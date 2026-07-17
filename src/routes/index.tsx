@@ -111,9 +111,8 @@ function Index() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex flex-col">
-            <BrandLogo variant="light" />
-            <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase mt-0.5 ml-1">Refrigeração</span>
+          <div className="flex items-center gap-3">
+            <img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-12 md:h-14 w-auto" />
           </div>
           <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-navy">
             <a href="#solucoes" className="hover:text-green transition">Soluções</a>
