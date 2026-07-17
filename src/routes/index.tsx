@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChevronDown, Zap, Users, TrendingUp, CheckCircle2, Gavel, Heart, Beaker, Award, Wind, Phone, Mail, MapPin, Instagram, Facebook } from "lucide-react";
+import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -18,16 +19,6 @@ const messages = {
 };
 
 const wa = (msg: string) => whatsappBase + encodeURIComponent(msg);
-
-function BrandLogo({ variant = "light", size = "md" }: { variant?: "light" | "dark"; size?: "sm" | "md" | "lg" }) {
-  const fontSize = size === "lg" ? "28px" : size === "sm" ? "18px" : "22px";
-  return (
-    <div className="brand" style={{ fontSize }}>
-      <span className="brand-mark">DBS</span>
-      <span className={variant === "light" ? "brand-text-dark" : "brand-text-light"}>AIR</span>
-    </div>
-  );
-}
 
 function Index() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
