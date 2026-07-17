@@ -361,7 +361,7 @@ function Index() {
       <footer className="bg-navy-900 text-white/70 py-14">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-10">
           <div>
-            <BrandLogo variant="dark" />
+            <div className="inline-block bg-white rounded-xl p-3"><img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-14 w-auto" /></div>
             <p className="text-sm mt-4 leading-relaxed">Soluções em Refrigeração e Climatização para o mercado corporativo.</p>
           </div>
           <div>
