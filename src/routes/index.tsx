@@ -1,6 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronDown, Zap, Users, TrendingUp, CheckCircle2, Gavel, Heart, Beaker, Award, Wind, Phone, Mail, MapPin, Instagram, Facebook } from "lucide-react";
+import {
+  ChevronDown,
+  CheckCircle2,
+  Gavel,
+  Heart,
+  Beaker,
+  Award,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
+  CalendarCheck,
+  List,
+  Instagram,
+  Menu,
+  X,
+  ShieldCheck,
+} from "lucide-react";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/")({
@@ -8,337 +25,438 @@ export const Route = createFileRoute("/")({
 });
 
 const whatsappBase = "https://wa.me/5521998256991?text=";
-const messages = {
-  header: "Olá, gostaria de solicitar uma proposta técnica de PMOC e manutenção para nossa empresa.",
-  hero: "Olá, gostaria de solicitar uma proposta técnica de PMOC e manutenção para nossa empresa.",
-  corretivo: "Olá, gostaria de solicitar um atendimento avulso para manutenção corretiva.",
-  preventiva: "Olá, gostaria de solicitar uma proposta para manutenção preventiva mensal.",
-  premium: "Olá, gostaria de solicitar uma proposta técnica da solução completa de PMOC e gestão de climatização.",
-  complexa: "Olá, tenho uma estrutura complexa e gostaria de uma proposta personalizada de PMOC.",
-  final: "Olá, gostaria de agendar uma avaliação técnica gratuita de PMOC para nossa empresa.",
-};
-
 const wa = (msg: string) => whatsappBase + encodeURIComponent(msg);
+const defaultMsg =
+  "Olá. Gostaria de solicitar um contato técnico comercial para avaliar a climatização/PMOC da minha empresa.";
 
 function Index() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const toggleFaq = (i: number) => setExpandedFaq(expandedFaq === i ? null : i);
 
-  const laws = [
-    "Lei Federal 13.589/2018 — PMOC obrigatório",
-    "Portaria MS 3.523/1998 — Qualidade do ar",
-    "RE ANVISA 9/2003 — Padrões do ar interior",
-    "NBR 13971:2017 — Manutenção programada",
-    "NBR 14679:2000 — Higienização de sistemas",
-    "NBR 16401 — Instalações centrais de ar",
-  ];
-  const stripItems = [...laws, ...laws];
-
-  const services = [
-    {
-      category: "Atendimento sob Demanda",
-      title: "Atendimento Corretivo",
-      desc: "Para situações emergenciais e reparos pontuais. Diagnóstico técnico preciso e solução ágil com peças de qualidade e garantia.",
-      benefits: ["Visita técnica rápida", "Diagnóstico completo", "Peças com garantia"],
-      cta: "Solicitar Atendimento Avulso",
-      msg: messages.corretivo,
-      featured: false,
-    },
-    {
-      category: "Recomendado para Operações Contínuas",
-      title: "Manutenção Preventiva",
-      desc: "Visitas periódicas programadas com higienização profunda, análise de rendimento e prevenção de paradas inesperadas.",
-      benefits: ["Limpeza bactericida mensal", "Análise de eficiência energética", "Atendimento prioritário"],
-      cta: "Solicitar Proposta Mensal",
-      msg: messages.preventiva,
-      featured: true,
-    },
-    {
-      category: "Solução Completa",
-      title: "Gestão Completa & PMOC",
-      desc: "Solução integrada com responsabilidade técnica, documentação legal completa e gestão operacional total do seu sistema.",
-      benefits: [
-        "Responsabilidade Técnica com emissão de ART/TRT",
-        "Adequação à Lei 13.589/18 e Portaria 3.523",
-        "Laudos de Qualidade do Ar (RE 09 ANVISA)",
-        "Relatórios de Eficiência e Vida Útil",
-      ],
-      cta: "Falar com Responsável Técnico",
-      msg: messages.premium,
-      featured: false,
-    },
-  ];
-
-  const legislation = [
-    {
-      icon: Gavel,
-      title: "Lei Federal nº 13.589/2018",
-      desc: "Tornou obrigatória a manutenção programada e a elaboração do PMOC para todos os edifícios de uso público e coletivo climatizados.",
-      applies: "Aplicável a: Escritórios, clínicas, hospitais, comércios, indústrias e espaços climatizados de acesso coletivo.",
-    },
-    {
-      icon: Heart,
-      title: "Portaria MS nº 3.523/1998",
-      desc: "Estabelece parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade do ar e a saúde dos ocupantes.",
-      applies: "Define: Frequência de limpeza, padrões bacteriológicos e protocolos de higienização.",
-    },
-    {
-      icon: Beaker,
-      title: "Resolução RE nº 9/2003 ANVISA",
-      desc: "Estabelece padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂ e taxa mínima de renovação de ar.",
-      applies: "Especifica: Limites de contaminantes e frequência de monitoramento obrigatória.",
-    },
-  ];
-
-  const responsibilityItems = [
-    { num: 1, title: "ART / TRT Registrada", desc: "Emissão de Anotação de Responsabilidade Técnica (ART) ou Termo de Responsabilidade Técnica (TRT) devidamente registrada no CREA ou CFT, assinada por engenheiro mecânico ou técnico legalmente habilitado." },
-    { num: 2, title: "Engenheiro Responsável Designado", desc: "Nomeação formal de profissional qualificado como responsável técnico pela operação, manutenção e conformidade do sistema de climatização da sua empresa." },
-    { num: 3, title: "Livro de Registro Técnico", desc: "Documentação completa e auditável de todas as atividades de manutenção, limpeza, trocas de componentes e análises de qualidade do ar, conforme exigido pela legislação." },
-    { num: 4, title: "Relatórios Mensais de Rastreabilidade", desc: "Emissão mensal de relatórios técnicos com medições de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias) e conformidade com padrões ANVISA." },
-    { num: 5, title: "Cronograma Personalizado", desc: "Plano de manutenção customizado conforme carga térmica, criticidade de cada ambiente e requisitos operacionais específicos da sua empresa." },
-  ];
-
-  const faqs = [
-    { q: "O PMOC é obrigatório para o meu tipo de negócio?", a: "Sim. A Lei Federal nº 13.589/2018 torna o PMOC obrigatório para todos os edifícios de uso público e coletivo climatizados, independentemente da carga térmica. Isso inclui escritórios, clínicas, hospitais, comércios, indústrias e qualquer espaço climatizado de acesso coletivo. A falta de conformidade expõe sua empresa a multas da ANVISA e riscos operacionais significativos." },
-    { q: "Qual é a periodicidade recomendada para manutenção preventiva?", a: "A NBR 13971:2017 recomenda manutenção preventiva mensal para sistemas em operação contínua. A frequência pode variar conforme a carga térmica, tipo de equipamento e ambiente. A DBS Air realiza uma avaliação técnica inicial para definir o cronograma ideal para sua operação, garantindo conformidade com as normas técnicas e eficiência máxima." },
-    { q: "A DBS Air emite ART e documentação legal?", a: "Sim. A DBS Air emite ART (Anotação de Responsabilidade Técnica) ou TRT (Termo de Responsabilidade Técnica) devidamente registrada no CREA ou CFT, assinada por engenheiro mecânico ou técnico legalmente habilitado. Fornecemos também Livro de Registro Técnico, relatórios mensais de rastreabilidade e toda documentação necessária para auditorias da Vigilância Sanitária e ANVISA." },
-    { q: "Como é feito o diagnóstico inicial da minha climatização?", a: "O diagnóstico inicial é realizado por engenheiro qualificado e inclui: inspeção visual completa dos equipamentos, medição de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias), verificação de conformidade com normas ABNT e ANVISA, e recomendações de manutenção. Ao final, você recebe um relatório técnico detalhado com proposta personalizada." },
-    { q: "Vocês oferecem suporte emergencial fora do horário comercial?", a: "Sim. A DBS Air oferece suporte emergencial 24 horas para clientes com contrato de gestão completa ou manutenção preventiva. Contato: +55 21 99825-6991. Para atendimentos emergenciais pontuais, consulte disponibilidade. Nosso objetivo é minimizar paradas operacionais e garantir a continuidade da climatização da sua empresa." },
-  ];
-
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-12 md:h-14 w-auto" />
+    <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
+      {/* ============ TOP UTILITY BAR ============ */}
+      <div style={{ background: "#0F172A" }} className="text-white text-xs">
+        <div className="container max-w-7xl mx-auto px-4 h-9 flex items-center justify-between">
+          <div className="hidden sm:flex items-center gap-5">
+            <span className="flex items-center gap-1.5" style={{ color: "#93C5FD" }}>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="tracking-wider uppercase font-semibold">Lei 13.589/2018 · ANVISA · CREA/CFT</span>
+            </span>
           </div>
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-navy">
-            <a href="#solucoes" className="hover:text-green transition">Soluções</a>
-            <a href="#pmoc" className="hover:text-green transition">PMOC</a>
-            <a href="#modalidades" className="hover:text-green transition">Modalidades</a>
-            <a href="#faq" className="hover:text-green transition">FAQ</a>
-          </nav>
-          <a href={wa(messages.header)} target="_blank" rel="noopener noreferrer" className="btn-primary text-sm !py-2.5 !px-4">
-            Solicitar Orçamento
-          </a>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="hero-bg text-white">
-        <div className="max-w-7xl mx-auto px-6 py-20 md:py-28 grid lg:grid-cols-[1.3fr_1fr] gap-14 items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/8 border border-white/15 text-xs font-mono text-white/80 mb-6">
-              <Wind size={14} style={{ color: "#26B37F" }} />
-              Especialistas em PMOC — Rio de Janeiro e Região Metropolitana
-            </div>
-            <h1 className="text-4xl md:text-6xl font-bold leading-[1.05] mb-6">
-              Gestão Técnica de Climatização e <span style={{ color: "#26B37F" }}>PMOC</span> para Empresas
-            </h1>
-            <p className="text-lg md:text-xl text-white/75 mb-10 leading-relaxed max-w-2xl">
-              Garanta a conformidade legal da sua operação e o desempenho térmico dos seus equipamentos com engenharia de manutenção qualificada.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <a href={wa(messages.hero)} target="_blank" rel="noopener noreferrer" className="btn-primary">
-                Agendar Visita Técnica
-              </a>
-              <a href="#modalidades" className="btn-outline">Conhecer Modalidades</a>
-            </div>
+          <div className="flex items-center gap-5">
+            <a href="tel:+5521998256991" className="flex items-center gap-1.5 hover:text-white transition" style={{ color: "#CBD5E1" }}>
+              <Phone className="w-3.5 h-3.5" /> +55 21 99825-6991
+            </a>
+            <a href="mailto:contato@dbsair.com.br" className="hidden md:flex items-center gap-1.5 hover:text-white transition" style={{ color: "#CBD5E1" }}>
+              <Mail className="w-3.5 h-3.5" /> contato@dbsair.com.br
+            </a>
+            <a href="https://www.instagram.com/dbs.air/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition" style={{ color: "#CBD5E1" }} aria-label="Instagram">
+              <Instagram className="w-3.5 h-3.5" />
+            </a>
           </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {[
-              { n: "13+", l: "Anos de atuação" },
-              { n: "100%", l: "Conformidade ANVISA" },
-              { n: "24h", l: "Suporte emergencial" },
-            ].map((m) => (
-              <div key={m.l} className="bg-white/[0.04] border border-white/10 rounded-xl p-6 backdrop-blur">
-                <div className="stat-num" style={{ color: "#26B37F" }}>{m.n}</div>
-                <div className="text-xs font-mono uppercase tracking-widest text-white/60 mt-2">{m.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Compliance strip */}
-      <div className="strip">
-        <div className="strip-track">
-          {stripItems.map((law, i) => <span key={i}>◆ {law}</span>)}
         </div>
       </div>
 
-      {/* Value Proposition */}
-      <section id="solucoes" className="py-24 bg-background">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="max-w-2xl mb-14">
-            <div className="text-xs font-mono uppercase tracking-widest text-green mb-3">Diferenciais</div>
-            <h2 className="text-3xl md:text-5xl font-bold text-navy mb-4">Por que escolher a DBS Air?</h2>
-            <p className="text-lg text-muted-foreground">Três pilares que sustentam nossa atuação no mercado corporativo.</p>
-          </div>
+      {/* ============ MAIN HEADER (LOGO EM DESTAQUE) ============ */}
+      <header className="sticky top-0 w-full bg-white z-50 shadow-md" style={{ borderBottom: "3px solid #1E3A8A" }}>
+        <div className="container max-w-7xl mx-auto px-4 flex items-center justify-between h-24 md:h-28">
+          {/* Logo XL */}
+          <a href="#top" className="flex items-center gap-4 group">
+            <img
+              src={logoAsset.url}
+              alt="DBS Air Refrigeração"
+              className="h-16 md:h-20 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            />
+            <div className="hidden lg:block" style={{ borderLeft: "2px solid #E2E8F0", paddingLeft: "16px" }}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#0284C7" }}>
+                Engenharia de Climatização
+              </p>
+              <p className="text-sm font-semibold mt-0.5" style={{ color: "#0F172A" }}>
+                PMOC · Manutenção · Conformidade
+              </p>
+            </div>
+          </a>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { Icon: Award, t: "Conformidade Técnica", d: "Emissão de ART por engenheiro responsável, laudos técnicos e total aderência às normas ABNT NBR 16401 e regulamentações da ANVISA." },
-              { Icon: Users, t: "Equipe Qualificada", d: "Técnicos certificados, uniformizados e com seguro de responsabilidade civil. Treinamento contínuo em segurança e conformidade regulatória." },
-              { Icon: TrendingUp, t: "Eficiência Operacional", d: "Redução de consumo energético, prevenção de paradas inesperadas e otimização do desempenho térmico dos seus equipamentos." },
-            ].map(({ Icon, t, d }) => (
-              <div key={t} className="card-service">
-                <div className="w-12 h-12 rounded-lg bg-green/10 flex items-center justify-center mb-5">
-                  <Icon size={22} color="#1E8F66" />
+          {/* Nav */}
+          <nav className="hidden md:flex items-center gap-7">
+            <a href="#solucoes" className="text-sm font-semibold text-gray-700 hover:text-[#0284C7] transition">Soluções</a>
+            <a href="#pmoc" className="text-sm font-semibold text-gray-700 hover:text-[#0284C7] transition">PMOC</a>
+            <a href="#modalidades" className="text-sm font-semibold text-gray-700 hover:text-[#0284C7] transition">Modalidades</a>
+            <a href="#faq" className="text-sm font-semibold text-gray-700 hover:text-[#0284C7] transition">FAQ</a>
+            <a
+              href={wa(defaultMsg)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition"
+              style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
+            >
+              <Phone className="w-4 h-4" /> Solicitar Orçamento
+            </a>
+          </nav>
+
+          {/* Mobile menu button */}
+          <button
+            className="md:hidden p-2 rounded-lg"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Menu"
+            style={{ color: "#0F172A" }}
+          >
+            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+
+        {/* Mobile Menu */}
+        {menuOpen && (
+          <div className="md:hidden border-t border-gray-200 bg-white">
+            <div className="container max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+              <a href="#solucoes" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Soluções</a>
+              <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
+              <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
+              <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
+              <a
+                href={wa(defaultMsg)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 text-white px-5 py-3 rounded-lg font-semibold text-sm"
+                style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
+              >
+                <Phone className="w-4 h-4" /> Solicitar Orçamento
+              </a>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* ============ HERO ============ */}
+      <section id="top" className="py-20 md:py-28 relative overflow-hidden" style={{ background: "linear-gradient(135deg,#0F172A 0%,#1E3A8A 100%)" }}>
+        {/* Decorative grid */}
+        <div
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(#93C5FD 1px, transparent 1px), linear-gradient(90deg, #93C5FD 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
+        />
+        <div className="container max-w-7xl mx-auto px-4 relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] mb-5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ color: "#93C5FD", background: "rgba(147,197,253,0.1)", border: "1px solid rgba(147,197,253,0.3)" }}>
+                <ShieldCheck className="w-3.5 h-3.5" /> Especialistas em PMOC
+              </p>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-[1.1] text-white">
+                Gestão Técnica de Climatização e <span style={{ color: "#93C5FD" }}>PMOC</span> para Empresas
+              </h1>
+              <p className="text-lg mb-8 leading-relaxed" style={{ color: "#CBD5E1" }}>
+                Garanta a conformidade legal da sua operação e o desempenho térmico dos seus equipamentos com engenharia de manutenção qualificada. Atendemos empresas no <strong className="text-white">Rio de Janeiro e Região Metropolitana</strong>.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <a
+                  href={wa(defaultMsg)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5 shadow-lg"
+                  style={{ background: "#16A34A" }}
+                >
+                  <Calendar className="w-5 h-5" /> Agendar Visita Técnica
+                </a>
+                <a
+                  href="#modalidades"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5"
+                  style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)" }}
+                >
+                  <List className="w-5 h-5" /> Conhecer Modalidades
+                </a>
+              </div>
+            </div>
+
+            {/* Right: Quick Access Card */}
+            <div className="bg-white p-8 rounded-2xl shadow-2xl" style={{ boxShadow: "0 25px 50px -12px rgba(30,58,138,0.5)" }}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "#0F172A" }}>
+                <span className="w-1 h-6 rounded" style={{ background: "#16A34A" }} /> Acesso Rápido
+              </h3>
+              <div className="space-y-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#DCFCE7" }}>
+                    <Phone className="w-5 h-5" style={{ color: "#16A34A" }} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#666" }}>Telefone</p>
+                    <a href="tel:+5521998256991" className="text-base font-semibold" style={{ color: "#0284C7" }}>+55 21 99825-6991</a>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-navy mb-2">{t}</h3>
-                <p className="text-muted-foreground leading-relaxed">{d}</p>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#DBEAFE" }}>
+                    <Mail className="w-5 h-5" style={{ color: "#0284C7" }} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#666" }}>Email</p>
+                    <a href="mailto:contato@dbsair.com.br" className="text-base font-semibold" style={{ color: "#0284C7" }}>contato@dbsair.com.br</a>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#FEF3C7" }}>
+                    <MapPin className="w-5 h-5" style={{ color: "#D97706" }} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#666" }}>Localização</p>
+                    <p className="text-base font-semibold" style={{ color: "#0F172A" }}>Ramos, Rio de Janeiro - RJ</p>
+                  </div>
+                </div>
+                <div className="pt-5 border-t border-gray-200">
+                  <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#16A34A" }}>Conformidade Legal</p>
+                  <p className="text-sm" style={{ color: "#666" }}>Lei 13.589/2018 • ANVISA • CREA/CFT</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============ METRICS ============ */}
+      <section className="py-12 md:py-16" style={{ background: "#F8FAFC" }}>
+        <div className="container max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-3 gap-4 md:gap-8">
+            {[
+              { n: "15+", l: "ANOS DE EXPERIÊNCIA" },
+              { n: "100%", l: "CONFORMIDADE ANVISA" },
+              { n: "24h", l: "SUPORTE EMERGENCIAL" },
+            ].map((m, i) => (
+              <div key={i} className="text-center">
+                <p className="text-4xl md:text-5xl font-bold" style={{ color: "#0284C7" }}>{m.n}</p>
+                <p className="text-xs md:text-sm mt-2 font-bold tracking-wider" style={{ color: "#0F172A" }}>{m.l}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Compliance / PMOC */}
-      <section id="pmoc" className="py-24 bg-muted">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="max-w-3xl mb-14">
-            <div className="text-xs font-mono uppercase tracking-widest text-green mb-3">Conformidade</div>
-            <h2 className="text-3xl md:text-5xl font-bold text-navy mb-4">Conformidade Regulatória e Responsabilidade Técnica</h2>
-            <p className="text-lg text-muted-foreground">Fundação legal robusta para a operação segura e auditável de sistemas de climatização em ambientes corporativos.</p>
-          </div>
+      {/* ============ VALUE PROPOSITION ============ */}
+      <section id="solucoes" className="py-20 md:py-28 bg-white">
+        <div className="container max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Por que escolher a DBS Air?</h2>
+          <p className="text-lg mb-12" style={{ color: "#666" }}>Três pilares que sustentam nossa atuação no mercado corporativo.</p>
 
-          <div className="grid md:grid-cols-3 gap-6 mb-16">
-            {legislation.map(({ icon: Icon, title, desc, applies }) => (
-              <div key={title} className="card-service">
-                <div className="w-11 h-11 rounded-lg bg-navy/[0.06] flex items-center justify-center mb-4">
-                  <Icon size={20} color="#0E1A2E" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { icon: Award, title: "Conformidade Técnica", desc: "Emissão de ART por engenheiro responsável, laudos técnicos e total aderência às normas ABNT NBR 16401 e regulamentações da ANVISA." },
+              { icon: Heart, title: "Equipe Qualificada", desc: "Técnicos certificados, uniformizados e com seguro de responsabilidade civil. Treinamento contínuo em segurança e conformidade regulatória." },
+              { icon: Beaker, title: "Eficiência Operacional", desc: "Redução de consumo energético, prevenção de paradas inesperadas e otimização do desempenho térmico dos seus equipamentos." },
+            ].map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div key={idx} className="p-8 rounded-xl transition hover:-translate-y-1 hover:shadow-xl" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <div className="w-14 h-14 rounded-xl mb-6 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#DBEAFE,#BFDBFE)" }}>
+                    <Icon className="w-7 h-7" style={{ color: "#0284C7" }} />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3" style={{ color: "#0F172A" }}>{item.title}</h3>
+                  <p className="leading-relaxed" style={{ color: "#666" }}>{item.desc}</p>
                 </div>
-                <h3 className="text-lg font-semibold text-navy mb-3">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">{desc}</p>
-                <p className="text-xs text-navy/80 border-t pt-3 leading-relaxed">{applies}</p>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ COMPLIANCE ============ */}
+      <section id="pmoc" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
+        <div className="container max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Conformidade Regulatória e Responsabilidade Técnica</h2>
+          <p className="text-lg mb-12" style={{ color: "#666" }}>Fundação legal robusta para a operação segura e auditável de sistemas de climatização em ambientes corporativos.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            {[
+              { icon: Gavel, title: "Lei Federal nº 13.589/2018", desc: "Tornou obrigatória a manutenção programada e a elaboração do PMOC para todos os edifícios de uso público e coletivo climatizados." },
+              { icon: Heart, title: "Portaria MS nº 3.523/1998", desc: "Estabelece os parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade e integridade da saúde dos ocupantes." },
+              { icon: Beaker, title: "Resolução RE nº 9/2003 ANVISA", desc: "Estabelece os padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂, poeira e taxa mínima de renovação de ar." },
+            ].map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div key={idx} className="p-8 rounded-xl shadow-sm hover:shadow-md transition" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: "#DBEAFE" }}>
+                      <Icon className="w-5 h-5" style={{ color: "#0284C7" }} />
+                    </div>
+                    <h3 className="font-bold" style={{ color: "#0F172A" }}>{item.title}</h3>
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "#666" }}>{item.desc}</p>
+                </div>
+              );
+            })}
           </div>
 
           {/* ABNT */}
-          <div className="bg-white border rounded-2xl p-8 md:p-10 mb-10">
-            <div className="flex items-center gap-3 mb-6">
-              <CheckCircle2 size={22} color="#1E8F66" />
-              <h3 className="text-xl font-semibold text-navy">Normas Técnicas de Execução (ABNT)</h3>
-            </div>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <div className="font-mono text-sm text-green mb-2">NBR 13971:2017</div>
-                <p className="text-muted-foreground leading-relaxed">Sistemas de refrigeração, condicionamento de ar e bomba de calor — Manutenção programada. Define procedimentos, frequências e responsabilidades técnicas para manutenção preventiva e corretiva.</p>
+          <div className="p-8 md:p-12 rounded-xl shadow-sm mb-12" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+            <h3 className="text-2xl font-bold mb-8 flex items-center gap-3" style={{ color: "#0F172A" }}>
+              <Award className="w-7 h-7" style={{ color: "#16A34A" }} /> Normas Técnicas de Execução (ABNT)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div style={{ borderLeft: "4px solid #16A34A", paddingLeft: "24px" }}>
+                <h4 className="font-bold mb-3" style={{ color: "#0F172A" }}>NBR 13971:2017</h4>
+                <p className="text-sm leading-relaxed" style={{ color: "#666" }}>
+                  <strong>Sistemas de refrigeração, condicionamento de ar e bomba de calor — Manutenção programada.</strong> Define os procedimentos, frequências e responsabilidades técnicas para manutenção preventiva e corretiva de sistemas de climatização.
+                </p>
               </div>
-              <div>
-                <div className="font-mono text-sm text-green mb-2">NBR 14679:2000</div>
-                <p className="text-muted-foreground leading-relaxed">Execução de serviços de higienização em sistemas de ar condicionado. Estabelece padrões de limpeza, desinfecção e documentação em dutos, serpentinas e componentes.</p>
+              <div style={{ borderLeft: "4px solid #16A34A", paddingLeft: "24px" }}>
+                <h4 className="font-bold mb-3" style={{ color: "#0F172A" }}>NBR 14679:2000</h4>
+                <p className="text-sm leading-relaxed" style={{ color: "#666" }}>
+                  <strong>Execução de serviços de higienização em sistemas de ar condicionado.</strong> Estabelece os padrões de limpeza, desinfecção e documentação de atividades de higienização em dutos, serpentinas e componentes.
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Responsibility */}
-          <div className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
-            <div className="bg-white border rounded-2xl p-8 md:p-10">
-              <h3 className="text-2xl font-semibold text-navy mb-3">Responsabilidade Técnica e Documentação</h3>
-              <p className="text-muted-foreground mb-8 leading-relaxed">A DBS Air atua em total conformidade com as exigências dos órgãos de classe (CREA, CFT, ANVISA e Vigilância Sanitária), garantindo máxima segurança jurídica e operacional.</p>
-
-              <div className="space-y-5">
-                {responsibilityItems.map((item) => (
-                  <div key={item.num} className="flex gap-4">
-                    <div className="w-9 h-9 rounded-lg bg-green flex items-center justify-center flex-shrink-0 font-mono text-white font-bold text-sm">{item.num}</div>
+          {/* Technical Responsibility */}
+          <div className="p-8 md:p-12 rounded-xl shadow-sm" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+            <h3 className="text-2xl font-bold mb-4" style={{ color: "#0F172A" }}>Responsabilidade Técnica e Documentação</h3>
+            <p className="mb-8 leading-relaxed" style={{ color: "#666" }}>
+              A DBS Air atua em total conformidade com as exigências dos órgãos de classe (CREA, CFT, ANVISA e Vigilância Sanitária), garantindo a máxima segurança jurídica e operacional para sua empresa.
+            </p>
+            <div className="space-y-4">
+              {[
+                { num: 1, title: "ART / TRT Registrada", desc: "Emissão de Anotação de Responsabilidade Técnica (ART) ou Termo de Responsabilidade Técnica (TRT) devidamente registrada no CREA ou CFT, assinada por engenheiro mecânico ou técnico legalmente habilitado." },
+                { num: 2, title: "Engenheiro Responsável Designado", desc: "Nomeação formal de profissional qualificado como responsável técnico pela operação, manutenção e conformidade do sistema de climatização da sua empresa." },
+                { num: 3, title: "Livro de Registro Técnico", desc: "Documentação completa e auditável de todas as atividades de manutenção, limpeza, trocas de componentes e análises de qualidade do ar, conforme exigido pela legislação." },
+                { num: 4, title: "Relatórios Mensais de Rastreabilidade", desc: "Emissão mensal de relatórios técnicos com medições de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias), e conformidade com os padrões ANVISA." },
+                { num: 5, title: "Cronograma Personalizado", desc: "Plano de manutenção customizado conforme a carga térmica, criticidade de cada ambiente e requisitos operacionais específicos da sua empresa." },
+              ].map((item) => (
+                <div key={item.num} className="p-6 rounded-lg" style={{ background: "#F8FAFC", borderLeft: "4px solid #16A34A" }}>
+                  <div className="flex items-start gap-4">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white" style={{ background: "#16A34A" }}>{item.num}</div>
                     <div>
-                      <div className="font-semibold text-navy mb-1">{item.title}</div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                      <h4 className="font-bold mb-1.5" style={{ color: "#0F172A" }}>{item.title}</h4>
+                      <p className="text-sm leading-relaxed" style={{ color: "#666" }}>{item.desc}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-5">
-              <div className="bg-navy text-white rounded-2xl p-8">
-                <CheckCircle2 size={28} style={{ color: "#26B37F" }} />
-                <div className="mt-4 text-sm font-mono uppercase tracking-widest" style={{ color: "#26B37F" }}>Conformidade Garantida</div>
-                <div className="text-xl font-semibold mt-2 mb-3">Auditoria Pronta</div>
-                <p className="text-sm text-white/70 leading-relaxed">Toda documentação técnica organizada e pronta para auditorias da Vigilância Sanitária, ANVISA ou órgãos reguladores.</p>
-              </div>
-              <div className="bg-white border rounded-2xl p-8">
-                <Zap size={24} color="#1E8F66" />
-                <div className="text-lg font-semibold text-navy mt-3 mb-2">Seguro Profissional</div>
-                <p className="text-sm text-muted-foreground leading-relaxed">Equipe com Seguro de Responsabilidade Civil e registro ativo em órgãos reguladores (CREA/CFT).</p>
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services / Modalidades */}
-      <section id="modalidades" className="py-24 bg-background">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="max-w-2xl mb-14">
-            <div className="text-xs font-mono uppercase tracking-widest text-green mb-3">Modalidades</div>
-            <h2 className="text-3xl md:text-5xl font-bold text-navy mb-4">Modalidades de Atendimento</h2>
-            <p className="text-lg text-muted-foreground">Escolha a estrutura que melhor se adequa às necessidades operacionais da sua empresa.</p>
-          </div>
+      {/* ============ SERVICES ============ */}
+      <section id="modalidades" className="py-20 md:py-28 bg-white">
+        <div className="container max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Modalidades de Atendimento</h2>
+          <p className="text-lg mb-12" style={{ color: "#666" }}>Escolha a estrutura que melhor se adequa às necessidades operacionais da sua empresa.</p>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {services.map((s) => (
-              <div key={s.title} className={`card-service flex flex-col ${s.featured ? "!border-green ring-1 ring-green/30 relative" : ""}`}>
-                {s.featured && (
-                  <div className="absolute -top-3 left-6 bg-green text-white text-[10px] font-mono uppercase tracking-widest px-3 py-1 rounded-full">Recomendado</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            {[
+              {
+                category: "Atendimento sob Demanda",
+                title: "Atendimento Corretivo",
+                desc: "Para situações emergenciais e reparos pontuais. Diagnóstico técnico preciso e solução ágil com peças de qualidade e garantia.",
+                benefits: ["Visita técnica rápida", "Diagnóstico completo", "Peças com garantia"],
+                cta: "Solicitar Atendimento Avulso",
+                msg: "Olá. Gostaria de solicitar um atendimento avulso para manutenção corretiva.",
+              },
+              {
+                category: "Recomendado para Operações Contínuas",
+                title: "Contrato de Manutenção Preventiva Programada",
+                desc: "Visitas periódicas programadas com higienização profunda, análise de rendimento e prevenção de paradas inesperadas.",
+                benefits: ["Limpeza bactericida mensal", "Análise de eficiência energética", "Atendimento prioritário"],
+                cta: "Solicitar Proposta Mensal",
+                msg: "Olá. Gostaria de solicitar uma proposta para manutenção preventiva mensal.",
+                highlight: true,
+              },
+              {
+                category: "Solução Completa",
+                title: "Gestão Completa & PMOC",
+                desc: "Solução integrada com responsabilidade técnica, documentação legal completa e gestão operacional total do seu sistema.",
+                benefits: [
+                  "Responsabilidade Técnica com emissão de ART/TRT",
+                  "Adequação estrita à Lei 13.589/18 e Portaria 3.523",
+                  "Laudos de Qualidade do Ar (Resolução RE 09 da ANVISA)",
+                  "Relatórios de Eficiência Energética e Vida Útil",
+                ],
+                cta: "Falar com Responsável Técnico",
+                msg: "Olá. Gostaria de solicitar uma proposta técnica da solução completa de PMOC e gestão de climatização.",
+              },
+            ].map((service, idx) => (
+              <div
+                key={idx}
+                className="p-8 rounded-xl transition hover:-translate-y-1 hover:shadow-xl relative flex flex-col"
+                style={{
+                  background: "#FFFFFF",
+                  border: service.highlight ? "2px solid #1E3A8A" : "1px solid #E2E8F0",
+                  boxShadow: service.highlight ? "0 20px 40px -15px rgba(30,58,138,0.25)" : undefined,
+                }}
+              >
+                {service.highlight && (
+                  <div className="absolute -top-3 left-8 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white rounded" style={{ background: "#1E3A8A" }}>
+                    Mais Contratado
+                  </div>
                 )}
-                <div className="text-xs font-mono uppercase tracking-widest text-green mb-3">{s.category}</div>
-                <h3 className="text-2xl font-semibold text-navy mb-3">{s.title}</h3>
-                <p className="text-muted-foreground leading-relaxed mb-6">{s.desc}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "#666" }}>{service.category}</p>
+                <h3 className="text-2xl font-bold mb-4" style={{ color: "#0F172A" }}>{service.title}</h3>
+                <p className="mb-6 leading-relaxed" style={{ color: "#666" }}>{service.desc}</p>
 
-                <div className="text-xs font-semibold text-navy uppercase tracking-wider mb-3">Incluso:</div>
-                <ul className="space-y-2 mb-8">
-                  {s.benefits.map((b) => (
-                    <li key={b} className="flex items-start gap-2 text-sm text-navy">
-                      <CheckCircle2 size={16} color="#1E8F66" className="flex-shrink-0 mt-0.5" />
-                      <span>{b}</span>
+                <p className="text-sm font-semibold mb-3" style={{ color: "#0F172A" }}>Incluso:</p>
+                <ul className="space-y-2 mb-8 flex-1">
+                  {service.benefits.map((benefit, i) => (
+                    <li key={i} className="text-sm flex items-start gap-2" style={{ color: "#666" }}>
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#16A34A" }} />
+                      <span>{benefit}</span>
                     </li>
                   ))}
                 </ul>
 
-                <a href={wa(s.msg)} target="_blank" rel="noopener noreferrer" className={`mt-auto text-center ${s.featured ? "btn-primary" : "btn-outline !text-navy !border-navy/20 hover:!bg-navy/5"}`}>
-                  {s.cta}
+                <a
+                  href={wa(service.msg)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-lg font-semibold transition"
+                  style={{ background: service.highlight ? "linear-gradient(135deg,#1E3A8A,#0284C7)" : "#0284C7" }}
+                >
+                  <Phone className="w-4 h-4" /> {service.cta}
                 </a>
               </div>
             ))}
           </div>
 
-          <div className="mt-12 bg-navy/[0.04] border border-navy/10 rounded-xl p-6 text-center">
-            <p className="text-navy font-medium">Precisa de uma proposta personalizada para múltiplos equipamentos ou estrutura complexa?</p>
-            <a href={wa(messages.complexa)} target="_blank" rel="noopener noreferrer" className="text-green font-semibold hover:underline mt-1 inline-block">
-              Solicite uma avaliação técnica →
+          <div className="text-center pt-8" style={{ borderTop: "1px solid #E2E8F0" }}>
+            <p className="mb-4" style={{ color: "#666" }}>Precisa de uma proposta personalizada para múltiplos equipamentos ou estrutura complexa?</p>
+            <a
+              href={wa("Olá. Tenho uma estrutura complexa e gostaria de uma proposta personalizada de PMOC.")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold transition hover:underline"
+              style={{ color: "#0284C7" }}
+            >
+              Solicite uma avaliação técnica. →
             </a>
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section id="faq" className="py-24 bg-muted">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="mb-12 text-center">
-            <div className="text-xs font-mono uppercase tracking-widest text-green mb-3">FAQ</div>
-            <h2 className="text-3xl md:text-5xl font-bold text-navy mb-4">Perguntas Frequentes</h2>
-            <p className="text-lg text-muted-foreground">Informações técnicas e operacionais sobre nossos serviços.</p>
-          </div>
+      {/* ============ FAQ ============ */}
+      <section id="faq" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
+        <div className="container max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Perguntas Frequentes</h2>
+          <p className="text-lg mb-12" style={{ color: "#666" }}>Informações técnicas e operacionais sobre nossos serviços.</p>
 
-          <div className="space-y-3">
-            {faqs.map((item, idx) => (
-              <div key={idx} className="bg-white border rounded-xl overflow-hidden">
+          <div className="p-4 md:p-8 rounded-xl shadow-sm" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+            {[
+              { q: "O PMOC é obrigatório para o meu tipo de negócio?", a: "Sim. A Lei Federal nº 13.589/2018 torna o PMOC obrigatório para todos os edifícios de uso público e coletivo climatizados, independentemente da carga térmica. Isso inclui escritórios, clínicas, hospitais, comércios, indústrias e qualquer espaço climatizado de acesso coletivo. A falta de conformidade expõe sua empresa a multas da ANVISA e riscos operacionais significativos." },
+              { q: "Qual é a periodicidade recomendada para manutenção preventiva?", a: "A NBR 13971:2017 recomenda manutenção preventiva mensal para sistemas em operação contínua. A frequência pode variar conforme a carga térmica, tipo de equipamento e ambiente. A DBS Air realiza uma avaliação técnica inicial para definir o cronograma ideal para sua operação, garantindo conformidade com as normas técnicas e eficiência máxima." },
+              { q: "A DBS Air emite ART e documentação legal?", a: "Sim. A DBS Air emite ART (Anotação de Responsabilidade Técnica) ou TRT (Termo de Responsabilidade Técnica) devidamente registrada no CREA ou CFT, assinada por engenheiro mecânico ou técnico legalmente habilitado. Fornecemos também Livro de Registro Técnico, relatórios mensais de rastreabilidade e toda documentação necessária para auditorias da Vigilância Sanitária e ANVISA." },
+              { q: "Como é feito o diagnóstico inicial da minha climatização?", a: "O diagnóstico inicial é realizado por engenheiro qualificado e inclui: inspeção visual completa dos equipamentos, medição de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias), verificação de conformidade com normas ABNT e ANVISA, e recomendações de manutenção. Ao final, você recebe um relatório técnico detalhado com proposta personalizada." },
+              { q: "Vocês oferecem suporte emergencial fora do horário comercial?", a: "Sim. A DBS Air oferece suporte emergencial 24 horas para clientes com contrato de gestão completa ou manutenção preventiva. Contato: +55 21 99825-6991. Para atendimentos emergenciais pontuais, consulte disponibilidade. Nosso objetivo é minimizar paradas operacionais e garantir a continuidade da climatização da sua empresa." },
+            ].map((item, idx, arr) => (
+              <div key={idx} style={{ borderBottom: idx < arr.length - 1 ? "1px solid #E2E8F0" : "none" }} className="py-5">
                 <button
                   onClick={() => toggleFaq(idx)}
-                  className="w-full flex items-center justify-between text-left px-6 py-5 hover:bg-muted/50 transition"
+                  className="w-full flex items-center justify-between text-left transition gap-4"
+                  style={{ color: expandedFaq === idx ? "#0284C7" : "#0F172A" }}
                 >
-                  <span className="font-semibold text-navy pr-4">{item.q}</span>
-                  <ChevronDown size={20} className={`flex-shrink-0 text-green transition-transform ${expandedFaq === idx ? "rotate-180" : ""}`} />
+                  <h3 className="text-base md:text-lg font-bold">{item.q}</h3>
+                  <ChevronDown className={`w-5 h-5 transition-transform flex-shrink-0 ${expandedFaq === idx ? "rotate-180" : ""}`} style={{ color: "#999" }} />
                 </button>
                 {expandedFaq === idx && (
-                  <div className="px-6 pb-5 text-muted-foreground leading-relaxed border-t pt-4">{item.a}</div>
+                  <p className="mt-4 leading-relaxed" style={{ color: "#666" }}>{item.a}</p>
                 )}
               </div>
             ))}
@@ -346,49 +464,70 @@ function Index() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="hero-bg text-white py-24">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-5xl font-bold mb-5">Pronto para otimizar sua climatização?</h2>
-          <p className="text-lg text-white/70 mb-10">Agende uma avaliação técnica gratuita com nossos engenheiros. Sem compromisso.</p>
-          <a href={wa(messages.final)} target="_blank" rel="noopener noreferrer" className="btn-primary">
-            Agendar Avaliação Técnica
+      {/* ============ FINAL CTA ============ */}
+      <section className="py-20 md:py-28 bg-white text-center" style={{ borderTop: "1px solid #E2E8F0" }}>
+        <div className="container max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ color: "#0F172A" }}>Pronto para otimizar sua climatização?</h2>
+          <p className="text-lg mb-8 max-w-2xl mx-auto" style={{ color: "#666" }}>
+            Agende uma avaliação técnica gratuita com nossos engenheiros. Sem compromisso.
+          </p>
+          <a
+            href={wa("Olá. Gostaria de agendar uma avaliação técnica gratuita de PMOC para nossa empresa.")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 text-white px-8 py-4 rounded-lg font-semibold transition text-lg transform hover:-translate-y-0.5 shadow-lg"
+            style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
+          >
+            <CalendarCheck className="w-5 h-5" /> Agendar Avaliação Técnica
           </a>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-navy-900 text-white/70 py-14">
-        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-10">
-          <div>
-            <div className="inline-block bg-white rounded-xl p-3"><img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-14 w-auto" /></div>
-            <p className="text-sm mt-4 leading-relaxed">Soluções em Refrigeração e Climatização para o mercado corporativo.</p>
-          </div>
-          <div>
-            <div className="text-white font-semibold mb-4 text-sm">Contato</div>
-            <ul className="space-y-2.5 text-sm">
-              <li className="flex items-start gap-2"><Phone size={14} className="mt-1 flex-shrink-0" /><a href={wa(messages.header)} target="_blank" rel="noopener noreferrer" className="hover:text-white">+55 21 99825-6991</a></li>
-              <li className="flex items-start gap-2"><Mail size={14} className="mt-1 flex-shrink-0" /><a href="mailto:contato@dbsair.com.br" className="hover:text-white">contato@dbsair.com.br</a></li>
-              <li className="flex items-start gap-2"><Mail size={14} className="mt-1 flex-shrink-0" /><a href="mailto:assistencia@dbsair.com.br" className="hover:text-white">assistencia@dbsair.com.br</a></li>
-            </ul>
-          </div>
-          <div>
-            <div className="text-white font-semibold mb-4 text-sm">Redes Sociais</div>
-            <ul className="space-y-2.5 text-sm">
-              <li><a href="https://www.instagram.com/dbs.air/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white"><Instagram size={14} /> Instagram</a></li>
-              <li><a href="#" className="flex items-center gap-2 hover:text-white"><Facebook size={14} /> Facebook</a></li>
-            </ul>
-          </div>
-          <div>
-            <div className="text-white font-semibold mb-4 text-sm">Localização</div>
-            <div className="flex items-start gap-2 text-sm leading-relaxed">
-              <MapPin size={14} className="mt-1 flex-shrink-0" />
-              <p>Rua Nabôr do Rêgo, 481<br />Ramos, Rio de Janeiro — RJ<br />21031-720, Brasil</p>
+      {/* ============ FOOTER ============ */}
+      <footer style={{ background: "#0F172A" }} className="text-white py-14">
+        <div className="container max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
+            <div>
+              <div className="bg-white rounded-xl p-4 inline-block mb-4">
+                <img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-14 w-auto object-contain" />
+              </div>
+              <p className="text-sm" style={{ color: "#94A3B8" }}>Soluções em Refrigeração e Climatização Corporativa.</p>
+            </div>
+
+            <div>
+              <p className="font-bold text-sm mb-4 uppercase tracking-widest" style={{ color: "#93C5FD" }}>Contato</p>
+              <ul className="space-y-2 text-sm" style={{ color: "#CBD5E1" }}>
+                <li><a href="tel:+5521998256991" className="hover:text-white transition">+55 21 99825-6991</a></li>
+                <li><a href="mailto:contato@dbsair.com.br" className="hover:text-white transition">contato@dbsair.com.br</a></li>
+                <li><a href="mailto:assistencia@dbsair.com.br" className="hover:text-white transition">assistencia@dbsair.com.br</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-bold text-sm mb-4 uppercase tracking-widest" style={{ color: "#93C5FD" }}>Endereço</p>
+              <p className="text-sm" style={{ color: "#CBD5E1" }}>
+                Rua Nabôr do Rêgo, 481<br />
+                Ramos, Rio de Janeiro - RJ<br />
+                CEP: 21031-720
+              </p>
+            </div>
+
+            <div>
+              <p className="font-bold text-sm mb-4 uppercase tracking-widest" style={{ color: "#93C5FD" }}>Dados Institucionais</p>
+              <p className="text-xs leading-relaxed" style={{ color: "#CBD5E1" }}>
+                <strong className="text-white">Razão Social:</strong> DBS AIR REFRIGERAÇÃO LTDA<br />
+                <strong className="text-white">CNPJ:</strong> 13.352.707/0001-09<br />
+                <strong className="text-white">Instagram:</strong>{" "}
+                <a href="https://www.instagram.com/dbs.air/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition inline-flex items-center gap-1">
+                  <Instagram className="w-3 h-3" /> @dbs.air
+                </a>
+              </p>
             </div>
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-6 mt-12 pt-6 border-t border-white/10 text-xs text-white/40 font-mono">
-          © {new Date().getFullYear()} DBS Air — Soluções em Refrigeração. Todos os direitos reservados.
+
+          <div className="pt-8 text-center text-sm" style={{ borderTop: "1px solid #1E3A8A", color: "#94A3B8" }}>
+            <p>&copy; 2024 DBS Air Refrigeração LTDA · CNPJ 13.352.707/0001-09 · Todos os direitos reservados.</p>
+          </div>
         </div>
       </footer>
     </div>
