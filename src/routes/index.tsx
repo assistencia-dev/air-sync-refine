@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChevronDown, Zap, Users, TrendingUp, CheckCircle2, Gavel, Heart, Beaker, Award, Wind, Phone, Mail, MapPin, Instagram, Facebook } from "lucide-react";
+import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -18,16 +19,6 @@ const messages = {
 };
 
 const wa = (msg: string) => whatsappBase + encodeURIComponent(msg);
-
-function BrandLogo({ variant = "light", size = "md" }: { variant?: "light" | "dark"; size?: "sm" | "md" | "lg" }) {
-  const fontSize = size === "lg" ? "28px" : size === "sm" ? "18px" : "22px";
-  return (
-    <div className="brand" style={{ fontSize }}>
-      <span className="brand-mark">DBS</span>
-      <span className={variant === "light" ? "brand-text-dark" : "brand-text-light"}>AIR</span>
-    </div>
-  );
-}
 
 function Index() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -120,9 +111,8 @@ function Index() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex flex-col">
-            <BrandLogo variant="light" />
-            <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase mt-0.5 ml-1">Refrigeração</span>
+          <div className="flex items-center gap-3">
+            <img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-12 md:h-14 w-auto" />
           </div>
           <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-navy">
             <a href="#solucoes" className="hover:text-green transition">Soluções</a>
@@ -371,7 +361,7 @@ function Index() {
       <footer className="bg-navy-900 text-white/70 py-14">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-10">
           <div>
-            <BrandLogo variant="dark" />
+            <div className="inline-block bg-white rounded-xl p-3"><img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-14 w-auto" /></div>
             <p className="text-sm mt-4 leading-relaxed">Soluções em Refrigeração e Climatização para o mercado corporativo.</p>
           </div>
           <div>
