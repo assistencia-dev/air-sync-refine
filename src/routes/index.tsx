@@ -469,10 +469,10 @@ function Index() {
         <div className="container max-w-7xl mx-auto px-4">
           <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ color: "#0F172A" }}>Pronto para otimizar sua climatização?</h2>
           <p className="text-lg mb-8 max-w-2xl mx-auto" style={{ color: "#666" }}>
-            Agende uma avaliação técnica gratuita com nossos engenheiros. Sem compromisso.
+            Agende uma avaliação técnica com nossos engenheiros. Sem compromisso.
           </p>
           <a
-            href={wa("Olá. Gostaria de agendar uma avaliação técnica gratuita de PMOC para nossa empresa.")}
+            href={wa(defaultMsg)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 text-white px-8 py-4 rounded-lg font-semibold transition text-lg transform hover:-translate-y-0.5 shadow-lg"
@@ -516,7 +516,7 @@ function Index() {
               <p className="font-bold text-sm mb-4 uppercase tracking-widest" style={{ color: "#93C5FD" }}>Dados Institucionais</p>
               <p className="text-xs leading-relaxed" style={{ color: "#CBD5E1" }}>
                 <strong className="text-white">Razão Social:</strong> DBS AIR REFRIGERAÇÃO LTDA<br />
-                <strong className="text-white">CNPJ:</strong> 13.352.707/0001-09<br />
+                <strong className="text-white">CNPJ:</strong> 13.352.707/0001-09 (Atuando desde 2011 no Rio de Janeiro)<br />
                 <strong className="text-white">Instagram:</strong>{" "}
                 <a href="https://www.instagram.com/dbs.air/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition inline-flex items-center gap-1">
                   <Instagram className="w-3 h-3" /> @dbs.air
