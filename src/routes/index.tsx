@@ -27,7 +27,7 @@ export const Route = createFileRoute("/")({
 const whatsappBase = "https://wa.me/5521998256991?text=";
 const wa = (msg: string) => whatsappBase + encodeURIComponent(msg);
 const defaultMsg =
-  "Olá. Gostaria de solicitar um contato técnico comercial para avaliar a climatização/PMOC da minha empresa.";
+  "Olá. Gostaria de solicitar uma avaliação técnica para contrato de manutenção/PMOC na minha empresa.";
 
 function Index() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -147,10 +147,10 @@ function Index() {
                 <ShieldCheck className="w-3.5 h-3.5" /> Especialistas em PMOC
               </p>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-[1.1] text-white">
-                Gestão Técnica de Climatização e <span style={{ color: "#93C5FD" }}>PMOC</span> para Empresas
+                A Excelência Invisível que Move Grandes Operações.
               </h1>
               <p className="text-lg mb-8 leading-relaxed" style={{ color: "#CBD5E1" }}>
-                Garanta a conformidade legal da sua operação e o desempenho térmico dos seus equipamentos com engenharia de manutenção qualificada. Atendemos empresas no <strong className="text-white">Rio de Janeiro e Região Metropolitana</strong>.
+                Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
@@ -160,7 +160,7 @@ function Index() {
                   className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5 shadow-lg"
                   style={{ background: "#16A34A" }}
                 >
-                  <Calendar className="w-5 h-5" /> Agendar Visita Técnica
+                  <Calendar className="w-5 h-5" /> Agendar Avaliação Técnica
                 </a>
                 <a
                   href="#modalidades"
@@ -222,7 +222,7 @@ function Index() {
             {[
               { n: "15+", l: "ANOS DE EXPERIÊNCIA" },
               { n: "100%", l: "CONFORMIDADE ANVISA" },
-              { n: "24h", l: "SUPORTE EMERGENCIAL" },
+              { n: "SLA", l: "ACORDO DE NÍVEL DE SERVIÇO" },
             ].map((m, i) => (
               <div key={i} className="text-center">
                 <p className="text-4xl md:text-5xl font-bold" style={{ color: "#0284C7" }}>{m.n}</p>
@@ -236,14 +236,14 @@ function Index() {
       {/* ============ VALUE PROPOSITION ============ */}
       <section id="solucoes" className="py-20 md:py-28 bg-white">
         <div className="container max-w-7xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Por que escolher a DBS Air?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>A Diferença entre Manutenção Comum e Ativo Estratégico</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Três pilares que sustentam nossa atuação no mercado corporativo.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { icon: Award, title: "Conformidade Técnica", desc: "Emissão de ART por engenheiro responsável, laudos técnicos e total aderência às normas ABNT NBR 16401 e regulamentações da ANVISA." },
-              { icon: Heart, title: "Equipe Qualificada", desc: "Técnicos certificados, uniformizados e com seguro de responsabilidade civil. Treinamento contínuo em segurança e conformidade regulatória." },
-              { icon: Beaker, title: "Eficiência Operacional", desc: "Redução de consumo energético, prevenção de paradas inesperadas e otimização do desempenho térmico dos seus equipamentos." },
+              { icon: Award, title: "Preservação Patrimonial", desc: "Redução drástica na taxa de quebra de compressores e chillers, protegendo o investimento em maquinário da sua empresa." },
+              { icon: Heart, title: "Eficiência Térmica Avançada", desc: "Calibração milimétrica de sistemas que diminui o desperdício de energia e otimiza os custos operacionais (OPEX) em até 30%." },
+              { icon: Beaker, title: "Reputação e Conformidade Integral", desc: "Seus colaboradores, clientes e o jurídico da sua empresa totalmente seguros sob a tutela de engenheiros seniores (CREA/CFT) e das diretrizes da ANVISA." },
             ].map((item, idx) => {
               const Icon = item.icon;
               return (
