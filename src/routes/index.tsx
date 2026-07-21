@@ -347,8 +347,8 @@ function Index() {
             {[
               {
                 category: "Atendimento sob Demanda",
-                title: "Atendimento Corretivo",
-                desc: "Para situações emergenciais e reparos pontuais. Diagnóstico técnico preciso e solução ágil com peças de qualidade e garantia.",
+                title: "Atendimento Corretivo Corporativo",
+                desc: "Diagnóstico técnico preciso, substituição de componentes sob demanda e reparos emergenciais com frota própria.",
                 benefits: ["Visita técnica rápida", "Diagnóstico completo", "Peças com garantia"],
                 cta: "Solicitar Atendimento Avulso",
                 msg: "Olá. Gostaria de solicitar um atendimento avulso para manutenção corretiva.",
@@ -356,7 +356,7 @@ function Index() {
               {
                 category: "Recomendado para Operações Contínuas",
                 title: "Contrato de Manutenção Preventiva Programada",
-                desc: "Visitas periódicas programadas com higienização profunda, análise de rendimento e prevenção de paradas inesperadas.",
+                desc: "Cronograma recorrente de visitas, higienização química profunda e foco em eficiência energética contínua.",
                 benefits: ["Limpeza bactericida mensal", "Análise de eficiência energética", "Atendimento prioritário"],
                 cta: "Solicitar Proposta Mensal",
                 msg: "Olá. Gostaria de solicitar uma proposta para manutenção preventiva mensal.",
@@ -364,8 +364,8 @@ function Index() {
               },
               {
                 category: "Solução Completa",
-                title: "Gestão Completa & PMOC",
-                desc: "Solução integrada com responsabilidade técnica, documentação legal completa e gestão operacional total do seu sistema.",
+                title: "Gestão Integral & Auditoria de PMOC",
+                desc: "Emissão de ART/TRT por engenheiro habilitado, livro de registro completo em conformidade com a Lei Federal nº 13.589/2018, Portaria nº 3.523/1998 e RE nº 9/2003 da ANVISA.",
                 benefits: [
                   "Responsabilidade Técnica com emissão de ART/TRT",
                   "Adequação estrita à Lei 13.589/18 e Portaria 3.523",
@@ -444,7 +444,7 @@ function Index() {
               { q: "Qual é a periodicidade recomendada para manutenção preventiva?", a: "A NBR 13971:2017 recomenda manutenção preventiva mensal para sistemas em operação contínua. A frequência pode variar conforme a carga térmica, tipo de equipamento e ambiente. A DBS Air realiza uma avaliação técnica inicial para definir o cronograma ideal para sua operação, garantindo conformidade com as normas técnicas e eficiência máxima." },
               { q: "A DBS Air emite ART e documentação legal?", a: "Sim. A DBS Air emite ART (Anotação de Responsabilidade Técnica) ou TRT (Termo de Responsabilidade Técnica) devidamente registrada no CREA ou CFT, assinada por engenheiro mecânico ou técnico legalmente habilitado. Fornecemos também Livro de Registro Técnico, relatórios mensais de rastreabilidade e toda documentação necessária para auditorias da Vigilância Sanitária e ANVISA." },
               { q: "Como é feito o diagnóstico inicial da minha climatização?", a: "O diagnóstico inicial é realizado por engenheiro qualificado e inclui: inspeção visual completa dos equipamentos, medição de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias), verificação de conformidade com normas ABNT e ANVISA, e recomendações de manutenção. Ao final, você recebe um relatório técnico detalhado com proposta personalizada." },
-              { q: "Vocês oferecem suporte emergencial fora do horário comercial?", a: "Sim. A DBS Air oferece suporte emergencial 24 horas para clientes com contrato de gestão completa ou manutenção preventiva. Contato: +55 21 99825-6991. Para atendimentos emergenciais pontuais, consulte disponibilidade. Nosso objetivo é minimizar paradas operacionais e garantir a continuidade da climatização da sua empresa." },
+              { q: "Vocês oferecem suporte emergencial fora do horário comercial?", a: "Sim. A DBS Air oferece atendimento emergencial para clientes com contrato de gestão completa ou manutenção preventiva. Entre em contato pelo +55 21 99825-6991 para verificar disponibilidade e condições. Nosso objetivo é minimizar paradas operacionais e garantir a continuidade da climatização da sua empresa." },
             ].map((item, idx, arr) => (
               <div key={idx} style={{ borderBottom: idx < arr.length - 1 ? "1px solid #E2E8F0" : "none" }} className="py-5">
                 <button
