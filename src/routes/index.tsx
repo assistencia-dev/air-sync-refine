@@ -55,6 +55,10 @@ function Index() {
             <a href="https://www.instagram.com/dbs.air/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition" style={{ color: "#CBD5E1" }} aria-label="Instagram">
               <Instagram className="w-3.5 h-3.5" />
             </a>
+            <a href="/login" className="hidden md:inline-flex items-center gap-1.5 hover:text-white transition font-semibold" style={{ color: "#93C5FD" }}>
+              Portal do Cliente
+            </a>
+
           </div>
         </div>
       </div>
@@ -220,10 +224,11 @@ function Index() {
         <div className="container max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-3 gap-4 md:gap-8">
             {[
-              { n: "15+", l: "ANOS DE EXPERIÊNCIA" },
+              { n: "15+", l: "ANOS DE ATUAÇÃO" },
               { n: "100%", l: "CONFORMIDADE ANVISA" },
               { n: "SLA", l: "ACORDO DE NÍVEL DE SERVIÇO" },
             ].map((m, i) => (
+
               <div key={i} className="text-center">
                 <p className="text-4xl md:text-5xl font-bold" style={{ color: "#0284C7" }}>{m.n}</p>
                 <p className="text-xs md:text-sm mt-2 font-bold tracking-wider" style={{ color: "#0F172A" }}>{m.l}</p>
@@ -526,7 +531,7 @@ function Index() {
           </div>
 
           <div className="pt-8 text-center text-sm" style={{ borderTop: "1px solid #1E3A8A", color: "#94A3B8" }}>
-            <p>&copy; 2024 DBS Air Refrigeração LTDA · CNPJ 13.352.707/0001-09 · Todos os direitos reservados.</p>
+            <p>&copy; 2026 DBS Air Refrigeração LTDA · CNPJ 13.352.707/0001-09 · Todos os direitos reservados.</p>
           </div>
         </div>
       </footer>
