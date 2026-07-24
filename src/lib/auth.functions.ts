@@ -87,9 +87,12 @@ export const getMyProfile = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("users")
-      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager")
+      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status, unit:unit_id(name, cnpj, address_json), company:company_id(legal_name, trade_name)")
       .eq("auth_id", context.userId)
       .maybeSingle();
     if (error) throw new Error(error.message);
+    if (data && data.status && data.status !== "ativo") {
+      throw new Error("Acesso suspenso. Entre em contato com a DBS Air.");
+    }
     return data;
   });
