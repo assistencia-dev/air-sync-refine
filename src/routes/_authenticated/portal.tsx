@@ -23,7 +23,11 @@ function PortalPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
-  const tickets = useQuery({ queryKey: ["my-tickets"], queryFn: () => listMyTickets() });
+  const tickets = useQuery({
+    queryKey: ["my-tickets"],
+    queryFn: () => listMyTickets(),
+    enabled: !!profile.data,
+  });
 
   useEffect(() => {
     // If super/admin lands here by mistake, forward.
@@ -31,6 +35,19 @@ function PortalPage() {
       navigate({ to: "/admin", replace: true });
     }
   }, [profile.data, navigate]);
+
+  // If the account was suspended mid-session, sign out.
+  useEffect(() => {
+    const msg = profile.error instanceof Error ? profile.error.message : "";
+    if (msg.includes("Acesso suspenso")) {
+      (async () => {
+        await qc.cancelQueries();
+        qc.clear();
+        await supabase.auth.signOut();
+        navigate({ to: "/login", replace: true });
+      })();
+    }
+  }, [profile.error, qc, navigate]);
 
   const [occurrence, setOccurrence] = useState(OCCURRENCE_TYPES[0]);
   const [desc, setDesc] = useState("");
@@ -53,6 +70,10 @@ function PortalPage() {
     navigate({ to: "/login", replace: true });
   }
 
+  const unit = (profile.data as any)?.unit;
+  const company = (profile.data as any)?.company;
+
+
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
       <header className="bg-white border-b border-slate-200 shadow-sm">
@@ -72,7 +93,28 @@ function PortalPage() {
         </div>
       </header>
 
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-center gap-x-8 gap-y-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Empresa</div>
+            <div className="text-sm font-semibold text-slate-900">{company?.trade_name ?? company?.legal_name ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Unidade</div>
+            <div className="text-sm font-semibold text-slate-900">{unit?.name ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">CNPJ</div>
+            <div className="text-sm font-mono text-slate-700">{unit?.cnpj ?? "—"}</div>
+          </div>
+          <div className="ml-auto text-[11px] text-slate-500">
+            Contexto herdado da sessão autenticada. Não editável.
+          </div>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
+
         <section className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm h-fit">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
             <PlusCircle className="w-5 h-5" style={{ color: "#16A34A" }} /> Abrir novo chamado

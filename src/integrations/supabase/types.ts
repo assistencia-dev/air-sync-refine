@@ -55,6 +55,48 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata_json: Json | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           account_type: string | null
@@ -107,6 +149,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "ticket_attachments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_timeline: {
+        Row: {
+          author_user_id: string | null
+          created_at: string
+          id: string
+          note_text: string | null
+          role_label: string | null
+          status_change: string | null
+          ticket_id: string
+        }
+        Insert: {
+          author_user_id?: string | null
+          created_at?: string
+          id?: string
+          note_text?: string | null
+          role_label?: string | null
+          status_change?: string | null
+          ticket_id: string
+        }
+        Update: {
+          author_user_id?: string | null
+          created_at?: string
+          id?: string
+          note_text?: string | null
+          role_label?: string | null
+          status_change?: string | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_timeline_author_user_id_fkey"
+            columns: ["author_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_timeline_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
@@ -295,6 +382,7 @@ export type Database = {
       }
       current_unit_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      usuario_esta_ativo: { Args: never; Returns: boolean }
     }
     Enums: {
       role_key:
