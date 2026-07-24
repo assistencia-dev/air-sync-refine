@@ -27,7 +27,7 @@ export const resolveLogin = createServerFn({ method: "POST" })
     const digits = normalizeDigits(raw);
     const isEmail = raw.includes("@");
 
-    let query = supabaseAdmin.from("users").select("email, username, cpf").limit(1);
+    let query = supabaseAdmin.from("users").select("email, username, cpf, status").limit(1);
     if (isEmail) {
       query = query.ilike("email", raw);
     } else if (digits.length === 11) {
@@ -40,7 +40,12 @@ export const resolveLogin = createServerFn({ method: "POST" })
     }
     const { data: found } = await query.maybeSingle();
 
-    if (found?.email) return { email: found.email };
+    if (found?.email) {
+      if (found.status && found.status !== "ativo") {
+        throw new Error("Acesso suspenso. Entre em contato com a DBS Air.");
+      }
+      return { email: found.email };
+    }
 
     // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
