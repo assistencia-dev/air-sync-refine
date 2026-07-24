@@ -23,7 +23,11 @@ function PortalPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
-  const tickets = useQuery({ queryKey: ["my-tickets"], queryFn: () => listMyTickets() });
+  const tickets = useQuery({
+    queryKey: ["my-tickets"],
+    queryFn: () => listMyTickets(),
+    enabled: !!profile.data,
+  });
 
   useEffect(() => {
     // If super/admin lands here by mistake, forward.
@@ -31,6 +35,19 @@ function PortalPage() {
       navigate({ to: "/admin", replace: true });
     }
   }, [profile.data, navigate]);
+
+  // If the account was suspended mid-session, sign out.
+  useEffect(() => {
+    const msg = profile.error instanceof Error ? profile.error.message : "";
+    if (msg.includes("Acesso suspenso")) {
+      (async () => {
+        await qc.cancelQueries();
+        qc.clear();
+        await supabase.auth.signOut();
+        navigate({ to: "/login", replace: true });
+      })();
+    }
+  }, [profile.error, qc, navigate]);
 
   const [occurrence, setOccurrence] = useState(OCCURRENCE_TYPES[0]);
   const [desc, setDesc] = useState("");
@@ -52,6 +69,10 @@ function PortalPage() {
     await supabase.auth.signOut();
     navigate({ to: "/login", replace: true });
   }
+
+  const unit = (profile.data as any)?.unit;
+  const company = (profile.data as any)?.company;
+
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
