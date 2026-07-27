@@ -152,6 +152,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers() });
   const [confirm, setConfirm] = useState<{ id: string; name: string; nextStatus: "ativo" | "bloqueado" } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const mut = useMutation({
     mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) => setUserStatus({ data: v }),
@@ -169,12 +170,22 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Usuários Vinculados</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {isSuperAdmin ? "Somente SUPER_ADMIN pode ativar ou desativar acessos." : "Visualização apenas — ativação restrita ao SUPER_ADMIN."}
+            {isSuperAdmin ? "Somente SUPER_ADMIN pode criar, ativar ou desativar acessos." : "Visualização apenas — gestão restrita ao SUPER_ADMIN."}
           </p>
         </div>
-        <button onClick={() => users.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
-          <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              + Novo Acesso
+            </button>
+          )}
+          <button onClick={() => users.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+            <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
