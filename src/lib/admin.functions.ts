@@ -59,3 +59,99 @@ export const setUserStatus = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+/** Lists companies and units for admin selection when creating accesses. */
+export const listCompaniesUnits = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: me } = await context.supabase
+      .from("users").select("role_key").eq("auth_id", context.userId).maybeSingle();
+    if (!me || (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL")) {
+      throw new Error("Acesso negado.");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [companies, units] = await Promise.all([
+      supabaseAdmin.from("companies").select("id, legal_name, trade_name").order("legal_name"),
+      supabaseAdmin.from("units").select("id, name, company_id").order("name"),
+    ]);
+    if (companies.error) throw new Error(companies.error.message);
+    if (units.error) throw new Error(units.error.message);
+    return { companies: companies.data ?? [], units: units.data ?? [] };
+  });
+
+/** SUPER_ADMIN creates a client access (Auth user + public.users profile). */
+export const createClientUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    full_name: string;
+    email: string;
+    cpf?: string;
+    role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
+    unit_id?: string | null;
+    company_id?: string | null;
+    password: string;
+    is_unit_manager?: boolean;
+  }) => {
+    if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
+    if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
+    if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
+      throw new Error("Papel inválido.");
+    }
+    if (!input?.password || input.password.length < 8) throw new Error("Senha temporária muito curta.");
+    return {
+      full_name: input.full_name.trim(),
+      email: input.email.trim().toLowerCase(),
+      cpf: input.cpf?.replace(/\D+/g, "") || null,
+      role_key: input.role_key,
+      unit_id: input.unit_id || null,
+      company_id: input.company_id || null,
+      password: input.password,
+      is_unit_manager: !!input.is_unit_manager,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const { data: me } = await context.supabase
+      .from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
+    if (!me || me.role_key !== "SUPER_ADMIN") {
+      throw new Error("Somente SUPER_ADMIN pode criar acessos.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { full_name: data.full_name },
+    });
+    if (createErr || !created?.user?.id) {
+      throw new Error(createErr?.message || "Falha ao criar usuário no Auth.");
+    }
+    const authId = created.user.id;
+
+    const { error: insErr } = await supabaseAdmin.from("users").insert({
+      auth_id: authId,
+      full_name: data.full_name,
+      email: data.email,
+      cpf: data.cpf,
+      role_key: data.role_key,
+      unit_id: data.unit_id,
+      company_id: data.company_id,
+      is_unit_manager: data.is_unit_manager,
+      status: "ativo",
+      created_by: me.id,
+    });
+    if (insErr) {
+      // rollback auth user to avoid orphans
+      await supabaseAdmin.auth.admin.deleteUser(authId);
+      throw new Error(insErr.message);
+    }
+
+    await supabaseAdmin.from("audit_log").insert({
+      actor_user_id: me.id,
+      action: "created_user",
+      metadata_json: { email: data.email, role_key: data.role_key, unit_id: data.unit_id, at: new Date().toISOString() },
+    });
+
+    return { ok: true, email: data.email };
+  });

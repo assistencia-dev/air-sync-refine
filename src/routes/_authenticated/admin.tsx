@@ -5,7 +5,7 @@ import { LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { listAllTickets, updateTicketStatus } from "@/lib/tickets.functions";
-import { listAllUsers, setUserStatus } from "@/lib/admin.functions";
+import { listAllUsers, setUserStatus, listCompaniesUnits, createClientUser } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -152,6 +152,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers() });
   const [confirm, setConfirm] = useState<{ id: string; name: string; nextStatus: "ativo" | "bloqueado" } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const mut = useMutation({
     mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) => setUserStatus({ data: v }),
@@ -169,12 +170,22 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Usuários Vinculados</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {isSuperAdmin ? "Somente SUPER_ADMIN pode ativar ou desativar acessos." : "Visualização apenas — ativação restrita ao SUPER_ADMIN."}
+            {isSuperAdmin ? "Somente SUPER_ADMIN pode criar, ativar ou desativar acessos." : "Visualização apenas — gestão restrita ao SUPER_ADMIN."}
           </p>
         </div>
-        <button onClick={() => users.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
-          <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              + Novo Acesso
+            </button>
+          )}
+          <button onClick={() => users.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+            <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -274,6 +285,193 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           </div>
         </div>
       )}
+
+      {showCreate && isSuperAdmin && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => qc.invalidateQueries({ queryKey: ["all-users"] })}
+        />
+      )}
+    </div>
+  );
+}
+
+function generatePassword(len = 12) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+  const arr = new Uint32Array(len);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
+
+function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const cu = useQuery({ queryKey: ["companies-units"], queryFn: () => listCompaniesUnits() });
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">("CLIENTE_PF");
+  const [companyId, setCompanyId] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [password, setPassword] = useState(() => generatePassword());
+  const [isUnitManager, setIsUnitManager] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ email: string; password: string } | null>(null);
+
+  const filteredUnits = (cu.data?.units ?? []).filter((u: any) => !companyId || u.company_id === companyId);
+
+  const mut = useMutation({
+    mutationFn: () =>
+      createClientUser({
+        data: {
+          full_name: fullName,
+          email,
+          cpf: cpf || undefined,
+          role_key: roleKey,
+          unit_id: unitId || null,
+          company_id: companyId || null,
+          password,
+          is_unit_manager: isUnitManager,
+        },
+      }),
+    onSuccess: (r) => {
+      setSuccess({ email: r.email, password });
+      setErr(null);
+      onCreated();
+    },
+    onError: (e) => setErr(e instanceof Error ? e.message : "Falha ao criar acesso."),
+  });
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+          <h3 className="text-lg font-bold text-slate-900">Acesso criado com sucesso</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Copie e envie ao cliente. A senha temporária não será exibida novamente.
+          </p>
+          <div className="mt-4 space-y-2">
+            <div className="p-3 rounded-md bg-slate-50 border border-slate-200 text-sm">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Login (e-mail)</div>
+              <div className="font-mono">{success.email}</div>
+            </div>
+            <div className="p-3 rounded-md bg-slate-50 border border-slate-200 text-sm">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Senha temporária</div>
+              <div className="font-mono">{success.password}</div>
+            </div>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`Login: ${success.email}\nSenha: ${success.password}`);
+              }}
+              className="text-xs font-semibold px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Copiar credenciais
+            </button>
+            <button
+              onClick={onClose}
+              className="text-xs font-semibold px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !mut.isPending && onClose()}>
+      <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-slate-900">Novo Acesso</h3>
+        <p className="mt-1 text-xs text-slate-500">Crie o login de um cliente vinculado a uma empresa/unidade.</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          <Field label="Nome completo *">
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="E-mail *">
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="CPF (opcional)">
+              <input value={cpf} onChange={(e) => setCpf(e.target.value)} className={inputCls} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Papel *">
+              <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
+                <option value="CLIENTE_PF">CLIENTE_PF</option>
+                <option value="GESTOR_CONTA">GESTOR_CONTA</option>
+                <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
+              </select>
+            </Field>
+            <Field label="Empresa">
+              <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
+                <option value="">—</option>
+                {cu.data?.companies?.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <Field label="Unidade / Loja">
+            <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+              <option value="">—</option>
+              {filteredUnits.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </Field>
+          <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
+            Gestor da unidade (pode ver chamados dos colegas da unidade)
+          </label>
+          <Field label="Senha temporária">
+            <div className="flex gap-2">
+              <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls + " font-mono"} />
+              <button
+                type="button"
+                onClick={() => setPassword(generatePassword())}
+                className="text-xs font-semibold px-3 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+              >
+                Gerar
+              </button>
+            </div>
+          </Field>
+        </div>
+
+        {err && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{err}</div>}
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={mut.isPending}
+            className="text-xs font-semibold px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending}
+            className="text-xs font-semibold px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
+          >
+            {mut.isPending ? "Criando..." : "Criar Acesso"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inputCls = "w-full text-sm px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">{label}</label>
+      {children}
     </div>
   );
 }
