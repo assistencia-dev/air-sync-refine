@@ -5,7 +5,7 @@ import { LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { listAllTickets, updateTicketStatus } from "@/lib/tickets.functions";
-import { listAllUsers, setUserStatus } from "@/lib/admin.functions";
+import { listAllUsers, setUserStatus, listCompaniesUnits, createClientUser } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/_authenticated/admin")({
