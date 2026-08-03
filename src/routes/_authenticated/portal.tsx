@@ -215,10 +215,13 @@ function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
     aberto: { bg: "#DBEAFE", fg: "#1D4ED8", label: "Aberto" },
     atribuido: { bg: "#FEF3C7", fg: "#B45309", label: "Atribuído" },
+    em_atendimento: { bg: "#FEF3C7", fg: "#B45309", label: "Em atendimento" },
     em_rota: { bg: "#E0E7FF", fg: "#4338CA", label: "Em rota" },
     aguardando_peca: { bg: "#FEE2E2", fg: "#B91C1C", label: "Aguardando peça" },
     concluido: { bg: "#DCFCE7", fg: "#166534", label: "Concluído" },
+    cancelado: { bg: "#F1F5F9", fg: "#475569", label: "Cancelado" },
   };
   const it = map[status] ?? { bg: "#F1F5F9", fg: "#334155", label: status };
   return <span className="inline-block px-2 py-0.5 text-[11px] font-bold rounded" style={{ background: it.bg, color: it.fg }}>{it.label}</span>;
 }
+
