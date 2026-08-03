@@ -420,6 +420,10 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [unitId, setUnitId] = useState("");
   const [password, setPassword] = useState(() => generatePassword());
   const [isUnitManager, setIsUnitManager] = useState(false);
+  const [clientMode, setClientMode] = useState<"novo" | "existente">("novo");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyCnpj, setNewCompanyCnpj] = useState("");
+  const [newUnitName, setNewUnitName] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ email: string; password: string } | null>(null);
 
@@ -433,12 +437,17 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           email,
           cpf: cpf || undefined,
           role_key: roleKey,
-          unit_id: unitId || null,
-          company_id: companyId || null,
           password,
-          is_unit_manager: isUnitManager,
+          ...(clientMode === "existente"
+            ? { company_id: companyId || null, unit_id: unitId || null, is_unit_manager: isUnitManager }
+            : {
+                new_company_name: newCompanyName,
+                new_company_cnpj: newCompanyCnpj,
+                new_unit_name: newUnitName,
+              }),
         },
       }),
+
     onSuccess: (r) => {
       setSuccess({ email: r.email, password });
       setErr(null);
