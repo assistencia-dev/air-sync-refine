@@ -79,7 +79,9 @@ export const listCompaniesUnits = createServerFn({ method: "GET" })
     return { companies: companies.data ?? [], units: units.data ?? [] };
   });
 
-/** SUPER_ADMIN creates a client access (Auth user + public.users profile). */
+/** SUPER_ADMIN creates a client access (Auth user + public.users profile).
+ *  Mode A: vincula a empresa/unidade existentes (company_id/unit_id).
+ *  Mode B: cliente novo — cria empresa + unidade na hora. */
 export const createClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: {
@@ -91,6 +93,9 @@ export const createClientUser = createServerFn({ method: "POST" })
     company_id?: string | null;
     password: string;
     is_unit_manager?: boolean;
+    new_company_name?: string | null;
+    new_company_cnpj?: string | null;
+    new_unit_name?: string | null;
   }) => {
     if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
     if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
@@ -98,15 +103,24 @@ export const createClientUser = createServerFn({ method: "POST" })
       throw new Error("Papel inválido.");
     }
     if (!input?.password || input.password.length < 8) throw new Error("Senha temporária muito curta.");
+    const company_id = input.company_id || null;
+    const new_company_name = input.new_company_name?.trim() || null;
+    const new_company_cnpj = input.new_company_cnpj?.trim() || null;
+    if (!company_id && (!new_company_name || !new_company_cnpj)) {
+      throw new Error("Para cliente novo, informe Nome da Empresa e CNPJ.");
+    }
     return {
       full_name: input.full_name.trim(),
       email: input.email.trim().toLowerCase(),
       cpf: input.cpf?.replace(/\D+/g, "") || null,
       role_key: input.role_key,
       unit_id: input.unit_id || null,
-      company_id: input.company_id || null,
+      company_id,
       password: input.password,
       is_unit_manager: !!input.is_unit_manager,
+      new_company_name,
+      new_company_cnpj,
+      new_unit_name: input.new_unit_name?.trim() || null,
     };
   })
   .handler(async ({ context, data }) => {
@@ -117,6 +131,39 @@ export const createClientUser = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let finalCompanyId = data.company_id;
+    let finalUnitId = data.unit_id;
+    let isUnitManager = data.is_unit_manager;
+
+    // Cliente novo: cria empresa + unidade automaticamente
+    if (!finalCompanyId) {
+      const { data: newCompany, error: companyErr } = await supabaseAdmin
+        .from("companies")
+        .insert({
+          legal_name: data.new_company_name!,
+          trade_name: data.new_company_name!,
+          cnpj_matriz: data.new_company_cnpj!,
+          account_type: "avulso",
+        })
+        .select()
+        .single();
+      if (companyErr) throw new Error("Erro ao criar empresa: " + companyErr.message);
+      finalCompanyId = newCompany.id;
+
+      const { data: newUnit, error: unitErr } = await supabaseAdmin
+        .from("units")
+        .insert({
+          company_id: finalCompanyId,
+          name: data.new_unit_name || data.new_company_name!,
+          cnpj: data.new_company_cnpj!,
+        })
+        .select()
+        .single();
+      if (unitErr) throw new Error("Erro ao criar unidade: " + unitErr.message);
+      finalUnitId = newUnit.id;
+      isUnitManager = true; // única unidade do cliente
+    }
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -135,14 +182,13 @@ export const createClientUser = createServerFn({ method: "POST" })
       email: data.email,
       cpf: data.cpf,
       role_key: data.role_key,
-      unit_id: data.unit_id,
-      company_id: data.company_id,
-      is_unit_manager: data.is_unit_manager,
+      unit_id: finalUnitId,
+      company_id: finalCompanyId,
+      is_unit_manager: isUnitManager,
       status: "ativo",
       created_by: me.id,
     });
     if (insErr) {
-      // rollback auth user to avoid orphans
       await supabaseAdmin.auth.admin.deleteUser(authId);
       throw new Error(insErr.message);
     }
@@ -150,8 +196,16 @@ export const createClientUser = createServerFn({ method: "POST" })
     await supabaseAdmin.from("audit_log").insert({
       actor_user_id: me.id,
       action: "created_user",
-      metadata_json: { email: data.email, role_key: data.role_key, unit_id: data.unit_id, at: new Date().toISOString() },
+      metadata_json: {
+        email: data.email,
+        role_key: data.role_key,
+        company_id: finalCompanyId,
+        unit_id: finalUnitId,
+        created_company: !data.company_id,
+        at: new Date().toISOString(),
+      },
     });
 
     return { ok: true, email: data.email };
   });
+

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
-import { listAllTickets, updateTicketStatus } from "@/lib/tickets.functions";
+import { listAllTickets, updateTicketStatus, assumeTicket, completeTicket, cancelTicket } from "@/lib/tickets.functions";
 import { listAllUsers, setUserStatus, listCompaniesUnits, createClientUser } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-const STATUSES = ["aberto", "atribuido", "em_rota", "aguardando_peca", "concluido"];
+const STATUSES = ["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"];
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -91,22 +91,48 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
 function TicketsPanel() {
   const qc = useQueryClient();
   const tickets = useQuery({ queryKey: ["all-tickets"], queryFn: () => listAllTickets() });
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; protocol: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [actionErr, setActionErr] = useState<string | null>(null);
+
+  const reload = () => qc.invalidateQueries({ queryKey: ["all-tickets"] });
+  const onErr = (e: unknown) => setActionErr(e instanceof Error ? e.message : "Falha na operação.");
+
   const mut = useMutation({
     mutationFn: (v: { id: string; status: string }) => updateTicketStatus({ data: v }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["all-tickets"] }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
   });
+  const assume = useMutation({
+    mutationFn: (id: string) => assumeTicket({ data: { id } }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
+  });
+  const complete = useMutation({
+    mutationFn: (v: { id: string; asset_id: string | null }) => completeTicket({ data: v }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
+  });
+  const cancel = useMutation({
+    mutationFn: (v: { id: string; reason: string }) => cancelTicket({ data: v }),
+    onSuccess: () => { setActionErr(null); setCancelTarget(null); setCancelReason(""); reload(); },
+    onError: onErr,
+  });
+
+  const busy = assume.isPending || complete.isPending || cancel.isPending;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
       <div className="p-6 border-b border-slate-200 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Central de Chamados (Visão Global)</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Todos os chamados de todas as unidades. Altere status inline.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Assuma, conclua ou cancele ordens de serviço. Não há reabertura de chamados encerrados.</p>
         </div>
         <button onClick={() => tickets.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
           <RefreshCw className="w-3.5 h-3.5" /> Atualizar
         </button>
       </div>
+      {actionErr && <div className="mx-6 mt-4 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
@@ -117,35 +143,114 @@ function TicketsPanel() {
               <th className="text-left px-4 py-3">Aberto por</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Aberto em</th>
+              <th className="text-right px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {tickets.isLoading && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
-            {tickets.data?.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Nenhum chamado.</td></tr>}
-            {tickets.data?.map((t: any) => (
-              <tr key={t.id} className="border-t border-slate-100 align-top">
-                <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
-                <td className="px-4 py-3">{t.occurrence_type}</td>
-                <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
-                <td className="px-4 py-3 text-xs">{t.users?.full_name ?? t.users?.username ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <select
-                    value={t.status}
-                    onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
-                    className="text-xs px-2 py-1 rounded border border-slate-300"
-                  >
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
-              </tr>
-            ))}
+            {tickets.isLoading && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
+            {tickets.data?.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhum chamado.</td></tr>}
+            {tickets.data?.map((t: any) => {
+              const closed = t.status === "concluido" || t.status === "cancelado";
+              return (
+                <tr key={t.id} className="border-t border-slate-100 align-top">
+                  <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
+                  <td className="px-4 py-3">{t.occurrence_type}</td>
+                  <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs">{t.users?.full_name ?? t.users?.username ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={t.status}
+                      onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
+                      className="text-xs px-2 py-1 rounded border border-slate-300"
+                    >
+                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {t.assumed_by && (
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Assumido por {t.assumed?.full_name ?? t.assumed?.username ?? "administrador"}
+                        {t.assumed_at ? ` em ${new Date(t.assumed_at).toLocaleString("pt-BR")}` : ""}
+                      </div>
+                    )}
+                    {t.status === "cancelado" && t.cancel_reason && (
+                      <div className="mt-1 text-[11px] text-red-700">Motivo: {t.cancel_reason}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-end gap-1.5">
+                      {t.status === "aberto" && (
+                        <button
+                          disabled={busy}
+                          onClick={() => assume.mutate(t.id)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Assumir Chamado
+                        </button>
+                      )}
+                      {(t.status === "em_atendimento" || t.status === "aguardando_peca" || t.status === "atribuido" || t.status === "em_rota") && (
+                        <button
+                          disabled={busy}
+                          onClick={() => complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Concluir Chamado
+                        </button>
+                      )}
+                      {!closed && (
+                        <button
+                          disabled={busy}
+                          onClick={() => { setCancelReason(""); setActionErr(null); setCancelTarget({ id: t.id, protocol: t.protocol_number }); }}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Cancelar Chamado
+                        </button>
+                      )}
+                      {closed && <span className="text-xs text-slate-400">Encerrado</span>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !cancel.isPending && setCancelTarget(null)}>
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">Cancelar chamado {cancelTarget.protocol}</h3>
+            <p className="mt-2 text-sm text-slate-600">Informe a justificativa (mínimo 10 caracteres). Esta ação é definitiva.</p>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={4}
+              className="mt-3 w-full text-sm px-3 py-2 rounded-md border border-slate-300"
+              placeholder="Ex: Cliente informou que o equipamento foi substituído."
+            />
+            {actionErr && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setCancelTarget(null)}
+                disabled={cancel.isPending}
+                className="text-xs font-semibold px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => cancel.mutate({ id: cancelTarget.id, reason: cancelReason })}
+                disabled={cancel.isPending}
+                className="text-xs font-semibold px-4 py-2 rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
+              >
+                {cancel.isPending ? "Cancelando..." : "Confirmar cancelamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const qc = useQueryClient();
@@ -296,6 +401,15 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   );
 }
 
+function maskCnpj(v: string) {
+  const d = v.replace(/\D+/g, "").slice(0, 14);
+  return d
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2");
+}
+
 function generatePassword(len = 12) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let out = "";
@@ -315,6 +429,10 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [unitId, setUnitId] = useState("");
   const [password, setPassword] = useState(() => generatePassword());
   const [isUnitManager, setIsUnitManager] = useState(false);
+  const [clientMode, setClientMode] = useState<"novo" | "existente">("novo");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyCnpj, setNewCompanyCnpj] = useState("");
+  const [newUnitName, setNewUnitName] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ email: string; password: string } | null>(null);
 
@@ -328,12 +446,17 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           email,
           cpf: cpf || undefined,
           role_key: roleKey,
-          unit_id: unitId || null,
-          company_id: companyId || null,
           password,
-          is_unit_manager: isUnitManager,
+          ...(clientMode === "existente"
+            ? { company_id: companyId || null, unit_id: unitId || null, is_unit_manager: isUnitManager }
+            : {
+                new_company_name: newCompanyName,
+                new_company_cnpj: newCompanyCnpj,
+                new_unit_name: newUnitName,
+              }),
         },
       }),
+
     onSuccess: (r) => {
       setSuccess({ email: r.email, password });
       setErr(null);
@@ -385,7 +508,18 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !mut.isPending && onClose()}>
       <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-slate-900">Novo Acesso</h3>
-        <p className="mt-1 text-xs text-slate-500">Crie o login de um cliente vinculado a uma empresa/unidade.</p>
+        <p className="mt-1 text-xs text-slate-500">Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.</p>
+
+        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+          <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
+            <input type="radio" name="clientMode" checked={clientMode === "novo"} onChange={() => setClientMode("novo")} className="mt-0.5" />
+            Cliente Novo (cria empresa automaticamente)
+          </label>
+          <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
+            <input type="radio" name="clientMode" checked={clientMode === "existente"} onChange={() => setClientMode("existente")} className="mt-0.5" />
+            Vincular a uma Rede/Empresa já existente
+          </label>
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3">
           <Field label="Nome completo *">
@@ -399,35 +533,70 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
               <input value={cpf} onChange={(e) => setCpf(e.target.value)} className={inputCls} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Papel *">
-              <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
-                <option value="CLIENTE_PF">CLIENTE_PF</option>
-                <option value="GESTOR_CONTA">GESTOR_CONTA</option>
-                <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
-              </select>
-            </Field>
-            <Field label="Empresa">
-              <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
-                <option value="">—</option>
-                {cu.data?.companies?.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field label="Unidade / Loja">
-            <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
-              <option value="">—</option>
-              {filteredUnits.map((u: any) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
+          <Field label="Papel *">
+            <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
+              <option value="CLIENTE_PF">CLIENTE_PF</option>
+              <option value="GESTOR_CONTA">GESTOR_CONTA</option>
+              <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
             </select>
           </Field>
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-            <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
-            Gestor da unidade (pode ver chamados dos colegas da unidade)
-          </label>
+
+          {clientMode === "existente" && (
+            <>
+              <Field label="Empresa">
+                <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
+                  <option value="">—</option>
+                  {cu.data?.companies?.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Unidade / Loja">
+                <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  {filteredUnits.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
+                Gestor da unidade (pode ver chamados dos colegas da unidade)
+              </label>
+            </>
+          )}
+
+          {clientMode === "novo" && (
+            <>
+              <Field label="Nome da Empresa/Cliente *">
+                <input
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className={inputCls}
+                  placeholder="Ex: Farmácia São João LTDA"
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="CNPJ *">
+                  <input
+                    value={newCompanyCnpj}
+                    onChange={(e) => setNewCompanyCnpj(maskCnpj(e.target.value))}
+                    className={inputCls + " font-mono"}
+                    placeholder="00.000.000/0000-00"
+                  />
+                </Field>
+                <Field label="Nome da Unidade (opcional)">
+                  <input
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    className={inputCls}
+                    placeholder="Se vazio, usa o nome da empresa"
+                  />
+                </Field>
+              </div>
+            </>
+          )}
+
           <Field label="Senha temporária">
             <div className="flex gap-2">
               <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls + " font-mono"} />
