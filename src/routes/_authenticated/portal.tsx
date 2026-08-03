@@ -180,14 +180,28 @@ function PortalPage() {
               <tbody>
                 {tickets.isLoading && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
                 {tickets.data?.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum chamado ainda.</td></tr>}
-                {tickets.data?.map((t) => (
-                  <tr key={t.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
-                    <td className="px-4 py-3">{t.occurrence_type}</td>
-                    <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
-                  </tr>
-                ))}
+                {tickets.data?.map((t: any) => {
+                  const closed = t.status === "concluido" || t.status === "cancelado";
+                  return (
+                    <tr key={t.id} className="border-t border-slate-100 align-top">
+                      <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
+                      <td className="px-4 py-3">{t.occurrence_type}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={t.status} />
+                        {closed && (
+                          <p className="text-[11px] text-slate-500 mt-1 max-w-[240px]">
+                            Este chamado está encerrado. Caso o problema persista ou retorne, abra um novo chamado.
+                          </p>
+                        )}
+                        {t.status === "cancelado" && t.cancel_reason && (
+                          <p className="text-[11px] text-red-700 mt-1 max-w-[240px]">Motivo: {t.cancel_reason}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
+                    </tr>
+                  );
+                })}
+
               </tbody>
             </table>
           </div>
