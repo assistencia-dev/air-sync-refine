@@ -91,22 +91,48 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
 function TicketsPanel() {
   const qc = useQueryClient();
   const tickets = useQuery({ queryKey: ["all-tickets"], queryFn: () => listAllTickets() });
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; protocol: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [actionErr, setActionErr] = useState<string | null>(null);
+
+  const reload = () => qc.invalidateQueries({ queryKey: ["all-tickets"] });
+  const onErr = (e: unknown) => setActionErr(e instanceof Error ? e.message : "Falha na operação.");
+
   const mut = useMutation({
     mutationFn: (v: { id: string; status: string }) => updateTicketStatus({ data: v }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["all-tickets"] }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
   });
+  const assume = useMutation({
+    mutationFn: (id: string) => assumeTicket({ data: { id } }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
+  });
+  const complete = useMutation({
+    mutationFn: (v: { id: string; asset_id: string | null }) => completeTicket({ data: v }),
+    onSuccess: () => { setActionErr(null); reload(); },
+    onError: onErr,
+  });
+  const cancel = useMutation({
+    mutationFn: (v: { id: string; reason: string }) => cancelTicket({ data: v }),
+    onSuccess: () => { setActionErr(null); setCancelTarget(null); setCancelReason(""); reload(); },
+    onError: onErr,
+  });
+
+  const busy = assume.isPending || complete.isPending || cancel.isPending;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
       <div className="p-6 border-b border-slate-200 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Central de Chamados (Visão Global)</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Todos os chamados de todas as unidades. Altere status inline.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Assuma, conclua ou cancele ordens de serviço. Não há reabertura de chamados encerrados.</p>
         </div>
         <button onClick={() => tickets.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
           <RefreshCw className="w-3.5 h-3.5" /> Atualizar
         </button>
       </div>
+      {actionErr && <div className="mx-6 mt-4 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
@@ -117,35 +143,114 @@ function TicketsPanel() {
               <th className="text-left px-4 py-3">Aberto por</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Aberto em</th>
+              <th className="text-right px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {tickets.isLoading && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
-            {tickets.data?.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Nenhum chamado.</td></tr>}
-            {tickets.data?.map((t: any) => (
-              <tr key={t.id} className="border-t border-slate-100 align-top">
-                <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
-                <td className="px-4 py-3">{t.occurrence_type}</td>
-                <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
-                <td className="px-4 py-3 text-xs">{t.users?.full_name ?? t.users?.username ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <select
-                    value={t.status}
-                    onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
-                    className="text-xs px-2 py-1 rounded border border-slate-300"
-                  >
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
-              </tr>
-            ))}
+            {tickets.isLoading && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
+            {tickets.data?.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhum chamado.</td></tr>}
+            {tickets.data?.map((t: any) => {
+              const closed = t.status === "concluido" || t.status === "cancelado";
+              return (
+                <tr key={t.id} className="border-t border-slate-100 align-top">
+                  <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
+                  <td className="px-4 py-3">{t.occurrence_type}</td>
+                  <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs">{t.users?.full_name ?? t.users?.username ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={t.status}
+                      onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
+                      className="text-xs px-2 py-1 rounded border border-slate-300"
+                    >
+                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {t.assumed_by && (
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Assumido por {t.assumed?.full_name ?? t.assumed?.username ?? "administrador"}
+                        {t.assumed_at ? ` em ${new Date(t.assumed_at).toLocaleString("pt-BR")}` : ""}
+                      </div>
+                    )}
+                    {t.status === "cancelado" && t.cancel_reason && (
+                      <div className="mt-1 text-[11px] text-red-700">Motivo: {t.cancel_reason}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-end gap-1.5">
+                      {t.status === "aberto" && (
+                        <button
+                          disabled={busy}
+                          onClick={() => assume.mutate(t.id)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Assumir Chamado
+                        </button>
+                      )}
+                      {(t.status === "em_atendimento" || t.status === "aguardando_peca" || t.status === "atribuido" || t.status === "em_rota") && (
+                        <button
+                          disabled={busy}
+                          onClick={() => complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Concluir Chamado
+                        </button>
+                      )}
+                      {!closed && (
+                        <button
+                          disabled={busy}
+                          onClick={() => { setCancelReason(""); setActionErr(null); setCancelTarget({ id: t.id, protocol: t.protocol_number }); }}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
+                        >
+                          Cancelar Chamado
+                        </button>
+                      )}
+                      {closed && <span className="text-xs text-slate-400">Encerrado</span>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !cancel.isPending && setCancelTarget(null)}>
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">Cancelar chamado {cancelTarget.protocol}</h3>
+            <p className="mt-2 text-sm text-slate-600">Informe a justificativa (mínimo 10 caracteres). Esta ação é definitiva.</p>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={4}
+              className="mt-3 w-full text-sm px-3 py-2 rounded-md border border-slate-300"
+              placeholder="Ex: Cliente informou que o equipamento foi substituído."
+            />
+            {actionErr && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setCancelTarget(null)}
+                disabled={cancel.isPending}
+                className="text-xs font-semibold px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => cancel.mutate({ id: cancelTarget.id, reason: cancelReason })}
+                disabled={cancel.isPending}
+                className="text-xs font-semibold px-4 py-2 rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-60"
+              >
+                {cancel.isPending ? "Cancelando..." : "Confirmar cancelamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const qc = useQueryClient();
