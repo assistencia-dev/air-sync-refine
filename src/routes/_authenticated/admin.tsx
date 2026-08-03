@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
-import { listAllTickets, updateTicketStatus } from "@/lib/tickets.functions";
+import { listAllTickets, updateTicketStatus, assumeTicket, completeTicket, cancelTicket } from "@/lib/tickets.functions";
 import { listAllUsers, setUserStatus, listCompaniesUnits, createClientUser } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
