@@ -499,7 +499,18 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !mut.isPending && onClose()}>
       <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-slate-900">Novo Acesso</h3>
-        <p className="mt-1 text-xs text-slate-500">Crie o login de um cliente vinculado a uma empresa/unidade.</p>
+        <p className="mt-1 text-xs text-slate-500">Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.</p>
+
+        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+          <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
+            <input type="radio" name="clientMode" checked={clientMode === "novo"} onChange={() => setClientMode("novo")} className="mt-0.5" />
+            Cliente Novo (cria empresa automaticamente)
+          </label>
+          <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
+            <input type="radio" name="clientMode" checked={clientMode === "existente"} onChange={() => setClientMode("existente")} className="mt-0.5" />
+            Vincular a uma Rede/Empresa já existente
+          </label>
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3">
           <Field label="Nome completo *">
@@ -513,35 +524,70 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
               <input value={cpf} onChange={(e) => setCpf(e.target.value)} className={inputCls} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Papel *">
-              <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
-                <option value="CLIENTE_PF">CLIENTE_PF</option>
-                <option value="GESTOR_CONTA">GESTOR_CONTA</option>
-                <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
-              </select>
-            </Field>
-            <Field label="Empresa">
-              <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
-                <option value="">—</option>
-                {cu.data?.companies?.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field label="Unidade / Loja">
-            <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
-              <option value="">—</option>
-              {filteredUnits.map((u: any) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
+          <Field label="Papel *">
+            <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
+              <option value="CLIENTE_PF">CLIENTE_PF</option>
+              <option value="GESTOR_CONTA">GESTOR_CONTA</option>
+              <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
             </select>
           </Field>
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-            <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
-            Gestor da unidade (pode ver chamados dos colegas da unidade)
-          </label>
+
+          {clientMode === "existente" && (
+            <>
+              <Field label="Empresa">
+                <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
+                  <option value="">—</option>
+                  {cu.data?.companies?.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Unidade / Loja">
+                <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  {filteredUnits.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
+                Gestor da unidade (pode ver chamados dos colegas da unidade)
+              </label>
+            </>
+          )}
+
+          {clientMode === "novo" && (
+            <>
+              <Field label="Nome da Empresa/Cliente *">
+                <input
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className={inputCls}
+                  placeholder="Ex: Farmácia São João LTDA"
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="CNPJ *">
+                  <input
+                    value={newCompanyCnpj}
+                    onChange={(e) => setNewCompanyCnpj(maskCnpj(e.target.value))}
+                    className={inputCls + " font-mono"}
+                    placeholder="00.000.000/0000-00"
+                  />
+                </Field>
+                <Field label="Nome da Unidade (opcional)">
+                  <input
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    className={inputCls}
+                    placeholder="Se vazio, usa o nome da empresa"
+                  />
+                </Field>
+              </div>
+            </>
+          )}
+
           <Field label="Senha temporária">
             <div className="flex gap-2">
               <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls + " font-mono"} />
