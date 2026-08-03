@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-const STATUSES = ["aberto", "atribuido", "em_rota", "aguardando_peca", "concluido"];
+const STATUSES = ["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"];
 
 function AdminPage() {
   const navigate = useNavigate();
