@@ -21,6 +21,7 @@ export type Database = {
           btu_capacity: number | null
           created_at: string
           id: string
+          last_maintenance_date: string | null
           status: string
           tag_code: string | null
           unit_id: string | null
@@ -31,6 +32,7 @@ export type Database = {
           btu_capacity?: number | null
           created_at?: string
           id?: string
+          last_maintenance_date?: string | null
           status?: string
           tag_code?: string | null
           unit_id?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           btu_capacity?: number | null
           created_at?: string
           id?: string
+          last_maintenance_date?: string | null
           status?: string
           tag_code?: string | null
           unit_id?: string | null
@@ -205,6 +208,9 @@ export type Database = {
         Row: {
           asset_id: string | null
           assigned_technician_id: string | null
+          assumed_at: string | null
+          assumed_by: string | null
+          cancel_reason: string | null
           closed_at: string | null
           created_at: string
           created_by_user_id: string | null
@@ -212,7 +218,7 @@ export type Database = {
           id: string
           occurrence_type: string
           priority: string
-          protocol_number: string
+          protocol_number: string | null
           sla_deadline: string | null
           status: string
           unit_id: string | null
@@ -220,6 +226,9 @@ export type Database = {
         Insert: {
           asset_id?: string | null
           assigned_technician_id?: string | null
+          assumed_at?: string | null
+          assumed_by?: string | null
+          cancel_reason?: string | null
           closed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
@@ -227,7 +236,7 @@ export type Database = {
           id?: string
           occurrence_type: string
           priority?: string
-          protocol_number?: string
+          protocol_number?: string | null
           sla_deadline?: string | null
           status?: string
           unit_id?: string | null
@@ -235,6 +244,9 @@ export type Database = {
         Update: {
           asset_id?: string | null
           assigned_technician_id?: string | null
+          assumed_at?: string | null
+          assumed_by?: string | null
+          cancel_reason?: string | null
           closed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
@@ -242,7 +254,7 @@ export type Database = {
           id?: string
           occurrence_type?: string
           priority?: string
-          protocol_number?: string
+          protocol_number?: string | null
           sla_deadline?: string | null
           status?: string
           unit_id?: string | null
@@ -253,6 +265,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_assumed_by_fkey"
+            columns: ["assumed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
