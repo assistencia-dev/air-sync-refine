@@ -28,6 +28,7 @@ import {
   createClientUser,
 } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -394,6 +395,11 @@ function TicketsPanel() {
               )
               .map((t: any) => {
                 const closed = t.status === "concluido" || t.status === "cancelado";
+                const hasOs = (t.ticket_attachments ?? []).some(
+                  (item: { file_type?: string | null; file_name?: string | null }) =>
+                    item.file_type === "application/pdf" ||
+                    item.file_name?.toLowerCase().endsWith(".pdf"),
+                );
                 return (
                   <tr key={t.id} className="border-t border-slate-100 align-top">
                     <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
@@ -405,6 +411,7 @@ function TicketsPanel() {
                       >
                         {t.description}
                       </p>
+                      <TicketAttachments ticketId={t.id} canUpload />
                     </td>
                     <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-xs">
@@ -457,13 +464,18 @@ function TicketsPanel() {
                           t.status === "atribuido" ||
                           t.status === "em_rota") && (
                           <button
-                            disabled={busy}
                             onClick={() =>
                               complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })
                             }
-                            className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 whitespace-nowrap"
+                            disabled={busy || !hasOs}
+                            title={
+                              hasOs
+                                ? "Concluir chamado"
+                                : "Anexe a OS em PDF para liberar a conclusão"
+                            }
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
                           >
-                            Concluir Chamado
+                            {hasOs ? "Concluir Chamado" : "Anexe a OS em PDF"}
                           </button>
                         )}
                         {!closed && (
