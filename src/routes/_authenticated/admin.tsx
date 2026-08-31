@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleDot, LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
+import { CheckCircle2, CircleDot, ExternalLink, LogOut, RefreshCw, Shield, Ticket, Users, WalletCards } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import {
@@ -18,6 +18,7 @@ import {
   createClientUser,
 } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -46,7 +47,7 @@ const STATUS_LABELS: Record<string, string> = {
 function AdminPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"tickets" | "users">("tickets");
+  const [tab, setTab] = useState<"tickets" | "users" | "passage">("tickets");
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
 
   useEffect(() => {
@@ -123,10 +124,24 @@ function AdminPage() {
           icon={<Users className="w-3.5 h-3.5" />}
           label="Usuários Vinculados"
         />
+        {profile.data?.username === "DBSASSISTENCIA123" && (
+          <TabBtn
+            active={tab === "passage"}
+            onClick={() => setTab("passage")}
+            icon={<WalletCards className="w-3.5 h-3.5" />}
+            label="Controle de Passagem"
+          />
+        )}
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {tab === "tickets" ? <TicketsPanel /> : <UsersPanel isSuperAdmin={isSuperAdmin} />}
+        {tab === "tickets" ? (
+          <TicketsPanel />
+        ) : tab === "users" ? (
+          <UsersPanel isSuperAdmin={isSuperAdmin} />
+        ) : (
+          <ValePassagemPanel />
+        )}
       </main>
     </div>
   );
@@ -150,6 +165,32 @@ function TabBtn({
     >
       {icon} {label}
     </button>
+  );
+}
+
+function ValePassagemPanel() {
+  const launch = useMutation({
+    mutationFn: () => createValePassageSsoUrl(),
+    onSuccess: ({ url }) => window.location.assign(url),
+  });
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="bg-gradient-to-br from-[#0E1A2E] via-[#14324B] to-[#1E8F66] px-6 py-8 text-white sm:px-10">
+        <div className="flex max-w-3xl items-start justify-between gap-6">
+          <div>
+            <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200"><WalletCards className="h-4 w-4" /> Módulo interno</span>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight">Controle de Passagem</h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-200">Acesse o painel de colaboradores, recargas, histórico e financeiro usando o mesmo acesso administrativo nativo da DBS Air.</p>
+          </div>
+          <div className="hidden rounded-2xl border border-white/15 bg-white/10 p-3 sm:block"><WalletCards className="h-8 w-8 text-emerald-200" /></div>
+        </div>
+      </div>
+      <div className="flex flex-col items-start justify-between gap-5 px-6 py-7 sm:flex-row sm:items-center sm:px-10">
+        <div><p className="text-sm font-bold text-slate-900">Dados preservados</p><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">O módulo mantém o banco original do Controle de Passagem. Nenhum colaborador ou lançamento é migrado, substituído ou apagado.</p></div>
+        <button onClick={() => launch.mutate()} disabled={launch.isPending} className="inline-flex items-center gap-2 rounded-xl bg-[#1E8F66] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-900/10 transition hover:bg-[#177653] disabled:opacity-60">{launch.isPending ? "Abrindo módulo..." : "Abrir Controle de Passagem"}<ExternalLink className="h-4 w-4" /></button>
+      </div>
+      {launch.error && <p className="border-t border-red-100 bg-red-50 px-6 py-3 text-xs font-semibold text-red-700 sm:px-10">{launch.error instanceof Error ? launch.error.message : "Não foi possível abrir o módulo."}</p>}
+    </section>
   );
 }
 
