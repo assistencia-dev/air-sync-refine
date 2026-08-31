@@ -28,7 +28,6 @@ import {
   createClientUser,
 } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
-import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -81,11 +80,57 @@ function AdminPage() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50"
+      className="min-h-screen bg-[#f4f7f6]"
       style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
     >
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#102b3b] px-5 py-6 text-white shadow-[12px_0_36px_rgba(16,43,59,.16)] lg:flex">
+        <div className="flex items-center gap-2 px-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f7c945] text-sm font-black text-[#102b3b]">
+            DBS
+          </span>
+          <div>
+            <strong className="block text-sm tracking-tight">DBS Air</strong>
+            <span className="text-[9px] font-bold uppercase tracking-[.18em] text-white/45">
+              Operações
+            </span>
+          </div>
+        </div>
+        <p className="mb-3 mt-12 px-2 text-[9px] font-bold uppercase tracking-[.18em] text-white/40">
+          Área de trabalho
+        </p>
+        <nav className="space-y-1">
+          <button
+            onClick={() => setTab("tickets")}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "tickets" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+          >
+            <Ticket className="h-4 w-4" /> Chamados
+          </button>
+          <button
+            onClick={() => setTab("users")}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "users" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+          >
+            <Users className="h-4 w-4" /> Usuários vinculados
+          </button>
+          {profile.data?.username === "DBSASSISTENCIA123" && (
+            <button
+              onClick={() => navigate({ to: "/passage" })}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white"
+            >
+              <WalletCards className="h-4 w-4" /> Controle de passagem
+            </button>
+          )}
+        </nav>
+        <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-emerald-200">
+            Sessão protegida
+          </p>
+          <p className="mt-2 truncate text-xs text-white/65">
+            {profile.data?.username ?? "Administrador"}
+          </p>
+        </div>
+      </aside>
+      <header className="border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur lg:pl-64">
+        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-3">
             <img src={logoAsset.url} alt="DBS Air" className="h-8 w-auto object-contain" />
             <span
@@ -96,6 +141,9 @@ function AdminPage() {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <span className="hidden items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 sm:inline-flex">
+              <CircleDot className="h-3 w-3 fill-emerald-500 text-emerald-500" /> Operação online
+            </span>
             <span className="text-sm font-semibold text-slate-700 hidden sm:inline">
               {profile.data?.full_name ?? profile.data?.username}
             </span>
@@ -121,7 +169,7 @@ function AdminPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 pt-6 flex gap-2 border-b border-slate-200">
+      <div className="mx-auto flex max-w-7xl gap-2 border-b border-slate-200 px-4 pt-6 lg:hidden">
         <TabBtn
           active={tab === "tickets"}
           onClick={() => setTab("tickets")}
@@ -144,7 +192,7 @@ function AdminPage() {
         )}
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 lg:pl-72 lg:pr-8">
         {tab === "tickets" ? (
           <TicketsPanel />
         ) : tab === "users" ? (
@@ -179,10 +227,6 @@ function TabBtn({
 }
 
 function ValePassagemPanel() {
-  const launch = useMutation({
-    mutationFn: () => createValePassageSsoUrl(),
-    onSuccess: ({ url }) => window.location.assign(url),
-  });
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="bg-gradient-to-br from-[#0E1A2E] via-[#14324B] to-[#1E8F66] px-6 py-8 text-white sm:px-10">
@@ -193,8 +237,7 @@ function ValePassagemPanel() {
             </span>
             <h2 className="mt-3 text-3xl font-bold tracking-tight">Controle de Passagem</h2>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-200">
-              Acesse o painel de colaboradores, recargas, histórico e financeiro usando o mesmo
-              acesso administrativo nativo da DBS Air.
+              Colaboradores, recargas, histórico e financeiro dentro da área de trabalho DBS Air.
             </p>
           </div>
           <div className="hidden rounded-2xl border border-white/15 bg-white/10 p-3 sm:block">
@@ -206,26 +249,17 @@ function ValePassagemPanel() {
         <div>
           <p className="text-sm font-bold text-slate-900">Dados preservados</p>
           <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
-            O módulo mantém o banco original do Controle de Passagem. Nenhum colaborador ou
-            lançamento é migrado, substituído ou apagado.
+            O módulo continua usando o banco original. Nenhum colaborador ou lançamento é migrado,
+            substituído ou apagado.
           </p>
         </div>
-        <button
-          onClick={() => launch.mutate()}
-          disabled={launch.isPending}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#1E8F66] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-900/10 transition hover:bg-[#177653] disabled:opacity-60"
+        <a
+          href="/passage"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#1E8F66] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-900/10 transition hover:bg-[#177653]"
         >
-          {launch.isPending ? "Abrindo módulo..." : "Abrir Controle de Passagem"}
-          <ExternalLink className="h-4 w-4" />
-        </button>
+          <ExternalLink className="h-4 w-4" /> Abrir módulo interno
+        </a>
       </div>
-      {launch.error && (
-        <p className="border-t border-red-100 bg-red-50 px-6 py-3 text-xs font-semibold text-red-700 sm:px-10">
-          {launch.error instanceof Error
-            ? launch.error.message
-            : "Não foi possível abrir o módulo."}
-        </p>
-      )}
     </section>
   );
 }
