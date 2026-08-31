@@ -1,13 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Shield, Utensils, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
+import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 
 const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
-
-type Benefit = "passagem" | "alimentacao";
 
 export const Route = createFileRoute("/_authenticated/passage")({
   head: () => ({ meta: [{ title: "RH | DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -16,8 +15,8 @@ export const Route = createFileRoute("/_authenticated/passage")({
 
 export function HrRoute() {
   const navigate = useNavigate();
-  const [benefit, setBenefit] = useState<Benefit>("passagem");
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const [benefit, setBenefit] = useState<"passagem" | "alimentacao">("passagem");
 
   useEffect(() => {
     if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username)) {
@@ -61,7 +60,7 @@ export function HrRoute() {
                 Gestão de benefícios do colaborador, dentro do portal DBS.
               </p>
             </div>
-            <nav className="flex gap-2" aria-label="Benefícios de RH">
+            <nav className="flex flex-wrap gap-2" aria-label="Benefícios de RH">
               <button
                 onClick={() => setBenefit("passagem")}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${benefit === "passagem" ? "bg-[#102b3b] text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
@@ -76,11 +75,13 @@ export function HrRoute() {
               </button>
             </nav>
           </div>
-          {benefit === "passagem" ? (
+          {benefit === "alimentacao" ? (
+            <RhBenefitPanel benefitType="alimentacao" />
+          ) : (
             <div>
               <div className="mb-2 flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs text-emerald-800 sm:px-5">
                 <span>
-                  <strong>Vale Passagem</strong> · dados preservados no sistema original
+                  <strong>Vale Passagem</strong> · sistema original preservado
                 </span>
                 <a
                   href={VALE_PASSAGEM_URL}
@@ -99,67 +100,9 @@ export function HrRoute() {
                 referrerPolicy="strict-origin-when-cross-origin"
               />
             </div>
-          ) : (
-            <FoodBenefitPanel />
           )}
         </div>
       </main>
     </div>
-  );
-}
-
-function FoodBenefitPanel() {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="bg-gradient-to-br from-[#102b3b] via-[#1b4b55] to-[#f7c945] px-6 py-10 text-white sm:px-10">
-        <div className="flex max-w-3xl items-start justify-between gap-6">
-          <div>
-            <span className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[.2em] text-amber-200">
-              <Utensils className="h-4 w-4" /> Novo benefício de RH
-            </span>
-            <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-              Vale Alimentação
-            </h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-white/75">
-              A mesma experiência de gestão do Vale Passagem, preparada para organizar benefícios de
-              alimentação.
-            </p>
-          </div>
-          <div className="hidden rounded-2xl border border-white/15 bg-white/10 p-4 sm:block">
-            <Utensils className="h-9 w-9 text-amber-200" />
-          </div>
-        </div>
-      </div>
-      <div className="grid gap-4 p-6 sm:grid-cols-3 sm:p-10">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">
-            Colaboradores
-          </p>
-          <p className="mt-3 text-2xl font-black text-[#102b3b]">—</p>
-          <p className="mt-1 text-xs text-slate-500">Aguardando conexão do cadastro RH.</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">
-            Recargas
-          </p>
-          <p className="mt-3 text-2xl font-black text-[#102b3b]">—</p>
-          <p className="mt-1 text-xs text-slate-500">Fluxo preparado para a próxima etapa.</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">
-            Histórico
-          </p>
-          <p className="mt-3 text-2xl font-black text-[#102b3b]">—</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Sem leitura de dados enquanto o banco está em standby.
-          </p>
-        </div>
-      </div>
-      <div className="mx-6 mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900 sm:mx-10 sm:mb-10">
-        <strong>Área preparada.</strong> Esta aba já faz parte do RH e está na mesma navegação do
-        Vale Passagem. A operação real de colaboradores, saldos e recargas será ligada somente
-        quando a origem de dados autorizada estiver disponível, sem criar registros fictícios.
-      </div>
-    </section>
   );
 }

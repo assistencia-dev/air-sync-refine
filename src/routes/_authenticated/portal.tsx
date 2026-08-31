@@ -1,19 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckCircle2,
-  CircleDot,
-  LogOut,
-  Paperclip,
-  PlusCircle,
-  RefreshCw,
-  Ticket,
-} from "lucide-react";
+import { CheckCircle2, CircleDot, LogOut, PlusCircle, RefreshCw, Ticket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { createTicket, listMyTickets, reopenTicket } from "@/lib/tickets.functions";
-import { TicketAttachments, uploadTicketFiles } from "@/components/TicketAttachments";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -63,7 +54,6 @@ function PortalPage() {
 
   const [occurrence, setOccurrence] = useState(OCCURRENCE_TYPES[0]);
   const [desc, setDesc] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [ticketView, setTicketView] = useState<"active" | "closed">("active");
 
@@ -78,17 +68,11 @@ function PortalPage() {
   });
 
   const mut = useMutation({
-    mutationFn: async (input: { occurrence_type: string; description: string; files: File[] }) => {
-      const ticket = await createTicket({
-        data: { occurrence_type: input.occurrence_type, description: input.description },
-      });
-      if (input.files.length) await uploadTicketFiles(ticket.id, input.files);
-      return ticket;
-    },
+    mutationFn: (input: { occurrence_type: string; description: string }) =>
+      createTicket({ data: input }),
     onSuccess: (t) => {
       setMsg(`Chamado criado. Protocolo ${t.protocol_number}`);
       setDesc("");
-      setSelectedFiles([]);
       qc.invalidateQueries({ queryKey: ["my-tickets"] });
     },
     onError: (e) => setMsg(e instanceof Error ? e.message : "Falha ao criar chamado."),
@@ -112,7 +96,11 @@ function PortalPage() {
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoAsset.url} alt="DBS Air" className="h-8 w-auto object-contain" />
+            <img
+              src={logoAsset.url}
+              alt="DBS Air"
+              className="h-10 w-auto max-w-[190px] object-contain"
+            />
             <span className="text-xs font-bold uppercase tracking-widest text-slate-500 hidden md:inline">
               Portal do Cliente
             </span>
@@ -170,7 +158,7 @@ function PortalPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              mut.mutate({ occurrence_type: occurrence, description: desc, files: selectedFiles });
+              mut.mutate({ occurrence_type: occurrence, description: desc });
             }}
             className="space-y-4"
           >
@@ -202,22 +190,6 @@ function PortalPage() {
                 placeholder="Descreva sintomas, criticidade e horário observado..."
               />
             </div>
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-600 transition hover:border-sky-300 hover:bg-sky-50">
-              <Paperclip className="h-4 w-4 text-sky-600" />{" "}
-              {selectedFiles.length
-                ? `${selectedFiles.length} arquivo(s) selecionado(s)`
-                : "Adicionar fotos ou documentos"}
-              <input
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
-                className="sr-only"
-              />
-            </label>
-            <p className="text-[10px] text-slate-400">
-              Você pode anexar fotos, PDF ou documentos de até 15 MB por arquivo.
-            </p>
             {msg && <div className="text-xs p-2.5 rounded-md bg-blue-50 text-blue-800">{msg}</div>}
             <button
               type="submit"
@@ -310,7 +282,6 @@ function PortalPage() {
                           >
                             {t.description}
                           </p>
-                          <TicketAttachments ticketId={t.id} />
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={t.status} />

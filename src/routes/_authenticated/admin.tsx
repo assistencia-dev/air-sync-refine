@@ -28,7 +28,6 @@ import {
   createClientUser,
 } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
-import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -135,7 +134,11 @@ function AdminPage() {
       <header className="border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur lg:pl-64">
         <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-3">
-            <img src={logoAsset.url} alt="DBS Air" className="h-8 w-auto object-contain" />
+            <img
+              src={logoAsset.url}
+              alt="DBS Air"
+              className="h-10 w-auto max-w-[190px] object-contain"
+            />
             <span
               className="text-xs font-bold uppercase tracking-widest inline-flex items-center gap-1.5"
               style={{ color: "#0284C7" }}
@@ -159,18 +162,6 @@ function AdminPage() {
           </div>
         </div>
       </header>
-
-      {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
-        <div className="max-w-7xl mx-auto px-4 pt-4">
-          <div
-            className="rounded-md p-3 text-xs"
-            style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}
-          >
-            <strong>Aviso de segurança:</strong> Recomenda-se trocar a senha padrão deste usuário
-            administrador após o primeiro acesso.
-          </div>
-        </div>
-      )}
 
       <div className="mx-auto flex max-w-7xl gap-2 border-b border-slate-200 px-4 pt-6 lg:hidden">
         <TabBtn
@@ -397,11 +388,6 @@ function TicketsPanel() {
               )
               .map((t: any) => {
                 const closed = t.status === "concluido" || t.status === "cancelado";
-                const hasOs = (t.ticket_attachments ?? []).some(
-                  (item: { file_type?: string | null; file_name?: string | null }) =>
-                    item.file_type === "application/pdf" ||
-                    item.file_name?.toLowerCase().endsWith(".pdf"),
-                );
                 return (
                   <tr key={t.id} className="border-t border-slate-100 align-top">
                     <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
@@ -413,7 +399,6 @@ function TicketsPanel() {
                       >
                         {t.description}
                       </p>
-                      <TicketAttachments ticketId={t.id} canUpload />
                     </td>
                     <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-xs">
@@ -469,15 +454,10 @@ function TicketsPanel() {
                             onClick={() =>
                               complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })
                             }
-                            disabled={busy || !hasOs}
-                            title={
-                              hasOs
-                                ? "Concluir chamado"
-                                : "Anexe a OS em PDF para liberar a conclusão"
-                            }
+                            disabled={busy}
                             className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap"
                           >
-                            {hasOs ? "Concluir Chamado" : "Anexe a OS em PDF"}
+                            Concluir Chamado
                           </button>
                         )}
                         {!closed && (

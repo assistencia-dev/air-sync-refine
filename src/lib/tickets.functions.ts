@@ -79,14 +79,6 @@ export const completeTicket = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const me = await requireStaff(context);
-    const { count: pdfCount, error: attachmentErr } = await context.supabase
-      .from("ticket_attachments")
-      .select("id", { count: "exact", head: true })
-      .eq("ticket_id", data.id)
-      .eq("file_type", "application/pdf");
-    if (attachmentErr) throw new Error(attachmentErr.message);
-    if (!pdfCount)
-      throw new Error("Anexe a Ordem de Serviço em PDF antes de concluir este chamado.");
 
     const now = new Date().toISOString();
     const { error } = await context.supabase
