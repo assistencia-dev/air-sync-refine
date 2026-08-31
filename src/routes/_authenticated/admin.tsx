@@ -117,7 +117,7 @@ function AdminPage() {
               onClick={() => navigate({ to: "/passage" })}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white"
             >
-              <WalletCards className="h-4 w-4" /> Controle de passagem
+              <WalletCards className="h-4 w-4" /> RH
             </button>
           )}
         </nav>
@@ -188,7 +188,7 @@ function AdminPage() {
             active={tab === "passage"}
             onClick={() => navigate({ to: "/passage" })}
             icon={<WalletCards className="w-3.5 h-3.5" />}
-            label="Controle de Passagem"
+            label="RH"
           />
         )}
       </div>
@@ -234,9 +234,9 @@ function ValePassagemPanel() {
         <div className="flex max-w-3xl items-start justify-between gap-6">
           <div>
             <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200">
-              <WalletCards className="h-4 w-4" /> Módulo interno
+              <WalletCards className="h-4 w-4" /> Módulo RH
             </span>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight">Controle de Passagem</h2>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight">RH</h2>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-200">
               Colaboradores, recargas, histórico e financeiro dentro da área de trabalho DBS Air.
             </p>
