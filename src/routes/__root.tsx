@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { TicketNotificationListener } from "../components/TicketNotificationListener";
 
 function NotFoundComponent() {
   return (
@@ -78,23 +79,52 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "DBS Air | A Excelência Invisível que Move Grandes Operações" },
-      { name: "description", content: "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro." },
+      {
+        name: "description",
+        content:
+          "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro.",
+      },
       { name: "author", content: "DBS Air Refrigeração" },
-      { property: "og:title", content: "DBS Air | A Excelência Invisível que Move Grandes Operações" },
-      { property: "og:description", content: "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro." },
+      {
+        property: "og:title",
+        content: "DBS Air | A Excelência Invisível que Move Grandes Operações",
+      },
+      {
+        property: "og:description",
+        content:
+          "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "DBS Air | A Excelência Invisível que Move Grandes Operações" },
-      { name: "twitter:description", content: "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/318f5c33-fbe2-471c-9c6f-690528769770/id-preview-1c4ad7aa--ad3dfd84-66c1-403e-9732-79cc4f2d70df.lovable.app-1784301888970.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/318f5c33-fbe2-471c-9c6f-690528769770/id-preview-1c4ad7aa--ad3dfd84-66c1-403e-9732-79cc4f2d70df.lovable.app-1784301888970.png" },
+      {
+        name: "twitter:title",
+        content: "DBS Air | A Excelência Invisível que Move Grandes Operações",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Projetamos e mantemos sistemas de climatização corporativa de alta performance. Silenciosos, eficientes e em perfeita conformidade técnica para os endereços mais exigentes do Rio de Janeiro.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/318f5c33-fbe2-471c-9c6f-690528769770/id-preview-1c4ad7aa--ad3dfd84-66c1-403e-9732-79cc4f2d70df.lovable.app-1784301888970.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/318f5c33-fbe2-471c-9c6f-690528769770/id-preview-1c4ad7aa--ad3dfd84-66c1-403e-9732-79cc4f2d70df.lovable.app-1784301888970.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -105,7 +135,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
@@ -124,6 +154,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <TicketNotificationListener />
     </QueryClientProvider>
   );
 }

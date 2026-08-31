@@ -6,7 +6,9 @@ export const listMyTickets = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("tickets")
-      .select("id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, unit_id, created_by_user_id")
+      .select(
+        "id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, unit_id, created_by_user_id",
+      )
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -18,7 +20,9 @@ export const listAllTickets = createServerFn({ method: "GET" })
     // RLS restricts non-admins to their own rows; this fetches everything for admins.
     const { data, error } = await context.supabase
       .from("tickets")
-      .select("id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, assumed_by, assumed_at, asset_id, unit_id, assigned_technician_id, created_by_user_id, users:created_by_user_id(full_name, username), assumed:assumed_by(full_name, username), unit:unit_id(name, cnpj)")
+      .select(
+        "id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, assumed_by, assumed_at, asset_id, unit_id, assigned_technician_id, created_by_user_id, users:created_by_user_id(full_name, username), assumed:assumed_by(full_name, username), unit:unit_id(name, cnpj)",
+      )
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -91,7 +95,10 @@ export const completeTicket = createServerFn({ method: "POST" })
     });
 
     if (data.asset_id) {
-      await context.supabase.from("assets").update({ last_maintenance_date: now }).eq("id", data.asset_id);
+      await context.supabase
+        .from("assets")
+        .update({ last_maintenance_date: now })
+        .eq("id", data.asset_id);
     }
     return { ok: true };
   });
@@ -110,7 +117,11 @@ export const cancelTicket = createServerFn({ method: "POST" })
     const me = await requireStaff(context);
     const { error } = await context.supabase
       .from("tickets")
-      .update({ status: "cancelado", cancel_reason: data.reason, closed_at: new Date().toISOString() })
+      .update({
+        status: "cancelado",
+        cancel_reason: data.reason,
+        closed_at: new Date().toISOString(),
+      })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
 
@@ -124,19 +135,20 @@ export const cancelTicket = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-
 export const createTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { occurrence_type: string; description: string; asset_id?: string | null }) => {
-    if (!input?.occurrence_type) throw new Error("Tipo de ocorrência obrigatório.");
-    if (!input?.description || input.description.trim().length < 20)
-      throw new Error("Descreva o ocorrido com pelo menos 20 caracteres.");
-    return {
-      occurrence_type: input.occurrence_type,
-      description: input.description.trim(),
-      asset_id: input.asset_id || null,
-    };
-  })
+  .inputValidator(
+    (input: { occurrence_type: string; description: string; asset_id?: string | null }) => {
+      if (!input?.occurrence_type) throw new Error("Tipo de ocorrência obrigatório.");
+      if (!input?.description || input.description.trim().length < 20)
+        throw new Error("Descreva o ocorrido com pelo menos 20 caracteres.");
+      return {
+        occurrence_type: input.occurrence_type,
+        description: input.description.trim(),
+        asset_id: input.asset_id || null,
+      };
+    },
+  )
   .handler(async ({ context, data }) => {
     const { data: me, error: meErr } = await context.supabase
       .from("users")
@@ -163,14 +175,46 @@ export const createTicket = createServerFn({ method: "POST" })
 export const updateTicketStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string; status: string }) => {
-    if (!input?.id || !input?.status) throw new Error("Dados inválidos.");
+    const allowed = [
+      "aberto",
+      "atribuido",
+      "em_rota",
+      "em_atendimento",
+      "aguardando_peca",
+      "concluido",
+      "cancelado",
+    ];
+    if (!input?.id || !input?.status || !allowed.includes(input.status))
+      throw new Error("Status de chamado inválido.");
     return input;
   })
   .handler(async ({ context, data }) => {
+    const me = await requireStaff(context);
+    const { data: current, error: currentError } = await context.supabase
+      .from("tickets")
+      .select("id, status, protocol_number")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (currentError) throw new Error(currentError.message);
+    if (!current) throw new Error("Chamado não encontrado.");
+    if (current.status === "concluido" || current.status === "cancelado") {
+      throw new Error("Chamados encerrados não podem ter o status alterado.");
+    }
+    if (current.status === data.status) return { ok: true };
     const { error } = await context.supabase
       .from("tickets")
-      .update({ status: data.status, closed_at: data.status === "concluido" ? new Date().toISOString() : null })
+      .update({
+        status: data.status,
+        closed_at: data.status === "concluido" ? new Date().toISOString() : null,
+      })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    await context.supabase.from("ticket_timeline").insert({
+      ticket_id: data.id,
+      author_user_id: me.id,
+      role_label: "Sistema",
+      note_text: `Status alterado para ${data.status}.`,
+      status_change: data.status,
+    });
+    return { ok: true, protocol_number: current.protocol_number };
   });

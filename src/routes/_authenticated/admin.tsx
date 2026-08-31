@@ -1,11 +1,22 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
+import { CheckCircle2, CircleDot, LogOut, RefreshCw, Shield, Ticket, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
-import { listAllTickets, updateTicketStatus, assumeTicket, completeTicket, cancelTicket } from "@/lib/tickets.functions";
-import { listAllUsers, setUserStatus, listCompaniesUnits, createClientUser } from "@/lib/admin.functions";
+import {
+  listAllTickets,
+  updateTicketStatus,
+  assumeTicket,
+  completeTicket,
+  cancelTicket,
+} from "@/lib/tickets.functions";
+import {
+  listAllUsers,
+  setUserStatus,
+  listCompaniesUnits,
+  createClientUser,
+} from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -13,7 +24,24 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-const STATUSES = ["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"];
+const STATUSES = [
+  "aberto",
+  "atribuido",
+  "em_rota",
+  "em_atendimento",
+  "aguardando_peca",
+  "concluido",
+  "cancelado",
+];
+const STATUS_LABELS: Record<string, string> = {
+  aberto: "Aberto",
+  atribuido: "Atribuído",
+  em_rota: "Em rota",
+  em_atendimento: "Em atendimento",
+  aguardando_peca: "Aguardando peça",
+  concluido: "Concluído",
+  cancelado: "Cancelado",
+};
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -22,7 +50,11 @@ function AdminPage() {
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
 
   useEffect(() => {
-    if (profile.data && profile.data.role_key !== "SUPER_ADMIN" && profile.data.role_key !== "ADMIN_OPERACIONAL") {
+    if (
+      profile.data &&
+      profile.data.role_key !== "SUPER_ADMIN" &&
+      profile.data.role_key !== "ADMIN_OPERACIONAL"
+    ) {
       navigate({ to: "/portal", replace: true });
     }
   }, [profile.data, navigate]);
@@ -37,12 +69,18 @@ function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div
+      className="min-h-screen bg-slate-50"
+      style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
+    >
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoAsset.url} alt="DBS Air" className="h-8 w-auto object-contain" />
-            <span className="text-xs font-bold uppercase tracking-widest inline-flex items-center gap-1.5" style={{ color: "#0284C7" }}>
+            <span
+              className="text-xs font-bold uppercase tracking-widest inline-flex items-center gap-1.5"
+              style={{ color: "#0284C7" }}
+            >
               <Shield className="w-3.5 h-3.5" /> Painel Administrativo
             </span>
           </div>
@@ -50,7 +88,10 @@ function AdminPage() {
             <span className="text-sm font-semibold text-slate-700 hidden sm:inline">
               {profile.data?.full_name ?? profile.data?.username}
             </span>
-            <button onClick={signOut} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900">
+            <button
+              onClick={signOut}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
+            >
               <LogOut className="w-4 h-4" /> Sair
             </button>
           </div>
@@ -59,15 +100,29 @@ function AdminPage() {
 
       {profile.data?.username === "DBSASSISTENCIA123" && (
         <div className="max-w-7xl mx-auto px-4 pt-4">
-          <div className="rounded-md p-3 text-xs" style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}>
-            <strong>Aviso de segurança:</strong> Recomenda-se trocar a senha padrão deste usuário administrador após o primeiro acesso.
+          <div
+            className="rounded-md p-3 text-xs"
+            style={{ background: "#FEF3C7", color: "#78350F", border: "1px solid #FCD34D" }}
+          >
+            <strong>Aviso de segurança:</strong> Recomenda-se trocar a senha padrão deste usuário
+            administrador após o primeiro acesso.
           </div>
         </div>
       )}
 
       <div className="max-w-7xl mx-auto px-4 pt-6 flex gap-2 border-b border-slate-200">
-        <TabBtn active={tab === "tickets"} onClick={() => setTab("tickets")} icon={<Ticket className="w-3.5 h-3.5" />} label="Chamados" />
-        <TabBtn active={tab === "users"} onClick={() => setTab("users")} icon={<Users className="w-3.5 h-3.5" />} label="Usuários Vinculados" />
+        <TabBtn
+          active={tab === "tickets"}
+          onClick={() => setTab("tickets")}
+          icon={<Ticket className="w-3.5 h-3.5" />}
+          label="Chamados"
+        />
+        <TabBtn
+          active={tab === "users"}
+          onClick={() => setTab("users")}
+          icon={<Users className="w-3.5 h-3.5" />}
+          label="Usuários Vinculados"
+        />
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -77,7 +132,17 @@ function AdminPage() {
   );
 }
 
-function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+function TabBtn({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -94,28 +159,43 @@ function TicketsPanel() {
   const [cancelTarget, setCancelTarget] = useState<{ id: string; protocol: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [ticketView, setTicketView] = useState<"active" | "closed">("active");
 
   const reload = () => qc.invalidateQueries({ queryKey: ["all-tickets"] });
   const onErr = (e: unknown) => setActionErr(e instanceof Error ? e.message : "Falha na operação.");
 
   const mut = useMutation({
     mutationFn: (v: { id: string; status: string }) => updateTicketStatus({ data: v }),
-    onSuccess: () => { setActionErr(null); reload(); },
+    onSuccess: () => {
+      setActionErr(null);
+      reload();
+    },
     onError: onErr,
   });
   const assume = useMutation({
     mutationFn: (id: string) => assumeTicket({ data: { id } }),
-    onSuccess: () => { setActionErr(null); reload(); },
+    onSuccess: () => {
+      setActionErr(null);
+      reload();
+    },
     onError: onErr,
   });
   const complete = useMutation({
     mutationFn: (v: { id: string; asset_id: string | null }) => completeTicket({ data: v }),
-    onSuccess: () => { setActionErr(null); reload(); },
+    onSuccess: () => {
+      setActionErr(null);
+      reload();
+    },
     onError: onErr,
   });
   const cancel = useMutation({
     mutationFn: (v: { id: string; reason: string }) => cancelTicket({ data: v }),
-    onSuccess: () => { setActionErr(null); setCancelTarget(null); setCancelReason(""); reload(); },
+    onSuccess: () => {
+      setActionErr(null);
+      setCancelTarget(null);
+      setCancelReason("");
+      reload();
+    },
     onError: onErr,
   });
 
@@ -123,22 +203,52 @@ function TicketsPanel() {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-      <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Central de Chamados (Visão Global)</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Assuma, conclua ou cancele ordens de serviço. Não há reabertura de chamados encerrados.</p>
+      <div className="border-b border-slate-200">
+        <div className="p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Central de Chamados (Visão Global)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Acompanhe o atendimento, leia o relato completo do cliente e mantenha cada ordem de
+              serviço no fluxo correto.
+            </p>
+          </div>
+          <button
+            onClick={() => tickets.refetch()}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+          </button>
         </div>
-        <button onClick={() => tickets.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
-          <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-        </button>
+        <div className="flex gap-2 px-6 pb-4">
+          <button
+            onClick={() => setTicketView("active")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${ticketView === "active" ? "bg-sky-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >
+            <CircleDot className="h-3.5 w-3.5" /> Em atendimento
+          </button>
+          <button
+            onClick={() => setTicketView("closed")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${ticketView === "closed" ? "bg-emerald-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Concluídos/cancelados
+          </button>
+        </div>
       </div>
-      {actionErr && <div className="mx-6 mt-4 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
+      {actionErr && (
+        <div
+          className="mx-6 mt-4 text-xs p-2.5 rounded-md"
+          style={{ background: "#FEF2F2", color: "#B91C1C" }}
+        >
+          {actionErr}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
             <tr>
               <th className="text-left px-4 py-3">Protocolo</th>
               <th className="text-left px-4 py-3">Tipo</th>
+              <th className="text-left px-4 py-3 min-w-[280px]">Descrição do problema</th>
               <th className="text-left px-4 py-3">Unidade</th>
               <th className="text-left px-4 py-3">Aberto por</th>
               <th className="text-left px-4 py-3">Status</th>
@@ -147,79 +257,142 @@ function TicketsPanel() {
             </tr>
           </thead>
           <tbody>
-            {tickets.isLoading && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
-            {tickets.data?.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">Nenhum chamado.</td></tr>}
-            {tickets.data?.map((t: any) => {
-              const closed = t.status === "concluido" || t.status === "cancelado";
-              return (
-                <tr key={t.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
-                  <td className="px-4 py-3">{t.occurrence_type}</td>
-                  <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs">{t.users?.full_name ?? t.users?.username ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={t.status}
-                      onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
-                      className="text-xs px-2 py-1 rounded border border-slate-300"
-                    >
-                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {t.assumed_by && (
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        Assumido por {t.assumed?.full_name ?? t.assumed?.username ?? "administrador"}
-                        {t.assumed_at ? ` em ${new Date(t.assumed_at).toLocaleString("pt-BR")}` : ""}
+            {tickets.isLoading && (
+              <tr>
+                <td colSpan={8} className="p-6 text-center text-slate-500">
+                  Carregando...
+                </td>
+              </tr>
+            )}
+            {tickets.data?.filter((t: any) =>
+              ticketView === "closed"
+                ? t.status === "concluido" || t.status === "cancelado"
+                : t.status !== "concluido" && t.status !== "cancelado",
+            ).length === 0 && (
+              <tr>
+                <td colSpan={8} className="p-6 text-center text-slate-500">
+                  Nenhum chamado nesta aba.
+                </td>
+              </tr>
+            )}
+            {tickets.data
+              ?.filter((t: any) =>
+                ticketView === "closed"
+                  ? t.status === "concluido" || t.status === "cancelado"
+                  : t.status !== "concluido" && t.status !== "cancelado",
+              )
+              .map((t: any) => {
+                const closed = t.status === "concluido" || t.status === "cancelado";
+                return (
+                  <tr key={t.id} className="border-t border-slate-100 align-top">
+                    <td className="px-4 py-3 font-mono text-xs">{t.protocol_number}</td>
+                    <td className="px-4 py-3">{t.occurrence_type}</td>
+                    <td className="px-4 py-3">
+                      <p
+                        className="max-w-[340px] whitespace-pre-wrap text-xs leading-5 text-slate-700"
+                        title={t.description}
+                      >
+                        {t.description}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-xs">{t.unit?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {t.users?.full_name ?? t.users?.username ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={t.status}
+                        disabled={closed}
+                        onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
+                        className="text-xs px-2 py-1 rounded border border-slate-300"
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {STATUS_LABELS[s]}
+                          </option>
+                        ))}
+                      </select>
+                      {t.assumed_by && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          Assumido por{" "}
+                          {t.assumed?.full_name ?? t.assumed?.username ?? "administrador"}
+                          {t.assumed_at
+                            ? ` em ${new Date(t.assumed_at).toLocaleString("pt-BR")}`
+                            : ""}
+                        </div>
+                      )}
+                      {t.status === "cancelado" && t.cancel_reason && (
+                        <div className="mt-1 text-[11px] text-red-700">
+                          Motivo: {t.cancel_reason}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">
+                      {new Date(t.created_at).toLocaleString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-end gap-1.5">
+                        {t.status === "aberto" && (
+                          <button
+                            disabled={busy}
+                            onClick={() => assume.mutate(t.id)}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                          >
+                            Assumir Chamado
+                          </button>
+                        )}
+                        {(t.status === "em_atendimento" ||
+                          t.status === "aguardando_peca" ||
+                          t.status === "atribuido" ||
+                          t.status === "em_rota") && (
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })
+                            }
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 whitespace-nowrap"
+                          >
+                            Concluir Chamado
+                          </button>
+                        )}
+                        {!closed && (
+                          <button
+                            disabled={busy}
+                            onClick={() => {
+                              setCancelReason("");
+                              setActionErr(null);
+                              setCancelTarget({ id: t.id, protocol: t.protocol_number });
+                            }}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
+                          >
+                            Cancelar Chamado
+                          </button>
+                        )}
+                        {closed && <span className="text-xs text-slate-400">Encerrado</span>}
                       </div>
-                    )}
-                    {t.status === "cancelado" && t.cancel_reason && (
-                      <div className="mt-1 text-[11px] text-red-700">Motivo: {t.cancel_reason}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{new Date(t.created_at).toLocaleString("pt-BR")}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col items-end gap-1.5">
-                      {t.status === "aberto" && (
-                        <button
-                          disabled={busy}
-                          onClick={() => assume.mutate(t.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
-                        >
-                          Assumir Chamado
-                        </button>
-                      )}
-                      {(t.status === "em_atendimento" || t.status === "aguardando_peca" || t.status === "atribuido" || t.status === "em_rota") && (
-                        <button
-                          disabled={busy}
-                          onClick={() => complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 whitespace-nowrap"
-                        >
-                          Concluir Chamado
-                        </button>
-                      )}
-                      {!closed && (
-                        <button
-                          disabled={busy}
-                          onClick={() => { setCancelReason(""); setActionErr(null); setCancelTarget({ id: t.id, protocol: t.protocol_number }); }}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50 disabled:opacity-60 whitespace-nowrap"
-                        >
-                          Cancelar Chamado
-                        </button>
-                      )}
-                      {closed && <span className="text-xs text-slate-400">Encerrado</span>}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
 
       {cancelTarget && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !cancel.isPending && setCancelTarget(null)}>
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-slate-900">Cancelar chamado {cancelTarget.protocol}</h3>
-            <p className="mt-2 text-sm text-slate-600">Informe a justificativa (mínimo 10 caracteres). Esta ação é definitiva.</p>
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => !cancel.isPending && setCancelTarget(null)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-900">
+              Cancelar chamado {cancelTarget.protocol}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Informe a justificativa (mínimo 10 caracteres). Esta ação é definitiva.
+            </p>
             <textarea
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
@@ -227,7 +400,14 @@ function TicketsPanel() {
               className="mt-3 w-full text-sm px-3 py-2 rounded-md border border-slate-300"
               placeholder="Ex: Cliente informou que o equipamento foi substituído."
             />
-            {actionErr && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{actionErr}</div>}
+            {actionErr && (
+              <div
+                className="mt-3 text-xs p-2.5 rounded-md"
+                style={{ background: "#FEF2F2", color: "#B91C1C" }}
+              >
+                {actionErr}
+              </div>
+            )}
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 onClick={() => setCancelTarget(null)}
@@ -251,16 +431,20 @@ function TicketsPanel() {
   );
 }
 
-
 function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers() });
-  const [confirm, setConfirm] = useState<{ id: string; name: string; nextStatus: "ativo" | "bloqueado" } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    id: string;
+    name: string;
+    nextStatus: "ativo" | "bloqueado";
+  } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const mut = useMutation({
-    mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) => setUserStatus({ data: v }),
+    mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) =>
+      setUserStatus({ data: v }),
     onSuccess: () => {
       setConfirm(null);
       setErr(null);
@@ -275,7 +459,9 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Usuários Vinculados</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {isSuperAdmin ? "Somente SUPER_ADMIN pode criar, ativar ou desativar acessos." : "Visualização apenas — gestão restrita ao SUPER_ADMIN."}
+            {isSuperAdmin
+              ? "Somente SUPER_ADMIN pode criar, ativar ou desativar acessos."
+              : "Visualização apenas — gestão restrita ao SUPER_ADMIN."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -287,7 +473,10 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               + Novo Acesso
             </button>
           )}
-          <button onClick={() => users.refetch()} className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+          <button
+            onClick={() => users.refetch()}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+          >
             <RefreshCw className="w-3.5 h-3.5" /> Atualizar
           </button>
         </div>
@@ -305,8 +494,20 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {users.isLoading && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Carregando...</td></tr>}
-            {users.data?.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Nenhum usuário.</td></tr>}
+            {users.isLoading && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-slate-500">
+                  Carregando...
+                </td>
+              </tr>
+            )}
+            {users.data?.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-slate-500">
+                  Nenhum usuário.
+                </td>
+              </tr>
+            )}
             {users.data?.map((u: any) => {
               const blocked = u.status !== "ativo";
               return (
@@ -314,7 +515,11 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <td className="px-4 py-3 font-medium text-slate-900">
                     <div className="flex items-center gap-2">
                       <span>{u.full_name ?? "—"}</span>
-                      {blocked && <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-slate-200 text-slate-700">Bloqueado</span>}
+                      {blocked && (
+                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-slate-200 text-slate-700">
+                          Bloqueado
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">
@@ -327,7 +532,9 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     <div className="text-slate-400">{u.unit?.name ?? "—"}</div>
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    <span className={`inline-block px-2 py-0.5 font-bold rounded ${blocked ? "bg-slate-200 text-slate-700" : "bg-green-100 text-green-800"}`}>
+                    <span
+                      className={`inline-block px-2 py-0.5 font-bold rounded ${blocked ? "bg-slate-200 text-slate-700" : "bg-green-100 text-green-800"}`}
+                    >
                       {blocked ? "Bloqueado" : "Ativo"}
                     </span>
                   </td>
@@ -335,14 +542,26 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     {isSuperAdmin ? (
                       blocked ? (
                         <button
-                          onClick={() => setConfirm({ id: u.id, name: u.full_name ?? u.username ?? "usuário", nextStatus: "ativo" })}
+                          onClick={() =>
+                            setConfirm({
+                              id: u.id,
+                              name: u.full_name ?? u.username ?? "usuário",
+                              nextStatus: "ativo",
+                            })
+                          }
                           className="text-xs font-semibold px-3 py-1.5 rounded-md border border-green-600 text-green-700 hover:bg-green-50"
                         >
                           Reativar
                         </button>
                       ) : (
                         <button
-                          onClick={() => setConfirm({ id: u.id, name: u.full_name ?? u.username ?? "usuário", nextStatus: "bloqueado" })}
+                          onClick={() =>
+                            setConfirm({
+                              id: u.id,
+                              name: u.full_name ?? u.username ?? "usuário",
+                              nextStatus: "bloqueado",
+                            })
+                          }
                           className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50"
                         >
                           Desativar
@@ -360,17 +579,38 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       </div>
 
       {confirm && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !mut.isPending && setConfirm(null)}>
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => !mut.isPending && setConfirm(null)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-bold text-slate-900">
               {confirm.nextStatus === "bloqueado" ? "Desativar acesso" : "Reativar acesso"}
             </h3>
             <p className="mt-3 text-sm text-slate-600">
-              {confirm.nextStatus === "bloqueado"
-                ? <>Tem certeza que deseja suspender o acesso de <strong>{confirm.name}</strong>? Ele não poderá mais fazer login nem abrir novos chamados.</>
-                : <>Deseja reativar o acesso de <strong>{confirm.name}</strong>? Ele voltará a acessar o portal normalmente.</>}
+              {confirm.nextStatus === "bloqueado" ? (
+                <>
+                  Tem certeza que deseja suspender o acesso de <strong>{confirm.name}</strong>? Ele
+                  não poderá mais fazer login nem abrir novos chamados.
+                </>
+              ) : (
+                <>
+                  Deseja reativar o acesso de <strong>{confirm.name}</strong>? Ele voltará a acessar
+                  o portal normalmente.
+                </>
+              )}
             </p>
-            {err && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{err}</div>}
+            {err && (
+              <div
+                className="mt-3 text-xs p-2.5 rounded-md"
+                style={{ background: "#FEF2F2", color: "#B91C1C" }}
+              >
+                {err}
+              </div>
+            )}
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 onClick={() => setConfirm(null)}
@@ -384,7 +624,11 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 disabled={mut.isPending}
                 className={`text-xs font-semibold px-4 py-2 rounded-md text-white disabled:opacity-60 ${confirm.nextStatus === "bloqueado" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}`}
               >
-                {mut.isPending ? "Processando..." : confirm.nextStatus === "bloqueado" ? "Confirmar desativação" : "Confirmar reativação"}
+                {mut.isPending
+                  ? "Processando..."
+                  : confirm.nextStatus === "bloqueado"
+                    ? "Confirmar desativação"
+                    : "Confirmar reativação"}
               </button>
             </div>
           </div>
@@ -424,7 +668,9 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">("CLIENTE_PF");
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+    "CLIENTE_PF",
+  );
   const [companyId, setCompanyId] = useState("");
   const [unitId, setUnitId] = useState("");
   const [password, setPassword] = useState(() => generatePassword());
@@ -436,7 +682,9 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ email: string; password: string } | null>(null);
 
-  const filteredUnits = (cu.data?.units ?? []).filter((u: any) => !companyId || u.company_id === companyId);
+  const filteredUnits = (cu.data?.units ?? []).filter(
+    (u: any) => !companyId || u.company_id === companyId,
+  );
 
   const mut = useMutation({
     mutationFn: () =>
@@ -448,7 +696,11 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           role_key: roleKey,
           password,
           ...(clientMode === "existente"
-            ? { company_id: companyId || null, unit_id: unitId || null, is_unit_manager: isUnitManager }
+            ? {
+                company_id: companyId || null,
+                unit_id: unitId || null,
+                is_unit_manager: isUnitManager,
+              }
             : {
                 new_company_name: newCompanyName,
                 new_company_cnpj: newCompanyCnpj,
@@ -475,18 +727,24 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </p>
           <div className="mt-4 space-y-2">
             <div className="p-3 rounded-md bg-slate-50 border border-slate-200 text-sm">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Login (e-mail)</div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Login (e-mail)
+              </div>
               <div className="font-mono">{success.email}</div>
             </div>
             <div className="p-3 rounded-md bg-slate-50 border border-slate-200 text-sm">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Senha temporária</div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Senha temporária
+              </div>
               <div className="font-mono">{success.password}</div>
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <button
               onClick={() => {
-                navigator.clipboard.writeText(`Login: ${success.email}\nSenha: ${success.password}`);
+                navigator.clipboard.writeText(
+                  `Login: ${success.email}\nSenha: ${success.password}`,
+                );
               }}
               className="text-xs font-semibold px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
             >
@@ -505,36 +763,69 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !mut.isPending && onClose()}>
-      <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={() => !mut.isPending && onClose()}
+    >
+      <div
+        className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-lg font-bold text-slate-900">Novo Acesso</h3>
-        <p className="mt-1 text-xs text-slate-500">Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.
+        </p>
 
         <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
           <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
-            <input type="radio" name="clientMode" checked={clientMode === "novo"} onChange={() => setClientMode("novo")} className="mt-0.5" />
+            <input
+              type="radio"
+              name="clientMode"
+              checked={clientMode === "novo"}
+              onChange={() => setClientMode("novo")}
+              className="mt-0.5"
+            />
             Cliente Novo (cria empresa automaticamente)
           </label>
           <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
-            <input type="radio" name="clientMode" checked={clientMode === "existente"} onChange={() => setClientMode("existente")} className="mt-0.5" />
+            <input
+              type="radio"
+              name="clientMode"
+              checked={clientMode === "existente"}
+              onChange={() => setClientMode("existente")}
+              className="mt-0.5"
+            />
             Vincular a uma Rede/Empresa já existente
           </label>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3">
           <Field label="Nome completo *">
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} />
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className={inputCls}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="E-mail *">
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputCls}
+              />
             </Field>
             <Field label="CPF (opcional)">
               <input value={cpf} onChange={(e) => setCpf(e.target.value)} className={inputCls} />
             </Field>
           </div>
           <Field label="Papel *">
-            <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as any)} className={inputCls}>
+            <select
+              value={roleKey}
+              onChange={(e) => setRoleKey(e.target.value as any)}
+              className={inputCls}
+            >
               <option value="CLIENTE_PF">CLIENTE_PF</option>
               <option value="GESTOR_CONTA">GESTOR_CONTA</option>
               <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
@@ -544,23 +835,42 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           {clientMode === "existente" && (
             <>
               <Field label="Empresa">
-                <select value={companyId} onChange={(e) => { setCompanyId(e.target.value); setUnitId(""); }} className={inputCls}>
+                <select
+                  value={companyId}
+                  onChange={(e) => {
+                    setCompanyId(e.target.value);
+                    setUnitId("");
+                  }}
+                  className={inputCls}
+                >
                   <option value="">—</option>
                   {cu.data?.companies?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.trade_name ?? c.legal_name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.trade_name ?? c.legal_name}
+                    </option>
                   ))}
                 </select>
               </Field>
               <Field label="Unidade / Loja">
-                <select value={unitId} onChange={(e) => setUnitId(e.target.value)} className={inputCls}>
+                <select
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                  className={inputCls}
+                >
                   <option value="">—</option>
                   {filteredUnits.map((u: any) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
                   ))}
                 </select>
               </Field>
               <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-                <input type="checkbox" checked={isUnitManager} onChange={(e) => setIsUnitManager(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={isUnitManager}
+                  onChange={(e) => setIsUnitManager(e.target.checked)}
+                />
                 Gestor da unidade (pode ver chamados dos colegas da unidade)
               </label>
             </>
@@ -599,7 +909,11 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
           <Field label="Senha temporária">
             <div className="flex gap-2">
-              <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls + " font-mono"} />
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputCls + " font-mono"}
+              />
               <button
                 type="button"
                 onClick={() => setPassword(generatePassword())}
@@ -611,7 +925,14 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </Field>
         </div>
 
-        {err && <div className="mt-3 text-xs p-2.5 rounded-md" style={{ background: "#FEF2F2", color: "#B91C1C" }}>{err}</div>}
+        {err && (
+          <div
+            className="mt-3 text-xs p-2.5 rounded-md"
+            style={{ background: "#FEF2F2", color: "#B91C1C" }}
+          >
+            {err}
+          </div>
+        )}
 
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
@@ -634,12 +955,15 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
-const inputCls = "w-full text-sm px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500";
+const inputCls =
+  "w-full text-sm px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">{label}</label>
+      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-1">
+        {label}
+      </label>
       {children}
     </div>
   );
