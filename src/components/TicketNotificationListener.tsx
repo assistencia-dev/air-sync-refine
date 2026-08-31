@@ -65,7 +65,7 @@ export function TicketNotificationListener() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "tickets" },
         (payload) => {
-          if (!isAdmin) return;
+          if (!isAdmin || profile.username !== "DBSASSISTENCIA123") return;
           const ticket = payload.new as {
             id: string;
             protocol_number?: string;
@@ -130,8 +130,9 @@ export function TicketNotificationListener() {
         : [
             {
               id: "permission",
-              title: "Ative as notificações",
-              message: "Receba avisos de novos chamados e mudanças de status.",
+              title: "Ative os avisos de chamados",
+              message:
+                "Receba novos chamados no painel e acompanhe as mudanças de status dos seus atendimentos.",
               tone: "blue",
             },
             ...current,
