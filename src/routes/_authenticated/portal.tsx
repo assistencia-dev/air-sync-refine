@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleDot, LogOut, PlusCircle, RefreshCw, Ticket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
-import { createTicket, listMyTickets } from "@/lib/tickets.functions";
+import { createTicket, listMyTickets, reopenTicket } from "@/lib/tickets.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -56,6 +56,16 @@ function PortalPage() {
   const [desc, setDesc] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [ticketView, setTicketView] = useState<"active" | "closed">("active");
+
+  const reopen = useMutation({
+    mutationFn: (id: string) => reopenTicket({ data: { id } }),
+    onSuccess: (t) => {
+      setMsg(`Chamado ${t.protocol_number} reaberto e enviado para atendimento.`);
+      setTicketView("active");
+      qc.invalidateQueries({ queryKey: ["my-tickets"] });
+    },
+    onError: (e) => setMsg(e instanceof Error ? e.message : "Não foi possível reabrir o chamado."),
+  });
 
   const mut = useMutation({
     mutationFn: (input: { occurrence_type: string; description: string }) =>
@@ -272,10 +282,28 @@ function PortalPage() {
                         <td className="px-4 py-3">
                           <StatusBadge status={t.status} />
                           {closed && (
-                            <p className="text-[11px] text-slate-500 mt-1 max-w-[240px]">
-                              Este chamado está encerrado. Caso o problema persista ou retorne, abra
-                              um novo chamado.
-                            </p>
+                            <>
+                              <p className="text-[11px] text-slate-500 mt-1 max-w-[240px]">
+                                Este chamado está encerrado. Se o problema persistir ou retornar,
+                                você pode reabrir esta solicitação.
+                              </p>
+                              <button
+                                type="button"
+                                disabled={reopen.isPending}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Deseja reabrir o chamado ${t.protocol_number}? Ele voltará para a fila de atendimento.`,
+                                    )
+                                  ) {
+                                    reopen.mutate(t.id);
+                                  }
+                                }}
+                                className="mt-3 inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-100 disabled:opacity-60"
+                              >
+                                {reopen.isPending ? "Reabrindo..." : "Reabrir chamado"}
+                              </button>
+                            </>
                           )}
                           {t.status === "cancelado" && t.cancel_reason && (
                             <p className="text-[11px] text-red-700 mt-1 max-w-[240px]">
