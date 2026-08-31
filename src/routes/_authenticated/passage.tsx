@@ -1,10 +1,11 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Shield, Utensils, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 
 const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
+const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 
 type Benefit = "passagem" | "alimentacao";
 
@@ -19,7 +20,7 @@ export function HrRoute() {
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
 
   useEffect(() => {
-    if (profile.data && profile.data.username !== "DBSASSISTENCIA123") {
+    if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username)) {
       navigate({ to: "/portal", replace: true });
     }
   }, [profile.data, navigate]);

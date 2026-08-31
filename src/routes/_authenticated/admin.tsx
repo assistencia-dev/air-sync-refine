@@ -44,6 +44,8 @@ const STATUSES = [
   "concluido",
   "cancelado",
 ];
+const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
+
 const STATUS_LABELS: Record<string, string> = {
   aberto: "Aberto",
   atribuido: "Atribuído",
@@ -112,7 +114,7 @@ function AdminPage() {
           >
             <Users className="h-4 w-4" /> Usuários vinculados
           </button>
-          {profile.data?.username === "DBSASSISTENCIA123" && (
+          {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
             <button
               onClick={() => navigate({ to: "/passage" })}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white"
@@ -158,7 +160,7 @@ function AdminPage() {
         </div>
       </header>
 
-      {profile.data?.username === "DBSASSISTENCIA123" && (
+      {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
         <div className="max-w-7xl mx-auto px-4 pt-4">
           <div
             className="rounded-md p-3 text-xs"
@@ -183,7 +185,7 @@ function AdminPage() {
           icon={<Users className="w-3.5 h-3.5" />}
           label="Usuários Vinculados"
         />
-        {profile.data?.username === "DBSASSISTENCIA123" && (
+        {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
           <TabBtn
             active={tab === "passage"}
             onClick={() => navigate({ to: "/passage" })}
