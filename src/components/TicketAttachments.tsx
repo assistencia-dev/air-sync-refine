@@ -75,6 +75,7 @@ export function TicketAttachments({
   const [uploading, setUploading] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [available, setAvailable] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -83,7 +84,14 @@ export function TicketAttachments({
       .select("id, file_url, file_name, file_type, file_size, storage_path, created_at")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: false });
-    if (error) setMessage("Não foi possível carregar os anexos.");
+    if (error) {
+      setAvailable(false);
+      setMessage("Anexos aguardando configuração do armazenamento.");
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setAvailable(true);
     setItems((data ?? []) as Attachment[]);
     setLoading(false);
   }
@@ -200,7 +208,9 @@ export function TicketAttachments({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
           <Paperclip className="h-3.5 w-3.5 text-sky-600" /> Anexos{" "}
-          <span className="font-medium text-slate-400">· {countLabel}</span>
+          <span className="font-medium text-slate-400">
+            · {available ? countLabel : "aguardando configuração"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {items.length > 0 && (
@@ -214,7 +224,7 @@ export function TicketAttachments({
               {zipping ? "Preparando ZIP..." : "Baixar tudo (.zip)"}
             </button>
           )}
-          {canUpload && (
+          {canUpload && available && (
             <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-sky-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-sky-700">
               <Upload className="h-3.5 w-3.5" /> {uploading ? "Enviando..." : "Adicionar arquivo"}
               <input
@@ -229,7 +239,7 @@ export function TicketAttachments({
           )}
         </div>
       </div>
-      {canUpload && (
+      {canUpload && available && (
         <p className="mt-2 text-[10px] text-slate-400">
           Fotos, PDF e documentos até 15 MB por arquivo.
         </p>
@@ -238,6 +248,10 @@ export function TicketAttachments({
         <div className="flex items-center gap-2 py-3 text-xs text-slate-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando anexos...
         </div>
+      ) : !available ? (
+        <p className="py-3 text-xs text-amber-700">
+          Os anexos serão ativados quando o ambiente de armazenamento correto estiver conectado.
+        </p>
       ) : items.length === 0 ? (
         <p className="py-3 text-xs text-slate-400">Nenhum anexo neste chamado.</p>
       ) : (
