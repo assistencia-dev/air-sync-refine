@@ -57,7 +57,9 @@ export const listTicketAttachments = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await supabaseAdmin
       .from("ticket_attachments")
-      .select("id, ticket_id, file_name, file_type, file_size, uploader_role, created_at, file_url, storage_path")
+      .select(
+        "id, ticket_id, file_name, file_type, file_size, uploader_role, created_at, file_url, storage_path",
+      )
       .eq("ticket_id", data.ticket_id)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
@@ -143,5 +145,46 @@ export const uploadTicketAttachment = createServerFn({ method: "POST" })
       note_text: `Anexo enviado: ${data.file_name}`,
     });
 
+    return { ok: true };
+  });
+
+export const deleteTicketAttachment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { attachment_id: string }) => {
+    if (!input?.attachment_id) throw new Error("Anexo inválido.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const { data: me, error: meError } = await context.supabase
+      .from("users")
+      .select("id, role_key, status")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
+    if (meError || !me || me.status !== "ativo")
+      throw new Error("Perfil administrativo não encontrado.");
+    if (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL")
+      throw new Error("Somente o administrador pode remover uma OS.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: attachment, error } = await supabaseAdmin
+      .from("ticket_attachments")
+      .select("id, ticket_id, storage_path, file_name")
+      .eq("id", data.attachment_id)
+      .maybeSingle();
+    if (error || !attachment) throw new Error(error?.message ?? "Anexo não encontrado.");
+    if (attachment.storage_path)
+      await supabaseAdmin.storage.from(BUCKET).remove([attachment.storage_path]);
+    const { error: deleteError } = await supabaseAdmin
+      .from("ticket_attachments")
+      .delete()
+      .eq("id", data.attachment_id);
+    if (deleteError) throw new Error(deleteError.message);
+    await supabaseAdmin
+      .from("ticket_timeline")
+      .insert({
+        ticket_id: attachment.ticket_id,
+        author_user_id: me.id,
+        role_label: "DBS Air",
+        note_text: `Anexo removido: ${attachment.file_name}`,
+      });
     return { ok: true };
   });

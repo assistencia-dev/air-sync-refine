@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Loader2, Paperclip, Upload } from "lucide-react";
+import { Download, FileText, Loader2, Paperclip, Upload, X } from "lucide-react";
 import {
+  deleteTicketAttachment,
   listTicketAttachments,
   uploadTicketAttachment,
   type TicketAttachment,
@@ -25,6 +26,12 @@ export function TicketAttachments({
   const attachments = useQuery({
     queryKey: ["ticket-attachments", ticketId],
     queryFn: () => listTicketAttachments({ data: { ticket_id: ticketId } }),
+  });
+  const remove = useMutation({
+    mutationFn: (attachmentId: string) =>
+      deleteTicketAttachment({ data: { attachment_id: attachmentId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket-attachments", ticketId] }),
+    onError: (err) => setError(err instanceof Error ? err.message : "Falha ao remover a OS."),
   });
   const upload = useMutation({
     mutationFn: async (file: File) => {
@@ -65,21 +72,41 @@ export function TicketAttachments({
         <span className="text-[11px] text-slate-500">Anexos indisponíveis</span>
       )}
       {(attachments.data ?? []).map((file: TicketAttachment) => (
-        <a
+        <div
           key={file.id}
-          href={file.url ?? undefined}
-          target="_blank"
-          rel="noreferrer"
-          download={file.file_name}
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition hover:border-sky-300 hover:bg-sky-50"
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2"
         >
-          <FileText className="h-4 w-4 shrink-0 text-red-600" />
-          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">
-            {file.file_name}
-            <small className="block font-normal text-slate-400">{formatSize(file.file_size)}</small>
-          </span>
-          <Download className="h-3.5 w-3.5 shrink-0 text-sky-700" />
-        </a>
+          <a
+            href={file.url ?? undefined}
+            target="_blank"
+            rel="noreferrer"
+            download={file.file_name}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left transition hover:text-sky-700"
+          >
+            <FileText className="h-4 w-4 shrink-0 text-red-600" />
+            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-700">
+              {file.file_name}
+              <small className="block font-normal text-slate-400">
+                {formatSize(file.file_size)}
+              </small>
+            </span>
+            <Download className="h-3.5 w-3.5 shrink-0 text-sky-700" />
+          </a>
+          {canUpload && (
+            <button
+              type="button"
+              title="Excluir OS"
+              aria-label={`Excluir ${file.file_name}`}
+              disabled={remove.isPending}
+              onClick={() => {
+                if (window.confirm(`Excluir a OS ${file.file_name}?`)) remove.mutate(file.id);
+              }}
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       ))}
       {canUpload && (
         <>
