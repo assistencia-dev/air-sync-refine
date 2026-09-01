@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { createTicket, listMyTickets, reopenTicket } from "@/lib/tickets.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   head: () => ({ meta: [{ title: "Portal DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -242,12 +243,13 @@ function PortalPage() {
                   <th className="text-left px-4 py-3 min-w-[260px]">Descrição do problema</th>
                   <th className="text-left px-4 py-3">Status</th>
                   <th className="text-left px-4 py-3">Aberto em</th>
+                  <th className="text-left px-4 py-3">Anexos</th>
                 </tr>
               </thead>
               <tbody>
                 {tickets.isLoading && (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-500">
+                    <td colSpan={6} className="p-6 text-center text-slate-500">
                       Carregando...
                     </td>
                   </tr>
@@ -258,7 +260,7 @@ function PortalPage() {
                     : t.status !== "concluido" && t.status !== "cancelado",
                 ).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-500">
+                    <td colSpan={6} className="p-6 text-center text-slate-500">
                       Nenhum chamado nesta aba.
                     </td>
                   </tr>
@@ -317,6 +319,9 @@ function PortalPage() {
                         </td>
                         <td className="px-4 py-3 text-slate-500 text-xs">
                           {new Date(t.created_at).toLocaleString("pt-BR")}
+                        </td>
+                        <td className="px-4 py-3">
+                          <TicketAttachments ticketId={t.id} />
                         </td>
                       </tr>
                     );

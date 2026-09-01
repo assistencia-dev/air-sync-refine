@@ -28,6 +28,7 @@ import {
   createClientUser,
 } from "@/lib/admin.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -358,13 +359,14 @@ function TicketsPanel() {
               <th className="text-left px-4 py-3">Aberto por</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Aberto em</th>
+              <th className="text-left px-4 py-3">OS em PDF</th>
               <th className="text-right px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
             {tickets.isLoading && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-slate-500">
+                <td colSpan={9} className="p-6 text-center text-slate-500">
                   Carregando...
                 </td>
               </tr>
@@ -375,7 +377,7 @@ function TicketsPanel() {
                 : t.status !== "concluido" && t.status !== "cancelado",
             ).length === 0 && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-slate-500">
+                <td colSpan={9} className="p-6 text-center text-slate-500">
                   Nenhum chamado nesta aba.
                 </td>
               </tr>
@@ -434,6 +436,9 @@ function TicketsPanel() {
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
                       {new Date(t.created_at).toLocaleString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <TicketAttachments ticketId={t.id} canUpload />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col items-end gap-1.5">
