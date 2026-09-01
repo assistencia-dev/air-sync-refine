@@ -21,7 +21,7 @@ export function HrRoute() {
   const sso = useQuery({
     queryKey: ["rh-vale-passagem-sso"],
     queryFn: () => createValePassageSsoUrl(),
-    enabled: profile.data?.username === "DBSASSISTENCIA123",
+    enabled: NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? ""),
     retry: false,
   });
   const [benefit, setBenefit] = useState<"passagem" | "alimentacao" | "cadastro">("passagem");
@@ -96,19 +96,43 @@ export function HrRoute() {
             <RhBenefitPanel benefitType="alimentacao" />
           ) : (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-1 border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-900 sm:px-7">
-                <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">
-                  Sistema integrado ao RH
-                </p>
-                <p className="text-sm font-bold">Vale Passagem</p>
-              </div>
-              <iframe
-                title="Sistema de Vale Passagem"
-                src={sso.data?.url ?? VALE_PASSAGEM_URL}
-                className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
-                allow="storage-access; notifications"
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
+              {sso.isError ? (
+                <div className="flex min-h-[560px] items-center justify-center p-8 text-center">
+                  <div className="max-w-md">
+                    <Shield className="mx-auto h-10 w-10 text-amber-500" />
+                    <h2 className="mt-4 text-lg font-black text-[#102b3b]">
+                      Acesso único indisponível
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      O login do RH foi reconhecido, mas o Vale Passagem não conseguiu validar a
+                      sessão única. Não abrimos outro login para evitar duplicidade. Verifique a
+                      configuração SSO do módulo original.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1 border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-900 sm:px-7">
+                    <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">
+                      Sistema integrado ao RH
+                    </p>
+                    <p className="text-sm font-bold">Vale Passagem</p>
+                  </div>
+                  {sso.isLoading ? (
+                    <div className="flex min-h-[560px] items-center justify-center text-sm font-semibold text-slate-500">
+                      Validando acesso único...
+                    </div>
+                  ) : (
+                    <iframe
+                      title="Sistema de Vale Passagem"
+                      src={sso.data?.url ?? VALE_PASSAGEM_URL}
+                      className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
+                      allow="storage-access; notifications"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                    />
+                  )}
+                </>
+              )}
             </section>
           )}
         </div>

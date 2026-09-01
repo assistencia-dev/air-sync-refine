@@ -15,8 +15,13 @@ export const createValePassageSsoUrl = createServerFn({ method: "GET" })
       .eq("auth_id", context.userId)
       .maybeSingle();
     if (error || !profile) throw new Error("Perfil administrativo não encontrado.");
-    if (profile.status !== "ativo" || profile.username !== "DBSASSISTENCIA123") {
-      throw new Error("O módulo de Controle de Passagem está disponível somente para o operador nativo.");
+    if (
+      profile.status !== "ativo" ||
+      !["DBS123", "DBSASSISTENCIA123"].includes(profile.username ?? "")
+    ) {
+      throw new Error(
+        "O módulo de Controle de Passagem está disponível somente para operadores nativos.",
+      );
     }
 
     const baseUrl = process.env.VALE_PASSAGEM_URL;
