@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, Shield, Utensils, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
@@ -19,7 +19,7 @@ export function HrRoute() {
   const [benefit, setBenefit] = useState<"passagem" | "alimentacao">("passagem");
 
   useEffect(() => {
-    if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username)) {
+    if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "")) {
       navigate({ to: "/portal", replace: true });
     }
   }, [profile.data, navigate]);

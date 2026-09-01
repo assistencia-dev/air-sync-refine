@@ -127,6 +127,87 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_employees: {
+        Row: {
+          benefit_type: string
+          created_at: string
+          fare_cents: number
+          full_name: string
+          id: string
+          is_active: boolean
+          trips_per_day: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          benefit_type: string
+          created_at?: string
+          fare_cents: number
+          full_name: string
+          id?: string
+          is_active?: boolean
+          trips_per_day?: number
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          benefit_type?: string
+          created_at?: string
+          fare_cents?: number
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          trips_per_day?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rh_topups: {
+        Row: {
+          amount_cents: number
+          benefit_type: string
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          paid_at: string
+        }
+        Insert: {
+          amount_cents: number
+          benefit_type: string
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          paid_at: string
+        }
+        Update: {
+          amount_cents?: number
+          benefit_type?: string
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          paid_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_topups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_topups_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_attachments: {
         Row: {
           created_at: string

@@ -516,4 +516,3 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
     </div>
   );
 }
-EOF;

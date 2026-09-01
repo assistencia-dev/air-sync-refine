@@ -76,7 +76,7 @@ export function TicketNotificationListener() {
           const message = `${ticket.protocol_number ?? "Novo protocolo"} · ${ticket.occurrence_type ?? "Ocorrência"}`;
           notifyNative(title, message);
           setToasts((current) =>
-            [{ id: `${ticket.id}-new`, title, message, tone: "blue" }, ...current].slice(0, 3),
+            [{ id: `${ticket.id}-new`, title, message, tone: "blue" as const }, ...current].slice(0, 3),
           );
         },
       )
@@ -100,7 +100,7 @@ export function TicketNotificationListener() {
           notifyNative(title, message);
           setToasts((current) =>
             [
-              { id: `${ticket.id}-${ticket.status}`, title, message, tone: "green" },
+              { id: `${ticket.id}-${ticket.status}`, title, message, tone: "green" as const },
               ...current,
             ].slice(0, 3),
           );
