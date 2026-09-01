@@ -211,24 +211,39 @@ export type Database = {
       ticket_attachments: {
         Row: {
           created_at: string
+          file_name: string | null
+          file_size: number | null
           file_type: string | null
           file_url: string
           id: string
+          storage_path: string | null
           ticket_id: string
+          uploaded_by: string | null
+          uploader_role: string | null
         }
         Insert: {
           created_at?: string
+          file_name?: string | null
+          file_size?: number | null
           file_type?: string | null
           file_url: string
           id?: string
+          storage_path?: string | null
           ticket_id: string
+          uploaded_by?: string | null
+          uploader_role?: string | null
         }
         Update: {
           created_at?: string
+          file_name?: string | null
+          file_size?: number | null
           file_type?: string | null
           file_url?: string
           id?: string
+          storage_path?: string | null
           ticket_id?: string
+          uploaded_by?: string | null
+          uploader_role?: string | null
         }
         Relationships: [
           {
@@ -236,6 +251,13 @@ export type Database = {
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
