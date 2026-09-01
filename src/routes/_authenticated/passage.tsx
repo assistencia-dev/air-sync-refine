@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ExternalLink, Shield, Utensils, WalletCards } from "lucide-react";
+import { ArrowLeft, Shield, Utensils, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
+import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
 
 const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
@@ -16,6 +17,12 @@ export const Route = createFileRoute("/_authenticated/passage")({
 export function HrRoute() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const sso = useQuery({
+    queryKey: ["rh-vale-passagem-sso"],
+    queryFn: () => createValePassageSsoUrl(),
+    enabled: profile.data?.username === "DBSASSISTENCIA123",
+    retry: false,
+  });
   const [benefit, setBenefit] = useState<"passagem" | "alimentacao">("passagem");
 
   useEffect(() => {
@@ -79,25 +86,15 @@ export function HrRoute() {
             <RhBenefitPanel benefitType="alimentacao" />
           ) : (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-900 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">
-                    Sistema preservado
-                  </p>
-                  <p className="mt-1 text-sm font-bold">Vale Passagem</p>
-                </div>
-                <a
-                  href={VALE_PASSAGEM_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:underline"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Abrir em nova aba
-                </a>
+              <div className="flex flex-col gap-1 border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-900 sm:px-7">
+                <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">
+                  Sistema integrado ao RH
+                </p>
+                <p className="text-sm font-bold">Vale Passagem</p>
               </div>
               <iframe
                 title="Sistema de Vale Passagem"
-                src={VALE_PASSAGEM_URL}
+                src={sso.data?.url ?? VALE_PASSAGEM_URL}
                 className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
                 allow="storage-access; notifications"
                 referrerPolicy="strict-origin-when-cross-origin"
