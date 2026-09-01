@@ -570,7 +570,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <h2 className="text-lg font-bold text-slate-900">Usuários Vinculados</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {isSuperAdmin
-              ? "Somente SUPER_ADMIN pode criar, ativar ou desativar acessos."
+              ? "Somente SUPER_ADMIN pode criar, reativar ou excluir acessos. O histórico é preservado."
               : "Visualização apenas — gestão restrita ao SUPER_ADMIN."}
           </p>
         </div>
@@ -674,7 +674,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                           }
                           className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50"
                         >
-                          Desativar
+                          Excluir acesso
                         </button>
                       )
                     ) : (
@@ -698,13 +698,14 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold text-slate-900">
-              {confirm.nextStatus === "bloqueado" ? "Desativar acesso" : "Reativar acesso"}
+              {confirm.nextStatus === "bloqueado" ? "Excluir acesso" : "Reativar acesso"}
             </h3>
             <p className="mt-3 text-sm text-slate-600">
               {confirm.nextStatus === "bloqueado" ? (
                 <>
-                  Tem certeza que deseja suspender o acesso de <strong>{confirm.name}</strong>? Ele
-                  não poderá mais fazer login nem abrir novos chamados.
+                  Tem certeza que deseja excluir o acesso de <strong>{confirm.name}</strong>? O
+                  usuário não poderá mais fazer login, mas os chamados e o histórico serão
+                  preservados.
                 </>
               ) : (
                 <>
@@ -737,7 +738,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 {mut.isPending
                   ? "Processando..."
                   : confirm.nextStatus === "bloqueado"
-                    ? "Confirmar desativação"
+                    ? "Confirmar exclusão do acesso"
                     : "Confirmar reativação"}
               </button>
             </div>

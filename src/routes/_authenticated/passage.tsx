@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Shield, Utensils, WalletCards } from "lucide-react";
+import { ArrowLeft, Shield, Utensils, UsersRound, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
+import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
@@ -23,7 +24,7 @@ export function HrRoute() {
     enabled: profile.data?.username === "DBSASSISTENCIA123",
     retry: false,
   });
-  const [benefit, setBenefit] = useState<"passagem" | "alimentacao">("passagem");
+  const [benefit, setBenefit] = useState<"passagem" | "alimentacao" | "cadastro">("passagem");
 
   useEffect(() => {
     if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "")) {
@@ -70,6 +71,12 @@ export function HrRoute() {
             </div>
             <nav className="flex flex-wrap gap-2" aria-label="Benefícios de RH">
               <button
+                onClick={() => setBenefit("cadastro")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${benefit === "cadastro" ? "bg-[#1E8F66] text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              >
+                <UsersRound className="h-4 w-4" /> Cadastro de funcionários
+              </button>
+              <button
                 onClick={() => setBenefit("passagem")}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${benefit === "passagem" ? "bg-[#102b3b] text-white shadow-md" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
               >
@@ -83,7 +90,9 @@ export function HrRoute() {
               </button>
             </nav>
           </div>
-          {benefit === "alimentacao" ? (
+          {benefit === "cadastro" ? (
+            <RhEmployeeRegistry />
+          ) : benefit === "alimentacao" ? (
             <RhBenefitPanel benefitType="alimentacao" />
           ) : (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
