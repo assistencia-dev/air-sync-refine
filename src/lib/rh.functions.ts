@@ -7,7 +7,7 @@ export type RhBenefitType = "passagem" | "alimentacao";
 type RhInput = { benefit_type: RhBenefitType };
 
 async function requireNativeOperator(context: { userId: string }) {
-  const { data, error } = await context.supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .select("id, username, status")
     .eq("auth_id", context.userId)
@@ -16,7 +16,7 @@ async function requireNativeOperator(context: { userId: string }) {
     error ||
     !data ||
     data.status !== "ativo" ||
-    !["DBS123", "DBSASSISTENCIA123"].includes(data.username)
+    !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")
   ) {
     throw new Error("Acesso restrito ao operador nativo DBS.");
   }
