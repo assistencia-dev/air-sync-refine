@@ -46,9 +46,9 @@ export function HrRoute() {
           <Shield className="h-3.5 w-3.5" /> Acesso administrativo
         </span>
       </header>
-      <main className="relative flex-1 p-3 sm:p-5">
-        <div className="mx-auto max-w-[1600px]">
-          <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <main className="relative flex-1 p-4 sm:p-6">
+        <div className="mx-auto max-w-[1480px]">
+          <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[.2em] text-slate-400">
                 Área de trabalho
@@ -78,16 +78,19 @@ export function HrRoute() {
           {benefit === "alimentacao" ? (
             <RhBenefitPanel benefitType="alimentacao" />
           ) : (
-            <div>
-              <div className="mb-2 flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs text-emerald-800 sm:px-5">
-                <span>
-                  <strong>Vale Passagem</strong> · sistema original preservado
-                </span>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-900 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700">
+                    Sistema preservado
+                  </p>
+                  <p className="mt-1 text-sm font-bold">Vale Passagem</p>
+                </div>
                 <a
                   href={VALE_PASSAGEM_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="hidden items-center gap-1 font-bold hover:underline sm:inline-flex"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:underline"
                 >
                   <ExternalLink className="h-3.5 w-3.5" /> Abrir em nova aba
                 </a>
@@ -95,11 +98,11 @@ export function HrRoute() {
               <iframe
                 title="Sistema de Vale Passagem"
                 src={VALE_PASSAGEM_URL}
-                className="h-[calc(100vh-13.5rem)] min-h-[640px] w-full rounded-xl border border-slate-200 bg-white shadow-sm"
+                className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
                 allow="storage-access; notifications"
                 referrerPolicy="strict-origin-when-cross-origin"
               />
-            </div>
+            </section>
           )}
         </div>
       </main>
