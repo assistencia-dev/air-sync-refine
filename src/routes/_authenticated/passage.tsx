@@ -61,10 +61,11 @@ export function HrRoute() {
                 Área de trabalho
               </p>
               <h1 className="mt-1 text-xl font-black tracking-tight text-[#102b3b]">
-                Recargas e benefícios
+                RH · Recargas e benefícios
               </h1>
               <p className="mt-1 text-xs text-slate-500">
-                Gestão de benefícios do colaborador, dentro do portal DBS.
+                Um único acesso para administrar Vale Passagem e Vale Alimentação dentro do portal
+                DBS.
               </p>
             </div>
             <nav className="flex flex-wrap gap-2" aria-label="Benefícios de RH">
