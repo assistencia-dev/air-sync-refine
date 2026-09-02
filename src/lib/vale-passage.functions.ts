@@ -24,8 +24,9 @@ export const createValePassageSsoUrl = createServerFn({ method: "GET" })
       );
     }
 
-    const baseUrl = process.env.VALE_PASSAGEM_URL;
-    const secret = process.env.VALE_PASSAGEM_SSO_SECRET;
+    const baseUrl = process.env.VALE_PASSAGEM_URL ?? "https://valepassagem-d8edi3fl.manus.space";
+    // O módulo original valida este mesmo nome de segredo no servidor.
+    const secret = process.env.DBS_SSO_SHARED_SECRET ?? process.env.VALE_PASSAGEM_SSO_SECRET;
     if (!baseUrl || !secret) {
       throw new Error("O módulo de Controle de Passagem ainda não foi configurado no ambiente.");
     }
