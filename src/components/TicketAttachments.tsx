@@ -28,9 +28,11 @@ function sizeText(bytes: number | null) {
 export function TicketAttachments({
   ticketId,
   compact = false,
+  canUpload = true,
 }: {
   ticketId: string;
   compact?: boolean;
+  canUpload?: boolean;
 }) {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
