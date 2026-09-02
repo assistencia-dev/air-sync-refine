@@ -86,7 +86,7 @@ export function RhEmployeeRegistry() {
               </tr>
             </thead>
             <tbody>
-              {(employees.data ?? []).map((employee: Employee) => (
+              {((employees.data ?? []) as unknown as Employee[]).map((employee: Employee) => (
                 <EmployeeRow
                   key={employee.id}
                   employee={employee}
