@@ -132,9 +132,12 @@ export type Database = {
           benefit_type: string
           created_at: string
           fare_cents: number
+          ficha_file_name: string | null
+          ficha_storage_path: string | null
           full_name: string
           id: string
           is_active: boolean
+          registration_data: Json
           trips_per_day: number
           unit: string
           updated_at: string
@@ -143,9 +146,12 @@ export type Database = {
           benefit_type: string
           created_at?: string
           fare_cents: number
+          ficha_file_name?: string | null
+          ficha_storage_path?: string | null
           full_name: string
           id?: string
           is_active?: boolean
+          registration_data?: Json
           trips_per_day?: number
           unit: string
           updated_at?: string
@@ -154,9 +160,12 @@ export type Database = {
           benefit_type?: string
           created_at?: string
           fare_cents?: number
+          ficha_file_name?: string | null
+          ficha_storage_path?: string | null
           full_name?: string
           id?: string
           is_active?: boolean
+          registration_data?: Json
           trips_per_day?: number
           unit?: string
           updated_at?: string
