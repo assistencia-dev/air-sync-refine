@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { ExternalLink, IdCard, Utensils, WalletCards } from "lucide-react";
+import { IdCard, Shield, Utensils, WalletCards } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
 
@@ -13,6 +15,11 @@ type HrSection = "passagem" | "alimentacao" | "cadastro";
  */
 export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [section, setSection] = useState<HrSection>("passagem");
+  const sso = useQuery({
+    queryKey: ["rh-vale-passagem-sso"],
+    queryFn: () => createValePassageSsoUrl(),
+    retry: false,
+  });
 
   const tabs: { key: HrSection; label: string; icon: React.ReactNode; active: string }[] = [
     {
@@ -62,14 +69,9 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
             ))}
           </nav>
           {embedded && (
-            <a
-              href="/passage"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-900"
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> Abrir RH em nova aba
-            </a>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
+              <Shield className="h-3.5 w-3.5" /> Sessão única do RH
+            </span>
           )}
         </div>
       </div>
@@ -85,22 +87,23 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
               </p>
               <p className="mt-1 text-sm font-bold">Vale Passagem</p>
             </div>
-            <a
-              href={VALE_PASSAGEM_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:underline"
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> Abrir em nova aba
-            </a>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+              <Shield className="h-3.5 w-3.5" /> Acesso pelo RH
+            </span>
           </div>
-          <iframe
-            title="Sistema de Vale Passagem"
-            src={VALE_PASSAGEM_URL}
-            className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
-            allow="storage-access; notifications"
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
+          {sso.isLoading ? (
+            <div className="flex min-h-[560px] items-center justify-center text-sm font-semibold text-slate-500">
+              Validando acesso único...
+            </div>
+          ) : (
+            <iframe
+              title="Sistema de Vale Passagem"
+              src={sso.data?.url ?? VALE_PASSAGEM_URL}
+              className="h-[min(760px,calc(100vh-15rem))] min-h-[560px] w-full bg-white"
+              allow="storage-access; notifications"
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          )}
         </section>
       )}
     </div>
