@@ -40,7 +40,7 @@ export const listRhEmployees = createServerFn({ method: "GET" })
       .select(
         "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
       )
-      .eq("benefit_type", data.benefit_type)
+      .eq("is_active", true)
       .order("full_name");
     if (error) throw new Error(error.message);
     return employees ?? [];
@@ -119,7 +119,6 @@ export const updateRhEmployee = createServerFn({ method: "POST" })
         trips_per_day: data.trips_per_day,
       })
       .eq("id", data.id)
-      .eq("benefit_type", data.benefit_type)
       .select(
         "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
       )
@@ -140,8 +139,7 @@ export const deleteRhEmployee = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("rh_employees")
       .update({ is_active: false })
-      .eq("id", data.id)
-      .eq("benefit_type", data.benefit_type);
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -187,7 +185,6 @@ export const createRhTopup = createServerFn({ method: "POST" })
       .from("rh_employees")
       .select("id")
       .eq("id", data.employee_id)
-      .eq("benefit_type", data.benefit_type)
       .eq("is_active", true)
       .maybeSingle();
     if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
@@ -215,6 +212,43 @@ export const deleteRhTopup = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .eq("benefit_type", data.benefit_type);
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Valida usuário + senha do operador para liberar o módulo RH.
+ * Usa um cliente sem persistência de sessão: apenas confere as credenciais.
+ */
+export const unlockRhModule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { username: string; password: string }) => {
+    if (!input?.username?.trim() || !input?.password) {
+      throw new Error("Informe usuário e senha do RH.");
+    }
+    return { username: input.username.trim().toUpperCase(), password: input.password };
+  })
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+    if ((operator.username ?? "").toUpperCase() !== data.username) {
+      throw new Error("Usuário ou senha do RH inválidos.");
+    }
+    const { data: row } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", operator.id)
+      .maybeSingle();
+    if (!row?.email) throw new Error("Operador sem e-mail de acesso configurado.");
+    const { createClient } = await import("@supabase/supabase-js");
+    const check = createClient(
+      process.env["SUPABASE_URL"]!,
+      process.env["SUPABASE_PUBLISHABLE_KEY"]!,
+      { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } },
+    );
+    const { error } = await check.auth.signInWithPassword({
+      email: row.email,
+      password: data.password,
+    });
+    if (error) throw new Error("Usuário ou senha do RH inválidos.");
     return { ok: true };
   });
 
