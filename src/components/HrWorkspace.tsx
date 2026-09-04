@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { IdCard, Shield, Utensils, WalletCards } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { getMyProfile } from "@/lib/auth.functions";
 import { createValePassageSsoUrl } from "@/lib/vale-passage.functions";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
@@ -13,13 +14,71 @@ type HrSection = "passagem" | "alimentacao" | "cadastro";
  * Área de trabalho de RH compartilhada: usada embutida na aba do painel
  * administrativo e também na rota dedicada /passage (aba nova).
  */
+function RhGate({
+  loading = false,
+  denied = false,
+  onEnter,
+}: {
+  loading?: boolean;
+  denied?: boolean;
+  onEnter?: () => void;
+}) {
+  return (
+    <section className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+        <Shield className="mx-auto h-8 w-8 text-[#1E8F66]" />
+        <p className="mt-4 text-[10px] font-black uppercase tracking-[.2em] text-slate-400">
+          Módulo protegido
+        </p>
+        <h1 className="mt-2 text-xl font-black text-[#102b3b]">Acesso ao RH</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          {loading
+            ? "Validando a sessão administrativa..."
+            : denied
+              ? "Este usuário não possui acesso ao módulo RH."
+              : "Faça o acesso com a sessão administrativa já registrada para liberar as ferramentas."}
+        </p>
+        {onEnter && (
+          <button
+            type="button"
+            onClick={onEnter}
+            className="mt-6 w-full rounded-xl bg-[#102b3b] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#173e54]"
+          >
+            Entrar no módulo RH
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
+  const profile = useQuery({ queryKey: ["rh-module-profile"], queryFn: () => getMyProfile() });
+  const [rhAuthenticated, setRhAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("dbs-rh-authenticated") === "1";
+  });
   const [section, setSection] = useState<HrSection>("passagem");
+  const isNativeOperator = ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
   const sso = useQuery({
     queryKey: ["rh-vale-passagem-sso"],
     queryFn: () => createValePassageSsoUrl(),
+    enabled: rhAuthenticated && isNativeOperator,
     retry: false,
   });
+
+  if (profile.isLoading) return <RhGate loading />;
+  if (!profile.data || !isNativeOperator) return <RhGate denied />;
+  if (!rhAuthenticated) {
+    return (
+      <RhGate
+        onEnter={() => {
+          window.sessionStorage.setItem("dbs-rh-authenticated", "1");
+          setRhAuthenticated(true);
+        }}
+      />
+    );
+  }
 
   const tabs: { key: HrSection; label: string; icon: React.ReactNode; active: string }[] = [
     {
