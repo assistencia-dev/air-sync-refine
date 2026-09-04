@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { IdCard, Lock, Shield, Utensils, WalletCards } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  IdCard,
+  KeyRound,
+  Lock,
+  Shield,
+  ShieldCheck,
+  UserRound,
+  Utensils,
+  WalletCards,
+} from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { unlockRhModule } from "@/lib/rh.functions";
@@ -27,6 +38,7 @@ function RhLogin({
 }) {
   const [username, setUsername] = useState(defaultUsername);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unlock = useMutation({
     mutationFn: () => unlockRhModule({ data: { username, password } }),
@@ -65,17 +77,18 @@ function RhLogin({
           </p>
         </div>
         <ul className="relative mt-10 space-y-3 text-sm">
-          {[
-            [IdCard, "Cadastro único de colaboradores"],
-            [WalletCards, "Controle de recargas e cobertura"],
-            [KeyRound, "Acesso liberado somente após login"],
-          ].map(([Icon, text], index) => (
+          {(
+            [
+              [IdCard, "Cadastro único de colaboradores"],
+              [WalletCards, "Controle de recargas e cobertura"],
+              [KeyRound, "Acesso liberado somente após login"],
+            ] as const
+          ).map(([Icon, text], index) => (
             <li key={index} className="flex items-center gap-3 text-white/80">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-[#1fd08c]">
-                {/* @ts-expect-error tupla de ícone */}
                 <Icon className="h-4 w-4" />
               </span>
-              {text as string}
+              {text}
             </li>
           ))}
         </ul>
