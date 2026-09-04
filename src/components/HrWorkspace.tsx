@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { IdCard, Lock, Shield, Utensils, WalletCards } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  IdCard,
+  KeyRound,
+  Lock,
+  Shield,
+  ShieldCheck,
+  UserRound,
+  Utensils,
+  WalletCards,
+} from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { unlockRhModule } from "@/lib/rh.functions";
@@ -27,6 +38,7 @@ function RhLogin({
 }) {
   const [username, setUsername] = useState(defaultUsername);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unlock = useMutation({
     mutationFn: () => unlockRhModule({ data: { username, password } }),
@@ -39,65 +51,145 @@ function RhLogin({
   });
 
   return (
-    <section className="flex min-h-[520px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-8">
-        <div className="text-center">
-          <Shield className="mx-auto h-8 w-8 text-[#1E8F66]" />
-          <p className="mt-4 text-[10px] font-black uppercase tracking-[.2em] text-slate-400">
+    <section className="grid min-h-[560px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl lg:grid-cols-2">
+      {/* Painel institucional */}
+      <div className="relative hidden flex-col justify-between bg-[#0B1B26] p-10 text-white lg:flex">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.18]"
+          style={{
+            backgroundImage:
+              "linear-gradient(#ffffff22 1px,transparent 1px),linear-gradient(90deg,#ffffff22 1px,transparent 1px)",
+            backgroundSize: "38px 38px",
+          }}
+        />
+        <div className="relative">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.2em] text-[#f7c945]">
+            <ShieldCheck className="h-3.5 w-3.5" /> Ambiente restrito
+          </span>
+          <h1 className="mt-6 text-3xl font-black leading-tight tracking-tight">
+            Recursos Humanos
+            <br />
+            DBS Air
+          </h1>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-white/65">
+            Cadastro central de colaboradores, Vale Passagem e Vale Alimentação em um único
+            ambiente auditado.
+          </p>
+        </div>
+        <ul className="relative mt-10 space-y-3 text-sm">
+          {(
+            [
+              [IdCard, "Cadastro único de colaboradores"],
+              [WalletCards, "Controle de recargas e cobertura"],
+              [KeyRound, "Acesso liberado somente após login"],
+            ] as const
+          ).map(([Icon, text], index) => (
+            <li key={index} className="flex items-center gap-3 text-white/80">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-[#1fd08c]">
+                <Icon className="h-4 w-4" />
+              </span>
+              {text}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Formulário */}
+      <div className="flex items-center justify-center bg-[#f7f9fa] p-6 sm:p-10">
+        <div className="w-full max-w-sm">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#102b3b] text-[#f7c945] shadow-lg">
+            <Lock className="h-5 w-5" />
+          </div>
+          <p className="mt-6 text-[10px] font-black uppercase tracking-[.22em] text-slate-400">
             Módulo protegido
           </p>
-          <h1 className="mt-2 text-xl font-black text-[#102b3b]">Acesso ao RH</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-[#102b3b]">Acesso ao RH</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
             {loading
               ? "Validando a sessão administrativa..."
               : denied
                 ? "Este usuário não possui acesso ao módulo RH."
-                : "Informe usuário e senha para liberar as ferramentas do RH."}
+                : "Use as mesmas credenciais administrativas do portal para liberar as ferramentas."}
           </p>
-        </div>
 
-        {!loading && !denied && (
-          <form
-            className="mt-6 space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setError(null);
-              unlock.mutate();
-            }}
-          >
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Usuário do RH"
-              autoComplete="username"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-            />
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Senha"
-              type="password"
-              autoComplete="current-password"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-            />
-            {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={unlock.isPending || !username.trim() || !password}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#102b3b] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#173e54] disabled:opacity-50"
+          {loading && (
+            <div className="mt-6 space-y-3">
+              <div className="h-12 animate-pulse rounded-xl bg-slate-200" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-200" />
+            </div>
+          )}
+
+          {!loading && !denied && (
+            <form
+              className="mt-7 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError(null);
+                unlock.mutate();
+              }}
             >
-              <Lock className="h-4 w-4" />
-              {unlock.isPending ? "Validando..." : "Entrar no módulo RH"}
-            </button>
-          </form>
-        )}
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Usuário
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
+                  <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                  <input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="DBSASSISTENCIA123"
+                    autoComplete="username"
+                    className="w-full bg-transparent py-3 text-sm font-semibold text-[#102b3b] outline-none"
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Senha
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
+                  <KeyRound className="h-4 w-4 shrink-0 text-slate-400" />
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    className="w-full bg-transparent py-3 text-sm font-semibold text-[#102b3b] outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    className="text-slate-400 transition hover:text-slate-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </label>
+              {error && (
+                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700">
+                  {error}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={unlock.isPending || !username.trim() || !password}
+                className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#102b3b] px-4 py-3.5 text-sm font-black text-white shadow-lg transition hover:bg-[#173e54] disabled:opacity-50"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                {unlock.isPending ? "Validando acesso..." : "Entrar no módulo RH"}
+              </button>
+              <p className="pt-1 text-center text-[11px] text-slate-400">
+                Sessão do RH válida apenas nesta aba do navegador.
+              </p>
+            </form>
+          )}
+        </div>
       </div>
     </section>
   );
+
 }
 
 export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
