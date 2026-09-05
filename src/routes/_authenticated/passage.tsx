@@ -36,7 +36,7 @@ export function HrRoute() {
             className="h-10 w-auto max-w-[190px] object-contain"
           />
           <span className="hidden h-7 w-px bg-slate-700 sm:block" />
-          <span className="text-xs font-bold uppercase tracking-widest text-[#1E8F66]">
+          <span className="text-xs font-bold uppercase tracking-widest text-[#F59E0B]">
             Módulo RH
           </span>
         </div>
