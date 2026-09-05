@@ -70,10 +70,10 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   const title = benefitType === "alimentacao" ? "Vale Alimentação" : "Vale Passagem";
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-slate-200 bg-[#102b3b] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
+    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#f7c945]">
+          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#F59E0B]">
             Módulo RH · operação
           </p>
           <h2 className="mt-1 text-2xl font-black tracking-tight">{title}</h2>
@@ -83,12 +83,12 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
         </div>
         <button
           onClick={() => setTopupOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f7c945] px-4 py-2.5 text-xs font-black text-[#102b3b] shadow-lg transition hover:bg-[#ffd967]"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50 shadow-lg transition hover:bg-[#ffd967]"
         >
           <Plus className="h-4 w-4" /> Nova recarga
         </button>
       </div>
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 py-3 sm:px-7">
+      <div className="flex flex-wrap gap-2 border-b border-slate-800 px-5 py-3 sm:px-7">
         {(
           [
             ["overview", "Visão geral", WalletCards],
@@ -100,26 +100,26 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
           <button
             key={key}
             onClick={() => setSection(key)}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${section === key ? "bg-[#102b3b] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${section === key ? "bg-[#0F172A] text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
           >
             <Icon className="h-3.5 w-3.5" /> {label}
           </button>
         ))}
       </div>
       {error && (
-        <div className="mx-5 mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 sm:mx-7">
+        <div className="mx-5 mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 sm:mx-7">
           {error}
         </div>
       )}
       {(employees.isError || topups.isError) && (
-        <div className="mx-5 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900 sm:mx-7">
+        <div className="mx-5 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs leading-5 text-amber-200 sm:mx-7">
           O cadastro do RH ainda não está disponível neste ambiente. Nenhum dado foi alterado;
           publique a migração do Supabase para liberar esta área.
         </div>
       )}
       <div className="p-5 sm:p-7">
         {(employees.isLoading || topups.isLoading) && (
-          <p className="mb-5 rounded-xl bg-slate-50 p-6 text-center text-xs font-semibold text-slate-500">
+          <p className="mb-5 rounded-xl bg-[#141F33] p-6 text-center text-xs font-semibold text-slate-400">
             Carregando dados do RH...
           </p>
         )}
@@ -190,13 +190,13 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
         />
       )}
       {topupOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#102b3b]/45 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#02060d]/70 p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-xl font-black text-[#102b3b]">Nova recarga</h3>
+              <h3 className="text-xl font-black text-slate-50">Nova recarga</h3>
               <button
                 onClick={() => setTopupOpen(false)}
-                className="text-xs font-bold text-slate-500"
+                className="text-xs font-bold text-slate-400"
               >
                 Fechar
               </button>
@@ -219,14 +219,14 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
 
 function Metric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex items-center justify-between text-slate-500">
+    <article className="rounded-xl border border-slate-800 bg-[#141F33] p-4">
+      <div className="flex items-center justify-between text-slate-400">
         <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#1E8F66]">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-900 text-[#F59E0B]">
           {icon}
         </span>
       </div>
-      <strong className="mt-4 block text-2xl font-black tracking-tight text-[#102b3b]">
+      <strong className="mt-4 block text-2xl font-black tracking-tight text-slate-50">
         {value}
       </strong>
     </article>
@@ -248,19 +248,19 @@ function EmployeeList({
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-black text-[#102b3b]">Colaboradores</h3>
-          <p className="text-xs text-slate-500">Cadastros usados nos cálculos de cobertura.</p>
+          <h3 className="text-lg font-black text-slate-50">Colaboradores</h3>
+          <p className="text-xs text-slate-400">Cadastros usados nos cálculos de cobertura.</p>
         </div>
         <button
           onClick={onNew}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#1E8F66] px-3 py-2 text-xs font-bold text-white"
+          className="inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-black text-[#0B0F19]"
         >
           <Plus className="h-3.5 w-3.5" /> Novo colaborador
         </button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <thead className="bg-[#141F33] text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Unidade</th>
@@ -271,16 +271,16 @@ function EmployeeList({
           </thead>
           <tbody>
             {employees.map((employee) => (
-              <tr key={employee.id} className="border-t border-slate-100">
-                <td className="px-4 py-3 font-semibold text-slate-800">{employee.full_name}</td>
+              <tr key={employee.id} className="border-t border-slate-800">
+                <td className="px-4 py-3 font-semibold text-slate-100">{employee.full_name}</td>
                 <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
                 <td className="px-4 py-3">{money(employee.fare_cents)}</td>
                 <td className="px-4 py-3">{employee.trips_per_day}</td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => onEdit(employee)} className="mr-2 text-sky-700">
+                  <button onClick={() => onEdit(employee)} className="mr-2 text-sky-300">
                     <Pencil className="inline h-4 w-4" />
                   </button>
-                  <button onClick={() => onDelete(employee.id)} className="text-red-700">
+                  <button onClick={() => onDelete(employee.id)} className="text-red-300">
                     <Trash2 className="inline h-4 w-4" />
                   </button>
                 </td>
@@ -289,7 +289,7 @@ function EmployeeList({
           </tbody>
         </table>
         {!employees.length && (
-          <p className="p-8 text-center text-xs text-slate-500">
+          <p className="p-8 text-center text-xs text-slate-400">
             Nenhum colaborador cadastrado ainda.
           </p>
         )}
@@ -340,9 +340,9 @@ function EmployeeModal({
     onSuccess: onDone,
   });
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#102b3b]/45 p-4">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
-        <h3 className="text-xl font-black text-[#102b3b]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#02060d]/70 p-4">
+      <div className="w-full max-w-xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
+        <h3 className="text-xl font-black text-slate-50">
           {employee ? "Editar colaborador" : "Novo colaborador"}
         </h3>
         <div className="mt-5 grid gap-4">
@@ -350,20 +350,20 @@ function EmployeeModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nome completo"
-            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
           />
           <input
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
             placeholder="Unidade / setor"
-            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
           />
           <div className="grid grid-cols-2 gap-4">
             <input
               value={fare}
               onChange={(e) => setFare(e.target.value)}
               placeholder="Valor unitário"
-              className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+              className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
             />
             <input
               value={trips}
@@ -372,7 +372,7 @@ function EmployeeModal({
               min="1"
               max="12"
               placeholder="Viagens por dia"
-              className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+              className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
             />
           </div>
         </div>
@@ -386,7 +386,7 @@ function EmployeeModal({
           <button
             onClick={() => save.mutate()}
             disabled={save.isPending}
-            className="rounded-lg bg-[#1E8F66] px-4 py-2 text-xs font-bold text-white"
+            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-black text-[#0B0F19]"
           >
             {save.isPending ? "Salvando..." : "Salvar colaborador"}
           </button>
@@ -430,7 +430,7 @@ function TopupForm({
       <select
         value={employeeId}
         onChange={(e) => setEmployeeId(e.target.value)}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+        className="w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
       >
         <option value="">Selecione um colaborador</option>
         {employees.map((item) => (
@@ -444,16 +444,16 @@ function TopupForm({
         onChange={(e) => setAmount(e.target.value)}
         placeholder="Valor da recarga"
         inputMode="decimal"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+        className="w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
       />
       <input
         value={paidAt}
         onChange={(e) => setPaidAt(e.target.value)}
         type="date"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+        className="w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
       />
       {employee && amountCents > 0 && (
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-800">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
           <strong>Cobertura estimada: {days} dias úteis.</strong>
           <span className="block mt-1">Renovação prevista em {addBusinessDays(paidAt, days)}.</span>
         </div>
@@ -461,7 +461,7 @@ function TopupForm({
       <button
         onClick={() => create.mutate()}
         disabled={create.isPending || !employeeId || amountCents <= 0}
-        className="rounded-lg bg-[#1E8F66] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+        className="rounded-lg bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-[#0B0F19] disabled:opacity-50"
       >
         {create.isPending ? "Registrando..." : "Registrar recarga"}
       </button>
@@ -473,13 +473,13 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
   const byId = useMemo(() => new Map(employees.map((item) => [item.id, item])), [employees]);
   return (
     <div>
-      <h3 className="text-lg font-black text-[#102b3b]">Histórico de recargas</h3>
-      <p className="mb-4 text-xs text-slate-500">
+      <h3 className="text-lg font-black text-slate-50">Histórico de recargas</h3>
+      <p className="mb-4 text-xs text-slate-400">
         Acompanhe valores, cobertura e data de cada movimentação.
       </p>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <thead className="bg-[#141F33] text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-4 py-3">Colaborador</th>
               <th className="px-4 py-3">Data</th>
@@ -491,7 +491,7 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
             {topups.map((item) => {
               const employee = byId.get(item.employee_id);
               return (
-                <tr key={item.id} className="border-t border-slate-100">
+                <tr key={item.id} className="border-t border-slate-800">
                   <td className="px-4 py-3 font-semibold">
                     {employee?.full_name ?? "Colaborador inativo"}
                   </td>
@@ -508,7 +508,7 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
           </tbody>
         </table>
         {!topups.length && (
-          <p className="p-8 text-center text-xs text-slate-500">
+          <p className="p-8 text-center text-xs text-slate-400">
             Nenhuma recarga registrada ainda.
           </p>
         )}

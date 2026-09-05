@@ -25,28 +25,28 @@ export function HrRoute() {
 
   return (
     <div
-      className="flex min-h-screen flex-col bg-[#f4f7f6]"
+      className="flex min-h-screen flex-col bg-[#090D16]"
       style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
     >
-      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-200 bg-white/90 px-4 shadow-sm backdrop-blur sm:px-6">
+      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-800 bg-[#0F172A]/90 px-4 shadow-sm backdrop-blur sm:px-6">
         <div className="flex items-center gap-3">
           <img
             src={logoAsset.url}
             alt="DBS Air"
             className="h-10 w-auto max-w-[190px] object-contain"
           />
-          <span className="hidden h-7 w-px bg-slate-200 sm:block" />
-          <span className="text-xs font-bold uppercase tracking-widest text-[#1E8F66]">
+          <span className="hidden h-7 w-px bg-slate-700 sm:block" />
+          <span className="text-xs font-bold uppercase tracking-widest text-[#F59E0B]">
             Módulo RH
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex">
+          <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex">
             <Shield className="h-3.5 w-3.5" /> Acesso administrativo
           </span>
           <button
             onClick={() => navigate({ to: "/admin" })}
-            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" /> Voltar ao painel
           </button>
