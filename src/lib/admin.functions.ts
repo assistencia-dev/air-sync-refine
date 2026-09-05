@@ -17,7 +17,9 @@ export const listAllUsers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("users")
-      .select("id, full_name, username, email, role_key, status, unit:unit_id(name), company:company_id(legal_name, trade_name)")
+      .select(
+        "id, auth_id, full_name, username, email, cpf, role_key, status, unit_id, company_id, is_unit_manager, unit:unit_id(name), company:company_id(legal_name, trade_name)",
+      )
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -28,7 +30,8 @@ export const setUserStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { user_id: string; status: "ativo" | "bloqueado" }) => {
     if (!input?.user_id) throw new Error("Usuário inválido.");
-    if (input.status !== "ativo" && input.status !== "bloqueado") throw new Error("Status inválido.");
+    if (input.status !== "ativo" && input.status !== "bloqueado")
+      throw new Error("Status inválido.");
     return input;
   })
   .handler(async ({ context, data }) => {
@@ -60,12 +63,111 @@ export const setUserStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** SUPER_ADMIN edits a linked user without deleting historical tickets or attachments. */
+export const updateClientUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      user_id: string;
+      full_name: string;
+      email: string;
+      cpf?: string | null;
+      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
+      company_id?: string | null;
+      unit_id?: string | null;
+      is_unit_manager?: boolean;
+    }) => {
+      if (!input?.user_id) throw new Error("Usuário inválido.");
+      if (!input.full_name?.trim()) throw new Error("Informe o nome completo.");
+      if (!input.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
+      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
+        throw new Error("Papel inválido.");
+      }
+      return {
+        ...input,
+        full_name: input.full_name.trim(),
+        email: input.email.trim().toLowerCase(),
+        cpf: input.cpf?.replace(/\D+/g, "") || null,
+        company_id: input.company_id || null,
+        unit_id: input.unit_id || null,
+        is_unit_manager: !!input.is_unit_manager,
+      };
+    },
+  )
+  .handler(async ({ context, data }) => {
+    const { data: me } = await context.supabase
+      .from("users")
+      .select("id, role_key")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
+    if (!me || me.role_key !== "SUPER_ADMIN") {
+      throw new Error("Somente SUPER_ADMIN pode editar acessos.");
+    }
+    if (me.id === data.user_id)
+      throw new Error("Edite sua própria conta pela configuração de perfil.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: target, error: targetErr } = await supabaseAdmin
+      .from("users")
+      .select("id, auth_id, email, full_name, role_key, company_id, unit_id")
+      .eq("id", data.user_id)
+      .maybeSingle();
+    if (targetErr || !target) throw new Error("Usuário não encontrado.");
+
+    const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(target.auth_id, {
+      email: data.email,
+      user_metadata: { full_name: data.full_name },
+    });
+    if (authErr) throw new Error(authErr.message);
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("users")
+      .update({
+        full_name: data.full_name,
+        email: data.email,
+        cpf: data.cpf,
+        role_key: data.role_key,
+        company_id: data.company_id,
+        unit_id: data.unit_id,
+        is_unit_manager: data.is_unit_manager,
+      })
+      .eq("id", data.user_id);
+    if (updateErr) throw new Error(updateErr.message);
+
+    await supabaseAdmin.from("audit_log").insert({
+      actor_user_id: me.id,
+      target_user_id: data.user_id,
+      action: "updated_user",
+      metadata_json: {
+        previous: {
+          email: target.email,
+          full_name: target.full_name,
+          role_key: target.role_key,
+          company_id: target.company_id,
+          unit_id: target.unit_id,
+        },
+        next: {
+          email: data.email,
+          full_name: data.full_name,
+          role_key: data.role_key,
+          company_id: data.company_id,
+          unit_id: data.unit_id,
+        },
+        at: new Date().toISOString(),
+      },
+    });
+    return { ok: true };
+  });
+
 /** Lists companies and units for admin selection when creating accesses. */
 export const listCompaniesUnits = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: me } = await context.supabase
-      .from("users").select("role_key").eq("auth_id", context.userId).maybeSingle();
+      .from("users")
+      .select("role_key")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
     if (!me || (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL")) {
       throw new Error("Acesso negado.");
     }
@@ -84,48 +186,54 @@ export const listCompaniesUnits = createServerFn({ method: "GET" })
  *  Mode B: cliente novo — cria empresa + unidade na hora. */
 export const createClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    full_name: string;
-    email: string;
-    cpf?: string;
-    role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
-    unit_id?: string | null;
-    company_id?: string | null;
-    password: string;
-    is_unit_manager?: boolean;
-    new_company_name?: string | null;
-    new_company_cnpj?: string | null;
-    new_unit_name?: string | null;
-  }) => {
-    if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
-    if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-    if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
-      throw new Error("Papel inválido.");
-    }
-    if (!input?.password || input.password.length < 8) throw new Error("Senha temporária muito curta.");
-    const company_id = input.company_id || null;
-    const new_company_name = input.new_company_name?.trim() || null;
-    const new_company_cnpj = input.new_company_cnpj?.trim() || null;
-    if (!company_id && (!new_company_name || !new_company_cnpj)) {
-      throw new Error("Para cliente novo, informe Nome da Empresa e CNPJ.");
-    }
-    return {
-      full_name: input.full_name.trim(),
-      email: input.email.trim().toLowerCase(),
-      cpf: input.cpf?.replace(/\D+/g, "") || null,
-      role_key: input.role_key,
-      unit_id: input.unit_id || null,
-      company_id,
-      password: input.password,
-      is_unit_manager: !!input.is_unit_manager,
-      new_company_name,
-      new_company_cnpj,
-      new_unit_name: input.new_unit_name?.trim() || null,
-    };
-  })
+  .inputValidator(
+    (input: {
+      full_name: string;
+      email: string;
+      cpf?: string;
+      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
+      unit_id?: string | null;
+      company_id?: string | null;
+      password: string;
+      is_unit_manager?: boolean;
+      new_company_name?: string | null;
+      new_company_cnpj?: string | null;
+      new_unit_name?: string | null;
+    }) => {
+      if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
+      if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
+      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
+        throw new Error("Papel inválido.");
+      }
+      if (!input?.password || input.password.length < 8)
+        throw new Error("Senha temporária muito curta.");
+      const company_id = input.company_id || null;
+      const new_company_name = input.new_company_name?.trim() || null;
+      const new_company_cnpj = input.new_company_cnpj?.trim() || null;
+      if (!company_id && (!new_company_name || !new_company_cnpj)) {
+        throw new Error("Para cliente novo, informe Nome da Empresa e CNPJ.");
+      }
+      return {
+        full_name: input.full_name.trim(),
+        email: input.email.trim().toLowerCase(),
+        cpf: input.cpf?.replace(/\D+/g, "") || null,
+        role_key: input.role_key,
+        unit_id: input.unit_id || null,
+        company_id,
+        password: input.password,
+        is_unit_manager: !!input.is_unit_manager,
+        new_company_name,
+        new_company_cnpj,
+        new_unit_name: input.new_unit_name?.trim() || null,
+      };
+    },
+  )
   .handler(async ({ context, data }) => {
     const { data: me } = await context.supabase
-      .from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
+      .from("users")
+      .select("id, role_key")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
     if (!me || me.role_key !== "SUPER_ADMIN") {
       throw new Error("Somente SUPER_ADMIN pode criar acessos.");
     }
@@ -208,4 +316,3 @@ export const createClientUser = createServerFn({ method: "POST" })
 
     return { ok: true, email: data.email };
   });
-

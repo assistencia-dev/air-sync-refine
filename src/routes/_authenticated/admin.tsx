@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleDot,
   LogOut,
+  Pencil,
   RefreshCw,
   Shield,
   Ticket,
@@ -25,6 +26,7 @@ import {
   setUserStatus,
   listCompaniesUnits,
   createClientUser,
+  updateClientUser,
 } from "@/lib/admin.functions";
 import { HrWorkspace } from "@/components/HrWorkspace";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
@@ -513,6 +515,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editUser, setEditUser] = useState<any | null>(null);
 
   const mut = useMutation({
     mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) =>
@@ -612,33 +615,45 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {isSuperAdmin ? (
-                      blocked ? (
-                        <button
-                          onClick={() =>
-                            setConfirm({
-                              id: u.id,
-                              name: u.full_name ?? u.username ?? "usuário",
-                              nextStatus: "ativo",
-                            })
-                          }
-                          className="text-xs font-semibold px-3 py-1.5 rounded-md border border-green-600 text-green-700 hover:bg-green-50"
-                        >
-                          Reativar
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() =>
-                            setConfirm({
-                              id: u.id,
-                              name: u.full_name ?? u.username ?? "usuário",
-                              nextStatus: "bloqueado",
-                            })
-                          }
-                          className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50"
-                        >
-                          Excluir acesso
-                        </button>
-                      )
+                      <div className="flex items-center justify-end gap-2">
+                        {["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(u.role_key) && (
+                          <button
+                            type="button"
+                            onClick={() => setEditUser(u)}
+                            title="Editar usuário"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-sky-600 px-2.5 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Editar
+                          </button>
+                        )}
+                        {blocked ? (
+                          <button
+                            onClick={() =>
+                              setConfirm({
+                                id: u.id,
+                                name: u.full_name ?? u.username ?? "usuário",
+                                nextStatus: "ativo",
+                              })
+                            }
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md border border-green-600 text-green-700 hover:bg-green-50"
+                          >
+                            Reativar
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setConfirm({
+                                id: u.id,
+                                name: u.full_name ?? u.username ?? "usuário",
+                                nextStatus: "bloqueado",
+                              })
+                            }
+                            className="text-xs font-semibold px-3 py-1.5 rounded-md border border-red-600 text-red-700 hover:bg-red-50"
+                          >
+                            Excluir acesso
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}
@@ -714,6 +729,16 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           onCreated={() => qc.invalidateQueries({ queryKey: ["all-users"] })}
         />
       )}
+      {editUser && isSuperAdmin && (
+        <EditUserModal
+          user={editUser}
+          onClose={() => setEditUser(null)}
+          onSaved={() => {
+            setEditUser(null);
+            qc.invalidateQueries({ queryKey: ["all-users"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -734,6 +759,172 @@ function generatePassword(len = 12) {
   crypto.getRandomValues(arr);
   for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
   return out;
+}
+
+function EditUserModal({
+  user,
+  onClose,
+  onSaved,
+}: {
+  user: any;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const cu = useQuery({ queryKey: ["companies-units"], queryFn: () => listCompaniesUnits() });
+  const [fullName, setFullName] = useState(user.full_name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [cpf, setCpf] = useState(user.cpf ?? "");
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+    user.role_key,
+  );
+  const [companyId, setCompanyId] = useState(user.company_id ?? "");
+  const [unitId, setUnitId] = useState(user.unit_id ?? "");
+  const [isUnitManager, setIsUnitManager] = useState(Boolean(user.is_unit_manager));
+  const [err, setErr] = useState<string | null>(null);
+
+  const filteredUnits = (cu.data?.units ?? []).filter(
+    (u: any) => !companyId || u.company_id === companyId,
+  );
+
+  const mut = useMutation({
+    mutationFn: () =>
+      updateClientUser({
+        data: {
+          user_id: user.id,
+          full_name: fullName,
+          email,
+          cpf: cpf || null,
+          role_key: roleKey,
+          company_id: companyId || null,
+          unit_id: unitId || null,
+          is_unit_manager: isUnitManager,
+        },
+      }),
+    onSuccess: () => onSaved(),
+    onError: (e) => setErr(e instanceof Error ? e.message : "Falha ao editar usuário."),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Editar usuário vinculado</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Altere os dados de acesso sem remover chamados, anexos ou histórico.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm font-bold text-slate-400 hover:text-slate-700"
+          >
+            Fechar
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-slate-700">
+            Nome completo
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            E-mail de acesso
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            CPF
+            <input
+              value={cpf}
+              onChange={(e) => setCpf(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            Papel
+            <select
+              value={roleKey}
+              onChange={(e) => setRoleKey(e.target.value as typeof roleKey)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="CLIENTE_PF">Cliente</option>
+              <option value="GESTOR_CONTA">Gestor de conta</option>
+              <option value="GESTOR_REGIONAL">Gestor regional</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            Empresa
+            <select
+              value={companyId}
+              onChange={(e) => {
+                setCompanyId(e.target.value);
+                setUnitId("");
+              }}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Sem empresa</option>
+              {(cu.data?.companies ?? []).map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.trade_name || c.legal_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-700">
+            Unidade
+            <select
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Sem unidade</option>
+              {filteredUnits.map((u: any) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            checked={isUnitManager}
+            onChange={(e) => setIsUnitManager(e.target.checked)}
+          />
+          Usuário responsável pela unidade
+        </label>
+        {err && <div className="mt-4 rounded-md bg-red-50 p-3 text-xs text-red-700">{err}</div>}
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={mut.isPending}
+            className="rounded-md border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending}
+            className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {mut.isPending ? "Salvando..." : "Salvar alterações"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
