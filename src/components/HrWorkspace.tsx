@@ -63,7 +63,7 @@ function RhLogin({
           }}
         />
         <div className="relative">
-          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.2em] text-[#f7c945]">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.2em] text-[#F59E0B]">
             <ShieldCheck className="h-3.5 w-3.5" /> Ambiente restrito
           </span>
           <h1 className="mt-6 text-3xl font-black leading-tight tracking-tight">
@@ -97,7 +97,7 @@ function RhLogin({
       {/* Formulário */}
       <div className="flex items-center justify-center bg-[#0F172A] p-6 sm:p-10">
         <div className="w-full max-w-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[#f7c945] shadow-lg">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[#F59E0B] shadow-lg">
             <Lock className="h-5 w-5" />
           </div>
           <p className="mt-6 text-[10px] font-black uppercase tracking-[.22em] text-slate-400">
@@ -229,7 +229,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       key: "alimentacao",
       label: "Vale Alimentação",
       icon: <Utensils className="h-4 w-4" />,
-      active: "bg-[#f7c945] text-[#102b3b] shadow-md",
+      active: "bg-[#F59E0B] text-[#102b3b] shadow-md",
     },
   ];
 

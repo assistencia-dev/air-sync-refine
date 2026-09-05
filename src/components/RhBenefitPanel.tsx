@@ -73,7 +73,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
       <div className="flex flex-col gap-4 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#f7c945]">
+          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#F59E0B]">
             Módulo RH · operação
           </p>
           <h2 className="mt-1 text-2xl font-black tracking-tight">{title}</h2>
@@ -83,7 +83,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
         </div>
         <button
           onClick={() => setTopupOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f7c945] px-4 py-2.5 text-xs font-black text-slate-50 shadow-lg transition hover:bg-[#ffd967]"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50 shadow-lg transition hover:bg-[#ffd967]"
         >
           <Plus className="h-4 w-4" /> Nova recarga
         </button>

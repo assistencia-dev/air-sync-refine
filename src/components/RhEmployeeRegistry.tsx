@@ -50,7 +50,7 @@ export function RhEmployeeRegistry() {
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#f7c945]">
+          <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#F59E0B]">
             RH · cadastro central
           </p>
           <h2 className="mt-1 text-2xl font-black">Funcionários</h2>
@@ -63,7 +63,7 @@ export function RhEmployeeRegistry() {
             setEditing(null);
             setFormOpen(true);
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f7c945] px-4 py-2.5 text-xs font-black text-slate-50"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50"
         >
           <Plus className="h-4 w-4" /> Novo funcionário
         </button>
