@@ -51,9 +51,9 @@ function RhLogin({
   });
 
   return (
-    <section className="grid min-h-[560px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl lg:grid-cols-2">
+    <section className="grid min-h-[560px] overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-xl lg:grid-cols-2">
       {/* Painel institucional */}
-      <div className="relative hidden flex-col justify-between bg-[#0B1B26] p-10 text-white lg:flex">
+      <div className="relative hidden flex-col justify-between bg-[#090D16] p-10 text-white lg:flex">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.18]"
           style={{
@@ -95,16 +95,16 @@ function RhLogin({
       </div>
 
       {/* Formulário */}
-      <div className="flex items-center justify-center bg-[#f7f9fa] p-6 sm:p-10">
+      <div className="flex items-center justify-center bg-[#0F172A] p-6 sm:p-10">
         <div className="w-full max-w-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#102b3b] text-[#f7c945] shadow-lg">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[#f7c945] shadow-lg">
             <Lock className="h-5 w-5" />
           </div>
           <p className="mt-6 text-[10px] font-black uppercase tracking-[.22em] text-slate-400">
             Módulo protegido
           </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-[#102b3b]">Acesso ao RH</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-50">Acesso ao RH</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
             {loading
               ? "Validando a sessão administrativa..."
               : denied
@@ -114,8 +114,8 @@ function RhLogin({
 
           {loading && (
             <div className="mt-6 space-y-3">
-              <div className="h-12 animate-pulse rounded-xl bg-slate-200" />
-              <div className="h-12 animate-pulse rounded-xl bg-slate-200" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-800" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-800" />
             </div>
           )}
 
@@ -129,25 +129,25 @@ function RhLogin({
               }}
             >
               <label className="block">
-                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Usuário
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
+                <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-[#0F172A] px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
                   <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
                   <input
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="DBSASSISTENCIA123"
                     autoComplete="username"
-                    className="w-full bg-transparent py-3 text-sm font-semibold text-[#102b3b] outline-none"
+                    className="w-full bg-transparent py-3 text-sm font-semibold text-slate-50 outline-none"
                   />
                 </div>
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Senha
                 </span>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
+                <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-[#0F172A] px-3 transition focus-within:border-[#1E8F66] focus-within:ring-2 focus-within:ring-[#1E8F66]/20">
                   <KeyRound className="h-4 w-4 shrink-0 text-slate-400" />
                   <input
                     value={password}
@@ -155,27 +155,27 @@ function RhLogin({
                     placeholder="••••••••"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
-                    className="w-full bg-transparent py-3 text-sm font-semibold text-[#102b3b] outline-none"
+                    className="w-full bg-transparent py-3 text-sm font-semibold text-slate-50 outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    className="text-slate-400 transition hover:text-slate-700"
+                    className="text-slate-400 transition hover:text-slate-200"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </label>
               {error && (
-                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700">
+                <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs font-semibold text-red-300">
                   {error}
                 </p>
               )}
               <button
                 type="submit"
                 disabled={unlock.isPending || !username.trim() || !password}
-                className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#102b3b] px-4 py-3.5 text-sm font-black text-white shadow-lg transition hover:bg-[#173e54] disabled:opacity-50"
+                className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0F172A] px-4 py-3.5 text-sm font-black text-white shadow-lg transition hover:bg-[#1E293B] disabled:opacity-50"
               >
                 <ShieldCheck className="h-4 w-4" />
                 {unlock.isPending ? "Validando acesso..." : "Entrar no módulo RH"}
@@ -217,13 +217,13 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       key: "cadastro",
       label: "Cadastro de Funcionários",
       icon: <IdCard className="h-4 w-4" />,
-      active: "bg-[#1E8F66] text-white shadow-md",
+      active: "bg-[#F59E0B] text-white shadow-md",
     },
     {
       key: "passagem",
       label: "Vale Passagem",
       icon: <WalletCards className="h-4 w-4" />,
-      active: "bg-[#102b3b] text-white shadow-md",
+      active: "bg-[#0F172A] text-white shadow-md",
     },
     {
       key: "alimentacao",
@@ -235,15 +235,15 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-7">
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[.2em] text-slate-400">
             Área de trabalho
           </p>
-          <h1 className="mt-1 text-xl font-black tracking-tight text-[#102b3b]">
+          <h1 className="mt-1 text-xl font-black tracking-tight text-slate-50">
             RH — Benefícios e cadastro
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-400">
             Cadastro central de colaboradores compartilhado pelas duas ferramentas de benefício.
           </p>
         </div>
@@ -253,14 +253,14 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
               <button
                 key={t.key}
                 onClick={() => setSection(t.key)}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${section === t.key ? t.active : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${section === t.key ? t.active : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
               >
                 {t.icon} {t.label}
               </button>
             ))}
           </nav>
           {embedded && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
               <Shield className="h-3.5 w-3.5" /> Sessão única do RH
             </span>
           )}

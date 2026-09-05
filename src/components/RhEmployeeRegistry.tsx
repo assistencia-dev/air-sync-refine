@@ -47,8 +47,8 @@ export function RhEmployeeRegistry() {
   const [error, setError] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-[#102b3b] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
+    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#f7c945]">
             RH · cadastro central
@@ -63,20 +63,20 @@ export function RhEmployeeRegistry() {
             setEditing(null);
             setFormOpen(true);
           }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f7c945] px-4 py-2.5 text-xs font-black text-[#102b3b]"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f7c945] px-4 py-2.5 text-xs font-black text-slate-50"
         >
           <Plus className="h-4 w-4" /> Novo funcionário
         </button>
       </div>
       <div className="p-5 sm:p-7">
         {error && (
-          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
             {error}
           </p>
         )}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <thead className="bg-[#141F33] text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Unidade</th>
@@ -114,7 +114,7 @@ export function RhEmployeeRegistry() {
           </table>
           {!employees.isLoading && !(employees.data ?? []).length && (
             <div className="p-10 text-center">
-              <UsersRound className="mx-auto h-8 w-8 text-slate-300" />
+              <UsersRound className="mx-auto h-8 w-8 text-slate-600" />
               <p className="mt-2 text-sm font-bold text-slate-600">Nenhum funcionário cadastrado</p>
               <p className="mt-1 text-xs text-slate-400">
                 Cadastre uma vez e reutilize nas duas ferramentas do RH.
@@ -185,8 +185,8 @@ function EmployeeRow({
     }
   }
   return (
-    <tr className="border-t border-slate-100 align-top">
-      <td className="px-4 py-3 font-semibold text-slate-800">{employee.full_name}</td>
+    <tr className="border-t border-slate-800 align-top">
+      <td className="px-4 py-3 font-semibold text-slate-100">{employee.full_name}</td>
       <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
       <td className="px-4 py-3 text-slate-600">{employee.registration_data?.job_title || "—"}</td>
       <td className="px-4 py-3">
@@ -194,7 +194,7 @@ function EmployeeRow({
           {employee.ficha_file_name ? (
             <button
               onClick={download}
-              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
+              className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2 py-1 text-[11px] font-bold text-slate-200"
             >
               <Download className="h-3 w-3" /> Baixar ficha
             </button>
@@ -214,18 +214,18 @@ function EmployeeRow({
           <button
             onClick={() => input.current?.click()}
             disabled={uploading}
-            className="inline-flex items-center gap-1 rounded-md border border-dashed border-sky-300 bg-sky-50 px-2 py-1 text-[11px] font-bold text-sky-700"
+            className="inline-flex items-center gap-1 rounded-md border border-dashed border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300"
           >
             <Upload className="h-3 w-3" /> {uploading ? "Enviando" : "Anexar PDF"}
           </button>
         </div>
-        {error && <p className="mt-1 text-[11px] text-red-700">{error}</p>}
+        {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
       </td>
       <td className="px-4 py-3 text-right">
-        <button onClick={onEdit} className="mr-2 text-sky-700">
+        <button onClick={onEdit} className="mr-2 text-sky-300">
           <Pencil className="inline h-4 w-4" />
         </button>
-        <button onClick={onDelete} className="text-red-700">
+        <button onClick={onDelete} className="text-red-300">
           <Trash2 className="inline h-4 w-4" />
         </button>
       </td>
@@ -255,19 +255,19 @@ function EmployeeForm({
   const update = (key: string, value: string) =>
     setValues((current) => ({ ...current, [key]: value }));
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102b3b]/45 p-4">
-      <div className="my-6 w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#02060d]/70 p-4">
+      <div className="my-6 w-full max-w-3xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-xl font-black text-[#102b3b]">
+            <h3 className="text-xl font-black text-slate-50">
               {employee ? "Editar funcionário" : "Novo funcionário"}
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-400">
               Preencha manualmente conforme a ficha funcional. O PDF é apenas um anexo, sem
               interpretação automática.
             </p>
           </div>
-          <button onClick={onClose} className="text-xs font-bold text-slate-500">
+          <button onClick={onClose} className="text-xs font-bold text-slate-400">
             Fechar
           </button>
         </div>
@@ -276,13 +276,13 @@ function EmployeeForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nome completo *"
-            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm sm:col-span-2"
           />
           <input
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
             placeholder="Unidade / setor *"
-            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm sm:col-span-2"
+            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm sm:col-span-2"
           />
           {FIELDS.map(([key, label]) => (
             <input
@@ -291,7 +291,7 @@ function EmployeeForm({
               onChange={(e) => update(key, e.target.value)}
               placeholder={label}
               type={key.includes("date") ? "date" : "text"}
-              className={`rounded-lg border border-slate-300 px-3 py-2.5 text-sm ${key === "notes" ? "sm:col-span-2" : ""}`}
+              className={`rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm ${key === "notes" ? "sm:col-span-2" : ""}`}
             />
           ))}
         </div>
@@ -305,7 +305,7 @@ function EmployeeForm({
           <button
             onClick={() => save.mutate()}
             disabled={save.isPending || !name.trim() || !unit.trim()}
-            className="rounded-lg bg-[#1E8F66] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-black text-[#0B0F19] disabled:opacity-50"
           >
             {save.isPending ? "Salvando..." : "Salvar funcionário"}
           </button>
