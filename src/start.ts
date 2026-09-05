@@ -1,7 +1,9 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
-import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+// Intentionally NOT the generated attachSupabaseAuth: the brokered preview session
+// can resolve late, so we use a retrying bearer attacher instead.
+import { attachSupabaseBearer } from "@/lib/supabase-bearer-middleware";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
