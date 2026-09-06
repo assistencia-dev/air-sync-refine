@@ -127,6 +127,117 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_benefit_requests: {
+        Row: {
+          birth_date: string | null
+          carrier: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          daily_cents: number | null
+          days: number | null
+          depart_at: string | null
+          destination: string | null
+          employee_id: string | null
+          employee_name: string
+          estimated_cents: number
+          filial: string | null
+          id: string
+          is_deleted: boolean
+          kind: string
+          meal_type: string | null
+          origin: string | null
+          over_budget_reason: string | null
+          paid_cents: number
+          pnr: string | null
+          reason: string | null
+          ref_month: string | null
+          return_at: string | null
+          rg: string | null
+          status: string
+          total_cents: number | null
+          travel_mode: string | null
+          updated_at: string
+        }
+        Insert: {
+          birth_date?: string | null
+          carrier?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_cents?: number | null
+          days?: number | null
+          depart_at?: string | null
+          destination?: string | null
+          employee_id?: string | null
+          employee_name: string
+          estimated_cents?: number
+          filial?: string | null
+          id?: string
+          is_deleted?: boolean
+          kind: string
+          meal_type?: string | null
+          origin?: string | null
+          over_budget_reason?: string | null
+          paid_cents?: number
+          pnr?: string | null
+          reason?: string | null
+          ref_month?: string | null
+          return_at?: string | null
+          rg?: string | null
+          status?: string
+          total_cents?: number | null
+          travel_mode?: string | null
+          updated_at?: string
+        }
+        Update: {
+          birth_date?: string | null
+          carrier?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_cents?: number | null
+          days?: number | null
+          depart_at?: string | null
+          destination?: string | null
+          employee_id?: string | null
+          employee_name?: string
+          estimated_cents?: number
+          filial?: string | null
+          id?: string
+          is_deleted?: boolean
+          kind?: string
+          meal_type?: string | null
+          origin?: string | null
+          over_budget_reason?: string | null
+          paid_cents?: number
+          pnr?: string | null
+          reason?: string | null
+          ref_month?: string | null
+          return_at?: string | null
+          rg?: string | null
+          status?: string
+          total_cents?: number | null
+          travel_mode?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_benefit_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_benefit_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_employees: {
         Row: {
           benefit_type: string
@@ -171,6 +282,105 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      rh_request_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          is_deleted: boolean
+          request_id: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_deleted?: boolean
+          request_id: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          is_deleted?: boolean
+          request_id?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_request_attachments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "rh_benefit_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_request_attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_request_audit: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          request_id: string
+          status_from: string | null
+          status_to: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          request_id: string
+          status_from?: string | null
+          status_to?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          request_id?: string
+          status_from?: string | null
+          status_to?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_request_audit_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "rh_benefit_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_request_audit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rh_topups: {
         Row: {
