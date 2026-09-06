@@ -130,7 +130,7 @@ export const listBenefitRequests = createServerFn({ method: "POST" })
     const ids = (rows ?? []).map((r) => r.id);
     const counts = new Map<string, number>();
     if (ids.length) {
-      const { data: atts } = await supabaseAdmin
+      const { data: atts } = await db
         .from("rh_request_attachments")
         .select("request_id")
         .in("request_id", ids)
@@ -234,12 +234,12 @@ export const saveBenefitRequest = createServerFn({ method: "POST" })
     };
 
     if (data.id) {
-      const { data: before } = await supabaseAdmin
+      const { data: before } = await db
         .from("rh_benefit_requests")
         .select("status")
         .eq("id", data.id)
         .maybeSingle();
-      const { data: row, error } = await supabaseAdmin
+      const { data: row, error } = await db
         .from("rh_benefit_requests")
         .update(payload)
         .eq("id", data.id)
