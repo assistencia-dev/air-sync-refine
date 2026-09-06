@@ -2,7 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 const BUCKET = "rh-files";
+// As tabelas de solicitações são acessadas apenas pelo servidor; tipos gerados podem
+// ainda não incluí-las, por isso usamos um acesso destipado controlado.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabaseAdmin as any;
 const MAX_BYTES = 15 * 1024 * 1024;
 
 export type BenefitKind = "passagem" | "alimentacao";
@@ -87,9 +93,9 @@ async function writeAudit(entry: {
   action: string;
   status_from?: string | null;
   status_to?: string | null;
-  details?: Record<string, unknown> | null;
+  details?: Record<string, Json> | null;
 }) {
-  await supabaseAdmin.from("rh_request_audit").insert({
+  await db.from("rh_request_audit").insert({
     request_id: entry.request_id,
     user_id: entry.user_id,
     action: entry.action,
@@ -100,7 +106,7 @@ async function writeAudit(entry: {
 }
 
 async function countAttachments(requestId: string) {
-  const { count } = await supabaseAdmin
+  const { count } = await db
     .from("rh_request_attachments")
     .select("id", { count: "exact", head: true })
     .eq("request_id", requestId)
@@ -113,7 +119,7 @@ export const listBenefitRequests = createServerFn({ method: "POST" })
   .inputValidator((input: { kind: BenefitKind }) => ({ kind: assertKind(input?.kind) }))
   .handler(async ({ context, data }): Promise<BenefitRequest[]> => {
     await requireNativeOperator(context);
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await db
       .from("rh_benefit_requests")
       .select(SELECT_COLUMNS)
       .eq("kind", data.kind)
@@ -251,7 +257,7 @@ export const saveBenefitRequest = createServerFn({ method: "POST" })
       return row;
     }
 
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await db
       .from("rh_benefit_requests")
       .insert({
         ...payload,
@@ -279,7 +285,7 @@ export const changeRequestStatus = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await db
       .from("rh_benefit_requests")
       .select("id, kind, status, pnr")
       .eq("id", data.id)
@@ -313,7 +319,7 @@ export const changeRequestStatus = createServerFn({ method: "POST" })
       throw new Error("Anexe o comprovante de carga/Pix antes de marcar como CREDITADO.");
     }
 
-    const { error: upErr } = await supabaseAdmin
+    const { error: upErr } = await db
       .from("rh_benefit_requests")
       .update({ status: data.status })
       .eq("id", row.id);
@@ -339,13 +345,13 @@ export const softDeleteRequest = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await db
       .from("rh_benefit_requests")
       .select("id, status")
       .eq("id", data.id)
       .maybeSingle();
     if (error || !row) throw new Error("Solicitação não encontrada.");
-    const { error: upErr } = await supabaseAdmin
+    const { error: upErr } = await db
       .from("rh_benefit_requests")
       .update({ is_deleted: true })
       .eq("id", row.id);
@@ -378,7 +384,7 @@ export const listRequestAttachments = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<RequestAttachment[]> => {
     await requireNativeOperator(context);
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await db
       .from("rh_request_attachments")
       .select("id, file_name, file_type, file_size, storage_path, created_at")
       .eq("request_id", data.request_id)
@@ -436,7 +442,7 @@ export const uploadRequestAttachment = createServerFn({ method: "POST" })
       .upload(path, binary, { contentType: data.file_type ?? "application/octet-stream" });
     if (upErr) throw new Error(upErr.message);
 
-    const { error: insErr } = await supabaseAdmin.from("rh_request_attachments").insert({
+    const { error: insErr } = await db.from("rh_request_attachments").insert({
       request_id: data.request_id,
       file_name: data.file_name,
       file_type: data.file_type,
@@ -460,7 +466,7 @@ export type RequestAuditEntry = {
   action: string;
   status_from: string | null;
   status_to: string | null;
-  details: Record<string, unknown> | null;
+  details: Record<string, Json> | null;
   created_at: string;
   user_name: string | null;
 };
@@ -473,7 +479,7 @@ export const listRequestAudit = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<RequestAuditEntry[]> => {
     await requireNativeOperator(context);
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await db
       .from("rh_request_audit")
       .select("id, action, status_from, status_to, details, created_at, user_id")
       .eq("request_id", data.request_id)
@@ -494,7 +500,7 @@ export const listRequestAudit = createServerFn({ method: "POST" })
       action: r.action,
       status_from: r.status_from,
       status_to: r.status_to,
-      details: (r.details as Record<string, unknown> | null) ?? null,
+      details: (r.details as Record<string, Json> | null) ?? null,
       created_at: r.created_at,
       user_name: r.user_id ? (names.get(r.user_id) ?? null) : null,
     }));
