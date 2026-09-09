@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
@@ -28,6 +29,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
+  id: '/admin/rh-dashboard',
+  path: '/admin/rh-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,12 +76,19 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
+  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/admin' | '/passage' | '/portal'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/passage'
+    | '/portal'
+    | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/admin' | '/passage' | '/portal'
+  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/admin/rh-dashboard'
   id:
     | '__root__'
     | '/'
@@ -82,12 +97,14 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/passage'
     | '/_authenticated/portal'
+    | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  AdminRhDashboardRoute: typeof AdminRhDashboardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -111,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/rh-dashboard': {
+      id: '/admin/rh-dashboard'
+      path: '/admin/rh-dashboard'
+      fullPath: '/admin/rh-dashboard'
+      preLoaderRoute: typeof AdminRhDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/portal': {
@@ -156,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  AdminRhDashboardRoute: AdminRhDashboardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
