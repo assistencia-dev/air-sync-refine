@@ -80,14 +80,16 @@ export interface BatchAllocationResult {
  * @returns DailyCosts object with BRL and cents representations
  */
 export function calculateDailyCosts(config: EmployeeBenefitConfig): DailyCosts {
-  const vt_daily_cost = config.vt_tariff_unit * config.vt_trips_per_day;
+  // O valor salvo para o colaborador já é a diária do benefício.
+  // Viagens/dia permanece apenas para compatibilidade com registros antigos.
+  const vt_daily_cost = config.vt_tariff_unit;
   const va_daily_cost = config.va_daily_rate;
 
   return {
     vt_daily_cost,
     va_daily_cost,
-    vt_daily_cost_cents: Math.floor(vt_daily_cost * 100),
-    va_daily_cost_cents: Math.floor(va_daily_cost * 100),
+    vt_daily_cost_cents: Math.round(vt_daily_cost * 100),
+    va_daily_cost_cents: Math.round(va_daily_cost * 100),
   };
 }
 

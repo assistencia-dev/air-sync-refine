@@ -13,6 +13,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import type { EmployeeBenefitConfig } from './benefitCalculations';
+import { createRhEmployee, deleteRhEmployee, listRhEmployees, updateRhEmployee } from '@/lib/rh.functions';
 
 // Type alias for rh_employees row
 type RHEmployee = Database['public']['Tables']['rh_employees']['Row'];
@@ -32,13 +33,14 @@ export interface EmployeeWithCosts extends RHEmployee {
  * Convert DB row to EmployeeBenefitConfig for calculations
  */
 export function toEmployeeBenefitConfig(emp: RHEmployee): EmployeeBenefitConfig {
+  const dailyRate = (emp.fare_cents ?? 0) / 100;
   return {
     employeeId: emp.id,
     fullName: emp.full_name,
-    vt_tariff_unit: emp.vt_tariff_unit ?? 4.30,
-    vt_trips_per_day: emp.vt_trips_per_day ?? 2,
-    va_daily_rate: emp.va_daily_rate ?? 35.0,
-    work_schedule: emp.work_schedule ?? '5x2',
+    vt_tariff_unit: emp.benefit_type === 'passagem' ? dailyRate : 0,
+    vt_trips_per_day: emp.trips_per_day ?? 1,
+    va_daily_rate: emp.benefit_type === 'alimentacao' ? dailyRate : 0,
+    work_schedule: '5x2',
   };
 }
 
@@ -46,14 +48,11 @@ export function toEmployeeBenefitConfig(emp: RHEmployee): EmployeeBenefitConfig 
  * Convert DB row to EmployeeWithCosts (adds computed properties)
  */
 export function toEmployeeWithCosts(emp: RHEmployee): EmployeeWithCosts {
-  const vt_tariff = emp.vt_tariff_unit ?? 4.30;
-  const vt_trips = emp.vt_trips_per_day ?? 2;
-  const va_rate = emp.va_daily_rate ?? 35.0;
-
+  const dailyRate = (emp.fare_cents ?? 0) / 100;
   return {
     ...emp,
-    daily_vt_cost: vt_tariff * vt_trips,
-    daily_va_cost: va_rate,
+    daily_vt_cost: emp.benefit_type === 'passagem' ? dailyRate : 0,
+    daily_va_cost: emp.benefit_type === 'alimentacao' ? dailyRate : 0,
   };
 }
 
@@ -63,24 +62,14 @@ export function toEmployeeWithCosts(emp: RHEmployee): EmployeeWithCosts {
  * @returns Array of employees with costs
  */
 export async function fetchActiveEmployees(unitId?: string): Promise<EmployeeWithCosts[]> {
-  let query = supabase
-    .from('rh_employees')
-    .select('*')
-    .eq('is_active', true)
-    .order('full_name', { ascending: true });
-
-  if (unitId) {
-    query = query.eq('unit', unitId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('[fetchActiveEmployees] Supabase error:', error.message);
-    throw new Error(`Falha ao buscar colaboradores: ${error.message}`);
-  }
-
-  return (data || []).map(toEmployeeWithCosts);
+  const [passage, food] = await Promise.all([
+    listRhEmployees({ data: { benefit_type: 'passagem' } }),
+    listRhEmployees({ data: { benefit_type: 'alimentacao' } }),
+  ]);
+  const employees = [...passage, ...food]
+    .filter((employee) => !unitId || employee.unit === unitId)
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  return employees.map(toEmployeeWithCosts);
 }
 
 /**
@@ -89,18 +78,8 @@ export async function fetchActiveEmployees(unitId?: string): Promise<EmployeeWit
  * @returns Employee with costs, or null if not found
  */
 export async function fetchEmployeeById(employeeId: string): Promise<EmployeeWithCosts | null> {
-  const { data, error } = await supabase
-    .from('rh_employees')
-    .select('*')
-    .eq('id', employeeId)
-    .maybeSingle();
-
-  if (error) {
-    console.error(`[fetchEmployeeById] Supabase error for ${employeeId}:`, error.message);
-    throw new Error(`Falha ao buscar colaborador: ${error.message}`);
-  }
-
-  return data ? toEmployeeWithCosts(data) : null;
+  const employees = await fetchActiveEmployees();
+  return employees.find((employee) => employee.id === employeeId) ?? null;
 }
 
 /**
@@ -108,52 +87,17 @@ export async function fetchEmployeeById(employeeId: string): Promise<EmployeeWit
  * @param input - Employee data
  * @returns Created employee with costs
  */
-export async function createEmployee(input: {
-  full_name: string;
-  benefit_type: string; // 'VT', 'VA', or 'VT_VA'
-  unit: string;
-  vt_tariff_unit?: number;
-  vt_trips_per_day?: number;
-  va_daily_rate?: number;
-  work_schedule?: string;
-  registration_data?: Record<string, any>;
-}): Promise<EmployeeWithCosts> {
-  const now = new Date().toISOString();
-
-  const insertData: RHEmployeeInsert = {
-    full_name: input.full_name,
-    benefit_type: input.benefit_type,
-    unit: input.unit,
-    fare_cents: 0, // Legacy field, deprecated
-    is_active: true,
-    vt_tariff_unit: input.vt_tariff_unit ?? 4.30,
-    vt_trips_per_day: input.vt_trips_per_day ?? 2,
-    va_daily_rate: input.va_daily_rate ?? 35.0,
-    work_schedule: input.work_schedule ?? '5x2',
-    is_daily_rates_configured: true,
-    daily_rates_updated_at: now,
-    registration_data: input.registration_data || {},
-  };
-
-  const { data, error } = await supabase
-    .from('rh_employees')
-    .insert([insertData])
-    .select()
-    .single();
-
-  if (error) {
-    console.error('[createEmployee] Supabase error:', error.message);
-    throw new Error(`Falha ao criar colaborador: ${error.message}`);
+export async function createEmployee(input: { full_name: string; benefit_type: string; unit: string; vt_tariff_unit?: number; vt_trips_per_day?: number; va_daily_rate?: number; work_schedule?: string; registration_data?: Record<string, any> }): Promise<EmployeeWithCosts> {
+  const benefitTypes = input.benefit_type === 'VT_VA' ? ['passagem', 'alimentacao'] : [input.benefit_type === 'VT' ? 'passagem' : input.benefit_type === 'VA' ? 'alimentacao' : input.benefit_type];
+  if (!benefitTypes.every((type) => type === 'passagem' || type === 'alimentacao')) throw new Error('Tipo de benefício inválido.');
+  const created = [];
+  for (const benefitType of benefitTypes) {
+    const daily = benefitType === 'passagem' ? input.vt_tariff_unit ?? 0 : input.va_daily_rate ?? 0;
+    if (daily <= 0) throw new Error('Informe um valor diário válido para o benefício.');
+    const employee = await createRhEmployee({ data: { benefit_type: benefitType as 'passagem' | 'alimentacao', full_name: input.full_name, unit: input.unit, fare_cents: Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? input.vt_trips_per_day ?? 1 : 1 } });
+    created.push(employee);
   }
-
-  // Log to audit trail
-  await logAudit('CREATE_EMPLOYEE', {
-    employee_id: data.id,
-    employee_name: data.full_name,
-    benefit_type: data.benefit_type,
-  });
-
-  return toEmployeeWithCosts(data);
+  return toEmployeeWithCosts(created[0]);
 }
 
 /**
@@ -162,46 +106,14 @@ export async function createEmployee(input: {
  * @param updates - Fields to update
  * @returns Updated employee with costs
  */
-export async function updateEmployee(
-  employeeId: string,
-  updates: {
-    full_name?: string;
-    benefit_type?: string;
-    vt_tariff_unit?: number;
-    vt_trips_per_day?: number;
-    va_daily_rate?: number;
-    work_schedule?: string;
-    is_active?: boolean;
-    registration_data?: Record<string, any>;
-  }
-): Promise<EmployeeWithCosts> {
-  const now = new Date().toISOString();
-
-  const updateData: RHEmployeeUpdate = {
-    ...updates,
-    daily_rates_updated_at: updates.vt_tariff_unit || updates.vt_trips_per_day || updates.va_daily_rate || updates.work_schedule ? now : undefined,
-    updated_at: now,
-  };
-
-  const { data, error } = await supabase
-    .from('rh_employees')
-    .update(updateData)
-    .eq('id', employeeId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error(`[updateEmployee] Supabase error for ${employeeId}:`, error.message);
-    throw new Error(`Falha ao atualizar colaborador: ${error.message}`);
-  }
-
-  // Log to audit trail
-  await logAudit('UPDATE_EMPLOYEE', {
-    employee_id: employeeId,
-    fields_updated: Object.keys(updates),
-  });
-
-  return toEmployeeWithCosts(data);
+export async function updateEmployee(employeeId: string, updates: { full_name?: string; benefit_type?: string; unit?: string; vt_tariff_unit?: number; vt_trips_per_day?: number; va_daily_rate?: number; work_schedule?: string; is_active?: boolean; registration_data?: Record<string, any> }): Promise<EmployeeWithCosts> {
+  const current = await fetchEmployeeById(employeeId);
+  if (!current) throw new Error('Colaborador não encontrado.');
+  const benefitType = updates.benefit_type === 'VT' ? 'passagem' : updates.benefit_type === 'VA' ? 'alimentacao' : (updates.benefit_type ?? current.benefit_type);
+  if (benefitType !== 'passagem' && benefitType !== 'alimentacao') throw new Error('Tipo de benefício inválido.');
+  const daily = benefitType === 'passagem' ? updates.vt_tariff_unit : updates.va_daily_rate;
+  const updated = await updateRhEmployee({ data: { id: employeeId, benefit_type: benefitType, full_name: updates.full_name ?? current.full_name, unit: updates.unit ?? current.unit, fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? updates.vt_trips_per_day ?? current.trips_per_day : 1 } });
+  return toEmployeeWithCosts(updated);
 }
 
 /**
@@ -210,7 +122,10 @@ export async function updateEmployee(
  * @returns Updated employee
  */
 export async function deactivateEmployee(employeeId: string): Promise<EmployeeWithCosts> {
-  return updateEmployee(employeeId, { is_active: false });
+  const current = await fetchEmployeeById(employeeId);
+  if (!current) throw new Error('Colaborador não encontrado.');
+  await deleteRhEmployee({ data: { id: employeeId, benefit_type: current.benefit_type as 'passagem' | 'alimentacao' } });
+  return { ...current, is_active: false };
 }
 
 /**
@@ -228,40 +143,12 @@ export async function reactivateEmployee(employeeId: string): Promise<EmployeeWi
  * @param rates - Daily rate updates
  * @returns Updated employee
  */
-export async function updateEmployeeDailyRates(
-  employeeId: string,
-  rates: {
-    vt_tariff_unit?: number;
-    vt_trips_per_day?: number;
-    va_daily_rate?: number;
-    work_schedule?: string;
-  }
-): Promise<EmployeeWithCosts> {
-  const now = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from('rh_employees')
-    .update({
-      ...rates,
-      is_daily_rates_configured: true,
-      daily_rates_updated_at: now,
-      updated_at: now,
-    })
-    .eq('id', employeeId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error(`[updateEmployeeDailyRates] Supabase error for ${employeeId}:`, error.message);
-    throw new Error(`Falha ao atualizar tarifa do colaborador: ${error.message}`);
-  }
-
-  await logAudit('UPDATE_EMPLOYEE_DAILY_RATES', {
-    employee_id: employeeId,
-    rates_updated: Object.keys(rates),
-  });
-
-  return toEmployeeWithCosts(data);
+export async function updateEmployeeDailyRates(employeeId: string, rates: { vt_tariff_unit?: number; vt_trips_per_day?: number; va_daily_rate?: number; work_schedule?: string }): Promise<EmployeeWithCosts> {
+  const current = await fetchEmployeeById(employeeId);
+  if (!current) throw new Error('Colaborador não encontrado.');
+  const daily = current.benefit_type === 'passagem' ? rates.vt_tariff_unit : rates.va_daily_rate;
+  const updated = await updateRhEmployee({ data: { id: employeeId, benefit_type: current.benefit_type as 'passagem' | 'alimentacao', full_name: current.full_name, unit: current.unit, fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100), trips_per_day: current.benefit_type === 'passagem' ? rates.vt_trips_per_day ?? current.trips_per_day : 1 } });
+  return toEmployeeWithCosts(updated);
 }
 
 /**
@@ -271,24 +158,9 @@ export async function updateEmployeeDailyRates(
  * @returns Matching employees
  */
 export async function searchEmployeesByName(searchTerm: string, unitId?: string): Promise<EmployeeWithCosts[]> {
-  let query = supabase
-    .from('rh_employees')
-    .select('*')
-    .ilike('full_name', `%${searchTerm}%`)
-    .eq('is_active', true);
-
-  if (unitId) {
-    query = query.eq('unit', unitId);
-  }
-
-  const { data, error } = await query.order('full_name', { ascending: true });
-
-  if (error) {
-    console.error('[searchEmployeesByName] Supabase error:', error.message);
-    throw new Error(`Falha ao buscar colaboradores: ${error.message}`);
-  }
-
-  return (data || []).map(toEmployeeWithCosts);
+  const employees = await fetchActiveEmployees(unitId);
+  const term = searchTerm.trim().toLowerCase();
+  return term ? employees.filter((employee) => employee.full_name.toLowerCase().includes(term)) : employees;
 }
 
 /**
@@ -297,19 +169,7 @@ export async function searchEmployeesByName(searchTerm: string, unitId?: string)
  * @returns Employees pending configuration
  */
 export async function fetchEmployeesPendingRatesConfiguration(): Promise<EmployeeWithCosts[]> {
-  const { data, error } = await supabase
-    .from('rh_employees')
-    .select('*')
-    .eq('is_active', true)
-    .eq('is_daily_rates_configured', false)
-    .order('full_name', { ascending: true });
-
-  if (error) {
-    console.error('[fetchEmployeesPendingRatesConfiguration] Supabase error:', error.message);
-    throw new Error(`Falha ao buscar configurações pendentes: ${error.message}`);
-  }
-
-  return (data || []).map(toEmployeeWithCosts);
+  return fetchActiveEmployees();
 }
 
 // ============================================================================

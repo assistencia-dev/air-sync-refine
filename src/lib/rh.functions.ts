@@ -41,6 +41,7 @@ export const listRhEmployees = createServerFn({ method: "GET" })
         "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
       )
       .eq("is_active", true)
+      .eq("benefit_type", data.benefit_type)
       .order("full_name");
     if (error) throw new Error(error.message);
     return employees ?? [];
@@ -241,7 +242,7 @@ export const unlockRhModule = createServerFn({ method: "POST" })
     const { createClient } = await import("@supabase/supabase-js");
     const check = createClient(
       process.env["SUPABASE_URL"]!,
-      process.env["SUPABASE_PUBLISHABLE_KEY"]!,
+      process.env["SUPABASE_ANON_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"]!,
       { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } },
     );
     const { error } = await check.auth.signInWithPassword({

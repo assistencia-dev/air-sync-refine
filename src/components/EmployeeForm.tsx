@@ -67,12 +67,12 @@ export function EmployeeForm({ initialData, onSuccess, onCancel }: EmployeeFormP
     resolver: zodResolver(employeeFormSchema),
     defaultValues: initialData ? {
       full_name: initialData.full_name,
-      benefit_type: initialData.benefit_type as 'VT' | 'VA' | 'VT_VA',
+      benefit_type: initialData.benefit_type === 'passagem' ? 'VT' : 'VA',
       unit: initialData.unit,
-      work_schedule: initialData.work_schedule ?? '5x2',
-      vt_tariff_unit: initialData.vt_tariff_unit ?? 4.3,
-      vt_trips_per_day: initialData.vt_trips_per_day ?? 2,
-      va_daily_rate: initialData.va_daily_rate ?? 35.0,
+      work_schedule: '5x2',
+      vt_tariff_unit: initialData.benefit_type === 'passagem' ? initialData.fare_cents / 100 : 4.3,
+      vt_trips_per_day: initialData.benefit_type === 'passagem' ? initialData.trips_per_day : 1,
+      va_daily_rate: initialData.benefit_type === 'alimentacao' ? initialData.fare_cents / 100 : 35.0,
     } : {
       benefit_type: 'VT_VA',
       work_schedule: '5x2',
@@ -236,7 +236,7 @@ export function EmployeeForm({ initialData, onSuccess, onCancel }: EmployeeFormP
           {/* VT Tariff Unit */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>
-              Tarifa VT (R$)
+              Valor diário VT (R$)
             </label>
             <input
               type="number"
@@ -245,7 +245,7 @@ export function EmployeeForm({ initialData, onSuccess, onCancel }: EmployeeFormP
               placeholder="4.30"
               className="w-full px-4 py-2.5 rounded-lg border border-slate-600 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs mt-1" style={{ color: '#64748B' }}>Tarifa por viagem (BUI)</p>
+            <p className="text-xs mt-1" style={{ color: '#64748B' }}>Valor usado em: dias trabalhados × diária VT</p>
             {errors.vt_tariff_unit && (
               <p className="text-xs mt-1" style={{ color: '#FCA5A5' }}>{errors.vt_tariff_unit.message}</p>
             )}

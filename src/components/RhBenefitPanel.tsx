@@ -28,8 +28,8 @@ const dateText = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(
     new Date(`${value}T12:00:00`),
   );
-function coverageDays(amount: number, fare: number, trips: number) {
-  return fare > 0 && trips > 0 ? Math.floor(amount / (fare * trips)) : 0;
+function coverageDays(amount: number, dailyValue: number) {
+  return dailyValue > 0 ? Math.floor(amount / dailyValue) : 0;
 }
 
 function addBusinessDays(date: string, days: number) {
@@ -61,7 +61,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   });
   const activeEmployees = (employees.data ?? []).filter((item: Employee) => item.is_active);
   const totalMonth = (topups.data ?? [])
-    .filter((item: Topup) => new Date(item.paid_at).getMonth() === new Date().getMonth())
+    .filter((item: Topup) => new Date(item.paid_at).getMonth() === new Date().getMonth() && new Date(item.paid_at).getFullYear() === new Date().getFullYear())
     .reduce((sum: number, item: Topup) => sum + item.amount_cents, 0);
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["rh-employees", benefitType] });
@@ -264,7 +264,7 @@ function EmployeeList({
             <tr>
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Unidade</th>
-              <th className="px-4 py-3">Valor unitário</th>
+              <th className="px-4 py-3">Valor diário</th>
               <th className="px-4 py-3">Viagens/dia</th>
               <th className="px-4 py-3 text-right">Ações</th>
             </tr>
@@ -411,7 +411,7 @@ function TopupForm({
   const employee = employees.find((item) => item.id === employeeId);
   const amountCents = Math.round(Number(amount.replace(",", ".")) * 100);
   const days = employee
-    ? coverageDays(amountCents, employee.fare_cents, employee.trips_per_day)
+    ? coverageDays(amountCents, employee.fare_cents)
     : 0;
   const create = useMutation({
     mutationFn: () =>
@@ -499,7 +499,7 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
                   <td className="px-4 py-3">{money(item.amount_cents)}</td>
                   <td className="px-4 py-3">
                     {employee
-                      ? `${coverageDays(item.amount_cents, employee.fare_cents, employee.trips_per_day)} dias úteis`
+                      ? `${coverageDays(item.amount_cents, employee.fare_cents)} dias úteis`
                       : "—"}
                   </td>
                 </tr>
