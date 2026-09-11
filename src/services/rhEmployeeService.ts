@@ -69,7 +69,7 @@ export async function fetchActiveEmployees(unitId?: string): Promise<EmployeeWit
   const employees = [...passage, ...food]
     .filter((employee) => !unitId || employee.unit === unitId)
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
-  return employees.map(toEmployeeWithCosts);
+  return employees.map((employee) => toEmployeeWithCosts(employee as RHEmployee));
 }
 
 /**
@@ -97,7 +97,7 @@ export async function createEmployee(input: { full_name: string; benefit_type: s
     const employee = await createRhEmployee({ data: { benefit_type: benefitType as 'passagem' | 'alimentacao', full_name: input.full_name, unit: input.unit, fare_cents: Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? input.vt_trips_per_day ?? 1 : 1 } });
     created.push(employee);
   }
-  return toEmployeeWithCosts(created[0]);
+  return toEmployeeWithCosts(created[0] as RHEmployee);
 }
 
 /**
@@ -113,7 +113,7 @@ export async function updateEmployee(employeeId: string, updates: { full_name?: 
   if (benefitType !== 'passagem' && benefitType !== 'alimentacao') throw new Error('Tipo de benefício inválido.');
   const daily = benefitType === 'passagem' ? updates.vt_tariff_unit : updates.va_daily_rate;
   const updated = await updateRhEmployee({ data: { id: employeeId, benefit_type: benefitType, full_name: updates.full_name ?? current.full_name, unit: updates.unit ?? current.unit, fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? updates.vt_trips_per_day ?? current.trips_per_day : 1 } });
-  return toEmployeeWithCosts(updated);
+  return toEmployeeWithCosts(updated as RHEmployee);
 }
 
 /**
