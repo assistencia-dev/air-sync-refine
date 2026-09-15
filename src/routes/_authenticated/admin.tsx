@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CircleDot,
+  Landmark,
   LogOut,
   Pencil,
   RefreshCw,
@@ -124,6 +125,14 @@ function AdminPage() {
               <WalletCards className="h-4 w-4" /> RH
             </button>
           )}
+          {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
+            <button
+              onClick={() => navigate({ to: "/treasury" })}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition text-white/65 hover:bg-white/10 hover:text-white`}
+            >
+              <Landmark className="h-4 w-4" /> Financeiro
+            </button>
+          )}
         </nav>
         <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-emerald-200">
@@ -185,6 +194,14 @@ function AdminPage() {
             onClick={() => setTab("passage")}
             icon={<WalletCards className="w-3.5 h-3.5" />}
             label="RH"
+          />
+        )}
+        {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
+          <TabBtn
+            active={false}
+            onClick={() => navigate({ to: "/treasury" })}
+            icon={<Landmark className="w-3.5 h-3.5" />}
+            label="Financeiro"
           />
         )}
       </div>
