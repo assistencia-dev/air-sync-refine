@@ -12,6 +12,7 @@ import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
+import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
 
 const LoginRoute = LoginRouteImport.update({ id: '/login', path: '/login', getParentRoute: () => rootRouteImport } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({ id: '/_authenticated', getParentRoute: () => rootRouteImport } as any)
@@ -21,6 +22,7 @@ const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({ id: '/p
 const AuthenticatedPassageRoute = AuthenticatedPassageRouteImport.update({ id: '/passage', path: '/passage', getParentRoute: () => AuthenticatedRouteRoute } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({ id: '/admin', path: '/admin', getParentRoute: () => AuthenticatedRouteRoute } as any)
 const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({ id: '/folha-ponto', path: '/folha-ponto', getParentRoute: () => AuthenticatedRouteRoute } as any)
+const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({ id: '/treasury', path: '/treasury', getParentRoute: () => AuthenticatedRouteRoute } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -29,6 +31,7 @@ export interface FileRoutesByFullPath {
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
   '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo extends FileRoutesByFullPath {}
@@ -41,6 +44,7 @@ export interface FileRoutesById {
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
@@ -68,6 +72,7 @@ declare module '@tanstack/react-router' {
     '/_authenticated/passage': { id: '/_authenticated/passage'; path: '/passage'; fullPath: '/passage'; preLoaderRoute: typeof AuthenticatedPassageRouteImport; parentRoute: typeof AuthenticatedRouteRoute }
     '/_authenticated/admin': { id: '/_authenticated/admin'; path: '/admin'; fullPath: '/admin'; preLoaderRoute: typeof AuthenticatedAdminRouteImport; parentRoute: typeof AuthenticatedRouteRoute }
     '/_authenticated/folha-ponto': { id: '/_authenticated/folha-ponto'; path: '/folha-ponto'; fullPath: '/folha-ponto'; preLoaderRoute: typeof AuthenticatedFolhaPontoRouteImport; parentRoute: typeof AuthenticatedRouteRoute }
+    '/_authenticated/treasury': { id: '/_authenticated/treasury'; path: '/treasury'; fullPath: '/treasury'; preLoaderRoute: typeof AuthenticatedTreasuryRouteImport; parentRoute: typeof AuthenticatedRouteRoute }
   }
 }
 
@@ -76,12 +81,14 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
+  AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
 }
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute,
   AuthenticatedPassageRoute,
   AuthenticatedPortalRoute,
   AuthenticatedFolhaPontoRoute,
+  AuthenticatedTreasuryRoute,
 }
 const AuthenticatedRouteRouteWithChildren = AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 const rootRouteChildren: RootRouteChildren = { IndexRoute, AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren, LoginRoute, AdminRhDashboardRoute }
