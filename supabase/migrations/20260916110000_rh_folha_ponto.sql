@@ -1,5 +1,5 @@
 -- DBS AIR · Folha de Ponto
--- Migração aditiva: não remove nem substitui registros existentes.
+-- Migração exclusivamente aditiva: não remove nem substitui dados existentes.
 
 ALTER TABLE public.rh_employees
   ADD COLUMN IF NOT EXISTS ponto_access_enabled boolean NOT NULL DEFAULT false,
@@ -48,23 +48,24 @@ CREATE INDEX IF NOT EXISTS rh_ponto_audit_employee_idx
   ON public.rh_ponto_audit(employee_id, created_at DESC);
 
 GRANT SELECT, INSERT, UPDATE ON public.rh_ponto_records TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON public.rh_ponto_audit TO authenticated;
+GRANT SELECT ON public.rh_ponto_audit TO authenticated;
 GRANT ALL ON public.rh_ponto_records TO service_role;
 GRANT ALL ON public.rh_ponto_audit TO service_role;
 ALTER TABLE public.rh_ponto_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rh_ponto_audit ENABLE ROW LEVEL SECURITY;
 
--- O acesso efetivo é validado pelos server functions. Estas policies também
--- evitam que um colaborador autenticado consiga consultar o ponto de terceiros.
+-- As policies usam as mesmas funções RBAC já adotadas pelo projeto.
 CREATE POLICY rh_ponto_records_self_select ON public.rh_ponto_records
   FOR SELECT TO authenticated
   USING (
     employee_id IN (
       SELECT e.id FROM public.rh_employees e
-      WHERE e.ponto_portal_user_id = public.current_app_user_id()
-        AND e.ponto_access_enabled = true
+      WHERE e.ponto_portal_user_id = (
+        SELECT u.id FROM public.users u WHERE u.auth_id = auth.uid()
+      )
+      AND e.ponto_access_enabled = true
     )
-    OR public.is_admin()
+    OR public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL')
   );
 
 CREATE POLICY rh_ponto_records_self_insert ON public.rh_ponto_records
@@ -72,20 +73,23 @@ CREATE POLICY rh_ponto_records_self_insert ON public.rh_ponto_records
   WITH CHECK (
     employee_id IN (
       SELECT e.id FROM public.rh_employees e
-      WHERE e.ponto_portal_user_id = public.current_app_user_id()
-        AND e.ponto_access_enabled = true
+      WHERE e.ponto_portal_user_id = (
+        SELECT u.id FROM public.users u WHERE u.auth_id = auth.uid()
+      )
+      AND e.ponto_access_enabled = true
     )
-    OR public.is_admin()
+    OR public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL')
   );
 
 CREATE POLICY rh_ponto_records_admin_update ON public.rh_ponto_records
   FOR UPDATE TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
+  USING (public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL'))
+  WITH CHECK (public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL'));
 
 CREATE POLICY rh_ponto_audit_admin_select ON public.rh_ponto_audit
   FOR SELECT TO authenticated
-  USING (public.is_admin());
+  USING (public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL'));
 
 CREATE POLICY rh_ponto_audit_admin_insert ON public.rh_ponto_audit
   FOR INSERT TO authenticated
-  WITH CHECK (public.is_admin());
+  WITH CHECK (public.current_role_key() IN ('SUPER_ADMIN', 'ADMIN_OPERACIONAL'));
