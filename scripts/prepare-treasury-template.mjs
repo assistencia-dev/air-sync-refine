@@ -2,23 +2,23 @@ import fs from "node:fs";
 
 const path = "src/routes/_authenticated/treasury.tsx";
 const source = fs.readFileSync(path, "utf8");
+
+// O Treasury é integralmente client-side. A configuração SSR incompatível é
+// removida antes de localizar os marcadores, evitando deslocar os índices do
+// template e corromper o HTML/JavaScript embutido durante o build.
+const preparedSource = source.replace(
+  /createFileRoute\(([^)]*)\)\(\{\s*ssr:\s*false,\s*/,
+  "createFileRoute($1)({\n  ",
+);
+
 const startMarker = "const TREASURY_HTML = `";
-const endMarker = "`;
-\nfunction TreasuryPage";
-const start = source.indexOf(startMarker);
-const end = source.indexOf(endMarker, start + startMarker.length);
+const endMarker = "`;\n\nfunction TreasuryPage";
+const start = preparedSource.indexOf(startMarker);
+const end = preparedSource.indexOf(endMarker, start + startMarker.length);
 
 if (start < 0 || end < 0) {
   throw new Error("Não foi possível localizar o template DBS TREASURY.");
 }
-
-let preparedSource = source;
-// O Treasury é um módulo integralmente client-side. Removemos a opção SSR
-// desnecessária/incompatível antes do Vite compilar a rota.
-preparedSource = preparedSource.replace(
-  /createFileRoute\(([^)]*)\)\(\{\s*ssr:\s*false,\s*/,
-  "createFileRoute($1)({\n  ",
-);
 
 let html = preparedSource.slice(start + startMarker.length, end);
 // O HTML contém JavaScript próprio com template literals. Como ele está
