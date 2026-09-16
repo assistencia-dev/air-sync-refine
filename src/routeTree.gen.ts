@@ -16,6 +16,8 @@ import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboar
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
+import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -51,6 +53,16 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
+  id: '/folha-ponto',
+  path: '/folha-ponto',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
+  id: '/treasury',
+  path: '/treasury',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -58,6 +70,8 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
@@ -66,6 +80,8 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
@@ -76,6 +92,8 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
+  '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
@@ -86,9 +104,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/passage'
     | '/portal'
+    | '/folha-ponto'
+    | '/treasury'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/admin/rh-dashboard'
+  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/folha-ponto' | '/treasury' | '/admin/rh-dashboard'
   id:
     | '__root__'
     | '/'
@@ -97,6 +117,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/passage'
     | '/_authenticated/portal'
+    | '/_authenticated/folha-ponto'
+    | '/_authenticated/treasury'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
 }
@@ -158,6 +180,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/folha-ponto': {
+      id: '/_authenticated/folha-ponto'
+      path: '/folha-ponto'
+      fullPath: '/folha-ponto'
+      preLoaderRoute: typeof AuthenticatedFolhaPontoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/treasury': {
+      id: '/_authenticated/treasury'
+      path: '/treasury'
+      fullPath: '/treasury'
+      preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -165,12 +201,16 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
+  AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
+  AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
+  AuthenticatedFolhaPontoRoute: AuthenticatedFolhaPontoRoute,
+  AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
