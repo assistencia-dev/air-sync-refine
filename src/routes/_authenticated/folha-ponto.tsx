@@ -14,7 +14,7 @@ function FolhaPontoPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
   const access = useQuery({ queryKey: ["my-ponto-access"], queryFn: () => hasMyPontoAccess(), retry: false });
-  const isRh = ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
+  const isRh = profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
   useEffect(() => {
     if (!profile.isLoading && !isRh && access.data && !access.data.enabled) navigate({ to: "/portal", replace: true });
   }, [profile.isLoading, isRh, access.data, navigate]);
