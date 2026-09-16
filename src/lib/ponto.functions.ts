@@ -6,9 +6,19 @@ const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
 
 async function requireRh(context: { userId: string }) {
-  const { data, error } = await supabaseAdmin.from("users").select("id, username, status").eq("auth_id", context.userId).maybeSingle();
-  if (error || !data || data.status !== "ativo" || !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")) throw new Error("Acesso restrito ao RH da DBS Air.");
+  const { data, error } = await supabaseAdmin.from("users").select("id, username, role_key, status").eq("auth_id", context.userId).maybeSingle();
+  const allowed = data && (data.role_key === "SUPER_ADMIN" || data.role_key === "ADMIN_OPERACIONAL" || ["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? ""));
+  if (error || !allowed || data.status !== "ativo") throw new Error("Acesso restrito ao RH da DBS Air.");
   return data;
+}
+
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const rad = (v: number) => (v * Math.PI) / 180;
+  const earth = 6371000;
+  const dLat = rad(lat2 - lat1);
+  const dLng = rad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * earth * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 async function getEmployee(contextUserId: string) {
@@ -40,6 +50,7 @@ export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware
 export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
   if (!input?.employee_id) throw new Error("Colaborador inválido.");
   if (input.enabled && !input.portal_identifier?.trim()) throw new Error("Informe o usuário, e-mail ou CPF usado no login do colaborador.");
+  if (input.enabled && ((input.base_lat == null) !== (input.base_lng == null))) throw new Error("Informe latitude e longitude da base juntas.");
   if (input.radius_m !== undefined && (!Number.isInteger(input.radius_m) || input.radius_m < 20 || input.radius_m > 5000)) throw new Error("Raio permitido: 20 a 5.000 metros.");
   return input;
 }).handler(async ({ context, data }) => {
@@ -68,6 +79,8 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
 
 export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
   if (!TYPES.includes(input.punch_type) || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Marcação inválida.");
+  if (input.latitude != null && (input.latitude < -90 || input.latitude > 90)) throw new Error("Latitude inválida.");
+  if (input.longitude != null && (input.longitude < -180 || input.longitude > 180)) throw new Error("Longitude inválida.");
   return input;
 }).handler(async ({ context, data }) => {
   const employee = await getEmployee(context.userId);
@@ -76,8 +89,18 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   const last = rows?.[0]?.punch_type as PointType | undefined;
   const next = TYPES[Math.min(last ? TYPES.indexOf(last) + 1 : 0, TYPES.length)];
   if (!next || data.punch_type !== next) throw new Error(`A próxima marcação deve ser ${next ?? "nenhuma"}.`);
-  if (data.punch_type === "entrada" && data.inside_radius === false) throw new Error("Marcação bloqueada: fora do raio permitido pelo RH.");
-  const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert({ ...data, employee_id: employee.id }).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
+
+  let distance = data.distance_m ?? null;
+  let inside = data.inside_radius ?? null;
+  if (data.latitude != null && data.longitude != null && employee.ponto_base_lat != null && employee.ponto_base_lng != null) {
+    distance = distanceMeters(Number(employee.ponto_base_lat), Number(employee.ponto_base_lng), data.latitude, data.longitude);
+    inside = distance <= Number(employee.ponto_raio_m ?? 150);
+  }
+  if (data.punch_type === "entrada" && (inside !== true)) throw new Error("Marcação bloqueada: é necessário estar dentro do raio permitido pelo RH.");
+
+  const payload = { ...data, employee_id: employee.id, distance_m: distance, inside_radius: inside };
+  const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
+  await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });
   return record;
 });
