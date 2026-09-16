@@ -47,6 +47,35 @@ export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware
   return (data ?? []).map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
 });
 
+export const createRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; username: string; password: string; base_lat: number; base_lng: number; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
+  if (!input?.employee_id || !input.username?.trim()) throw new Error("Informe o login do colaborador.");
+  if (!input.password || input.password.length < 6) throw new Error("A senha deve ter pelo menos 6 caracteres.");
+  if (!Number.isFinite(input.base_lat) || !Number.isFinite(input.base_lng)) throw new Error("Informe a latitude e longitude da base.");
+  if (input.radius_m !== undefined && (!Number.isInteger(input.radius_m) || input.radius_m < 20 || input.radius_m > 5000)) throw new Error("Raio permitido: 20 a 5.000 metros.");
+  return { ...input, username: input.username.trim() };
+}).handler(async ({ context, data }) => {
+  const actor = await requireRh(context);
+  const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees").select("id, full_name, is_active, ponto_portal_user_id").eq("id", data.employee_id).maybeSingle();
+  if (employeeError) throw new Error(employeeError.message);
+  if (!employee || !employee.is_active) throw new Error("Colaborador não encontrado ou inativo.");
+  if (employee.ponto_portal_user_id) throw new Error("Este colaborador já possui acesso de ponto. Use Editar para alterar a configuração.");
+
+  const username = data.username.replace(/\s+/g, "").toUpperCase();
+  const { data: existing } = await supabaseAdmin.from("users").select("id").ilike("username", username).maybeSingle();
+  if (existing) throw new Error("Este login já está sendo usado. Escolha outro.");
+  const email = `${username.toLowerCase()}@dbsair.internal`;
+  const { data: authResult, error: authError } = await supabaseAdmin.auth.admin.createUser({ email, password: data.password, email_confirm: true, user_metadata: { username, full_name: employee.full_name } });
+  if (authError || !authResult.user) throw new Error(authError?.message ?? "Não foi possível criar o acesso do colaborador.");
+
+  const { data: appUser, error: userError } = await supabaseAdmin.from("users").insert({ auth_id: authResult.user.id, username, email, full_name: employee.full_name, role_key: "CLIENTE_PF", status: "ativo", created_by: actor.id }).select("id, username, email").single();
+  if (userError || !appUser) throw new Error(userError?.message ?? "Não foi possível criar o perfil do colaborador.");
+
+  const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees").update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id, ponto_raio_m: data.radius_m ?? 150, ponto_base_lat: data.base_lat, ponto_base_lng: data.base_lng, ponto_entrada_prevista: data.entrada_prevista ?? null, ponto_saida_prevista: data.saida_prevista ?? null, ponto_almoco_inicio_previsto: data.almoco_inicio_previsto ?? null, ponto_almoco_fim_previsto: data.almoco_fim_previsto ?? null }).eq("id", employee.id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
+  if (updateError) throw new Error(updateError.message);
+  await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: actor.id, action: "ACESSO_PONTO_CRIADO", details: { username, login_email: email } });
+  return { employee: updated, username, email };
+});
+
 export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
   if (!input?.employee_id) throw new Error("Colaborador inválido.");
   if (input.enabled && !input.portal_identifier?.trim()) throw new Error("Informe o usuário, e-mail ou CPF usado no login do colaborador.");
@@ -61,7 +90,7 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
     let q = supabaseAdmin.from("users").select("id, username, email, cpf, status").limit(1);
     if (identifier.includes("@")) q = q.ilike("email", identifier); else if (digits.length === 11) q = q.eq("cpf", digits); else q = q.ilike("username", identifier);
     const { data: user } = await q.maybeSingle();
-    if (!user || user.status !== "ativo") throw new Error("Usuário de login não encontrado ou inativo. Cadastre primeiro o acesso no portal.");
+    if (!user || user.status !== "ativo") throw new Error("Login não encontrado ou inativo. Crie o acesso do colaborador nesta tela antes de liberar a folha de ponto.");
     patch.ponto_portal_user_id = user.id;
   } else patch.ponto_portal_user_id = null;
   const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(patch).eq("id", data.employee_id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
