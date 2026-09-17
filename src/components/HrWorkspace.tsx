@@ -8,7 +8,7 @@ export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 type HrSection = "ponto" | "passagem" | "alimentacao" | "cadastro";
 
 function buildPontoDocument(html: string) {
-  const bootstrap = `<style id="dbs-ponto-host-fix">html,body{width:100%!important;min-width:0!important;margin:0!important}body{overflow:hidden!important}#view-rh{width:100%!important;min-height:100dvh!important}#view-rh>main{width:100%!important;min-width:0!important;margin-left:0!important;padding-left:0!important}#view-rh .mobile-main{width:100%!important;max-width:none!important}#view-rh .mobile-main>div{max-width:none!important;width:100%!important}#view-rh .sidebar{flex-shrink:0}@media(min-width:901px){#view-rh{display:flex!important;align-items:stretch!important}#view-rh>main{flex:1!important;min-width:0!important;overflow-y:auto!important;height:100dvh!important}}@media(max-width:900px){#view-rh>main{padding-left:0!important;width:100%!important}.sidebar{z-index:40!important}}</style><script>(function(){function openRh(){var l=document.getElementById('view-login');if(l)l.style.display='none';var rh=document.getElementById('view-rh');if(rh){rh.classList.remove('hidden');rh.style.display='flex';rh.style.width='100%';rh.style.minHeight='100dvh'}if(typeof mudarModuloRH==='function')mudarModuloRH('dashboard');if(window.lucide)window.lucide.createIcons()}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openRh);else openRh();})();</script>`;
+  const bootstrap = `<style id="dbs-ponto-host-fix">html,body{width:100%!important;min-width:0!important;margin:0!important}body{overflow:hidden!important}#view-rh{width:100%!important;min-height:100dvh!important}#view-rh>main{width:100%!important;min-width:0!important;margin-left:0!important;padding-left:0!important}#view-rh .mobile-main{width:100%!important;max-width:none!important}#view-rh .sidebar{flex-shrink:0}@media(min-width:901px){#view-rh{display:flex!important;align-items:stretch!important}#view-rh>main{flex:1!important;min-width:0!important;overflow-y:auto!important;height:100dvh!important}#view-rh>main .mobile-main{max-width:none!important}}@media(max-width:900px){#view-rh>main{padding-left:0!important;width:100%!important}.sidebar{z-index:40!important}}</style><script>(function(){function openRh(){var l=document.getElementById('view-login');if(l)l.style.display='none';var rh=document.getElementById('view-rh');if(rh){rh.classList.remove('hidden');rh.style.display='flex';rh.style.width='100%';rh.style.minHeight='100dvh'}if(typeof mudarModuloRH==='function')mudarModuloRH('dashboard');if(window.lucide)window.lucide.createIcons()}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',openRh);else openRh();})();</script>`;
   return html.replace("</head>", `${bootstrap}</head>`);
 }
 
@@ -22,6 +22,20 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
     { key: "passagem" as const, label: "Vale Passagem", icon: <WalletCards className="h-4 w-4" /> },
     { key: "alimentacao" as const, label: "Vale Alimentação", icon: <Utensils className="h-4 w-4" /> },
   ];
+
+  if (embedded) {
+    return (
+      <div className="fixed inset-0 z-0 bg-white">
+        <iframe
+          title="DBS AIR PONTO v5.0"
+          srcDoc={srcDoc}
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+          allow="camera; geolocation"
+          className="block h-[100dvh] min-h-screen w-full border-0 bg-white"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100dvh-80px)] w-full flex-col">
@@ -42,19 +56,12 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
 
       {section === "ponto" && (
         <div className="min-h-0 flex-1 overflow-hidden bg-slate-50">
-          <iframe
-            title="DBS AIR PONTO v5.0"
-            srcDoc={srcDoc}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-            allow="camera; geolocation"
-            className="block h-[calc(100dvh-150px)] min-h-[760px] w-full border-0 bg-white"
-          />
+          <iframe title="DBS AIR PONTO v5.0" srcDoc={srcDoc} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" allow="camera; geolocation" className="block h-[calc(100dvh-150px)] min-h-[760px] w-full border-0 bg-white" />
         </div>
       )}
       {section === "cadastro" && <div className="flex-1 p-4 lg:p-6"><RhEmployeeRegistry /></div>}
       {section === "alimentacao" && <div className="flex-1 p-4 lg:p-6"><RhBenefitPanel benefitType="alimentacao" /></div>}
       {section === "passagem" && <div className="flex-1 p-4 lg:p-6"><RhBenefitPanel benefitType="passagem" /></div>}
-      {section !== "ponto" && embedded && <p className="shrink-0 py-2 text-center text-[11px] text-slate-400">Sessão única do RH · autenticação herdada do sistema principal.</p>}
     </div>
   );
 }
