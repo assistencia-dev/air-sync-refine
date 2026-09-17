@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
 import { HrWorkspace } from "@/components/HrWorkspace";
+import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
 
 export const Route = createFileRoute("/_authenticated/folha-ponto")({
   head: () => ({ meta: [{ title: "Folha de Ponto · DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -37,10 +38,14 @@ function FolhaPontoPage() {
 
   if (!isRh && !access.data?.enabled) return null;
 
+  if (isRh) {
+    return <main className="min-h-screen w-full bg-slate-50"><HrWorkspace /></main>;
+  }
+
   return (
-    <main className="min-h-screen w-full bg-[#f4f7f6]">
-      <div className="w-full">
-        <HrWorkspace />
+    <main className="min-h-screen w-full bg-[#f4f7f6] px-4 py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <RhPontoWorkspace />
       </div>
     </main>
   );
