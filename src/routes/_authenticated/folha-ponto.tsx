@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
-import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
+import { HrWorkspace } from "@/components/HrWorkspace";
 
 export const Route = createFileRoute("/_authenticated/folha-ponto")({
   head: () => ({ meta: [{ title: "Folha de Ponto · DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -13,8 +13,13 @@ export const Route = createFileRoute("/_authenticated/folha-ponto")({
 function FolhaPontoPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
-  const access = useQuery({ queryKey: ["my-ponto-access"], queryFn: () => hasMyPontoAccess(), retry: false });
   const isRh = profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL";
+  const access = useQuery({
+    queryKey: ["my-ponto-access"],
+    queryFn: () => hasMyPontoAccess(),
+    enabled: !profile.isLoading && !isRh,
+    retry: false,
+  });
 
   useEffect(() => {
     if (!profile.isLoading && !profile.error && !isRh && access.data && !access.data.enabled) {
@@ -32,5 +37,11 @@ function FolhaPontoPage() {
 
   if (!isRh && !access.data?.enabled) return null;
 
-  return <main className="min-h-screen bg-[#f4f7f6] px-4 py-6 lg:px-8"><div className="mx-auto max-w-7xl"><RhPontoWorkspace /></div></main>;
+  return (
+    <main className="min-h-screen w-full bg-[#f4f7f6]">
+      <div className="w-full">
+        <HrWorkspace />
+      </div>
+    </main>
+  );
 }
