@@ -7,7 +7,7 @@ type PointType = (typeof TYPES)[number];
 
 async function requireRh(context: { userId: string }) {
   const { data, error } = await supabaseAdmin.from("users").select("id, username, role_key, status").eq("auth_id", context.userId).maybeSingle();
-  const allowed = data && (data.role_key === "SUPER_ADMIN" || data.role_key === "ADMIN_OPERACIONAL" || ["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? ""));
+  const allowed = data?.role_key === "SUPER_ADMIN" || data?.role_key === "ADMIN_OPERACIONAL";
   if (error || !allowed || data.status !== "ativo") throw new Error("Acesso restrito ao RH da DBS Air.");
   return data;
 }
@@ -68,7 +68,10 @@ export const createRhPontoAccess = createServerFn({ method: "POST" }).middleware
   if (authError || !authResult.user) throw new Error(authError?.message ?? "Não foi possível criar o acesso do colaborador.");
 
   const { data: appUser, error: userError } = await supabaseAdmin.from("users").insert({ auth_id: authResult.user.id, username, email, full_name: employee.full_name, role_key: "CLIENTE_PF", status: "ativo", created_by: actor.id }).select("id, username, email").single();
-  if (userError || !appUser) throw new Error(userError?.message ?? "Não foi possível criar o perfil do colaborador.");
+  if (userError || !appUser) {
+    await supabaseAdmin.auth.admin.deleteUser(authResult.user.id);
+    throw new Error(userError?.message ?? "Não foi possível criar o perfil do colaborador.");
+  }
 
   const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees").update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id, ponto_raio_m: data.radius_m ?? 150, ponto_base_lat: data.base_lat, ponto_base_lng: data.base_lng, ponto_entrada_prevista: data.entrada_prevista ?? null, ponto_saida_prevista: data.saida_prevista ?? null, ponto_almoco_inicio_previsto: data.almoco_inicio_previsto ?? null, ponto_almoco_fim_previsto: data.almoco_fim_previsto ?? null }).eq("id", employee.id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
   if (updateError) throw new Error(updateError.message);
