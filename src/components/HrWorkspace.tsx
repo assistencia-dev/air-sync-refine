@@ -24,8 +24,8 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   ];
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-h-[calc(100dvh-80px)] w-full flex-col">
+      <div className="flex shrink-0 flex-col gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[.2em] text-slate-400">Recursos Humanos</p>
           <h1 className="mt-1 text-xl font-black tracking-tight text-slate-900">RH · Gestão de Pessoas</h1>
@@ -41,14 +41,20 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       {section === "ponto" && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
-          <iframe title="DBS AIR PONTO v5.0" srcDoc={srcDoc} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" className="block h-[calc(100vh-190px)] min-h-[720px] w-full border-0" />
+        <div className="min-h-0 flex-1 overflow-hidden bg-slate-50">
+          <iframe
+            title="DBS AIR PONTO v5.0"
+            srcDoc={srcDoc}
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+            allow="camera; geolocation"
+            className="block h-[calc(100dvh-150px)] min-h-[760px] w-full border-0 bg-white"
+          />
         </div>
       )}
-      {section === "cadastro" && <RhEmployeeRegistry />}
-      {section === "alimentacao" && <RhBenefitPanel benefitType="alimentacao" />}
-      {section === "passagem" && <RhBenefitPanel benefitType="passagem" />}
-      {section !== "ponto" && embedded && <p className="text-center text-[11px] text-slate-400">Sessão única do RH · autenticação herdada do sistema principal.</p>}
+      {section === "cadastro" && <div className="flex-1 p-4 lg:p-6"><RhEmployeeRegistry /></div>}
+      {section === "alimentacao" && <div className="flex-1 p-4 lg:p-6"><RhBenefitPanel benefitType="alimentacao" /></div>}
+      {section === "passagem" && <div className="flex-1 p-4 lg:p-6"><RhBenefitPanel benefitType="passagem" /></div>}
+      {section !== "ponto" && embedded && <p className="shrink-0 py-2 text-center text-[11px] text-slate-400">Sessão única do RH · autenticação herdada do sistema principal.</p>}
     </div>
   );
 }
