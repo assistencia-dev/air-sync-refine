@@ -941,7 +941,11 @@ td strong{font-weight:650;}
 <div id="toast-container"></div>
 
 <script>
-    let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [] };
+    const TREASURY_STATE_KEY = 'DBS_TREASURY_STATE_V3';
+    const TREASURY_PREVIOUS_KEY = 'DBS_TREASURY_PREVIOUS_SAFE';
+    const TREASURY_SNAPSHOT_KEY = 'DBS_TREASURY_SNAPSHOT_BEFORE_V6';
+    const TREASURY_VERSION = 4;
+    let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION } };
 
     function formatMoney(value){ const n=Number(value); return (Number.isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -967,8 +971,12 @@ function showToast(msg) {
         const monthStr = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`;
         document.getElementById('global-period-filter').value = monthStr;
 
-        const local = localStorage.getItem('DBS_TREASURY_STATE_V3');
-        if (local) localStorage.setItem('DBS_TREASURY_SNAPSHOT_BEFORE_V6', local);
+        const local = localStorage.getItem(TREASURY_STATE_KEY);
+        if (local) {
+            // Snapshot imutável da entrada da sessão: nunca perde o estado que já existia.
+            localStorage.setItem(TREASURY_SNAPSHOT_KEY, local);
+            localStorage.setItem(TREASURY_PREVIOUS_KEY, local);
+        }
         if (!local) {
             STATE = {
                 recebimentos: [
@@ -1018,8 +1026,10 @@ function showToast(msg) {
             logAuditoria('INICIALIZAÇÃO', 'Sistema', 'Banco de dados criado e preservado com sucesso.');
         } else {
             try {
-                STATE = JSON.parse(local);
-                if (!STATE || typeof STATE !== 'object') throw new Error('estado inválido');
+                const parsed = JSON.parse(local);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('estado inválido');
+                STATE = parsed;
+                // Migração aditiva: somente cria coleções/campos ausentes; jamais substitui dados existentes.
                 if (!Array.isArray(STATE.recebimentos)) STATE.recebimentos = [];
                 if (!Array.isArray(STATE.contasPagar)) STATE.contasPagar = [];
                 if (!Array.isArray(STATE.passivos)) STATE.passivos = [];
@@ -1027,7 +1037,14 @@ function showToast(msg) {
                 if (!Array.isArray(STATE.bancos)) STATE.bancos = [];
                 if (!Array.isArray(STATE.movimentacoes)) STATE.movimentacoes = [];
                 if (!Array.isArray(STATE.auditoria)) STATE.auditoria = [];
+                if (!STATE._meta || typeof STATE._meta !== 'object') STATE._meta = {};
+                STATE._meta.version = Math.max(Number(STATE._meta.version)||1, TREASURY_VERSION);
                 STATE.bancos.forEach(b => { if (!b.status) b.status = 'Ativa'; });
+                // Normalização não destrutiva dos movimentos antigos.
+                STATE.movimentacoes.forEach(m => {
+                    if (m && m.anulado == null) m.anulado = false;
+                });
+                save();
             } catch (err) {
                 alert('Não foi possível ler os dados salvos. O conteúdo original foi preservado. Use um Backup JSON para recuperação.');
                 return;
@@ -1038,7 +1055,22 @@ function showToast(msg) {
     }
 
     function save() {
-        localStorage.setItem('DBS_TREASURY_STATE_V3', JSON.stringify(STATE));
+        const payload = JSON.stringify(STATE);
+        try {
+            // Nunca sobrescreve o último estado válido sem guardar uma cópia anterior.
+            const previous = localStorage.getItem(TREASURY_STATE_KEY);
+            if (previous) localStorage.setItem(TREASURY_PREVIOUS_KEY, previous);
+            localStorage.setItem(TREASURY_STATE_KEY, payload);
+            localStorage.setItem('DBS_TREASURY_LAST_SAVE_AT', new Date().toISOString());
+        } catch (err) {
+            console.error('DBS Treasury: falha ao persistir estado', err);
+            try {
+                // Mesmo se o storage atingir a cota, preserva uma cópia em memória da sessão.
+                window.__DBS_TREASURY_LAST_VALID_STATE = payload;
+            } catch (_) {}
+            showToast('Não foi possível salvar no navegador. Faça um backup JSON antes de continuar.');
+            throw err;
+        }
     }
 
     function getDaysDiff(dateString) {
@@ -1768,10 +1800,22 @@ function showToast(msg) {
         reader.onload = function(e) {
             try {
                 const importedState = JSON.parse(e.target.result);
+                if (!importedState || typeof importedState !== 'object' || Array.isArray(importedState)) throw new Error('estrutura inválida');
+                // Backup obrigatório antes da restauração: o estado atual nunca é descartado.
+                const current = localStorage.getItem(TREASURY_STATE_KEY);
+                if (current) {
+                    localStorage.setItem(TREASURY_PREVIOUS_KEY, current);
+                    localStorage.setItem(TREASURY_SNAPSHOT_KEY, current);
+                }
+                const requiredCollections = ['recebimentos','contasPagar','passivos','recorrencias','bancos','movimentacoes','auditoria'];
+                requiredCollections.forEach(key => {
+                    if (!Array.isArray(importedState[key])) importedState[key] = [];
+                });
+                importedState._meta = { ...(importedState._meta || {}), version: TREASURY_VERSION, restoredAt: new Date().toISOString() };
                 STATE = importedState;
-                save(); render();
-                showToast('Banco restaurado com sucesso!');
-                logAuditoria('RESTAURAÇÃO', 'Sistema', 'Banco restaurado via JSON');
+                save();
+                render();
+                logAuditoria('RESTAURAÇÃO', 'Sistema', 'Banco restaurado via JSON. Estado anterior preservado em backup seguro.');
             } catch(err) {
                 alert('Arquivo de backup inválido!');
             }
@@ -1871,13 +1915,13 @@ function showToast(msg) {
         let recCadastrada = 0;
         STATE.recebimentos.forEach(r => {
             let [y, m] = r.data.split('-');
-            if (y === selY && m === selM) recCadastrada += r.valor;
+            if (y === selY && m === selM && String(r.status || 'Pendente').toLowerCase() === 'recebido') recCadastrada += r.valor;
         });
 
         let contasPagarMes = 0;
         STATE.contasPagar.forEach(p => {
             let [y, m] = p.vencimento.split('-');
-            if (y === selY && m === selM) contasPagarMes += p.valor;
+            if (y === selY && m === selM && String(p.status || 'Pendente').toLowerCase() === 'pago') contasPagarMes += p.valor;
         });
 
         const recBrutaManual = parseFloat(document.getElementById('dre-input-receita').value) || 0;
@@ -1900,7 +1944,7 @@ function showToast(msg) {
         STATE.passivos.forEach(pass => {
             pass.parcelas.forEach(p => {
                 let [y, m] = p.vencimento.split('-');
-                if (y === selY && m === selM) totalPassivosMes += p.valor;
+                if (y === selY && m === selM && String(p.status || 'Pendente').toLowerCase() === 'pago') totalPassivosMes += p.valor;
             });
         });
 
@@ -1944,7 +1988,9 @@ function showToast(msg) {
     function getMovimentacoesAtivas(){
         return (STATE.movimentacoes||[])
             .map(m => normalizarMovimento(Object.assign({}, m)))
-            .filter(m => !!m);
+            // Estornos continuam visíveis para auditoria, mas movimentos anulados
+            // não entram novamente nos totais operacionais.
+            .filter(m => !!m && !m.anulado);
     }
 
     function isSaldoInicialTecnico(m){
@@ -1984,12 +2030,12 @@ function showToast(msg) {
 
         STATE.recebimentos.forEach(r => {
             let [y, m] = r.data.split('-');
-            if (y === selY && m === selM) tReceberMes += r.valor;
+            if (y === selY && m === selM && String(r.status || 'Pendente').toLowerCase() !== 'recebido') tReceberMes += r.valor;
         });
 
         STATE.contasPagar.forEach(p => {
             let [y, m] = p.vencimento.split('-');
-            if (y === selY && m === selM) tPagarMes += p.valor;
+            if (y === selY && m === selM && String(p.status || 'Pendente').toLowerCase() !== 'pago') tPagarMes += p.valor;
             let diff = getDaysDiff(p.vencimento);
             if(p.status === 'Pendente' && diff < 0) qtdAtrasados++;
         });
