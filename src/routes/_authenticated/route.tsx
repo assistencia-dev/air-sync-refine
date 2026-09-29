@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, isRedirect, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyEmployeePortalAccess } from "@/lib/rh.functions";
 
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated")({
           throw redirect({ to: "/folha-ponto", replace: true });
         }
       } catch (error) {
-        if (error && typeof error === "object" && "isRedirect" in error) throw error;
+        if (isRedirect(error)) throw error;
         // Falhas de consulta não bloqueiam usuários legados/clientes durante a migração.
       }
     }
