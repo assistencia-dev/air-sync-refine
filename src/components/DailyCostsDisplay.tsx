@@ -16,6 +16,20 @@ export interface DailyCostsDisplayProps {
 /**
  * Display daily costs in card format (most common)
  */
+function businessDaysInCurrentMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  let count = 0;
+  const cursor = new Date(year, month, 1);
+  while (cursor.getMonth() === month) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
 export function DailyCostsCard({ dailyCosts, showCents = false }: DailyCostsDisplayProps) {
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4 space-y-3">
@@ -84,7 +98,7 @@ export function DailyCostsCard({ dailyCosts, showCents = false }: DailyCostsDisp
       {/* Monthly Projection */}
       <div className="pt-2 border-t border-slate-700 text-xs" style={{ color: '#CBD5E1' }}>
         <p className="text-center">
-          <span className="font-semibold">21 dias úteis</span> = {formatCurrencyBRL((dailyCosts.vt_daily_cost + dailyCosts.va_daily_cost) * 21)}
+          <span className="font-semibold">{businessDaysInCurrentMonth()} dias úteis</span> = {formatCurrencyBRL((dailyCosts.vt_daily_cost + dailyCosts.va_daily_cost) * businessDaysInCurrentMonth())}
         </p>
       </div>
     </div>
