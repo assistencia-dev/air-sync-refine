@@ -633,7 +633,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <td className="px-4 py-3 text-right">
                     {isSuperAdmin ? (
                       <div className="flex items-center justify-end gap-2">
-                        {["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(u.role_key) && (
+                        {["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(u.role_key) && (
                           <button
                             type="button"
                             onClick={() => setEditUser(u)}
@@ -1058,7 +1058,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.
         </p>
 
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+        {roleKey !== "COLABORADOR" && <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
           <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
             <input
               type="radio"
@@ -1115,7 +1115,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </select>
           </Field>
 
-          {clientMode === "existente" && (
+          {roleKey !== "COLABORADOR" && clientMode === "existente" && (
             <>
               <Field label="Empresa">
                 <select
@@ -1159,7 +1159,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </>
           )}
 
-          {clientMode === "novo" && (
+          {roleKey !== "COLABORADOR" && clientMode === "novo" && (
             <>
               <Field label="Nome da Empresa/Cliente *">
                 <input
