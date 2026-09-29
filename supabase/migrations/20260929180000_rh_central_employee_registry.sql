@@ -48,26 +48,48 @@ where benefit_type = 'alimentacao'
   and registry_employee_id = id;
 
 -- Move legacy point/login and ficha linkage to the canonical employee before the UI
--- stops exposing the duplicate benefit rows as employees.
-with linked as (
-  select
-    registry_employee_id,
-    max(case when coalesce(ponto_access_enabled, false) then 1 else 0 end) as has_access,
-    max(ponto_portal_user_id::text)::uuid as portal_user_id,
-    max(ficha_file_name) filter (where ficha_file_name is not null) as ficha_name,
-    max(ficha_storage_path) filter (where ficha_storage_path is not null) as ficha_path
-  from public.rh_employees
-  where registry_employee_id is not null
-  group by registry_employee_id
-)
+-- stops exposing duplicate benefit rows as employees.
 update public.rh_employees canonical
 set
-  ponto_access_enabled = case when linked.has_access = 1 then true else canonical.ponto_access_enabled end,
-  ponto_portal_user_id = coalesce(linked.portal_user_id, canonical.ponto_portal_user_id),
-  ficha_file_name = coalesce(canonical.ficha_file_name, linked.ficha_name),
-  ficha_storage_path = coalesce(canonical.ficha_storage_path, linked.ficha_path)
-from linked
-where canonical.id = linked.registry_employee_id;
+  ponto_access_enabled = true,
+  ponto_portal_user_id = (
+    select legacy.ponto_portal_user_id
+    from public.rh_employees legacy
+    where legacy.registry_employee_id = canonical.id
+      and legacy.ponto_access_enabled = true
+      and legacy.ponto_portal_user_id is not null
+    order by legacy.updated_at desc nulls last, legacy.created_at desc
+    limit 1
+  ),
+  ficha_file_name = coalesce(
+    canonical.ficha_file_name,
+    (
+      select legacy.ficha_file_name
+      from public.rh_employees legacy
+      where legacy.registry_employee_id = canonical.id
+        and legacy.ficha_file_name is not null
+      order by legacy.updated_at desc nulls last, legacy.created_at desc
+      limit 1
+    )
+  ),
+  ficha_storage_path = coalesce(
+    canonical.ficha_storage_path,
+    (
+      select legacy.ficha_storage_path
+      from public.rh_employees legacy
+      where legacy.registry_employee_id = canonical.id
+        and legacy.ficha_storage_path is not null
+      order by legacy.updated_at desc nulls last, legacy.created_at desc
+      limit 1
+    )
+  )
+where exists (
+  select 1
+  from public.rh_employees legacy
+  where legacy.registry_employee_id = canonical.id
+    and legacy.ponto_access_enabled = true
+    and legacy.ponto_portal_user_id is not null
+);
 
 create index if not exists idx_rh_employees_registry_employee_id
   on public.rh_employees(registry_employee_id);
