@@ -20,8 +20,12 @@ const nextType = (records: any[]) => {
 
 export function RhPontoWorkspace() {
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
-  const isRh = ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
+  const isRh = profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
   return isRh ? <PontoRh /> : <PontoColaborador />;
+}
+
+export function RhPontoEmployeePortal() {
+  return <PontoColaborador />;
 }
 
 function PontoRh() {
