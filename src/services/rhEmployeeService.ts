@@ -51,7 +51,7 @@ export function toEmployeeWithCosts(emp: RHEmployee): EmployeeWithCosts {
   const dailyRate = (emp.fare_cents ?? 0) / 100;
   return {
     ...emp,
-    daily_vt_cost: emp.benefit_type === 'passagem' ? dailyRate : 0,
+    daily_vt_cost: emp.benefit_type === 'passagem' ? dailyRate * (emp.trips_per_day ?? 1) : 0,
     daily_va_cost: emp.benefit_type === 'alimentacao' ? dailyRate : 0,
   };
 }

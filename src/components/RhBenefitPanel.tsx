@@ -28,8 +28,8 @@ const dateText = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(
     new Date(`${value}T12:00:00`),
   );
-function coverageDays(amount: number, dailyValue: number) {
-  return dailyValue > 0 ? Math.floor(amount / dailyValue) : 0;
+function coverageDays(amountCents: number, dailyCostCents: number) {
+  return dailyCostCents > 0 ? Math.floor(amountCents / dailyCostCents) : 0;
 }
 
 function addBusinessDays(date: string, days: number) {
@@ -407,12 +407,20 @@ function TopupForm({
 }) {
   const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
   const [amount, setAmount] = useState("");
-  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
+  const localDateISO = () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  };
+  const [paidAt, setPaidAt] = useState(localDateISO());
   const employee = employees.find((item) => item.id === employeeId);
   const amountCents = Math.round(Number(amount.replace(",", ".")) * 100);
-  const days = employee
-    ? coverageDays(amountCents, employee.fare_cents)
+  const dailyCostCents = employee
+    ? employee.fare_cents * (benefitType === "passagem" ? employee.trips_per_day : 1)
     : 0;
+  const days = employee ? coverageDays(amountCents, dailyCostCents) : 0;
   const create = useMutation({
     mutationFn: () =>
       createRhTopup({
