@@ -47,6 +47,277 @@ export const listRhEmployees = createServerFn({ method: "GET" })
     return employees ?? [];
   });
 
+export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireNativeOperator(context);
+    const { data, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, is_active, registration_data, registry_employee_id")
+      .order("full_name");
+    if (error) throw new Error(error.message);
+    return (data ?? []).filter((row: any) => row.registry_employee_id === row.id);
+  });
+
+export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { registry_employee_id: string; benefit_type: RhBenefitType; fare_cents: number; trips_per_day: number }) => {
+    validateBenefit(input);
+    if (!input.registry_employee_id) throw new Error("Selecione o funcionário no Cadastro de Funcionários.");
+    if (!Number.isInteger(input.fare_cents) || input.fare_cents <= 0) throw new Error("Informe um valor diário válido.");
+    if (!Number.isInteger(input.trips_per_day) || input.trips_per_day < 1 || input.trips_per_day > 12) throw new Error("Informe a quantidade de viagens por dia.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: registry, error: registryError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, is_active")
+      .eq("id", data.registry_employee_id)
+      .eq("registry_employee_id", data.registry_employee_id)
+      .maybeSingle();
+    if (registryError) throw new Error(registryError.message);
+    if (!registry) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+    if (!registry.is_active) throw new Error("O funcionário está inativo no Cadastro de Funcionários.");
+
+    const { data: existing, error: existingError } = await supabaseAdmin.from("rh_employees").select("id")
+      .eq("registry_employee_id", data.registry_employee_id).eq("benefit_type", data.benefit_type).maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+
+    const payload = { full_name: registry.full_name, unit: registry.unit, fare_cents: data.fare_cents, trips_per_day: data.benefit_type === "passagem" ? data.trips_per_day : 1, is_active: true, benefit_configured: true };
+    if (existing) {
+      const { data: updated, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", existing.id)
+        .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured").single();
+      if (error) throw new Error(error.message);
+      return updated;
+    }
+    const { data: created, error } = await supabaseAdmin.from("rh_employees")
+      .insert({ ...payload, benefit_type: data.benefit_type, registry_employee_id: data.registry_employee_id, registration_data: {} })
+      .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured").single();
+    if (error) throw new Error(error.message);
+    return created;
+  });
+
+export const createRhEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      benefit_type: RhBenefitType;
+      full_name: string;
+      unit: string;
+      fare_cents: number;
+      trips_per_day: number;
+    }) => {
+      validateBenefit(input);
+      if (!input.full_name?.trim() || !input.unit?.trim())
+        throw new Error("Informe nome e unidade.");
+      if (!Number.isInteger(input.fare_cents) || input.fare_cents <= 0)
+        throw new Error("Informe um valor diário válido.");
+      if (
+        !Number.isInteger(input.trips_per_day) ||
+        input.trips_per_day < 1 ||
+        input.trips_per_day > 12
+      )
+        throw new Error("Informe a quantidade de viagens por dia.");
+      return { ...input, full_name: input.full_name.trim(), unit: input.unit.trim() };
+    },
+  )
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: employee, error } = await supabaseAdmin
+      .from("rh_employees")
+      .insert({ ...data, is_active: true })
+      .select(
+        "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
+      )
+      .single();
+    if (error) throw new Error(error.message);
+    return employee;
+  });
+
+export const updateRhEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      id: string;
+      benefit_type: RhBenefitType;
+      full_name: string;
+      unit: string;
+      fare_cents: number;
+      trips_per_day: number;
+    }) => {
+      validateBenefit(input);
+      if (!input.id || !input.full_name?.trim() || !input.unit?.trim())
+        throw new Error("Dados do colaborador inválidos.");
+      if (!Number.isInteger(input.fare_cents) || input.fare_cents <= 0)
+        throw new Error("Informe um valor diário válido.");
+      if (
+        !Number.isInteger(input.trips_per_day) ||
+        input.trips_per_day < 1 ||
+        input.trips_per_day > 12
+      )
+        throw new Error("Informe a quantidade de viagens por dia.");
+      return { ...input, full_name: input.full_name.trim(), unit: input.unit.trim() };
+    },
+  )
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: employee, error } = await supabaseAdmin
+      .from("rh_employees")
+      .update({
+        full_name: data.full_name,
+        unit: data.unit,
+        fare_cents: data.fare_cents,
+        trips_per_day: data.trips_per_day,
+      })
+      .eq("id", data.id)
+      .select(
+        "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
+      )
+      .single();
+    if (error) throw new Error(error.message);
+    return employee;
+  });
+
+export const deleteRhEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; benefit_type: RhBenefitType }) => {
+    validateBenefit(input);
+    if (!input.id) throw new Error("Colaborador inválido.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { error } = await supabaseAdmin
+      .from("rh_employees")
+      .update({ is_active: false, ponto_access_enabled: false })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reactivateRhEmployeeRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => {
+    if (!input?.id) throw new Error("Funcionário inválido.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { error } = await supabaseAdmin
+      .from("rh_employees")
+      .update({ is_active: true })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const listRhTopups = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(validateBenefit)
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: topups, error } = await supabaseAdmin
+      .from("rh_topups")
+      .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
+      .eq("benefit_type", data.benefit_type)
+      .order("paid_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return topups ?? [];
+  });
+
+export const createRhTopup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      benefit_type: RhBenefitType;
+      employee_id: string;
+      amount_cents: number;
+      paid_at: string;
+    }) => {
+      validateBenefit(input);
+      if (
+        !input.employee_id ||
+        !Number.isInteger(input.amount_cents) ||
+        input.amount_cents <= 0 ||
+        !input.paid_at
+      ) {
+        throw new Error("Informe colaborador, valor e data da recarga.");
+      }
+      return input;
+    },
+  )
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+    const { data: employee } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id")
+      .eq("id", data.employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
+    const { data: topup, error } = await supabaseAdmin
+      .from("rh_topups")
+      .insert({ ...data, created_by: operator.id })
+      .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
+      .single();
+    if (error) throw new Error(error.message);
+    return topup;
+  });
+
+export const deleteRhTopup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; benefit_type: RhBenefitType }) => {
+    validateBenefit(input);
+    if (!input.id) throw new Error("Recarga inválida.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { error } = await supabaseAdmin
+      .from("rh_topups")
+      .delete()
+      .eq("id", data.id)
+      .eq("benefit_type", data.benefit_type);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Valida usuário + senha do operador para liberar o módulo RH.
+ * Usa um cliente sem persistência de sessão: apenas confere as credenciais.
+ */
+export const unlockRhModule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { username: string; password: string }) => {
+    if (!input?.username?.trim() || !input?.password) {
+      throw new Error("Informe usuário e senha do RH.");
+    }
+    return { username: input.username.trim().toUpperCase(), password: input.password };
+  })
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+    if ((operator.username ?? "").toUpperCase() !== data.username) {
+      throw new Error("Usuário ou senha do RH inválidos.");
+    }
+    const { data: row } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", operator.id)
+      .maybeSingle();
+    if (!row?.email) throw new Error("Operador sem e-mail de acesso configurado.");
+    const { createClient } = await import("@supabase/supabase-js");
+    const check = createClient(
+      process.env["SUPABASE_URL"]!,
+      process.env["SUPABASE_ANON_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"]!,
+      { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } },
+    );
+    const { error } = await check.auth.signInWithPassword({
+      email: row.email,
+      password: data.password,
+    });
+    if (error) throw new Error("Usuário ou senha do RH inválidos.");
+    return { ok: true };
+  });
+
 export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -70,41 +341,25 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
 export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
-    if (!input?.full_name?.trim() || !input?.unit?.trim())
-      throw new Error("Informe nome e unidade do funcionário.");
-    return {
-      ...input,
-      id: input.id || undefined,
-      full_name: input.full_name.trim(),
-      unit: input.unit.trim(),
-    };
+    if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
+    return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim() };
   })
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
-    const payload = {
-      full_name: data.full_name,
-      unit: data.unit,
-      registration_data: data.registration_data,
-      is_active: true,
-    };
-    const query = data.id
-      ? supabaseAdmin
-          .from("rh_employees")
-          .update(payload)
-          .eq("id", data.id)
-          .select(
-            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
-          )
-          .single()
-      : supabaseAdmin
-          .from("rh_employees")
-          .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1 })
-          .select(
-            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
-          )
-          .single();
-    const { data: employee, error } = await query;
-    if (error) throw new Error(error.message);
+    const payload = { full_name: data.full_name, unit: data.unit, registration_data: data.registration_data, is_active: true };
+    if (data.id) {
+      const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", data.id)
+        .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+      if (error) throw new Error(error.message);
+      return employee;
+    }
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees")
+      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false })
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
+    if (createError) throw new Error(createError.message);
+    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+    if (linkError) throw new Error(linkError.message);
     return employee;
   });
 
