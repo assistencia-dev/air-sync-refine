@@ -1507,7 +1507,7 @@ function showToast(msg) {
         const pass = STATE.passivos.find(x => x.id === passId);
         const p = pass?.parcelas.find(x => x.id === parcId);
         if (!pass || !p) return;
-        if (p.comprovante && !confirm(`Já existe um comprovante (${p.comprovante}). Deseja substituí-lo por "\${file.name}"?`)) { input.value=''; return; }
+        if (p.comprovante && !confirm(`Já existe um comprovante (${p.comprovante}). Deseja substituí-lo por "${file.name}"?`)) { input.value=''; return; }
         if (file.size > 5 * 1024 * 1024) { alert('Comprovante muito grande. Limite para armazenamento direto: 5 MB.'); input.value=''; return; }
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -1547,7 +1547,7 @@ function showToast(msg) {
         const alvo = localizarComprovante(objId, tipo, historicoId);
         if (!alvo || !alvo.obj.comprovante) return;
         const nome = alvo.obj.comprovante;
-        const pergunta = `Excluir o comprovante "\${nome}"?\\n\\nO pagamento/registro será mantido. Somente o arquivo e a referência do comprovante serão removidos.`;
+        const pergunta = `Excluir o comprovante "${nome}"?\\n\\nO pagamento/registro será mantido. Somente o arquivo e a referência do comprovante serão removidos.`;
         if (!confirm(pergunta)) return;
         alvo.obj.comprovante = null;
         delete alvo.obj.comprovanteData;
