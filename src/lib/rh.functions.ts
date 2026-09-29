@@ -271,7 +271,41 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
       .eq("is_active", true)
       .order("full_name");
     if (error) throw new Error(error.message);
-    return data ?? [];
+
+    // O cadastro é apresentado uma única vez por pessoa/unidade.
+    // Registros legados de VT/VA continuam no banco e não são apagados.
+    const unique = new Map<string, any>();
+    for (const employee of data ?? []) {
+      const key = `${employee.full_name}|${employee.unit}`.trim().toLowerCase();
+      const current = unique.get(key);
+      const currentData = current?.registration_data ?? {};
+      const nextData = employee.registration_data ?? {};
+      const currentScore = Object.keys(currentData).filter((k) => String(currentData[k] ?? "").trim()).length;
+      const nextScore = Object.keys(nextData).filter((k) => String(nextData[k] ?? "").trim()).length;
+      if (!current || nextScore > currentScore) {
+        unique.set(key, employee);
+      }
+    }
+
+    const registry = [...unique.values()];
+    const ids = registry.map((e) => e.id);
+    const accessRows = ids.length
+      ? (((await (supabaseAdmin as any)
+          .from("rh_employee_access")
+          .select("employee_id, user_id, access_enabled, login_identifier, updated_at")
+          .in("employee_id", ids)).data ?? []) as any[])
+      : [];
+    const userIds = [...new Set(accessRows.map((a) => a.user_id).filter(Boolean))];
+    const users = userIds.length
+      ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status").in("id", userIds)).data ?? []) as any[])
+      : [];
+    const usersById = new Map(users.map((u) => [u.id, u]));
+    const accessByEmployee = new Map(accessRows.map((a) => [a.employee_id, { ...a, user: usersById.get(a.user_id) ?? null }]));
+
+    return registry.map((employee) => ({
+      ...employee,
+      access: accessByEmployee.get(employee.id) ?? null,
+    }));
   });
 
 export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
@@ -313,6 +347,208 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
     const { data: employee, error } = await query;
     if (error) throw new Error(error.message);
     return employee;
+  });
+
+export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db = supabaseAdmin as any;
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users")
+      .select("id, role_key, status")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo") return { enabled: false, employee: null };
+
+    const isAdmin = user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL";
+    if (isAdmin) return { enabled: false, employee: null };
+
+    const { data: access, error } = await db
+      .from("rh_employee_access")
+      .select("employee_id, access_enabled")
+      .eq("user_id", user.id)
+      .eq("access_enabled", true)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    if (!access?.[0]?.employee_id) return { enabled: false, employee: null };
+
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, is_active")
+      .eq("id", access[0].employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+
+    return {
+      enabled: Boolean(employee),
+      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit } : null,
+    };
+  });
+
+export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    employee_id: string;
+    enabled: boolean;
+    login_identifier?: string;
+    initial_password?: string;
+  }) => {
+    if (!input?.employee_id) throw new Error("Funcionário inválido.");
+    if (input.enabled && !input.login_identifier?.trim()) {
+      throw new Error("Informe o login do funcionário.");
+    }
+    if (input.enabled && input.initial_password !== undefined && input.initial_password.length < 6) {
+      throw new Error("A senha inicial deve ter pelo menos 6 caracteres.");
+    }
+    return {
+      ...input,
+      login_identifier: input.login_identifier?.trim() || undefined,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, registration_data, is_active")
+      .eq("id", data.employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
+
+    const db = supabaseAdmin as any;
+
+    if (!data.enabled) {
+      const { error } = await db
+        .from("rh_employee_access")
+        .update({ access_enabled: false, updated_at: new Date().toISOString() })
+        .eq("employee_id", data.employee_id);
+      if (error) throw new Error(error.message);
+
+      // Mantém compatibilidade com o portal de ponto já existente.
+      await supabaseAdmin
+        .from("rh_employees")
+        .update({ ponto_access_enabled: false })
+        .eq("id", data.employee_id);
+
+      await supabaseAdmin.from("rh_ponto_audit").insert({
+        employee_id: data.employee_id,
+        actor_user_id: operator.id,
+        action: "ACESSO_FUNCIONARIO_REVOGADO",
+        details: {},
+      });
+
+      return { ok: true, enabled: false, user: null };
+    }
+
+    const identifier = data.login_identifier!;
+    const digits = identifier.replace(/\\D/g, "");
+    const isEmail = identifier.includes("@");
+
+    let query = supabaseAdmin
+      .from("users")
+      .select("id, auth_id, username, email, cpf, role_key, status")
+      .limit(1);
+
+    if (isEmail) query = query.ilike("email", identifier);
+    else if (digits.length === 11) query = query.eq("cpf", digits);
+    else query = query.ilike("username", identifier);
+
+    const { data: existingUser, error: userLookupError } = await query.maybeSingle();
+    if (userLookupError) throw new Error(userLookupError.message);
+
+    let appUser = existingUser as any;
+
+    if (appUser && ["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) {
+      throw new Error("Este login já pertence a um administrador e não pode ser vinculado como funcionário.");
+    }
+
+    if (!appUser) {
+      if (!data.initial_password) {
+        throw new Error("Informe uma senha inicial para criar o acesso.");
+      }
+
+      const username = isEmail ? identifier.split("@")[0].trim() : identifier.trim();
+      const safeUsername = username.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40);
+      const internalEmail = isEmail ? identifier : `${safeUsername.toLowerCase()}@dbsair.internal`;
+
+      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: internalEmail,
+        password: data.initial_password,
+        email_confirm: true,
+        user_metadata: { username: safeUsername, full_name: employee.full_name },
+      });
+      if (createError) throw new Error("Não foi possível criar o acesso: " + createError.message);
+      if (!created.user?.id) throw new Error("O acesso foi criado sem identificador de autenticação.");
+
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from("users")
+        .insert({
+          auth_id: created.user.id,
+          username: safeUsername,
+          email: internalEmail,
+          cpf: digits.length === 11 ? digits : null,
+          full_name: employee.full_name,
+          role_key: "CLIENTE_PF",
+          status: "ativo",
+          created_by: operator.id,
+        })
+        .select("id, auth_id, username, email, cpf, role_key, status")
+        .single();
+      if (insertError) throw new Error("Usuário criado, mas o perfil não pôde ser salvo: " + insertError.message);
+      appUser = inserted;
+    } else if (appUser.status !== "ativo") {
+      throw new Error("O usuário encontrado está inativo.");
+    }
+
+    const { data: access, error: accessError } = await db
+      .from("rh_employee_access")
+      .upsert({
+        employee_id: data.employee_id,
+        user_id: appUser.id,
+        access_enabled: true,
+        login_identifier: identifier,
+        created_by: operator.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "employee_id" })
+      .select("id, employee_id, user_id, access_enabled, login_identifier, updated_at")
+      .single();
+    if (accessError) throw new Error(accessError.message);
+
+    // Compatibilidade: o ponto passa a respeitar também o vínculo central.
+    await supabaseAdmin
+      .from("rh_employees")
+      .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id })
+      .eq("id", data.employee_id);
+
+    await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: data.employee_id,
+      actor_user_id: operator.id,
+      action: "ACESSO_FUNCIONARIO_LIBERADO",
+      details: { login_identifier: identifier, access_id: access.id },
+    });
+
+    return {
+      ok: true,
+      enabled: true,
+      user: { id: appUser.id, username: appUser.username, email: appUser.email },
+    };
+  });
+
+export const listRhEmployeeAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireNativeOperator(context);
+    const db = supabaseAdmin as any;
+    const { data, error } = await db
+      .from("rh_employee_access")
+      .select("id, employee_id, user_id, access_enabled, login_identifier, updated_at")
+      .order("updated_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
 
 export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })

@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
+import { Download, FileText, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
 import {
   deactivateRhEmployeeRecord,
   getRhEmployeeFichaUrl,
   listRhEmployeeRegistry,
   saveRhEmployeeRecord,
   uploadRhEmployeeFicha,
+  saveRhEmployeeAccess,
 } from "@/lib/rh.functions";
 
 type Employee = {
@@ -15,6 +16,13 @@ type Employee = {
   unit: string;
   registration_data: Record<string, string> | null;
   ficha_file_name: string | null;
+  access?: {
+    employee_id: string;
+    user_id: string;
+    access_enabled: boolean;
+    login_identifier: string | null;
+    user?: { username?: string | null; email?: string | null; status?: string | null } | null;
+  } | null;
 };
 const FIELDS = [
   ["cpf", "CPF"],
@@ -44,6 +52,7 @@ export function RhEmployeeRegistry() {
   });
   const [editing, setEditing] = useState<Employee | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [accessing, setAccessing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
   return (
@@ -82,6 +91,7 @@ export function RhEmployeeRegistry() {
                 <th className="px-4 py-3">Unidade</th>
                 <th className="px-4 py-3">Cargo</th>
                 <th className="px-4 py-3">Ficha</th>
+                <th className="px-4 py-3">Acesso</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
@@ -94,6 +104,7 @@ export function RhEmployeeRegistry() {
                     setEditing(employee);
                     setFormOpen(true);
                   }}
+                  onAccess={() => setAccessing(employee)}
                   onDelete={async () => {
                     if (!window.confirm(`Desativar o cadastro de ${employee.full_name}?`)) return;
                     try {
@@ -133,6 +144,16 @@ export function RhEmployeeRegistry() {
           }}
         />
       )}
+      {accessing && (
+        <EmployeeAccessForm
+          employee={accessing}
+          onClose={() => setAccessing(null)}
+          onDone={() => {
+            setAccessing(null);
+            refresh();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -140,11 +161,13 @@ export function RhEmployeeRegistry() {
 function EmployeeRow({
   employee,
   onEdit,
+  onAccess,
   onDelete,
   onUploaded,
 }: {
   employee: Employee;
   onEdit: () => void;
+  onAccess: () => void;
   onDelete: () => void;
   onUploaded: () => void;
 }) {
@@ -221,7 +244,20 @@ function EmployeeRow({
         </div>
         {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
       </td>
+      <td className="px-4 py-3">
+        {employee.access?.access_enabled ? (
+          <div>
+            <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300">Liberado</span>
+            <p className="mt-1 text-[10px] text-slate-500">{employee.access.login_identifier ?? employee.access.user?.username ?? "Acesso vinculado"}</p>
+          </div>
+        ) : (
+          <span className="text-[11px] text-slate-500">Sem acesso</span>
+        )}
+      </td>
       <td className="px-4 py-3 text-right">
+        <button onClick={onAccess} title="Gerenciar acesso" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300">
+          <KeyRound className="h-3 w-3" /> Acesso
+        </button>
         <button onClick={onEdit} className="mr-2 text-sky-300">
           <Pencil className="inline h-4 w-4" />
         </button>
@@ -230,6 +266,68 @@ function EmployeeRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+function EmployeeAccessForm({
+  employee,
+  onClose,
+  onDone,
+}: {
+  employee: Employee;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [login, setLogin] = useState(employee.access?.login_identifier ?? employee.access?.user?.username ?? "");
+  const [password, setPassword] = useState("");
+  const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
+  const save = useMutation({
+    mutationFn: () =>
+      saveRhEmployeeAccess({
+        data: {
+          employee_id: employee.id,
+          enabled,
+          login_identifier: login,
+          initial_password: password || undefined,
+        },
+      }),
+    onSuccess: onDone,
+  });
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-[#02060d]/70 p-4">
+      <div className="my-6 w-full max-w-lg rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-400">RH · acesso do funcionário</p>
+            <h3 className="mt-1 text-xl font-black text-slate-50">{employee.full_name}</h3>
+            <p className="mt-1 text-xs text-slate-400">Este acesso usa o login único e direciona o funcionário exclusivamente para a Folha de Ponto.</p>
+          </div>
+          <button onClick={onClose} className="text-xs font-bold text-slate-400">Fechar</button>
+        </div>
+        <div className="mt-5 space-y-4">
+          <label className="block text-xs font-bold text-slate-300">
+            Login do funcionário
+            <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="ex.: joao.silva" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500" />
+          </label>
+          <label className="block text-xs font-bold text-slate-300">
+            Senha inicial
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={employee.access ? "Deixe vazio para não alterar" : "mínimo 6 caracteres"} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500" />
+          </label>
+          <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-300">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            Acesso liberado para este funcionário
+          </label>
+        </div>
+        {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível salvar o acesso."}</p>}
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button>
+          <button onClick={() => save.mutate()} disabled={save.isPending || (enabled && !login.trim())} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
+            <KeyRound className="h-4 w-4" /> {save.isPending ? "Salvando..." : "Salvar acesso"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
