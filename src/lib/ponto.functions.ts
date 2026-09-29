@@ -44,7 +44,14 @@ export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware
   const ids = (data ?? []).map(e => e.ponto_portal_user_id).filter(Boolean) as string[];
   const users = ids.length ? ((await supabaseAdmin.from("users").select("id, username, email, full_name").in("id", ids)).data ?? []) : [];
   const byId = new Map(users.map(u => [u.id, u]));
-  return (data ?? []).map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
+  const enriched = (data ?? []).map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
+  const unique = new Map<string, (typeof enriched)[number]>();
+  for (const employee of enriched) {
+    const key = (employee.full_name + "|" + employee.unit).trim().toLowerCase();
+    const current = unique.get(key);
+    if (!current || (!current.ponto_access_enabled && employee.ponto_access_enabled)) unique.set(key, employee);
+  }
+  return [...unique.values()];
 });
 
 export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
