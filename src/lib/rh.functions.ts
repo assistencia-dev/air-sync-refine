@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { randomBytes } from "node:crypto";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -466,10 +467,13 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       throw new Error("Este login já pertence a um administrador e não pode ser vinculado como funcionário.");
     }
 
+    let generatedPassword: string | null = null;
+
     if (!appUser) {
-      if (!data.initial_password) {
-        throw new Error("Informe uma senha inicial para criar o acesso.");
-      }
+      // Para novos acessos, a senha padrão é criptograficamente aleatória.
+      // Isso evita rejeições do Supabase por senhas previsíveis/comprometidas.
+      generatedPassword = randomBytes(18).toString("hex");
+      const passwordForCreation = generatedPassword;
 
       const username = isEmail ? identifier.split("@")[0].trim() : identifier.trim();
       const safeUsername = username.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40);
@@ -477,7 +481,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
 
       const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: internalEmail,
-        password: data.initial_password,
+        password: passwordForCreation,
         email_confirm: true,
         user_metadata: { username: safeUsername, full_name: employee.full_name },
       });
@@ -535,6 +539,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       ok: true,
       enabled: true,
       user: { id: appUser.id, username: appUser.username, email: appUser.email },
+      initial_password: generatedPassword,
     };
   });
 
