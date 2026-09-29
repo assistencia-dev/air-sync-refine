@@ -366,157 +366,44 @@ export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    employee_id: string;
-    enabled: boolean;
-    login_identifier?: string;
-    initial_password?: string;
-  }) => {
+  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
-    if (input.enabled && !input.login_identifier?.trim()) {
-      throw new Error("Informe o login do funcionário.");
-    }
-    if (input.enabled && input.initial_password !== undefined && input.initial_password.length < 6) {
-      throw new Error("A senha inicial deve ter pelo menos 6 caracteres.");
-    }
-    return {
-      ...input,
-      login_identifier: input.login_identifier?.trim() || undefined,
-    };
+    if (input.enabled && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
+    return { ...input, login_identifier: input.login_identifier?.trim() || undefined };
   })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
-
-    const { data: employee, error: employeeError } = await supabaseAdmin
-      .from("rh_employees")
-      .select("id, full_name, unit, registration_data, is_active")
-      .eq("id", data.employee_id)
-      .eq("is_active", true)
-      .maybeSingle();
+    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, is_active").eq("id", data.employee_id).eq("is_active", true).maybeSingle();
     if (employeeError) throw new Error(employeeError.message);
     if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
-
-    const db = supabaseAdmin as any;
-
     if (!data.enabled) {
-      const { error } = await db
-        .from("rh_employee_access")
-        .update({ access_enabled: false, updated_at: new Date().toISOString() })
-        .eq("employee_id", data.employee_id);
+      const { error } = await supabaseAdmin.from("rh_employees").update({ ponto_access_enabled: false, ponto_portal_user_id: null }).eq("id", data.employee_id);
       if (error) throw new Error(error.message);
-
-      // Mantém compatibilidade com o portal de ponto já existente.
-      await supabaseAdmin
-        .from("rh_employees")
-        .update({ ponto_access_enabled: false })
-        .eq("id", data.employee_id);
-
-      await supabaseAdmin.from("rh_ponto_audit").insert({
-        employee_id: data.employee_id,
-        actor_user_id: operator.id,
-        action: "ACESSO_FUNCIONARIO_REVOGADO",
-        details: {},
-      });
-
-      return { ok: true, enabled: false, user: null };
+      await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_REVOGADO", details: {} });
+      return { ok: true, enabled: false, user: null, initial_password: null };
     }
-
     const identifier = data.login_identifier!;
     const digits = identifier.replace(/\\D/g, "");
     const isEmail = identifier.includes("@");
-
-    let query = supabaseAdmin
-      .from("users")
-      .select("id, auth_id, username, email, cpf, role_key, status")
-      .limit(1);
-
+    let query = supabaseAdmin.from("users").select("id, username, email, cpf, full_name, role_key, status").limit(1);
     if (isEmail) query = query.ilike("email", identifier);
     else if (digits.length === 11) query = query.eq("cpf", digits);
     else query = query.ilike("username", identifier);
-
-    const { data: existingUser, error: userLookupError } = await query.maybeSingle();
-    if (userLookupError) throw new Error(userLookupError.message);
-
-    let appUser = existingUser as any;
-
-    if (appUser && ["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) {
-      throw new Error("Este login já pertence a um administrador e não pode ser vinculado como funcionário.");
-    }
-
-    let generatedPassword: string | null = null;
-
-    if (!appUser) {
-      // Para novos acessos, a senha padrão é criptograficamente aleatória.
-      // Isso evita rejeições do Supabase por senhas previsíveis/comprometidas.
-      generatedPassword = randomBytes(18).toString("hex");
-      const passwordForCreation = generatedPassword;
-
-      const username = isEmail ? identifier.split("@")[0].trim() : identifier.trim();
-      const safeUsername = username.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40);
-      const internalEmail = isEmail ? identifier : `${safeUsername.toLowerCase()}@dbsair.internal`;
-
-      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: internalEmail,
-        password: passwordForCreation,
-        email_confirm: true,
-        user_metadata: { username: safeUsername, full_name: employee.full_name },
-      });
-      if (createError) throw new Error("Não foi possível criar o acesso: " + createError.message);
-      if (!created.user?.id) throw new Error("O acesso foi criado sem identificador de autenticação.");
-
-      const { data: inserted, error: insertError } = await supabaseAdmin
-        .from("users")
-        .insert({
-          auth_id: created.user.id,
-          username: safeUsername,
-          email: internalEmail,
-          cpf: digits.length === 11 ? digits : null,
-          full_name: employee.full_name,
-          role_key: "CLIENTE_PF",
-          status: "ativo",
-          created_by: operator.id,
-        })
-        .select("id, auth_id, username, email, cpf, role_key, status")
-        .single();
-      if (insertError) throw new Error("Usuário criado, mas o perfil não pôde ser salvo: " + insertError.message);
-      appUser = inserted;
-    } else if (appUser.status !== "ativo") {
-      throw new Error("O usuário encontrado está inativo.");
-    }
-
-    const { data: access, error: accessError } = await db
-      .from("rh_employee_access")
-      .upsert({
-        employee_id: data.employee_id,
-        user_id: appUser.id,
-        access_enabled: true,
-        login_identifier: identifier,
-        created_by: operator.id,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "employee_id" })
-      .select("id, employee_id, user_id, access_enabled, login_identifier, updated_at")
-      .single();
-    if (accessError) throw new Error(accessError.message);
-
-    // Compatibilidade: o ponto passa a respeitar também o vínculo central.
-    await supabaseAdmin
-      .from("rh_employees")
-      .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id })
-      .eq("id", data.employee_id);
-
-    await supabaseAdmin.from("rh_ponto_audit").insert({
-      employee_id: data.employee_id,
-      actor_user_id: operator.id,
-      action: "ACESSO_FUNCIONARIO_LIBERADO",
-      details: { login_identifier: identifier, access_id: access.id },
-    });
-
-    return {
-      ok: true,
-      enabled: true,
-      user: { id: appUser.id, username: appUser.username, email: appUser.email },
-      initial_password: generatedPassword,
-    };
+    const { data: appUser, error: userError } = await query.maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!appUser) throw new Error("Usuário não encontrado. Crie primeiro o acesso em Usuários vinculados.");
+    if (appUser.status !== "ativo") throw new Error("O usuário encontrado está inativo.");
+    if (["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) throw new Error("Este login pertence a um administrador e não pode ser vinculado ao funcionário.");
+    if (appUser.role_key !== "COLABORADOR") throw new Error("O usuário precisa estar classificado como COLABORADOR em Usuários vinculados.");
+    const { data: currentLink } = await supabaseAdmin.from("rh_employees").select("id")
+      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("id", data.employee_id).limit(1);
+    if (currentLink?.length) throw new Error("Este usuário já está vinculado a outro funcionário.");
+    const { error: updateError } = await supabaseAdmin.from("rh_employees")
+      .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id }).eq("id", data.employee_id);
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_LIBERADO", details: { login_identifier: identifier, user_id: appUser.id } });
+    return { ok: true, enabled: true, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
   });
 
 export const listRhEmployeeAccess = createServerFn({ method: "GET" })
