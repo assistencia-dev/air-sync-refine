@@ -191,7 +191,7 @@ export const createClientUser = createServerFn({ method: "POST" })
       full_name: string;
       email: string;
       cpf?: string;
-      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
+      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
       unit_id?: string | null;
       company_id?: string | null;
       password: string;
@@ -202,7 +202,7 @@ export const createClientUser = createServerFn({ method: "POST" })
     }) => {
       if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
       if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
+      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
         throw new Error("Papel inválido.");
       }
       if (!input?.password || input.password.length < 8)
@@ -245,7 +245,7 @@ export const createClientUser = createServerFn({ method: "POST" })
     let isUnitManager = data.is_unit_manager;
 
     // Cliente novo: cria empresa + unidade automaticamente
-    if (!finalCompanyId) {
+    if (!finalCompanyId && data.role_key !== "COLABORADOR") {
       const { data: newCompany, error: companyErr } = await supabaseAdmin
         .from("companies")
         .insert({
