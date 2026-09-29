@@ -111,3 +111,20 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });
   return record;
 });
+
+
+export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
+  if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
+  return input;
+}).handler(async ({ context, data }) => {
+  await requireRh(context);
+  let query = supabaseAdmin.from("rh_ponto_records").select("id, employee_id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, note").gte("work_date", data.start_date).lte("work_date", data.end_date).order("work_date").order("punched_at");
+  if (data.employee_id) query = query.eq("employee_id", data.employee_id);
+  const { data: records, error } = await query;
+  if (error) throw new Error(error.message);
+  const ids = [...new Set((records ?? []).map(r => r.employee_id))];
+  const employees = ids.length ? ((await supabaseAdmin.from("rh_employees").select("id, full_name, unit, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto").in("id", ids)).data ?? []) : [];
+  const byId = new Map(employees.map(e => [e.id, e]));
+  return (records ?? []).map(r => ({ ...r, employee: byId.get(r.employee_id) ?? null }));
+});
