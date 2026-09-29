@@ -67,7 +67,7 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
   const patch: Record<string, unknown> = { ponto_access_enabled: data.enabled, ponto_raio_m: data.radius_m ?? 150, ponto_base_lat: data.base_lat ?? null, ponto_base_lng: data.base_lng ?? null, ponto_entrada_prevista: data.entrada_prevista ?? null, ponto_saida_prevista: data.saida_prevista ?? null, ponto_almoco_inicio_previsto: data.almoco_inicio_previsto ?? null, ponto_almoco_fim_previsto: data.almoco_fim_previsto ?? null };
   if (data.enabled) {
     const identifier = data.portal_identifier!.trim(); const digits = identifier.replace(/\D/g, "");
-    let q = supabaseAdmin.from("users").select("id, username, email, cpf, status").limit(1);
+    let q = supabaseAdmin.from("users").select("id, username, email, cpf, status, role_key").limit(1);
     if (identifier.includes("@")) q = q.ilike("email", identifier); else if (digits.length === 11) q = q.eq("cpf", digits); else q = q.ilike("username", identifier);
     const { data: user } = await q.maybeSingle();
     if (!user || user.status !== "ativo") throw new Error("Usuário de login não encontrado ou inativo. Cadastre primeiro o acesso em Usuários vinculados.");
