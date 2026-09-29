@@ -14,6 +14,7 @@ import {
 
 type Employee = {
   id: string;
+  registry_employee_id: string;
   full_name: string;
   unit: string;
   fare_cents: number;
