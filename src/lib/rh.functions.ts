@@ -140,7 +140,23 @@ export const deleteRhEmployee = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false })
+      .update({ is_active: false, ponto_access_enabled: false })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reactivateRhEmployeeRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => {
+    if (!input?.id) throw new Error("Funcionário inválido.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { error } = await supabaseAdmin
+      .from("rh_employees")
+      .update({ is_active: true })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -269,7 +285,6 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
       .select(
         "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active",
       )
-      .eq("is_active", true)
       .order("full_name");
     if (error) throw new Error(error.message);
 
@@ -477,7 +492,7 @@ export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false })
+      .update({ is_active: false, ponto_access_enabled: false })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
