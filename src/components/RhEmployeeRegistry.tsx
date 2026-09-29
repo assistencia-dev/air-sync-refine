@@ -9,6 +9,7 @@ import {
   saveRhEmployeeRecord,
   uploadRhEmployeeFicha,
   saveRhEmployeeAccess,
+  listRhCollaboratorUsers,
 } from "@/lib/rh.functions";
 
 type Employee = {
@@ -290,6 +291,10 @@ function EmployeeAccessForm({
 }) {
   const [login, setLogin] = useState(employee.access?.login_identifier ?? employee.access?.user?.username ?? "");
   const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
+  const collaboratorUsers = useQuery({
+    queryKey: ["rh-collaborator-users"],
+    queryFn: () => listRhCollaboratorUsers(),
+  });
   const save = useMutation({
     mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login } }),
     onSuccess: onDone,
@@ -308,9 +313,24 @@ function EmployeeAccessForm({
         </div>
         <div className="mt-5 space-y-4">
           <label className="block text-xs font-bold text-slate-300">
-            Login do funcionário
-            <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="ex.: joao.silva" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500" />
-            <p className="mt-1 text-[10px] font-normal text-slate-500">Use o mesmo usuário/e-mail cadastrado em Usuários vinculados com o papel COLABORADOR.</p>
+            Usuário vinculado
+            <select
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              disabled={collaboratorUsers.isLoading}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"
+            >
+              <option value="">Selecione o login criado em Usuários vinculados</option>
+              {(collaboratorUsers.data ?? []).map((user: any) => (
+                <option key={user.id} value={user.username || user.email || user.cpf || ""}>
+                  {user.full_name || user.username || user.email} · {user.username || user.email}
+                </option>
+              ))}
+              {login && !(collaboratorUsers.data ?? []).some((user: any) => (user.username || user.email || user.cpf) === login) && (
+                <option value={login}>{login} · vínculo atual</option>
+              )}
+            </select>
+            <p className="mt-1 text-[10px] font-normal text-slate-500">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
           </label>
           <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-300">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
