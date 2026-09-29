@@ -152,6 +152,41 @@ export function EmployeeTable({ onEdit, onDelete, unitFilter }: EmployeeTablePro
                   vt_daily_cost_cents: Math.round(emp.daily_vt_cost * 100),
                   va_daily_cost_cents: Math.round(emp.daily_va_cost * 100),
                 };
+                return (
+                  <tr key={emp.id}>
+                    <td className="px-6 py-4 font-semibold" style={{ color: '#F8FAFC' }}>{emp.full_name}</td>
+                    <td className="px-6 py-4" style={{ color: '#CBD5E1' }}>{emp.unit}</td>
+                    <td className="px-6 py-4" style={{ color: '#CBD5E1' }}>
+                      {emp.benefit_type === 'passagem' ? 'Vale Passagem' : 'Vale Alimentação'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <DailyCostsDisplay dailyCosts={costs} variant="compact" />
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onEdit?.(emp)}
+                          className="p-2 rounded-lg hover:bg-slate-700 transition"
+                          style={{ color: '#93C5FD' }}
+                          aria-label={`Editar ${emp.full_name}`}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(emp)}
+                          disabled={deletingId === emp.id}
+                          className="p-2 rounded-lg hover:bg-red-900/30 transition disabled:opacity-50"
+                          style={{ color: '#F87171' }}
+                          aria-label={`Desativar ${emp.full_name}`}
+                        >
+                          {deletingId === emp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
               })}
             </tbody>
           </table>
