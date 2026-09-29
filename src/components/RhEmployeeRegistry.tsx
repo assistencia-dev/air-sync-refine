@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Download, FileText, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
 import {
   deactivateRhEmployeeRecord,
+  reactivateRhEmployeeRecord,
   getRhEmployeeFichaUrl,
   listRhEmployeeRegistry,
   saveRhEmployeeRecord,
@@ -16,6 +17,7 @@ type Employee = {
   unit: string;
   registration_data: Record<string, string> | null;
   ficha_file_name: string | null;
+  is_active: boolean;
   access?: {
     employee_id: string;
     user_id: string;
@@ -106,15 +108,20 @@ export function RhEmployeeRegistry() {
                   }}
                   onAccess={() => setAccessing(employee)}
                   onDelete={async () => {
-                    if (!window.confirm(`Desativar o cadastro de ${employee.full_name}?`)) return;
+                    const action = employee.is_active ? "inativar" : "reativar";
+                    if (!window.confirm(`${action === "inativar" ? "Inativar" : "Reativar"} o cadastro de ${employee.full_name}? O cadastro e os dados serão preservados.`)) return;
                     try {
-                      await deactivateRhEmployeeRecord({ data: { id: employee.id } });
+                      if (employee.is_active) {
+                        await deactivateRhEmployeeRecord({ data: { id: employee.id } });
+                      } else {
+                        await reactivateRhEmployeeRecord({ data: { id: employee.id } });
+                      }
                       refresh();
                     } catch (e) {
                       setError(
                         e instanceof Error
                           ? e.message
-                          : "Não foi possível desativar o funcionário.",
+                          : "Não foi possível alterar o status do funcionário.",
                       );
                     }
                   }}
@@ -209,7 +216,7 @@ function EmployeeRow({
   }
   return (
     <tr className="border-t border-slate-800 align-top">
-      <td className="px-4 py-3 font-semibold text-slate-100">{employee.full_name}</td>
+      <td className="px-4 py-3 font-semibold text-slate-100">\n        {employee.full_name}\n        {!employee.is_active && <span className="ml-2 inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold text-slate-400">Inativo</span>}\n      </td>
       <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
       <td className="px-4 py-3 text-slate-600">{employee.registration_data?.job_title || "—"}</td>
       <td className="px-4 py-3">
