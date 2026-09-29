@@ -1083,7 +1083,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </label>
         </div>}
 
-        <div className="mt-4 grid grid-cols-1 gap-3"
+        <div className="mt-4 grid grid-cols-1 gap-3">
           <Field label="Nome completo *">
             <input
               value={fullName}
