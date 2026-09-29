@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Pencil, Plus, Receipt, Trash2, UsersRound, WalletCards } from "lucide-react";
+import { Pencil, Plus, Receipt, Trash2, UsersRound, WalletCards } from "lucide-react";
 import {
   configureRhEmployeeBenefit,
   createRhTopup,
   deleteRhEmployee,
-  deleteRhTopup,
   listRhEmployees,
   listRhTopups,
   listRhEmployeeRegistryForBenefits,
