@@ -1,8 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
-import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
@@ -57,7 +55,7 @@ const TREASURY_URL = "/treasury.html";
 
 function TreasuryPage() {
   const navigate = useNavigate();
-  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const [profile, setProfile] = useState<{ role_key?: string } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
@@ -66,9 +64,27 @@ function TreasuryPage() {
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profile.data) return;
-    if (profile.data.role_key !== "SUPER_ADMIN") navigate({ to: "/portal", replace: true });
-  }, [profile.data, navigate]);
+    let cancelled = false;
+    const loadProfile = async () => {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) {
+        if (!cancelled) navigate({ to: "/login", replace: true });
+        return;
+      }
+      const { data: user, error } = await (supabase as any)
+        .from("users")
+        .select("role_key, status")
+        .eq("auth_id", auth.user.id)
+        .maybeSingle();
+      if (error || !user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
+        if (!cancelled) navigate({ to: "/portal", replace: true });
+        return;
+      }
+      if (!cancelled) setProfile(user);
+    };
+    void loadProfile();
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
