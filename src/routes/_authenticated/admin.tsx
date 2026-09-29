@@ -633,7 +633,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <td className="px-4 py-3 text-right">
                     {isSuperAdmin ? (
                       <div className="flex items-center justify-end gap-2">
-                        {["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(u.role_key) && (
+                        {["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(u.role_key) && (
                           <button
                             type="button"
                             onClick={() => setEditUser(u)}
@@ -791,7 +791,7 @@ function EditUserModal({
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [cpf, setCpf] = useState(user.cpf ?? "");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     user.role_key,
   );
   const [companyId, setCompanyId] = useState(user.company_id ?? "");
@@ -874,6 +874,7 @@ function EditUserModal({
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="CLIENTE_PF">Cliente</option>
+              <option value="COLABORADOR">Colaborador</option>
               <option value="GESTOR_CONTA">Gestor de conta</option>
               <option value="GESTOR_REGIONAL">Gestor regional</option>
             </select>
@@ -949,7 +950,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     "CLIENTE_PF",
   );
   const [companyId, setCompanyId] = useState("");
@@ -1057,7 +1058,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.
         </p>
 
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+        {roleKey !== "COLABORADOR" && <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
           <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
             <input
               type="radio"
@@ -1108,12 +1109,13 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
               className={inputCls}
             >
               <option value="CLIENTE_PF">CLIENTE_PF</option>
+              <option value="COLABORADOR">COLABORADOR</option>
               <option value="GESTOR_CONTA">GESTOR_CONTA</option>
               <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
             </select>
           </Field>
 
-          {clientMode === "existente" && (
+          {roleKey !== "COLABORADOR" && clientMode === "existente" && (
             <>
               <Field label="Empresa">
                 <select
@@ -1157,7 +1159,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </>
           )}
 
-          {clientMode === "novo" && (
+          {roleKey !== "COLABORADOR" && clientMode === "novo" && (
             <>
               <Field label="Nome da Empresa/Cliente *">
                 <input
