@@ -1081,9 +1081,9 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             />
             Vincular a uma Rede/Empresa já existente
           </label>
-        </div>
+        </div>}
 
-        <div className="mt-4 grid grid-cols-1 gap-3">
+        <div className="mt-4 grid grid-cols-1 gap-3"
           <Field label="Nome completo *">
             <input
               value={fullName}
