@@ -50,7 +50,7 @@ const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html";
+const TREASURY_URL = "/treasury.html?v=20260929-2";
 
 
 function TreasuryPage() {

@@ -1535,13 +1535,16 @@ function showToast(msg) {
         if (!validarBaixaValorAlto(item.valor, item.comprovanteData)) return;
         const banco = getBankById(getPreferredBankId(item, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa.'); return; }
-        if (Number(banco.saldo) < Number(item.valor)) { alert(`Saldo insuficiente em ${banco.nome}. Saldo disponível: R$ ${formatMoney(Number(banco.saldo))}`); return; }
+        // Baixa financeira não pode ser bloqueada pelo saldo atual: obrigações e caixa são dimensões diferentes.
+        // O saldo bancário pode ficar negativo quando a operação real exigir, preservando a baixa e o histórico.
+        const saldoAntes = Number(banco.saldo) || 0;
         item.bancoId = banco.id;
         item.status = 'Pago';
         item.dataPagamento = new Date().toISOString().split('T')[0];
         banco.saldo -= item.valor;
         STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: item.dataPagamento, descricao: `Pagamento: ${item.fornecedor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: item.valor, sinal: -1, origemId: item.id, origemTipo: 'conta_pagar' });
-        logAuditoria('BAIXA', 'Contas a Pagar', `Pagamento efetuado: R$ ${formatMoney(item.valor)} para ${item.fornecedor} pela conta ${banco.nome}`);
+        logAuditoria('BAIXA', 'Contas a Pagar', `Pagamento efetuado: R$ ${formatMoney(item.valor)} para ${item.fornecedor} pela conta ${banco.nome}. Saldo antes: R$ ${formatMoney(saldoAntes)}; saldo após: R$ ${formatMoney(banco.saldo)}`);
+        if (Number(banco.saldo) < 0) showToast(`Pagamento registrado. Atenção: ${banco.nome} ficou com saldo negativo de R$ ${formatMoney(Math.abs(Number(banco.saldo)))}.`);
         showToast('Conta quitada no Caixa!');
         save(); render();
     }
@@ -1568,14 +1571,17 @@ function showToast(msg) {
         if (!validarBaixaValorAlto(p.valor, p.comprovanteData)) return;
         const banco = getBankById(getPreferredBankId(p, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa para esta parcela.'); return; }
-        if (Number(banco.saldo) < Number(p.valor)) { alert(`Saldo insuficiente em ${banco.nome}. Saldo disponível: R$ ${formatMoney(Number(banco.saldo))}`); return; }
+        // Acordo parcelado não é descontado do caixa integralmente. Só a parcela baixada afeta o banco.
+        // Saldo negativo é permitido para representar a obrigação de caixa sem impedir a operação.
+        const saldoAntes = Number(banco.saldo) || 0;
         p.bancoId = banco.id;
         p.status = 'Pago';
         p.dataPagamento = new Date().toISOString().split('T')[0];
         if(!p.comprovante) p.comprovante = "Baixa_Manual.pdf";
         banco.saldo -= p.valor;
         STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: p.dataPagamento, descricao: `Parcela #${p.num} - ${pass.credor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: p.valor, sinal: -1, origemId: p.id, origemTipo: 'parcela_acordo' });
-        logAuditoria('BAIXA', 'Acordos', `Parcela #${p.num} quitada de ${pass.credor} pela conta ${banco.nome}`);
+        logAuditoria('BAIXA', 'Acordos', `Parcela #${p.num} quitada de ${pass.credor} pela conta ${banco.nome}. Saldo antes: R$ ${formatMoney(saldoAntes)}; saldo após: R$ ${formatMoney(banco.saldo)}`);
+        if (Number(banco.saldo) < 0) showToast(`Parcela baixada. Atenção: ${banco.nome} ficou com saldo negativo de R$ ${formatMoney(Math.abs(Number(banco.saldo)))}.`);
         showToast('Parcela baixada com sucesso!');
         save(); render();
     }
