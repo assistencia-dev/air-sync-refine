@@ -1078,8 +1078,13 @@ function showToast(msg) {
     function openModalTransferencia() {
         const orig = document.getElementById('transf-origem');
         const dest = document.getElementById('transf-destino');
-        orig.innerHTML = STATE.bancos.map(b => `<option value="${b.id}">${b.nome} (R$ ${formatMoney(b.saldo)})</option>`).join('');
+        const ativos = getActiveBancos();
+        orig.innerHTML = ativos.map(b => `<option value="${b.id}">${b.nome} (R$ ${formatMoney(b.saldo)})</option>`).join('');
         dest.innerHTML = orig.innerHTML;
+        if (!ativos.length) {
+            alert('Cadastre pelo menos duas contas bancárias ativas para realizar uma transferência.');
+            return;
+        }
         document.getElementById('modal-transferencia').style.display = 'flex';
     }
 
@@ -1313,6 +1318,7 @@ function showToast(msg) {
         const proximoVencimento = document.getElementById('add-r-venc').value;
         const bancoId = document.getElementById('add-r-banco').value;
         if (!servico || !Number.isFinite(valor) || valor <= 0 || !proximoVencimento || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
+        if (!validarDataRetroativa(proximoVencimento)) return;
 
         STATE.recorrencias.push({ id: `rec_${Date.now()}`, servico, valor, frequencia, proximoVencimento, bancoId, historico: [] });
         logAuditoria('CADASTRO', 'Recorrências', `Conta fixa adicionada: ${servico}`);
@@ -1383,8 +1389,10 @@ function showToast(msg) {
         const valor = parseFloat(document.getElementById('transf-val').value);
 
         if(origId === destId) { alert('Escolha contas diferentes!'); return; }
+        if(!Number.isFinite(valor) || valor <= 0) { alert('Informe um valor de transferência maior que zero.'); return; }
         let orig = STATE.bancos.find(b => b.id === origId);
         let dest = STATE.bancos.find(b => b.id === destId);
+        if(!orig || !dest || orig.status === 'Arquivada' || dest.status === 'Arquivada') { alert('As duas contas precisam estar ativas.'); return; }
 
         if(orig.saldo < valor) { alert('Saldo insuficiente na conta de origem!'); return; }
 
@@ -2187,7 +2195,8 @@ function showToast(msg) {
         // Recorrências Lista
         const recContainer = document.getElementById('recorrencias-list');
         recContainer.innerHTML = '';
-        STATE.recorrencias.filter(r => !r.arquivado).forEach(r => {
+        const mostrarRecArquivadas = document.getElementById('flt-rec-arquivadas')?.checked;
+        STATE.recorrencias.filter(r => !!r.arquivado === !!mostrarRecArquivadas).forEach(r => {
             let diff = getDaysDiff(r.proximoVencimento);
             let agingBadge = diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)} dias em atraso</span>` : `<span class="badge badge-pending">Vence em ${diff} dias</span>`;
 
