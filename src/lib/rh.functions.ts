@@ -188,8 +188,9 @@ export const deleteRhEmployee = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false, ponto_access_enabled: false })
-      .eq("id", data.id);
+      .update({ is_active: false, benefit_configured: false })
+      .eq("id", data.id)
+      .eq("benefit_type", data.benefit_type);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -251,6 +252,8 @@ export const createRhTopup = createServerFn({ method: "POST" })
       .from("rh_employees")
       .select("id")
       .eq("id", data.employee_id)
+      .eq("benefit_type", data.benefit_type)
+      .eq("benefit_configured", true)
       .eq("is_active", true)
       .maybeSingle();
     if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
