@@ -47,6 +47,28 @@ where benefit_type = 'alimentacao'
   and coalesce(registration_data::jsonb, '{}'::jsonb) <> '{}'::jsonb
   and registry_employee_id = id;
 
+-- Move legacy point/login and ficha linkage to the canonical employee before the UI
+-- stops exposing the duplicate benefit rows as employees.
+with linked as (
+  select
+    registry_employee_id,
+    max(case when coalesce(ponto_access_enabled, false) then 1 else 0 end) as has_access,
+    max(ponto_portal_user_id::text)::uuid as portal_user_id,
+    max(ficha_file_name) filter (where ficha_file_name is not null) as ficha_name,
+    max(ficha_storage_path) filter (where ficha_storage_path is not null) as ficha_path
+  from public.rh_employees
+  where registry_employee_id is not null
+  group by registry_employee_id
+)
+update public.rh_employees canonical
+set
+  ponto_access_enabled = case when linked.has_access = 1 then true else canonical.ponto_access_enabled end,
+  ponto_portal_user_id = coalesce(linked.portal_user_id, canonical.ponto_portal_user_id),
+  ficha_file_name = coalesce(canonical.ficha_file_name, linked.ficha_name),
+  ficha_storage_path = coalesce(canonical.ficha_storage_path, linked.ficha_path)
+from linked
+where canonical.id = linked.registry_employee_id;
+
 create index if not exists idx_rh_employees_registry_employee_id
   on public.rh_employees(registry_employee_id);
 
