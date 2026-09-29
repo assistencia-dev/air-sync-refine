@@ -72,7 +72,7 @@ export const updateClientUser = createServerFn({ method: "POST" })
       full_name: string;
       email: string;
       cpf?: string | null;
-      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF";
+      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
       company_id?: string | null;
       unit_id?: string | null;
       is_unit_manager?: boolean;
@@ -80,7 +80,7 @@ export const updateClientUser = createServerFn({ method: "POST" })
       if (!input?.user_id) throw new Error("Usuário inválido.");
       if (!input.full_name?.trim()) throw new Error("Informe o nome completo.");
       if (!input.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF"].includes(input.role_key)) {
+      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
         throw new Error("Papel inválido.");
       }
       return {
@@ -210,7 +210,7 @@ export const createClientUser = createServerFn({ method: "POST" })
       const company_id = input.company_id || null;
       const new_company_name = input.new_company_name?.trim() || null;
       const new_company_cnpj = input.new_company_cnpj?.trim() || null;
-      if (!company_id && (!new_company_name || !new_company_cnpj)) {
+      if (input.role_key !== "COLABORADOR" && !company_id && (!new_company_name || !new_company_cnpj)) {
         throw new Error("Para cliente novo, informe Nome da Empresa e CNPJ.");
       }
       return {
