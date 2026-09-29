@@ -42,9 +42,16 @@ export const listRhEmployees = createServerFn({ method: "GET" })
       .eq("is_active", true)
       .eq("benefit_configured", true)
       .eq("benefit_type", data.benefit_type)
-      .order("full_name");
+      .order("full_name")
+      .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
-    return employees ?? [];
+
+    const unique = new Map<string, any>();
+    for (const employee of employees ?? []) {
+      const key = employee.registry_employee_id ?? employee.id;
+      if (!unique.has(key)) unique.set(key, employee);
+    }
+    return [...unique.values()];
   });
 
 export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" })
