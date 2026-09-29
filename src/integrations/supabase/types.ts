@@ -729,6 +729,7 @@ export type Database = {
       role_key:
         | "SUPER_ADMIN"
         | "ADMIN_OPERACIONAL"
+        | "COLABORADOR"
         | "GESTOR_CONTA"
         | "GESTOR_REGIONAL"
         | "CLIENTE_PF"
@@ -862,6 +863,7 @@ export const Constants = {
       role_key: [
         "SUPER_ADMIN",
         "ADMIN_OPERACIONAL",
+        "COLABORADOR",
         "GESTOR_CONTA",
         "GESTOR_REGIONAL",
         "CLIENTE_PF",
