@@ -24,8 +24,9 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) 
 async function getEmployee(contextUserId: string) {
   const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", contextUserId).maybeSingle();
   if (!user) throw new Error("Usuário não encontrado.");
-  const { data: employee, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("ponto_portal_user_id", user.id).eq("is_active", true).maybeSingle();
+  const { data: employees, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("ponto_portal_user_id", user.id).eq("is_active", true).order("ponto_access_enabled", { ascending: false }).order("updated_at", { ascending: false }).limit(20);
   if (error) throw new Error(error.message);
+  const employee = (employees ?? []).find((item) => item.ponto_access_enabled) ?? employees?.[0] ?? null;
   if (!employee?.ponto_access_enabled) throw new Error("Acesso à Folha de Ponto não liberado pelo RH.");
   return employee;
 }
