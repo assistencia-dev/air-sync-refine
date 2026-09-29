@@ -34,8 +34,9 @@ async function getEmployee(contextUserId: string) {
 export const hasMyPontoAccess = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", context.userId).maybeSingle();
   if (!user) return { enabled: false };
-  const { data } = await supabaseAdmin.from("rh_employees").select("id").eq("ponto_portal_user_id", user.id).eq("ponto_access_enabled", true).eq("is_active", true).maybeSingle();
-  return { enabled: Boolean(data) };
+  const { data, error } = await supabaseAdmin.from("rh_employees").select("id").eq("ponto_portal_user_id", user.id).eq("ponto_access_enabled", true).eq("is_active", true).limit(1);
+  if (error) throw new Error(error.message);
+  return { enabled: Boolean(data?.length) };
 });
 
 export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
