@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMyProfile } from "@/lib/auth.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
-import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
+import { RhPontoEmployeePortal } from "@/components/RhPontoWorkspace";
 
 export const Route = createFileRoute("/_authenticated/folha-ponto")({
   head: () => ({ meta: [{ title: "Folha de Ponto · DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -20,5 +20,5 @@ function FolhaPontoPage() {
   }, [profile.isLoading, isRh, access.data, navigate]);
   if (profile.isLoading || access.isLoading) return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm text-slate-500">Carregando Folha de Ponto...</div>;
   if (!isRh && !access.data?.enabled) return null;
-  return <main className="min-h-screen bg-[#f4f7f6] px-4 py-6 lg:px-8"><div className="mx-auto max-w-7xl"><RhPontoWorkspace /></div></main>;
+  return <main className="min-h-screen bg-[#f4f7f6] px-4 py-6 lg:px-8"><div className="mx-auto max-w-7xl"><RhPontoEmployeePortal /></div></main>;
 }
