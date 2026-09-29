@@ -95,7 +95,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
   return <article className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm">
     <p className="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">{label}</p>
     <strong className="mt-2 block text-2xl font-black text-slate-50">{value}</strong>
@@ -115,7 +115,7 @@ function StatusCard({ title, text, ok }: { title: string; text: string; ok: bool
 function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups }: { registry: any[]; vt: any[]; va: any[]; vtTopups: any[]; vaTopups: any[] }) {
   const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
   const salaryTotal = registry.reduce((sum, e) => {
-    const raw = String(e.registration_data?.salary ?? "").replace(/[^0-9,.-]/g, "").replace(/./g, "").replace(",", ".");
+    const raw = String(e.registration_data?.salary ?? "").replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", ".");
     const value = Number(raw);
     return sum + (Number.isFinite(value) ? Math.round(value * 100) : 0);
   }, 0);
