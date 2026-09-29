@@ -12,7 +12,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, CreditCard, Utensils } from 'lucide-react';
+import { Users, CreditCard, Utensils, Clock3 } from 'lucide-react';
+import { RhPontoWorkspace } from '@/components/RhPontoWorkspace';
 
 import { TabGestaoColaboradores } from './rh-dashboard/TabGestaoColaboradores';
 import { TabValePassagem } from './rh-dashboard/TabValePassagem';
@@ -59,7 +60,7 @@ function RHDashboard() {
       <div className="container max-w-7xl mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab List */}
-          <TabsList className="grid w-full grid-cols-3" style={{ background: 'rgba(30, 41, 59, 0.5)', borderColor: '#334155', borderWidth: '1px' }}>
+          <TabsList className="grid w-full grid-cols-4" style={{ background: 'rgba(30, 41, 59, 0.5)', borderColor: '#334155', borderWidth: '1px' }}>
             <TabsTrigger
               value="gestao"
               className="flex items-center gap-2 data-[state=active]:font-bold data-[state=active]:text-white"
@@ -95,6 +96,18 @@ function RHDashboard() {
               <span className="hidden sm:inline">Vale Alimentação</span>
               <span className="sm:hidden">VA</span>
             </TabsTrigger>
+
+            <TabsTrigger
+              value="ponto"
+              className="flex items-center gap-2 data-[state=active]:font-bold data-[state=active]:text-white"
+              style={{
+                color: activeTab === 'ponto' ? '#F59E0B' : '#94A3B8',
+              }}
+            >
+              <Clock3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Folha de Ponto</span>
+              <span className="sm:hidden">Ponto</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Tab 1: Gestão de Colaboradores */}
@@ -110,6 +123,11 @@ function RHDashboard() {
           {/* Tab 3: Vale Alimentação */}
           <TabsContent value="va" className="space-y-6">
             <TabValeAlimentacao />
+          </TabsContent>
+
+          {/* Tab 4: Folha de Ponto */}
+          <TabsContent value="ponto" className="space-y-6">
+            <RhPontoWorkspace />
           </TabsContent>
         </Tabs>
       </div>
