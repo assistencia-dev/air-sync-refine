@@ -444,6 +444,9 @@ td strong{font-weight:650;}
 
         <div class="menu-group">
             <div class="menu-title">Segurança & Sistema</div>
+            <div class="nav-item" onclick="switchModule('mod-profissional', this)">
+                <i class="fa-solid fa-chart-pie"></i> Gestão Financeira
+            </div>
             <div class="nav-item" onclick="switchModule('mod-auditoria', this)">
                 <i class="fa-solid fa-shield-halved"></i> Auditoria & Atas
             </div>
@@ -733,6 +736,79 @@ td strong{font-weight:650;}
             </div>
         </section>
 
+        <!-- GESTÃO FINANCEIRA PROFISSIONAL — aditivo, sem substituir módulos existentes -->
+        <section id="mod-profissional" class="module-section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-chart-pie" style="color:var(--brand-primary);"></i> Gestão Financeira Profissional</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" onclick="exportarControleFinanceiroCSV()"><i class="fa-solid fa-file-csv"></i> Exportar Controle</button>
+                        <button class="btn btn-secondary" onclick="criarSnapshotSeguranca()"><i class="fa-solid fa-shield"></i> Snapshot</button>
+                    </div>
+                </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-title">Caixa Disponível</div><div class="kpi-value" id="pf-caixa">R$ 0,00</div><div class="kpi-sub">Bancos ativos</div></div>
+                    <div class="kpi-card"><div class="kpi-title">A Receber</div><div class="kpi-value" id="pf-receber">R$ 0,00</div><div class="kpi-sub">Títulos em aberto</div></div>
+                    <div class="kpi-card"><div class="kpi-title">A Pagar</div><div class="kpi-value" id="pf-pagar">R$ 0,00</div><div class="kpi-sub">Títulos em aberto</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Compromissos</div><div class="kpi-value" id="pf-compromissos">R$ 0,00</div><div class="kpi-sub">Passivos + fixos próximos</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Fluxo Realizado</div><div class="kpi-value" id="pf-realizado">R$ 0,00</div><div class="kpi-sub">Entradas menos saídas</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Resultado Operacional</div><div class="kpi-value" id="pf-resultado">R$ 0,00</div><div class="kpi-sub">Recebido − pago</div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-scale-balanced" style="color:var(--brand-primary);"></i> Realizado × Previsto</div>
+                    <span id="pf-periodo-label" style="font-size:11px;color:var(--text-muted);"></span>
+                </div>
+                <div class="projection-grid">
+                    <div class="proj-card"><div class="proj-title">Entradas realizadas</div><div class="proj-val" id="pf-ent-real">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Saídas realizadas</div><div class="proj-val" id="pf-sai-real">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Saldo projetado 30 dias</div><div class="proj-val" id="pf-proj30">R$ 0,00</div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-landmark"></i> Conciliação Bancária</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('pf-conc-file').click()"><i class="fa-solid fa-upload"></i> Importar CSV/OFX</button>
+                        <input id="pf-conc-file" type="file" accept=".csv,.ofx,.txt" style="display:none" onchange="importarConciliacao(this)">
+                    </div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">A importação é somente leitura até a confirmação do vínculo. Nenhum lançamento existente é apagado ou alterado automaticamente.</div>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><div class="kpi-title">Conciliados</div><div class="kpi-value" id="pf-conc-ok">0</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Pendentes</div><div class="kpi-value" id="pf-conc-pend">0</div></div>
+                    <div class="kpi-card"><div class="kpi-title">Divergentes</div><div class="kpi-value" id="pf-conc-div">0</div></div>
+                </div>
+                <div style="overflow-x:auto;margin-top:14px;"><table><thead><tr><th>DATA</th><th>DESCRIÇÃO</th><th>VALOR</th><th>STATUS</th><th>VÍNCULO</th><th>AÇÃO</th></tr></thead><tbody id="pf-conc-list"></tbody></table></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-tags"></i> Plano de Contas & Centros de Custo</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" onclick="adicionarPlanoContaPrompt()"><i class="fa-solid fa-plus"></i> Conta</button>
+                        <button class="btn btn-secondary" onclick="adicionarCentroCustoPrompt()"><i class="fa-solid fa-plus"></i> Centro de Custo</button>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div><strong style="font-size:11px;">Plano de Contas</strong><div id="pf-plano-contas" style="margin-top:8px;"></div></div>
+                    <div><strong style="font-size:11px;">Centros de Custo</strong><div id="pf-centros-custo" style="margin-top:8px;"></div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-lock"></i> Fechamento de Período</div>
+                    <button class="btn btn-secondary" onclick="alternarFechamentoPeriodo()"><i class="fa-solid fa-calendar-check"></i> Fechar/Reabrir mês</button>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);">Mês selecionado: <strong id="pf-fechamento-periodo"></strong></div>
+                <div id="pf-fechamento-status" style="margin-top:8px;"></div>
+            </div>
+        </section>
+
         <!-- AUDITORIA -->
         <section id="mod-auditoria" class="module-section">
             <div class="panel">
@@ -937,7 +1013,7 @@ td strong{font-weight:650;}
         }
         treasuryPost("DBS_TREASURY_CLOUD_READY", { hasState: !!msg.state });
     });
-    let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION } };
+    let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION, planoContas: [], centrosCusto: [], orcamentos: [], conciliacoes: [], fechamentos: [], snapshots: [] } };
 
     function formatMoney(value){ const n=Number(value); return (Number.isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -987,7 +1063,13 @@ function showToast(msg) {
                 if (!Array.isArray(STATE.movimentacoes)) STATE.movimentacoes = [];
                 if (!Array.isArray(STATE.auditoria)) STATE.auditoria = [];
                 if (!STATE._meta || typeof STATE._meta !== 'object') STATE._meta = {};
-                STATE._meta.version = Math.max(Number(STATE._meta.version)||1, TREASURY_VERSION);
+                if (!Array.isArray(STATE._meta.planoContas)) STATE._meta.planoContas = [];
+                if (!Array.isArray(STATE._meta.centrosCusto)) STATE._meta.centrosCusto = [];
+                if (!Array.isArray(STATE._meta.orcamentos)) STATE._meta.orcamentos = [];
+                if (!Array.isArray(STATE._meta.conciliacoes)) STATE._meta.conciliacoes = [];
+                if (!Array.isArray(STATE._meta.fechamentos)) STATE._meta.fechamentos = [];
+                if (!Array.isArray(STATE._meta.snapshots)) STATE._meta.snapshots = [];
+                STATE._meta.version = Math.max(Number(STATE._meta.version)||1, TREASURY_VERSION + 1);
                 STATE.bancos.forEach(b => { if (!b.status) b.status = 'Ativa'; });
                 // Normalização não destrutiva dos movimentos antigos.
                 STATE.movimentacoes.forEach(m => {
@@ -1098,6 +1180,11 @@ function showToast(msg) {
 
     function validarDataRetroativa(dataLancamento) {
         if (!dataLancamento) return true;
+        const periodo = String(dataLancamento).slice(0,7);
+        if (Array.isArray(STATE?._meta?.fechamentos) && STATE._meta.fechamentos.includes(periodo)) {
+            alert('Período financeiro fechado: ' + periodo + '. Reabra o mês em Gestão Financeira antes de alterar lançamentos.');
+            return false;
+        }
         const hoje = new Date();
         const limite = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
         const alvo = String(dataLancamento).includes('T') ? new Date(dataLancamento) : new Date(String(dataLancamento) + 'T00:00:00');
@@ -1981,8 +2068,130 @@ function showToast(msg) {
         return null;
     }
 
+    function moeda(v){ return 'R$ ' + formatMoney(Number(v)||0); }
+    function periodoAtualSelecionado(){ return document.getElementById('global-period-filter')?.value || ''; }
+    function isPago(v){ return ['pago','recebido','quitado'].includes(String(v||'').toLowerCase()); }
+    function dataDoItem(x){ return x?.data || x?.vencimento || x?.proximoVencimento || ''; }
+
+    function getResumoProfissional(periodo){
+        const [y,m]=String(periodo||'').split('-');
+        const recMes=(STATE.recebimentos||[]).filter(r=>String(r.data||'').startsWith(periodo));
+        const pagMes=(STATE.contasPagar||[]).filter(p=>String(p.vencimento||'').startsWith(periodo));
+        const entradasReal=recMes.filter(r=>String(r.status||'').toLowerCase()==='recebido').reduce((s,r)=>s+(Number(r.valor)||0),0);
+        const entradasPrev=recMes.filter(r=>String(r.status||'').toLowerCase()!=='recebido').reduce((s,r)=>s+(Number(r.valor)||0),0);
+        const saidasReal=pagMes.filter(p=>String(p.status||'').toLowerCase()==='pago').reduce((s,p)=>s+(Number(p.valor)||0),0);
+        const saidasPrev=pagMes.filter(p=>String(p.status||'').toLowerCase()!=='pago').reduce((s,p)=>s+(Number(p.valor)||0),0);
+        let passPrev=0, passReal=0;
+        (STATE.passivos||[]).filter(p=>!p.arquivado).forEach(p=>(p.parcelas||[]).forEach(x=>{
+            if(String(x.vencimento||'').startsWith(periodo)){ if(isPago(x.status)) passReal+=Number(x.valor)||0; else passPrev+=Number(x.valor)||0; }
+        }));
+        const caixa=getSaldoBancosAtivos();
+        return {y,m,entradasReal,entradasPrev,saidasReal,saidasPrev,passPrev,passReal,caixa,resultado:entradasReal-saidasReal};
+    }
+
+    function renderGestaoFinanceiraProfissional(periodo){
+        const s=getResumoProfissional(periodo);
+        const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+        set('pf-caixa',moeda(s.caixa));
+        set('pf-receber',moeda(s.entradasPrev));
+        set('pf-pagar',moeda(s.saidasPrev));
+        set('pf-compromissos',moeda(s.passPrev));
+        set('pf-realizado',moeda(s.entradasReal-s.saidasReal));
+        set('pf-resultado',moeda(s.resultado));
+        set('pf-ent-real',moeda(s.entradasReal));
+        set('pf-sai-real',moeda(s.saidasReal));
+        set('pf-proj30',moeda(s.caixa+s.entradasPrev-s.saidasPrev-s.passPrev));
+        set('pf-periodo-label',periodo ? 'Período: '+periodo : '');
+        set('pf-fechamento-periodo',periodo||'');
+        const fechado=(STATE._meta.fechamentos||[]).includes(periodo);
+        const fs=document.getElementById('pf-fechamento-status');
+        if(fs) fs.innerHTML=fechado ? '<span class="badge badge-paid"><i class="fa-solid fa-lock"></i> Período fechado</span>' : '<span class="badge badge-pending"><i class="fa-solid fa-lock-open"></i> Período aberto</span>';
+
+        const conc=STATE._meta.conciliacoes||[];
+        set('pf-conc-ok',conc.filter(x=>x.status==='Conciliado').length);
+        set('pf-conc-pend',conc.filter(x=>x.status==='Pendente').length);
+        set('pf-conc-div',conc.filter(x=>x.status==='Divergente').length);
+        const cl=document.getElementById('pf-conc-list');
+        if(cl) cl.innerHTML=conc.slice(-50).reverse().map(x=>'<tr><td>'+formatarDataBR(x.data)+'</td><td>'+String(x.descricao||'').replace(/</g,'&lt;')+'</td><td>'+moeda(x.valor)+'</td><td><span class="badge '+(x.status==='Conciliado'?'badge-paid':x.status==='Divergente'?'badge-overdue':'badge-pending')+'">'+x.status+'</span></td><td>'+(x.movimentoId||'—')+'</td><td>'+(x.status!=='Conciliado'?'<button class="btn btn-success" style="padding:4px 7px" onclick="conciliarItem(\''+x.id+'\')">Conciliar</button>':'—')+'</td></tr>').join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Nenhum extrato importado.</td></tr>';
+
+        const pc=document.getElementById('pf-plano-contas');
+        if(pc) pc.innerHTML=(STATE._meta.planoContas||[]).map(x=>'<div style="padding:7px 9px;border:1px solid var(--border-light);border-radius:7px;margin-bottom:5px;font-size:11px"><strong>'+x.codigo+'</strong> — '+x.nome+'</div>').join('') || '<span style="font-size:11px;color:var(--text-muted)">Nenhuma conta cadastrada.</span>';
+        const cc=document.getElementById('pf-centros-custo');
+        if(cc) cc.innerHTML=(STATE._meta.centrosCusto||[]).map(x=>'<div style="padding:7px 9px;border:1px solid var(--border-light);border-radius:7px;margin-bottom:5px;font-size:11px"><strong>'+x.codigo+'</strong> — '+x.nome+'</div>').join('') || '<span style="font-size:11px;color:var(--text-muted)">Nenhum centro cadastrado.</span>';
+    }
+
+    function adicionarPlanoContaPrompt(){
+        const nome=prompt('Nome da conta do plano de contas:'); if(!nome)return;
+        const codigo=prompt('Código (ex.: 1.01.001):')||String((STATE._meta.planoContas||[]).length+1);
+        STATE._meta.planoContas.push({id:'pc_'+Date.now(),codigo,nome:nome.trim(),ativo:true});
+        logAuditoria('CADASTRO','Plano de Contas','Conta criada: '+codigo+' - '+nome.trim()); render();
+    }
+    function adicionarCentroCustoPrompt(){
+        const nome=prompt('Nome do centro de custo:'); if(!nome)return;
+        const codigo=prompt('Código (ex.: CC-001):')||'CC-'+String((STATE._meta.centrosCusto||[]).length+1).padStart(3,'0');
+        STATE._meta.centrosCusto.push({id:'cc_'+Date.now(),codigo,nome:nome.trim(),ativo:true});
+        logAuditoria('CADASTRO','Centro de Custo','Centro criado: '+codigo+' - '+nome.trim()); render();
+    }
+    function alternarFechamentoPeriodo(){
+        const periodo=periodoAtualSelecionado(); if(!periodo)return;
+        const arr=STATE._meta.fechamentos||[]; const idx=arr.indexOf(periodo);
+        if(idx>=0){ if(prompt('Digite a senha do Administrador para reabrir o período:')!==SENHA_ADMIN_OPERACIONAL)return; arr.splice(idx,1); logAuditoria('REABERTURA','Fechamento','Período reaberto: '+periodo); }
+        else { if(!confirm('Fechar o período '+periodo+'? Alterações retroativas serão bloqueadas.'))return; arr.push(periodo); logAuditoria('FECHAMENTO','Fechamento','Período fechado: '+periodo); }
+        save(); render();
+    }
+    function criarSnapshotSeguranca(){
+        try{
+            const snapshot={id:'snap_'+Date.now(),createdAt:new Date().toISOString(),version:STATE._meta.version,state:JSON.parse(JSON.stringify(STATE))};
+            STATE._meta.snapshots=Array.isArray(STATE._meta.snapshots)?STATE._meta.snapshots:[]; STATE._meta.snapshots.push(snapshot);
+            if(STATE._meta.snapshots.length>3) STATE._meta.snapshots.shift();
+            save(); showToast('Snapshot de segurança criado.'); logAuditoria('SNAPSHOT','Segurança','Snapshot interno criado para proteção operacional.');
+        }catch(e){alert('Não foi possível criar o snapshot: '+e.message);}
+    }
+    function exportarControleFinanceiroCSV(){
+        const s=getResumoProfissional(periodoAtualSelecionado());
+        const rows=[
+            ['Indicador','Valor'],['Caixa disponível',s.caixa],['Entradas realizadas',s.entradasReal],['Entradas previstas',s.entradasPrev],['Saídas realizadas',s.saidasReal],['Saídas previstas',s.saidasPrev],['Passivos previstos',s.passPrev],['Passivos pagos',s.passReal],['Resultado realizado',s.resultado]
+        ];
+        const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+        const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='DBS_Treasury_Controle_'+periodoAtualSelecionado()+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+        logAuditoria('EXPORTAÇÃO','Gestão Financeira','Exportação do controle financeiro em CSV.');
+    }
+    function conciliarItem(id){
+        const item=(STATE._meta.conciliacoes||[]).find(x=>x.id===id); if(!item)return;
+        const mov=(STATE.movimentacoes||[]).find(m=>m.id===item.movimentoId);
+        if(!mov){ item.status='Divergente'; alert('Não foi localizado um movimento vinculado.'); render(); return; }
+        item.status='Conciliado'; item.conciliadoEm=new Date().toISOString(); item.valorSistema=Number(mov.valor)||0;
+        logAuditoria('CONCILIAÇÃO','Bancos','Movimento '+mov.id+' conciliado com extrato.');
+        save(); render();
+    }
+    function importarConciliacao(input){
+        const file=input?.files?.[0]; if(!file)return;
+        const reader=new FileReader();
+        reader.onload=()=>{
+            const text=String(reader.result||''); const lines=text.split(/\r?\n/).filter(Boolean);
+            const imported=[];
+            if(file.name.toLowerCase().endsWith('.ofx')){
+                const dates=[...text.matchAll(/<DTPOSTED>(\d{8})/g)].map(m=>m[1]);
+                const names=[...text.matchAll(/<MEMO>([^<\r\n]*)/g)].map(m=>m[1]);
+                const amounts=[...text.matchAll(/<TRNAMT>([-\d.,]+)/g)].map(m=>m[1]);
+                for(let i=0;i<Math.max(dates.length,amounts.length);i++) imported.push({data:dates[i]?dates[i].slice(0,4)+'-'+dates[i].slice(4,6)+'-'+dates[i].slice(6,8):'',descricao:names[i]||'Movimento OFX',valor:Math.abs(parseFloat(String(amounts[i]||'0').replace(',','.'))||0)});
+            }else{
+                for(const line of lines.slice(1)){ const p=line.split(/[;\t,]/); if(p.length>=3) imported.push({data:normalizarDataImportada(p[0]),descricao:p[1]||'Movimento importado',valor:Math.abs(Number(String(p[2]).replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}(?:,|$))/g,'').replace(',','.'))||0)}); }
+            }
+            const novos=imported.map((x,i)=>{const candidatos=(STATE.movimentacoes||[]).filter(m=>String(m.data||'')===x.data&&Math.abs((Number(m.valor)||0)-x.valor)<0.01); const mov=candidatos[0]; return {id:'conc_'+Date.now()+'_'+i,...x,status:mov?'Conciliado':'Pendente',movimentoId:mov?.id||null,valorSistema:mov?Number(mov.valor)||0:null};});
+            STATE._meta.conciliacoes=(STATE._meta.conciliacoes||[]).concat(novos); save(); logAuditoria('IMPORTAÇÃO','Conciliação','Importados '+novos.length+' movimentos de '+file.name+'.'); render();
+            input.value='';
+        };
+        reader.readAsText(file);
+    }
+    function normalizarDataImportada(v){
+        const s=String(v||'').trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+        const m=s.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/); return m?m[3]+'-'+m[2]+'-'+m[1]:s;
+    }
+
     function render() {
         const selectedPeriod = document.getElementById('global-period-filter').value;
+        try { renderGestaoFinanceiraProfissional(selectedPeriod); } catch (e) { console.warn('DBS Treasury professional controls:', e); }
         let [selY, selM] = selectedPeriod.split('-');
 
         let tPassivoTotal = 0, tPassivoMes = 0, qtdAtrasados = 0;
@@ -2253,6 +2462,11 @@ function showToast(msg) {
     }
 
     init();
+</script>
+
+<script>
+// DBS TREASURY — camada profissional adicional, sem alterar os módulos existentes.
+window.addEventListener('error', function(e){ console.error('DBS Treasury runtime:', e.error || e.message); });
 </script>
 
 <script>
