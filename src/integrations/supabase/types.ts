@@ -240,6 +240,7 @@ export type Database = {
       }
       rh_employees: {
         Row: {
+          benefit_configured: boolean
           benefit_type: string
           created_at: string
           fare_cents: number
@@ -249,11 +250,13 @@ export type Database = {
           id: string
           is_active: boolean
           registration_data: Json
+          registry_employee_id: string | null
           trips_per_day: number
           unit: string
           updated_at: string
         }
         Insert: {
+          benefit_configured?: boolean
           benefit_type: string
           created_at?: string
           fare_cents: number
@@ -263,11 +266,13 @@ export type Database = {
           id?: string
           is_active?: boolean
           registration_data?: Json
+          registry_employee_id?: string | null
           trips_per_day?: number
           unit: string
           updated_at?: string
         }
         Update: {
+          benefit_configured?: boolean
           benefit_type?: string
           created_at?: string
           fare_cents?: number
@@ -277,11 +282,20 @@ export type Database = {
           id?: string
           is_active?: boolean
           registration_data?: Json
+          registry_employee_id?: string | null
           trips_per_day?: number
           unit?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rh_employees_registry_employee_fk"
+            columns: ["registry_employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rh_request_attachments: {
         Row: {

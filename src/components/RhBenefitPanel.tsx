@@ -1,19 +1,19 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Pencil, Plus, Receipt, Trash2, UsersRound, WalletCards } from "lucide-react";
+import { Pencil, Plus, Receipt, Trash2, UsersRound, WalletCards } from "lucide-react";
 import {
-  createRhEmployee,
+  configureRhEmployeeBenefit,
   createRhTopup,
   deleteRhEmployee,
-  deleteRhTopup,
   listRhEmployees,
   listRhTopups,
-  updateRhEmployee,
+  listRhEmployeeRegistryForBenefits,
   type RhBenefitType,
 } from "@/lib/rh.functions";
 
 type Employee = {
   id: string;
+  registry_employee_id: string;
   full_name: string;
   unit: string;
   fare_cents: number;
@@ -179,7 +179,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
         )}
       </div>
       {employeeModal && (
-        <EmployeeModal
+        <BenefitConfigModal
           benefitType={benefitType}
           employee={employeeModal === "new" ? undefined : employeeModal}
           onClose={() => setEmployeeModal(null)}
@@ -248,14 +248,11 @@ function EmployeeList({
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-black text-slate-50">Colaboradores</h3>
-          <p className="text-xs text-slate-400">Cadastros usados nos cálculos de cobertura.</p>
+          <h3 className="text-lg font-black text-slate-50">Colaboradores com benefício</h3>
+          <p className="text-xs text-slate-400">Os funcionários vêm exclusivamente do Cadastro de Funcionários.</p>
         </div>
-        <button
-          onClick={onNew}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-black text-[#0B0F19]"
-        >
-          <Plus className="h-3.5 w-3.5" /> Novo colaborador
+        <button onClick={onNew} className="inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-black text-[#0B0F19]">
+          <Plus className="h-3.5 w-3.5" /> Vincular do cadastro
         </button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -277,28 +274,20 @@ function EmployeeList({
                 <td className="px-4 py-3">{money(employee.fare_cents)}</td>
                 <td className="px-4 py-3">{employee.trips_per_day}</td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => onEdit(employee)} className="mr-2 text-sky-300">
-                    <Pencil className="inline h-4 w-4" />
-                  </button>
-                  <button onClick={() => onDelete(employee.id)} className="text-red-300">
-                    <Trash2 className="inline h-4 w-4" />
-                  </button>
+                  <button onClick={() => onEdit(employee)} className="mr-2 text-sky-300" title="Editar benefício"><Pencil className="inline h-4 w-4" /></button>
+                  <button onClick={() => onDelete(employee.id)} className="text-red-300" title="Desativar benefício"><Trash2 className="inline h-4 w-4" /></button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {!employees.length && (
-          <p className="p-8 text-center text-xs text-slate-400">
-            Nenhum colaborador cadastrado ainda.
-          </p>
-        )}
+        {!employees.length && <p className="p-8 text-center text-xs text-slate-400">Nenhum benefício configurado. Use “Vincular do cadastro”.</p>}
       </div>
     </div>
   );
 }
 
-function EmployeeModal({
+function BenefitConfigModal({
   benefitType,
   employee,
   onClose,
@@ -309,86 +298,56 @@ function EmployeeModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [name, setName] = useState(employee?.full_name ?? "");
-  const [unit, setUnit] = useState(employee?.unit ?? "");
-  const [fare, setFare] = useState(
-    employee ? (employee.fare_cents / 100).toFixed(2).replace(".", ",") : "",
-  );
-  const [trips, setTrips] = useState(String(employee?.trips_per_day ?? 1));
+  const registry = useQuery({
+    queryKey: ["rh-employee-registry-for-benefit"],
+    queryFn: () => listRhEmployeeRegistryForBenefits(),
+    enabled: !employee,
+  });
+  const [employeeId, setEmployeeId] = useState(employee?.registry_employee_id ?? "");
+  const [fare, setFare] = useState(employee ? (employee.fare_cents / 100).toFixed(2).replace(".", ",") : "");
+  const [trips, setTrips] = useState(String(employee?.trips_per_day ?? 2));
+
   const save = useMutation({
-    mutationFn: () =>
-      employee
-        ? updateRhEmployee({
-            data: {
-              id: employee.id,
-              benefit_type: benefitType,
-              full_name: name,
-              unit,
-              fare_cents: Math.round(Number(fare.replace(",", ".")) * 100),
-              trips_per_day: Number(trips),
-            },
-          })
-        : createRhEmployee({
-            data: {
-              benefit_type: benefitType,
-              full_name: name,
-              unit,
-              fare_cents: Math.round(Number(fare.replace(",", ".")) * 100),
-              trips_per_day: Number(trips),
-            },
-          }),
+    mutationFn: () => configureRhEmployeeBenefit({
+      data: {
+        registry_employee_id: employeeId,
+        benefit_type: benefitType,
+        fare_cents: Math.round(Number(fare.replace(",", ".")) * 100),
+        trips_per_day: Number(trips),
+      },
+    }),
     onSuccess: onDone,
   });
+
+  const available = (registry.data ?? []).filter((item: any) => item.is_active);
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#02060d]/70 p-4">
       <div className="w-full max-w-xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
-        <h3 className="text-xl font-black text-slate-50">
-          {employee ? "Editar colaborador" : "Novo colaborador"}
-        </h3>
+        <h3 className="text-xl font-black text-slate-50">{employee ? "Editar benefício" : "Vincular funcionário ao benefício"}</h3>
+        <p className="mt-1 text-xs text-slate-400">O funcionário é criado somente no Cadastro de Funcionários. Aqui você apenas configura o benefício.</p>
         <div className="mt-5 grid gap-4">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nome completo"
-            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
-          />
-          <input
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="Unidade / setor"
-            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
-          />
+          {!employee ? (
+            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100">
+              <option value="">Selecione o funcionário cadastrado</option>
+              {available.map((item: any) => <option key={item.id} value={item.id}>{item.full_name} · {item.unit}</option>)}
+            </select>
+          ) : (
+            <div className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5">
+              <p className="text-sm font-bold text-slate-100">{employee.full_name}</p>
+              <p className="text-xs text-slate-500">{employee.unit}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
-            <input
-              value={fare}
-              onChange={(e) => setFare(e.target.value)}
-              placeholder="Valor unitário"
-              className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
-            />
-            <input
-              value={trips}
-              onChange={(e) => setTrips(e.target.value)}
-              type="number"
-              min="1"
-              max="12"
-              placeholder="Viagens por dia"
-              className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm"
-            />
+            <input value={fare} onChange={(e) => setFare(e.target.value)} placeholder="Valor diário / tarifa" inputMode="decimal" className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-400" />
+            <input value={trips} onChange={(e) => setTrips(e.target.value)} type="number" min="1" max="12" placeholder="Viagens por dia" className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100" />
           </div>
         </div>
+        {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível configurar o benefício."}</p>}
         <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-xs font-bold text-slate-600"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => save.mutate()}
-            disabled={save.isPending}
-            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-black text-[#0B0F19]"
-          >
-            {save.isPending ? "Salvando..." : "Salvar colaborador"}
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button>
+          <button onClick={() => save.mutate()} disabled={save.isPending || !employeeId || Number(fare.replace(",", ".")) <= 0} className="rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-black text-[#0B0F19] disabled:opacity-50">
+            {save.isPending ? "Salvando..." : "Salvar benefício"}
           </button>
         </div>
       </div>

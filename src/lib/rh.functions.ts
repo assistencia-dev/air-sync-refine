@@ -38,14 +38,69 @@ export const listRhEmployees = createServerFn({ method: "GET" })
     await requireNativeOperator(context);
     const { data: employees, error } = await supabaseAdmin
       .from("rh_employees")
-      .select(
-        "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
-      )
+      .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured, created_at, updated_at")
       .eq("is_active", true)
+      .eq("benefit_configured", true)
       .eq("benefit_type", data.benefit_type)
+      .order("full_name")
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    const unique = new Map<string, any>();
+    for (const employee of employees ?? []) {
+      const key = employee.registry_employee_id ?? employee.id;
+      if (!unique.has(key)) unique.set(key, employee);
+    }
+    return [...unique.values()];
+  });
+
+export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireNativeOperator(context);
+    const { data, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, is_active, registration_data, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-    return employees ?? [];
+    return (data ?? []).filter((row: any) => row.registry_employee_id === row.id);
+  });
+
+export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { registry_employee_id: string; benefit_type: RhBenefitType; fare_cents: number; trips_per_day: number }) => {
+    validateBenefit(input);
+    if (!input.registry_employee_id) throw new Error("Selecione o funcionário no Cadastro de Funcionários.");
+    if (!Number.isInteger(input.fare_cents) || input.fare_cents <= 0) throw new Error("Informe um valor diário válido.");
+    if (!Number.isInteger(input.trips_per_day) || input.trips_per_day < 1 || input.trips_per_day > 12) throw new Error("Informe a quantidade de viagens por dia.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: registry, error: registryError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, is_active")
+      .eq("id", data.registry_employee_id)
+      .eq("registry_employee_id", data.registry_employee_id)
+      .maybeSingle();
+    if (registryError) throw new Error(registryError.message);
+    if (!registry) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+    if (!registry.is_active) throw new Error("O funcionário está inativo no Cadastro de Funcionários.");
+
+    const { data: existing, error: existingError } = await supabaseAdmin.from("rh_employees").select("id")
+      .eq("registry_employee_id", data.registry_employee_id).eq("benefit_type", data.benefit_type).maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+
+    const payload = { full_name: registry.full_name, unit: registry.unit, fare_cents: data.fare_cents, trips_per_day: data.benefit_type === "passagem" ? data.trips_per_day : 1, is_active: true, benefit_configured: true };
+    if (existing) {
+      const { data: updated, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", existing.id)
+        .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured").single();
+      if (error) throw new Error(error.message);
+      return updated;
+    }
+    const { data: created, error } = await supabaseAdmin.from("rh_employees")
+      .insert({ ...payload, benefit_type: data.benefit_type, registry_employee_id: data.registry_employee_id, registration_data: {} })
+      .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured").single();
+    if (error) throw new Error(error.message);
+    return created;
   });
 
 export const createRhEmployee = createServerFn({ method: "POST" })
@@ -140,8 +195,9 @@ export const deleteRhEmployee = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false, ponto_access_enabled: false })
-      .eq("id", data.id);
+      .update({ is_active: false, benefit_configured: false })
+      .eq("id", data.id)
+      .eq("benefit_type", data.benefit_type);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -203,6 +259,8 @@ export const createRhTopup = createServerFn({ method: "POST" })
       .from("rh_employees")
       .select("id")
       .eq("id", data.employee_id)
+      .eq("benefit_type", data.benefit_type)
+      .eq("benefit_configured", true)
       .eq("is_active", true)
       .maybeSingle();
     if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
@@ -270,97 +328,48 @@ export const unlockRhModule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export type EmployeeRecordInput = {
-  full_name: string;
-  unit: string;
-  registration_data: Record<string, string>;
-};
-
 export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
-    const { data, error } = await supabaseAdmin
-      .from("rh_employees")
-      .select(
-        "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active",
-      )
+    const { data, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-
-    // O cadastro é apresentado uma única vez por pessoa/unidade.
-    // Registros legados de VT/VA continuam no banco e não são apagados.
-    const unique = new Map<string, any>();
-    for (const employee of data ?? []) {
-      const key = `${employee.full_name}|${employee.unit}`.trim().toLowerCase();
-      const current = unique.get(key);
-      const currentData = current?.registration_data ?? {};
-      const nextData = employee.registration_data ?? {};
-      const currentScore = Object.keys(currentData).filter((k) => String(currentData[k] ?? "").trim()).length;
-      const nextScore = Object.keys(nextData).filter((k) => String(nextData[k] ?? "").trim()).length;
-      if (!current || nextScore > currentScore) {
-        unique.set(key, employee);
-      }
-    }
-
-    const registry = [...unique.values()];
-    const userIds = [...new Set(registry.map((e) => e.ponto_portal_user_id).filter(Boolean))];
-    const users = userIds.length
-      ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[])
-      : [];
+    const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id);
+    const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
+    const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
-    const accessByEmployee = new Map(registry.filter((e) => e.ponto_portal_user_id).map((e) => [e.id, {
-      employee_id: e.id,
-      user_id: e.ponto_portal_user_id,
-      access_enabled: Boolean(e.ponto_access_enabled),
+    const accessByEmployee = new Map(registry.filter((e: any) => e.ponto_portal_user_id).map((e: any) => [e.id, {
+      employee_id: e.id, user_id: e.ponto_portal_user_id, access_enabled: Boolean(e.ponto_access_enabled),
       login_identifier: usersById.get(e.ponto_portal_user_id)?.username ?? usersById.get(e.ponto_portal_user_id)?.email ?? null,
       user: usersById.get(e.ponto_portal_user_id) ?? null,
     }]));
-
-    return registry.map((employee) => ({
-      ...employee,
-      access: accessByEmployee.get(employee.id) ?? null,
-    }));
+    return registry.map((employee: any) => ({ ...employee, access: accessByEmployee.get(employee.id) ?? null }));
   });
 
 export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
-    if (!input?.full_name?.trim() || !input?.unit?.trim())
-      throw new Error("Informe nome e unidade do funcionário.");
-    return {
-      ...input,
-      id: input.id || undefined,
-      full_name: input.full_name.trim(),
-      unit: input.unit.trim(),
-    };
+    if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
+    return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim() };
   })
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
-    const payload = {
-      full_name: data.full_name,
-      unit: data.unit,
-      registration_data: data.registration_data,
-      is_active: true,
-    };
-    const query = data.id
-      ? supabaseAdmin
-          .from("rh_employees")
-          .update(payload)
-          .eq("id", data.id)
-          .select(
-            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
-          )
-          .single()
-      : supabaseAdmin
-          .from("rh_employees")
-          .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1 })
-          .select(
-            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
-          )
-          .single();
-    const { data: employee, error } = await query;
-    if (error) throw new Error(error.message);
+    const payload = { full_name: data.full_name, unit: data.unit, registration_data: data.registration_data, is_active: true };
+    if (data.id) {
+      const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", data.id)
+        .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+      if (error) throw new Error(error.message);
+      return employee;
+    }
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees")
+      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false })
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
+    if (createError) throw new Error(createError.message);
+    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+    if (linkError) throw new Error(linkError.message);
     return employee;
   });
 
@@ -379,6 +388,16 @@ export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
     return { enabled: Boolean(employee), employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit } : null };
   });
 
+export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireNativeOperator(context);
+    const { data, error } = await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key")
+      .eq("role_key", "COLABORADOR").eq("status", "ativo").order("full_name");
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string }) => {
@@ -389,7 +408,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
     const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, is_active").eq("id", data.employee_id).eq("is_active", true).maybeSingle();
+      .select("id, full_name, unit, is_active, registry_employee_id").eq("id", data.employee_id).eq("registry_employee_id", data.employee_id).eq("is_active", true).maybeSingle();
     if (employeeError) throw new Error(employeeError.message);
     if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
     if (!data.enabled) {
@@ -412,7 +431,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) throw new Error("Este login pertence a um administrador e não pode ser vinculado ao funcionário.");
     if (appUser.role_key !== "COLABORADOR") throw new Error("O usuário precisa estar classificado como COLABORADOR em Usuários vinculados.");
     const { data: currentLink } = await supabaseAdmin.from("rh_employees").select("id")
-      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("id", data.employee_id).limit(1);
+      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("registry_employee_id", data.employee_id).limit(1);
     if (currentLink?.length) throw new Error("Este usuário já está vinculado a outro funcionário.");
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
       .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id }).eq("id", data.employee_id);

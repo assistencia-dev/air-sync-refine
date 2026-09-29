@@ -47,19 +47,13 @@ export const hasMyPontoAccess = createServerFn({ method: "GET" })
 
 export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await requireRh(context);
-  const { data, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("is_active", true).order("full_name");
+  const { data, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, registry_employee_id, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("is_active", true).order("full_name");
   if (error) throw new Error(error.message);
-  const ids = (data ?? []).map(e => e.ponto_portal_user_id).filter(Boolean) as string[];
+  const canonical = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id);
+  const ids = canonical.map(e => e.ponto_portal_user_id).filter(Boolean) as string[];
   const users = ids.length ? ((await supabaseAdmin.from("users").select("id, username, email, full_name").in("id", ids)).data ?? []) : [];
   const byId = new Map(users.map(u => [u.id, u]));
-  const enriched = (data ?? []).map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
-  const unique = new Map<string, (typeof enriched)[number]>();
-  for (const employee of enriched) {
-    const key = (employee.full_name + "|" + employee.unit).trim().toLowerCase();
-    const current = unique.get(key);
-    if (!current || (!current.ponto_access_enabled && employee.ponto_access_enabled)) unique.set(key, employee);
-  }
-  return [...unique.values()];
+  return canonical.map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
 });
 
 export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
@@ -73,12 +67,15 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
   const patch: Record<string, unknown> = { ponto_access_enabled: data.enabled, ponto_raio_m: data.radius_m ?? 150, ponto_base_lat: data.base_lat ?? null, ponto_base_lng: data.base_lng ?? null, ponto_entrada_prevista: data.entrada_prevista ?? null, ponto_saida_prevista: data.saida_prevista ?? null, ponto_almoco_inicio_previsto: data.almoco_inicio_previsto ?? null, ponto_almoco_fim_previsto: data.almoco_fim_previsto ?? null };
   if (data.enabled) {
     const identifier = data.portal_identifier!.trim(); const digits = identifier.replace(/\D/g, "");
-    let q = supabaseAdmin.from("users").select("id, username, email, cpf, status").limit(1);
+    let q = supabaseAdmin.from("users").select("id, username, email, cpf, status, role_key").limit(1);
     if (identifier.includes("@")) q = q.ilike("email", identifier); else if (digits.length === 11) q = q.eq("cpf", digits); else q = q.ilike("username", identifier);
     const { data: user } = await q.maybeSingle();
-    if (!user || user.status !== "ativo") throw new Error("Usuário de login não encontrado ou inativo. Cadastre primeiro o acesso no portal.");
+    if (!user || user.status !== "ativo") throw new Error("Usuário de login não encontrado ou inativo. Cadastre primeiro o acesso em Usuários vinculados.");
+    if (user.role_key && user.role_key !== "COLABORADOR") throw new Error("O login precisa estar classificado como COLABORADOR em Usuários vinculados.");
     patch.ponto_portal_user_id = user.id;
   } else patch.ponto_portal_user_id = null;
+  const { data: employeeRecord } = await supabaseAdmin.from("rh_employees").select("id, registry_employee_id, is_active").eq("id", data.employee_id).eq("registry_employee_id", data.employee_id).maybeSingle();
+  if (!employeeRecord || !employeeRecord.is_active) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
   const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(patch).eq("id", data.employee_id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
   if (error) throw new Error(error.message);
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: actor.id, action: data.enabled ? "ACESSO_PONTO_LIBERADO" : "ACESSO_PONTO_REVOGADO", details: { portal_identifier: data.enabled ? data.portal_identifier : null } });

@@ -13,7 +13,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import type { EmployeeBenefitConfig } from './benefitCalculations';
-import { createRhEmployee, deleteRhEmployee, listRhEmployees, updateRhEmployee } from '@/lib/rh.functions';
+import { configureRhEmployeeBenefit, deleteRhEmployee, listRhEmployees, saveRhEmployeeRecord } from '@/lib/rh.functions';
 
 // Type alias for rh_employees row
 type RHEmployee = Database['public']['Tables']['rh_employees']['Row'];
@@ -88,16 +88,39 @@ export async function fetchEmployeeById(employeeId: string): Promise<EmployeeWit
  * @returns Created employee with costs
  */
 export async function createEmployee(input: { full_name: string; benefit_type: string; unit: string; vt_tariff_unit?: number; vt_trips_per_day?: number; va_daily_rate?: number; work_schedule?: string; registration_data?: Record<string, any> }): Promise<EmployeeWithCosts> {
-  const benefitTypes = input.benefit_type === 'VT_VA' ? ['passagem', 'alimentacao'] : [input.benefit_type === 'VT' ? 'passagem' : input.benefit_type === 'VA' ? 'alimentacao' : input.benefit_type];
-  if (!benefitTypes.every((type) => type === 'passagem' || type === 'alimentacao')) throw new Error('Tipo de benefício inválido.');
-  const created = [];
+  const benefitTypes = input.benefit_type === 'VT_VA'
+    ? ['passagem', 'alimentacao']
+    : [input.benefit_type === 'VT' ? 'passagem' : input.benefit_type === 'VA' ? 'alimentacao' : input.benefit_type];
+
+  if (!benefitTypes.every((type) => type === 'passagem' || type === 'alimentacao')) {
+    throw new Error('Tipo de benefício inválido.');
+  }
+
+  const registry = await saveRhEmployeeRecord({
+    data: {
+      full_name: input.full_name,
+      unit: input.unit,
+      registration_data: input.registration_data ?? {},
+    },
+  });
+
+  let first: RHEmployee | null = null;
   for (const benefitType of benefitTypes) {
     const daily = benefitType === 'passagem' ? input.vt_tariff_unit ?? 0 : input.va_daily_rate ?? 0;
     if (daily <= 0) throw new Error('Informe um valor diário válido para o benefício.');
-    const employee = await createRhEmployee({ data: { benefit_type: benefitType as 'passagem' | 'alimentacao', full_name: input.full_name, unit: input.unit, fare_cents: Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? input.vt_trips_per_day ?? 1 : 1 } });
-    created.push(employee);
+    const configured = await configureRhEmployeeBenefit({
+      data: {
+        registry_employee_id: registry.id,
+        benefit_type: benefitType as 'passagem' | 'alimentacao',
+        fare_cents: Math.round(daily * 100),
+        trips_per_day: benefitType === 'passagem' ? input.vt_trips_per_day ?? 1 : 1,
+      },
+    });
+    if (!first) first = configured as RHEmployee;
   }
-  return toEmployeeWithCosts(created[0] as RHEmployee);
+
+  if (!first) throw new Error('Não foi possível configurar o funcionário.');
+  return toEmployeeWithCosts(first);
 }
 
 /**
@@ -109,11 +132,39 @@ export async function createEmployee(input: { full_name: string; benefit_type: s
 export async function updateEmployee(employeeId: string, updates: { full_name?: string; benefit_type?: string; unit?: string; vt_tariff_unit?: number; vt_trips_per_day?: number; va_daily_rate?: number; work_schedule?: string; is_active?: boolean; registration_data?: Record<string, any> }): Promise<EmployeeWithCosts> {
   const current = await fetchEmployeeById(employeeId);
   if (!current) throw new Error('Colaborador não encontrado.');
-  const benefitType = updates.benefit_type === 'VT' ? 'passagem' : updates.benefit_type === 'VA' ? 'alimentacao' : (updates.benefit_type ?? current.benefit_type);
-  if (benefitType !== 'passagem' && benefitType !== 'alimentacao') throw new Error('Tipo de benefício inválido.');
+
+  const registryId = (current as any).registry_employee_id ?? current.id;
+  const nextName = updates.full_name ?? current.full_name;
+  const nextUnit = updates.unit ?? current.unit;
+  if (updates.full_name || updates.unit || updates.registration_data) {
+    await saveRhEmployeeRecord({
+      data: {
+        id: registryId,
+        full_name: nextName,
+        unit: nextUnit,
+        registration_data: updates.registration_data ?? ((current as any).registration_data ?? {}),
+      },
+    });
+  }
+
+  const benefitType = updates.benefit_type === 'VT' ? 'passagem'
+    : updates.benefit_type === 'VA' ? 'alimentacao'
+    : (updates.benefit_type ?? current.benefit_type);
+
+  if (benefitType !== 'passagem' && benefitType !== 'alimentacao') {
+    throw new Error('Tipo de benefício inválido.');
+  }
+
   const daily = benefitType === 'passagem' ? updates.vt_tariff_unit : updates.va_daily_rate;
-  const updated = await updateRhEmployee({ data: { id: employeeId, benefit_type: benefitType, full_name: updates.full_name ?? current.full_name, unit: updates.unit ?? current.unit, fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100), trips_per_day: benefitType === 'passagem' ? updates.vt_trips_per_day ?? current.trips_per_day : 1 } });
-  return toEmployeeWithCosts(updated as RHEmployee);
+  const configured = await configureRhEmployeeBenefit({
+    data: {
+      registry_employee_id: registryId,
+      benefit_type: benefitType as 'passagem' | 'alimentacao',
+      fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100),
+      trips_per_day: benefitType === 'passagem' ? updates.vt_trips_per_day ?? current.trips_per_day : 1,
+    },
+  });
+  return toEmployeeWithCosts(configured as RHEmployee);
 }
 
 /**
