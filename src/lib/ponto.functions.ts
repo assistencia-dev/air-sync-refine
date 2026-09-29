@@ -24,20 +24,84 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) 
 async function getEmployee(contextUserId: string) {
   const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", contextUserId).maybeSingle();
   if (!user) throw new Error("Usuário não encontrado.");
-  const { data: employees, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("ponto_portal_user_id", user.id).eq("is_active", true).order("ponto_access_enabled", { ascending: false }).order("updated_at", { ascending: false }).limit(20);
+
+  // Novo vínculo central: funcionário -> conta de acesso.
+  const db = supabaseAdmin as any;
+  const { data: accessRows, error: accessError } = await db
+    .from("rh_employee_access")
+    .select("employee_id, user_id, access_enabled")
+    .eq("user_id", user.id)
+    .eq("access_enabled", true)
+    .limit(1);
+
+  if (accessError) throw new Error(accessError.message);
+
+  if (accessRows?.[0]?.employee_id) {
+    const { data: employee, error } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active")
+      .eq("id", accessRows[0].employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!employee) throw new Error("Cadastro do funcionário não encontrado.");
+    return employee;
+  }
+
+  // Compatibilidade com vínculos antigos enquanto todos os acessos não forem normalizados.
+  const { data: employees, error } = await supabaseAdmin
+    .from("rh_employees")
+    .select("id, full_name, unit, registration_data, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active")
+    .eq("ponto_portal_user_id", user.id)
+    .eq("is_active", true)
+    .order("ponto_access_enabled", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(20);
   if (error) throw new Error(error.message);
   const employee = (employees ?? []).find((item) => item.ponto_access_enabled) ?? employees?.[0] ?? null;
   if (!employee?.ponto_access_enabled) throw new Error("Acesso à Folha de Ponto não liberado pelo RH.");
   return employee;
 }
 
-export const hasMyPontoAccess = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
-  const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", context.userId).maybeSingle();
-  if (!user) return { enabled: false };
-  const { data, error } = await supabaseAdmin.from("rh_employees").select("id").eq("ponto_portal_user_id", user.id).eq("ponto_access_enabled", true).eq("is_active", true).limit(1);
-  if (error) throw new Error(error.message);
-  return { enabled: Boolean(data?.length) };
-});
+export const hasMyPontoAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: user } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
+    if (!user) return { enabled: false };
+
+    const db = supabaseAdmin as any;
+    const { data: access, error: accessError } = await db
+      .from("rh_employee_access")
+      .select("employee_id")
+      .eq("user_id", user.id)
+      .eq("access_enabled", true)
+      .limit(1);
+    if (accessError) throw new Error(accessError.message);
+    if (access?.[0]?.employee_id) {
+      const { data: employee, error } = await supabaseAdmin
+        .from("rh_employees")
+        .select("id")
+        .eq("id", access[0].employee_id)
+        .eq("is_active", true)
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return { enabled: Boolean(employee?.length) };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id")
+      .eq("ponto_portal_user_id", user.id)
+      .eq("ponto_access_enabled", true)
+      .eq("is_active", true)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    return { enabled: Boolean(data?.length) };
+  });
 
 export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await requireRh(context);
