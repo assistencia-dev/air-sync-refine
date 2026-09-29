@@ -945,7 +945,7 @@ function showToast(msg) {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = 'toast';
-        toast.innerHTML = \`<i class="fa-solid fa-circle-check" style="color:var(--emerald);"></i> \${msg}\`;
+        toast.innerHTML = `<i class="fa-solid fa-circle-check" style="color:var(--emerald);"></i> ${msg}`;
         container.appendChild(toast);
         setTimeout(() => toast.remove(), 3500);
     }
@@ -960,7 +960,7 @@ function showToast(msg) {
 
     function init() {
         const now = new Date();
-        const monthStr = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`;
+        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('global-period-filter').value = monthStr;
 
         const local = localStorage.getItem(TREASURY_STATE_KEY);
@@ -1048,7 +1048,7 @@ function showToast(msg) {
         if (!el) return;
         const bancos = getActiveBancos();
         el.innerHTML = bancos.length
-            ? bancos.map(b => \`<option value="\${b.id}">\${b.nome} — R$ \${Number(b.saldo || 0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</option>\`).join('')
+            ? bancos.map(b => `<option value="${b.id}">${b.nome} — R$ ${Number(b.saldo || 0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</option>`).join('')
             : '<option value="">Nenhuma conta ativa cadastrada</option>';
         if (selectedId && bancos.some(b => b.id === selectedId)) el.value = selectedId;
     }
@@ -1078,7 +1078,7 @@ function showToast(msg) {
     function openModalTransferencia() {
         const orig = document.getElementById('transf-origem');
         const dest = document.getElementById('transf-destino');
-        orig.innerHTML = STATE.bancos.map(b => \`<option value="\${b.id}">\${b.nome} (R$ \${formatMoney(b.saldo)})</option>\`).join('');
+        orig.innerHTML = STATE.bancos.map(b => `<option value="${b.id}">${b.nome} (R$ ${formatMoney(b.saldo)})</option>`).join('');
         dest.innerHTML = orig.innerHTML;
         document.getElementById('modal-transferencia').style.display = 'flex';
     }
@@ -1107,7 +1107,7 @@ function showToast(msg) {
 
     function validarBaixaValorAlto(valor, anexoBase64) {
         if (Number(valor) >= LIMITE_COMPROVANTE && (!anexoBase64 || String(anexoBase64).trim() === '')) {
-            alert(\`Segurança: pagamentos/recebimentos a partir de R$ \${formatMoney(LIMITE_COMPROVANTE)} exigem comprovante PDF ou imagem.\`);
+            alert(`Segurança: pagamentos/recebimentos a partir de R$ ${formatMoney(LIMITE_COMPROVANTE)} exigem comprovante PDF ou imagem.`);
             return false;
         }
         return true;
@@ -1120,14 +1120,14 @@ function showToast(msg) {
         const colecao = tipo === 'recebimento' ? STATE.recebimentos : STATE.contasPagar;
         const item = colecao.find(x => x.id === id);
         if (!item) return;
-        if (item.comprovante && !confirm(\`Já existe um comprovante (\${item.comprovante}). Deseja substituí-lo?\`)) { input.value=''; return; }
+        if (item.comprovante && !confirm(`Já existe um comprovante (${item.comprovante}). Deseja substituí-lo?`)) { input.value=''; return; }
         const reader = new FileReader();
         reader.onload = e => {
             item.comprovante = file.name;
             item.comprovanteData = e.target.result;
             item.comprovanteType = file.type || 'application/octet-stream';
             item.comprovanteSize = file.size;
-            logAuditoria('ANEXO', tipo === 'recebimento' ? 'Recebimentos' : 'Contas a Pagar', \`Comprovante \${file.name} anexado ao registro \${id}\`);
+            logAuditoria('ANEXO', tipo === 'recebimento' ? 'Recebimentos' : 'Contas a Pagar', `Comprovante ${file.name} anexado ao registro ${id}`);
             showToast('Comprovante anexado.');
             save(); render();
         };
@@ -1143,19 +1143,19 @@ function showToast(msg) {
         const item = obterComprovanteLancamento(tipo, id);
         if (!item?.comprovanteData) { alert('O arquivo deste comprovante não está armazenado.'); return; }
         const a=document.createElement('a'); a.href=item.comprovanteData; a.download=item.comprovante || 'comprovante'; document.body.appendChild(a); a.click(); a.remove();
-        logAuditoria('DOWNLOAD','Comprovantes',\`Comprovante \${item.comprovante} baixado.\`);
+        logAuditoria('DOWNLOAD','Comprovantes',`Comprovante ${item.comprovante} baixado.`);
     }
     function excluirComprovanteLancamento(tipo, id) {
         const item=obterComprovanteLancamento(tipo,id); if(!item?.comprovante) return;
-        if(!confirm(\`Excluir o comprovante "\${item.comprovante}"? O lançamento será mantido.\`)) return;
+        if(!confirm(`Excluir o comprovante "${item.comprovante}"? O lançamento será mantido.`)) return;
         const nome=item.comprovante; item.comprovante=null; delete item.comprovanteData; delete item.comprovanteType; delete item.comprovanteSize;
-        logAuditoria('EXCLUSÃO DE ANEXO', tipo==='recebimento'?'Recebimentos':'Contas a Pagar', \`Comprovante \${nome} removido.\`);
+        logAuditoria('EXCLUSÃO DE ANEXO', tipo==='recebimento'?'Recebimentos':'Contas a Pagar', `Comprovante ${nome} removido.`);
         save(); render(); showToast('Comprovante excluído. O lançamento foi preservado.');
     }
 
     function registrarAlteracaoValor(modulo, descricao, anterior, novo) {
         if (Number(anterior) !== Number(novo)) {
-            logAuditoria('ALTERAÇÃO_VALOR', modulo, \`\${descricao}: de R$ \${formatMoney(anterior)} para R$ \${formatMoney(novo)}\`);
+            logAuditoria('ALTERAÇÃO_VALOR', modulo, `${descricao}: de R$ ${formatMoney(anterior)} para R$ ${formatMoney(novo)}`);
         }
     }
 
@@ -1174,13 +1174,13 @@ function showToast(msg) {
             if (!item) return;
             if (item.status === 'Recebido') { alert('Este recebimento já foi baixado. Desfaça a baixa antes de alterar dados financeiros.'); return; }
             if (!validarDataRetroativa(data)) return;
-            registrarAlteracaoValor('Recebimentos', \`Entrada de \${cliente}\`, item.valor, valor);
+            registrarAlteracaoValor('Recebimentos', `Entrada de ${cliente}`, item.valor, valor);
             item.cliente = cliente; item.valor = valor; item.categoria = categoria; item.data = data; item.bancoId = bancoId;
-            logAuditoria('EDIÇÃO', 'Recebimentos', \`Entrada de \${cliente} alterada.\`);
+            logAuditoria('EDIÇÃO', 'Recebimentos', `Entrada de ${cliente} alterada.`);
             showToast('Recebimento atualizado!');
         } else {
-            STATE.recebimentos.push({ id: \`rec_in_\${Date.now()}\`, cliente, valor, categoria, data, status: 'Pendente', bancoId });
-            logAuditoria('CADASTRO', 'Recebimentos', \`Nova entrada cadastrada: \${cliente} - R$ \${formatMoney(valor)}\`);
+            STATE.recebimentos.push({ id: `rec_in_${Date.now()}`, cliente, valor, categoria, data, status: 'Pendente', bancoId });
+            logAuditoria('CADASTRO', 'Recebimentos', `Nova entrada cadastrada: ${cliente} - R$ ${formatMoney(valor)}`);
             showToast('Novo recebimento cadastrado!');
         }
         save(); closeModals(); render();
@@ -1201,13 +1201,13 @@ function showToast(msg) {
             if (!item) return;
             if (item.status === 'Pago') { alert('Esta conta já foi paga. Desfaça o pagamento antes de alterar dados financeiros.'); return; }
             if (!validarDataRetroativa(item.vencimento) || !validarDataRetroativa(vencimento)) return;
-            registrarAlteracaoValor('Contas a Pagar', \`Conta de \${fornecedor}\`, item.valor, valor);
+            registrarAlteracaoValor('Contas a Pagar', `Conta de ${fornecedor}`, item.valor, valor);
             item.fornecedor = fornecedor; item.descricao = descricao; item.valor = valor; item.vencimento = vencimento; item.bancoId = bancoId;
-            logAuditoria('EDIÇÃO', 'Contas a Pagar', \`Conta de \${fornecedor} alterada.\`);
+            logAuditoria('EDIÇÃO', 'Contas a Pagar', `Conta de ${fornecedor} alterada.`);
             showToast('Conta a pagar atualizada!');
         } else {
-            STATE.contasPagar.push({ id: \`pag_\${Date.now()}\`, fornecedor, descricao, valor, vencimento, status: 'Pendente', bancoId });
-            logAuditoria('CADASTRO', 'Contas a Pagar', \`Nova conta cadastrada: \${fornecedor} - R$ \${formatMoney(valor)}\`);
+            STATE.contasPagar.push({ id: `pag_${Date.now()}`, fornecedor, descricao, valor, vencimento, status: 'Pendente', bancoId });
+            logAuditoria('CADASTRO', 'Contas a Pagar', `Nova conta cadastrada: ${fornecedor} - R$ ${formatMoney(valor)}`);
             showToast('Conta a pagar cadastrada!');
         }
         save(); closeModals(); render();
@@ -1230,12 +1230,12 @@ function showToast(msg) {
         for (let i = 0; i < qtd; i++) {
             let d = new Date(base.getFullYear(), base.getMonth() + i, base.getDate());
             parcelas.push({
-                id: \`p_\${stamp}_\${i}\`, num: i + 1, vencimento: d.toISOString().split('T')[0], valor: val, status: 'Pendente', comprovante: null, bancoId
+                id: `p_${stamp}_${i}`, num: i + 1, vencimento: d.toISOString().split('T')[0], valor: val, status: 'Pendente', comprovante: null, bancoId
             });
         }
 
-        STATE.passivos.push({ id: \`pass_\${stamp}\`, credor, doc, categoria, valorTotal: qtd * val, parcelas });
-        logAuditoria('CADASTRO', 'Acordos', \`Novo acordo: \${credor} com \${qtd} parcelas\`);
+        STATE.passivos.push({ id: `pass_${stamp}`, credor, doc, categoria, valorTotal: qtd * val, parcelas });
+        logAuditoria('CADASTRO', 'Acordos', `Novo acordo: ${credor} com ${qtd} parcelas`);
         showToast('Acordo cadastrado com sucesso!');
         save(); closeModals(); render();
     }
@@ -1243,9 +1243,9 @@ function showToast(msg) {
     function arquivarAcordo(id) {
         const pass = STATE.passivos.find(x => x.id === id);
         if (!pass) return;
-        if (!confirm(\`Arquivar o acordo de "\${pass.credor}"? Ele sairá da visão ativa, mas todos os dados e comprovantes serão preservados.\`)) return;
+        if (!confirm(`Arquivar o acordo de "${pass.credor}"? Ele sairá da visão ativa, mas todos os dados e comprovantes serão preservados.`)) return;
         pass.arquivado = true;
-        logAuditoria('ARQUIVAMENTO', 'Acordos', \`Acordo arquivado: \${pass.credor}\`);
+        logAuditoria('ARQUIVAMENTO', 'Acordos', `Acordo arquivado: ${pass.credor}`);
         save(); render(); showToast('Acordo arquivado.');
     }
 
@@ -1253,7 +1253,7 @@ function showToast(msg) {
         const pass = STATE.passivos.find(x => x.id === id);
         if (!pass) return;
         pass.arquivado = false;
-        logAuditoria('RESTAURAÇÃO', 'Acordos', \`Acordo restaurado: \${pass.credor}\`);
+        logAuditoria('RESTAURAÇÃO', 'Acordos', `Acordo restaurado: ${pass.credor}`);
         save(); render(); showToast('Acordo restaurado.');
     }
 
@@ -1267,18 +1267,18 @@ function showToast(msg) {
             alert('Este acordo possui histórico financeiro ou comprovantes. Para preservar a integridade do histórico, ele não pode ser apagado. Use Arquivar.');
             return;
         }
-        if (!confirm(\`Excluir definitivamente o acordo de "\${pass.credor}"? Esta ação não poderá ser desfeita.\`)) return;
+        if (!confirm(`Excluir definitivamente o acordo de "${pass.credor}"? Esta ação não poderá ser desfeita.`)) return;
         STATE.passivos.splice(idx, 1);
-        logAuditoria('EXCLUSÃO', 'Acordos', \`Acordo excluído: \${pass.credor}\`);
+        logAuditoria('EXCLUSÃO', 'Acordos', `Acordo excluído: ${pass.credor}`);
         save(); render(); showToast('Acordo excluído.');
     }
 
     function arquivarRecorrencia(id) {
         const rec = STATE.recorrencias.find(x => x.id === id);
         if (!rec) return;
-        if (!confirm(\`Arquivar a conta fixa "\${rec.servico}"? Ela deixará de gerar previsão e ficará preservada no histórico.\`)) return;
+        if (!confirm(`Arquivar a conta fixa "${rec.servico}"? Ela deixará de gerar previsão e ficará preservada no histórico.`)) return;
         rec.arquivado = true;
-        logAuditoria('ARQUIVAMENTO', 'Recorrências', \`Conta fixa arquivada: \${rec.servico}\`);
+        logAuditoria('ARQUIVAMENTO', 'Recorrências', `Conta fixa arquivada: ${rec.servico}`);
         save(); render(); showToast('Conta fixa arquivada.');
     }
 
@@ -1286,7 +1286,7 @@ function showToast(msg) {
         const rec = STATE.recorrencias.find(x => x.id === id);
         if (!rec) return;
         rec.arquivado = false;
-        logAuditoria('RESTAURAÇÃO', 'Recorrências', \`Conta fixa restaurada: \${rec.servico}\`);
+        logAuditoria('RESTAURAÇÃO', 'Recorrências', `Conta fixa restaurada: ${rec.servico}`);
         save(); render(); showToast('Conta fixa restaurada.');
     }
 
@@ -1299,9 +1299,9 @@ function showToast(msg) {
             alert('Esta conta fixa possui histórico financeiro. Para não perder informações, ela não pode ser apagada. Use Arquivar.');
             return;
         }
-        if (!confirm(\`Excluir definitivamente a conta fixa "\${rec.servico}"?\`)) return;
+        if (!confirm(`Excluir definitivamente a conta fixa "${rec.servico}"?`)) return;
         STATE.recorrencias.splice(idx, 1);
-        logAuditoria('EXCLUSÃO', 'Recorrências', \`Conta fixa excluída: \${rec.servico}\`);
+        logAuditoria('EXCLUSÃO', 'Recorrências', `Conta fixa excluída: ${rec.servico}`);
         save(); render(); showToast('Conta fixa excluída.');
     }
 
@@ -1314,8 +1314,8 @@ function showToast(msg) {
         const bancoId = document.getElementById('add-r-banco').value;
         if (!servico || !Number.isFinite(valor) || valor <= 0 || !proximoVencimento || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
 
-        STATE.recorrencias.push({ id: \`rec_\${Date.now()}\`, servico, valor, frequencia, proximoVencimento, bancoId, historico: [] });
-        logAuditoria('CADASTRO', 'Recorrências', \`Conta fixa adicionada: \${servico}\`);
+        STATE.recorrencias.push({ id: `rec_${Date.now()}`, servico, valor, frequencia, proximoVencimento, bancoId, historico: [] });
+        logAuditoria('CADASTRO', 'Recorrências', `Conta fixa adicionada: ${servico}`);
         showToast('Conta fixa salva!');
         save(); closeModals(); render();
     }
@@ -1325,8 +1325,8 @@ function showToast(msg) {
         const nome = document.getElementById('add-banco-nome').value.trim();
         const saldo = parseFloat(document.getElementById('add-banco-saldo').value);
         if (!nome || !Number.isFinite(saldo) || saldo < 0) { alert('Informe um nome e um saldo inicial válido.'); return; }
-        STATE.bancos.push({ id: \`banco_\${Date.now()}\`, nome, saldo, status: 'Ativa' });
-        logAuditoria('CADASTRO', 'Bancos', \`Nova conta bancária: \${nome}\`);
+        STATE.bancos.push({ id: `banco_${Date.now()}`, nome, saldo, status: 'Ativa' });
+        logAuditoria('CADASTRO', 'Bancos', `Nova conta bancária: ${nome}`);
         showToast('Conta bancária registrada!');
         save(); closeModals(); render();
     }
@@ -1338,7 +1338,7 @@ function showToast(msg) {
         if (nome === null) return;
         if (!nome.trim()) { alert('O nome não pode ficar vazio.'); return; }
         b.nome = nome.trim();
-        logAuditoria('EDIÇÃO', 'Bancos', \`Conta bancária renomeada para \${b.nome}\`);
+        logAuditoria('EDIÇÃO', 'Bancos', `Conta bancária renomeada para ${b.nome}`);
         save(); render(); showToast('Conta bancária atualizada!');
     }
 
@@ -1347,9 +1347,9 @@ function showToast(msg) {
         if (!b) return;
         if (b.status === 'Arquivada') return;
         if ((STATE.bancos || []).filter(x => x.status !== 'Arquivada').length <= 1) { alert('Mantenha pelo menos uma conta ativa.'); return; }
-        if (!confirm(\`Arquivar a conta "\${b.nome}"? Os lançamentos históricos serão preservados.\`)) return;
+        if (!confirm(`Arquivar a conta "${b.nome}"? Os lançamentos históricos serão preservados.`)) return;
         b.status = 'Arquivada';
-        logAuditoria('ARQUIVAMENTO', 'Bancos', \`Conta arquivada: \${b.nome}\`);
+        logAuditoria('ARQUIVAMENTO', 'Bancos', `Conta arquivada: ${b.nome}`);
         save(); render(); showToast('Conta arquivada. Histórico preservado.');
     }
 
@@ -1357,7 +1357,7 @@ function showToast(msg) {
         const b = getBankById(id);
         if (!b) return;
         b.status = 'Ativa';
-        logAuditoria('RESTAURAÇÃO', 'Bancos', \`Conta restaurada: \${b.nome}\`);
+        logAuditoria('RESTAURAÇÃO', 'Bancos', `Conta restaurada: ${b.nome}`);
         save(); render(); showToast('Conta restaurada!');
     }
 
@@ -1370,9 +1370,9 @@ function showToast(msg) {
             || (STATE.passivos || []).some(p => (p.bancoId === id) || (p.parcelas || []).some(x => x.bancoId === id))
             || (STATE.recorrencias || []).some(r => r.bancoId === id);
         if (referenciada) { alert('Esta conta possui histórico ou lançamentos vinculados. Ela será arquivada em vez de apagada para não quebrar o histórico financeiro.'); arquivarContaBancaria(id); return; }
-        if (!confirm(\`Excluir definitivamente a conta "\${b.nome}"?\`)) return;
+        if (!confirm(`Excluir definitivamente a conta "${b.nome}"?`)) return;
         STATE.bancos = STATE.bancos.filter(x => x.id !== id);
-        logAuditoria('EXCLUSÃO', 'Bancos', \`Conta excluída: \${b.nome}\`);
+        logAuditoria('EXCLUSÃO', 'Bancos', `Conta excluída: ${b.nome}`);
         save(); render(); showToast('Conta excluída!');
     }
 
@@ -1392,10 +1392,10 @@ function showToast(msg) {
         dest.saldo += valor;
 
         const hoje = new Date().toISOString().split('T')[0];
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: hoje, descricao: \`Transferência para \${dest.nome}\`, conta: orig.nome, bancoId: orig.id, tipo: 'Transferência', valor, sinal: -1, origemTipo: 'transferencia' });
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}_2\`, data: hoje, descricao: \`Transferência de \${orig.nome}\`, conta: dest.nome, bancoId: dest.id, tipo: 'Transferência', valor, sinal: 1, origemTipo: 'transferencia' });
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: hoje, descricao: `Transferência para ${dest.nome}`, conta: orig.nome, bancoId: orig.id, tipo: 'Transferência', valor, sinal: -1, origemTipo: 'transferencia' });
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}_2`, data: hoje, descricao: `Transferência de ${orig.nome}`, conta: dest.nome, bancoId: dest.id, tipo: 'Transferência', valor, sinal: 1, origemTipo: 'transferencia' });
 
-        logAuditoria('TRANSFERÊNCIA', 'Bancos', \`Transferência de R$ \${valor} de \${orig.nome} para \${dest.nome}\`);
+        logAuditoria('TRANSFERÊNCIA', 'Bancos', `Transferência de R$ ${valor} de ${orig.nome} para ${dest.nome}`);
         showToast('Transferência realizada!');
         save(); closeModals(); render();
     }
@@ -1411,8 +1411,8 @@ function showToast(msg) {
         item.dataRecebimento = new Date().toISOString().split('T')[0];
         item.valorRecebido = item.valor;
         banco.saldo += item.valor;
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: item.dataRecebimento, descricao: \`Recebimento: \${item.cliente}\`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor: item.valor, sinal: 1, origemId: item.id, origemTipo: 'recebimento' });
-        logAuditoria('BAIXA', 'Recebimentos', \`Entrada confirmada: R$ \${formatMoney(item.valor)} de \${item.cliente} na conta \${banco.nome}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: item.dataRecebimento, descricao: `Recebimento: ${item.cliente}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor: item.valor, sinal: 1, origemId: item.id, origemTipo: 'recebimento' });
+        logAuditoria('BAIXA', 'Recebimentos', `Entrada confirmada: R$ ${formatMoney(item.valor)} de ${item.cliente} na conta ${banco.nome}`);
         showToast('Recebimento confirmado no Caixa!');
         save(); render();
     }
@@ -1428,8 +1428,8 @@ function showToast(msg) {
         item.dataRecebimento = null;
         item.valorRecebido = null;
         anularUltimoMovimento(item.id, 'recebimento');
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: new Date().toISOString().split('T')[0], descricao: \`Estorno de recebimento: \${item.cliente}\`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Saída', valor, sinal: -1, estorno: true, origemId: item.id, origemTipo: 'recebimento' });
-        logAuditoria('REVERSÃO', 'Recebimentos', \`Recebimento desfeito: \${item.cliente} - R$ \${formatMoney(valor)}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de recebimento: ${item.cliente}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Saída', valor, sinal: -1, estorno: true, origemId: item.id, origemTipo: 'recebimento' });
+        logAuditoria('REVERSÃO', 'Recebimentos', `Recebimento desfeito: ${item.cliente} - R$ ${formatMoney(valor)}`);
         save(); render(); showToast('Recebimento desfeito e estornado!');
     }
 
@@ -1439,13 +1439,13 @@ function showToast(msg) {
         if (!validarBaixaValorAlto(item.valor, item.comprovanteData)) return;
         const banco = getBankById(getPreferredBankId(item, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa.'); return; }
-        if (Number(banco.saldo) < Number(item.valor)) { alert(\`Saldo insuficiente em \${banco.nome}. Saldo disponível: R$ \${formatMoney(Number(banco.saldo))}\`); return; }
+        if (Number(banco.saldo) < Number(item.valor)) { alert(`Saldo insuficiente em ${banco.nome}. Saldo disponível: R$ ${formatMoney(Number(banco.saldo))}`); return; }
         item.bancoId = banco.id;
         item.status = 'Pago';
         item.dataPagamento = new Date().toISOString().split('T')[0];
         banco.saldo -= item.valor;
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: item.dataPagamento, descricao: \`Pagamento: \${item.fornecedor}\`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: item.valor, sinal: -1, origemId: item.id, origemTipo: 'conta_pagar' });
-        logAuditoria('BAIXA', 'Contas a Pagar', \`Pagamento efetuado: R$ \${formatMoney(item.valor)} para \${item.fornecedor} pela conta \${banco.nome}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: item.dataPagamento, descricao: `Pagamento: ${item.fornecedor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: item.valor, sinal: -1, origemId: item.id, origemTipo: 'conta_pagar' });
+        logAuditoria('BAIXA', 'Contas a Pagar', `Pagamento efetuado: R$ ${formatMoney(item.valor)} para ${item.fornecedor} pela conta ${banco.nome}`);
         showToast('Conta quitada no Caixa!');
         save(); render();
     }
@@ -1460,8 +1460,8 @@ function showToast(msg) {
         item.status = 'Pendente';
         item.dataPagamento = null;
         anularUltimoMovimento(item.id, 'conta_pagar');
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: new Date().toISOString().split('T')[0], descricao: \`Estorno de pagamento: \${item.fornecedor}\`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: item.id, origemTipo: 'conta_pagar' });
-        logAuditoria('REVERSÃO', 'Contas a Pagar', \`Pagamento desfeito: \${item.fornecedor} - R$ \${formatMoney(valor)}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de pagamento: ${item.fornecedor}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: item.id, origemTipo: 'conta_pagar' });
+        logAuditoria('REVERSÃO', 'Contas a Pagar', `Pagamento desfeito: ${item.fornecedor} - R$ ${formatMoney(valor)}`);
         save(); render(); showToast('Pagamento desfeito e estornado!');
     }
 
@@ -1472,14 +1472,14 @@ function showToast(msg) {
         if (!validarBaixaValorAlto(p.valor, p.comprovanteData)) return;
         const banco = getBankById(getPreferredBankId(p, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa para esta parcela.'); return; }
-        if (Number(banco.saldo) < Number(p.valor)) { alert(\`Saldo insuficiente em \${banco.nome}. Saldo disponível: R$ \${formatMoney(Number(banco.saldo))}\`); return; }
+        if (Number(banco.saldo) < Number(p.valor)) { alert(`Saldo insuficiente em ${banco.nome}. Saldo disponível: R$ ${formatMoney(Number(banco.saldo))}`); return; }
         p.bancoId = banco.id;
         p.status = 'Pago';
         p.dataPagamento = new Date().toISOString().split('T')[0];
         if(!p.comprovante) p.comprovante = "Baixa_Manual.pdf";
         banco.saldo -= p.valor;
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: p.dataPagamento, descricao: \`Parcela #\${p.num} - \${pass.credor}\`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: p.valor, sinal: -1, origemId: p.id, origemTipo: 'parcela_acordo' });
-        logAuditoria('BAIXA', 'Acordos', \`Parcela #\${p.num} quitada de \${pass.credor} pela conta \${banco.nome}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: p.dataPagamento, descricao: `Parcela #${p.num} - ${pass.credor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: p.valor, sinal: -1, origemId: p.id, origemTipo: 'parcela_acordo' });
+        logAuditoria('BAIXA', 'Acordos', `Parcela #${p.num} quitada de ${pass.credor} pela conta ${banco.nome}`);
         showToast('Parcela baixada com sucesso!');
         save(); render();
     }
@@ -1495,8 +1495,8 @@ function showToast(msg) {
         p.status = 'Pendente';
         p.dataPagamento = null;
         anularUltimoMovimento(p.id, 'parcela_acordo');
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: new Date().toISOString().split('T')[0], descricao: \`Estorno parcela #\${p.num} - \${pass.credor}\`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: p.id, origemTipo: 'parcela_acordo' });
-        logAuditoria('REVERSÃO', 'Acordos', \`Pagamento desfeito da parcela #\${p.num} de \${pass.credor}; comprovante preservado\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno parcela #${p.num} - ${pass.credor}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: p.id, origemTipo: 'parcela_acordo' });
+        logAuditoria('REVERSÃO', 'Acordos', `Pagamento desfeito da parcela #${p.num} de ${pass.credor}; comprovante preservado`);
         showToast('Pagamento desfeito; comprovante preservado!');
         save(); render();
     }
@@ -1507,7 +1507,7 @@ function showToast(msg) {
         const pass = STATE.passivos.find(x => x.id === passId);
         const p = pass?.parcelas.find(x => x.id === parcId);
         if (!pass || !p) return;
-        if (p.comprovante && !confirm(\`Já existe um comprovante (\${p.comprovante}). Deseja substituí-lo por "\\${file.name}"?\`)) { input.value=''; return; }
+        if (p.comprovante && !confirm(`Já existe um comprovante (${p.comprovante}). Deseja substituí-lo por "${file.name}"?`)) { input.value=''; return; }
         if (file.size > 5 * 1024 * 1024) { alert('Comprovante muito grande. Limite para armazenamento direto: 5 MB.'); input.value=''; return; }
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -1515,7 +1515,7 @@ function showToast(msg) {
             p.comprovanteData = e.target.result;
             p.comprovanteType = file.type || 'application/octet-stream';
             p.comprovanteSize = file.size;
-            logAuditoria('ANEXO', 'Acordos', \`Comprovante \${file.name} anexado à parcela #\${p.num}\`);
+            logAuditoria('ANEXO', 'Acordos', `Comprovante ${file.name} anexado à parcela #${p.num}`);
             showToast('Comprovante anexado e armazenado!');
             save(); render();
         };
@@ -1533,12 +1533,12 @@ function showToast(msg) {
         if (tipo === 'parcela') {
             for (const pass of (STATE.passivos || [])) {
                 const obj = pass.parcelas?.find(p => p.id === objId);
-                if (obj) return { obj, modulo: 'Acordos', descricao: \`parcela #\${obj.num} de \${pass.credor}\` };
+                if (obj) return { obj, modulo: 'Acordos', descricao: `parcela #${obj.num} de ${pass.credor}` };
             }
         } else if (tipo === 'recorrencia') {
             const rec = (STATE.recorrencias || []).find(r => r.id === objId);
             const obj = rec?.historico?.find(h => h.id === historicoId);
-            if (obj) return { obj, modulo: 'Recorrências', descricao: \`pagamento de \${rec.servico}\` };
+            if (obj) return { obj, modulo: 'Recorrências', descricao: `pagamento de ${rec.servico}` };
         }
         return null;
     }
@@ -1547,13 +1547,13 @@ function showToast(msg) {
         const alvo = localizarComprovante(objId, tipo, historicoId);
         if (!alvo || !alvo.obj.comprovante) return;
         const nome = alvo.obj.comprovante;
-        const pergunta = \`Excluir o comprovante "\\${nome}"?\\n\\nO pagamento/registro será mantido. Somente o arquivo e a referência do comprovante serão removidos.\`;
+        const pergunta = `Excluir o comprovante "${nome}"?\\n\\nO pagamento/registro será mantido. Somente o arquivo e a referência do comprovante serão removidos.`;
         if (!confirm(pergunta)) return;
         alvo.obj.comprovante = null;
         delete alvo.obj.comprovanteData;
         delete alvo.obj.comprovanteType;
         delete alvo.obj.comprovanteSize;
-        logAuditoria('EXCLUSÃO DE ANEXO', alvo.modulo, \`Comprovante \${nome} removido de \${alvo.descricao}\`);
+        logAuditoria('EXCLUSÃO DE ANEXO', alvo.modulo, `Comprovante ${nome} removido de ${alvo.descricao}`);
         save();
         render();
         showToast('Comprovante excluído. O lançamento foi preservado.');
@@ -1571,7 +1571,7 @@ function showToast(msg) {
         if (!arq) { alert('Este comprovante foi registrado apenas pelo nome. O arquivo original não está armazenado nesta versão do sistema.'); return; }
         const a = document.createElement('a');
         a.href = arq.data; a.download = arq.name; document.body.appendChild(a); a.click(); a.remove();
-        logAuditoria('DOWNLOAD', tipo === 'parcela' ? 'Acordos' : 'Recorrências', \`Comprovante \${arq.name} baixado\`);
+        logAuditoria('DOWNLOAD', tipo === 'parcela' ? 'Acordos' : 'Recorrências', `Comprovante ${arq.name} baixado`);
     }
 
     function visualizarComprovante(objId, tipo, historicoId) {
@@ -1587,7 +1587,7 @@ function showToast(msg) {
         const win = window.open('', '_blank');
         if (!win) { alert('O navegador bloqueou a visualização. Permita pop-ups para este sistema.'); return; }
         if ((arq.type || '').startsWith('image/') || arq.type === 'application/pdf') {
-            win.document.write(\`<title>\${arq.name}</title><style>html,body{margin:0;height:100%;background:#111}embed,img{width:100%;height:100%;object-fit:contain;border:0}</style>\${arq.type === 'application/pdf' ? \`<embed src="\${arq.data}" type="application/pdf">\` : \`<img src="\${arq.data}" alt="\${arq.name}">\`}\`);
+            win.document.write(`<title>${arq.name}</title><style>html,body{margin:0;height:100%;background:#111}embed,img{width:100%;height:100%;object-fit:contain;border:0}</style>${arq.type === 'application/pdf' ? `<embed src="${arq.data}" type="application/pdf">` : `<img src="${arq.data}" alt="${arq.name}">`}`);
             win.document.close();
         } else {
             win.location.href = arq.data;
@@ -1598,28 +1598,28 @@ function showToast(msg) {
         const rec = STATE.recorrencias.find(x => x.id === recId);
         if (!rec) return;
         if (rec.arquivado) { alert('Esta conta fixa está arquivada. Restaure-a para registrar um novo pagamento.'); return; }
-        if (Number(rec.valor) >= LIMITE_COMPROVANTE && !document.getElementById(\`file-rec-\${recId}\`)?.files?.[0]) { alert(\`Segurança: esta baixa de R$ \${formatMoney(rec.valor)} exige comprovante. Anexe o PDF ou imagem antes de confirmar.\`); return; }
+        if (Number(rec.valor) >= LIMITE_COMPROVANTE && !document.getElementById(`file-rec-${recId}`)?.files?.[0]) { alert(`Segurança: esta baixa de R$ ${formatMoney(rec.valor)} exige comprovante. Anexe o PDF ou imagem antes de confirmar.`); return; }
         const banco = getBankById(getPreferredBankId(rec, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa.'); return; }
-        if (Number(banco.saldo) < Number(rec.valor)) { alert(\`Saldo insuficiente em \${banco.nome}.\`); return; }
-        const fileInput = document.getElementById(\`file-rec-\${recId}\`);
+        if (Number(banco.saldo) < Number(rec.valor)) { alert(`Saldo insuficiente em ${banco.nome}.`); return; }
+        const fileInput = document.getElementById(`file-rec-${recId}`);
         const file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
         if (file && file.size > 5 * 1024 * 1024) { alert('Recibo muito grande. Limite para armazenamento direto: 5 MB.'); return; }
         const hoje = new Date().toISOString().split('T')[0];
         rec.bancoId = banco.id;
         rec.historico = rec.historico || [];
-        const historico = { id: \`rh_\${Date.now()}\`, dataPagamento: hoje, valor: rec.valor, comprovante: file ? file.name : 'Recibo.pdf', bancoId: banco.id };
+        const historico = { id: `rh_${Date.now()}`, dataPagamento: hoje, valor: rec.valor, comprovante: file ? file.name : 'Recibo.pdf', bancoId: banco.id };
         const concluirPagamento = (data) => {
             if (data) { historico.comprovanteData = data; historico.comprovanteType = file.type || 'application/octet-stream'; historico.comprovanteSize = file.size; }
             rec.historico.push(historico);
             banco.saldo -= rec.valor;
-            STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: hoje, descricao: \`Gasto Fixo: \${rec.servico}\`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: rec.valor, sinal: -1, origemId: rec.id, origemTipo: 'recorrencia', origemHistoricoId: historico.id });
+            STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: hoje, descricao: `Gasto Fixo: ${rec.servico}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: rec.valor, sinal: -1, origemId: rec.id, origemTipo: 'recorrencia', origemHistoricoId: historico.id });
             let d = new Date(rec.proximoVencimento + 'T00:00:00');
             if (rec.frequencia === 'Mensal') d.setMonth(d.getMonth() + 1);
             else if (rec.frequencia === 'Trimestral') d.setMonth(d.getMonth() + 3);
             else if (rec.frequencia === 'Anual') d.setFullYear(d.getFullYear() + 1);
             rec.proximoVencimento = d.toISOString().split('T')[0];
-            logAuditoria('BAIXA', 'Recorrências', \`Gasto fixo quitado: \${rec.servico}\`);
+            logAuditoria('BAIXA', 'Recorrências', `Gasto fixo quitado: ${rec.servico}`);
             showToast('Gasto fixo quitado!');
             save(); render();
         };
@@ -1637,7 +1637,7 @@ function showToast(msg) {
         const idx = histId ? rec.historico.findIndex(h => h.id === histId) : rec.historico.length - 1;
         if (idx < 0) return;
         const h = rec.historico[idx];
-        if (!confirm(\`Desfazer o pagamento de R$ \${formatMoney(Number(h.valor))}?\`)) return;
+        if (!confirm(`Desfazer o pagamento de R$ ${formatMoney(Number(h.valor))}?`)) return;
         const banco = getBankById(h.bancoId || rec.bancoId);
         if (banco) banco.saldo += Number(h.valor);
         rec.historico.splice(idx, 1);
@@ -1647,8 +1647,8 @@ function showToast(msg) {
         else if (rec.frequencia === 'Anual') d.setFullYear(d.getFullYear() - 1);
         rec.proximoVencimento = d.toISOString().split('T')[0];
         anularUltimoMovimento(rec.id, 'recorrencia', h.id);
-        STATE.movimentacoes.unshift({ id: \`mov_\${Date.now()}\`, data: new Date().toISOString().split('T')[0], descricao: \`Estorno de gasto fixo: \${rec.servico}\`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor: Number(h.valor), sinal: 1, estorno: true, origemId: rec.id, origemTipo: 'recorrencia' });
-        logAuditoria('REVERSÃO', 'Recorrências', \`Pagamento desfeito: \${rec.servico}\`);
+        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de gasto fixo: ${rec.servico}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor: Number(h.valor), sinal: 1, estorno: true, origemId: rec.id, origemTipo: 'recorrencia' });
+        logAuditoria('REVERSÃO', 'Recorrências', `Pagamento desfeito: ${rec.servico}`);
         save(); render(); showToast('Pagamento da conta fixa desfeito!');
     }
 
@@ -1681,7 +1681,7 @@ function showToast(msg) {
         if (!validarDataRetroativa(item.data)) return;
         if(!confirm('Confirma a exclusão deste recebimento?')) return;
         STATE.recebimentos = STATE.recebimentos.filter(x => x.id !== id);
-        logAuditoria('EXCLUSÃO', 'Recebimentos', \`Registro excluído ID: \${id}\`);
+        logAuditoria('EXCLUSÃO', 'Recebimentos', `Registro excluído ID: ${id}`);
         showToast('Registro excluído!');
         save(); render();
     }
@@ -1693,7 +1693,7 @@ function showToast(msg) {
         if (!validarDataRetroativa(item.vencimento)) return;
         if(!confirm('Confirma a exclusão desta conta a pagar?')) return;
         STATE.contasPagar = STATE.contasPagar.filter(x => x.id !== id);
-        logAuditoria('EXCLUSÃO', 'Contas a Pagar', \`Registro excluído ID: \${id}\`);
+        logAuditoria('EXCLUSÃO', 'Contas a Pagar', `Registro excluído ID: ${id}`);
         showToast('Registro excluído!');
         save(); render();
     }
@@ -1735,7 +1735,7 @@ function showToast(msg) {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(STATE, null, 2));
         const dlAnchor = document.createElement('a');
         dlAnchor.setAttribute("href", dataStr);
-        dlAnchor.setAttribute("download", \`DBS_TREASURY_BACKUP_\${new Date().toISOString().split('T')[0]}.json\`);
+        dlAnchor.setAttribute("download", `DBS_TREASURY_BACKUP_${new Date().toISOString().split('T')[0]}.json`);
         document.body.appendChild(dlAnchor);
         dlAnchor.click();
         dlAnchor.remove();
@@ -1780,20 +1780,20 @@ function showToast(msg) {
             csvContent += "Credor,Documento,Categoria,Parcela,Vencimento,Valor,Status\\n";
             STATE.passivos.forEach(p => {
                 p.parcelas.forEach(parc => {
-                    csvContent += \`"\${p.credor}","\${p.doc}","\${p.categoria || 'Geral'}",\${parc.num},\${parc.vencimento},\${parc.valor},\${parc.status}\\n\`;
+                    csvContent += `"${p.credor}","${p.doc}","${p.categoria || 'Geral'}",${parc.num},${parc.vencimento},${parc.valor},${parc.status}\\n`;
                 });
             });
         } else {
             csvContent += "Cliente,Categoria,Data,Valor,Status\\n";
             STATE.recebimentos.forEach(r => {
-                csvContent += \`"\${r.cliente}","\${r.categoria}",\${r.data},\${r.valor},\${r.status}\\n\`;
+                csvContent += `"${r.cliente}","${r.categoria}",${r.data},${r.valor},${r.status}\\n`;
             });
         }
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", \`relatorio_\${tipo}.csv\`);
+        link.setAttribute("download", `relatorio_${tipo}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1805,7 +1805,7 @@ function showToast(msg) {
         const str=String(dataString);
         if(str.includes('/')) return str;
         const partes=str.split('T')[0].split('-');
-        return partes.length===3 ? \`\${partes[2]}/\${partes[1]}/\${partes[0]}\` : str;
+        return partes.length===3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : str;
     }
     function parseDataBR(dataStr){
         if(!dataStr) return null;
@@ -1819,8 +1819,8 @@ function showToast(msg) {
         if(tipo==='mesAtual'){ inicio=new Date(hoje.getFullYear(),hoje.getMonth(),1); fim=new Date(hoje.getFullYear(),hoje.getMonth()+1,0); }
         else if(tipo==='mesAnterior'){ inicio=new Date(hoje.getFullYear(),hoje.getMonth()-1,1); fim=new Date(hoje.getFullYear(),hoje.getMonth(),0); }
         else { inicio=new Date(hoje.getFullYear(),0,1); fim=new Date(hoje.getFullYear(),11,31); }
-        document.getElementById('filtroDataInicio').value=\`\${inicio.getFullYear()}-\${String(inicio.getMonth()+1).padStart(2,'0')}-\${String(inicio.getDate()).padStart(2,'0')}\`;
-        document.getElementById('filtroDataFim').value=\`\${fim.getFullYear()}-\${String(fim.getMonth()+1).padStart(2,'0')}-\${String(fim.getDate()).padStart(2,'0')}\`;
+        document.getElementById('filtroDataInicio').value=`${inicio.getFullYear()}-${String(inicio.getMonth()+1).padStart(2,'0')}-${String(inicio.getDate()).padStart(2,'0')}`;
+        document.getElementById('filtroDataFim').value=`${fim.getFullYear()}-${String(fim.getMonth()+1).padStart(2,'0')}-${String(fim.getDate()).padStart(2,'0')}`;
         filtrarAcordosPorData();
     }
     function limparFiltroData(){ document.getElementById('filtroDataInicio').value=''; document.getElementById('filtroDataFim').value=''; filtrarAcordosPorData(); }
@@ -1838,7 +1838,7 @@ function showToast(msg) {
         const lista=getAcordosFiltrados().filter(p=>!p.arquivado || document.getElementById('flt-passivo-arquivados')?.checked);
         if(!lista.length){ showToast('Nenhum acordo encontrado para o período selecionado.'); return; }
         const ini=document.getElementById('filtroDataInicio')?.value, fim=document.getElementById('filtroDataFim')?.value;
-        const periodo=(ini||fim)?\`Período: \${formatarDataBR(ini)} até \${formatarDataBR(fim)}\`:'Todos os Registros';
+        const periodo=(ini||fim)?`Período: ${formatarDataBR(ini)} até ${formatarDataBR(fim)}`:'Todos os Registros';
         let totalContratos=0,totalPago=0,totalSaldo=0,linhas='';
         lista.forEach(ac=>{
             const valorTotal=Number(ac.valorTotal)||0,totalParcelas=Number(ac.parcelas?.length)||1;
@@ -1849,14 +1849,14 @@ function showToast(msg) {
             const saldoDevedor=Math.max(0,valorTotal-pagasTotal);
             const pct=valorTotal>0?(pagasTotal/valorTotal*100).toFixed(1):'0.0';
             totalContratos+=valorTotal; totalPago+=pagasTotal; totalSaldo+=saldoDevedor;
-            linhas+=\`<tr><td><strong>\${ac.credor}</strong><br><small>\${ac.categoria||'Acordo'}</small></td><td>\${parcelasFiltradas.length}/\${totalParcelas}</td><td>R$ \${formatMoney(valorParcela)}</td><td>R$ \${formatMoney(valorTotal)}</td><td>R$ \${formatMoney(pagasTotal)}</td><td>R$ \${formatMoney(saldoDevedor)}</td><td>\${pct}%</td><td>\${parcelasFiltradas.length?formatarDataBR(parcelasFiltradas[0].vencimento):'-'}</td></tr>\`;
+            linhas+=`<tr><td><strong>${ac.credor}</strong><br><small>${ac.categoria||'Acordo'}</small></td><td>${parcelasFiltradas.length}/${totalParcelas}</td><td>R$ ${formatMoney(valorParcela)}</td><td>R$ ${formatMoney(valorTotal)}</td><td>R$ ${formatMoney(pagasTotal)}</td><td>R$ ${formatMoney(saldoDevedor)}</td><td>${pct}%</td><td>${parcelasFiltradas.length?formatarDataBR(parcelasFiltradas[0].vencimento):'-'}</td></tr>`;
         });
         const pctGeral=totalContratos>0?(totalPago/totalContratos*100).toFixed(1):'0.0';
         const win=window.open('','_blank','width=950,height=700');
         if(!win){alert('O navegador bloqueou a janela de impressão. Permita pop-ups para gerar o PDF.');return;}
-        win.document.write(\`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}</style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: \${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">\${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ \${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ \${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ \${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">\${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>\${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ \${formatMoney(totalContratos)}</td><td>R$ \${formatMoney(totalPago)}</td><td>R$ \${formatMoney(totalSaldo)}</td><td>\${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>\`);
+        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}</style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: ${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ ${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ ${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ ${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ ${formatMoney(totalContratos)}</td><td>R$ ${formatMoney(totalPago)}</td><td>R$ ${formatMoney(totalSaldo)}</td><td>${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>`);
         win.document.close();
-        logAuditoria('EXPORTAÇÃO_PDF','Acordos',\`Gerou relatório PDF de passivos. \${periodo}\`);
+        logAuditoria('EXPORTAÇÃO_PDF','Acordos',`Gerou relatório PDF de passivos. ${periodo}`);
     }
 
     function renderDRE() {
@@ -1901,22 +1901,22 @@ function showToast(msg) {
 
         const liquido = ebitda - totalPassivosMes;
 
-        document.getElementById('dre-val-rec-cadastrada').innerText = \`R$ \${recCadastrada.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-recbruta').innerText = \`R$ \${recBrutaManual.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-impostos').innerText = \`R$ \${impostosManual.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-recliquida').innerText = \`R$ \${recTotalLiquida.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-custos').innerText = \`R$ \${custosDir.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-recorrencias').innerText = \`R$ \${totalRecorrencias.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('dre-val-pagar-mes').innerText = \`R$ \${contasPagarMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+        document.getElementById('dre-val-rec-cadastrada').innerText = `R$ ${recCadastrada.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-recbruta').innerText = `R$ ${recBrutaManual.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-impostos').innerText = `R$ ${impostosManual.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-recliquida').innerText = `R$ ${recTotalLiquida.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-custos').innerText = `R$ ${custosDir.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-recorrencias').innerText = `R$ ${totalRecorrencias.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-pagar-mes').innerText = `R$ ${contasPagarMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         
         const ebitdaEl = document.getElementById('dre-val-ebitda');
-        ebitdaEl.innerText = \`R$ \${ebitda.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+        ebitdaEl.innerText = `R$ ${ebitda.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         ebitdaEl.className = ebitda >= 0 ? 'dre-val-pos' : 'dre-val-neg';
 
-        document.getElementById('dre-val-passivos').innerText = \`R$ \${totalPassivosMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+        document.getElementById('dre-val-passivos').innerText = `R$ ${totalPassivosMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         
         const liqEl = document.getElementById('dre-val-liquido');
-        liqEl.innerText = \`R$ \${liquido.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+        liqEl.innerText = `R$ ${liquido.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         liqEl.className = liquido >= 0 ? 'dre-val-pos' : 'dre-val-neg';
     }
 
@@ -2009,94 +2009,94 @@ function showToast(msg) {
 
         document.getElementById('alert-banner').style.display = qtdAtrasados > 0 ? 'flex' : 'none';
 
-        document.getElementById('kpi-receber-mes').innerText = \`R$ \${tReceberMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('kpi-pagar-mes').innerText = \`R$ \${tPagarMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('kpi-passivo-total').innerText = \`R$ \${tPassivoTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
-        document.getElementById('kpi-recorrente-mrr').innerText = \`R$ \${tMRR.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+        document.getElementById('kpi-receber-mes').innerText = `R$ ${tReceberMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('kpi-pagar-mes').innerText = `R$ ${tPagarMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('kpi-passivo-total').innerText = `R$ ${tPassivoTotal.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('kpi-recorrente-mrr').innerText = `R$ ${tMRR.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
 
         [30, 60, 90].forEach(dias => {
             let val = calcularProjecao(dias);
-            let el = document.getElementById(\`proj-\${dias}\`);
-            el.innerText = \`R$ \${val.toLocaleString('pt-BR', {minimumFractionDigits:2})}\`;
+            let el = document.getElementById(`proj-${dias}`);
+            el.innerText = `R$ ${val.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
             el.style.color = val >= 0 ? 'var(--emerald)' : 'var(--rose)';
         });
 
         // Tabela Recebimentos
-        document.getElementById('receber-list').innerHTML = STATE.recebimentos.map(r => \`
+        document.getElementById('receber-list').innerHTML = STATE.recebimentos.map(r => `
             <tr>
-                <td><strong>\${r.cliente}</strong></td>
-                <td><span class="badge badge-pending">\${r.categoria}</span></td>
-                <td>\${formatarDataBR(r.data)}</td>
-                <td>R$ \${formatMoney(r.valor)}</td>
-                <td><span class="badge \${r.status === 'Recebido' ? 'badge-paid' : 'badge-pending'}">\${r.status}</span></td>
+                <td><strong>${r.cliente}</strong></td>
+                <td><span class="badge badge-pending">${r.categoria}</span></td>
+                <td>${formatarDataBR(r.data)}</td>
+                <td>R$ ${formatMoney(r.valor)}</td>
+                <td><span class="badge ${r.status === 'Recebido' ? 'badge-paid' : 'badge-pending'}">${r.status}</span></td>
                 <td>
-                    \${r.status === 'Recebido' ? \`<button class="btn btn-secondary" onclick="desfazerRecebimento('\${r.id}')"><i class="fa-solid fa-rotate-left"></i></button>\` : \`<button class="btn btn-success" onclick="confirmarRecebimento('\${r.id}')"><i class="fa-solid fa-check"></i></button>\`}
-                    <button class="btn btn-secondary" onclick="editarRecebimentoModal('\${r.id}')"><i class="fa-solid fa-pen"></i></button>
-                    \${r.comprovante ? \`<span title="\${r.comprovante}" style="font-size:11px;color:var(--brand-primary);"><i class="fa-solid fa-paperclip"></i></span><button class="btn btn-secondary" style="padding:4px 6px;font-size:10px" title="Baixar comprovante" onclick="baixarComprovanteLancamento('recebimento','\${r.id}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 6px;font-size:10px" title="Excluir comprovante" onclick="excluirComprovanteLancamento('recebimento','\${r.id}')"><i class="fa-solid fa-trash"></i></button>\` : \`<input type="file" id="file-rec-lanc-\${r.id}" accept=".pdf,image/*" style="max-width:150px;font-size:10px" onchange="anexarComprovanteLancamento('recebimento','\${r.id}',this)">\`}
-                    <button class="btn btn-danger" onclick="excluirRecebimento('\${r.id}')"><i class="fa-solid fa-trash"></i></button>
+                    ${r.status === 'Recebido' ? `<button class="btn btn-secondary" onclick="desfazerRecebimento('${r.id}')"><i class="fa-solid fa-rotate-left"></i></button>` : `<button class="btn btn-success" onclick="confirmarRecebimento('${r.id}')"><i class="fa-solid fa-check"></i></button>`}
+                    <button class="btn btn-secondary" onclick="editarRecebimentoModal('${r.id}')"><i class="fa-solid fa-pen"></i></button>
+                    ${r.comprovante ? `<span title="${r.comprovante}" style="font-size:11px;color:var(--brand-primary);"><i class="fa-solid fa-paperclip"></i></span><button class="btn btn-secondary" style="padding:4px 6px;font-size:10px" title="Baixar comprovante" onclick="baixarComprovanteLancamento('recebimento','${r.id}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 6px;font-size:10px" title="Excluir comprovante" onclick="excluirComprovanteLancamento('recebimento','${r.id}')"><i class="fa-solid fa-trash"></i></button>` : `<input type="file" id="file-rec-lanc-${r.id}" accept=".pdf,image/*" style="max-width:150px;font-size:10px" onchange="anexarComprovanteLancamento('recebimento','${r.id}',this)">`}
+                    <button class="btn btn-danger" onclick="excluirRecebimento('${r.id}')"><i class="fa-solid fa-trash"></i></button>
                 </td>
             </tr>
-        \`).join('');
+        `).join('');
 
         // Tabela Contas a Pagar
         document.getElementById('pagar-list').innerHTML = STATE.contasPagar.map(p => {
             let diff = getDaysDiff(p.vencimento);
-            let tag = p.status === 'Pago' ? \`<span class="badge badge-paid">Pago</span>\` :
-                      (diff < 0 ? \`<span class="badge badge-overdue">\${Math.abs(diff)}d atraso</span>\` : \`<span class="badge badge-pending">A Pagar</span>\`);
-            return \`
+            let tag = p.status === 'Pago' ? `<span class="badge badge-paid">Pago</span>` :
+                      (diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)}d atraso</span>` : `<span class="badge badge-pending">A Pagar</span>`);
+            return `
                 <tr>
-                    <td><strong>\${p.fornecedor}</strong></td>
-                    <td>\${p.descricao}</td>
-                    <td>\${formatarDataBR(p.vencimento)}</td>
-                    <td>R$ \${formatMoney(p.valor)}</td>
-                    <td>\${tag}</td>
+                    <td><strong>${p.fornecedor}</strong></td>
+                    <td>${p.descricao}</td>
+                    <td>${formatarDataBR(p.vencimento)}</td>
+                    <td>R$ ${formatMoney(p.valor)}</td>
+                    <td>${tag}</td>
                     <td>
-                        \${p.status === 'Pago' ? \`<button class="btn btn-secondary" onclick="desfazerPagamentoConta('\${p.id}')"><i class="fa-solid fa-rotate-left"></i></button>\` : \`<button class="btn btn-success" onclick="confirmarPagamentoConta('\${p.id}')"><i class="fa-solid fa-check"></i></button>\`}
-                        <button class="btn btn-secondary" onclick="editarPagarModal('\${p.id}')"><i class="fa-solid fa-pen"></i></button>
-                        \${p.comprovante ? \`<span title="\${p.comprovante}" style="font-size:11px;color:var(--brand-primary);"><i class="fa-solid fa-paperclip"></i></span><button class="btn btn-secondary" style="padding:4px 6px;font-size:10px" title="Baixar comprovante" onclick="baixarComprovanteLancamento('conta_pagar','\${p.id}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 6px;font-size:10px" title="Excluir comprovante" onclick="excluirComprovanteLancamento('conta_pagar','\${p.id}')"><i class="fa-solid fa-trash"></i></button>\` : \`<input type="file" id="file-pag-lanc-\${p.id}" accept=".pdf,image/*" style="max-width:150px;font-size:10px" onchange="anexarComprovanteLancamento('conta_pagar','\${p.id}',this)">\`}
-                        <button class="btn btn-danger" onclick="excluirContaPagar('\${p.id}')"><i class="fa-solid fa-trash"></i></button>
+                        ${p.status === 'Pago' ? `<button class="btn btn-secondary" onclick="desfazerPagamentoConta('${p.id}')"><i class="fa-solid fa-rotate-left"></i></button>` : `<button class="btn btn-success" onclick="confirmarPagamentoConta('${p.id}')"><i class="fa-solid fa-check"></i></button>`}
+                        <button class="btn btn-secondary" onclick="editarPagarModal('${p.id}')"><i class="fa-solid fa-pen"></i></button>
+                        ${p.comprovante ? `<span title="${p.comprovante}" style="font-size:11px;color:var(--brand-primary);"><i class="fa-solid fa-paperclip"></i></span><button class="btn btn-secondary" style="padding:4px 6px;font-size:10px" title="Baixar comprovante" onclick="baixarComprovanteLancamento('conta_pagar','${p.id}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 6px;font-size:10px" title="Excluir comprovante" onclick="excluirComprovanteLancamento('conta_pagar','${p.id}')"><i class="fa-solid fa-trash"></i></button>` : `<input type="file" id="file-pag-lanc-${p.id}" accept=".pdf,image/*" style="max-width:150px;font-size:10px" onchange="anexarComprovanteLancamento('conta_pagar','${p.id}',this)">`}
+                        <button class="btn btn-danger" onclick="excluirContaPagar('${p.id}')"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>
-            \`;
+            `;
         }).join('');
 
         // Lista de Bancos e Caixa Movimentações
-        document.getElementById('bancos-list').innerHTML = STATE.bancos.map(b => \`
-            <div class="\${b.status === 'Arquivada' ? 'archived-item' : ''}" style="padding:12px; border:1px solid var(--border); border-radius:var(--radius-md);">
+        document.getElementById('bancos-list').innerHTML = STATE.bancos.map(b => `
+            <div class="${b.status === 'Arquivada' ? 'archived-item' : ''}" style="padding:12px; border:1px solid var(--border); border-radius:var(--radius-md);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div><strong>\${b.nome}</strong><div class="bank-status">\${b.status || 'Ativa'}</div></div>
-                    <div style="font-size:15px; font-weight:700; color:var(--brand-primary);">R$ \${formatMoney(Number(b.saldo || 0))}</div>
+                    <div><strong>${b.nome}</strong><div class="bank-status">${b.status || 'Ativa'}</div></div>
+                    <div style="font-size:15px; font-weight:700; color:var(--brand-primary);">R$ ${formatMoney(Number(b.saldo || 0))}</div>
                 </div>
                 <div class="bank-actions">
-                    <button class="btn btn-secondary" style="padding:5px 8px;" onclick="editarContaBancaria('\${b.id}')"><i class="fa-solid fa-pen"></i> Editar</button>
-                    \${b.status === 'Arquivada'
-                        ? \`<button class="btn btn-success" style="padding:5px 8px;" onclick="restaurarContaBancaria('\${b.id}')"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>\`
-                        : \`<button class="btn btn-warning" style="padding:5px 8px;" onclick="arquivarContaBancaria('\${b.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>\`}
-                    <button class="btn btn-danger" style="padding:5px 8px;" onclick="excluirContaBancaria('\${b.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
+                    <button class="btn btn-secondary" style="padding:5px 8px;" onclick="editarContaBancaria('${b.id}')"><i class="fa-solid fa-pen"></i> Editar</button>
+                    ${b.status === 'Arquivada'
+                        ? `<button class="btn btn-success" style="padding:5px 8px;" onclick="restaurarContaBancaria('${b.id}')"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>`
+                        : `<button class="btn btn-warning" style="padding:5px 8px;" onclick="arquivarContaBancaria('${b.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>`}
+                    <button class="btn btn-danger" style="padding:5px 8px;" onclick="excluirContaBancaria('${b.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
                 </div>
             </div>
-        \`).join('');
+        `).join('');
 
         const ledger = getLivroCaixaOperacional().sort((a,b)=>String(b.data).localeCompare(String(a.data)));
         const totalEntradas = ledger.filter(m=>m.sinal>0).reduce((s,m)=>s+(Number(m.valor)||0),0);
         const totalSaidas = ledger.filter(m=>m.sinal<0).reduce((s,m)=>s+(Number(m.valor)||0),0);
         const saldoConsolidado = getSaldoBancosAtivos();
         const fluxoLiquido = totalEntradas - Math.abs(totalSaidas);
-        document.getElementById('caixa-resumo').innerHTML = \`
-            <div class="ledger-box"><div class="ledger-label">Entradas reais</div><div class="ledger-value in">+ R$ \${formatMoney(totalEntradas)}</div></div>
-            <div class="ledger-box"><div class="ledger-label">Saídas reais</div><div class="ledger-value out">− R$ \${formatMoney(Math.abs(totalSaidas))}</div></div>
-            <div class="ledger-box"><div class="ledger-label">Fluxo líquido</div><div class="ledger-value" style="color:\${fluxoLiquido>=0?'var(--emerald)':'var(--rose)'}">\${fluxoLiquido>=0?'+':'−'} R$ \${formatMoney(Math.abs(fluxoLiquido))}</div></div>
-            <div class="ledger-box"><div class="ledger-label">Saldo atual dos bancos</div><div class="ledger-value">R$ \${formatMoney(saldoConsolidado)}</div></div>
-            <div class="ledger-note"><i class="fa-solid fa-shield-halved"></i> Saldo de abertura não é contado como entrada. Transferências internas não aumentam o caixa consolidado. Estornos aparecem como lançamentos de compensação e também ficam registrados na Auditoria.</div>\`;
-        document.getElementById('caixa-mov-list').innerHTML = ledger.slice(0, 30).map(m => \`
-            <tr class="\${m.estorno ? 'ledger-estorno' : ''}">
-                <td>\${formatarDataBR(m.data)}</td>
-                <td><strong>\${m.descricao}</strong>\${m.anulado ? ' <span class="badge badge-adjustment">Anulado</span>' : ''}</td>
-                <td>\${m.conta || '—'}</td>
-                <td><span class="badge \${m.estorno ? 'badge-adjustment' : (m.sinal > 0 ? 'badge-paid' : 'badge-overdue')}">\${m.estorno ? 'Estorno' : (m.sinal > 0 ? 'Entrada' : 'Saída')}</span></td>
-                <td style="font-weight:800; color:\${m.sinal > 0 ? 'var(--emerald)' : 'var(--rose)'};">\${m.sinal > 0 ? '+' : '−'} R$ \${formatMoney(m.valor)}</td>
+        document.getElementById('caixa-resumo').innerHTML = `
+            <div class="ledger-box"><div class="ledger-label">Entradas reais</div><div class="ledger-value in">+ R$ ${formatMoney(totalEntradas)}</div></div>
+            <div class="ledger-box"><div class="ledger-label">Saídas reais</div><div class="ledger-value out">− R$ ${formatMoney(Math.abs(totalSaidas))}</div></div>
+            <div class="ledger-box"><div class="ledger-label">Fluxo líquido</div><div class="ledger-value" style="color:${fluxoLiquido>=0?'var(--emerald)':'var(--rose)'}">${fluxoLiquido>=0?'+':'−'} R$ ${formatMoney(Math.abs(fluxoLiquido))}</div></div>
+            <div class="ledger-box"><div class="ledger-label">Saldo atual dos bancos</div><div class="ledger-value">R$ ${formatMoney(saldoConsolidado)}</div></div>
+            <div class="ledger-note"><i class="fa-solid fa-shield-halved"></i> Saldo de abertura não é contado como entrada. Transferências internas não aumentam o caixa consolidado. Estornos aparecem como lançamentos de compensação e também ficam registrados na Auditoria.</div>`;
+        document.getElementById('caixa-mov-list').innerHTML = ledger.slice(0, 30).map(m => `
+            <tr class="${m.estorno ? 'ledger-estorno' : ''}">
+                <td>${formatarDataBR(m.data)}</td>
+                <td><strong>${m.descricao}</strong>${m.anulado ? ' <span class="badge badge-adjustment">Anulado</span>' : ''}</td>
+                <td>${m.conta || '—'}</td>
+                <td><span class="badge ${m.estorno ? 'badge-adjustment' : (m.sinal > 0 ? 'badge-paid' : 'badge-overdue')}">${m.estorno ? 'Estorno' : (m.sinal > 0 ? 'Entrada' : 'Saída')}</span></td>
+                <td style="font-weight:800; color:${m.sinal > 0 ? 'var(--emerald)' : 'var(--rose)'};">${m.sinal > 0 ? '+' : '−'} R$ ${formatMoney(m.valor)}</td>
             </tr>
-        \`).join('');
+        `).join('');
         if(!ledger.length) document.getElementById('caixa-mov-list').innerHTML = '<tr><td colspan="5" class="ledger-empty">Nenhuma movimentação financeira registrada ainda.</td></tr>';
 
         // Dashboard Progresso
@@ -2107,28 +2107,28 @@ function showToast(msg) {
         STATE.passivos.forEach(pass => {
             let pago = pass.parcelas.filter(x => x.status === 'Pago').reduce((a,b) => a+b.valor, 0);
             let pct = pass.valorTotal > 0 ? ((pago / pass.valorTotal) * 100).toFixed(1) : 0;
-            dashProg.innerHTML += \`
+            dashProg.innerHTML += `
                 <div>
                     <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600;">
-                        <span>\${pass.credor} <span style="color:var(--text-muted); font-weight:400;">(\${pass.doc})</span></span>
-                        <span>R$ \${formatMoney(pago)} / R$ \${formatMoney(pass.valorTotal)} (\${pct}%)</span>
+                        <span>${pass.credor} <span style="color:var(--text-muted); font-weight:400;">(${pass.doc})</span></span>
+                        <span>R$ ${formatMoney(pago)} / R$ ${formatMoney(pass.valorTotal)} (${pct}%)</span>
                     </div>
                     <div style="height:7px; background:var(--bg-main); border-radius:4px; overflow:hidden; margin-top:5px; border:1px solid var(--border-light);">
-                        <div style="width:\${pct}%; height:100%; background:var(--emerald);"></div>
+                        <div style="width:${pct}%; height:100%; background:var(--emerald);"></div>
                     </div>
                 </div>
-            \`;
+            `;
         });
 
         STATE.recorrencias.filter(r => !r.arquivado).forEach(r => {
             let diff = getDaysDiff(r.proximoVencimento);
-            let tag = diff < 0 ? \`<span class="badge badge-overdue">\${Math.abs(diff)} dias em atraso</span>\` : \`<span class="badge badge-pending">Vence em \${diff} dias</span>\`;
-            dashRec.innerHTML += \`
+            let tag = diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)} dias em atraso</span>` : `<span class="badge badge-pending">Vence em ${diff} dias</span>`;
+            dashRec.innerHTML += `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-light); font-size:12.5px;">
-                    <div><strong>\${r.servico}</strong> <div style="margin-top:2px;">\${tag}</div></div>
-                    <div style="text-align:right;"><strong>R$ \${formatMoney(r.valor)}</strong><div style="font-size:11px; color:var(--text-muted);">\${formatarDataBR(r.proximoVencimento)}</div></div>
+                    <div><strong>${r.servico}</strong> <div style="margin-top:2px;">${tag}</div></div>
+                    <div style="text-align:right;"><strong>R$ ${formatMoney(r.valor)}</strong><div style="font-size:11px; color:var(--text-muted);">${formatarDataBR(r.proximoVencimento)}</div></div>
                 </div>
-            \`;
+            `;
         });
 
         // Passivos
@@ -2144,44 +2144,44 @@ function showToast(msg) {
 
             let rows = pass.parcelas.filter(x => fltPassStatus === 'TODOS' || x.status === fltPassStatus).map(p => {
                 let diff = getDaysDiff(p.vencimento);
-                let agingTag = p.status === 'Pago' ? \`<span class="badge badge-paid">Pago</span>\` :
-                               (diff < 0 ? \`<span class="badge badge-overdue">\${Math.abs(diff)} dias atraso</span>\` : 
-                               (diff === 0 ? \`<span class="badge badge-pending">Vence Hoje</span>\` : \`<span class="badge badge-pending">Faltam \${diff} dias</span>\`));
+                let agingTag = p.status === 'Pago' ? `<span class="badge badge-paid">Pago</span>` :
+                               (diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)} dias atraso</span>` : 
+                               (diff === 0 ? `<span class="badge badge-pending">Vence Hoje</span>` : `<span class="badge badge-pending">Faltam ${diff} dias</span>`));
 
-                return \`
+                return `
                     <tr>
-                        <td>Parcela #\${p.num}</td>
-                        <td>\${formatarDataBR(p.vencimento)}</td>
-                        <td>\${agingTag}</td>
-                        <td>R$ \${formatMoney(p.valor)}</td>
-                        <td>\${p.comprovante ? \`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="color:var(--brand-primary);font-weight:600;"><i class="fa-solid fa-paperclip"></i> \${p.comprovante}</span><button class="btn btn-secondary" style="padding:4px 7px;font-size:11px;" title="Visualizar comprovante" onclick="visualizarComprovante('\${p.id}','parcela')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary" style="padding:4px 7px;font-size:11px;" title="Baixar comprovante" onclick="baixarComprovante('\${p.id}','parcela')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 7px;font-size:11px;" title="Excluir comprovante" onclick="excluirComprovante('\${p.id}','parcela')"><i class="fa-solid fa-trash"></i></button></div>\` : \`<input type="file" style="font-size:11px;" accept=".pdf,image/*" onchange="handleFilePassivo('\${pass.id}', '\${p.id}', this)">\`}</td>
+                        <td>Parcela #${p.num}</td>
+                        <td>${formatarDataBR(p.vencimento)}</td>
+                        <td>${agingTag}</td>
+                        <td>R$ ${formatMoney(p.valor)}</td>
+                        <td>${p.comprovante ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="color:var(--brand-primary);font-weight:600;"><i class="fa-solid fa-paperclip"></i> ${p.comprovante}</span><button class="btn btn-secondary" style="padding:4px 7px;font-size:11px;" title="Visualizar comprovante" onclick="visualizarComprovante('${p.id}','parcela')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary" style="padding:4px 7px;font-size:11px;" title="Baixar comprovante" onclick="baixarComprovante('${p.id}','parcela')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:4px 7px;font-size:11px;" title="Excluir comprovante" onclick="excluirComprovante('${p.id}','parcela')"><i class="fa-solid fa-trash"></i></button></div>` : `<input type="file" style="font-size:11px;" accept=".pdf,image/*" onchange="handleFilePassivo('${pass.id}', '${p.id}', this)">`}</td>
                         <td style="display:flex; gap:6px;">
-                            \${p.status === 'Pago' ? 
-                                \`<button class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="desfazerPagamentoParcela('\${pass.id}', '\${p.id}')"><i class="fa-solid fa-rotate-left"></i> Desfazer</button>\` :
-                                \`<button class="btn btn-success" style="padding:4px 8px; font-size:11px;" onclick="baixarParcela('\${pass.id}', '\${p.id}')"><i class="fa-solid fa-check"></i> Baixar</button>\`
+                            ${p.status === 'Pago' ? 
+                                `<button class="btn btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="desfazerPagamentoParcela('${pass.id}', '${p.id}')"><i class="fa-solid fa-rotate-left"></i> Desfazer</button>` :
+                                `<button class="btn btn-success" style="padding:4px 8px; font-size:11px;" onclick="baixarParcela('${pass.id}', '${p.id}')"><i class="fa-solid fa-check"></i> Baixar</button>`
                             }
                         </td>
                     </tr>
-                \`;
+                `;
             }).join('');
 
-            passContainer.innerHTML += \`
+            passContainer.innerHTML += `
                 <div class="contract-card">
                     <div class="contract-card-header">
-                        <div><strong>\${pass.credor}</strong> <span style="font-size:12px; color:var(--text-muted); margin-left:8px;">[\${pass.doc}] — \${pass.categoria || 'Geral'}</span> \${pass.arquivado ? '<span class="badge badge-pending">Arquivado</span>' : ''}</div>
+                        <div><strong>${pass.credor}</strong> <span style="font-size:12px; color:var(--text-muted); margin-left:8px;">[${pass.doc}] — ${pass.categoria || 'Geral'}</span> ${pass.arquivado ? '<span class="badge badge-pending">Arquivado</span>' : ''}</div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            \${pass.arquivado ? \`<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="restaurarAcordo('\${pass.id}')"><i class="fa-solid fa-box-open"></i> Restaurar</button>\` : \`<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="arquivarAcordo('\${pass.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>\`}
-                            <button class="btn btn-secondary btn-danger-soft" style="padding:5px 8px;font-size:11px;" onclick="excluirAcordo('\${pass.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
+                            ${pass.arquivado ? `<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="restaurarAcordo('${pass.id}')"><i class="fa-solid fa-box-open"></i> Restaurar</button>` : `<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="arquivarAcordo('${pass.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>`}
+                            <button class="btn btn-secondary btn-danger-soft" style="padding:5px 8px;font-size:11px;" onclick="excluirAcordo('${pass.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
                         </div>
                     </div>
                     <div style="max-height:300px; overflow-y:auto;">
                         <table>
                             <thead><tr><th>PARCELA</th><th>VENCIMENTO</th><th>SITUAÇÃO</th><th>VALOR</th><th>COMPROVANTE</th><th>AÇÕES</th></tr></thead>
-                            <tbody>\${rows}</tbody>
+                            <tbody>${rows}</tbody>
                         </table>
                     </div>
                 </div>
-            \`;
+            `;
         });
 
         // Recorrências Lista
@@ -2189,28 +2189,28 @@ function showToast(msg) {
         recContainer.innerHTML = '';
         STATE.recorrencias.filter(r => !r.arquivado).forEach(r => {
             let diff = getDaysDiff(r.proximoVencimento);
-            let agingBadge = diff < 0 ? \`<span class="badge badge-overdue">\${Math.abs(diff)} dias em atraso</span>\` : \`<span class="badge badge-pending">Vence em \${diff} dias</span>\`;
+            let agingBadge = diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)} dias em atraso</span>` : `<span class="badge badge-pending">Vence em ${diff} dias</span>`;
 
-            recContainer.innerHTML += \`
+            recContainer.innerHTML += `
                 <div class="contract-card">
                     <div class="contract-card-header">
-                        <div><strong>\${r.servico}</strong> <span class="badge badge-pending" style="margin-left:8px;">\${r.frequencia}</span> \${r.arquivado ? '<span class="badge badge-pending">Arquivada</span>' : ''}</div>
+                        <div><strong>${r.servico}</strong> <span class="badge badge-pending" style="margin-left:8px;">${r.frequencia}</span> ${r.arquivado ? '<span class="badge badge-pending">Arquivada</span>' : ''}</div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            \${r.arquivado ? \`<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="restaurarRecorrencia('\${r.id}')"><i class="fa-solid fa-box-open"></i> Restaurar</button>\` : \`<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="arquivarRecorrencia('\${r.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>\`}
-                            <button class="btn btn-secondary btn-danger-soft" style="padding:5px 8px;font-size:11px;" onclick="excluirRecorrencia('\${r.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
+                            ${r.arquivado ? `<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="restaurarRecorrencia('${r.id}')"><i class="fa-solid fa-box-open"></i> Restaurar</button>` : `<button class="btn btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="arquivarRecorrencia('${r.id}')"><i class="fa-solid fa-box-archive"></i> Arquivar</button>`}
+                            <button class="btn btn-secondary btn-danger-soft" style="padding:5px 8px;font-size:11px;" onclick="excluirRecorrencia('${r.id}')"><i class="fa-solid fa-trash"></i> Excluir</button>
                         </div>
                     </div>
                     <div style="padding:18px; display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
                         <div>
                             <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">VALOR DA CONTA</div>
-                            <div style="font-size:18px; font-weight:700; margin-top:2px;">R$ \${formatMoney(r.valor)}</div>
+                            <div style="font-size:18px; font-weight:700; margin-top:2px;">R$ ${formatMoney(r.valor)}</div>
                             <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-top:10px;">PRÓXIMO VENCIMENTO</div>
-                            <div style="font-size:12.5px; font-weight:600; margin-top:2px;">\${formatarDataBR(r.proximoVencimento)} \${agingBadge}</div>
+                            <div style="font-size:12.5px; font-weight:600; margin-top:2px;">${formatarDataBR(r.proximoVencimento)} ${agingBadge}</div>
                             
                             <div style="margin-top:14px;">
                                 <label style="font-size:10px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;">RECIBO DA CONTA</label>
-                                <input type="file" id="file-rec-\${r.id}" accept=".pdf,image/*" style="font-size:11px; width:100%; margin-bottom:8px;"><div style="font-size:10px;color:var(--text-muted);margin-top:-4px;margin-bottom:8px;">PDF ou imagem até 5 MB. O arquivo fica armazenado para visualizar ou baixar depois.</div>
-                                <button class="btn btn-success" style="width:100%; justify-content:center;" onclick="baixarRecorrencia('\${r.id}')">Confirmar Pagamento</button>
+                                <input type="file" id="file-rec-${r.id}" accept=".pdf,image/*" style="font-size:11px; width:100%; margin-bottom:8px;"><div style="font-size:10px;color:var(--text-muted);margin-top:-4px;margin-bottom:8px;">PDF ou imagem até 5 MB. O arquivo fica armazenado para visualizar ou baixar depois.</div>
+                                <button class="btn btn-success" style="width:100%; justify-content:center;" onclick="baixarRecorrencia('${r.id}')">Confirmar Pagamento</button>
                             </div>
                         </div>
                         <div>
@@ -2218,26 +2218,26 @@ function showToast(msg) {
                             <table>
                                 <thead><tr><th>DATA PAGTO</th><th>VALOR</th><th>RECIBO</th></tr></thead>
                                 <tbody>
-                                    \${r.historico.length === 0 ? '<tr><td colspan="3" style="color:var(--text-muted);">Nenhum pagamento registrado.</td></tr>' : r.historico.map(h => \`
-                                        <tr><td>\${formatarDataBR(h.dataPagamento)}</td><td>R$ \${formatMoney(Number(h.valor))}</td><td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span><i class="fa-solid fa-paperclip"></i> \${h.comprovante}</span>\${h.comprovante ? \`<button class="btn btn-secondary" style="padding:3px 6px;" title="Visualizar" onclick="visualizarComprovante('\${r.id}','recorrencia','\${h.id || ''}')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary" style="padding:3px 6px;" title="Baixar" onclick="baixarComprovante('\${r.id}','recorrencia','\${h.id || ''}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:3px 6px;" title="Excluir comprovante" onclick="excluirComprovante('\${r.id}','recorrencia','\${h.id || ''}')"><i class="fa-solid fa-trash"></i></button>\` : ''}<button class="btn btn-secondary" style="padding:3px 6px;" onclick="desfazerRecorrencia('\${r.id}','\${h.id || ''}')"><i class="fa-solid fa-rotate-left"></i></button></div></td></tr>
-                                    \`).join('')}
+                                    ${r.historico.length === 0 ? '<tr><td colspan="3" style="color:var(--text-muted);">Nenhum pagamento registrado.</td></tr>' : r.historico.map(h => `
+                                        <tr><td>${formatarDataBR(h.dataPagamento)}</td><td>R$ ${formatMoney(Number(h.valor))}</td><td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span><i class="fa-solid fa-paperclip"></i> ${h.comprovante}</span>${h.comprovante ? `<button class="btn btn-secondary" style="padding:3px 6px;" title="Visualizar" onclick="visualizarComprovante('${r.id}','recorrencia','${h.id || ''}')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary" style="padding:3px 6px;" title="Baixar" onclick="baixarComprovante('${r.id}','recorrencia','${h.id || ''}')"><i class="fa-solid fa-download"></i></button><button class="btn btn-secondary btn-danger-soft" style="padding:3px 6px;" title="Excluir comprovante" onclick="excluirComprovante('${r.id}','recorrencia','${h.id || ''}')"><i class="fa-solid fa-trash"></i></button>` : ''}<button class="btn btn-secondary" style="padding:3px 6px;" onclick="desfazerRecorrencia('${r.id}','${h.id || ''}')"><i class="fa-solid fa-rotate-left"></i></button></div></td></tr>
+                                    `).join('')}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-            \`;
+            `;
         });
 
         // Auditoria
-        document.getElementById('auditoria-list').innerHTML = STATE.auditoria.slice(0, 30).map(a => \`
+        document.getElementById('auditoria-list').innerHTML = STATE.auditoria.slice(0, 30).map(a => `
             <tr>
-                <td>\${a.dataHora}</td>
-                <td><span class="badge badge-pending">\${a.acao}</span></td>
-                <td><strong>\${a.modulo}</strong></td>
-                <td>\${a.detalhes}</td>
+                <td>${a.dataHora}</td>
+                <td><span class="badge badge-pending">${a.acao}</span></td>
+                <td><strong>${a.modulo}</strong></td>
+                <td>${a.detalhes}</td>
             </tr>
-        \`).join('');
+        `).join('');
 
         renderDRE();
     }
