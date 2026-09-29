@@ -507,7 +507,7 @@ function HistoryList({ employees, topups }: { employees: Employee[]; topups: Top
                   <td className="px-4 py-3">{money(item.amount_cents)}</td>
                   <td className="px-4 py-3">
                     {employee
-                      ? `${coverageDays(item.amount_cents, employee.fare_cents)} dias úteis`
+                      ? `${coverageDays(item.amount_cents, employee.fare_cents * (benefitType === "passagem" ? employee.trips_per_day : 1))} dias úteis`
                       : "—"}
                   </td>
                 </tr>
