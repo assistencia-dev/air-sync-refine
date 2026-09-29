@@ -977,17 +977,19 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           cpf: cpf || undefined,
           role_key: roleKey,
           password,
-          ...(clientMode === "existente"
-            ? {
-                company_id: companyId || null,
-                unit_id: unitId || null,
-                is_unit_manager: isUnitManager,
-              }
-            : {
-                new_company_name: newCompanyName,
-                new_company_cnpj: newCompanyCnpj,
-                new_unit_name: newUnitName,
-              }),
+          ...(roleKey === "COLABORADOR"
+            ? {}
+            : clientMode === "existente"
+              ? {
+                  company_id: companyId || null,
+                  unit_id: unitId || null,
+                  is_unit_manager: isUnitManager,
+                }
+              : {
+                  new_company_name: newCompanyName,
+                  new_company_cnpj: newCompanyCnpj,
+                  new_unit_name: newUnitName,
+                }),
         },
       }),
 
@@ -1079,7 +1081,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             />
             Vincular a uma Rede/Empresa já existente
           </label>
-        </div>
+        </div>}
 
         <div className="mt-4 grid grid-cols-1 gap-3">
           <Field label="Nome completo *">
