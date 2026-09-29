@@ -349,6 +349,44 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
     return employee;
   });
 
+export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db = supabaseAdmin as any;
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users")
+      .select("id, role_key, status")
+      .eq("auth_id", context.userId)
+      .maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo") return { enabled: false, employee: null };
+
+    const isAdmin = user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL";
+    if (isAdmin) return { enabled: false, employee: null };
+
+    const { data: access, error } = await db
+      .from("rh_employee_access")
+      .select("employee_id, access_enabled")
+      .eq("user_id", user.id)
+      .eq("access_enabled", true)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    if (!access?.[0]?.employee_id) return { enabled: false, employee: null };
+
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, is_active")
+      .eq("id", access[0].employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+
+    return {
+      enabled: Boolean(employee),
+      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit } : null,
+    };
+  });
+
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: {
