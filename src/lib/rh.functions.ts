@@ -289,19 +289,18 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
     }
 
     const registry = [...unique.values()];
-    const ids = registry.map((e) => e.id);
-    const accessRows = ids.length
-      ? (((await (supabaseAdmin as any)
-          .from("rh_employee_access")
-          .select("employee_id, user_id, access_enabled, login_identifier, updated_at")
-          .in("employee_id", ids)).data ?? []) as any[])
-      : [];
-    const userIds = [...new Set(accessRows.map((a) => a.user_id).filter(Boolean))];
+    const userIds = [...new Set(registry.map((e) => e.ponto_portal_user_id).filter(Boolean))];
     const users = userIds.length
-      ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status").in("id", userIds)).data ?? []) as any[])
+      ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[])
       : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
-    const accessByEmployee = new Map(accessRows.map((a) => [a.employee_id, { ...a, user: usersById.get(a.user_id) ?? null }]));
+    const accessByEmployee = new Map(registry.filter((e) => e.ponto_portal_user_id).map((e) => [e.id, {
+      employee_id: e.id,
+      user_id: e.ponto_portal_user_id,
+      access_enabled: Boolean(e.ponto_access_enabled),
+      login_identifier: usersById.get(e.ponto_portal_user_id)?.username ?? usersById.get(e.ponto_portal_user_id)?.email ?? null,
+      user: usersById.get(e.ponto_portal_user_id) ?? null,
+    }]));
 
     return registry.map((employee) => ({
       ...employee,
