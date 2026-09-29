@@ -52,6 +52,12 @@ const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 // Os links de CDN foram removidos das crases acidentais no original
 const TREASURY_URL = "/treasury.html?v=20260929-2";
 
+function treasuryStateHasData(state: Record<string, unknown> | null | undefined) {
+  if (!state) return false;
+  const keys = ["passivos", "recorrencias", "recebimentos", "contasPagar", "bancos", "movimentacoes", "auditoria"];
+  return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
+}
+
 
 function TreasuryPage() {
   const navigate = useNavigate();
@@ -93,7 +99,7 @@ function TreasuryPage() {
       if (msg.type === "DBS_TREASURY_READY") {
         try {
           const cloud = await getTreasuryCloudState();
-          if (cloud?.state) {
+          if (cloud?.state && treasuryStateHasData(cloud.state as Record<string, unknown>)) {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
             cloudReadyRef.current = true;
           } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
@@ -105,7 +111,7 @@ function TreasuryPage() {
             sanitized.recorrencias = removeBy(sanitized.recorrencias || [], x => x.id === "rec_1" && x.servico === "Sistemas & Licenças Operacionais" && Number(x.valor) === 1200);
             sanitized.bancos = removeBy(sanitized.bancos || [], x => (x.id === "banco_1" && x.nome === "Santander Principal" && Number(x.saldo) === 12500) || (x.id === "banco_2" && x.nome === "Caixa Física Empresarial" && Number(x.saldo) === 1500));
             sanitized._meta = { ...(sanitized._meta || {}), demoSanitizedAt: new Date().toISOString(), version: 5 };
-            const saved = await saveTreasuryCloudState({ state: sanitized });
+            // Bootstrap seguro: se a nuvem estiver vazia, a cópia local existente é a fonte de migração.\n            // Nunca substitua um estado financeiro existente por um estado vazio.\n            const saved = await saveTreasuryCloudState({ state: sanitized });
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
             cloudReadyRef.current = true;
           }
