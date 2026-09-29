@@ -791,7 +791,7 @@ function EditUserModal({
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [cpf, setCpf] = useState(user.cpf ?? "");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     user.role_key,
   );
   const [companyId, setCompanyId] = useState(user.company_id ?? "");
@@ -874,6 +874,7 @@ function EditUserModal({
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="CLIENTE_PF">Cliente</option>
+              <option value="COLABORADOR">Colaborador</option>
               <option value="GESTOR_CONTA">Gestor de conta</option>
               <option value="GESTOR_REGIONAL">Gestor regional</option>
             </select>
@@ -949,7 +950,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF">(
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     "CLIENTE_PF",
   );
   const [companyId, setCompanyId] = useState("");
@@ -1108,6 +1109,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
               className={inputCls}
             >
               <option value="CLIENTE_PF">CLIENTE_PF</option>
+              <option value="COLABORADOR">COLABORADOR</option>
               <option value="GESTOR_CONTA">GESTOR_CONTA</option>
               <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
             </select>
