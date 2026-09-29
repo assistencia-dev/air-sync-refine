@@ -1703,7 +1703,8 @@ function showToast(msg) {
         if (Number(rec.valor) >= LIMITE_COMPROVANTE && !document.getElementById(`file-rec-${recId}`)?.files?.[0]) { alert(`Segurança: esta baixa de R$ ${formatMoney(rec.valor)} exige comprovante. Anexe o PDF ou imagem antes de confirmar.`); return; }
         const banco = getBankById(getPreferredBankId(rec, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa.'); return; }
-        if (Number(banco.saldo) < Number(rec.valor)) { alert(`Saldo insuficiente em ${banco.nome}.`); return; }
+        // Pagamentos de contas/obrigações não são bloqueados pelo saldo atual.
+        // O lançamento pode levar o banco a saldo negativo, preservando a baixa e a trilha de auditoria.
         const fileInput = document.getElementById(`file-rec-${recId}`);
         const file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
         if (file && file.size > 5 * 1024 * 1024) { alert('Recibo muito grande. Limite para armazenamento direto: 5 MB.'); return; }
