@@ -2333,6 +2333,7 @@ function TreasuryPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
+  const cloudReadyRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
@@ -2350,6 +2351,7 @@ function TreasuryPage() {
           const cloud = await getTreasuryCloudState();
           if (cloud?.state) {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
+            cloudReadyRef.current = true;
           } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
             const sanitized = JSON.parse(JSON.stringify(msg.state));
             const removeBy = (arr: any[], fn: (x:any)=>boolean) => arr.filter(x => !fn(x));
@@ -2361,6 +2363,7 @@ function TreasuryPage() {
             sanitized._meta = { ...(sanitized._meta || {}), demoSanitizedAt: new Date().toISOString(), version: 5 };
             const saved = await saveTreasuryCloudState({ state: sanitized });
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
+            cloudReadyRef.current = true;
           }
           setCloudError(null);
         } catch (err) {
@@ -2371,6 +2374,7 @@ function TreasuryPage() {
       }
       if (msg.type === "DBS_TREASURY_SAVE") {
         pendingStateRef.current = msg.state;
+        if (!cloudReadyRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
           const state = pendingStateRef.current;
