@@ -3,7 +3,36 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { getMyProfile } from "@/lib/auth.functions";
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+
+const getTreasuryCloudState = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: user, error: userError } = await context.supabase.from("users").select("id, company_id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { data, error } = await (context.supabase as any).from("treasury_snapshots").select("state, state_version, updated_at").eq("scope_key", scopeKey).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ?? null;
+  });
+
+const saveTreasuryCloudState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { state: Record<string, unknown> }) => input)
+  .handler(async ({ context, data }) => {
+    const { data: user, error: userError } = await context.supabase.from("users").select("id, company_id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
+    if (!data?.state || typeof data.state !== "object" || Array.isArray(data.state)) throw new Error("Estado financeiro inválido.");
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const payload = { scope_key: scopeKey, company_id: user.company_id ?? null, owner_user_id: user.id, state: data.state, state_version: Number((data.state as any)?._meta?.version) || 5, updated_by: user.id, updated_at: new Date().toISOString() };
+    const { data: saved, error } = await (context.supabase as any).from("treasury_snapshots").upsert(payload, { onConflict: "scope_key" }).select("state, state_version, updated_at").single();
+    if (error) throw new Error(error.message);
+    return saved;
+  });
 
 export const Route = createFileRoute("/_authenticated/treasury")({
   ssr: false,
@@ -944,7 +973,22 @@ td strong{font-weight:650;}
     const TREASURY_STATE_KEY = 'DBS_TREASURY_STATE_V3';
     const TREASURY_PREVIOUS_KEY = 'DBS_TREASURY_PREVIOUS_SAFE';
     const TREASURY_SNAPSHOT_KEY = 'DBS_TREASURY_SNAPSHOT_BEFORE_V6';
-    const TREASURY_VERSION = 4;
+    const TREASURY_VERSION = 5;
+    let CLOUD_STATE_RECEIVED = false;
+    function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, "*"); } catch (e) {} }
+    window.addEventListener("message", (event) => {
+        const msg = event.data || {};
+        if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
+        CLOUD_STATE_RECEIVED = true;
+        if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
+            STATE = msg.state;
+            if (!STATE._meta || typeof STATE._meta !== "object") STATE._meta = {};
+            STATE._meta.version = Math.max(Number(STATE._meta.version) || 1, TREASURY_VERSION);
+            try { localStorage.setItem(TREASURY_STATE_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_SNAPSHOT_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_PREVIOUS_KEY, JSON.stringify(STATE)); } catch (_) {}
+            populateAllBankSelects(); render();
+        }
+        treasuryPost("DBS_TREASURY_CLOUD_READY", { hasState: !!msg.state });
+    });
     let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION } };
 
     function formatMoney(value){ const n=Number(value); return (Number.isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -978,52 +1022,9 @@ function showToast(msg) {
             localStorage.setItem(TREASURY_PREVIOUS_KEY, local);
         }
         if (!local) {
-            STATE = {
-                recebimentos: [
-                    { id: 'rec_in_1', cliente: 'Cliente Contratual S/A', valor: 25000.00, categoria: 'Honorários Mensais', data: \`\${monthStr}-15\`, status: 'Pendente' }
-                ],
-                contasPagar: [
-                    { id: 'pag_1', fornecedor: 'Insumos Técnicos Ltda', descricao: 'Peças para Manutenção', valor: 3400.00, vencimento: \`\${monthStr}-20\`, status: 'Pendente' }
-                ],
-                bancos: [
-                    { id: 'banco_1', nome: 'Santander Principal', saldo: 12500.00 },
-                    { id: 'banco_2', nome: 'Caixa Física Empresarial', saldo: 1500.00 }
-                ],
-                movimentacoes: [
-                    { id: 'mov_1', data: \`\${monthStr}-01\`, descricao: 'Aporte Inicial de Caixa', conta: 'Santander Principal', tipo: 'Entrada', valor: 12500.00 }
-                ],
-                auditoria: [],
-                passivos: [
-                    {
-                        id: 'ac_santander_9778', credor: 'Banco Santander (Contrato 264039778)', doc: 'Acordo / Renegociação', categoria: 'Bancos / Empréstimos', valorTotal: 55255.25,
-                        parcelas: Array.from({length: 61}, (_, i) => ({
-                            id: \`p_sant1_\${i+1}\`, num: i + 1, vencimento: new Date(2026, 7 + i, 15).toISOString().split('T')[0], valor: 1055.04, status: (i === 0) ? 'Pago' : 'Pendente', comprovante: (i === 0) ? 'Comprovante_Agosto_1055,04.pdf' : null
-                        }))
-                    },
-                    {
-                        id: 'ac_santander_0653', credor: 'Banco Santander (Contrato 264040653)', doc: 'Acordo / Renegociação', categoria: 'Bancos / Empréstimos', valorTotal: 24780.36,
-                        parcelas: Array.from({length: 61}, (_, i) => ({
-                            id: \`p_sant2_\${i+1}\`, num: i + 1, vencimento: new Date(2026, 7 + i, 10).toISOString().split('T')[0], valor: 472.77, status: (i <= 1) ? 'Pago' : 'Pendente', comprovante: (i === 1) ? 'WhatsApp Image 2026-09-11 at 17.18.32.jpeg' : ((i === 0) ? 'Comprovante_Agosto_472,77.pdf' : null)
-                        }))
-                    },
-                    {
-                        id: 'ac_rfb_0211', credor: 'Receita Federal (RFB)', doc: 'Parcelamento Simplificado (0211.00012.0110471227.26-01)', categoria: 'Impostos / Fiscal', valorTotal: 3093.24,
-                        parcelas: [
-                            { id: 'rfb_1', num: 1, vencimento: '2026-08-31', valor: 515.54, status: 'Pago', comprovante: 'DARF_Quitado_Agosto_515,54.pdf' },
-                            { id: 'rfb_2', num: 2, vencimento: '2026-09-20', valor: 515.54, status: 'Pendente', comprovante: null },
-                            { id: 'rfb_3', num: 3, vencimento: '2026-10-20', valor: 515.54, status: 'Pendente', comprovante: null },
-                            { id: 'rfb_4', num: 4, vencimento: '2026-11-20', valor: 515.54, status: 'Pendente', comprovante: null },
-                            { id: 'rfb_5', num: 5, vencimento: '2026-12-20', valor: 515.54, status: 'Pendente', comprovante: null },
-                            { id: 'rfb_6', num: 6, vencimento: '2027-01-20', valor: 515.54, status: 'Pendente', comprovante: null }
-                        ]
-                    }
-                ],
-                recorrencias: [
-                    { id: 'rec_1', servico: 'Sistemas & Licenças Operacionais', valor: 1200.00, frequencia: 'Mensal', proximoVencimento: \`\${monthStr}-25\`, historico: [] }
-                ]
-            };
+            STATE = { recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], passivos: [], recorrencias: [], _meta: { version: TREASURY_VERSION } };
             save();
-            logAuditoria('INICIALIZAÇÃO', 'Sistema', 'Banco de dados criado e preservado com sucesso.');
+            logAuditoria('INICIALIZAÇÃO', 'Sistema', 'Banco financeiro criado vazio; sem dados demonstrativos.');
         } else {
             try {
                 const parsed = JSON.parse(local);
@@ -1052,6 +1053,7 @@ function showToast(msg) {
         }
         populateAllBankSelects();
         render();
+        treasuryPost('DBS_TREASURY_READY', { state: STATE });
     }
 
     function save() {
@@ -1062,6 +1064,7 @@ function showToast(msg) {
             if (previous) localStorage.setItem(TREASURY_PREVIOUS_KEY, previous);
             localStorage.setItem(TREASURY_STATE_KEY, payload);
             localStorage.setItem('DBS_TREASURY_LAST_SAVE_AT', new Date().toISOString());
+            treasuryPost('DBS_TREASURY_SAVE', { state: STATE });
         } catch (err) {
             console.error('DBS Treasury: falha ao persistir estado', err);
             try {
@@ -1998,7 +2001,7 @@ function showToast(msg) {
     }
 
     function getLivroCaixaOperacional(){
-        return getMovimentacoesAtivas().filter(m => !isSaldoInicialTecnico(m));
+        return getMovimentacoesAtivas().filter(m => !isSaldoInicialTecnico(m) && !m.estorno);
     }
 
     function getSaldoBancosAtivos(){
@@ -2328,80 +2331,72 @@ function TreasuryPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStateRef = useRef<Record<string, unknown> | null>(null);
+  const cloudReadyRef = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [cloudError, setCloudError] = useState<string | null>(null);
 
-  // Redireciona usuários não autorizados (não-admin) de volta ao portal
   useEffect(() => {
     if (!profile.data) return;
-    const role = profile.data.role_key;
-    const native = NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "");
-    const isAdmin = role === "SUPER_ADMIN" || role === "ADMIN_OPERACIONAL" || native;
-    if (!isAdmin) {
-      navigate({ to: "/portal", replace: true });
-    }
+    if (profile.data.role_key !== "SUPER_ADMIN") navigate({ to: "/portal", replace: true });
   }, [profile.data, navigate]);
 
-  // Previne que a tecla Escape feche o iframe acidentalmente
   useEffect(() => {
-    if (!loading) return;
-    const t = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(t);
-  }, [loading]);
+    const handler = async (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const msg = event.data || {};
+      if (msg.type === "DBS_TREASURY_READY") {
+        try {
+          const cloud = await getTreasuryCloudState();
+          if (cloud?.state) {
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
+            cloudReadyRef.current = true;
+          } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
+            const sanitized = JSON.parse(JSON.stringify(msg.state));
+            const removeBy = (arr: any[], fn: (x:any)=>boolean) => arr.filter(x => !fn(x));
+            sanitized.recebimentos = removeBy(sanitized.recebimentos || [], x => x.id === "rec_in_1" && x.cliente === "Cliente Contratual S/A" && Number(x.valor) === 25000 && x.status === "Pendente");
+            sanitized.contasPagar = removeBy(sanitized.contasPagar || [], x => x.id === "pag_1" && x.fornecedor === "Insumos Técnicos Ltda" && Number(x.valor) === 3400 && x.status === "Pendente");
+            sanitized.movimentacoes = removeBy(sanitized.movimentacoes || [], x => x.id === "mov_1" && x.descricao === "Aporte Inicial de Caixa" && Number(x.valor) === 12500);
+            sanitized.recorrencias = removeBy(sanitized.recorrencias || [], x => x.id === "rec_1" && x.servico === "Sistemas & Licenças Operacionais" && Number(x.valor) === 1200);
+            sanitized.bancos = removeBy(sanitized.bancos || [], x => (x.id === "banco_1" && x.nome === "Santander Principal" && Number(x.saldo) === 12500) || (x.id === "banco_2" && x.nome === "Caixa Física Empresarial" && Number(x.saldo) === 1500));
+            sanitized._meta = { ...(sanitized._meta || {}), demoSanitizedAt: new Date().toISOString(), version: 5 };
+            const saved = await saveTreasuryCloudState({ state: sanitized });
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
+            cloudReadyRef.current = true;
+          }
+          setCloudError(null);
+        } catch (err) {
+          console.error("DBS Treasury cloud load:", err);
+          setCloudError(err instanceof Error ? err.message : "Falha ao carregar o Financeiro.");
+        }
+        return;
+      }
+      if (msg.type === "DBS_TREASURY_SAVE") {
+        pendingStateRef.current = msg.state;
+        if (!cloudReadyRef.current) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(async () => {
+          const state = pendingStateRef.current;
+          if (!state) return;
+          try { await saveTreasuryCloudState({ state }); setCloudError(null); }
+          catch (err) { console.error("DBS Treasury cloud save:", err); setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro."); }
+        }, 450);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => { window.removeEventListener("message", handler); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "#090D16", fontFamily: "'Inter',system-ui,sans-serif" }}>
-      {/* Cabeçalho do app React (acima do iframe) — barra de navegação de volta */}
       <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-800 bg-[#0F172A]/90 px-4 shadow-sm backdrop-blur sm:px-6">
-        <div className="flex items-center gap-3">
-          <img
-            src={logoAsset.url}
-            alt="DBS Air"
-            className="h-10 w-auto max-w-[190px] object-contain"
-          />
-          <span className="hidden h-7 w-px bg-slate-700 sm:block" />
-          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#F59E0B" }}>
-            Módulo Financeiro · DBS TREASURY
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex">
-            <Shield className="h-3.5 w-3.5" /> Acesso restrito
-          </span>
-          <button
-            onClick={() => navigate({ to: "/admin" })}
-            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" /> Voltar ao painel
-          </button>
-        </div>
+        <div className="flex items-center gap-3"><img src={logoAsset.url} alt="DBS Air" className="h-10 w-auto max-w-[190px] object-contain" /><span className="hidden h-7 w-px bg-slate-700 sm:block" /><span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#F59E0B" }}>Módulo Financeiro · DBS TREASURY</span></div>
+        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-500/10 px-3 py-1.5 text-[10px] font-bold text-rose-300 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
       </header>
-
-      {/* Container do iframe — isolamento total de CSS/JS */}
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100vh - 72px)" }}>
-        {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50">
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-              <p className="text-sm font-semibold text-slate-600">
-                Carregando DBS TREASURY Enterprise Executive Suite…
-              </p>
-            </div>
-          </div>
-        )}
-        <iframe
-          ref={iframeRef}
-          title="DBS TREASURY"
-          srcDoc={TREASURY_HTML}
-          onLoad={() => setLoading(false)}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
-          style={{
-            width: "100%",
-            height: "calc(100vh - 72px)",
-            border: "none",
-            display: "block",
-            background: "#f5f7fb",
-          }}
-        />
+        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50"><div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Carregando DBS TREASURY Enterprise Executive Suite…</p></div></div>}
+        <iframe ref={iframeRef} title="DBS TREASURY" srcDoc={TREASURY_HTML} onLoad={() => setLoading(false)} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100vh - 72px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
     </div>
   );
