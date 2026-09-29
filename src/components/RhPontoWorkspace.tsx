@@ -5,8 +5,15 @@ import { getMyProfile } from "@/lib/auth.functions";
 import { getMyPonto, listRhPontoEmployees, registerMyPonto, setRhPontoAccess } from "@/lib/ponto.functions";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
+const localDateISO = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
 const nextType = (records: any[]) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateISO();
   const done = records.filter(r => r.work_date === today).map(r => r.punch_type);
   return (["entrada", "almoco_saida", "almoco_retorno", "saida"] as const).find(t => !done.includes(t)) ?? null;
 };
@@ -44,7 +51,7 @@ function PontoColaborador() {
   const query = useQuery({ queryKey: ["my-ponto"], queryFn: () => getMyPonto(), retry: false });
   const [status, setStatus] = useState("");
   const punch = useMutation({ mutationFn: async (type: any) => {
-    const workDate = new Date().toISOString().slice(0, 10);
+    const workDate = localDateISO();
     const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }));
     const baseLat = query.data?.employee.ponto_base_lat; const baseLng = query.data?.employee.ponto_base_lng; const R = 6371000; const rad = (n: number) => n * Math.PI / 180;
     const distance = baseLat != null && baseLng != null ? 2 * R * Math.asin(Math.sqrt(Math.sin((rad(pos.coords.latitude - Number(baseLat)) / 2)) ** 2 + Math.cos(rad(Number(baseLat))) * Math.cos(rad(pos.coords.latitude)) * Math.sin((rad(pos.coords.longitude - Number(baseLng)) / 2)) ** 2)) : null;
@@ -54,6 +61,6 @@ function PontoColaborador() {
   const next = useMemo(() => nextType(query.data?.records ?? []), [query.data?.records]);
   if (query.isLoading) return <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500">Carregando sua folha de ponto...</div>;
   if (query.error) return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center"><ShieldCheck className="mx-auto h-10 w-10 text-slate-400"/><h2 className="mt-3 text-xl font-black text-slate-900">Folha de Ponto</h2><p className="mt-2 text-sm text-slate-500">{query.error instanceof Error ? query.error.message : "Acesso não liberado pelo RH."}</p></div>;
-  const today = (query.data?.records ?? []).filter((r: any) => r.work_date === new Date().toISOString().slice(0, 10));
+  const today = (query.data?.records ?? []).filter((r: any) => r.work_date === localDateISO());
   return <div className="mx-auto max-w-3xl space-y-5"><header className="rounded-2xl bg-slate-900 p-6 text-white"><p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-300">DBS AIR · folha individual</p><h1 className="mt-1 text-2xl font-black">Olá, {query.data?.employee.full_name}</h1><p className="mt-1 text-sm text-white/60">Você visualiza somente a sua jornada.</p></header><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-500"><CalendarDays className="h-4 w-4"/>Hoje</div><div className="mt-5 grid gap-3 sm:grid-cols-4">{(["entrada", "almoco_saida", "almoco_retorno", "saida"] as const).map(t => { const r = today.find((x: any) => x.punch_type === t); return <div key={t} className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-xs font-bold text-slate-500">{labels[t]}</p><p className="mt-1 text-xl font-black text-slate-900">{r ? new Date(r.punched_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}</p></div>})}</div><button disabled={!next || punch.isPending} onClick={() => next && punch.mutate(next)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-4 text-sm font-black text-white disabled:opacity-40"><MapPin className="h-5 w-5"/>{punch.isPending ? "Validando localização..." : next ? `Registrar ${labels[next]}` : "Jornada de hoje completa"}</button>{status && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs font-bold text-slate-600">{status}</p>}</section><section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="font-black text-slate-900">Histórico</h2><div className="mt-3 divide-y divide-slate-100">{(query.data?.records ?? []).slice(0, 40).map((r: any) => <div key={r.id} className="flex items-center justify-between py-3 text-sm"><span className="font-bold text-slate-700">{labels[r.punch_type] ?? r.punch_type}</span><span className="text-slate-500">{new Date(r.punched_at).toLocaleString("pt-BR")}</span><span className={r.inside_radius === false ? "text-red-600" : "text-emerald-600"}>{r.inside_radius === false ? "Fora do raio" : "GPS OK"}</span></div>)}</div></section></div>;
 }
