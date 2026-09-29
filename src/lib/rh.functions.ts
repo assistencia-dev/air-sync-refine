@@ -267,7 +267,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("rh_employees")
       .select(
-        "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
+        "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active",
       )
       .eq("is_active", true)
       .order("full_name");
