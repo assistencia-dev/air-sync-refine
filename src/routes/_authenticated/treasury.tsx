@@ -3,36 +3,38 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { getMyProfile } from "@/lib/auth.functions";
-import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabase } from "@/integrations/supabase/client";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
-const getTreasuryCloudState = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data: user, error: userError } = await context.supabase.from("users").select("id, company_id, role_key, status").eq("auth_id", context.userId).maybeSingle();
-    if (userError) throw new Error(userError.message);
-    if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
-    const { data, error } = await (context.supabase as any).from("treasury_snapshots").select("state, state_version, updated_at").eq("scope_key", scopeKey).maybeSingle();
-    if (error) throw new Error(error.message);
-    return data ?? null;
-  });
+const getTreasuryCloudState = async () => {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Sessão expirada.");
+  const { data: user, error: userError } = await (supabase as any)
+    .from("users").select("id, company_id, role_key, status").eq("auth_id", auth.user.id).maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
+  const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+  const { data, error } = await (supabase as any).from("treasury_snapshots")
+    .select("state, state_version, updated_at").eq("scope_key", scopeKey).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ?? null;
+};
 
-const saveTreasuryCloudState = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { state: Record<string, unknown> }) => input)
-  .handler(async ({ context, data }) => {
-    const { data: user, error: userError } = await context.supabase.from("users").select("id, company_id, role_key, status").eq("auth_id", context.userId).maybeSingle();
-    if (userError) throw new Error(userError.message);
-    if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
-    if (!data?.state || typeof data.state !== "object" || Array.isArray(data.state)) throw new Error("Estado financeiro inválido.");
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
-    const payload = { scope_key: scopeKey, company_id: user.company_id ?? null, owner_user_id: user.id, state: data.state, state_version: Number((data.state as any)?._meta?.version) || 5, updated_by: user.id, updated_at: new Date().toISOString() };
-    const { data: saved, error } = await (context.supabase as any).from("treasury_snapshots").upsert(payload, { onConflict: "scope_key" }).select("state, state_version, updated_at").single();
-    if (error) throw new Error(error.message);
-    return saved;
-  });
+const saveTreasuryCloudState = async ({ state }: { state: Record<string, unknown> }) => {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Sessão expirada.");
+  const { data: user, error: userError } = await (supabase as any)
+    .from("users").select("id, company_id, role_key, status").eq("auth_id", auth.user.id).maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
+  if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("Estado financeiro inválido.");
+  const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+  const payload = { scope_key: scopeKey, company_id: user.company_id ?? null, owner_user_id: user.id, state, state_version: Number((state as any)?._meta?.version) || 5, updated_by: user.id, updated_at: new Date().toISOString() };
+  const { data: saved, error } = await (supabase as any).from("treasury_snapshots")
+    .upsert(payload, { onConflict: "scope_key" }).select("state, state_version, updated_at").single();
+  if (error) throw new Error(error.message);
+  return saved;
+};
 
 export const Route = createFileRoute("/_authenticated/treasury")({
   ssr: false,
