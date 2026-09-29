@@ -51,30 +51,20 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
-    const { data, error } = await supabaseAdmin
-      .from("rh_employees")
+    const { data, error } = await supabaseAdmin.from("rh_employees")
       .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-
     const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id);
     const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
-    const users = userIds.length
-      ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[])
-      : [];
+    const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
     const accessByEmployee = new Map(registry.filter((e: any) => e.ponto_portal_user_id).map((e: any) => [e.id, {
-      employee_id: e.id,
-      user_id: e.ponto_portal_user_id,
-      access_enabled: Boolean(e.ponto_access_enabled),
+      employee_id: e.id, user_id: e.ponto_portal_user_id, access_enabled: Boolean(e.ponto_access_enabled),
       login_identifier: usersById.get(e.ponto_portal_user_id)?.username ?? usersById.get(e.ponto_portal_user_id)?.email ?? null,
       user: usersById.get(e.ponto_portal_user_id) ?? null,
     }]));
-
-    return registry.map((employee: any) => ({
-      ...employee,
-      access: accessByEmployee.get(employee.id) ?? null,
-    }));
+    return registry.map((employee: any) => ({ ...employee, access: accessByEmployee.get(employee.id) ?? null }));
   });
 
 export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
@@ -97,32 +87,26 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       registration_data: data.registration_data,
       is_active: true,
     };
-    if (data.id) {
-      const { data: employee, error } = await supabaseAdmin
-        .from("rh_employees")
-        .update(payload)
-        .eq("id", data.id)
-        .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id")
-        .single();
-      if (error) throw new Error(error.message);
-      return employee;
-    }
-
-    const { data: created, error: createError } = await supabaseAdmin
-      .from("rh_employees")
-      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false })
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active")
-      .single();
-    if (createError) throw new Error(createError.message);
-
-    const { data: employee, error: linkError } = await supabaseAdmin
-      .from("rh_employees")
-      .update({ registry_employee_id: created.id })
-      .eq("id", created.id)
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id")
-      .single();
-    if (linkError) throw new Error(linkError.message);
-    return employee;  });
+    const query = data.id
+      ? supabaseAdmin
+          .from("rh_employees")
+          .update(payload)
+          .eq("id", data.id)
+          .select(
+            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
+          )
+          .single()
+      : supabaseAdmin
+          .from("rh_employees")
+          .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1 })
+          .select(
+            "id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active",
+          )
+          .single();
+    const { data: employee, error } = await query;
+    if (error) throw new Error(error.message);
+    return employee;
+  });
 
 export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -143,12 +127,8 @@ export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
-    const { data, error } = await supabaseAdmin
-      .from("users")
-      .select("id, username, email, cpf, full_name, status, role_key")
-      .eq("role_key", "COLABORADOR")
-      .eq("status", "ativo")
-      .order("full_name");
+    const { data, error } = await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key")
+      .eq("role_key", "COLABORADOR").eq("status", "ativo").order("full_name");
     if (error) throw new Error(error.message);
     return data ?? [];
   });
@@ -266,9 +246,34 @@ export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false, benefit_configured: false })
-      .eq("id", data.id)
-      .eq("benefit_type", data.benefit_type);
+      .update({ is_active: false, ponto_access_enabled: false })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
+    if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
+    return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim() };
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const payload = { full_name: data.full_name, unit: data.unit, registration_data: data.registration_data, is_active: true };
+    if (data.id) {
+      const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", data.id)
+        .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+      if (error) throw new Error(error.message);
+      return employee;
+    }
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees")
+      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false })
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
+    if (createError) throw new Error(createError.message);
+    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+    if (linkError) throw new Error(linkError.message);
+    return employee;
+  });
+
+
