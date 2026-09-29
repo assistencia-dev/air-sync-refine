@@ -492,7 +492,7 @@ export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { error } = await supabaseAdmin
       .from("rh_employees")
-      .update({ is_active: false })
+      .update({ is_active: false, ponto_access_enabled: false })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
