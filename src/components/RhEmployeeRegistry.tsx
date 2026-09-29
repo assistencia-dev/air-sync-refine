@@ -216,7 +216,10 @@ function EmployeeRow({
   }
   return (
     <tr className="border-t border-slate-800 align-top">
-      <td className="px-4 py-3 font-semibold text-slate-100">\n        {employee.full_name}\n        {!employee.is_active && <span className="ml-2 inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold text-slate-400">Inativo</span>}\n      </td>
+      <td className="px-4 py-3 font-semibold text-slate-100">
+        {employee.full_name}
+        {!employee.is_active && <span className="ml-2 inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold text-slate-400">Inativo</span>}
+      </td>
       <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
       <td className="px-4 py-3 text-slate-600">{employee.registration_data?.job_title || "—"}</td>
       <td className="px-4 py-3">
