@@ -2345,16 +2345,115 @@ function showToast(msg) {
             `;
         });
 
+        // Radar de Saídas: consolida somente dados já existentes no Treasury.
+        // Não cria lançamentos, não altera status e não modifica nenhuma fonte operacional.
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const inicioProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+        const fimProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0);
+        const limite7Dias = new Date(hoje);
+        limite7Dias.setDate(limite7Dias.getDate() + 7);
+
+        const saidas = [];
+        const adicionarSaida = ({ origem, descricao, valor, vencimento, id }) => {
+            if (!vencimento || !Number.isFinite(Number(valor)) || Number(valor) <= 0) return;
+            const data = new Date(String(vencimento).slice(0, 10) + 'T00:00:00');
+            if (Number.isNaN(data.getTime())) return;
+            saidas.push({ origem, descricao, valor: Number(valor), vencimento: String(vencimento).slice(0, 10), data, id });
+        };
+
+        // Contas a pagar pendentes.
+        STATE.contasPagar.filter(c => c.status !== 'Pago').forEach(c => {
+            adicionarSaida({
+                origem: 'Conta a Pagar',
+                descricao: c.fornecedor ? `${c.fornecedor} — ${c.descricao || 'Conta a pagar'}` : (c.descricao || 'Conta a pagar'),
+                valor: c.valor,
+                vencimento: c.vencimento,
+                id: c.id
+            });
+        });
+
+        // Todas as parcelas de acordos ainda pendentes.
+        STATE.passivos.filter(p => !p.arquivado).forEach(p => {
+            (p.parcelas || []).filter(parc => parc.status !== 'Pago').forEach(parc => {
+                adicionarSaida({
+                    origem: 'Acordo',
+                    descricao: `${p.credor} — Parcela #${parc.num}`,
+                    valor: parc.valor,
+                    vencimento: parc.vencimento,
+                    id: parc.id
+                });
+            });
+        });
+
+        // Próximo vencimento das contas fixas ativas.
         STATE.recorrencias.filter(r => !r.arquivado).forEach(r => {
-            let diff = getDaysDiff(r.proximoVencimento);
-            let tag = diff < 0 ? `<span class="badge badge-overdue">${Math.abs(diff)} dias em atraso</span>` : `<span class="badge badge-pending">Vence em ${diff} dias</span>`;
-            dashRec.innerHTML += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-light); font-size:12.5px;">
-                    <div><strong>${r.servico}</strong> <div style="margin-top:2px;">${tag}</div></div>
-                    <div style="text-align:right;"><strong>R$ ${formatMoney(r.valor)}</strong><div style="font-size:11px; color:var(--text-muted);">${formatarDataBR(r.proximoVencimento)}</div></div>
+            adicionarSaida({
+                origem: 'Conta Fixa',
+                descricao: r.servico,
+                valor: r.valor,
+                vencimento: r.proximoVencimento,
+                id: r.id
+            });
+        });
+
+        saidas.sort((a, b) => a.data - b.data || a.descricao.localeCompare(b.descricao, 'pt-BR'));
+
+        const atrasadas = saidas.filter(s => s.data < hoje);
+        const proximos7 = saidas.filter(s => s.data >= hoje && s.data <= limite7Dias);
+        const proximoMes = saidas.filter(s => s.data >= inicioProximoMes && s.data <= fimProximoMes);
+        const total = lista => lista.reduce((acc, item) => acc + item.valor, 0);
+
+        const renderSaida = item => {
+            const diff = getDaysDiff(item.vencimento);
+            const tag = diff < 0
+                ? `<span class="badge badge-overdue">${Math.abs(diff)} dias em atraso</span>`
+                : diff === 0
+                    ? '<span class="badge badge-overdue">Vence hoje</span>'
+                    : `<span class="badge badge-pending">Vence em ${diff} dias</span>`;
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--border-light); font-size:12px;">
+                    <div style="min-width:0;">
+                        <div><strong>${item.descricao}</strong></div>
+                        <div style="margin-top:3px; color:var(--text-muted);">${item.origem} · ${formatarDataBR(item.vencimento)} · ${tag}</div>
+                    </div>
+                    <div style="text-align:right; white-space:nowrap;"><strong>R$ ${formatMoney(item.valor)}</strong></div>
                 </div>
             `;
-        });
+        };
+
+        dashRec.innerHTML = `
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px;">
+                <div style="padding:9px; border:1px solid var(--border-light); border-radius:8px;">
+                    <div style="font-size:10px; color:var(--text-muted);">ATRASADAS</div>
+                    <strong style="font-size:15px;">R$ ${formatMoney(total(atrasadas))}</strong>
+                    <div style="font-size:10px; color:var(--text-muted);">${atrasadas.length} conta(s)</div>
+                </div>
+                <div style="padding:9px; border:1px solid var(--border-light); border-radius:8px;">
+                    <div style="font-size:10px; color:var(--text-muted);">PRÓXIMOS 7 DIAS</div>
+                    <strong style="font-size:15px;">R$ ${formatMoney(total(proximos7))}</strong>
+                    <div style="font-size:10px; color:var(--text-muted);">${proximos7.length} conta(s)</div>
+                </div>
+                <div style="padding:9px; border:1px solid var(--border-light); border-radius:8px;">
+                    <div style="font-size:10px; color:var(--text-muted);">PRÓXIMO MÊS</div>
+                    <strong style="font-size:15px;">R$ ${formatMoney(total(proximoMes))}</strong>
+                    <div style="font-size:10px; color:var(--text-muted);">${proximoMes.length} conta(s)</div>
+                </div>
+            </div>
+            ${atrasadas.length ? `
+                <div style="font-size:11px; font-weight:800; color:var(--rose); margin:6px 0 2px;">🔴 ATRASADAS</div>
+                ${atrasadas.map(renderSaida).join('')}
+            ` : ''}
+            ${proximos7.length ? `
+                <div style="font-size:11px; font-weight:800; margin:12px 0 2px;">🟡 PRÓXIMOS 7 DIAS</div>
+                ${proximos7.map(renderSaida).join('')}
+            ` : ''}
+            ${proximoMes.length ? `
+                <div style="font-size:11px; font-weight:800; margin:12px 0 2px;">🔵 PRÓXIMO MÊS</div>
+                ${proximoMes.map(renderSaida).join('')}
+            ` : ''}
+            ${!atrasadas.length && !proximos7.length && !proximoMes.length ? '<div style="padding:18px 0; text-align:center; color:var(--text-muted);">Nenhuma saída pendente encontrada para os períodos monitorados.</div>' : ''}
+        `;
 
         // Passivos
         const passContainer = document.getElementById('passivos-list');
