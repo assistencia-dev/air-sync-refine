@@ -410,13 +410,10 @@ export const listRhEmployeeAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
-    const db = supabaseAdmin as any;
-    const { data, error } = await db
-      .from("rh_employee_access")
-      .select("id, employee_id, user_id, access_enabled, login_identifier, updated_at")
-      .order("updated_at", { ascending: false });
+    const { data, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, ponto_portal_user_id, ponto_access_enabled").eq("is_active", true).eq("ponto_access_enabled", true);
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return (data ?? []).map((row) => ({ id: row.id, employee_id: row.id, user_id: row.ponto_portal_user_id, access_enabled: row.ponto_access_enabled }));
   });
 
 export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })
