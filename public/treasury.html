@@ -1229,6 +1229,7 @@ function showToast(msg) {
         const bancoId = document.getElementById('add-p-banco').value;
         if (!credor || !doc || !Number.isInteger(qtd) || qtd <= 0 || !Number.isFinite(val) || val <= 0 || !dataStr || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
 
+        if (!validarDataRetroativa(dataStr)) return;
         const base = new Date(dataStr + 'T00:00:00');
         const parcelas = [];
         const stamp = Date.now();
