@@ -40,6 +40,7 @@ function PontoRh() {
   const [occurrenceStatus, setOccurrenceStatus] = useState<RhPontoDayStatus>("PRESENCA");
   const [occurrenceNote, setOccurrenceNote] = useState("");
   const [view, setView] = useState<"gestao" | "acessos">("gestao");
+  const [reportOpen, setReportOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
   const [identifier, setIdentifier] = useState("");
   const [radius, setRadius] = useState("150");
@@ -73,7 +74,7 @@ function PontoRh() {
         const records = dayRecords.filter((r:any) => r.employee_id === e.id);
         const s = records[0]?.day_summary ?? { worked_minutes:0, late_minutes:0, early_leave_minutes:0, overtime_minutes:0, missing_punches:["entrada","almoco_saida","almoco_retorno","saida"] };
         const saved = latest.get(e.id + "|" + selectedDay);
-        const status = saved?.details?.status ?? (records.length === 0 ? "SEM_MARCACAO" : s.late_minutes ? "ATRASO" : s.early_leave_minutes ? "SAIDA_ANTECIPADA" : s.missing_punches?.length ? "ATRASO" : "PRESENCA");
+        const status = saved?.details?.status ?? (records.length === 0 ? "SEM_MARCACAO" : s.late_minutes ? "ATRASO" : s.early_leave_minutes ? "SAIDA_ANTECIPADA" : s.missing_punches?.length ? "PONTO_INCOMPLETO" : "PRESENCA");
         return { employee:e, records, summary:s, status, note:saved?.details?.note ?? null };
       })
       .filter((r:any) => statusFilter === "todos" || r.status === statusFilter);
@@ -88,12 +89,12 @@ function PontoRh() {
     justified: rows.filter((r:any)=>["FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].includes(r.status)).length,
   };
 
-  const statusLabel:Record<string,string> = { PRESENCA:"Presença", ATRASO:"Atraso", SAIDA_ANTECIPADA:"Saída antecipada", FALTA:"Falta", FALTA_JUSTIFICADA:"Falta justificada", SEM_MARCACAO:"Sem marcação", ATESTADO:"Atestado", FOLGA:"Folga", FERIAS:"Férias", COMPENSACAO:"Compensação", HOME_OFFICE:"Home office", ABONO:"Abono" };
+  const statusLabel:Record<string,string> = { PRESENCA:"Presença", ATRASO:"Atraso", SAIDA_ANTECIPADA:"Saída antecipada", FALTA:"Falta", FALTA_JUSTIFICADA:"Falta justificada", SEM_MARCACAO:"Sem marcação", PONTO_INCOMPLETO:"Ponto incompleto", ATESTADO:"Atestado", FOLGA:"Folga", FERIAS:"Férias", COMPENSACAO:"Compensação", HOME_OFFICE:"Home office", ABONO:"Abono" };
   const statusClass:Record<string,string> = {
     PRESENCA:"bg-emerald-50 text-emerald-700 border-emerald-100", ATRASO:"bg-amber-50 text-amber-700 border-amber-100",
     SAIDA_ANTECIPADA:"bg-orange-50 text-orange-700 border-orange-100", FALTA:"bg-red-50 text-red-700 border-red-100",
     FALTA_JUSTIFICADA:"bg-sky-50 text-sky-700 border-sky-100", ATESTADO:"bg-violet-50 text-violet-700 border-violet-100",
-    FOLGA:"bg-slate-100 text-slate-700 border-slate-200", SEM_MARCACAO:"bg-slate-100 text-slate-500 border-slate-200", FERIAS:"bg-indigo-50 text-indigo-700 border-indigo-100",
+    FOLGA:"bg-slate-100 text-slate-700 border-slate-200", SEM_MARCACAO:"bg-slate-100 text-slate-500 border-slate-200", PONTO_INCOMPLETO:"bg-rose-50 text-rose-700 border-rose-100", FERIAS:"bg-indigo-50 text-indigo-700 border-indigo-100",
     COMPENSACAO:"bg-cyan-50 text-cyan-700 border-cyan-100", HOME_OFFICE:"bg-teal-50 text-teal-700 border-teal-100", ABONO:"bg-blue-50 text-blue-700 border-blue-100"
   };
   const fmt = (m:number|null|undefined) => m == null ? "—" : Math.floor(m/60) + "h " + String(m%60).padStart(2,"0") + "m";
@@ -107,6 +108,57 @@ function PontoRh() {
     mutationFn:()=>setRhPontoDayManagement({data:{employee_id:dayEmployee.employee.id,work_date:selectedDay,status:occurrenceStatus,note:occurrenceNote}}),
     onSuccess:()=>{ qc.invalidateQueries({queryKey:["rh-ponto-day-management"]}); setDayEmployee(null); setOccurrenceNote(""); }
   });
+  const monthlySummary = useMemo(() => {
+    const byEmployee = new Map<string, any>();
+    for (const e of (employees.data ?? []) as any[]) {
+      byEmployee.set(e.id, { employee: e, days: 0, worked: 0, expected: 0, overtime: 0, late: 0, early: 0, incomplete: 0, absences: 0, justified: 0 });
+    }
+    for (const r of (report.data ?? []) as any[]) {
+      const item = byEmployee.get(r.employee_id);
+      if (!item) continue;
+      const s = r.day_summary ?? {};
+      item.days += 1;
+      item.worked += Number(s.worked_minutes || 0);
+      item.expected += Number(s.expected_minutes || 0);
+      item.overtime += Number(s.overtime_minutes || 0);
+      item.late += Number(s.late_minutes || 0);
+      item.early += Number(s.early_leave_minutes || 0);
+      if (s.missing_punches?.length) item.incomplete += 1;
+    }
+    for (const row of (management.data ?? []) as any[]) {
+      const d = row.details ?? {};
+      const item = byEmployee.get(row.employee_id);
+      if (!item || !d.work_date || !String(d.work_date).startsWith(reportDate)) continue;
+      if (d.status === "FALTA") item.absences += 1;
+      if (["FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].includes(d.status)) item.justified += 1;
+    }
+    return [...byEmployee.values()].sort((a,b)=>a.employee.full_name.localeCompare(b.employee.full_name,"pt-BR"));
+  }, [employees.data, report.data, management.data, reportDate]);
+
+  const openMonthlyReport = () => {
+    const monthLabel = new Date(reportDate + "-15T12:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    const moneyTime = (m:number) => Math.floor(m/60) + "h " + String(Math.abs(m)%60).padStart(2,"0") + "m";
+    const totalWorked = monthlySummary.reduce((a,r)=>a+r.worked,0);
+    const totalExpected = monthlySummary.reduce((a,r)=>a+r.expected,0);
+    const totalExtra = monthlySummary.reduce((a,r)=>a+r.overtime,0);
+    const totalLate = monthlySummary.reduce((a,r)=>a+r.late,0);
+    const rowsHtml = monthlySummary.map(r => `<tr><td><strong>${r.employee.full_name}</strong><br><small>${r.employee.unit||"Sem unidade"}</small></td><td>${r.days}</td><td>${moneyTime(r.expected)}</td><td>${moneyTime(r.worked)}</td><td>${moneyTime(r.overtime)}</td><td>${moneyTime(r.late)}</td><td>${r.early ? moneyTime(r.early) : "—"}</td><td>${r.absences}</td><td>${r.justified}</td><td>${r.incomplete}</td></tr>`).join("");
+    const w = window.open("", "_blank", "width=1200,height=800");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>Espelho RH - ${monthLabel}</title><style>
+      body{font-family:Arial,sans-serif;color:#172033;padding:32px}h1{margin:0;font-size:24px}h2{font-size:14px;margin:4px 0 24px;color:#64748b;text-transform:capitalize}
+      .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.kpi{border:1px solid #e2e8f0;border-radius:10px;padding:12px}.kpi b{display:block;font-size:20px;margin-top:5px}.kpi span{font-size:10px;color:#64748b;text-transform:uppercase;font-weight:bold}
+      table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f1f5f9;text-align:left;text-transform:uppercase;font-size:9px}th,td{padding:9px;border-bottom:1px solid #e2e8f0}small{color:#64748b}.footer{margin-top:25px;font-size:10px;color:#64748b}
+      @media print{body{padding:12px}.no-print{display:none}}
+    </style></head><body><h1>DBS AIR REFRIGERAÇÃO LTDA</h1><h2>Relatório Gerencial de Folha de Ponto · ${monthLabel}</h2>
+    <div class="kpis"><div class="kpi"><span>Horas previstas</span><b>${moneyTime(totalExpected)}</b></div><div class="kpi"><span>Horas trabalhadas</span><b>${moneyTime(totalWorked)}</b></div><div class="kpi"><span>Horas extras</span><b>${moneyTime(totalExtra)}</b></div><div class="kpi"><span>Atrasos</span><b>${moneyTime(totalLate)}</b></div></div>
+    <table><thead><tr><th>Colaborador</th><th>Dias</th><th>Previsto</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Saída ant.</th><th>Faltas</th><th>Justif.</th><th>Incompleto</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <p class="footer">Relatório gerado pelo módulo RH. As marcações originais permanecem preservadas; ocorrências administrativas são tratadas separadamente.</p>
+    <button class="no-print" onclick="window.print()" style="margin-top:20px;padding:10px 16px">Imprimir / Salvar PDF</button></body></html>`);
+    w.document.close();
+    setReportOpen(false);
+  };
+
   const active=(employees.data??[]).filter((e:any)=>e.ponto_access_enabled).length;
   const openAccess=(e:any)=>{setSelected(e);setIdentifier(e.portal_user?.username??e.portal_user?.email??"");setRadius(String(e.ponto_raio_m??150));setLat(e.ponto_base_lat?String(e.ponto_base_lat):"");setLng(e.ponto_base_lng?String(e.ponto_base_lng):"");setEntrada(e.ponto_entrada_prevista??"");setSaida(e.ponto_saida_prevista??"");setAlmocoIni(e.ponto_almoco_inicio_previsto??"");setAlmocoFim(e.ponto_almoco_fim_previsto??"");};
   const openDay=(r:any)=>{setDayEmployee(r);setOccurrenceStatus(r.status as RhPontoDayStatus);setOccurrenceNote(r.note??"");};
@@ -115,7 +167,7 @@ function PontoRh() {
     <header className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div><p className="text-[10px] font-black uppercase tracking-[.22em] text-sky-300">RH · gestão de jornada</p><h2 className="mt-2 text-3xl font-black">Folha de Ponto</h2><p className="mt-1 max-w-2xl text-sm text-slate-400">Acompanhe cada dia, identifique desvios e registre a ocorrência sem apagar a marcação original.</p></div>
-        <div className="flex rounded-xl bg-white/10 p-1"><button onClick={()=>setView("gestao")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="gestao"?"bg-white text-slate-900":"text-white/70")}>Gestão diária</button><button onClick={()=>setView("acessos")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="acessos"?"bg-white text-slate-900":"text-white/70")}>Acessos e jornada</button></div>
+        <button onClick={openMonthlyReport} className="mr-2 inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2 text-xs font-black text-slate-950"><ClipboardCheck className="h-4 w-4"/>Relatório mensal</button><div className="flex rounded-xl bg-white/10 p-1"><button onClick={()=>setView("gestao")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="gestao"?"bg-white text-slate-900":"text-white/70")}>Gestão diária</button><button onClick={()=>setView("acessos")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="acessos"?"bg-white text-slate-900":"text-white/70")}>Acessos e jornada</button></div>
       </div>
     </header>
 
@@ -127,7 +179,7 @@ function PontoRh() {
           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Pesquisar<div className="relative mt-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nome ou unidade..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm"/></div></label>
           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Funcionário<select value={employeeFilter} onChange={e=>setEmployeeFilter(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold"><option value="todos">Todos</option>{(employees.data??[]).map((e:any)=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select></label>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3"><Filter className="h-4 w-4 text-slate-400"/>{["todos","PRESENCA","SEM_MARCACAO","ATRASO","SAIDA_ANTECIPADA","FALTA","FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].map(s=><button key={s} onClick={()=>setStatusFilter(s)} className={"rounded-full border px-3 py-1.5 text-[11px] font-black "+(statusFilter===s?"border-slate-900 bg-slate-900 text-white":"border-slate-200 bg-white text-slate-500")}>{s==="todos"?"Todas":statusLabel[s]}</button>)}</div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3"><Filter className="h-4 w-4 text-slate-400"/>{["todos","PRESENCA","SEM_MARCACAO","PONTO_INCOMPLETO","ATRASO","SAIDA_ANTECIPADA","FALTA","FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].map(s=><button key={s} onClick={()=>setStatusFilter(s)} className={"rounded-full border px-3 py-1.5 text-[11px] font-black "+(statusFilter===s?"border-slate-900 bg-slate-900 text-white":"border-slate-200 bg-white text-slate-500")}>{s==="todos"?"Todas":statusLabel[s]}</button>)}</div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
