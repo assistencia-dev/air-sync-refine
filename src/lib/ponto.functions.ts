@@ -167,6 +167,74 @@ function pointSummary(records: Array<{ punch_type: PointType; punched_at: string
   };
 }
 
+export const RH_PONTO_DAY_STATUSES = [
+  "PRESENCA",
+  "ATRASO",
+  "SAIDA_ANTECIPADA",
+  "FALTA",
+  "FALTA_JUSTIFICADA",
+  "ATESTADO",
+  "FOLGA",
+  "FERIAS",
+  "COMPENSACAO",
+  "HOME_OFFICE",
+  "ABONO",
+] as const;
+export type RhPontoDayStatus = (typeof RH_PONTO_DAY_STATUSES)[number];
+
+export const listRhPontoDayManagement = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.start_date) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
+    if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireRh(context);
+    let query = supabaseAdmin.from("rh_ponto_audit")
+      .select("employee_id, action, details, created_at")
+      .gte("created_at", data.start_date + "T00:00:00")
+      .lt("created_at", data.end_date + "T23:59:59.999");
+    if (data.employee_id) query = query.eq("employee_id", data.employee_id);
+    const { data: rows, error } = await query.order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (rows ?? []).filter((row: any) => row.action === "GESTAO_DIA_PONTO");
+  });
+
+export const setRhPontoDayManagement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    employee_id: string;
+    work_date: string;
+    status: RhPontoDayStatus;
+    note?: string | null;
+  }) => {
+    if (!input?.employee_id || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.work_date)) throw new Error("Funcionário ou data inválidos.");
+    if (!RH_PONTO_DAY_STATUSES.includes(input.status)) throw new Error("Situação do dia inválida.");
+    return { ...input, note: input.note?.trim() || null };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireRh(context);
+    const { data: employee } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, is_active")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    const { data: row, error } = await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: data.employee_id,
+      actor_user_id: actor.id,
+      action: "GESTAO_DIA_PONTO",
+      details: {
+        work_date: data.work_date,
+        status: data.status,
+        note: data.note ?? null,
+        employee_name: employee.full_name,
+      },
+    }).select("employee_id, action, details, created_at").single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
 export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
   if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
