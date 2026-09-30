@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, ClipboardList, Clock3, FileWarning, HeartPulse, PlayCircle, UserPlus, WalletCards } from "lucide-react";
+import { RhDpTools } from "@/components/RhDpTools";
 import {
   calculateRhPayroll, closeRhPayrollPeriod, createRhAdmission, createRhEmployeeRequest, createRhMedicalExam,
   createRhPayrollPeriod, createRhTermination, createRhTimeAdjustment, createRhVacationRequest,
   getRhManagementDashboard, listRhPayroll, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
 } from "@/lib/rh.dp.functions";
 
-type Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes";
+type Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes"|"estrutura";
 const inputClass="mt-1 w-full rounded-xl border border-slate-700 bg-[#141F33] px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-[#F59E0B]";
 const buttonClass="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50";
 const secondaryButtonClass="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-200 disabled:cursor-not-allowed disabled:opacity-50";
@@ -21,7 +22,7 @@ export function RhDpCenter(){
  const dash=useQuery({queryKey:["rh-dp-dashboard"],queryFn:()=>getRhManagementDashboard()});
  const employees:any[]=dash.data?.employeesData??[];
  const refresh=()=>qc.invalidateQueries({queryKey:["rh-dp-dashboard"]});
- const tabs:[Tab,string][]=[["visao","Visão geral"],["folha","Folha"],["ferias","Férias"],["ponto","Ponto & banco"],["admissao","Admissão / desligamento"],["sst","SST"],["solicitacoes","Solicitações"]];
+ const tabs:[Tab,string][]=[["visao","Visão geral"],["folha","Folha"],["ferias","Férias"],["ponto","Ponto & banco"],["admissao","Admissão / desligamento"],["sst","SST"],["solicitacoes","Solicitações"],["estrutura","Estrutura"]];
  return <section className="space-y-5">
    <header className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm sm:p-7">
      <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#F59E0B]">RH · DP integrado</p>
@@ -39,6 +40,7 @@ export function RhDpCenter(){
    {dash.data&&tab==="admissao"&&<Admission employees={employees} refresh={refresh}/>}
    {dash.data&&tab==="sst"&&<Sst employees={employees} data={dash.data} refresh={refresh}/>}
    {dash.data&&tab==="solicitacoes"&&<Requests employees={employees} data={dash.data} refresh={refresh}/>}
+   {dash.data&&tab==="estrutura"&&<RhDpTools/>}
  </section>
 }
 
