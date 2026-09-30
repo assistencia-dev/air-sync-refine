@@ -13,7 +13,14 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import type { EmployeeBenefitConfig } from './benefitCalculations';
-import { configureRhEmployeeBenefit, deleteRhEmployee, listRhEmployees, saveRhEmployeeRecord } from '@/lib/rh.functions';
+import {
+  configureRhEmployeeBenefit,
+  deactivateRhEmployeeRecord,
+  deleteRhEmployee,
+  listRhEmployees,
+  reactivateRhEmployeeRecord,
+  saveRhEmployeeRecord,
+} from '@/lib/rh.functions';
 
 // Type alias for rh_employees row
 type RHEmployee = Database['public']['Tables']['rh_employees']['Row'];
@@ -66,10 +73,32 @@ export async function fetchActiveEmployees(unitId?: string): Promise<EmployeeWit
     listRhEmployees({ data: { benefit_type: 'passagem' } }),
     listRhEmployees({ data: { benefit_type: 'alimentacao' } }),
   ]);
-  const employees = [...passage, ...food]
+
+  // Um funcionário pode possuir VT e VA, mas continua sendo uma única pessoa.
+  // Consolidamos os benefícios pelo registro canônico para evitar duplicidade nas telas.
+  const byRegistry = new Map<string, { base: RHEmployee; vt?: RHEmployee; va?: RHEmployee }>();
+  for (const employee of [...passage, ...food] as RHEmployee[]) {
+    const registryId = (employee as any).registry_employee_id ?? employee.id;
+    const entry = byRegistry.get(registryId) ?? { base: employee };
+    entry.base = entry.base ?? employee;
+    if (employee.benefit_type === 'passagem') entry.vt = employee;
+    if (employee.benefit_type === 'alimentacao') entry.va = employee;
+    byRegistry.set(registryId, entry);
+  }
+
+  return [...byRegistry.values()]
+    .map(({ base, vt, va }) => ({
+      ...base,
+      // O ID continua sendo o registro central sempre que disponível.
+      id: (base as any).registry_employee_id ?? base.id,
+      benefit_type: vt ? 'passagem' : va?.benefit_type ?? base.benefit_type,
+      fare_cents: vt?.fare_cents ?? va?.fare_cents ?? base.fare_cents,
+      trips_per_day: vt?.trips_per_day ?? base.trips_per_day,
+      daily_vt_cost: vt ? (vt.fare_cents ?? 0) / 100 * (vt.trips_per_day ?? 1) : 0,
+      daily_va_cost: va ? (va.fare_cents ?? 0) / 100 : 0,
+    }))
     .filter((employee) => !unitId || employee.unit === unitId)
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
-  return employees.map((employee) => toEmployeeWithCosts(employee as RHEmployee));
 }
 
 /**
@@ -175,8 +204,9 @@ export async function updateEmployee(employeeId: string, updates: { full_name?: 
 export async function deactivateEmployee(employeeId: string): Promise<EmployeeWithCosts> {
   const current = await fetchEmployeeById(employeeId);
   if (!current) throw new Error('Colaborador não encontrado.');
-  await deleteRhEmployee({ data: { id: employeeId, benefit_type: current.benefit_type as 'passagem' | 'alimentacao' } });
-  return { ...current, is_active: false };
+  const registryId = (current as any).registry_employee_id ?? employeeId;
+  await deactivateRhEmployeeRecord({ data: { id: registryId } });
+  return { ...current, id: registryId, is_active: false };
 }
 
 /**
@@ -185,7 +215,11 @@ export async function deactivateEmployee(employeeId: string): Promise<EmployeeWi
  * @returns Updated employee
  */
 export async function reactivateEmployee(employeeId: string): Promise<EmployeeWithCosts> {
-  return updateEmployee(employeeId, { is_active: true });
+  const current = await fetchEmployeeById(employeeId);
+  if (!current) throw new Error('Colaborador não encontrado.');
+  const registryId = (current as any).registry_employee_id ?? employeeId;
+  await reactivateRhEmployeeRecord({ data: { id: registryId } });
+  return { ...current, id: registryId, is_active: true };
 }
 
 /**
