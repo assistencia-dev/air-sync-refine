@@ -17,6 +17,7 @@ import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
+import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
 import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
 
 const LoginRoute = LoginRouteImport.update({
@@ -58,6 +59,11 @@ const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
   path: '/folha-ponto',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
+  id: '/_authenticated/dbs-control',
+  path: '/dbs-control',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
   id: '/treasury',
   path: '/treasury',
@@ -71,6 +77,8 @@ export interface FileRoutesByFullPath {
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
   '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/dbs-control': typeof AuthenticatedDbsControlRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -105,10 +114,11 @@ export interface FileRouteTypes {
     | '/passage'
     | '/portal'
     | '/folha-ponto'
+    | '/dbs-control'
     | '/treasury'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/folha-ponto' | '/treasury' | '/admin/rh-dashboard'
+  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/folha-ponto' | '/dbs-control' | '/treasury' | '/admin/rh-dashboard'
   id:
     | '__root__'
     | '/'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/_authenticated/passage'
     | '/_authenticated/portal'
     | '/_authenticated/folha-ponto'
+    | '/_authenticated/dbs-control'
     | '/_authenticated/treasury'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
@@ -187,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFolhaPontoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dbs-control': {
+      id: '/_authenticated/dbs-control'
+      path: '/dbs-control'
+      fullPath: '/dbs-control'
+      preLoaderRoute: typeof AuthenticatedDbsControlRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/treasury': {
       id: '/_authenticated/treasury'
       path: '/treasury'
@@ -202,6 +220,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
+  AuthenticatedDbsControlRoute: typeof AuthenticatedDbsControlRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
 }
 
@@ -210,6 +229,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
   AuthenticatedFolhaPontoRoute: AuthenticatedFolhaPontoRoute,
+  AuthenticatedDbsControlRoute: AuthenticatedDbsControlRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
 }
 
