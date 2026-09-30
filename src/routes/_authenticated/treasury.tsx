@@ -5,35 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { getTreasuryCloudState, saveTreasuryCloudState } from "@/lib/treasury.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
-const getTreasuryCloudState = async () => {
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error("Sessão expirada.");
-  const { data: user, error: userError } = await (supabase as any)
-    .from("users").select("id, company_id, role_key, status").eq("auth_id", auth.user.id).maybeSingle();
-  if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
-  const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
-  const { data, error } = await (supabase as any).from("treasury_snapshots")
-    .select("state, state_version, updated_at").eq("scope_key", scopeKey).maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ?? null;
-};
-
-const saveTreasuryCloudState = async ({ state }: { state: Record<string, unknown> }) => {
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) throw new Error("Sessão expirada.");
-  const { data: user, error: userError } = await (supabase as any)
-    .from("users").select("id, company_id, role_key, status").eq("auth_id", auth.user.id).maybeSingle();
-  if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
-  if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("Estado financeiro inválido.");
-  const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
-  const payload = { scope_key: scopeKey, company_id: user.company_id ?? null, owner_user_id: user.id, state, state_version: Number((state as any)?._meta?.version) || 5, updated_by: user.id, updated_at: new Date().toISOString() };
-  const { data: saved, error } = await (supabase as any).from("treasury_snapshots")
-    .upsert(payload, { onConflict: "scope_key" }).select("state, state_version, updated_at").single();
-  if (error) throw new Error(error.message);
-  return saved;
-};
 
 export const Route = createFileRoute("/_authenticated/treasury")({
   ssr: false,
@@ -104,15 +75,12 @@ function TreasuryPage() {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
             cloudReadyRef.current = true;
           } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state) && treasuryStateHasData(msg.state as Record<string, unknown>)) {
-            const sanitized = JSON.parse(JSON.stringify(msg.state));
-            const removeBy = (arr: any[], fn: (x:any)=>boolean) => arr.filter(x => !fn(x));
-            sanitized.recebimentos = removeBy(sanitized.recebimentos || [], x => x.id === "rec_in_1" && x.cliente === "Cliente Contratual S/A" && Number(x.valor) === 25000 && x.status === "Pendente");
-            sanitized.contasPagar = removeBy(sanitized.contasPagar || [], x => x.id === "pag_1" && x.fornecedor === "Insumos Técnicos Ltda" && Number(x.valor) === 3400 && x.status === "Pendente");
-            sanitized.movimentacoes = removeBy(sanitized.movimentacoes || [], x => x.id === "mov_1" && x.descricao === "Aporte Inicial de Caixa" && Number(x.valor) === 12500);
-            sanitized.recorrencias = removeBy(sanitized.recorrencias || [], x => x.id === "rec_1" && x.servico === "Sistemas & Licenças Operacionais" && Number(x.valor) === 1200);
-            sanitized.bancos = removeBy(sanitized.bancos || [], x => (x.id === "banco_1" && x.nome === "Santander Principal" && Number(x.saldo) === 12500) || (x.id === "banco_2" && x.nome === "Caixa Física Empresarial" && Number(x.saldo) === 1500));
-            sanitized._meta = { ...(sanitized._meta || {}), demoSanitizedAt: new Date().toISOString(), version: 5 };
-            // Bootstrap seguro: se a nuvem estiver vazia, a cópia local existente é a fonte de migração.\n            // Nunca substitua um estado financeiro existente por um estado vazio.\n            const saved = await saveTreasuryCloudState({ state: sanitized });
+            const localState = msg.state && typeof msg.state === "object" ? JSON.parse(JSON.stringify(msg.state)) : null;
+            if (!localState) throw new Error("Estado local do Financeiro inválido.");
+            localState._meta = { ...(localState._meta || {}), version: 5, cloudMigratedAt: new Date().toISOString() };
+            // Bootstrap seguro: se a nuvem estiver vazia, a cópia local existente é a fonte de migração.
+            // Nenhum lançamento real é filtrado, removido ou substituído por dados demonstrativos.
+            const saved = await saveTreasuryCloudState({ state: localState });
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
             cloudReadyRef.current = true;
           }
