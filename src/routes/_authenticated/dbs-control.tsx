@@ -37,7 +37,17 @@ function DbsControlPage() {
 
   return (
     <main className="min-h-screen bg-slate-100">
-      <iframe title="DBS CONTROL" src={src} className="h-screen w-full border-0" allow="camera; geolocation" />
+      <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm">
+        <div className="text-xs font-black uppercase tracking-wider text-slate-600">DBS CONTROL</div>
+        <button
+          type="button"
+          onClick={() => navigate({ to: employeeMode ? "/folha-ponto" : "/admin", replace: true })}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+        >
+          ← Voltar ao menu principal
+        </button>
+      </div>
+      <iframe title="DBS CONTROL" src={src} className="h-[calc(100vh-3rem)] w-full border-0" allow="camera; geolocation" />
     </main>
   );
 }
