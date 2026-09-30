@@ -35,16 +35,36 @@ export const createRhPayrollPeriod=createServerFn({method:"POST"}).middleware([r
 });
 
 export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
-  const actor=await requireRhOperator(context);const {data:period,error:pe}=await supabaseAdmin.from("rh_payroll_periods").select("*").eq("id",data.period_id).maybeSingle();if(pe)throw new Error(pe.message);if(!period)throw new Error("Competência não encontrada.");if(period.status==="fechada")throw new Error("Folha fechada não pode ser recalculada.");
-  const {data:employees,error:ee}=await supabaseAdmin.from("rh_employees").select("id,registration_data").eq("is_active",true);if(ee)throw new Error(ee.message);
-  const ids=(employees??[]).map((e:any)=>e.id);const {data:contracts,error:ce}=ids.length?await supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents").in("employee_id",ids).eq("is_current",true):{data:[],error:null};if(ce)throw new Error(ce.message);
-  const cmap=new Map((contracts??[]).map((c:any)=>[c.employee_id,Number(c.salary_cents??0)]));
-  const runs=(employees??[]).map((e:any)=>{const salary=cmap.get(e.id)||moneyToCents(e.registration_data?.salary);return {period_id:period.id,employee_id:e.id,gross_cents:salary,discount_cents:0,net_cents:salary,inss_base_cents:salary,irrf_base_cents:0,fgts_base_cents:salary,status:"calculada"};});
-  for(const run of runs){const {data:saved,error:re}=await supabaseAdmin.from("rh_payroll_runs").upsert(run,{onConflict:"period_id,employee_id"}).select("*").single();if(re)throw new Error(re.message);const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code","SALARIO").limit(1);if(xe)throw new Error(xe.message);if(!existing?.length){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,item_type:"provento",code:"SALARIO",description:"Salário base",quantity:1,rate:100,amount_cents:run.gross_cents,reference:{source:"cadastro_central",run_id:saved.id}});if(ie)throw new Error(ie.message);}}
+  const actor=await requireRhOperator(context);
+  const {data:period,error:pe}=await supabaseAdmin.from("rh_payroll_periods").select("*").eq("id",data.period_id).maybeSingle();
+  if(pe)throw new Error(pe.message); if(!period)throw new Error("Competência não encontrada.");
+  if(period.status==="fechada")throw new Error("Folha fechada não pode ser recalculada.");
+  const competence=String(period.competence).slice(0,7);
+  if(competence!=="2026-01"&&competence<"2026-01")throw new Error("O motor fiscal parametrizado desta versão está homologado para competências a partir de 01/2026.");
+  const {data:employees,error:ee}=await supabaseAdmin.from("rh_employees").select("id,full_name,registration_data").eq("is_active",true);
+  if(ee)throw new Error(ee.message);
+  const ids=(employees??[]).map((e:any)=>e.id);
+  const [{data:contracts,error:ce},{data:dependents,error:de}]=await Promise.all([
+    ids.length?supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents,contract_type").in("employee_id",ids).eq("is_current",true):Promise.resolve({data:[],error:null}),
+    ids.length?supabaseAdmin.from("rh_employee_dependents").select("employee_id,id").in("employee_id",ids).eq("is_active",true).eq("is_ir_dependent",true):Promise.resolve({data:[],error:null})
+  ]);
+  if(ce)throw new Error(ce.message);if(de)throw new Error(de.message);
+  const cmap=new Map((contracts??[]).map((x:any)=>[x.employee_id,{salary:Number(x.salary_cents??0),type:x.contract_type??"CLT"}]));
+  const depMap=new Map<string,number>();for(const d of dependents??[])depMap.set(d.employee_id,(depMap.get(d.employee_id)??0)+1);
+  const calcInss=(gross:number)=>{const bands=[[162100,0.075],[290284,0.09],[435427,0.12],[847555,0.14]];let base=Math.min(gross,847555);let prev=0;let total=0;for(const [limit,rate] of bands){const slice=Math.max(0,Math.min(base,limit)-prev);total+=slice*rate;prev=limit;if(base<=limit)break;}return Math.round(total);};
+  const calcIrrf=(gross:number,inss:number,deps:number)=>{const legalBase=Math.max(0,gross-inss-deps*18959);const simplifiedBase=Math.max(0,gross-60720);const base=Math.min(legalBase,simplifiedBase);let tax=0;if(base>466468)tax=base*0.275-90873;else if(base>375105)tax=base*0.225-67549;else if(base>282665)tax=base*0.15-39416;else if(base>242880)tax=base*0.075-18216;tax=Math.max(0,Math.round(tax));let reduction=0;if(gross<=500000)reduction=Math.min(tax,31289);else if(gross<=735000)reduction=Math.min(tax,Math.max(0,Math.round(97862-0.133145*gross)));return Math.max(0,tax-reduction);};
+  const runs=(employees??[]).map((e:any)=>{const contract=cmap.get(e.id);const gross=contract?.salary||moneyToCents(e.registration_data?.salary);const inss=calcInss(gross);const irrf=calcIrrf(gross,inss,depMap.get(e.id)??0);const fgts=contract?.type==="APRENDIZ"?Math.round(gross*.02):Math.round(gross*.08);return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf,net_cents:Math.max(0,gross-inss-irrf),inss_base_cents:Math.min(gross,847555),irrf_base_cents:Math.max(0,gross-inss-Math.min(depMap.get(e.id)??0,0)*18959),fgts_base_cents:fgts,status:"calculada",_inss:inss,_irrf:irrf,_fgts:fgts};});
+  for(const run of runs){
+    const clean={period_id:run.period_id,employee_id:run.employee_id,gross_cents:run.gross_cents,discount_cents:run.discount_cents,net_cents:run.net_cents,inss_base_cents:run.inss_base_cents,irrf_base_cents:run.irrf_base_cents,fgts_base_cents:run.fgts_base_cents,status:run.status};
+    const {data:saved,error:re}=await supabaseAdmin.from("rh_payroll_runs").upsert(clean,{onConflict:"period_id,employee_id"}).select("*").single();if(re)throw new Error(re.message);
+    await supabaseAdmin.from("rh_payroll_items").delete().eq("period_id",period.id).eq("employee_id",run.employee_id);
+    const items=[["provento","SALARIO","Salário base",run.gross_cents],["desconto","INSS","INSS empregado",run._inss],["desconto","IRRF","IRRF",run._irrf],["encargo","FGTS","FGTS patronal",run._fgts]];
+    for(const [item_type,code,description,amount_cents] of items){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,item_type,code,description,quantity:1,rate:item_type==="encargo"?(run._fgts===Math.round(run.gross_cents*.02)?2:8):100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id}});if(ie)throw new Error(ie.message);}
+  }
   const {data:updated,error:ue}=await supabaseAdmin.from("rh_payroll_periods").update({status:"calculada",updated_at:new Date().toISOString()}).eq("id",period.id).select("*").single();if(ue)throw new Error(ue.message);
-  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length}});return {period:updated,employees:runs.length};
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026",rules:["INSS","IRRF","FGTS"]}});
+  return {period:updated,employees:runs.length};
 });
-
 export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
   const actor=await requireRhOperator(context);const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).neq("status","fechada").select("*").maybeSingle();if(error)throw new Error(error.message);if(!period)throw new Error("Folha não encontrada ou já fechada.");await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;
 });
