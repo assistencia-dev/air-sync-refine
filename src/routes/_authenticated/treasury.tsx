@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getTreasuryCloudState, saveTreasuryCloudState } from "@/lib/treasury.functions";
 import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
 
 const getTreasuryCloudState = async () => {
@@ -102,7 +103,7 @@ function TreasuryPage() {
           if (cloud?.state && treasuryStateHasData(cloud.state as Record<string, unknown>)) {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
             cloudReadyRef.current = true;
-          } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
+          } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state) && treasuryStateHasData(msg.state as Record<string, unknown>)) {
             const sanitized = JSON.parse(JSON.stringify(msg.state));
             const removeBy = (arr: any[], fn: (x:any)=>boolean) => arr.filter(x => !fn(x));
             sanitized.recebimentos = removeBy(sanitized.recebimentos || [], x => x.id === "rec_in_1" && x.cliente === "Cliente Contratual S/A" && Number(x.valor) === 25000 && x.status === "Pendente");
@@ -115,6 +116,7 @@ function TreasuryPage() {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
             cloudReadyRef.current = true;
           }
+          if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não possui uma cópia segura na nuvem. Verifique a implantação da tabela treasury_snapshots antes de usar outro dispositivo.");
           setCloudError(null);
         } catch (err) {
           console.error("DBS Treasury cloud load:", err);
