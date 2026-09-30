@@ -72,6 +72,17 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
     const { data: user } = await q.maybeSingle();
     if (!user || user.status !== "ativo") throw new Error("Usuário de login não encontrado ou inativo. Cadastre primeiro o acesso em Usuários vinculados.");
     if (user.role_key && user.role_key !== "COLABORADOR") throw new Error("O login precisa estar classificado como COLABORADOR em Usuários vinculados.");
+    const { data: currentLink, error: currentLinkError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name")
+      .eq("ponto_portal_user_id", user.id)
+      .eq("ponto_access_enabled", true)
+      .neq("id", data.employee_id)
+      .limit(1);
+    if (currentLinkError) throw new Error(currentLinkError.message);
+    if (currentLink?.length) {
+      throw new Error(`Este login já está vinculado ao funcionário ${currentLink[0].full_name}.`);
+    }
     patch.ponto_portal_user_id = user.id;
   } else patch.ponto_portal_user_id = null;
   const { data: employeeRecord } = await supabaseAdmin.from("rh_employees").select("id, registry_employee_id, is_active").eq("id", data.employee_id).maybeSingle();
