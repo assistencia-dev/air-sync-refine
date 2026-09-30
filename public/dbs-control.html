@@ -580,6 +580,30 @@
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
+            if (msg.type === 'DBS_CONTROL_TECHNICIAN_SYNCED') {
+                if (msg.ok) {
+                    const syncedEmail = String(msg.email || '').trim().toLowerCase();
+                    const existing = ERP_STATE.tecnicos.find(t => String(t.email || '').trim().toLowerCase() === syncedEmail);
+                    if (!existing && msg.name) {
+                        ERP_STATE.tecnicos.push({
+                            id: ERP_STATE.tecnicos.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0) + 1,
+                            employeeId: msg.employee_id || null,
+                            nome: msg.name,
+                            email: syncedEmail,
+                            posicao: msg.position || 'Colaborador DBS AIR',
+                            fone: msg.phone || ''
+                        });
+                        saveState();
+                    }
+                    const form = document.getElementById('form-tecnico');
+                    if (form) form.reset();
+                    alert('Colaborador cadastrado e vinculado ao acesso central do sistema.');
+                    renderizarTudo();
+                } else {
+                    alert(msg.error || 'Não foi possível cadastrar o colaborador.');
+                }
+                return;
+            }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
 
@@ -920,14 +944,26 @@
         function salvarTecnico(e) {
             e.preventDefault();
             const novo = {
-                id: ERP_STATE.tecnicos.length + 1,
-                nome: document.getElementById('tec-nome').value,
-                email: document.getElementById('tec-email').value,
+                nome: document.getElementById('tec-nome').value.trim(),
+                email: document.getElementById('tec-email').value.trim().toLowerCase(),
                 senha: document.getElementById('tec-senha').value,
                 posicao: document.getElementById('tec-posicao').value,
-                fone: document.getElementById('tec-fone').value
+                fone: document.getElementById('tec-fone').value.trim()
             };
-            ERP_STATE.tecnicos.push(novo);
+            if (!novo.nome || !novo.email || !novo.senha) return;
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'DBS_CONTROL_REGISTER_TECHNICIAN',
+                    name: novo.nome,
+                    email: novo.email,
+                    password: novo.senha,
+                    position: novo.posicao,
+                    phone: novo.fone
+                }, '*');
+                return;
+            }
+            const legacy = { id: ERP_STATE.tecnicos.length + 1, nome: novo.nome, email: novo.email, posicao: novo.posicao, fone: novo.fone };
+            ERP_STATE.tecnicos.push(legacy);
             saveState();
             document.getElementById('form-tecnico').reset();
             renderizarTudo();
