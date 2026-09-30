@@ -415,7 +415,8 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; dbs_control_enabled?: boolean }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
-    if (input.enabled && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
+    if ((input.enabled || input.dbs_control_enabled) && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
+    if (input.dbs_control_enabled && !input.enabled) throw new Error("O DBS CONTROL exige acesso à Folha de Ponto no mesmo login.");
     return { ...input, login_identifier: input.login_identifier?.trim() || undefined, dbs_control_enabled: Boolean(input.dbs_control_enabled) };
   })
   .handler(async ({ context, data }) => {
