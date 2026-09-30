@@ -13,18 +13,19 @@ const moneyToCents=(value:unknown)=>{const raw=String(value??"").trim();if(!raw)
 
 export const getRhManagementDashboard=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{
   await requireRhOperator(context);
-  const [employees,docs,vacations,payroll,admissions,exams,requests]=await Promise.all([
+  const [employees,docs,vacations,vacationRequests,payroll,admissions,exams,requests]=await Promise.all([
     supabaseAdmin.from("rh_employees").select("id,full_name,unit,is_active,registration_data").order("full_name"),
     supabaseAdmin.from("rh_employee_documents").select("id,employee_id,document_type,file_name,expires_at,status").order("expires_at"),
     supabaseAdmin.from("rh_vacation_periods").select("id,employee_id,concession_deadline,status,days_earned,days_used").order("concession_deadline"),
+    supabaseAdmin.from("rh_vacation_requests").select("id,employee_id,start_date,end_date,days,status,requested_at").order("start_date",{ascending:false}).limit(30),
     supabaseAdmin.from("rh_payroll_periods").select("id,competence,status").order("competence",{ascending:false}).limit(12),
     supabaseAdmin.from("rh_admission_processes").select("id,employee_id,status,expected_start").order("expected_start"),
     supabaseAdmin.from("rh_medical_exams").select("id,employee_id,exam_type,valid_until,result").order("valid_until"),
     supabaseAdmin.from("rh_employee_requests").select("id,employee_id,request_type,status,requested_at").order("requested_at",{ascending:false}).limit(20)
   ]);
-  for(const r of [employees,docs,vacations,payroll,admissions,exams,requests])if(r.error)throw new Error(r.error.message);
+  for(const r of [employees,docs,vacations,vacationRequests,payroll,admissions,exams,requests])if(r.error)throw new Error(r.error.message);
   const now=Date.now();const soon=(d:string|null|undefined,days:number)=>{if(!d)return false;const t=new Date(d+"T12:00:00").getTime();return t>=now&&t<=now+days*86400000;};
-  return {employees:(employees.data??[]).filter((e:any)=>e.is_active).length,inactive:(employees.data??[]).filter((e:any)=>!e.is_active).length,documentsExpiring:(docs.data??[]).filter((d:any)=>d.status!=="inativo"&&soon(d.expires_at,30)).length,vacationsDue:(vacations.data??[]).filter((v:any)=>v.status==="aberto"&&soon(v.concession_deadline,60)).length,payrollOpen:(payroll.data??[]).filter((p:any)=>p.status!=="fechada").length,admissionsPending:(admissions.data??[]).filter((a:any)=>a.status!=="concluida").length,examsExpiring:(exams.data??[]).filter((e:any)=>soon(e.valid_until,30)).length,requestsOpen:(requests.data??[]).filter((r:any)=>!["resolvida","cancelada"].includes(r.status)).length,employeesData:employees.data??[],documents:docs.data??[],vacations:vacations.data??[],payroll:payroll.data??[],admissions:admissions.data??[],exams:exams.data??[],requests:requests.data??[]};
+  return {employees:(employees.data??[]).filter((e:any)=>e.is_active).length,inactive:(employees.data??[]).filter((e:any)=>!e.is_active).length,documentsExpiring:(docs.data??[]).filter((d:any)=>d.status!=="inativo"&&soon(d.expires_at,30)).length,vacationsDue:(vacations.data??[]).filter((v:any)=>v.status==="aberto"&&soon(v.concession_deadline,60)).length,payrollOpen:(payroll.data??[]).filter((p:any)=>p.status!=="fechada").length,admissionsPending:(admissions.data??[]).filter((a:any)=>a.status!=="concluida").length,examsExpiring:(exams.data??[]).filter((e:any)=>soon(e.valid_until,30)).length,requestsOpen:(requests.data??[]).filter((r:any)=>!["resolvida","cancelada"].includes(r.status)).length,employeesData:employees.data??[],documents:docs.data??[],vacations:vacations.data??[],vacationRequests:vacationRequests.data??[],payroll:payroll.data??[],admissions:admissions.data??[],exams:exams.data??[],requests:requests.data??[]};
 });
 
 export const createRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{competence:string})=>{if(!input?.competence)throw new Error("Informe a competência.");return input;}).handler(async({context,data})=>{
