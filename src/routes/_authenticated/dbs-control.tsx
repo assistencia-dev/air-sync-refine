@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { hasMyDbsControlAccess } from "@/lib/rh.functions";
+import { createClientUser } from "@/lib/admin.functions";
+import { hasMyDbsControlAccess, listRhEmployeeRegistry, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
 import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
 
@@ -56,6 +57,64 @@ function DbsControlPage() {
         } catch (err) {
           console.error("DBS Control cloud load:", err);
           setCloudError(err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.");
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_REGISTER_TECHNICIAN") {
+        try {
+          const name = String(msg.name || "").trim();
+          const email = String(msg.email || "").trim().toLowerCase();
+          const password = String(msg.password || "");
+          const position = String(msg.position || "").trim();
+          const phone = String(msg.phone || "").trim();
+          if (!name || !email || !password) throw new Error("Nome, e-mail e senha são obrigatórios.");
+
+          const registry = await listRhEmployeeRegistry();
+          const existing = (registry as any[]).find((employee) =>
+            String(employee.access?.user?.email || "").toLowerCase() === email ||
+            String(employee.registration_data?.email || "").toLowerCase() === email
+          );
+
+          let employeeId = existing?.id;
+          if (!employeeId) {
+            const created = await saveRhEmployeeRecord({
+              full_name: name,
+              unit: "Não informado",
+              registration_data: { email, phone, position, source: "DBS_CONTROL" },
+            } as any);
+            employeeId = created.id;
+          }
+
+          let linked = (registry as any[]).find((employee) =>
+            String(employee.access?.user?.email || "").toLowerCase() === email
+          )?.access?.user;
+
+          if (!linked) {
+            await createClientUser({
+              full_name: name,
+              email,
+              role_key: "COLABORADOR",
+              password,
+            });
+          }
+
+          await saveRhEmployeeAccess({
+            employee_id: employeeId,
+            enabled: true,
+            login_identifier: email,
+            dbs_control_enabled: true,
+          });
+
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: true, email, employee_id: employeeId, name },
+            "*",
+          );
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: false, error: err instanceof Error ? err.message : "Falha ao criar acesso." },
+            "*",
+          );
         }
         return;
       }
