@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DBS AIR - ERP & Field Service Enterprise v6.0</title>
+    <!-- Bibliotecas para Geração de PDF e Exportação em ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --sidebar-width: 270px;
+            --color-bg: #f8fafc;
+            --color-surface: #ffffff;
+            --color-sidebar: #0f172a;
+            --color-sidebar-hover: #1e293b;
+            --color-primary: #0284c7;
+            --color-primary-dark: #0369a1;
+            --color-accent: #10b981;
+            --color-warning: #f59e0b;
+            --color-danger: #ef4444;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #cbd5e1;
+            --border-light: #e2e8f0;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--color-bg); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; font-size: 13px; }
+
+        aside { width: var(--sidebar-width); background-color: var(--color-sidebar); color: #fff; display: flex; flex-direction: column; flex-shrink: 0; }
+        .brand-header { padding: 18px 20px; background: #020617; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; }
+        .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; color: #fff; }
+        .brand-badge { background: var(--color-primary); color: #fff; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: var(--radius-sm); text-transform: uppercase; }
+
+        .nav-menu { list-style: none; padding: 10px 0; flex: 1; overflow-y: auto; }
+        .nav-section { padding: 12px 20px 4px 20px; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; }
+        .nav-item { padding: 9px 20px; display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; cursor: pointer; color: #94a3b8; border-left: 3px solid transparent; }
+        .nav-item:hover, .nav-item.active { background-color: var(--color-sidebar-hover); color: #ffffff; border-left-color: var(--color-primary); }
+
+        main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        header { background: var(--color-surface); padding: 14px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-sm); }
+        .page-title h1 { font-size: 17px; font-weight: 800; color: var(--text-main); }
+        .page-title p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        .btn { padding: 7px 12px; border-radius: var(--radius-md); font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; white-space: nowrap; }
+        .btn-primary { background-color: var(--color-primary); color: #fff; }
+        .btn-primary:hover { background-color: var(--color-primary-dark); }
+        .btn-success { background-color: var(--color-accent); color: #fff; }
+        .btn-secondary { background-color: #f1f5f9; color: var(--text-main); border-color: var(--border-color); }
+        .btn-danger { background-color: var(--color-danger); color: #fff; }
+        .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+        .tab-view { padding: 20px 24px; flex: 1; overflow-y: auto; display: none; }
+        .tab-view.active { display: block; }
+
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .metric-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 14px; border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); }
+        .metric-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+        .metric-value { font-size: 22px; font-weight: 800; color: var(--text-main); margin-top: 4px; }
+
+        .data-card { background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 20px; }
+        .data-header { padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; flex-wrap: wrap; gap: 10px; }
+        .data-header h3 { font-size: 13px; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.3px; }
+
+        .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .filter-bar input, .filter-bar select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 12px; outline: none; background: #fff; }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #f1f5f9; padding: 9px 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 10px; border-bottom: 1px solid var(--border-color); letter-spacing: 0.5px; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); color: var(--text-main); vertical-align: middle; }
+        tr:hover { background-color: #f8fafc; }
+
+        .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-block; }
+        .badge-pmoc { background: #e0f2fe; color: #0369a1; }
+        .badge-corretiva { background: #fee2e2; color: #b91c1c; }
+        .badge-andamento { background: #fef3c7; color: #92400e; }
+        .badge-concluido { background: #dcfce7; color: #166534; }
+        .badge-cargo { background: #f3e8ff; color: #6b21a8; }
+        .badge-tag { background: #e2e8f0; color: #334155; font-family: monospace; font-size: 11px; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 11px; font-weight: 700; color: var(--text-main); text-transform: uppercase; }
+        .form-group input, .form-group select, .form-group textarea { padding: 7px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 12.5px; outline: none; background: #fff; }
+
+        .kanban-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+        .kanban-col { background: #f1f5f9; border-radius: var(--radius-md); padding: 12px; min-height: 450px; border: 1px solid var(--border-light); }
+        .kanban-col-header { font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 10px; display: flex; justify-content: space-between; color: #475569; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; }
+        .kanban-card { background: #fff; border-radius: var(--radius-sm); padding: 10px; margin-bottom: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); }
+
+        .pwa-wrapper { max-width: 400px; margin: 0 auto; background: #0f172a; border-radius: 24px; padding: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .pwa-screen { background: #f8fafc; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; height: 680px; }
+        .pwa-header-bar { background: #020617; color: #fff; padding: 12px; text-align: center; font-weight: 700; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .pwa-body-content { padding: 14px; overflow-y: auto; flex: 1; }
+        .pwa-box { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 1px solid var(--border-light); margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+        
+        canvas.sig-canvas { border: 1px dashed var(--border-color); background: #fff; border-radius: 4px; cursor: crosshair; width: 100%; height: 100px; touch-action: none; }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="brand-header">
+            <div class="brand-title">DBS AIR SYSTEM</div>
+            <span class="brand-badge">v6.0 Pro</span>
+        </div>
+
+        <ul class="nav-menu">
+            <div class="nav-section">Painel Geral</div>
+            <li class="nav-item active" onclick="switchTab('tab-dashboard', this)"><span>Dashboard Principal</span></li>
+            <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
+            <li class="nav-item" onclick="switchTab('tab-ordens', this)"><span>Gestão de OS (Exportação PDF)</span></li>
+            <li class="nav-item" onclick="switchTab('tab-nova-os', this)"><span>Abrir Chamado / OS</span></li>
+
+            <div class="nav-section">Gestão de Ativos & Clientes</div>
+            <li class="nav-item" onclick="switchTab('tab-clientes', this)"><span>Clientes Corporativos</span></li>
+            <li class="nav-item" onclick="switchTab('tab-equipamentos', this)"><span>Parque de Equipamentos</span></li>
+            <li class="nav-item" onclick="switchTab('tab-tecnicos', this)"><span>Equipe Técnica & Logins</span></li>
+
+            <div class="nav-section">Insumos & Operação</div>
+            <li class="nav-item" onclick="switchTab('tab-pecas', this)"><span>Cadastro de Peças</span></li>
+            <li class="nav-item" onclick="switchTab('tab-servicos', this)"><span>Tabela de Serviços</span></li>
+            <li class="nav-item" onclick="switchTab('tab-compras', this)"><span>Pedidos de Compras</span></li>
+
+            <div class="nav-section">Mobile Field Service</div>
+            <li class="nav-item" onclick="switchTab('tab-pwa', this)"><span>App do Técnico (Simulador)</span></li>
+        </ul>
+    </aside>
+
+    <main>
+        <header>
+            <div class="page-title">
+                <h1 id="view-title">Painel Operacional</h1>
+                <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary btn-sm" onclick="resetarDadosPadrao()">Resetar Dados</button>
+                <button class="btn btn-primary" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <div id="tab-dashboard" class="tab-view active">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">Clientes Base</div>
+                    <div class="metric-value" id="dash-client-count">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Equipamentos Mapeados</div>
+                    <div class="metric-value" id="dash-equip-count" style="color:var(--color-primary);">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">OS em Atendimento</div>
+                    <div class="metric-value" id="dash-os-andamento" style="color:var(--color-warning);">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">OS Concluídas</div>
+                    <div class="metric-value" id="dash-os-concluidas" style="color:var(--color-accent);">0</div>
+                </div>
+            </div>
+
+            <div class="data-card">
+                <div class="data-header">
+                    <h3>Últimas Ordens de Serviço Emitidas</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nº OS</th>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Equipamento / TAG</th>
+                            <th>Técnico</th>
+                            <th>Tipo</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dash-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- QUADRO DE DESPACHO KANBAN -->
+        <div id="tab-despacho" class="tab-view">
+            <div class="kanban-board" id="kanban-board-container"></div>
+        </div>
+
+        <!-- GESTÃO AVANÇADA DE OS COM FILTROS, SELEÇÃO E EXPORTAÇÃO PDF / ZIP -->
+        <div id="tab-ordens" class="tab-view">
+            <div class="data-card">
+                <div class="data-header">
+                    <div class="filter-bar">
+                        <input type="text" id="os-search-input" onkeyup="aplicarFiltrosOS()" placeholder="Buscar por cliente, TAG, técnico ou OS..." style="width:240px;">
+                        <select id="os-filter-status" onchange="aplicarFiltrosOS()">
+                            <option value="TODOS">Todos os Status</option>
+                            <option value="Em Atendimento">Em Atendimento</option>
+                            <option value="Concluída">Concluída</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-success btn-sm" onclick="concluirSelecionadasLote()">Concluir Selecionadas</button>
+                        <button class="btn btn-secondary btn-sm" onclick="exportarSelecionadasPDF()">Exportar Selecionadas (PDF / ZIP)</button>
+                    </div>
+                </div>
+                <table id="os-table">
+                    <thead>
+                        <tr>
+                            <th style="width:30px;"><input type="checkbox" id="chk-select-all" onclick="toggleSelectAllOS(this)"></th>
+                            <th>Nº OS</th>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Equipamento (TAG)</th>
+                            <th>Técnico Responsável</th>
+                            <th>Tipo de Serviço</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th style="text-align:right;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="os-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ABERTURA DE OS -->
+        <div id="tab-nova-os" class="tab-view">
+            <div class="data-card" style="padding: 20px;">
+                <h3 style="margin-bottom: 14px;">Abertura de Chamado / Ordem de Serviço</h3>
+                <form id="form-nova-os" onsubmit="salvarNovaOS(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Cliente Corporativo</label>
+                            <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Equipamento do Cliente (TAG / Setor)</label>
+                            <select id="os-select-equipamento" required>
+                                <option value="">Selecione primeiro o cliente...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Técnico Responsável</label>
+                            <select id="os-select-tecnico" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Serviço</label>
+                            <select id="os-select-tipo" required>
+                                <option>Manutenção Corretiva</option>
+                                <option>Manutenção Preventiva / PMOC</option>
+                                <option>Instalação / Start-Up</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Serviço Principal Tabela</label>
+                            <select id="os-select-servico" required></select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label>Descrição do Problema / Instruções para o Técnico</label>
+                        <textarea id="os-desc" rows="3" required placeholder="Ex: Equipamento apresentando ruído na evaporadora e pouca refrigeração..."></textarea>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;">
+                        <button type="submit" class="btn btn-primary">Emitir e Despachar OS</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- CADASTRO DE EQUIPAMENTOS -->
+        <div id="tab-equipamentos" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Cadastrar Equipamento / Ativo de Cliente</h3>
+                <form id="form-equipamento" onsubmit="salvarEquipamento(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Cliente Proprietário</label>
+                            <select id="eq-select-cliente" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Código TAG / Identificador Interno</label>
+                            <input type="text" id="eq-tag" placeholder="Ex: TAG-CPD-01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Equipamento</label>
+                            <select id="eq-tipo" required>
+                                <option value="Split Hi-Wall">Split Hi-Wall</option>
+                                <option value="Split Cassete">Split Cassete</option>
+                                <option value="Chiller">Chiller</option>
+                                <option value="VRF / VRV">Sistema VRF / VRV</option>
+                                <option value="Self Contained">Self Contained</option>
+                                <option value="FanCoil">FanCoil</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fabricante / Marca</label>
+                            <input type="text" id="eq-marca" placeholder="Ex: Daikin, Carrier" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Modelo</label>
+                            <input type="text" id="eq-modelo" placeholder="Ex: 42AVQI12C5" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Número de Série</label>
+                            <input type="text" id="eq-serie" placeholder="Ex: SN38472910" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Capacidade (BTUs / TR)</label>
+                            <input type="text" id="eq-capacidade" placeholder="Ex: 12.000 BTU" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Ambiente / Setor de Instalação</label>
+                            <input type="text" id="eq-ambiente" placeholder="Ex: Sala Servidores CPD" required>
+                        </div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;">
+                        <button type="submit" class="btn btn-success">Vincular Equipamento ao Cliente</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="data-card">
+                <div class="data-header">
+                    <h3>Ativos Mapeados na Base</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TAG</th>
+                            <th>Cliente</th>
+                            <th>Tipo / Equipamento</th>
+                            <th>Marca / Modelo</th>
+                            <th>Nº Série</th>
+                            <th>Ambiente / Local</th>
+                            <th>Histórico OS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equip-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CLIENTES -->
+        <div id="tab-clientes" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Cadastrar Novo Cliente Corporativo</h3>
+                <form id="form-cliente" onsubmit="salvarCliente(event)">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Razão Social / Nome</label><input type="text" id="cli-nome" required></div>
+                        <div class="form-group"><label>CNPJ / CPF</label><input type="text" id="cli-cnpj" required></div>
+                        <div class="form-group"><label>Endereço Completo</label><input type="text" id="cli-endereco" required></div>
+                        <div class="form-group"><label>Pessoa de Contato</label><input type="text" id="cli-contato" required></div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Salvar Cliente</button></div>
+                </form>
+            </div>
+
+            <div class="data-card">
+                <div class="data-header"><h3>Clientes Registrados</h3></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Razão Social / Nome</th>
+                            <th>CNPJ / CPF</th>
+                            <th>Endereço Instalação</th>
+                            <th>Contato Responsável</th>
+                            <th>Qtd Equipamentos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cli-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TÉCNICOS COM LOGIN -->
+        <div id="tab-tecnicos" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Cadastrar Técnico (Credenciais de Acesso Mobile)</h3>
+                <form id="form-tecnico" onsubmit="salvarTecnico(event)">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Nome Completo</label><input type="text" id="tec-nome" required></div>
+                        <div class="form-group"><label>E-mail de Login</label><input type="email" id="tec-email" required></div>
+                        <div class="form-group"><label>Senha de Acesso</label><input type="password" id="tec-senha" required></div>
+                        <div class="form-group">
+                            <label>Cargo / Função</label>
+                            <select id="tec-posicao" required>
+                                <option value="Supervisor de Campo">Supervisor de Campo</option>
+                                <option value="Técnico HVAC Titular" selected>Técnico HVAC Titular</option>
+                                <option value="Auxiliar Técnico">Auxiliar Técnico</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Telefone / WhatsApp</label><input type="text" id="tec-fone" placeholder="(21) 90000-0000" required></div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Cadastrar Credenciais Técnico</button></div>
+                </form>
+            </div>
+
+            <div class="data-card">
+                <div class="data-header"><h3>Quadro de Técnicos Cadastrados</h3></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome Completo</th>
+                            <th>E-mail de Login</th>
+                            <th>Cargo</th>
+                            <th>Contato</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tec-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PEÇAS -->
+        <div id="tab-pecas" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Cadastrar Peça / Insumo no Estoque</h3>
+                <form id="form-peca" onsubmit="salvarPeca(event)">
+                    <div class="form-grid">
+                        <div class="form-group"><label>SKU / Código</label><input type="text" id="peca-sku" required></div>
+                        <div class="form-group"><label>Descrição Peça</label><input type="text" id="peca-nome" required></div>
+                        <div class="form-group"><label>Quantidade Estoque</label><input type="number" id="peca-qtd" value="10" required></div>
+                        <div class="form-group"><label>Preço Custo (R$)</label><input type="number" id="peca-custo" value="22.00" step="0.01" required></div>
+                        <div class="form-group"><label>Preço Venda (R$)</label><input type="number" id="peca-venda" value="65.00" step="0.01" required></div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Salvar Peça</button></div>
+                </form>
+            </div>
+            <div class="data-card">
+                <div class="data-header"><h3>Insumos e Peças no Estoque Matriz</h3></div>
+                <table>
+                    <thead><tr><th>SKU</th><th>Descrição</th><th>Estoque</th><th>Custo</th><th>Venda</th></tr></thead>
+                    <tbody id="peca-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SERVIÇOS -->
+        <div id="tab-servicos" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Cadastrar Serviço Tabela</h3>
+                <form id="form-servico" onsubmit="salvarServico(event)">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Descrição do Serviço</label><input type="text" id="serv-nome" required></div>
+                        <div class="form-group"><label>Tempo Estimado (Horas)</label><input type="number" id="serv-horas" value="2" step="0.5" required></div>
+                        <div class="form-group"><label>Valor Tabela (R$)</label><input type="number" id="serv-valor" value="250.00" step="0.01" required></div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Salvar Serviço</button></div>
+                </form>
+            </div>
+            <div class="data-card">
+                <div class="data-header"><h3>Catálogo de Serviços Mão de Obra</h3></div>
+                <table>
+                    <thead><tr><th>Descrição</th><th>Tempo Horas</th><th>Valor Tabela</th></tr></thead>
+                    <tbody id="serv-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COMPRAS -->
+        <div id="tab-compras" class="tab-view">
+            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
+                <h3 style="margin-bottom: 14px;">Registrar Pedido de Compra</h3>
+                <form id="form-compra" onsubmit="salvarCompra(event)">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Fornecedor</label><input type="text" id="comp-fornecedor" required></div>
+                        <div class="form-group"><label>Item / Insumo</label><input type="text" id="comp-item" required></div>
+                        <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" required></div>
+                        <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="comp-valor" value="450.00" step="0.01" required></div>
+                    </div>
+                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Registrar Compra</button></div>
+                </form>
+            </div>
+            <div class="data-card">
+                <div class="data-header"><h3>Pedidos de Compra Registrados</h3></div>
+                <table>
+                    <thead><tr><th>Fornecedor</th><th>Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr></thead>
+                    <tbody id="comp-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SIMULADOR APP MOBILE TÉCNICO COM CANVAS DE ASSINATURA -->
+        <div id="tab-pwa" class="tab-view">
+            <div class="pwa-wrapper">
+                <div class="pwa-screen">
+                    <div class="pwa-header-bar">DBS AIR FIELD MOBILE</div>
+                    <div class="pwa-body-content" id="pwa-content-area"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const INITIAL_STATE = {
+            tecnicos: [
+                { id: 1, nome: "Elias Santos", email: "elias@dbsair.com.br", senha: "123", posicao: "Técnico HVAC Titular", fone: "(21) 98888-1111" },
+                { id: 2, nome: "Márcio Silva", email: "marcio@dbsair.com.br", senha: "123", posicao: "Supervisor de Campo", fone: "(21) 97777-2222" }
+            ],
+            clientes: [
+                { id: 1, nome: "CTR Nova Iguaçu S.A.", cnpj: "12.345.678/0001-90", endereco: "Estrada de Adrianópolis, 5213", contato: "Carlos Gerente" },
+                { id: 2, nome: "Hospital Central de Diagnósticos", cnpj: "98.765.432/0001-11", endereco: "Av. Brasil, 1200", contato: "Dra. Renata" }
+            ],
+            equipamentos: [
+                { id: 1, clienteId: 1, tag: "TAG-CPD-01", tipo: "Split Hi-Wall", marca: "Daikin", modelo: "FTKN12B", serie: "SN993021", capacidade: "12.000 BTU", ambiente: "Sala de Servidores CPD" },
+                { id: 2, clienteId: 1, tag: "TAG-ADM-02", tipo: "Split Cassete", marca: "Carrier", modelo: "42XQC036", serie: "SN441029", capacidade: "36.000 BTU", ambiente: "Recepção Executiva" },
+                { id: 3, clienteId: 2, tag: "TAG-UTI-01", tipo: "Chiller", marca: "Hitachi", modelo: "RAP040B", serie: "SN112093", capacidade: "40 TR", ambiente: "Central Utilitários UTI" }
+            ],
+            pecas: [
+                { id: 1, sku: "CAP-35UF", nome: "Capacitor 35uF 450V", qtd: 24, custo: 22.00, venda: 65.00 },
+                { id: 2, sku: "GAS-R410A", nome: "Gás Refrigerante R410A (KG)", qtd: 80, custo: 45.00, venda: 120.00 }
+            ],
+            servicos: [
+                { id: 1, nome: "Higienização Completa de Split Hi-Wall", horas: 2, valor: 220.00 },
+                { id: 2, nome: "Carga de Gás com Teste de Estanqueidade", horas: 3, valor: 380.00 },
+                { id: 3, nome: "Análise Preventiva PMOC Mensal", horas: 1.5, valor: 180.00 }
+            ],
+            compras: [
+                { id: 1, fornecedor: "Dufrio Refrigeração", item: "Botija R410A 11.3kg", qtd: 2, valor: 760.00, status: "Entregue" }
+            ],
+            ordens: [
+                { id: "OS-04891", data: "30/09/2026", clienteId: 1, equipamentoId: 1, tecnicoId: 1, servicoId: 2, tipo: "Manutenção Corretiva", valor: 380.00, status: "Em Atendimento", desc: "Equipamento parou de refrigeração. Verificar vazamento e repor carga de gás.", pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null },
+                { id: "OS-04892", data: "30/09/2026", clienteId: 2, equipamentoId: 3, tecnicoId: 2, servicoId: 3, tipo: "Manutenção Preventiva / PMOC", valor: 180.00, status: "Concluída", desc: "Leitura de pressões e higienização periódica do sistema de água gelada.", pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null }
+            ]
+        };
+
+        let ERP_STATE = loadState();
+
+        function saveState() {
+            localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify(ERP_STATE));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
+            return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(INITIAL_STATE));
+        }
+
+        function resetarDadosPadrao() {
+            if(confirm("Tem certeza que deseja resetar os dados para o padrão original?")) {
+                localStorage.removeItem('DBS_AIR_ERP_STATE');
+                ERP_STATE = JSON.parse(JSON.stringify(INITIAL_STATE));
+                saveState();
+                renderizarTudo();
+            }
+        }
+
+        window.onload = function() {
+            renderizarTudo();
+        };
+
+        function renderizarTudo() {
+            renderizarTecnicos();
+            renderizarClientes();
+            renderizarEquipamentos();
+            renderizarPecas();
+            renderizarServicos();
+            renderizarCompras();
+            renderizarOrdens();
+            renderizarKanban();
+            renderizarPWAScreen();
+            atualizarSelects();
+            atualizarMetricas();
+        }
+
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            if(element) element.classList.add('active');
+        }
+
+        // MOTOR DE GERAÇÃO DE PDF INDIVIDUAL
+        function gerarPDFObjeto(osId) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const o = ERP_STATE.ordens.find(x => x.id === osId);
+            if (!o) return null;
+
+            const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
+            const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
+            const tec = ERP_STATE.tecnicos.find(t => t.id === o.tecnicoId) || {};
+            const srv = ERP_STATE.servicos.find(s => s.id === o.servicoId) || {};
+
+            // CABEÇALHO CORPORATIVO
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 32, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text("DBS AIR - RELATÓRIO TÉCNICO DE OS", 14, 18);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`ORDEM DE SERVIÇO: ${o.id} | DATA: ${o.data}`, 14, 26);
+
+            // DADOS DO CLIENTE
+            doc.setTextColor(15, 23, 42);
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("1. CLIENTE CORPORATIVO", 14, 44);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Razão Social: ${cli.nome || 'N/A'}`, 14, 52);
+            doc.text(`CNPJ: ${cli.cnpj || 'N/A'} | Contato: ${cli.contato || 'N/A'}`, 14, 58);
+            doc.text(`Endereço: ${cli.endereco || 'N/A'}`, 14, 64);
+
+            // FICHA TÉCNICA DO ATIVO
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("2. FICHA TÉCNICA DO ATIVO (EQUIPAMENTO)", 14, 76);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`TAG: ${eq.tag || 'N/A'} | Tipo: ${eq.tipo || 'N/A'} | Capacidade: ${eq.capacidade || 'N/A'}`, 14, 84);
+            doc.text(`Marca/Modelo: ${eq.marca || 'N/A'} / ${eq.modelo || 'N/A'}`, 14, 90);
+            doc.text(`Nº Série: ${eq.serie || 'N/A'} | Ambiente: ${eq.ambiente || 'N/A'}`, 14, 96);
+
+            // DETALHES OPERACIONAIS E PEÇAS
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("3. DIAGNÓSTICO E SERVIÇO EXECUTADO", 14, 108);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Tipo de Chamado: ${o.tipo}`, 14, 116);
+            doc.text(`Serviço Tabela: ${srv.nome || 'N/A'}`, 14, 122);
+            doc.text(`Técnico Responsável: ${tec.nome || 'N/A'} (${tec.posicao || ''})`, 14, 128);
+            doc.text(`Status Atual: ${o.status}`, 14, 134);
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Descrição do Trabalho / Diagnóstico:", 14, 144);
+            doc.setFont("helvetica", "normal");
+            const descLines = doc.splitTextToSize(o.desc, 180);
+            doc.text(descLines, 14, 150);
+
+            let curY = 165;
+            if (o.pecasUsadas && o.pecasUsadas.length > 0) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Insumos/Peças Aplicados:", 14, curY);
+                doc.setFont("helvetica", "normal");
+                curY += 6;
+                o.pecasUsadas.forEach(p => {
+                    doc.text(`- ${p.nome} (Qtd: ${p.qtd}) - R$ ${(p.venda * p.qtd).toFixed(2)}`, 14, curY);
+                    curY += 6;
+                });
+            }
+
+            // FOTOS DE EVIDÊNCIA
+            if (o.fotoAntes || o.fotoDepois) {
+                doc.setFont("helvetica", "bold");
+                doc.text("4. EVIDÊNCIAS FOTOGRÁFICAS DE CAMPO", 14, curY + 4);
+                curY += 10;
+                if (o.fotoAntes) {
+                    try { doc.addImage(o.fotoAntes, 'JPEG', 14, curY, 40, 30); doc.text("Antes", 14, curY + 34); } catch(e){}
+                }
+                if (o.fotoDepois) {
+                    try { doc.addImage(o.fotoDepois, 'JPEG', 60, curY, 40, 30); doc.text("Depois", 60, curY + 34); } catch(e){}
+                }
+                curY += 40;
+            } else {
+                curY += 10;
+            }
+
+            // VALOR E ASSINATURA DIGITAL
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text(`VALOR TOTAL DA OS: R$ ${o.valor.toFixed(2)}`, 14, curY + 10);
+
+            const sigY = curY + 30;
+            doc.setLineWidth(0.5);
+            doc.line(20, sigY, 90, sigY);
+            doc.line(120, sigY, 190, sigY);
+            
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.text("Assinatura do Técnico", 35, sigY + 6);
+            doc.text("Assinatura do Cliente", 138, sigY + 6);
+
+            if (o.assinatura) {
+                try {
+                    doc.addImage(o.assinatura, 'PNG', 125, sigY - 22, 50, 20);
+                } catch(e) {}
+            }
+
+            return doc;
+        }
+
+        function baixarPDFIndividual(osId) {
+            const doc = gerarPDFObjeto(osId);
+            if (doc) doc.save(`Ordem_de_Servico_${osId}.pdf`);
+        }
+
+        async function exportarSelecionadasPDF() {
+            const checkboxes = document.querySelectorAll('.chk-os-item:checked');
+            if (checkboxes.length === 0) { alert("Selecione ao menos uma Ordem de Serviço!"); return; }
+            if (checkboxes.length === 1) { baixarPDFIndividual(checkboxes[0].value); return; }
+
+            const zip = new JSZip();
+            const folder = zip.folder("Ordens_de_Servico_DBS_AIR");
+
+            checkboxes.forEach(chk => {
+                const osId = chk.value;
+                const doc = gerarPDFObjeto(osId);
+                if (doc) {
+                    const pdfBlob = doc.output('blob');
+                    folder.file(`OS_${osId}.pdf`, pdfBlob);
+                }
+            });
+
+            const zipBlob = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(zipBlob);
+            link.download = `Pacote_Ordens_de_Servico_${new Date().toISOString().slice(0,10)}.zip`;
+            link.click();
+        }
+
+        function concluirSelecionadasLote() {
+            const checkboxes = document.querySelectorAll('.chk-os-item:checked');
+            if (checkboxes.length === 0) { alert("Selecione ao menos uma OS para concluir!"); return; }
+
+            if (confirm(`Deseja concluir as ${checkboxes.length} OSs selecionadas?`)) {
+                checkboxes.forEach(chk => {
+                    const os = ERP_STATE.ordens.find(o => o.id === chk.value);
+                    if (os) os.status = "Concluída";
+                });
+                saveState();
+                renderizarTudo();
+            }
+        }
+
+        function toggleSelectAllOS(master) {
+            document.querySelectorAll('.chk-os-item').forEach(c => c.checked = master.checked);
+        }
+
+        function aplicarFiltrosOS() {
+            const search = document.getElementById('os-search-input').value.toLowerCase();
+            const statusFilter = document.getElementById('os-filter-status').value;
+
+            const tr = document.getElementById("os-table").getElementsByTagName("tr");
+            for (let i = 1; i < tr.length; i++) {
+                const text = tr[i].innerText.toLowerCase();
+                const statusCell = tr[i].getAttribute('data-status');
+
+                const matchSearch = text.includes(search);
+                const matchStatus = (statusFilter === "TODOS" || statusCell === statusFilter);
+
+                tr[i].style.display = (matchSearch && matchStatus) ? "" : "none";
+            }
+        }
+
+        function renderizarOrdens() {
+            const rowsHtml = ERP_STATE.ordens.map(o => {
+                const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
+                const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
+                const tec = ERP_STATE.tecnicos.find(t => t.id === o.tecnicoId) || {};
+
+                const isConcluido = o.status === "Concluída";
+                const badgeClass = isConcluido ? "badge-concluido" : "badge-andamento";
+
+                return `
+                    <tr data-status="${o.status}">
+                        <td><input type="checkbox" class="chk-os-item" value="${o.id}"></td>
+                        <td><strong>${o.id}</strong></td>
+                        <td>${o.data}</td>
+                        <td>${cli.nome || '-'}</td>
+                        <td><span class="badge badge-tag">${eq.tag || 'S/N'}</span> ${eq.tipo || ''}</td>
+                        <td>${tec.nome || '-'}</td>
+                        <td><span class="badge badge-pmoc">${o.tipo}</span></td>
+                        <td>R$ ${o.valor.toFixed(2)}</td>
+                        <td><span class="badge ${badgeClass}">${o.status}</span></td>
+                        <td style="text-align:right;">
+                            <button class="btn btn-secondary btn-sm" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('os-table-body').innerHTML = rowsHtml;
+            document.getElementById('dash-table-body').innerHTML = rowsHtml;
+        }
+
+        // CADASTROS
+        function salvarEquipamento(e) {
+            e.preventDefault();
+            const novo = {
+                id: ERP_STATE.equipamentos.length + 1,
+                clienteId: parseInt(document.getElementById('eq-select-cliente').value),
+                tag: document.getElementById('eq-tag').value,
+                tipo: document.getElementById('eq-tipo').value,
+                marca: document.getElementById('eq-marca').value,
+                modelo: document.getElementById('eq-modelo').value,
+                serie: document.getElementById('eq-serie').value,
+                capacidade: document.getElementById('eq-capacidade').value,
+                ambiente: document.getElementById('eq-ambiente').value
+            };
+            ERP_STATE.equipamentos.push(novo);
+            saveState();
+            document.getElementById('form-equipamento').reset();
+            renderizarTudo();
+        }
+
+        function renderizarEquipamentos() {
+            document.getElementById('equip-table-body').innerHTML = ERP_STATE.equipamentos.map(eq => {
+                const cli = ERP_STATE.clientes.find(c => c.id === eq.clienteId) || {};
+                const totalOS = ERP_STATE.ordens.filter(o => o.equipamentoId === eq.id).length;
+                return `
+                    <tr>
+                        <td><span class="badge badge-tag">${eq.tag}</span></td>
+                        <td><strong>${cli.nome || '-'}</strong></td>
+                        <td>${eq.tipo} (${eq.capacidade})</td>
+                        <td>${eq.marca} / ${eq.modelo}</td>
+                        <td>${eq.serie}</td>
+                        <td>${eq.ambiente}</td>
+                        <td><strong>${totalOS} Atendimentos</strong></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function atualizarEquipamentosDoClienteOS() {
+            const cliId = parseInt(document.getElementById('os-select-cliente').value);
+            const equipSelect = document.getElementById('os-select-equipamento');
+            const equipamentosDoCliente = ERP_STATE.equipamentos.filter(e => e.clienteId === cliId);
+
+            if (equipamentosDoCliente.length === 0) {
+                equipSelect.innerHTML = `<option value="">Nenhum equipamento cadastrado</option>`;
+            } else {
+                equipSelect.innerHTML = equipamentosDoCliente.map(e => `
+                    <option value="${e.id}">${e.tag} - ${e.tipo} (${e.ambiente})</option>
+                `).join('');
+            }
+        }
+
+        function salvarCliente(e) {
+            e.preventDefault();
+            const novo = {
+                id: ERP_STATE.clientes.length + 1,
+                nome: document.getElementById('cli-nome').value,
+                cnpj: document.getElementById('cli-cnpj').value,
+                endereco: document.getElementById('cli-endereco').value,
+                contato: document.getElementById('cli-contato').value
+            };
+            ERP_STATE.clientes.push(novo);
+            saveState();
+            document.getElementById('form-cliente').reset();
+            renderizarTudo();
+        }
+
+        function renderizarClientes() {
+            document.getElementById('cli-table-body').innerHTML = ERP_STATE.clientes.map(c => {
+                const qtdEquip = ERP_STATE.equipamentos.filter(e => e.clienteId === c.id).length;
+                return `
+                    <tr>
+                        <td><strong>${c.nome}</strong></td>
+                        <td>${c.cnpj}</td>
+                        <td>${c.endereco}</td>
+                        <td>${c.contato}</td>
+                        <td><strong>${qtdEquip} Unidades</strong></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function salvarTecnico(e) {
+            e.preventDefault();
+            const novo = {
+                id: ERP_STATE.tecnicos.length + 1,
+                nome: document.getElementById('tec-nome').value,
+                email: document.getElementById('tec-email').value,
+                senha: document.getElementById('tec-senha').value,
+                posicao: document.getElementById('tec-posicao').value,
+                fone: document.getElementById('tec-fone').value
+            };
+            ERP_STATE.tecnicos.push(novo);
+            saveState();
+            document.getElementById('form-tecnico').reset();
+            renderizarTudo();
+        }
+
+        function renderizarTecnicos() {
+            document.getElementById('tec-table-body').innerHTML = ERP_STATE.tecnicos.map(t => `
+                <tr>
+                    <td><strong>${t.nome}</strong></td>
+                    <td>${t.email}</td>
+                    <td><span class="badge badge-cargo">${t.posicao}</span></td>
+                    <td>${t.fone}</td>
+                    <td><span class="badge badge-concluido">Ativo</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function salvarNovaOS(e) {
+            e.preventDefault();
+            const cliId = parseInt(document.getElementById('os-select-cliente').value);
+            const equipId = parseInt(document.getElementById('os-select-equipamento').value);
+            const tecId = parseInt(document.getElementById('os-select-tecnico').value);
+            const srvId = parseInt(document.getElementById('os-select-servico').value);
+
+            if (!equipId) { alert("Selecione um equipamento válido!"); return; }
+
+            const srv = ERP_STATE.servicos.find(s => s.id === srvId);
+
+            const novaOS = {
+                id: `OS-0${4891 + ERP_STATE.ordens.length}`,
+                data: new Date().toLocaleDateString('pt-BR'),
+                clienteId: cliId,
+                equipamentoId: equipId,
+                tecnicoId: tecId,
+                servicoId: srvId,
+                tipo: document.getElementById('os-select-tipo').value,
+                valor: srv ? srv.valor : 0.00,
+                status: "Em Atendimento",
+                desc: document.getElementById('os-desc').value,
+                pecasUsadas: [],
+                assinatura: null,
+                fotoAntes: null,
+                fotoDepois: null
+            };
+
+            ERP_STATE.ordens.push(novaOS);
+            saveState();
+            renderizarTudo();
+            switchTab('tab-ordens');
+        }
+
+        function renderizarKanban() {
+            document.getElementById('kanban-board-container').innerHTML = ERP_STATE.tecnicos.map(tec => {
+                const chamados = ERP_STATE.ordens.filter(o => o.tecnicoId === tec.id);
+                return `
+                    <div class="kanban-col">
+                        <div class="kanban-col-header">
+                            <span>Técnico: ${tec.nome}</span>
+                            <span>${chamados.length} OS</span>
+                        </div>
+                        ${chamados.map(o => {
+                            const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
+                            const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
+                            return `
+                                <div class="kanban-card">
+                                    <span class="badge badge-corretiva">${o.tipo}</span>
+                                    <div style="font-weight:700; margin-top:6px;">${o.id} -${cli.nome}</div>
+                                    <div style="font-size:11px; color:var(--color-primary); font-weight:700; margin-top:2px;">Ativo: ${eq.tag} (${eq.ambiente})</div>
+                                    <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${o.desc}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // SIMULADOR APP MOBILE E CANVAS DE ASSINATURA
+        let activeCanvas = null;
+        let isDrawing = false;
+
+        function renderizarPWAScreen() {
+            const area = document.getElementById('pwa-content-area');
+
+            if (!ERP_STATE.sessionTecnicoLogado) {
+                area.innerHTML = `
+                    <div style="padding: 10px 0; text-align:center;">
+                        <h4 style="margin-bottom: 4px;">Acesso ao App de Campo</h4>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Entre com suas credenciais corporativas</p>
+
+                        <form onsubmit="efetuarLoginPWA(event)">
+                            <div class="form-group" style="text-align:left; margin-bottom: 10px;">
+                                <label>E-mail</label>
+                                <input type="email" id="pwa-login-email" required value="elias@dbsair.com.br">
+                            </div>
+                            <div class="form-group" style="text-align:left; margin-bottom: 16px;">
+                                <label>Senha</label>
+                                <input type="password" id="pwa-login-senha" required value="123">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Acessar Minhas OS</button>
+                        </form>
+                    </div>
+                `;
+            } else {
+                const tec = ERP_STATE.sessionTecnicoLogado;
+                const minhasOS = ERP_STATE.ordens.filter(o => o.tecnicoId === tec.id);
+
+                area.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">
+                        <div>
+                            <strong style="font-size:12px;">${tec.nome}</strong>
+                            <p style="font-size:10px; color:var(--text-muted);">${tec.posicao}</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="logoutPWA()">Sair</button>
+                    </div>
+
+                    <div style="font-weight:700; font-size:11px; text-transform:uppercase; margin-bottom:8px;">Ordens Despachadas (${minhasOS.length})</div>
+
+                    ${minhasOS.map(o => {
+                        const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
+                        const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
+                        const isConcluido = o.status === "Concluída";
+                        return `
+                            <div class="pwa-box">
+                                <span class="badge badge-corretiva">${o.id} -${o.tipo}</span>
+                                <h4 style="margin-top:6px; font-size:13px;">${cli.nome}</h4>
+                                <p style="font-size:11px; color:var(--text-muted);">Endereço: ${cli.endereco}</p>
+                                
+                                <div style="background:#f1f5f9; padding:8px; border-radius:4px; margin:8px 0; border:1px solid var(--border-color);">
+                                    <div style="font-size:11px; font-weight:700; color:var(--color-primary-dark);">ATIVO: ${eq.tag} -${eq.tipo}</div>
+                                    <div style="font-size:10px; color:var(--text-main);">Marca: ${eq.marca} \vert{} Modelo:${eq.modelo}</div>
+                                </div>
+
+                                <p style="font-size:11px; margin-bottom:8px;"><strong>Serviço:</strong> ${o.desc}</p>${isConcluido ? `
+                                    <div style="padding:6px; background:#dcfce7; color:#166534; text-align:center; font-weight:700; border-radius:4px;">Atendimento Concluído</div>
+                                ` : `
+                                    <div style="border-top:1px solid var(--border-light); padding-top:8px; margin-top:8px;">
+                                        <label style="font-size:10px; font-weight:700;">Adicionar Insumo/Peça:</label>
+                                        <div style="display:flex; gap:4px; margin-bottom:8px;">
+                                            <select id="pwa-peca-select-${o.id}" style="font-size:10px; flex:1;">
+                                                ${ERP_STATE.pecas.map(p => `<option value="${p.id}">${p.nome} (Estq:${p.qtd})</option>`).join('')}
+                                            </select>
+                                            <button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">+</button>
+                                        </div>
+
+                                        <label style="font-size:10px; font-weight:700;">Assinatura Digital do Cliente:</label>
+                                        <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
+                                        <button class="btn btn-secondary btn-sm" style="margin-top:2px; font-size:9px;" onclick="limparCanvas('${o.id}')">Limpar Assinatura</button>
+
+                                        <button class="btn btn-success btn-sm" style="width:100%; margin-top:10px; justify-content:center;" onclick="concluirOSMobile('${o.id}')">Concluir e Colher Assinatura</button>
+                                    </div>
+                                `}
+                            </div>
+                        `;
+                    }).join('')}
+                `;
+
+                // INICIALIZAR CANVASES DE ASSINATURA ATIVOS
+                minhasOS.forEach(o => {
+                    if (o.status !== "Concluída") {
+                        setTimeout(() => initCanvas(`sig-canvas-${o.id}`), 100);
+                    }
+                });
+            }
+        }
+
+        function initCanvas(id) {
+            const canvas = document.getElementById(id);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#0f172a';
+
+            function getPos(e) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            }
+
+            canvas.onmousedown = canvas.ontouchstart = function(e) {
+                isDrawing = true;
+                const p = getPos(e);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+            };
+
+            canvas.onmousemove = canvas.ontouchmove = function(e) {
+                if (!isDrawing) return;
+                const p = getPos(e);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+            };
+
+            canvas.onmouseup = canvas.ontouchend = function() {
+                isDrawing = false;
+            };
+        }
+
+        function limparCanvas(osId) {
+            const canvas = document.getElementById(`sig-canvas-${osId}`);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function adicionarPecaMobile(osId) {
+            const os = ERP_STATE.ordens.find(o => o.id === osId);
+            const pecaId = parseInt(document.getElementById(`pwa-peca-select-${osId}`).value);
+            const peca = ERP_STATE.pecas.find(p => p.id === pecaId);
+
+            if (os && peca) {
+                if (peca.qtd < 1) { alert("Estoque insuficiente!"); return; }
+                peca.qtd -= 1;
+                os.valor += peca.venda;
+                os.pecasUsadas.push({ id: peca.id, nome: peca.nome, venda: peca.venda, qtd: 1 });
+                saveState();
+                renderizarTudo();
+                alert(`Peça ${peca.nome} adicionada com sucesso!`);
+            }
+        }
+
+        function concluirOSMobile(osId) {
+            const os = ERP_STATE.ordens.find(o => o.id === osId);
+            const canvas = document.getElementById(`sig-canvas-${osId}`);
+
+            if (os) {
+                if (canvas) {
+                    os.assinatura = canvas.toDataURL();
+                }
+                os.status = "Concluída";
+                saveState();
+                renderizarTudo();
+                alert(`OS ${osId} finalizada com sucesso! Assinatura gravada.`);
+            }
+        }
+
+        function efetuarLoginPWA(e) {
+            e.preventDefault();
+            const email = document.getElementById('pwa-login-email').value;
+            const senha = document.getElementById('pwa-login-senha').value;
+            const encontrou = ERP_STATE.tecnicos.find(t => t.email === email && t.senha === senha);
+
+            if (encontrou) {
+                ERP_STATE.sessionTecnicoLogado = encontrou;
+                renderizarPWAScreen();
+            } else {
+                alert('E-mail ou senha inválidos.');
+            }
+        }
+
+        function logoutPWA() {
+            ERP_STATE.sessionTecnicoLogado = null;
+            renderizarPWAScreen();
+        }
+
+        // AUXILIARES
+        function salvarPeca(e) { e.preventDefault(); ERP_STATE.pecas.push({ id: ERP_STATE.pecas.length + 1, sku: document.getElementById('peca-sku').value, nome: document.getElementById('peca-nome').value, qtd: parseInt(document.getElementById('peca-qtd').value), custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) }); saveState(); document.getElementById('form-peca').reset(); renderizarTudo(); }
+        function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${p.custo.toFixed(2)}</td><td>R$ ${p.venda.toFixed(2)}</td></tr>`).join(''); }
+        function salvarServico(e) { e.preventDefault(); ERP_STATE.servicos.push({ id: ERP_STATE.servicos.length + 1, nome: document.getElementById('serv-nome').value, horas: parseFloat(document.getElementById('serv-horas').value), valor: parseFloat(document.getElementById('serv-valor').value) }); saveState(); document.getElementById('form-servico').reset(); renderizarTudo(); }
+        function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${s.valor.toFixed(2)}</td></tr>`).join(''); }
+        function salvarCompra(e) { e.preventDefault(); ERP_STATE.compras.push({ id: ERP_STATE.compras.length + 1, fornecedor: document.getElementById('comp-fornecedor').value, item: document.getElementById('comp-item').value, qtd: parseInt(document.getElementById('comp-qtd').value), valor: parseFloat(document.getElementById('comp-valor').value), status: "Enviado" }); saveState(); document.getElementById('form-compra').reset(); renderizarTudo(); }
+        function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${c.valor.toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
+
+        function atualizarSelects() {
+            document.getElementById('os-select-cliente').innerHTML = ERP_STATE.clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+            document.getElementById('eq-select-cliente').innerHTML = ERP_STATE.clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+            document.getElementById('os-select-tecnico').innerHTML = ERP_STATE.tecnicos.map(t => `<option value="${t.id}">${t.nome} (${t.posicao})</option>`).join('');
+            document.getElementById('os-select-servico').innerHTML = ERP_STATE.servicos.map(s => `<option value="${s.id}">${s.nome} (R$ ${s.valor.toFixed(2)})</option>`).join('');
+            atualizarEquipamentosDoClienteOS();
+        }
+
+        function atualizarMetricas() {
+            document.getElementById('dash-client-count').innerText = ERP_STATE.clientes.length;
+            document.getElementById('dash-equip-count').innerText = ERP_STATE.equipamentos.length;
+            document.getElementById('dash-os-andamento').innerText = ERP_STATE.ordens.filter(o => o.status === "Em Atendimento").length;
+            document.getElementById('dash-os-concluidas').innerText = ERP_STATE.ordens.filter(o => o.status === "Concluída").length;
+        }
+    </script>
+</body>
+</html>
