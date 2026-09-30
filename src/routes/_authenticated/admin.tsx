@@ -12,6 +12,7 @@ import {
   Ticket,
   Users,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
@@ -125,6 +126,12 @@ function AdminPage() {
               <WalletCards className="h-4 w-4" /> RH
             </button>
           )}
+          <button
+            onClick={() => navigate({ to: "/dbs-control" })}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white"
+          >
+            <Wrench className="h-4 w-4" /> DBS CONTROL
+          </button>
           {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
             <button
               onClick={() => navigate({ to: "/treasury" })}
@@ -196,6 +203,12 @@ function AdminPage() {
             label="RH"
           />
         )}
+        <TabBtn
+          active={false}
+          onClick={() => navigate({ to: "/dbs-control" })}
+          icon={<Wrench className="w-3.5 h-3.5" />}
+          label="DBS CONTROL"
+        />
         {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
           <TabBtn
             active={false}
