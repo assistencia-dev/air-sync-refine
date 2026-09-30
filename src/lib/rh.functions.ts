@@ -334,6 +334,115 @@ export const unlockRhModule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const getRhEmployee360 = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { employee_id: string }) => {
+    if (!input?.employee_id) throw new Error("Funcionário inválido.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireNativeOperator(context);
+    const { data: employee, error } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, registration_data, is_active, registry_employee_id, ponto_access_enabled, ponto_portal_user_id, dbs_control_access_enabled, created_at, updated_at")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+
+    const [contracts, dependents, documents, events, access] = await Promise.all([
+      supabaseAdmin.from("rh_employee_contracts").select("*").eq("employee_id", data.employee_id).order("is_current", { ascending: false }).order("created_at", { ascending: false }),
+      supabaseAdmin.from("rh_employee_dependents").select("*").eq("employee_id", data.employee_id).order("full_name"),
+      supabaseAdmin.from("rh_employee_documents").select("*").eq("employee_id", data.employee_id).order("expires_at"),
+      supabaseAdmin.from("rh_employee_events").select("*").eq("employee_id", data.employee_id).order("event_date", { ascending: false }).order("created_at", { ascending: false }).limit(100),
+      supabaseAdmin.from("rh_employee_access").select("id, employee_id, user_id, access_enabled, login_identifier, created_at, updated_at").eq("employee_id", data.employee_id).maybeSingle(),
+    ]);
+    for (const result of [contracts, dependents, documents, events, access]) {
+      if (result.error) throw new Error(result.error.message);
+    }
+    return {
+      employee,
+      contracts: contracts.data ?? [],
+      dependents: dependents.data ?? [],
+      documents: documents.data ?? [],
+      events: events.data ?? [],
+      access: access.data ?? null,
+    };
+  });
+
+export const saveRhEmployeeContract = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    id?: string;
+    employee_id: string;
+    contract_type?: string;
+    admission_date?: string | null;
+    termination_date?: string | null;
+    department_id?: string | null;
+    position_id?: string | null;
+    salary_cents?: number | null;
+    salary_effective_from?: string | null;
+    work_regime?: string | null;
+    weekly_hours?: number | null;
+    work_shift?: string | null;
+    notes?: string | null;
+  }) => {
+    if (!input?.employee_id) throw new Error("Funcionário inválido.");
+    if (input.salary_cents != null && (!Number.isInteger(input.salary_cents) || input.salary_cents < 0)) {
+      throw new Error("Salário inválido.");
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees").select("id, is_active").eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    if (!employee.is_active) throw new Error("Não é possível criar contrato para funcionário inativo.");
+
+    const payload = {
+      employee_id: data.employee_id,
+      contract_type: data.contract_type?.trim() || "CLT",
+      admission_date: data.admission_date || null,
+      termination_date: data.termination_date || null,
+      department_id: data.department_id || null,
+      position_id: data.position_id || null,
+      salary_cents: data.salary_cents ?? null,
+      salary_effective_from: data.salary_effective_from || null,
+      work_regime: data.work_regime || null,
+      weekly_hours: data.weekly_hours ?? null,
+      work_shift: data.work_shift || null,
+      notes: data.notes || null,
+      is_current: true,
+    };
+
+    if (data.id) {
+      const { data: current, error } = await supabaseAdmin.from("rh_employee_contracts")
+        .select("*").eq("id", data.id).eq("employee_id", data.employee_id).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!current) throw new Error("Contrato não encontrado.");
+      const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employee_contracts")
+        .update(payload).eq("id", data.id).select("*").single();
+      if (updateError) throw new Error(updateError.message);
+      await supabaseAdmin.from("rh_audit_log").insert({
+        employee_id: data.employee_id, actor_user_id: operator.id, action: "CONTRATO_ATUALIZADO",
+        entity_type: "rh_employee_contracts", entity_id: data.id, before_data: current, after_data: updated,
+      });
+      return updated;
+    }
+
+    await supabaseAdmin.from("rh_employee_contracts").update({ is_current: false }).eq("employee_id", data.employee_id).eq("is_current", true);
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employee_contracts")
+      .insert(payload).select("*").single();
+    if (createError) throw new Error(createError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id, actor_user_id: operator.id, action: "CONTRATO_CRIADO",
+      entity_type: "rh_employee_contracts", entity_id: created.id, before_data: null, after_data: created,
+    });
+    return created;
+  });
+
 export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
