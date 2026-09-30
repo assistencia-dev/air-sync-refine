@@ -1,4 +1,22 @@
 -- DBS AIR · RH cadastro -> acesso
+-- Compatibilidade do cadastro central de RH com a Folha de Ponto.
+-- Alguns ambientes já possuem rh_employees por migrações anteriores, mas sem
+-- os campos de acesso/ponto. Estas alterações são aditivas e preservam dados.
+ALTER TABLE public.rh_employees
+  ADD COLUMN IF NOT EXISTS ponto_access_enabled boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS ponto_portal_user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS ponto_base_lat numeric,
+  ADD COLUMN IF NOT EXISTS ponto_base_lng numeric,
+  ADD COLUMN IF NOT EXISTS ponto_raio_m integer NOT NULL DEFAULT 150,
+  ADD COLUMN IF NOT EXISTS ponto_entrada_prevista time,
+  ADD COLUMN IF NOT EXISTS ponto_saida_prevista time,
+  ADD COLUMN IF NOT EXISTS ponto_almoco_inicio_previsto time,
+  ADD COLUMN IF NOT EXISTS ponto_almoco_fim_previsto time;
+
+CREATE INDEX IF NOT EXISTS idx_rh_employees_ponto_portal_user
+  ON public.rh_employees (ponto_portal_user_id)
+  WHERE ponto_portal_user_id IS NOT NULL;
+
 -- Migração aditiva: não remove nem altera registros existentes.
 -- O vínculo novo passa a existir separado do cadastro para que o login do
 -- colaborador não fique acoplado à configuração da Folha de Ponto.
