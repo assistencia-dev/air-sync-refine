@@ -509,10 +509,24 @@ export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
-    const { error } = await supabaseAdmin
+    const { data: employee, error: currentError } = await supabaseAdmin
       .from("rh_employees")
+      .select("id, full_name, is_active, ponto_portal_user_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (currentError) throw new Error(currentError.message);
+    if (!employee) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+
+    const { error } = await supabaseAdmin.from("rh_employees")
       .update({ is_active: false, ponto_access_enabled: false })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
+
+    await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: data.id,
+      actor_user_id: null,
+      action: "FUNCIONARIO_INATIVADO",
+      details: { full_name: employee.full_name, user_id: employee.ponto_portal_user_id ?? null },
+    });
     return { ok: true };
   });
