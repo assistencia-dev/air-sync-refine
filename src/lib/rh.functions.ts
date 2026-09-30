@@ -333,7 +333,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
     const { data, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active, registry_employee_id")
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, created_at, updated_at, is_active, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
     const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id || !employee.registry_employee_id);
@@ -341,7 +341,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
     const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
     const accessByEmployee = new Map(registry.filter((e: any) => e.ponto_portal_user_id).map((e: any) => [e.id, {
-      employee_id: e.id, user_id: e.ponto_portal_user_id, access_enabled: Boolean(e.ponto_access_enabled),
+      employee_id: e.id, user_id: e.ponto_portal_user_id, access_enabled: Boolean(e.ponto_access_enabled), dbs_control_access_enabled: Boolean(e.dbs_control_access_enabled),
       login_identifier: usersById.get(e.ponto_portal_user_id)?.username ?? usersById.get(e.ponto_portal_user_id)?.email ?? null,
       user: usersById.get(e.ponto_portal_user_id) ?? null,
     }]));
@@ -413,10 +413,10 @@ export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string }) => {
+  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; dbs_control_enabled?: boolean }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     if (input.enabled && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
-    return { ...input, login_identifier: input.login_identifier?.trim() || undefined };
+    return { ...input, login_identifier: input.login_identifier?.trim() || undefined, dbs_control_enabled: Boolean(input.dbs_control_enabled) };
   })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
@@ -427,13 +427,13 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (!data.enabled) {
       const { data: linked, error: linkedError } = await supabaseAdmin
         .from("rh_employees")
-        .select("ponto_portal_user_id")
+        .select("ponto_portal_user_id, dbs_control_access_enabled")
         .eq("id", data.employee_id)
         .maybeSingle();
       if (linkedError) throw new Error(linkedError.message);
 
       const { error } = await supabaseAdmin.from("rh_employees")
-        .update({ ponto_access_enabled: false })
+        .update({ ponto_access_enabled: false, dbs_control_access_enabled: data.dbs_control_enabled })
         .eq("id", data.employee_id);
       if (error) throw new Error(error.message);
 
@@ -470,10 +470,34 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       throw new Error(`Este usuário já está vinculado ao funcionário ${currentLink[0].full_name}.`);
     }
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
-      .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id }).eq("id", data.employee_id);
+      .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id, dbs_control_access_enabled: data.dbs_control_enabled }).eq("id", data.employee_id);
     if (updateError) throw new Error(updateError.message);
     await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_LIBERADO", details: { login_identifier: identifier, user_id: appUser.id } });
-    return { ok: true, enabled: true, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
+    return { ok: true, enabled: true, dbs_control_enabled: data.dbs_control_enabled, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
+  });
+
+export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: user, error } = await supabaseAdmin.from("users")
+      .select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!user || user.status !== "ativo") return { enabled: false, employee: null };
+    if (user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL") {
+      return { enabled: true, employee: null, administrative: true };
+    }
+    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit, dbs_control_access_enabled, is_active")
+      .eq("ponto_portal_user_id", user.id)
+      .eq("dbs_control_access_enabled", true)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    return {
+      enabled: Boolean(employee),
+      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit } : null,
+      administrative: false,
+    };
   });
 
 export const listRhEmployeeAccess = createServerFn({ method: "GET" })
@@ -481,9 +505,9 @@ export const listRhEmployeeAccess = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
     const { data, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, ponto_portal_user_id, ponto_access_enabled").eq("is_active", true).eq("ponto_access_enabled", true);
+      .select("id, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled").eq("is_active", true).eq("ponto_access_enabled", true);
     if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => ({ id: row.id, employee_id: row.id, user_id: row.ponto_portal_user_id, access_enabled: row.ponto_access_enabled }));
+    return (data ?? []).map((row) => ({ id: row.id, employee_id: row.id, user_id: row.ponto_portal_user_id, access_enabled: row.ponto_access_enabled, dbs_control_access_enabled: Boolean(row.dbs_control_access_enabled) }));
   });
 
 export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })
