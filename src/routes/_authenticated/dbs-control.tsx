@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { hasMyDbsControlAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
+import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-control")({
   head: () => ({ meta: [{ title: "DBS CONTROL · DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -12,6 +14,76 @@ function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
   const access = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: false });
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStateRef = useRef<Record<string, unknown> | null>(null);
+  const cloudReadyRef = useRef(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = async (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const msg = event.data || {};
+
+      if (msg.type === "DBS_CONTROL_READY") {
+        try {
+          const cloud = await getDbsControlCloudState();
+          const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
+            ? cloud.state as Record<string, unknown>
+            : null;
+          const localState = msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)
+            ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
+            : null;
+
+          if (cloudState) {
+            cloudReadyRef.current = true;
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
+              "*",
+            );
+          } else if (localState) {
+            const saved = await saveDbsControlCloudState({ state: localState });
+            cloudReadyRef.current = true;
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
+              "*",
+            );
+          } else {
+            throw new Error("O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.");
+          }
+
+          setCloudError(null);
+        } catch (err) {
+          console.error("DBS Control cloud load:", err);
+          setCloudError(err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.");
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_SAVE") {
+        pendingStateRef.current = msg.state;
+        if (!cloudReadyRef.current) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(async () => {
+          const state = pendingStateRef.current;
+          if (!state) return;
+          try {
+            await saveDbsControlCloudState({ state });
+            setCloudError(null);
+          } catch (err) {
+            console.error("DBS Control cloud save:", err);
+            setCloudError(err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.");
+          }
+        }, 450);
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => {
+      window.removeEventListener("message", handler);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   if (profile.isLoading || access.isLoading) {
     return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm text-slate-500">Carregando DBS CONTROL...</div>;
@@ -32,13 +104,16 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_name=${encodeURIComponent(employeeName)}`
-    : "/dbs-control.html";
+    ? `/dbs-control.html?mode=employee&employee_name=${encodeURIComponent(employeeName)}&v=20260930-1`
+    : "/dbs-control.html?v=20260930-1";
 
   return (
     <main className="min-h-screen bg-slate-100">
       <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm">
-        <div className="text-xs font-black uppercase tracking-wider text-slate-600">DBS CONTROL</div>
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
+          <span>DBS CONTROL</span>
+          {cloudError && <span className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-600">Erro de sincronização</span>}
+        </div>
         <button
           type="button"
           onClick={() => navigate({ to: employeeMode ? "/folha-ponto" : "/admin", replace: true })}
@@ -47,7 +122,7 @@ function DbsControlPage() {
           ← Voltar ao menu principal
         </button>
       </div>
-      <iframe title="DBS CONTROL" src={src} className="h-[calc(100vh-3rem)] w-full border-0" allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-3rem)] w-full border-0" allow="camera; geolocation" />
     </main>
   );
 }
