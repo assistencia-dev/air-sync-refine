@@ -337,7 +337,7 @@ function EmployeeAccessForm({
             Acesso à Folha de Ponto liberado para este funcionário
           </label>
           <label className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs font-bold text-slate-300">
-            <input type="checkbox" checked={dbsControlEnabled} onChange={(e) => setDbsControlEnabled(e.target.checked)} />
+            <input type="checkbox" checked={dbsControlEnabled} onChange={(e) => { setDbsControlEnabled(e.target.checked); if (e.target.checked) setEnabled(true); }} />
             Liberar <span className="text-emerald-300">DBS CONTROL</span> para este funcionário
           </label>
           <p className="text-[10px] text-slate-500">
