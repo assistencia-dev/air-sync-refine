@@ -356,9 +356,22 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
-    const payload = { full_name: data.full_name, unit: data.unit, registration_data: data.registration_data, is_active: true };
     if (data.id) {
-      const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", data.id)
+      // Editar o cadastro central não reativa um funcionário inativo.
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from("rh_employees")
+        .select("id, is_active")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (currentError) throw new Error(currentError.message);
+      if (!current) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+
+      const { data: employee, error } = await supabaseAdmin.from("rh_employees").update({
+        full_name: data.full_name,
+        unit: data.unit,
+        registration_data: data.registration_data,
+        is_active: current.is_active,
+      }).eq("id", data.id)
         .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
       if (error) throw new Error(error.message);
       return employee;
@@ -412,9 +425,24 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (employeeError) throw new Error(employeeError.message);
     if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
     if (!data.enabled) {
-      const { error } = await supabaseAdmin.from("rh_employees").update({ ponto_access_enabled: false, ponto_portal_user_id: null }).eq("id", data.employee_id);
+      const { data: linked, error: linkedError } = await supabaseAdmin
+        .from("rh_employees")
+        .select("ponto_portal_user_id")
+        .eq("id", data.employee_id)
+        .maybeSingle();
+      if (linkedError) throw new Error(linkedError.message);
+
+      const { error } = await supabaseAdmin.from("rh_employees")
+        .update({ ponto_access_enabled: false })
+        .eq("id", data.employee_id);
       if (error) throw new Error(error.message);
-      await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_REVOGADO", details: {} });
+
+      await supabaseAdmin.from("rh_ponto_audit").insert({
+        employee_id: data.employee_id,
+        actor_user_id: operator.id,
+        action: "ACESSO_FUNCIONARIO_REVOGADO",
+        details: { user_id: linked?.ponto_portal_user_id ?? null },
+      });
       return { ok: true, enabled: false, user: null, initial_password: null };
     }
     const identifier = data.login_identifier!;
@@ -430,9 +458,17 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (appUser.status !== "ativo") throw new Error("O usuário encontrado está inativo.");
     if (["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) throw new Error("Este login pertence a um administrador e não pode ser vinculado ao funcionário.");
     if (appUser.role_key !== "COLABORADOR") throw new Error("O usuário precisa estar classificado como COLABORADOR em Usuários vinculados.");
-    const { data: currentLink } = await supabaseAdmin.from("rh_employees").select("id")
-      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("id", data.employee_id).limit(1);
-    if (currentLink?.length) throw new Error("Este usuário já está vinculado a outro funcionário.");
+    const { data: currentLink, error: currentLinkError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name")
+      .eq("ponto_portal_user_id", appUser.id)
+      .eq("ponto_access_enabled", true)
+      .neq("id", data.employee_id)
+      .limit(1);
+    if (currentLinkError) throw new Error(currentLinkError.message);
+    if (currentLink?.length) {
+      throw new Error(`Este usuário já está vinculado ao funcionário ${currentLink[0].full_name}.`);
+    }
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
       .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id }).eq("id", data.employee_id);
     if (updateError) throw new Error(updateError.message);
