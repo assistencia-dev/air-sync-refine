@@ -40,7 +40,6 @@ function PontoRh() {
   const [occurrenceStatus, setOccurrenceStatus] = useState<RhPontoDayStatus>("PRESENCA");
   const [occurrenceNote, setOccurrenceNote] = useState("");
   const [view, setView] = useState<"gestao" | "acessos">("gestao");
-  const [reportOpen, setReportOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
   const [identifier, setIdentifier] = useState("");
   const [radius, setRadius] = useState("150");
@@ -156,7 +155,6 @@ function PontoRh() {
     <p class="footer">Relatório gerado pelo módulo RH. As marcações originais permanecem preservadas; ocorrências administrativas são tratadas separadamente.</p>
     <button class="no-print" onclick="window.print()" style="margin-top:20px;padding:10px 16px">Imprimir / Salvar PDF</button></body></html>`);
     w.document.close();
-    setReportOpen(false);
   };
 
   const active=(employees.data??[]).filter((e:any)=>e.ponto_access_enabled).length;
