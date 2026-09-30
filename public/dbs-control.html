@@ -557,11 +557,23 @@
                 const parsed = JSON.parse(saved);
                 // Migra apenas o estado antigo de demonstração para o ambiente vazio.
                 // Depois dessa migração, os dados cadastrados pelo usuário são preservados.
-                if (parsed.version !== DBS_CONTROL_STATE_VERSION || !parsed.data) {
-                    localStorage.removeItem('DBS_AIR_ERP_STATE');
-                    return JSON.parse(JSON.stringify(INITIAL_STATE));
-                }
-                return parsed.data;
+                // Migração não destrutiva: nunca apaga um estado válido apenas porque a versão mudou.
+                const source = parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+                    ? parsed.data
+                    : parsed;
+                const migrated = { ...JSON.parse(JSON.stringify(INITIAL_STATE)), ...source };
+                Object.keys(INITIAL_STATE).forEach((key) => {
+                    if (Array.isArray(INITIAL_STATE[key]) && !Array.isArray(migrated[key])) migrated[key] = [];
+                });
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                        version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
+                    }));
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION, data: migrated
+                    }));
+                } catch (_) {}
+                return migrated;
             } catch {
                 localStorage.removeItem('DBS_AIR_ERP_STATE');
                 return JSON.parse(JSON.stringify(INITIAL_STATE));
