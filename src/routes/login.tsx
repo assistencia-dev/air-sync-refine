@@ -35,10 +35,22 @@ function LoginPage() {
       if (!session.session) throw new Error("Sessão não estabelecida.");
       const { data: profile } = await supabase.from("users").select("role_key").eq("auth_id", session.session.user.id).maybeSingle();
       const isAdmin = profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL";
-      if (isAdmin) navigate({ to: "/admin", replace: true });
-      else {
-        const point = await hasMyPontoAccess();
-        navigate({ to: point.enabled ? "/folha-ponto" : "/portal", replace: true });
+      const isCollaborator = profile?.role_key === "COLABORADOR";
+      if (isAdmin) {
+        navigate({ to: "/admin", replace: true });
+      } else if (isCollaborator) {
+        // Somente colaboradores consultam o RH/Folha de Ponto.
+        // Clientes nunca devem depender de rh_employees para entrar no portal.
+        try {
+          const point = await hasMyPontoAccess();
+          navigate({ to: point.enabled ? "/folha-ponto" : "/portal", replace: true });
+        } catch {
+          // Se o schema de RH estiver em migração, o colaborador continua
+          // autenticado e pode acessar o portal; o erro do RH não derruba o login.
+          navigate({ to: "/portal", replace: true });
+        }
+      } else {
+        navigate({ to: "/portal", replace: true });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao autenticar.";
