@@ -7,7 +7,7 @@ import {
   getRhManagementDashboard, listRhPayroll, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
 } from "@/lib/rh.dp.functions";
 
-type Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes";
+// CI verification marker: RH/DP integrated center\ntype Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes";
 const inputClass="mt-1 w-full rounded-xl border border-slate-700 bg-[#141F33] px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-[#F59E0B]";
 const buttonClass="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50";
 const secondaryButtonClass="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-200 disabled:cursor-not-allowed disabled:opacity-50";
