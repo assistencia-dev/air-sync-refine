@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, FileText, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
+import { Copy, Download, FileText, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, History, UserRound } from "lucide-react";
 import {
   deactivateRhEmployeeRecord,
   reactivateRhEmployeeRecord,
@@ -10,6 +10,7 @@ import {
   uploadRhEmployeeFicha,
   saveRhEmployeeAccess,
   listRhCollaboratorUsers,
+  getRhEmployee360,
 } from "@/lib/rh.functions";
 
 type Employee = {
@@ -57,6 +58,7 @@ export function RhEmployeeRegistry() {
   const [editing, setEditing] = useState<Employee | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [accessing, setAccessing] = useState<Employee | null>(null);
+  const [viewing, setViewing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
   return (
@@ -109,6 +111,7 @@ export function RhEmployeeRegistry() {
                     setFormOpen(true);
                   }}
                   onAccess={() => setAccessing(employee)}
+                  onView={() => setViewing(employee)}
                   onDelete={async () => {
                     const action = employee.is_active ? "inativar" : "reativar";
                     if (!window.confirm(`${action === "inativar" ? "Inativar" : "Reativar"} o cadastro de ${employee.full_name}? O cadastro e os dados serão preservados.`)) return;
@@ -267,7 +270,7 @@ function EmployeeRow({
         )}
       </td>
       <td className="px-4 py-3 text-right">
-        <button onClick={onAccess} title="Gerenciar acesso" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300">
+        <button onClick={onView} title="Abrir ficha 360" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300">\n          <Eye className="h-3 w-3" /> Ficha\n        </button>\n        <button onClick={onAccess} title="Gerenciar acesso" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300">
           <KeyRound className="h-3 w-3" /> Acesso
         </button>
         <button onClick={onEdit} className="mr-2 text-sky-300">
@@ -279,6 +282,86 @@ function EmployeeRow({
       </td>
     </tr>
   );
+}
+
+
+function Employee360({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  const q = useQuery({
+    queryKey: ["rh-employee-360", employee.id],
+    queryFn: () => getRhEmployee360({ data: { employee_id: employee.id } }),
+  });
+  const data = q.data;
+  const registration = data?.employee?.registration_data ?? employee.registration_data ?? {};
+  const money = (c: unknown) => {
+    const n = Number(c ?? 0);
+    return Number.isFinite(n) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n / 100) : "—";
+  };
+  return (
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#02060d]/75 p-4">
+      <div className="mx-auto my-6 w-full max-w-6xl overflow-hidden rounded-2xl bg-[#1E293B] shadow-2xl">
+        <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-400">RH · ficha 360°</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-50">{employee.full_name}</h3>
+            <p className="mt-1 text-xs text-slate-400">{employee.unit} · {employee.is_active ? "Ativo" : "Inativo"}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800">Fechar</button>
+        </div>
+        {q.isLoading ? <div className="p-10 text-center text-sm text-slate-400">Carregando ficha completa...</div> :
+         q.isError ? <div className="p-10 text-center text-sm text-red-300">{q.error instanceof Error ? q.error.message : "Falha ao carregar a ficha."}</div> :
+         <div className="space-y-5 p-5 sm:p-7">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MiniCard icon={<UserRound className="h-4 w-4" />} title="Cadastro" value={registration.cpf || "CPF não informado"} />
+            <MiniCard icon={<BriefcaseBusiness className="h-4 w-4" />} title="Cargo" value={registration.job_title || "Não informado"} />
+            <MiniCard icon={<CalendarDays className="h-4 w-4" />} title="Admissão" value={registration.admission_date || "Não informada"} />
+            <MiniCard icon={<KeyRound className="h-4 w-4" />} title="Acesso" value={data?.access?.access_enabled ? "Liberado" : "Não vinculado"} />
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <360Section title="Dados funcionais">
+              <InfoGrid items={[
+                ["Salário cadastrado", registration.salary || (data?.contracts?.[0]?.salary_cents != null ? money(data.contracts[0].salary_cents) : "—")],
+                ["Tipo de pagamento", registration.payment_type || "—"],
+                ["Jornada", registration.work_hours || (data?.contracts?.[0]?.weekly_hours ? data.contracts[0].weekly_hours + " h/semana" : "—")],
+                ["PIS", registration.pis || "—"],
+                ["CTPS", registration.ctps || "—"],
+                ["Telefone", registration.phone || "—"],
+              ]} />
+            </360Section>
+            <360Section title="Acessos e operação">
+              <InfoGrid items={[
+                ["Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada"],
+                ["DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado"],
+                ["Login", data?.access?.login_identifier || "—"],
+                ["Registro criado", data?.employee?.created_at ? new Date(data.employee.created_at).toLocaleDateString("pt-BR") : "—"],
+              ]} />
+            </360Section>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <360Section title={`Contratos (${data?.contracts?.length ?? 0})`}><TimelineList empty="Nenhum contrato registrado." items={(data?.contracts ?? []).map((x: any) => ({ title: x.contract_type || "Contrato", text: [x.admission_date && "Admissão: " + x.admission_date, x.termination_date && "Saída: " + x.termination_date, x.salary_cents != null && "Salário: " + money(x.salary_cents)].filter(Boolean).join(" · ") || "Sem detalhes adicionais" }))} /></360Section>
+            <360Section title={`Dependentes (${data?.dependents?.length ?? 0})`}><TimelineList empty="Nenhum dependente cadastrado." items={(data?.dependents ?? []).map((x: any) => ({ title: x.full_name, text: [x.relationship, x.birth_date, x.is_ir_dependent && "Dependente IR"].filter(Boolean).join(" · ") }))} /></360Section>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <360Section title={`Documentos (${data?.documents?.length ?? 0})`}><TimelineList empty="Nenhum documento registrado." items={(data?.documents ?? []).map((x: any) => ({ title: x.document_type, text: [x.file_name, x.expires_at && "Validade: " + x.expires_at, x.status].filter(Boolean).join(" · ") }))} /></360Section>
+            <360Section title={`Histórico (${data?.events?.length ?? 0})`}><TimelineList empty="Nenhum evento registrado." items={(data?.events ?? []).map((x: any) => ({ title: x.event_type, text: [x.event_date, x.status].filter(Boolean).join(" · ") }))} /></360Section>
+          </div>
+         </div>}
+      </div>
+    </div>
+  );
+}
+
+function MiniCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
+  return <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="flex items-center gap-2 text-slate-400">{icon}<span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div><p className="mt-2 truncate text-sm font-bold text-slate-100">{value}</p></div>;
+}
+function 360Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-3 flex items-center gap-2"><FileStack className="h-4 w-4 text-sky-400" /><h4 className="text-sm font-black text-slate-100">{title}</h4></div>{children}</section>;
+}
+function InfoGrid({ items }: { items: [string, string][] }) {
+  return <div className="grid gap-2 sm:grid-cols-2">{items.map(([k,v]) => <div key={k} className="rounded-lg bg-[#0F172A] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p><p className="mt-1 text-xs font-semibold text-slate-200">{v}</p></div>)}</div>;
+}
+function TimelineList({ items, empty }: { items: { title: string; text: string }[]; empty: string }) {
+  if (!items.length) return <p className="text-xs text-slate-500">{empty}</p>;
+  return <div className="space-y-2">{items.slice(0,8).map((x,i) => <div key={i} className="rounded-lg bg-[#0F172A] p-3"><p className="text-xs font-bold text-slate-200">{x.title}</p><p className="mt-1 text-[11px] text-slate-400">{x.text}</p></div>)}</div>;
 }
 
 function EmployeeAccessForm({
