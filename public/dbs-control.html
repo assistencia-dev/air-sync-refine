@@ -155,7 +155,7 @@
                 <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
             </div>
             <div style="display:flex; gap:8px;">
-                <button class="btn btn-secondary btn-sm" onclick="resetarDadosPadrao()">Resetar Dados</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetarDadosPadrao()">Limpar dados locais</button>
                 <button class="btn btn-primary" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
             </div>
         </header>
@@ -515,51 +515,49 @@
     </main>
 
     <script>
+        // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
+        // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
+        // posteriormente no ambiente real.
+        const DBS_CONTROL_STATE_VERSION = 2;
         const INITIAL_STATE = {
-            tecnicos: [
-                { id: 1, nome: "Elias Santos", email: "elias@dbsair.com.br", senha: "123", posicao: "Técnico HVAC Titular", fone: "(21) 98888-1111" },
-                { id: 2, nome: "Márcio Silva", email: "marcio@dbsair.com.br", senha: "123", posicao: "Supervisor de Campo", fone: "(21) 97777-2222" }
-            ],
-            clientes: [
-                { id: 1, nome: "CTR Nova Iguaçu S.A.", cnpj: "12.345.678/0001-90", endereco: "Estrada de Adrianópolis, 5213", contato: "Carlos Gerente" },
-                { id: 2, nome: "Hospital Central de Diagnósticos", cnpj: "98.765.432/0001-11", endereco: "Av. Brasil, 1200", contato: "Dra. Renata" }
-            ],
-            equipamentos: [
-                { id: 1, clienteId: 1, tag: "TAG-CPD-01", tipo: "Split Hi-Wall", marca: "Daikin", modelo: "FTKN12B", serie: "SN993021", capacidade: "12.000 BTU", ambiente: "Sala de Servidores CPD" },
-                { id: 2, clienteId: 1, tag: "TAG-ADM-02", tipo: "Split Cassete", marca: "Carrier", modelo: "42XQC036", serie: "SN441029", capacidade: "36.000 BTU", ambiente: "Recepção Executiva" },
-                { id: 3, clienteId: 2, tag: "TAG-UTI-01", tipo: "Chiller", marca: "Hitachi", modelo: "RAP040B", serie: "SN112093", capacidade: "40 TR", ambiente: "Central Utilitários UTI" }
-            ],
-            pecas: [
-                { id: 1, sku: "CAP-35UF", nome: "Capacitor 35uF 450V", qtd: 24, custo: 22.00, venda: 65.00 },
-                { id: 2, sku: "GAS-R410A", nome: "Gás Refrigerante R410A (KG)", qtd: 80, custo: 45.00, venda: 120.00 }
-            ],
-            servicos: [
-                { id: 1, nome: "Higienização Completa de Split Hi-Wall", horas: 2, valor: 220.00 },
-                { id: 2, nome: "Carga de Gás com Teste de Estanqueidade", horas: 3, valor: 380.00 },
-                { id: 3, nome: "Análise Preventiva PMOC Mensal", horas: 1.5, valor: 180.00 }
-            ],
-            compras: [
-                { id: 1, fornecedor: "Dufrio Refrigeração", item: "Botija R410A 11.3kg", qtd: 2, valor: 760.00, status: "Entregue" }
-            ],
-            ordens: [
-                { id: "OS-04891", data: "30/09/2026", clienteId: 1, equipamentoId: 1, tecnicoId: 1, servicoId: 2, tipo: "Manutenção Corretiva", valor: 380.00, status: "Em Atendimento", desc: "Equipamento parou de refrigeração. Verificar vazamento e repor carga de gás.", pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null },
-                { id: "OS-04892", data: "30/09/2026", clienteId: 2, equipamentoId: 3, tecnicoId: 2, servicoId: 3, tipo: "Manutenção Preventiva / PMOC", valor: 180.00, status: "Concluída", desc: "Leitura de pressões e higienização periódica do sistema de água gelada.", pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null }
-            ]
+            tecnicos: [],
+            clientes: [],
+            equipamentos: [],
+            pecas: [],
+            servicos: [],
+            compras: [],
+            ordens: []
         };
 
         let ERP_STATE = loadState();
 
         function saveState() {
-            localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify(ERP_STATE));
+            localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                version: DBS_CONTROL_STATE_VERSION,
+                data: ERP_STATE
+            }));
         }
 
         function loadState() {
             const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
-            return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(INITIAL_STATE));
+            if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
+            try {
+                const parsed = JSON.parse(saved);
+                // Migra apenas o estado antigo de demonstração para o ambiente vazio.
+                // Depois dessa migração, os dados cadastrados pelo usuário são preservados.
+                if (parsed.version !== DBS_CONTROL_STATE_VERSION || !parsed.data) {
+                    localStorage.removeItem('DBS_AIR_ERP_STATE');
+                    return JSON.parse(JSON.stringify(INITIAL_STATE));
+                }
+                return parsed.data;
+            } catch {
+                localStorage.removeItem('DBS_AIR_ERP_STATE');
+                return JSON.parse(JSON.stringify(INITIAL_STATE));
+            }
         }
 
         function resetarDadosPadrao() {
-            if(confirm("Tem certeza que deseja resetar os dados para o padrão original?")) {
+            if(confirm("Este botão limpa os dados locais deste navegador. Deseja continuar?")) {
                 localStorage.removeItem('DBS_AIR_ERP_STATE');
                 ERP_STATE = JSON.parse(JSON.stringify(INITIAL_STATE));
                 saveState();
