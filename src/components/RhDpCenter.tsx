@@ -94,3 +94,5 @@ function employeeName(employees:any[],id:string){return employees.find(e=>e.id==
 function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="mt-3 block text-xs font-bold text-slate-300">{label}{children}</label>}
 function Select({label,value,onChange,employees}:{label:string;value:string;onChange:(v:string)=>void;employees:any[]}){return <Field label={label}><select value={value} onChange={e=>onChange(e.target.value)} className={inputClass}><option value="">Selecione…</option>{employees.filter(e=>e.is_active).map(e=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select></Field>}
 function ErrorText({e}:{e:unknown}){return <p className="mt-3 text-xs font-semibold text-red-300">{e instanceof Error?e.message:"Não foi possível concluir a operação."}</p>}
+
+// build validation marker v2
