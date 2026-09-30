@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { createClientUser } from "@/lib/admin.functions";
-import { hasMyDbsControlAccess, listRhEmployeeRegistry, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
+import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
 import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
 
@@ -89,6 +89,13 @@ function DbsControlPage() {
           let linked = (registry as any[]).find((employee) =>
             String(employee.access?.user?.email || "").toLowerCase() === email
           )?.access?.user;
+
+          if (!linked) {
+            const collaborators = await listRhCollaboratorUsers();
+            linked = (collaborators as any[]).find((user) =>
+              String(user.email || "").toLowerCase() === email
+            );
+          }
 
           if (!linked) {
             await createClientUser({
