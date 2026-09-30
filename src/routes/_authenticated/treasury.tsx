@@ -71,20 +71,53 @@ function TreasuryPage() {
       if (msg.type === "DBS_TREASURY_READY") {
         try {
           const cloud = await getTreasuryCloudState();
-          if (cloud?.state && treasuryStateHasData(cloud.state as Record<string, unknown>)) {
-            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: cloud.state }, "*");
-            cloudReadyRef.current = true;
-          } else if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state) && treasuryStateHasData(msg.state as Record<string, unknown>)) {
-            const localState = msg.state && typeof msg.state === "object" ? JSON.parse(JSON.stringify(msg.state)) : null;
-            if (!localState) throw new Error("Estado local do Financeiro inválido.");
-            localState._meta = { ...(localState._meta || {}), version: 5, cloudMigratedAt: new Date().toISOString() };
-            // Bootstrap seguro: se a nuvem estiver vazia, a cópia local existente é a fonte de migração.
-            // Nenhum lançamento real é filtrado, removido ou substituído por dados demonstrativos.
+          const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
+            ? cloud.state as Record<string, unknown>
+            : null;
+          const localState = msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)
+            ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
+            : null;
+
+          // A nuvem é a fonte compartilhada quando já existe um snapshot.
+          // Se ainda não houver snapshot, preservamos o estado deste dispositivo
+          // e fazemos a primeira migração para a nuvem sem apagar lançamentos.
+          if (cloudState) {
+            if (treasuryStateHasData(cloudState) || !treasuryStateHasData(localState)) {
+              cloudReadyRef.current = true;
+              iframeRef.current?.contentWindow?.postMessage(
+                { type: "DBS_TREASURY_CLOUD_STATE", state: cloudState },
+                "*",
+              );
+            } else {
+              localState._meta = {
+                ...(localState._meta || {}),
+                version: 5,
+                cloudMigratedAt: new Date().toISOString(),
+              };
+              const saved = await saveTreasuryCloudState({ state: localState });
+              cloudReadyRef.current = true;
+              iframeRef.current?.contentWindow?.postMessage(
+                { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
+                "*",
+              );
+            }
+          } else if (localState) {
+            localState._meta = {
+              ...(localState._meta || {}),
+              version: 5,
+              cloudMigratedAt: new Date().toISOString(),
+            };
             const saved = await saveTreasuryCloudState({ state: localState });
-            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_TREASURY_CLOUD_STATE", state: saved.state }, "*");
             cloudReadyRef.current = true;
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
+              "*",
+            );
           }
-          if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não possui uma cópia segura na nuvem. Verifique a implantação da tabela treasury_snapshots antes de usar outro dispositivo.");
+
+          if (!cloudReadyRef.current) {
+            throw new Error("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados.");
+          }
           setCloudError(null);
         } catch (err) {
           console.error("DBS Treasury cloud load:", err);
@@ -112,7 +145,7 @@ function TreasuryPage() {
     <div className="flex flex-col min-h-screen" style={{ background: "#090D16", fontFamily: "'Inter',system-ui,sans-serif" }}>
       <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-800 bg-[#0F172A]/90 px-4 shadow-sm backdrop-blur sm:px-6">
         <div className="flex items-center gap-3"><img src={logoAsset.url} alt="DBS Air" className="h-10 w-auto max-w-[190px] object-contain" /><span className="hidden h-7 w-px bg-slate-700 sm:block" /><span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#F59E0B" }}>Módulo Financeiro · DBS TREASURY</span></div>
-        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-500/10 px-3 py-1.5 text-[10px] font-bold text-rose-300 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
+        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-500/10 px-3 py-1.5 text-[10px] font-bold text-rose-300 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
       </header>
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100vh - 72px)" }}>
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50"><div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Carregando DBS TREASURY Enterprise Executive Suite…</p></div></div>}
