@@ -2,7 +2,7 @@
   "use strict";
 
   function state() {
-    if (!window.ERP_STATE) return null;
+    if (typeof ERP_STATE === "undefined") return null;
     if (!Array.isArray(ERP_STATE.servicos)) ERP_STATE.servicos = [];
     if (!Array.isArray(ERP_STATE.ordens)) ERP_STATE.ordens = [];
     return ERP_STATE;
