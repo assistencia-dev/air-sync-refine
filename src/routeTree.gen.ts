@@ -78,7 +78,6 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRoute
   '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/dbs-control': typeof AuthenticatedDbsControlRoute
-  '/dbs-control': typeof AuthenticatedDbsControlRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
