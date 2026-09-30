@@ -22,7 +22,7 @@ type Employee = {
   access?: {
     employee_id: string;
     user_id: string;
-    access_enabled: boolean;
+    access_enabled: boolean;\n    dbs_control_access_enabled?: boolean;
     login_identifier: string | null;
     user?: { username?: string | null; email?: string | null; status?: string | null } | null;
   } | null;
@@ -290,13 +290,13 @@ function EmployeeAccessForm({
   onDone: () => void;
 }) {
   const [login, setLogin] = useState(employee.access?.login_identifier ?? employee.access?.user?.username ?? "");
-  const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
+  const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);\n  const [dbsControlEnabled, setDbsControlEnabled] = useState(employee.access?.dbs_control_access_enabled ?? false);
   const collaboratorUsers = useQuery({
     queryKey: ["rh-collaborator-users"],
     queryFn: () => listRhCollaboratorUsers(),
   });
   const save = useMutation({
-    mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login } }),
+    mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login, dbs_control_enabled: dbsControlEnabled } }),
     onSuccess: onDone,
   });
 
@@ -336,6 +336,13 @@ function EmployeeAccessForm({
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             Acesso à Folha de Ponto liberado para este funcionário
           </label>
+          <label className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs font-bold text-slate-300">
+            <input type="checkbox" checked={dbsControlEnabled} onChange={(e) => setDbsControlEnabled(e.target.checked)} />
+            Liberar <span className="text-emerald-300">DBS CONTROL</span> para este funcionário
+          </label>
+          <p className="text-[10px] text-slate-500">
+            O DBS CONTROL usa o mesmo login do funcionário. Desmarcar aqui remove apenas o módulo CONTROL; o cadastro e o login continuam preservados.
+          </p>
         </div>
         {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível vincular o acesso."}</p>}
         <div className="mt-6 flex justify-end gap-2">
