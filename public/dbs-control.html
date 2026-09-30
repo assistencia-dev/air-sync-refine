@@ -99,6 +99,23 @@
         .pwa-box { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 1px solid var(--border-light); margin-bottom: 10px; box-shadow: var(--shadow-sm); }
         
         canvas.sig-canvas { border: 1px dashed var(--border-color); background: #fff; border-radius: 4px; cursor: crosshair; width: 100%; height: 100px; touch-action: none; }
+            body.dbs-control-employee-mode aside .nav-menu .nav-section,
+        body.dbs-control-employee-mode aside .nav-menu .nav-item { display:none !important; }
+        body.dbs-control-employee-mode aside .nav-menu .nav-item[data-employee-visible="true"] { display:flex !important; }
+        body.dbs-control-employee-mode header .btn-secondary,
+        body.dbs-control-employee-mode header .btn-primary { display:none !important; }
+        body.dbs-control-employee-mode #tab-dashboard,
+        body.dbs-control-employee-mode #tab-despacho,
+        body.dbs-control-employee-mode #tab-ordens,
+        body.dbs-control-employee-mode #tab-nova-os,
+        body.dbs-control-employee-mode #tab-clientes,
+        body.dbs-control-employee-mode #tab-equipamentos,
+        body.dbs-control-employee-mode #tab-tecnicos,
+        body.dbs-control-employee-mode #tab-pecas,
+        body.dbs-control-employee-mode #tab-servicos,
+        body.dbs-control-employee-mode #tab-compras { display:none !important; }
+        body.dbs-control-employee-mode #tab-pwa { display:block !important; }
+        body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:700px; }
     </style>
 </head>
 <body>
@@ -127,7 +144,7 @@
             <li class="nav-item" onclick="switchTab('tab-compras', this)"><span>Pedidos de Compras</span></li>
 
             <div class="nav-section">Mobile Field Service</div>
-            <li class="nav-item" onclick="switchTab('tab-pwa', this)"><span>App do Técnico (Simulador)</span></li>
+            <li class="nav-item" data-employee-visible="true" onclick="switchTab('tab-pwa', this)"><span>DBS CONTROL · Minhas OS</span></li>
         </ul>
     </aside>
 
@@ -1156,6 +1173,24 @@
             document.getElementById('dash-os-andamento').innerText = ERP_STATE.ordens.filter(o => o.status === "Em Atendimento").length;
             document.getElementById('dash-os-concluidas').innerText = ERP_STATE.ordens.filter(o => o.status === "Concluída").length;
         }
+        // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
+        (function bootDbsControlEmployeeMode(){
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('mode') !== 'employee') return;
+                document.body.classList.add('dbs-control-employee-mode');
+                const employeeName = params.get('employee_name') || '';
+                const normalized = employeeName.trim().toLowerCase();
+                const found = ERP_STATE.tecnicos.find(t => String(t.nome || '').trim().toLowerCase() === normalized);
+                if (found) ERP_STATE.sessionTecnicoLogado = found;
+                else if (employeeName) ERP_STATE.sessionTecnicoLogado = { id: '__rh__', nome: employeeName, posicao: 'Colaborador DBS AIR' };
+                const title = document.getElementById('view-title');
+                const subtitle = document.getElementById('view-subtitle');
+                if (title) title.textContent = 'DBS CONTROL · Minhas Ordens';
+                if (subtitle) subtitle.textContent = employeeName ? `Atendimento de campo · ${employeeName}` : 'Atendimento de campo';
+                renderizarPWAScreen();
+            } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
+        })();
     </script>
 </body>
 </html>
