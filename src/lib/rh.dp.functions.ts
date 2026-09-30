@@ -1,0 +1,57 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+async function requireRhOperator(context: { userId: string }) {
+  const { data, error } = await supabaseAdmin.from("users").select("id,username,status,role_key").eq("auth_id", context.userId).maybeSingle();
+  if (error || !data || data.status !== "ativo") throw new Error("Usuário sem acesso ao RH.");
+  const allowed = ["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL"];
+  if (!allowed.includes(data.role_key ?? "") && !["DBS123","DBSASSISTENCIA123"].includes(data.username ?? "")) throw new Error("Acesso restrito à gestão do RH.");
+  return data;
+}
+const moneyToCents=(value:unknown)=>{const raw=String(value??"").trim();if(!raw)return 0;const n=Number(raw.replace(/[^0-9,.-]/g,"").replace(/\./g,"").replace(",","."));return Number.isFinite(n)?Math.round(n*100):0;};
+
+export const getRhManagementDashboard=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{
+  await requireRhOperator(context);
+  const [employees,docs,vacations,payroll,admissions,exams,requests]=await Promise.all([
+    supabaseAdmin.from("rh_employees").select("id,full_name,unit,is_active,registration_data").order("full_name"),
+    supabaseAdmin.from("rh_employee_documents").select("id,employee_id,document_type,file_name,expires_at,status").order("expires_at"),
+    supabaseAdmin.from("rh_vacation_periods").select("id,employee_id,concession_deadline,status,days_earned,days_used").order("concession_deadline"),
+    supabaseAdmin.from("rh_payroll_periods").select("id,competence,status").order("competence",{ascending:false}).limit(12),
+    supabaseAdmin.from("rh_admission_processes").select("id,employee_id,status,expected_start").order("expected_start"),
+    supabaseAdmin.from("rh_medical_exams").select("id,employee_id,exam_type,valid_until,result").order("valid_until"),
+    supabaseAdmin.from("rh_employee_requests").select("id,employee_id,request_type,status,requested_at").order("requested_at",{ascending:false}).limit(20)
+  ]);
+  for(const r of [employees,docs,vacations,payroll,admissions,exams,requests])if(r.error)throw new Error(r.error.message);
+  const now=Date.now();const soon=(d:string|null|undefined,days:number)=>{if(!d)return false;const t=new Date(d+"T12:00:00").getTime();return t>=now&&t<=now+days*86400000;};
+  return {employees:(employees.data??[]).filter((e:any)=>e.is_active).length,inactive:(employees.data??[]).filter((e:any)=>!e.is_active).length,documentsExpiring:(docs.data??[]).filter((d:any)=>d.status!=="inativo"&&soon(d.expires_at,30)).length,vacationsDue:(vacations.data??[]).filter((v:any)=>v.status==="aberto"&&soon(v.concession_deadline,60)).length,payrollOpen:(payroll.data??[]).filter((p:any)=>p.status!=="fechada").length,admissionsPending:(admissions.data??[]).filter((a:any)=>a.status!=="concluida").length,examsExpiring:(exams.data??[]).filter((e:any)=>soon(e.valid_until,30)).length,requestsOpen:(requests.data??[]).filter((r:any)=>!["resolvida","cancelada"].includes(r.status)).length,employeesData:employees.data??[],documents:docs.data??[],vacations:vacations.data??[],payroll:payroll.data??[],admissions:admissions.data??[],exams:exams.data??[],requests:requests.data??[]};
+});
+
+export const createRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{competence:string})=>{if(!input?.competence)throw new Error("Informe a competência.");return input;}).handler(async({context,data})=>{
+  const actor=await requireRhOperator(context);const competence=data.competence.length===7?data.competence+"-01":data.competence;
+  const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").upsert({competence,status:"aberta"},{onConflict:"competence"}).select("*").single();if(error)throw new Error(error.message);
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_COMPETENCIA_ABERTA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;
+});
+
+export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
+  const actor=await requireRhOperator(context);const {data:period,error:pe}=await supabaseAdmin.from("rh_payroll_periods").select("*").eq("id",data.period_id).maybeSingle();if(pe)throw new Error(pe.message);if(!period)throw new Error("Competência não encontrada.");if(period.status==="fechada")throw new Error("Folha fechada não pode ser recalculada.");
+  const {data:employees,error:ee}=await supabaseAdmin.from("rh_employees").select("id,registration_data").eq("is_active",true);if(ee)throw new Error(ee.message);
+  const ids=(employees??[]).map((e:any)=>e.id);const {data:contracts,error:ce}=ids.length?await supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents").in("employee_id",ids).eq("is_current",true):{data:[],error:null};if(ce)throw new Error(ce.message);
+  const cmap=new Map((contracts??[]).map((c:any)=>[c.employee_id,Number(c.salary_cents??0)]));
+  const runs=(employees??[]).map((e:any)=>{const salary=cmap.get(e.id)||moneyToCents(e.registration_data?.salary);return {period_id:period.id,employee_id:e.id,gross_cents:salary,discount_cents:0,net_cents:salary,inss_base_cents:salary,irrf_base_cents:0,fgts_base_cents:salary,status:"calculada"};});
+  for(const run of runs){const {data:saved,error:re}=await supabaseAdmin.from("rh_payroll_runs").upsert(run,{onConflict:"period_id,employee_id"}).select("*").single();if(re)throw new Error(re.message);const {data:item,error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,item_type:"provento",code:"SALARIO",description:"Salário base",quantity:1,rate:100,amount_cents:run.gross_cents,reference:{source:"cadastro_central",run_id:saved.id}}).select("*").single();if(ie)throw new Error(ie.message);}
+  const {data:updated,error:ue}=await supabaseAdmin.from("rh_payroll_periods").update({status:"calculada",updated_at:new Date().toISOString()}).eq("id",period.id).select("*").single();if(ue)throw new Error(ue.message);
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length}});return {period:updated,employees:runs.length};
+});
+
+export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
+  const actor=await requireRhOperator(context);const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).neq("status","fechada").select("*").maybeSingle();if(error)throw new Error(error.message);if(!period)throw new Error("Folha não encontrada ou já fechada.");await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;
+});
+
+export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{await requireRhOperator(context);const {data,error}=await supabaseAdmin.from("rh_payroll_periods").select("*,rh_payroll_runs(*)").order("competence",{ascending:false});if(error)throw new Error(error.message);return data??[];});
+
+export const createRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;start_date:string;end_date:string;days:number;vacation_period_id?:string;notes?:string})=>{if(!input?.employee_id||!input.start_date||!input.end_date||!input.days)throw new Error("Preencha funcionário, período e dias.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").insert({...data,status:"solicitada"}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"FERIAS_SOLICITADAS",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
+export const updateRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id:string;status:"aprovada"|"reprovada"|"cancelada";notes?:string})=>{if(!input?.id)throw new Error("Solicitação inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload:any={status:data.status,notes:data.notes??null};if(data.status==="aprovada"){payload.approved_at=new Date().toISOString();payload.approved_by=actor.id;}const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").update(payload).eq("id",data.id).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:row.employee_id,action:"FERIAS_STATUS_ALTERADO",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
+
+export const createRhTimeAdjustment=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;reference_date:string;adjustment_type:string;minutes:number;reason:string})=>{if(!input?.employee_id||!input.reference_date||!input.reason)throw new Error("Funcionário, data e motivo são obrigatórios.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_time_adjustments").insert({...data,status:"pendente",requested_by:actor.id}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"AJUSTE_PONTO_SOLICITADO",entity_type:"rh_time_adjustments",entity_id:row.id,after_data:row});return row;});
+export const updateRhTimeAdjustment=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id:string;status:"aprovado"|"reprovado";minutes?:number})=>{if(!input?.id)throw new Error("Ajuste inválido.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_time_adjustments").update({status:data.status,minutes:data.minutes??undefined,approved_by:actor.id,approved_at:new Date().toISOString()}).eq("id",data.id).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:row.employee_id,action:"AJUSTE_PONTO_STATUS_ALTERADO",entity_type:"rh_time_adjustments",entity_id:row.id,after_data:row});return row;});
