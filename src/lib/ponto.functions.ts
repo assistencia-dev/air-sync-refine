@@ -49,7 +49,7 @@ export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware
   await requireRh(context);
   const { data, error } = await supabaseAdmin.from("rh_employees").select("id, full_name, unit, registration_data, registry_employee_id, ponto_access_enabled, ponto_portal_user_id, ponto_base_lat, ponto_base_lng, ponto_raio_m, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto, is_active").eq("is_active", true).order("full_name");
   if (error) throw new Error(error.message);
-  const canonical = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id);
+  const canonical = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id || !employee.registry_employee_id);
   const ids = canonical.map(e => e.ponto_portal_user_id).filter(Boolean) as string[];
   const users = ids.length ? ((await supabaseAdmin.from("users").select("id, username, email, full_name").in("id", ids)).data ?? []) : [];
   const byId = new Map(users.map(u => [u.id, u]));
@@ -74,7 +74,7 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
     if (user.role_key && user.role_key !== "COLABORADOR") throw new Error("O login precisa estar classificado como COLABORADOR em Usuários vinculados.");
     patch.ponto_portal_user_id = user.id;
   } else patch.ponto_portal_user_id = null;
-  const { data: employeeRecord } = await supabaseAdmin.from("rh_employees").select("id, registry_employee_id, is_active").eq("id", data.employee_id).eq("registry_employee_id", data.employee_id).maybeSingle();
+  const { data: employeeRecord } = await supabaseAdmin.from("rh_employees").select("id, registry_employee_id, is_active").eq("id", data.employee_id).maybeSingle();
   if (!employeeRecord || !employeeRecord.is_active) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
   const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(patch).eq("id", data.employee_id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
   if (error) throw new Error(error.message);

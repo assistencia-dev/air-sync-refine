@@ -62,7 +62,7 @@ export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" 
       .select("id, full_name, unit, is_active, registration_data, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-    return (data ?? []).filter((row: any) => row.registry_employee_id === row.id);
+    return (data ?? []).filter((row: any) => row.registry_employee_id === row.id || !row.registry_employee_id);
   });
 
 export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
@@ -336,7 +336,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
       .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, created_at, updated_at, is_active, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-    const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id);
+    const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id || !employee.registry_employee_id);
     const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
     const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
@@ -408,7 +408,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
     const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, is_active, registry_employee_id").eq("id", data.employee_id).eq("registry_employee_id", data.employee_id).eq("is_active", true).maybeSingle();
+      .select("id, full_name, unit, is_active, registry_employee_id").eq("id", data.employee_id).eq("is_active", true).maybeSingle();
     if (employeeError) throw new Error(employeeError.message);
     if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
     if (!data.enabled) {
@@ -431,7 +431,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) throw new Error("Este login pertence a um administrador e não pode ser vinculado ao funcionário.");
     if (appUser.role_key !== "COLABORADOR") throw new Error("O usuário precisa estar classificado como COLABORADOR em Usuários vinculados.");
     const { data: currentLink } = await supabaseAdmin.from("rh_employees").select("id")
-      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("registry_employee_id", data.employee_id).limit(1);
+      .eq("ponto_portal_user_id", appUser.id).eq("ponto_access_enabled", true).neq("id", data.employee_id).limit(1);
     if (currentLink?.length) throw new Error("Este usuário já está vinculado a outro funcionário.");
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
       .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id }).eq("id", data.employee_id);
