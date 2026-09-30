@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   function ensureState() {
-    if (!window.ERP_STATE) return false;
+    if (typeof ERP_STATE === "undefined") return false;
     if (!Array.isArray(ERP_STATE.orcamentos)) ERP_STATE.orcamentos = [];
     return true;
   }
