@@ -582,6 +582,19 @@
             const msg = event.data || {};
             if (msg.type === 'DBS_CONTROL_TECHNICIAN_SYNCED') {
                 if (msg.ok) {
+                    const syncedEmail = String(msg.email || '').trim().toLowerCase();
+                    const existing = ERP_STATE.tecnicos.find(t => String(t.email || '').trim().toLowerCase() === syncedEmail);
+                    if (!existing && msg.name) {
+                        ERP_STATE.tecnicos.push({
+                            id: ERP_STATE.tecnicos.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0) + 1,
+                            employeeId: msg.employee_id || null,
+                            nome: msg.name,
+                            email: syncedEmail,
+                            posicao: msg.position || 'Colaborador DBS AIR',
+                            fone: msg.phone || ''
+                        });
+                        saveState();
+                    }
                     const form = document.getElementById('form-tecnico');
                     if (form) form.reset();
                     alert('Colaborador cadastrado e vinculado ao acesso central do sistema.');
