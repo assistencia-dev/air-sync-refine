@@ -179,6 +179,7 @@ export const RH_PONTO_DAY_STATUSES = [
   "COMPENSACAO",
   "HOME_OFFICE",
   "ABONO",
+  "SEM_MARCACAO",
 ] as const;
 export type RhPontoDayStatus = (typeof RH_PONTO_DAY_STATUSES)[number];
 
@@ -193,8 +194,8 @@ export const listRhPontoDayManagement = createServerFn({ method: "GET" })
     await requireRh(context);
     let query = supabaseAdmin.from("rh_ponto_audit")
       .select("employee_id, action, details, created_at")
-      .gte("created_at", data.start_date + "T00:00:00")
-      .lt("created_at", data.end_date + "T23:59:59.999");
+      .gte("details->>work_date", data.start_date)
+      .lte("details->>work_date", data.end_date);
     if (data.employee_id) query = query.eq("employee_id", data.employee_id);
     const { data: rows, error } = await query.order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
