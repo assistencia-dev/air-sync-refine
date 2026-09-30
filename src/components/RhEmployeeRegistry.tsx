@@ -22,7 +22,8 @@ type Employee = {
   access?: {
     employee_id: string;
     user_id: string;
-    access_enabled: boolean;\n    dbs_control_access_enabled?: boolean;
+    access_enabled: boolean;
+    dbs_control_access_enabled?: boolean;
     login_identifier: string | null;
     user?: { username?: string | null; email?: string | null; status?: string | null } | null;
   } | null;
@@ -290,7 +291,8 @@ function EmployeeAccessForm({
   onDone: () => void;
 }) {
   const [login, setLogin] = useState(employee.access?.login_identifier ?? employee.access?.user?.username ?? "");
-  const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);\n  const [dbsControlEnabled, setDbsControlEnabled] = useState(employee.access?.dbs_control_access_enabled ?? false);
+  const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
+  const [dbsControlEnabled, setDbsControlEnabled] = useState(employee.access?.dbs_control_access_enabled ?? false);
   const collaboratorUsers = useQuery({
     queryKey: ["rh-collaborator-users"],
     queryFn: () => listRhCollaboratorUsers(),
