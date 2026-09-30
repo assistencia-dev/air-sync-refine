@@ -997,6 +997,7 @@ td strong{font-weight:650;}
     const TREASURY_STATE_KEY = 'DBS_TREASURY_STATE_V3';
     const TREASURY_PREVIOUS_KEY = 'DBS_TREASURY_PREVIOUS_SAFE';
     const TREASURY_SNAPSHOT_KEY = 'DBS_TREASURY_SNAPSHOT_BEFORE_V6';
+    const TREASURY_CLOUD_MIGRATION_BACKUP_KEY = 'DBS_TREASURY_CLOUD_MIGRATION_BACKUP';
     const TREASURY_VERSION = 5;
     let CLOUD_STATE_RECEIVED = false;
     function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, "*"); } catch (e) {} }
@@ -1005,6 +1006,14 @@ td strong{font-weight:650;}
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
         if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
+            // Preserva o estado local do notebook antes de qualquer hidratação pela nuvem.
+            try {
+                const localBeforeCloud = localStorage.getItem(TREASURY_STATE_KEY);
+                if (localBeforeCloud) {
+                    localStorage.setItem(TREASURY_CLOUD_MIGRATION_BACKUP_KEY, localBeforeCloud);
+                    localStorage.setItem(TREASURY_PREVIOUS_KEY, localBeforeCloud);
+                }
+            } catch (_) {}
             STATE = msg.state;
             if (!STATE._meta || typeof STATE._meta !== "object") STATE._meta = {};
             STATE._meta.version = Math.max(Number(STATE._meta.version) || 1, TREASURY_VERSION);
