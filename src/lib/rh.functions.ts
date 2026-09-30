@@ -489,6 +489,15 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       }).eq("id", data.id)
         .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
       if (error) throw new Error(error.message);
+      await supabaseAdmin.from("rh_audit_log").insert({
+        employee_id: data.id,
+        actor_user_id: context.userId,
+        action: "CADASTRO_FUNCIONARIO_ATUALIZADO",
+        entity_type: "rh_employees",
+        entity_id: data.id,
+        before_data: current,
+        after_data: employee,
+      });
       return employee;
     }
     const payload = {
@@ -505,6 +514,15 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
     const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)
       .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
     if (linkError) throw new Error(linkError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: employee.id,
+      actor_user_id: context.userId,
+      action: "CADASTRO_FUNCIONARIO_CRIADO",
+      entity_type: "rh_employees",
+      entity_id: employee.id,
+      before_data: null,
+      after_data: employee,
+    });
     return employee;
   });
 
