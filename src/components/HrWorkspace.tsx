@@ -4,12 +4,13 @@ import { IdCard, Utensils, WalletCards, Clock3, Shield, Calculator } from "lucid
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
 import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
+import { RhDpCenter } from "@/components/RhDpCenter";
 import { listRhEmployeeRegistry, listRhEmployees, listRhTopups } from "@/lib/rh.functions";
 import { listRhPontoEmployees } from "@/lib/ponto.functions";
 
 export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 
-type HrSection = "resumo" | "custos" | "ponto" | "passagem" | "alimentacao" | "cadastro";
+type HrSection = "resumo" | "custos" | "ponto" | "passagem" | "alimentacao" | "cadastro" | "gestao";
 
 /**
  * Área de trabalho do RH.
@@ -35,6 +36,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const tabs: { key: HrSection; label: string; icon: React.ReactNode; active: string }[] = [
     { key: "resumo", label: "Resumo do RH", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
     { key: "custos", label: "Folha e Custos", icon: <Calculator className="h-4 w-4" />, active: "bg-[#0F172A] text-white shadow-md" },
+    { key: "gestao", label: "Gestão RH / DP", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
     { key: "ponto", label: "Folha de Ponto", icon: <Clock3 className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
     { key: "cadastro", label: "Cadastro de Funcionários", icon: <IdCard className="h-4 w-4" />, active: "bg-[#F59E0B] text-white shadow-md" },
     { key: "passagem", label: "Vale Passagem", icon: <WalletCards className="h-4 w-4" />, active: "bg-[#0F172A] text-white shadow-md" },
@@ -86,6 +88,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
       )}
+      {section === "gestao" && <RhDpCenter />}
       {section === "custos" && <RhPayrollSummary registry={registry.data ?? []} vt={vt.data ?? []} va={va.data ?? []} vtTopups={vtTopups.data ?? []} vaTopups={vaTopups.data ?? []} />}
       {section === "ponto" && <RhPontoWorkspace />}
       {section === "cadastro" && <RhEmployeeRegistry />}
