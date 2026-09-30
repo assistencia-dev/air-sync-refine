@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_authenticated")({
 
     // Funcionário com acesso RH não entra no portal de clientes nem nos módulos administrativos.
     // A única porta funcional liberada para esse perfil é a Folha de Ponto individual.
-    if (location.pathname !== "/folha-ponto") {
+    if (location.pathname !== "/folha-ponto" && location.pathname !== "/dbs-control") {
       try {
         const employeeAccess = await getMyEmployeePortalAccess();
         if (employeeAccess.enabled) {
