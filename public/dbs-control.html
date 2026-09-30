@@ -530,12 +530,24 @@
         };
 
         let ERP_STATE = loadState();
+        let DBS_CONTROL_CLOUD_READY = false;
+        let DBS_CONTROL_CLOUD_HYDRATING = false;
+
+        function getPersistableState() {
+            const snapshot = JSON.parse(JSON.stringify(ERP_STATE));
+            delete snapshot.sessionTecnicoLogado;
+            return snapshot;
+        }
 
         function saveState() {
+            const persistableState = getPersistableState();
             localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
                 version: DBS_CONTROL_STATE_VERSION,
-                data: ERP_STATE
+                data: persistableState
             }));
+            if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state: persistableState }, '*');
+            }
         }
 
         function loadState() {
@@ -565,8 +577,33 @@
             }
         }
 
+        window.addEventListener('message', function(event) {
+            if (event.source !== window.parent) return;
+            const msg = event.data || {};
+            if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
+            if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
+
+            DBS_CONTROL_CLOUD_HYDRATING = true;
+            try {
+                const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+                ERP_STATE = JSON.parse(JSON.stringify(msg.state));
+                if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: getPersistableState()
+                }));
+                renderizarTudo();
+            } finally {
+                DBS_CONTROL_CLOUD_HYDRATING = false;
+                DBS_CONTROL_CLOUD_READY = true;
+            }
+        });
+
         window.onload = function() {
             renderizarTudo();
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
+            }
         };
 
         function renderizarTudo() {
