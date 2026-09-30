@@ -30,7 +30,7 @@ export const getRhManagementDashboard=createServerFn({method:"GET"}).middleware(
 
 export const createRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{competence:string})=>{if(!input?.competence)throw new Error("Informe a competência.");return input;}).handler(async({context,data})=>{
   const actor=await requireRhOperator(context);const competence=data.competence.length===7?data.competence+"-01":data.competence;
-  const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").upsert({competence,status:"aberta"},{onConflict:"competence"}).select("*").single();if(error)throw new Error(error.message);
+  const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_periods").select("*").eq("competence",competence).maybeSingle();if(xe)throw new Error(xe.message);if(existing?.status==="fechada")throw new Error("Esta competência já está fechada e não pode ser reaberta.");const period=existing??(await supabaseAdmin.from("rh_payroll_periods").insert({competence,status:"aberta"}).select("*").single()).data;if(!period)throw new Error("Não foi possível abrir a competência.");
   await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_COMPETENCIA_ABERTA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;
 });
 
