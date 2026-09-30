@@ -317,7 +317,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <MiniCard icon={<KeyRound className="h-4 w-4" />} title="Acesso" value={data?.access?.access_enabled ? "Liberado" : "Não vinculado"} />
           </div>
           <div className="grid gap-5 lg:grid-cols-2">
-            <360Section title="Dados funcionais">
+            <Employee360Section title="Dados funcionais">
               <InfoGrid items={[
                 ["Salário cadastrado", registration.salary || (data?.contracts?.[0]?.salary_cents != null ? money(data.contracts[0].salary_cents) : "—")],
                 ["Tipo de pagamento", registration.payment_type || "—"],
@@ -326,23 +326,23 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
                 ["CTPS", registration.ctps || "—"],
                 ["Telefone", registration.phone || "—"],
               ]} />
-            </360Section>
-            <360Section title="Acessos e operação">
+            </Employee360Section>
+            <Employee360Section title="Acessos e operação">
               <InfoGrid items={[
                 ["Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada"],
                 ["DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado"],
                 ["Login", data?.access?.login_identifier || "—"],
                 ["Registro criado", data?.employee?.created_at ? new Date(data.employee.created_at).toLocaleDateString("pt-BR") : "—"],
               ]} />
-            </360Section>
+            </Employee360Section>
           </div>
           <div className="grid gap-5 lg:grid-cols-2">
-            <360Section title={`Contratos (${data?.contracts?.length ?? 0})`}><TimelineList empty="Nenhum contrato registrado." items={(data?.contracts ?? []).map((x: any) => ({ title: x.contract_type || "Contrato", text: [x.admission_date && "Admissão: " + x.admission_date, x.termination_date && "Saída: " + x.termination_date, x.salary_cents != null && "Salário: " + money(x.salary_cents)].filter(Boolean).join(" · ") || "Sem detalhes adicionais" }))} /></360Section>
-            <360Section title={`Dependentes (${data?.dependents?.length ?? 0})`}><TimelineList empty="Nenhum dependente cadastrado." items={(data?.dependents ?? []).map((x: any) => ({ title: x.full_name, text: [x.relationship, x.birth_date, x.is_ir_dependent && "Dependente IR"].filter(Boolean).join(" · ") }))} /></360Section>
+            <Employee360Section title={`Contratos (${data?.contracts?.length ?? 0})`}><TimelineList empty="Nenhum contrato registrado." items={(data?.contracts ?? []).map((x: any) => ({ title: x.contract_type || "Contrato", text: [x.admission_date && "Admissão: " + x.admission_date, x.termination_date && "Saída: " + x.termination_date, x.salary_cents != null && "Salário: " + money(x.salary_cents)].filter(Boolean).join(" · ") || "Sem detalhes adicionais" }))} /></Employee360Section>
+            <Employee360Section title={`Dependentes (${data?.dependents?.length ?? 0})`}><TimelineList empty="Nenhum dependente cadastrado." items={(data?.dependents ?? []).map((x: any) => ({ title: x.full_name, text: [x.relationship, x.birth_date, x.is_ir_dependent && "Dependente IR"].filter(Boolean).join(" · ") }))} /></Employee360Section>
           </div>
           <div className="grid gap-5 lg:grid-cols-2">
-            <360Section title={`Documentos (${data?.documents?.length ?? 0})`}><TimelineList empty="Nenhum documento registrado." items={(data?.documents ?? []).map((x: any) => ({ title: x.document_type, text: [x.file_name, x.expires_at && "Validade: " + x.expires_at, x.status].filter(Boolean).join(" · ") }))} /></360Section>
-            <360Section title={`Histórico (${data?.events?.length ?? 0})`}><TimelineList empty="Nenhum evento registrado." items={(data?.events ?? []).map((x: any) => ({ title: x.event_type, text: [x.event_date, x.status].filter(Boolean).join(" · ") }))} /></360Section>
+            <Employee360Section title={`Documentos (${data?.documents?.length ?? 0})`}><TimelineList empty="Nenhum documento registrado." items={(data?.documents ?? []).map((x: any) => ({ title: x.document_type, text: [x.file_name, x.expires_at && "Validade: " + x.expires_at, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
+            <Employee360Section title={`Histórico (${data?.events?.length ?? 0})`}><TimelineList empty="Nenhum evento registrado." items={(data?.events ?? []).map((x: any) => ({ title: x.event_type, text: [x.event_date, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
           </div>
          </div>}
       </div>
@@ -353,7 +353,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
 function MiniCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
   return <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="flex items-center gap-2 text-slate-400">{icon}<span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div><p className="mt-2 truncate text-sm font-bold text-slate-100">{value}</p></div>;
 }
-function 360Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Employee360Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-3 flex items-center gap-2"><FileStack className="h-4 w-4 text-sky-400" /><h4 className="text-sm font-black text-slate-100">{title}</h4></div>{children}</section>;
 }
 function InfoGrid({ items }: { items: [string, string][] }) {
