@@ -129,6 +129,44 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
 });
 
 
+function minutesFromTime(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const match = value.match(/(?:T| )([01]\d|2[0-3]):([0-5]\d)/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function durationBetween(start: string | null | undefined, end: string | null | undefined): number {
+  const a = minutesFromTime(start);
+  const b = minutesFromTime(end);
+  if (a == null || b == null || b < a) return 0;
+  return b - a;
+}
+
+function pointSummary(records: Array<{ punch_type: PointType; punched_at: string }>, employee: any) {
+  const byType = new Map(records.map((r) => [r.punch_type, r.punched_at]));
+  const workedMinutes =
+    durationBetween(byType.get("entrada"), byType.get("almoco_saida")) +
+    durationBetween(byType.get("almoco_retorno"), byType.get("saida"));
+
+  const expectedStart = minutesFromTime(employee?.ponto_entrada_prevista);
+  const expectedEnd = minutesFromTime(employee?.ponto_saida_prevista);
+  const actualStart = minutesFromTime(byType.get("entrada"));
+  const actualEnd = minutesFromTime(byType.get("saida"));
+
+  return {
+    worked_minutes: workedMinutes,
+    expected_minutes: expectedStart != null && expectedEnd != null && expectedEnd >= expectedStart
+      ? expectedEnd - expectedStart
+      : null,
+    late_minutes: expectedStart != null && actualStart != null ? Math.max(0, actualStart - expectedStart) : 0,
+    early_leave_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, expectedEnd - actualEnd) : 0,
+    overtime_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, actualEnd - expectedEnd) : 0,
+    missing_punches: (["entrada", "almoco_saida", "almoco_retorno", "saida"] as PointType[])
+      .filter((type) => !byType.has(type)),
+  };
+}
+
 export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
   if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
@@ -142,5 +180,27 @@ export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([
   const ids = [...new Set((records ?? []).map(r => r.employee_id))];
   const employees = ids.length ? ((await supabaseAdmin.from("rh_employees").select("id, full_name, unit, ponto_entrada_prevista, ponto_saida_prevista, ponto_almoco_inicio_previsto, ponto_almoco_fim_previsto").in("id", ids)).data ?? []) : [];
   const byId = new Map(employees.map(e => [e.id, e]));
-  return (records ?? []).map(r => ({ ...r, employee: byId.get(r.employee_id) ?? null }));
+  const enriched = (records ?? []).map(r => ({ ...r, employee: byId.get(r.employee_id) ?? null }));
+
+  // Mantém os registros originais e acrescenta um resumo diário calculado,
+  // permitindo que a tela mostre horas, atrasos e marcações faltantes sem alterar dados.
+  const grouped = new Map<string, typeof enriched>();
+  for (const row of enriched) {
+    const key = `${row.employee_id}|${row.work_date}`;
+    const group = grouped.get(key) ?? [];
+    group.push(row);
+    grouped.set(key, group);
+  }
+
+  return enriched.map((row) => {
+    const key = `${row.employee_id}|${row.work_date}`;
+    const group = grouped.get(key) ?? [];
+    return {
+      ...row,
+      day_summary: pointSummary(
+        group.map((item) => ({ punch_type: item.punch_type as PointType, punched_at: item.punched_at })),
+        row.employee,
+      ),
+    };
+  });
 });
