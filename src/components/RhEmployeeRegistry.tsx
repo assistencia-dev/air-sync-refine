@@ -270,7 +270,10 @@ function EmployeeRow({
         )}
       </td>
       <td className="px-4 py-3 text-right">
-        <button onClick={onView} title="Abrir ficha 360" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300">\n          <Eye className="h-3 w-3" /> Ficha\n        </button>\n        <button onClick={onAccess} title="Gerenciar acesso" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300">
+        <button onClick={onView} title="Abrir ficha 360" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300">
+          <Eye className="h-3 w-3" /> Ficha
+        </button>
+        <button onClick={onAccess} title="Gerenciar acesso" className="mr-2 inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-bold text-sky-300">
           <KeyRound className="h-3 w-3" /> Acesso
         </button>
         <button onClick={onEdit} className="mr-2 text-sky-300">
