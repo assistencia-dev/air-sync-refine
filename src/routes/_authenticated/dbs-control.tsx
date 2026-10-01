@@ -11,6 +11,12 @@ export const Route = createFileRoute("/_authenticated/dbs-control")({
   component: DbsControlPage,
 });
 
+function dbsControlStateHasData(state: Record<string, unknown> | null | undefined) {
+  if (!state) return false;
+  const keys = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
+  return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -36,7 +42,11 @@ function DbsControlPage() {
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
 
-          if (cloudState) {
+          // Um snapshot vazio não pode substituir os dados locais já existentes.
+          // Isso é importante na primeira abertura em outro dispositivo: se ele
+          // entrou antes da migração do notebook, o snapshot vazio é apenas um
+          // estado inicial e o primeiro estado real deve ser promovido para a nuvem.
+          if (cloudState && (dbsControlStateHasData(cloudState) || !dbsControlStateHasData(localState))) {
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
