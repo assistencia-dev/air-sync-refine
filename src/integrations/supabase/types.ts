@@ -127,6 +127,627 @@ export type Database = {
         }
         Relationships: []
       }
+      dbs_control_clients: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          legal_name: string
+          logo_storage_path: string | null
+          notes: string | null
+          phone: string | null
+          status: string
+          trade_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          legal_name: string
+          logo_storage_path?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          legal_name?: string
+          logo_storage_path?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dbs_control_equipment: {
+        Row: {
+          brand: string | null
+          capacity: string | null
+          client_id: string
+          created_at: string
+          environment: string | null
+          equipment_type: string | null
+          id: string
+          installation_date: string | null
+          model: string | null
+          serial_number: string | null
+          site_id: string | null
+          status: string
+          tag_code: string | null
+          technical_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          capacity?: string | null
+          client_id: string
+          created_at?: string
+          environment?: string | null
+          equipment_type?: string | null
+          id?: string
+          installation_date?: string | null
+          model?: string | null
+          serial_number?: string | null
+          site_id?: string | null
+          status?: string
+          tag_code?: string | null
+          technical_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          capacity?: string | null
+          client_id?: string
+          created_at?: string
+          environment?: string | null
+          equipment_type?: string | null
+          id?: string
+          installation_date?: string | null
+          model?: string | null
+          serial_number?: string | null
+          site_id?: string | null
+          status?: string
+          tag_code?: string | null
+          technical_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_equipment_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_equipment_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_parts: {
+        Row: {
+          cost_cents: number | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sale_cents: number | null
+          sku: string | null
+          status: string
+          stock_quantity: number
+          updated_at: string
+        }
+        Insert: {
+          cost_cents?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sale_cents?: number | null
+          sku?: string | null
+          status?: string
+          stock_quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_cents?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sale_cents?: number | null
+          sku?: string | null
+          status?: string
+          stock_quantity?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dbs_control_service_catalog: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          name: string
+          status: string
+          table_value_cents: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          name: string
+          status?: string
+          table_value_cents?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          name?: string
+          status?: string
+          table_value_cents?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dbs_control_sites: {
+        Row: {
+          address_json: Json
+          client_id: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_json?: Json
+          client_id: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_json?: Json
+          client_id?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sites_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_snapshots: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          owner_user_id: string | null
+          scope_key: string
+          state: Json
+          state_version: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string | null
+          scope_key: string
+          state: Json
+          state_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string | null
+          scope_key?: string
+          state?: Json
+          state_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_snapshots_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_snapshots_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_snapshots_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_attachments: {
+        Row: {
+          attachment_type: string
+          created_at: string
+          file_name: string
+          file_type: string | null
+          id: string
+          storage_path: string
+          uploaded_by_user_id: string | null
+          work_order_id: string
+        }
+        Insert: {
+          attachment_type?: string
+          created_at?: string
+          file_name: string
+          file_type?: string | null
+          id?: string
+          storage_path: string
+          uploaded_by_user_id?: string | null
+          work_order_id: string
+        }
+        Update: {
+          attachment_type?: string
+          created_at?: string
+          file_name?: string
+          file_type?: string | null
+          id?: string
+          storage_path?: string
+          uploaded_by_user_id?: string | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_attachments_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_equipment: {
+        Row: {
+          equipment_id: string
+          work_order_id: string
+        }
+        Insert: {
+          equipment_id: string
+          work_order_id: string
+        }
+        Update: {
+          equipment_id?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_equipment_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_equipment_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          new_status: string | null
+          old_status: string | null
+          work_order_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          new_status?: string | null
+          old_status?: string | null
+          work_order_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          new_status?: string | null
+          old_status?: string | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_events_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_parts: {
+        Row: {
+          created_at: string
+          id: string
+          part_id: string
+          quantity: number
+          unit_cents: number | null
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          part_id: string
+          quantity: number
+          unit_cents?: number | null
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          part_id?: string
+          quantity?: number
+          unit_cents?: number | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_parts_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_parts_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_services: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          quantity: number
+          service_id: string | null
+          unit_cents: number | null
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          quantity?: number
+          service_id?: string | null
+          unit_cents?: number | null
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          quantity?: number
+          service_id?: string | null
+          unit_cents?: number | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_services_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_service_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_services_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_orders: {
+        Row: {
+          assigned_employee_id: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          observation: string | null
+          priority: string
+          protocol: string
+          scheduled_at: string | null
+          service_id: string | null
+          signature_data: string | null
+          signature_name: string | null
+          site_id: string | null
+          sla_deadline: string | null
+          started_at: string | null
+          status: string
+          technical_opinion: string | null
+          total_cents: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_employee_id?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observation?: string | null
+          priority?: string
+          protocol: string
+          scheduled_at?: string | null
+          service_id?: string | null
+          signature_data?: string | null
+          signature_name?: string | null
+          site_id?: string | null
+          sla_deadline?: string | null
+          started_at?: string | null
+          status?: string
+          technical_opinion?: string | null
+          total_cents?: number
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_employee_id?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observation?: string | null
+          priority?: string
+          protocol?: string
+          scheduled_at?: string | null
+          service_id?: string | null
+          signature_data?: string | null
+          signature_name?: string | null
+          site_id?: string | null
+          sla_deadline?: string | null
+          started_at?: string | null
+          status?: string
+          technical_opinion?: string | null
+          total_cents?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_orders_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_orders_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_orders_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_service_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_orders_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_admission_processes: {
         Row: {
           actual_start: string | null
@@ -2160,6 +2781,8 @@ export type Database = {
         Returns: Database["public"]["Enums"]["role_key"]
       }
       current_unit_id: { Args: never; Returns: string }
+      dbs_my_employee_ids: { Args: never; Returns: string[] }
+      dbs_my_work_order_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
       usuario_esta_ativo: { Args: never; Returns: boolean }
     }

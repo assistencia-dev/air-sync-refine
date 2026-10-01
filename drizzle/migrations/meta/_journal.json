@@ -15,6 +15,13 @@
       "when": 1790823807059,
       "tag": "0001_rh_ponto_access_treasury",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790823863672,
+      "tag": "0002_dbs_control_core_and_snapshots",
+      "breakpoints": true
     }
   ]
 }
