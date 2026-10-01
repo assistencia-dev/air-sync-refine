@@ -274,8 +274,8 @@ function EmployeeRow({
         {employee.full_name}
         {!employee.is_active && <span className="ml-2 inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold text-slate-400">Inativo</span>}
       </td>
-      <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
-      <td className="px-4 py-3 text-slate-600">{employee.registration_data?.job_title || "—"}</td>
+      <td className="px-4 py-3 text-slate-300">{employee.unit}</td>
+      <td className="px-4 py-3 text-slate-300">{employee.registration_data?.job_title || "—"}</td>
       <td className="px-4 py-3">
         <div className="flex flex-wrap gap-1.5">
           {employee.ficha_file_name ? (
