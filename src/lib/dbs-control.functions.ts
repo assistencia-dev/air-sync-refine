@@ -115,11 +115,39 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     const incomingOrder = incomingById.get(String(currentOrder?.id));
     if (!incomingOrder) return currentOrder;
 
+    const oldParts = Array.isArray(currentOrder?.pecasUsadas) ? currentOrder.pecasUsadas : [];
+    const newParts = Array.isArray(incomingOrder?.pecasUsadas) ? incomingOrder.pecasUsadas : oldParts;
+    const oldQty = new Map<string, number>();
+    const newQty = new Map<string, number>();
+    for (const part of oldParts) {
+      const id = String(part?.id ?? "");
+      if (id) oldQty.set(id, (oldQty.get(id) ?? 0) + Math.max(0, Number(part?.qtd ?? 0)));
+    }
+    for (const part of newParts) {
+      const id = String(part?.id ?? "");
+      if (id) newQty.set(id, (newQty.get(id) ?? 0) + Math.max(0, Number(part?.qtd ?? 0)));
+    }
+    const parts = current.pecas as any[];
+    const partById = new Map(parts.map((part) => [String(part?.id), part]));
+    for (const [partId, quantity] of newQty) {
+      const delta = quantity - (oldQty.get(partId) ?? 0);
+      if (delta <= 0) continue;
+      const stock = partById.get(partId);
+      if (!stock) throw new Error("Uma peça utilizada na OS não existe mais no estoque.");
+      if (Number(stock.qtd ?? 0) < delta) throw new Error(`Estoque insuficiente para a peça ${stock.nome ?? partId}.`);
+    }
+    for (const [partId, quantity] of newQty) {
+      const delta = quantity - (oldQty.get(partId) ?? 0);
+      if (!delta) continue;
+      const stock = partById.get(partId);
+      if (stock) stock.qtd = Math.max(0, Number(stock.qtd ?? 0) - delta);
+    }
+
     return {
       ...currentOrder,
       status: incomingOrder.status ?? currentOrder.status,
       assinatura: incomingOrder.assinatura ?? currentOrder.assinatura,
-      pecasUsadas: Array.isArray(incomingOrder.pecasUsadas) ? incomingOrder.pecasUsadas : currentOrder.pecasUsadas,
+      pecasUsadas: newParts,
       valor: Number.isFinite(Number(incomingOrder.valor)) ? Number(incomingOrder.valor) : currentOrder.valor,
     };
   });
