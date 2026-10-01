@@ -16,14 +16,14 @@ type EmployeeRecordInput = {
 async function requireNativeOperator(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, username, status")
+    .select("id, username, role_key, status")
     .eq("auth_id", context.userId)
     .maybeSingle();
   if (
     error ||
     !data ||
     data.status !== "ativo" ||
-    !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")
+    (!["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "") && !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? ""))
   ) {
     throw new Error("Acesso restrito ao operador nativo DBS.");
   }
