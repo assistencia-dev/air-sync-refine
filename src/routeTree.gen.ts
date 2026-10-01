@@ -13,12 +13,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
+import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
 import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
-import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -39,6 +39,11 @@ const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
   path: '/admin/rh-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
+  id: '/treasury',
+  path: '/treasury',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
   id: '/portal',
   path: '/portal',
@@ -49,24 +54,19 @@ const AuthenticatedPassageRoute = AuthenticatedPassageRouteImport.update({
   path: '/passage',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
   id: '/folha-ponto',
   path: '/folha-ponto',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
-  id: '/_authenticated/dbs-control',
+  id: '/dbs-control',
   path: '/dbs-control',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
-  id: '/treasury',
-  path: '/treasury',
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
@@ -74,10 +74,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
-  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
-  '/dbs-control': typeof AuthenticatedDbsControlRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -85,9 +85,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
-  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -97,10 +98,10 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
-  '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
-  '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -110,24 +111,33 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/dbs-control'
+    | '/folha-ponto'
     | '/passage'
     | '/portal'
-    | '/folha-ponto'
-    | '/dbs-control'
     | '/treasury'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/admin' | '/passage' | '/portal' | '/folha-ponto' | '/dbs-control' | '/treasury' | '/admin/rh-dashboard'
+  to:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/dbs-control'
+    | '/folha-ponto'
+    | '/passage'
+    | '/portal'
+    | '/treasury'
+    | '/admin/rh-dashboard'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/admin'
+    | '/_authenticated/dbs-control'
+    | '/_authenticated/folha-ponto'
     | '/_authenticated/passage'
     | '/_authenticated/portal'
-    | '/_authenticated/folha-ponto'
-    | '/_authenticated/dbs-control'
     | '/_authenticated/treasury'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
@@ -169,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRhDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/treasury': {
+      id: '/_authenticated/treasury'
+      path: '/treasury'
+      fullPath: '/treasury'
+      preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/portal': {
       id: '/_authenticated/portal'
       path: '/portal'
@@ -181,13 +198,6 @@ declare module '@tanstack/react-router' {
       path: '/passage'
       fullPath: '/passage'
       preLoaderRoute: typeof AuthenticatedPassageRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/folha-ponto': {
@@ -204,11 +214,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDbsControlRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/treasury': {
-      id: '/_authenticated/treasury'
-      path: '/treasury'
-      fullPath: '/treasury'
-      preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
@@ -216,19 +226,19 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedDbsControlRoute: typeof AuthenticatedDbsControlRoute
+  AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
-  AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
-  AuthenticatedDbsControlRoute: typeof AuthenticatedDbsControlRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedDbsControlRoute: AuthenticatedDbsControlRoute,
+  AuthenticatedFolhaPontoRoute: AuthenticatedFolhaPontoRoute,
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
-  AuthenticatedFolhaPontoRoute: AuthenticatedFolhaPontoRoute,
-  AuthenticatedDbsControlRoute: AuthenticatedDbsControlRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
 }
 
