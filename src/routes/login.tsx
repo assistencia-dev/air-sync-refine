@@ -20,9 +20,35 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/portal", replace: true });
+    let cancelled = false;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session || cancelled) return;
+      try {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("role_key")
+          .eq("auth_id", data.session.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL") {
+          navigate({ to: "/admin", replace: true });
+          return;
+        }
+        if (profile?.role_key === "COLABORADOR") {
+          try {
+            const point = await hasMyPontoAccess();
+            navigate({ to: point.enabled ? "/folha-ponto" : "/portal", replace: true });
+          } catch {
+            navigate({ to: "/portal", replace: true });
+          }
+          return;
+        }
+        navigate({ to: "/portal", replace: true });
+      } catch {
+        navigate({ to: "/portal", replace: true });
+      }
     });
+    return () => { cancelled = true; };
   }, [navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
