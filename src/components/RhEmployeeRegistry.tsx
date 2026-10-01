@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, FileText, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, History, UserRound } from "lucide-react";
+import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown } from "lucide-react";
 import {
   deactivateRhEmployeeRecord,
   reactivateRhEmployeeRecord,
@@ -12,6 +12,7 @@ import {
   listRhCollaboratorUsers,
   getRhEmployee360,
 } from "@/lib/rh.functions";
+import { exportRhEmployeeFichaPdf } from "@/lib/rh.exports";
 
 type Employee = {
   id: string;
@@ -154,6 +155,12 @@ export function RhEmployeeRegistry() {
             setFormOpen(false);
             refresh();
           }}
+        />
+      )}
+      {viewing && (
+        <Employee360
+          employee={viewing}
+          onClose={() => setViewing(null)}
         />
       )}
       {accessing && (
@@ -308,7 +315,16 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <h3 className="mt-1 text-2xl font-black text-slate-50">{employee.full_name}</h3>
             <p className="mt-1 text-xs text-slate-400">{employee.unit} · {employee.is_active ? "Ativo" : "Inativo"}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800">Fechar</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => data && exportRhEmployeeFichaPdf(employee, data)}
+              disabled={!data}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50"
+            >
+              <FileDown className="h-4 w-4" /> Exportar ficha PDF
+            </button>
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800">Fechar</button>
+          </div>
         </div>
         {q.isLoading ? <div className="p-10 text-center text-sm text-slate-400">Carregando ficha completa...</div> :
          q.isError ? <div className="p-10 text-center text-sm text-red-300">{q.error instanceof Error ? q.error.message : "Falha ao carregar a ficha."}</div> :
