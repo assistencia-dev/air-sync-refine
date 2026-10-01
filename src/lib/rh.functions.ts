@@ -627,7 +627,7 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: user, error } = await supabaseAdmin.from("users")
-      .select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+      .select("id, role_key, status, email").eq("auth_id", context.userId).maybeSingle();
     if (error) throw new Error(error.message);
     if (!user || user.status !== "ativo") return { enabled: false, employee: null };
     if (user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL") {
