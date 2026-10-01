@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CheckCircle2, ClipboardList, Clock3, FileWarning, HeartPulse, PlayCircle, UserPlus, WalletCards } from "lucide-react";
+import { CalendarDays, CheckCircle2, ClipboardList, Clock3, FileWarning, HeartPulse, PlayCircle, UserPlus, WalletCards, FileDown, FileSpreadsheet } from "lucide-react";
 import { RhDpTools } from "@/components/RhDpTools";
 import {
   calculateRhPayroll, closeRhPayrollPeriod, createRhAdmission, createRhEmployeeRequest, createRhMedicalExam,
   createRhPayrollPeriod, createRhTermination, createRhTimeAdjustment, createRhVacationRequest,
   getRhManagementDashboard, listRhPayroll, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
 } from "@/lib/rh.dp.functions";
+import { exportRhPayrollExcel, exportRhPayrollPdf } from "@/lib/rh.exports";
 
 type Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes"|"estrutura";
 const inputClass="mt-1 w-full rounded-xl border border-slate-700 bg-[#141F33] px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-[#F59E0B]";
@@ -49,15 +50,65 @@ function Card({label,value,icon:Icon}:{label:string;value:React.ReactNode;icon:a
 function Dashboard({data}:any){return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Card label="Funcionários ativos" value={data.employees} icon={ClipboardList}/><Card label="Folhas abertas" value={data.payrollOpen} icon={WalletCards}/><Card label="Férias em atenção" value={data.vacationsDue} icon={CalendarDays}/><Card label="Documentos / exames" value={data.documentsExpiring+data.examsExpiring} icon={FileWarning}/></div><div className="grid gap-4 lg:grid-cols-3"><Panel><b>Admissões pendentes</b><p className="mt-2 text-2xl font-black text-slate-50">{data.admissionsPending}</p></Panel><Panel><b>Solicitações abertas</b><p className="mt-2 text-2xl font-black text-slate-50">{data.requestsOpen}</p></Panel><Panel><b>Funcionários inativos</b><p className="mt-2 text-2xl font-black text-slate-50">{data.inactive}</p></Panel></div><Panel><b className="text-slate-100">Alertas operacionais</b><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{[[data.vacationsDue,"Férias próximas"],[data.documentsExpiring,"Documentos vencendo"],[data.examsExpiring,"Exames vencendo"],[data.admissionsPending,"Admissões em andamento"]].map(([n,l])=><div key={String(l)} className="rounded-xl border border-slate-700 bg-[#141F33] p-3 text-xs"><strong className="text-[#F59E0B]">{n}</strong><span className="ml-2 text-slate-400">{l}</span></div>)}</div></Panel></div>}
 
 function Payroll({data,refresh}:{data:any;refresh:()=>void}){
- const [competence,setCompetence]=useState(month()); const [selected,setSelected]=useState("");
+ const [competence,setCompetence]=useState(month());
+ const [selected,setSelected]=useState("");
  const periods:any[]=data.payroll??[];
+ const employees:any[]=data.employeesData??[];
  const open=useMutation({mutationFn:()=>createRhPayrollPeriod({data:{competence}}),onSuccess:refresh});
  const calc=useMutation({mutationFn:()=>calculateRhPayroll({data:{period_id:selected}}),onSuccess:refresh});
  const close=useMutation({mutationFn:()=>closeRhPayrollPeriod({data:{period_id:selected}}),onSuccess:refresh});
  const rows=useQuery({queryKey:["rh-payroll"],queryFn:()=>listRhPayroll()});
- return <div className="space-y-4"><Panel><div className="flex flex-col gap-3 md:flex-row md:items-end"><Field label="Competência"><input type="month" value={competence} onChange={e=>setCompetence(e.target.value)} className={inputClass}/></Field><button onClick={()=>open.mutate()} className={buttonClass}>Abrir competência</button></div>{open.error&&<ErrorText e={open.error}/>}</Panel><Panel><div className="flex flex-wrap gap-2">{periods.map((p:any)=><button key={p.id} onClick={()=>setSelected(p.id)} className={"rounded-lg px-3 py-2 text-xs font-bold "+(selected===p.id?"bg-[#F59E0B] text-slate-950":"bg-slate-800 text-slate-300")}>{String(p.competence).slice(0,7)} · {p.status}</button>)}</div><div className="mt-4 flex flex-wrap gap-2"><button disabled={!selected} onClick={()=>calc.mutate()} className={buttonClass}><PlayCircle className="h-4 w-4"/>Calcular</button><button disabled={!selected} onClick={()=>close.mutate()} className={secondaryButtonClass}><CheckCircle2 className="h-4 w-4"/>Fechar</button></div>{calc.error&&<ErrorText e={calc.error}/>} {close.error&&<ErrorText e={close.error}/>}</Panel><Panel><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th className="p-2">Competência</th><th className="p-2">Status</th><th className="p-2">Funcionários</th><th className="p-2">Bruto</th><th className="p-2">Descontos</th><th className="p-2">Líquido</th></tr></thead><tbody>{(rows.data??[]).map((p:any)=><tr key={p.id} className="border-t border-slate-800"><td className="p-2">{String(p.competence).slice(0,7)}</td><td className="p-2">{p.status}</td><td className="p-2">{p.rh_payroll_runs?.length??0}</td><td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.gross_cents||0),0))}</td><td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.discount_cents||0),0))}</td><td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.net_cents||0),0))}</td></tr>)}</tbody></table></div></Panel></div>
+ const selectedPeriod=periods.find((p:any)=>p.id===selected) ?? (rows.data??[]).find((p:any)=>p.id===selected);
+ const exportRows=(selectedPeriod?.rh_payroll_runs??[]).map((run:any)=>({
+   ...run,
+   employee_name:employees.find((e:any)=>e.id===run.employee_id)?.full_name ?? "Funcionário",
+   status:run.status ?? "calculada",
+ }));
+ const exportCompetence=selectedPeriod ? String(selectedPeriod.competence).slice(0,7) : competence;
+ return <div className="space-y-4">
+   <Panel>
+     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+       <div className="flex flex-col gap-3 md:flex-row md:items-end">
+         <Field label="Competência"><input type="month" value={competence} onChange={e=>setCompetence(e.target.value)} className={inputClass}/></Field>
+         <button onClick={()=>open.mutate()} className={buttonClass}>Abrir competência</button>
+       </div>
+       <div className="text-[11px] text-slate-500">A folha é calculada a partir do cadastro central e dos contratos vigentes.</div>
+     </div>
+     {open.error&&<ErrorText e={open.error}/>}
+   </Panel>
+   <Panel>
+     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+       <div>
+         <b className="text-slate-100">Competências</b>
+         <p className="mt-1 text-[11px] text-slate-500">Selecione uma competência para calcular, fechar ou exportar.</p>
+       </div>
+       <div className="flex flex-wrap gap-2">
+         {periods.map((p:any)=><button key={p.id} onClick={()=>setSelected(p.id)} className={"rounded-lg px-3 py-2 text-xs font-bold "+(selected===p.id?"bg-[#F59E0B] text-slate-950":"bg-slate-800 text-slate-300")}>{String(p.competence).slice(0,7)} · {p.status}</button>)}
+       </div>
+     </div>
+     <div className="mt-4 flex flex-wrap gap-2">
+       <button disabled={!selected||calc.isPending} onClick={()=>calc.mutate()} className={buttonClass}><PlayCircle className="h-4 w-4"/>{calc.isPending?"Calculando...":"Calcular folha"}</button>
+       <button disabled={!selected||close.isPending} onClick={()=>close.mutate()} className={secondaryButtonClass}><CheckCircle2 className="h-4 w-4"/>{close.isPending?"Fechando...":"Fechar competência"}</button>
+       <button disabled={!selected||!exportRows.length} onClick={()=>exportRhPayrollPdf(exportCompetence,exportRows)} className={secondaryButtonClass}><FileDown className="h-4 w-4"/>Exportar PDF</button>
+       <button disabled={!selected||!exportRows.length} onClick={()=>exportRhPayrollExcel(exportCompetence,exportRows)} className={secondaryButtonClass}><FileSpreadsheet className="h-4 w-4"/>Exportar Excel</button>
+     </div>
+     {calc.error&&<ErrorText e={calc.error}/>} {close.error&&<ErrorText e={close.error}/>}
+   </Panel>
+   <Panel>
+     <div className="overflow-x-auto">
+       <table className="w-full text-xs">
+         <thead className="text-left text-slate-500"><tr><th className="p-2">Competência</th><th className="p-2">Status</th><th className="p-2">Funcionários</th><th className="p-2">Bruto</th><th className="p-2">Descontos</th><th className="p-2">Líquido</th></tr></thead>
+         <tbody>{(rows.data??[]).map((p:any)=><tr key={p.id} className="border-t border-slate-800">
+           <td className="p-2">{String(p.competence).slice(0,7)}</td><td className="p-2">{p.status}</td><td className="p-2">{p.rh_payroll_runs?.length??0}</td>
+           <td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.gross_cents||0),0))}</td>
+           <td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.discount_cents||0),0))}</td>
+           <td className="p-2">{money((p.rh_payroll_runs??[]).reduce((n:number,r:any)=>n+Number(r.net_cents||0),0))}</td>
+         </tr>)}</tbody>
+       </table>
+     </div>
+   </Panel>
+ </div>
 }
-
 function Vacation({employees,data,refresh}:{employees:any[];data:any;refresh:()=>void}){
  const [employee_id,setEmployee]=useState("");const [start_date,setStart]=useState(today());const [end_date,setEnd]=useState(today());const [days,setDays]=useState("30");
  const period=useMutation({mutationFn:()=>createRhVacationPeriod({data:{employee_id,acquisition_start:start_date,acquisition_end:end_date,days_earned:Number(days)}}),onSuccess:refresh}); const mut=useMutation({mutationFn:()=>createRhVacationRequest({data:{employee_id,start_date,end_date,days:Number(days)}}),onSuccess:refresh});
