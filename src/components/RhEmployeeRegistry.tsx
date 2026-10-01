@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown } from "lucide-react";
 import {
@@ -61,7 +61,30 @@ export function RhEmployeeRegistry() {
   const [accessing, setAccessing] = useState<Employee | null>(null);
   const [viewing, setViewing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
+  const [accessFilter, setAccessFilter] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
   const refresh = () => qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
+  const employeeList = (employees.data ?? []) as unknown as Employee[];
+  const filteredEmployees = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return employeeList.filter((employee) => {
+      const matchesSearch = !term || [
+        employee.full_name, employee.unit, employee.registration_data?.job_title, employee.registration_data?.cpf,
+      ].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR").includes(term);
+      const matchesStatus = statusFilter === "todos"
+        || (statusFilter === "ativos" && employee.is_active)
+        || (statusFilter === "inativos" && !employee.is_active);
+      const hasAccess = Boolean(employee.access?.access_enabled);
+      const matchesAccess = accessFilter === "todos"
+        || (accessFilter === "com_acesso" && hasAccess)
+        || (accessFilter === "sem_acesso" && !hasAccess);
+      return matchesSearch && matchesStatus && matchesAccess;
+    });
+  }, [employeeList, search, statusFilter, accessFilter]);
+  const activeCount = employeeList.filter((employee) => employee.is_active).length;
+  const inactiveCount = employeeList.length - activeCount;
+  const accessCount = employeeList.filter((employee) => employee.access?.access_enabled).length;
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
@@ -71,7 +94,7 @@ export function RhEmployeeRegistry() {
           </p>
           <h2 className="mt-1 text-2xl font-black">Funcionários</h2>
           <p className="mt-1 text-xs text-white/65">
-            Um único cadastro compartilhado pelo Vale Passagem e Vale Alimentação.
+            Cadastro mestre utilizado pelo DP, Ponto, Folha, Vale Passagem, Vale Alimentação e acessos.
           </p>
         </div>
         <button
@@ -85,6 +108,20 @@ export function RhEmployeeRegistry() {
         </button>
       </div>
       <div className="p-5 sm:p-7">
+        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Ativos</p><p className="mt-1 text-2xl font-black text-emerald-300">{activeCount}</p></div>
+          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Inativos</p><p className="mt-1 text-2xl font-black text-slate-300">{inactiveCount}</p></div>
+          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Acessos vinculados</p><p className="mt-1 text-2xl font-black text-sky-300">{accessCount}</p></div>
+        </div>
+        <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, unidade, cargo ou CPF..." className="w-full rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#F59E0B]" />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-xs font-bold text-slate-200">
+            <option value="ativos">Somente ativos</option><option value="todos">Todos os funcionários</option><option value="inativos">Somente inativos</option>
+          </select>
+          <select value={accessFilter} onChange={(e) => setAccessFilter(e.target.value as typeof accessFilter)} className="rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-xs font-bold text-slate-200">
+            <option value="todos">Todos os acessos</option><option value="com_acesso">Com acesso</option><option value="sem_acesso">Sem acesso</option>
+          </select>
+        </div>
         {error && (
           <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
             {error}
@@ -103,7 +140,7 @@ export function RhEmployeeRegistry() {
               </tr>
             </thead>
             <tbody>
-              {((employees.data ?? []) as unknown as Employee[]).map((employee: Employee) => (
+              {filteredEmployees.map((employee: Employee) => (
                 <EmployeeRow
                   key={employee.id}
                   employee={employee}
@@ -136,12 +173,15 @@ export function RhEmployeeRegistry() {
               ))}
             </tbody>
           </table>
-          {!employees.isLoading && !(employees.data ?? []).length && (
+          {!employees.isLoading && employeeList.length > 0 && !filteredEmployees.length && (
+            <div className="p-10 text-center"><UsersRound className="mx-auto h-8 w-8 text-slate-600" /><p className="mt-2 text-sm font-bold text-slate-500">Nenhum funcionário encontrado</p><p className="mt-1 text-xs text-slate-400">Ajuste a busca ou os filtros para localizar o cadastro.</p></div>
+          )}
+          {!employees.isLoading && !employeeList.length && (
             <div className="p-10 text-center">
               <UsersRound className="mx-auto h-8 w-8 text-slate-600" />
               <p className="mt-2 text-sm font-bold text-slate-600">Nenhum funcionário cadastrado</p>
               <p className="mt-1 text-xs text-slate-400">
-                Cadastre uma vez e reutilize nas duas ferramentas do RH.
+                Cadastre uma vez e reutilize em todo o RH/DP.
               </p>
             </div>
           )}
