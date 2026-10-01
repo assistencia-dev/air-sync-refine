@@ -179,7 +179,7 @@ function DbsControlPage() {
           });
 
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: true, email, employee_id: employeeId, name },
+            { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: true, email, employee_id: employeeId, name, position, phone },
             "*",
           );
         } catch (err) {
@@ -239,8 +239,8 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_name=${encodeURIComponent(employeeName)}&v=20261001-2`
-    : "/dbs-control.html?v=20261001-2";
+    ? `/dbs-control.html?mode=employee&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261001-3`
+    : "/dbs-control.html?v=20261001-3";
 
   return (
     <main className="min-h-screen bg-slate-100">
