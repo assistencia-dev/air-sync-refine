@@ -4,8 +4,8 @@ import { CalendarDays, CheckCircle2, ClipboardList, Clock3, FileWarning, HeartPu
 import { RhDpTools } from "@/components/RhDpTools";
 import {
   calculateRhPayroll, closeRhPayrollPeriod, createRhAdmission, createRhEmployeeRequest, createRhMedicalExam,
-  createRhPayrollPeriod, createRhTermination, createRhTimeAdjustment, createRhVacationRequest,
-  getRhManagementDashboard, listRhPayroll, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
+  createRhPayrollPeriod, createRhTermination, createRhTimeAdjustment, createRhVacationRequest, createRhVacationPeriod,
+  getRhManagementDashboard, listRhPayroll, listRhTimeAdjustments, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
 } from "@/lib/rh.dp.functions";
 import { exportRhPayrollExcel, exportRhPayrollPdf } from "@/lib/rh.exports";
 
