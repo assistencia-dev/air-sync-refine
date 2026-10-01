@@ -21,7 +21,7 @@ async function getDbsControlClientCloudState() {
     .eq("auth_id", auth.user.id)
     .maybeSingle();
   if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key === "COLABORADOR") return null;
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") throw new Error("Acesso ao DBS CONTROL não autorizado.");
   const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
   const { data, error } = await supabase
     .from("dbs_control_snapshots")
