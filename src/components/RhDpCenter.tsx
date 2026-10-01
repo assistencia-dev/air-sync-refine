@@ -8,6 +8,7 @@ import {
   getRhManagementDashboard, listRhPayroll, listRhTimeAdjustments, resolveRhEmployeeRequest, updateRhTimeAdjustment, updateRhVacationRequest
 } from "@/lib/rh.dp.functions";
 import { exportRhPayrollExcel, exportRhPayrollPdf } from "@/lib/rh.exports";
+import { listRhEmployeeRegistry } from "@/lib/rh.functions";
 
 type Tab="visao"|"folha"|"ferias"|"ponto"|"admissao"|"sst"|"solicitacoes"|"estrutura";
 const inputClass="mt-1 w-full rounded-xl border border-slate-700 bg-[#141F33] px-3 py-2.5 text-xs text-slate-100 outline-none focus:border-[#F59E0B]";
@@ -21,8 +22,9 @@ export function RhDpCenter(){
  const [tab,setTab]=useState<Tab>("visao");
  const qc=useQueryClient();
  const dash=useQuery({queryKey:["rh-dp-dashboard"],queryFn:()=>getRhManagementDashboard()});
- const employees:any[]=dash.data?.employeesData??[];
- const refresh=()=>qc.invalidateQueries({queryKey:["rh-dp-dashboard"]});
+ const employeeQuery=useQuery({queryKey:["rh-dp-employees"],queryFn:()=>listRhEmployeeRegistry()});
+ const employees:any[]=employeeQuery.data ?? dash.data?.employeesData ?? [];
+ const refresh=()=>{ qc.invalidateQueries({queryKey:["rh-dp-dashboard"]}); qc.invalidateQueries({queryKey:["rh-dp-employees"]}); };
  const tabs:[Tab,string][]=[["visao","Visão geral"],["folha","Folha"],["ferias","Férias"],["ponto","Ponto & banco"],["admissao","Admissão / desligamento"],["sst","SST"],["solicitacoes","Solicitações"],["estrutura","Estrutura"]];
  return <section className="space-y-5">
    <header className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm sm:p-7">
@@ -32,16 +34,18 @@ export function RhDpCenter(){
        <nav className="flex flex-wrap gap-2">{tabs.map(([k,l])=><button key={k} onClick={()=>setTab(k)} className={"rounded-xl px-3 py-2 text-xs font-bold "+(tab===k?"bg-[#F59E0B] text-slate-950":"bg-slate-800 text-slate-300 hover:bg-slate-700")}>{l}</button>)}</nav>
      </div>
    </header>
-   {dash.isLoading&&<Panel>Carregando dados do RH…</Panel>}
-   {dash.error&&<Panel>Não foi possível carregar o RH: {dash.error instanceof Error?dash.error.message:"erro de conexão"} </Panel>}
-   {dash.data&&tab==="visao"&&<Dashboard data={dash.data}/>}
-   {dash.data&&tab==="folha"&&<Payroll data={dash.data} refresh={refresh}/>}
-   {dash.data&&tab==="ferias"&&<Vacation employees={employees} data={dash.data} refresh={refresh}/>}
-   {dash.data&&tab==="ponto"&&<TimeAdjustments employees={employees} refresh={refresh}/>}
-   {dash.data&&tab==="admissao"&&<Admission employees={employees} refresh={refresh}/>}
-   {dash.data&&tab==="sst"&&<Sst employees={employees} data={dash.data} refresh={refresh}/>}
-   {dash.data&&tab==="solicitacoes"&&<Requests employees={employees} data={dash.data} refresh={refresh}/>}
-   {dash.data&&tab==="estrutura"&&<RhDpTools/>}
+   {dash.isLoading&&tab==="visao"&&<Panel>Carregando indicadores do RH…</Panel>}
+   {dash.error&&tab==="visao"&&<Panel><b className="text-red-200">Não foi possível carregar os indicadores.</b><p className="mt-1 text-xs text-red-300">{dash.error instanceof Error?dash.error.message:"Erro de conexão"}</p></Panel>}
+   {employeeQuery.isLoading&&tab!=="visao"&&<Panel>Carregando cadastro central…</Panel>}
+   {employeeQuery.error&&tab!=="visao"&&<Panel><b className="text-red-200">Não foi possível carregar os funcionários.</b><p className="mt-1 text-xs text-red-300">{employeeQuery.error instanceof Error?employeeQuery.error.message:"Erro de conexão"}</p></Panel>}
+   {tab==="visao"&&dash.data&&<Dashboard data={dash.data}/>}
+   {tab==="folha"&&<Payroll data={dash.data??{employeesData:employees,payroll:[]}} refresh={refresh}/>}
+   {tab==="ferias"&&<Vacation employees={employees} data={dash.data??{vacations:[],vacationRequests:[]}} refresh={refresh}/>}
+   {tab==="ponto"&&<TimeAdjustments employees={employees} refresh={refresh}/>}
+   {tab==="admissao"&&<Admission employees={employees} refresh={refresh}/>}
+   {tab==="sst"&&<Sst employees={employees} data={dash.data??{exams:[]}} refresh={refresh}/>}
+   {tab==="solicitacoes"&&<Requests employees={employees} data={dash.data??{requests:[]}} refresh={refresh}/>}
+   {tab==="estrutura"&&<RhDpTools/>}
  </section>
 }
 
