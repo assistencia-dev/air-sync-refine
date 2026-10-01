@@ -227,6 +227,7 @@ function EmployeeRow({
   employee: Employee;
   onEdit: () => void;
   onAccess: () => void;
+  onView: () => void;
   onDelete: () => void;
   onUploaded: () => void;
 }) {
