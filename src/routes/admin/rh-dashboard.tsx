@@ -12,8 +12,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, CreditCard, Utensils, Clock3 } from 'lucide-react';
+import { Users, CreditCard, Utensils, Clock3, BriefcaseBusiness } from 'lucide-react';
 import { RhPontoWorkspace } from '@/components/RhPontoWorkspace';
+import { RhDpCenter } from '@/components/RhDpCenter';
 
 import { TabGestaoColaboradores } from './rh-dashboard/TabGestaoColaboradores';
 import { TabValePassagem } from './rh-dashboard/TabValePassagem';
@@ -49,7 +50,7 @@ function RHDashboard() {
                 Gestão de RH
               </h1>
               <p className="text-sm mt-1" style={{ color: '#94A3B8' }}>
-                Colaboradores, Vale Passagem e Vale Alimentação
+                Cadastro único, Departamento Pessoal, ponto, benefícios e folha
               </p>
             </div>
           </div>
@@ -60,7 +61,17 @@ function RHDashboard() {
       <div className="container max-w-7xl mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab List */}
-          <TabsList className="grid w-full grid-cols-4" style={{ background: 'rgba(30, 41, 59, 0.5)', borderColor: '#334155', borderWidth: '1px' }}>
+          <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5" style={{ background: 'rgba(30, 41, 59, 0.5)', borderColor: '#334155', borderWidth: '1px' }}>
+            <TabsTrigger
+              value="dp"
+              className="flex items-center gap-2 data-[state=active]:font-bold data-[state=active]:text-white"
+              style={{ color: activeTab === 'dp' ? '#F59E0B' : '#94A3B8' }}
+            >
+              <BriefcaseBusiness className="w-4 h-4" />
+              <span className="hidden sm:inline">Departamento Pessoal</span>
+              <span className="sm:hidden">DP</span>
+            </TabsTrigger>
+
             <TabsTrigger
               value="gestao"
               className="flex items-center gap-2 data-[state=active]:font-bold data-[state=active]:text-white"
@@ -109,6 +120,10 @@ function RHDashboard() {
               <span className="sm:hidden">Ponto</span>
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dp" className="space-y-6">
+            <RhDpCenter />
+          </TabsContent>
 
           {/* Tab 1: Gestão de Colaboradores */}
           <TabsContent value="gestao" className="space-y-6">
