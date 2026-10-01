@@ -221,6 +221,7 @@ function EmployeeRow({
   employee,
   onEdit,
   onAccess,
+  onView,
   onDelete,
   onUploaded,
 }: {
