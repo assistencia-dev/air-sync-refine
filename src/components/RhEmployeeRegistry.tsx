@@ -122,9 +122,9 @@ export function RhEmployeeRegistry() {
             <option value="todos">Todos os acessos</option><option value="com_acesso">Com acesso</option><option value="sem_acesso">Sem acesso</option>
           </select>
         </div>
-        {(error || employees.isError) && (
+        {error && (
           <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
-            {error || (employees.error instanceof Error ? employees.error.message : "Não foi possível carregar o Cadastro de Funcionários.")}
+            {error}
           </p>
         )}
         <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -501,7 +501,6 @@ function EmployeeAccessForm({
               )}
             </select>
             <p className="mt-1 text-[10px] font-normal text-slate-500">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
-            {collaboratorUsers.isError && <p className="mt-2 text-[11px] font-semibold text-red-300">{collaboratorUsers.error instanceof Error ? collaboratorUsers.error.message : "Não foi possível carregar os usuários vinculados."}</p>}
           </label>
           <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-300">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
@@ -589,7 +588,6 @@ function EmployeeForm({
             />
           ))}
         </div>
-        {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível salvar o funcionário."}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onClose}
