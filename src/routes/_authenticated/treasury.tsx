@@ -24,6 +24,59 @@ const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 // Os links de CDN foram removidos das crases acidentais no original
 const TREASURY_URL = "/treasury.html?v=20260929-2";
 
+async function getTreasuryClientCloudState() {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, company_id, role_key, status")
+    .eq("auth_id", auth.user.id)
+    .maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
+    throw new Error("Acesso ao Financeiro não autorizado.");
+  }
+  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+  const { data, error } = await supabase
+    .from("treasury_snapshots")
+    .select("state, state_version, updated_at")
+    .eq("scope_key", scopeKey)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ?? null;
+}
+
+async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, company_id, role_key, status")
+    .eq("auth_id", auth.user.id)
+    .maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
+    throw new Error("Acesso ao Financeiro não autorizado.");
+  }
+  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+  const payload = {
+    scope_key: scopeKey,
+    company_id: user.company_id ?? null,
+    owner_user_id: user.id,
+    state,
+    state_version: Number((state as any)?._meta?.version) || 5,
+    updated_by: user.id,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from("treasury_snapshots")
+    .upsert(payload, { onConflict: "scope_key" })
+    .select("state, state_version, updated_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 function treasuryStateHasData(state: Record<string, unknown> | null | undefined) {
   if (!state) return false;
   const keys = ["passivos", "recorrencias", "recebimentos", "contasPagar", "bancos", "movimentacoes", "auditoria"];
@@ -70,7 +123,7 @@ function TreasuryPage() {
       const msg = event.data || {};
       if (msg.type === "DBS_TREASURY_READY") {
         try {
-          const cloud = await getTreasuryCloudState();
+          const cloud = await getTreasuryClientCloudState();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
@@ -94,7 +147,7 @@ function TreasuryPage() {
                 version: 5,
                 cloudMigratedAt: new Date().toISOString(),
               };
-              const saved = await saveTreasuryCloudState({ state: localState });
+              const saved = await saveTreasuryClientCloudState(localState);
               cloudReadyRef.current = true;
               iframeRef.current?.contentWindow?.postMessage(
                 { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
@@ -107,7 +160,7 @@ function TreasuryPage() {
               version: 5,
               cloudMigratedAt: new Date().toISOString(),
             };
-            const saved = await saveTreasuryCloudState({ state: localState });
+            const saved = await saveTreasuryClientCloudState(localState);
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
@@ -132,7 +185,7 @@ function TreasuryPage() {
         saveTimerRef.current = setTimeout(async () => {
           const state = pendingStateRef.current;
           if (!state) return;
-          try { await saveTreasuryCloudState({ state }); setCloudError(null); }
+          try { await saveTreasuryClientCloudState(state); setCloudError(null); }
           catch (err) { console.error("DBS Treasury cloud save:", err); setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro."); }
         }, 450);
       }
