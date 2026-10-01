@@ -84,10 +84,7 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_READY") {
         try {
-          const isAdministrative = profile.data?.role_key === "SUPER_ADMIN";
-          const cloud = isAdministrative
-            ? await getDbsControlClientCloudState()
-            : await getDbsControlCloudState();
+          const cloud = await getDbsControlCloudState();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
@@ -106,9 +103,7 @@ function DbsControlPage() {
               "*",
             );
           } else if (localState) {
-            const saved = isAdministrative
-              ? await saveDbsControlClientCloudState(localState)
-              : await saveDbsControlCloudState({ state: localState });
+            const saved = await saveDbsControlCloudState({ state: localState });
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
@@ -199,11 +194,7 @@ function DbsControlPage() {
           const state = pendingStateRef.current;
           if (!state) return;
           try {
-            if (profile.data?.role_key === "SUPER_ADMIN") {
-              await saveDbsControlClientCloudState(state);
-            } else {
-              await saveDbsControlCloudState({ state });
-            }
+            await saveDbsControlCloudState({ state });
             setCloudError(null);
           } catch (err) {
             console.error("DBS Control cloud save:", err);
