@@ -501,6 +501,7 @@ function EmployeeAccessForm({
               )}
             </select>
             <p className="mt-1 text-[10px] font-normal text-slate-500">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
+            {collaboratorUsers.isError && <p className="mt-2 text-[11px] font-semibold text-red-300">{collaboratorUsers.error instanceof Error ? collaboratorUsers.error.message : "Não foi possível carregar os usuários vinculados."}</p>}
           </label>
           <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-300">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
