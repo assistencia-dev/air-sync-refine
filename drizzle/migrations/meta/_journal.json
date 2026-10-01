@@ -8,6 +8,13 @@
       "when": 1790823749701,
       "tag": "0000_add_colaborador_role",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790823807059,
+      "tag": "0001_rh_ponto_access_treasury",
+      "breakpoints": true
     }
   ]
 }

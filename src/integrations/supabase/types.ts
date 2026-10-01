@@ -360,6 +360,61 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_employee_access: {
+        Row: {
+          access_enabled: boolean
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          login_identifier: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          login_identifier?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          login_identifier?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_employee_access_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_employee_access_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_employee_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_employee_contracts: {
         Row: {
           admission_date: string | null
@@ -682,48 +737,99 @@ export type Database = {
       }
       rh_employees: {
         Row: {
+          benefit_configured: boolean
           benefit_type: string
           created_at: string
+          dbs_control_access_enabled: boolean
           fare_cents: number
           ficha_file_name: string | null
           ficha_storage_path: string | null
           full_name: string
           id: string
           is_active: boolean
+          ponto_access_enabled: boolean
+          ponto_almoco_fim_previsto: string | null
+          ponto_almoco_inicio_previsto: string | null
+          ponto_base_lat: number | null
+          ponto_base_lng: number | null
+          ponto_entrada_prevista: string | null
+          ponto_portal_user_id: string | null
+          ponto_raio_m: number
+          ponto_saida_prevista: string | null
           registration_data: Json
+          registry_employee_id: string | null
           trips_per_day: number
           unit: string
           updated_at: string
         }
         Insert: {
+          benefit_configured?: boolean
           benefit_type: string
           created_at?: string
+          dbs_control_access_enabled?: boolean
           fare_cents: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
           full_name: string
           id?: string
           is_active?: boolean
+          ponto_access_enabled?: boolean
+          ponto_almoco_fim_previsto?: string | null
+          ponto_almoco_inicio_previsto?: string | null
+          ponto_base_lat?: number | null
+          ponto_base_lng?: number | null
+          ponto_entrada_prevista?: string | null
+          ponto_portal_user_id?: string | null
+          ponto_raio_m?: number
+          ponto_saida_prevista?: string | null
           registration_data?: Json
+          registry_employee_id?: string | null
           trips_per_day?: number
           unit: string
           updated_at?: string
         }
         Update: {
+          benefit_configured?: boolean
           benefit_type?: string
           created_at?: string
+          dbs_control_access_enabled?: boolean
           fare_cents?: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
           full_name?: string
           id?: string
           is_active?: boolean
+          ponto_access_enabled?: boolean
+          ponto_almoco_fim_previsto?: string | null
+          ponto_almoco_inicio_previsto?: string | null
+          ponto_base_lat?: number | null
+          ponto_base_lng?: number | null
+          ponto_entrada_prevista?: string | null
+          ponto_portal_user_id?: string | null
+          ponto_raio_m?: number
+          ponto_saida_prevista?: string | null
           registration_data?: Json
+          registry_employee_id?: string | null
           trips_per_day?: number
           unit?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rh_employees_ponto_portal_user_id_fkey"
+            columns: ["ponto_portal_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_employees_registry_employee_id_fkey"
+            columns: ["registry_employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rh_leave_records: {
         Row: {
@@ -1029,6 +1135,114 @@ export type Database = {
             columns: ["period_id"]
             isOneToOne: false
             referencedRelation: "rh_payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_ponto_audit: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          employee_id: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          employee_id?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          employee_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_ponto_audit_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_ponto_audit_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_ponto_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          distance_m: number | null
+          employee_id: string
+          gps_accuracy_m: number | null
+          id: string
+          inside_radius: boolean | null
+          latitude: number | null
+          longitude: number | null
+          note: string | null
+          photo_data: string | null
+          punch_type: string
+          punched_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          distance_m?: number | null
+          employee_id: string
+          gps_accuracy_m?: number | null
+          id?: string
+          inside_radius?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          note?: string | null
+          photo_data?: string | null
+          punch_type: string
+          punched_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          distance_m?: number | null
+          employee_id?: string
+          gps_accuracy_m?: number | null
+          id?: string
+          inside_radius?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          note?: string | null
+          photo_data?: string | null
+          punch_type?: string
+          punched_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_ponto_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_ponto_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1774,6 +1988,64 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_snapshots: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          owner_user_id: string | null
+          scope_key: string
+          state: Json
+          state_version: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string | null
+          scope_key: string
+          state: Json
+          state_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string | null
+          scope_key?: string
+          state?: Json
+          state_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_snapshots_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_snapshots_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_snapshots_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
