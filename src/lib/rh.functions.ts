@@ -350,14 +350,17 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!employee) throw new Error("Funcionário não encontrado.");
 
-    const [contracts, dependents, documents, events, access] = await Promise.all([
+    const [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns] = await Promise.all([
       supabaseAdmin.from("rh_employee_contracts").select("*").eq("employee_id", data.employee_id).order("is_current", { ascending: false }).order("created_at", { ascending: false }),
       supabaseAdmin.from("rh_employee_dependents").select("*").eq("employee_id", data.employee_id).order("full_name"),
       supabaseAdmin.from("rh_employee_documents").select("*").eq("employee_id", data.employee_id).order("expires_at"),
       supabaseAdmin.from("rh_employee_events").select("*").eq("employee_id", data.employee_id).order("event_date", { ascending: false }).order("created_at", { ascending: false }).limit(100),
       supabaseAdmin.from("rh_employee_access").select("id, employee_id, user_id, access_enabled, login_identifier, created_at, updated_at").eq("employee_id", data.employee_id).maybeSingle(),
+      supabaseAdmin.from("rh_employees").select("id, benefit_type, fare_cents, trips_per_day, benefit_configured, is_active, registry_employee_id").eq("registry_employee_id", data.employee_id),
+      supabaseAdmin.from("rh_ponto_records").select("id, work_date, punch_type, punched_at, inside_radius, note").eq("employee_id", data.employee_id).order("punched_at", { ascending: false }).limit(100),
+      supabaseAdmin.from("rh_payroll_runs").select("id, period_id, gross_cents, discount_cents, net_cents, fgts_base_cents, status, calculated_at").eq("employee_id", data.employee_id).order("calculated_at", { ascending: false }).limit(24),
     ]);
-    for (const result of [contracts, dependents, documents, events, access]) {
+    for (const result of [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns]) {
       if (result.error) throw new Error(result.error.message);
     }
     return {
@@ -367,6 +370,9 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
       documents: documents.data ?? [],
       events: events.data ?? [],
       access: access.data ?? null,
+      benefits: benefits.data ?? [],
+      pointRecords: pointRecords.data ?? [],
+      payrollRuns: payrollRuns.data ?? [],
     };
   });
 
