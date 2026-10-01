@@ -363,6 +363,30 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <Employee360Section title={`Documentos (${data?.documents?.length ?? 0})`}><TimelineList empty="Nenhum documento registrado." items={(data?.documents ?? []).map((x: any) => ({ title: x.document_type, text: [x.file_name, x.expires_at && "Validade: " + x.expires_at, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
             <Employee360Section title={`Histórico (${data?.events?.length ?? 0})`}><TimelineList empty="Nenhum evento registrado." items={(data?.events ?? []).map((x: any) => ({ title: x.event_type, text: [x.event_date, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
           </div>
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Employee360Section title={`Benefícios (${data?.benefits?.length ?? 0})`}>
+              <TimelineList empty="Nenhum benefício vinculado." items={(data?.benefits ?? []).map((x: any) => ({
+                title: x.benefit_type === "passagem" ? "Vale Passagem" : "Vale Alimentação",
+                text: [x.benefit_configured ? "Configurado" : "Pendente de configuração", x.fare_cents != null && new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(x.fare_cents)/100), x.trips_per_day && x.benefit_type === "passagem" && x.trips_per_day + " viagens/dia"].filter(Boolean).join(" · ")
+              }))} />
+            </Employee360Section>
+            <Employee360Section title={`Ponto (${data?.pointRecords?.length ?? 0})`}>
+              <TimelineList empty="Nenhuma batida registrada." items={(data?.pointRecords ?? []).slice(0,12).map((x: any) => ({
+                title: x.punch_type,
+                text: [x.work_date, x.punched_at ? new Date(x.punched_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "", x.inside_radius === true ? "GPS dentro da base" : x.inside_radius === false ? "GPS fora da base" : ""].filter(Boolean).join(" · ")
+              }))} />
+            </Employee360Section>
+            <Employee360Section title={`Folha (${data?.payrollRuns?.length ?? 0})`}>
+              <TimelineList empty="Nenhuma folha calculada para este funcionário." items={(data?.payrollRuns ?? []).slice(0,12).map((x: any) => ({
+                title: String(x.calculated_at ?? "").slice(0,7) || "Competência",
+                text: [
+                  "Bruto: " + new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(x.gross_cents ?? 0)/100),
+                  "Líquido: " + new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(x.net_cents ?? 0)/100),
+                  x.status
+                ].join(" · ")
+              }))} />
+            </Employee360Section>
+          </div>
          </div>}
       </div>
     </div>
