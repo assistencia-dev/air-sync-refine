@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 function esc(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -73,6 +71,9 @@ export function exportRhEmployeeFichaPdf(employee: any, data: any) {
     list("Dependentes", data?.dependents ?? [], (x) => `<div class="item"><div class="value">${esc([x.full_name, x.relationship, x.birth_date, x.is_ir_dependent && "Dependente IR"].filter(Boolean).join(" · "))}</div></div>`),
     list("Documentos", data?.documents ?? [], (x) => `<div class="item"><div class="value">${esc([x.document_type, x.file_name, x.expires_at && "Validade: "+x.expires_at, x.status].filter(Boolean).join(" · "))}</div></div>`),
     list("Histórico funcional", data?.events ?? [], (x) => `<div class="item"><div class="value">${esc([x.event_date, x.event_type, x.status].filter(Boolean).join(" · "))}</div></div>`),
+    list("Benefícios", data?.benefits ?? [], (x) => `<div class="item"><div class="value">${esc([x.benefit_type || x.type || x.name, x.status, x.amount_cents != null && "Valor: "+money(x.amount_cents), x.monthly_value_cents != null && "Mensal: "+money(x.monthly_value_cents)].filter(Boolean).join(" · "))}</div></div>`),
+    list("Registros de ponto", (data?.pointRecords ?? []).slice(0, 31), (x) => `<div class="item"><div class="value">${esc([x.record_date || x.date, x.entry_time && "Entrada: "+x.entry_time, x.lunch_start && "Almoço: "+x.lunch_start, x.lunch_end && "Retorno: "+x.lunch_end, x.exit_time && "Saída: "+x.exit_time, x.status].filter(Boolean).join(" · "))}</div></div>`),
+    list("Histórico de folha", (data?.payrollRuns ?? []).slice(0, 12), (x) => `<div class="item"><div class="value">${esc([x.competence || x.period_competence, x.status, x.gross_cents != null && "Bruto: "+money(x.gross_cents), x.discount_cents != null && "Descontos: "+money(x.discount_cents), x.net_cents != null && "Líquido: "+money(x.net_cents)].filter(Boolean).join(" · "))}</div></div>`),
     `<div class="section"><h2>Acessos</h2><div class="grid">${item("Login", data?.access?.login_identifier || "—")}${item("Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada")}${item("DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado")}</div></div>`,
     `<div class="section"><h2>Observações</h2><div class="item"><div class="value">${esc(value("notes"))}</div></div></div>`,
   ].join("");
