@@ -481,7 +481,7 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       // Editar o cadastro central não reativa um funcionário inativo.
       const { data: current, error: currentError } = await supabaseAdmin
         .from("rh_employees")
-        .select("id, is_active")
+        .select("*")
         .eq("id", data.id)
         .maybeSingle();
       if (currentError) throw new Error(currentError.message);
@@ -536,7 +536,7 @@ export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: user, error: userError } = await supabaseAdmin.from("users")
-      .select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+      .select("id, role_key, status, email").eq("auth_id", context.userId).maybeSingle();
     if (userError) throw new Error(userError.message);
     if (!user || user.status !== "ativo") return { enabled: false, employee: null };
     if (user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL") return { enabled: false, employee: null };
@@ -642,7 +642,7 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
     if (employeeError) throw new Error(employeeError.message);
     return {
       enabled: Boolean(employee),
-      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit } : null,
+      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit, email: user.email ?? null } : null,
       administrative: false,
     };
   });
@@ -725,7 +725,7 @@ export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
     if (!employee) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
 
     const { error } = await supabaseAdmin.from("rh_employees")
-      .update({ is_active: false, ponto_access_enabled: false })
+      .update({ is_active: false, ponto_access_enabled: false, dbs_control_access_enabled: false })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
 
