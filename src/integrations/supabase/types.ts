@@ -748,21 +748,6 @@ export type Database = {
           },
         ]
       }
-      project: {
-        Row: {
-          created_at: string
-          id: number
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-        }
-        Update: {
-          created_at?: string
-          id?: number
-        }
-        Relationships: []
-      }
       rh_admission_processes: {
         Row: {
           actual_start: string | null
@@ -1394,8 +1379,6 @@ export type Database = {
           ponto_saida_prevista: string | null
           registration_data: Json
           registry_employee_id: string | null
-          source_key: string | null
-          source_system: string | null
           trips_per_day: number
           unit: string
           updated_at: string
@@ -1422,8 +1405,6 @@ export type Database = {
           ponto_saida_prevista?: string | null
           registration_data?: Json
           registry_employee_id?: string | null
-          source_key?: string | null
-          source_system?: string | null
           trips_per_day?: number
           unit: string
           updated_at?: string
@@ -1450,8 +1431,6 @@ export type Database = {
           ponto_saida_prevista?: string | null
           registration_data?: Json
           registry_employee_id?: string | null
-          source_key?: string | null
-          source_system?: string | null
           trips_per_day?: number
           unit?: string
           updated_at?: string
@@ -1465,7 +1444,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rh_employees_registry_employee_fk"
+            foreignKeyName: "rh_employees_registry_employee_id_fkey"
             columns: ["registry_employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
@@ -2802,6 +2781,8 @@ export type Database = {
         Returns: Database["public"]["Enums"]["role_key"]
       }
       current_unit_id: { Args: never; Returns: string }
+      dbs_my_employee_ids: { Args: never; Returns: string[] }
+      dbs_my_work_order_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
       usuario_esta_ativo: { Args: never; Returns: boolean }
     }
