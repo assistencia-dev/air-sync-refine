@@ -4,12 +4,62 @@ import { useEffect, useRef, useState } from "react";
 import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-control")({
   head: () => ({ meta: [{ title: "DBS CONTROL · DBS Air" }, { name: "robots", content: "noindex" }] }),
   component: DbsControlPage,
 });
+
+async function getDbsControlClientCloudState() {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, company_id, role_key, status")
+    .eq("auth_id", auth.user.id)
+    .maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key === "COLABORADOR") return null;
+  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+  const { data, error } = await supabase
+    .from("dbs_control_snapshots")
+    .select("state, state_version, updated_at")
+    .eq("scope_key", scopeKey)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ?? null;
+}
+
+async function saveDbsControlClientCloudState(state: Record<string, unknown>) {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("id, company_id, role_key, status")
+    .eq("auth_id", auth.user.id)
+    .maybeSingle();
+  if (userError) throw new Error(userError.message);
+  if (!user || user.status !== "ativo" || user.role_key === "COLABORADOR") return null;
+  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+  const payload = {
+    scope_key: scopeKey,
+    company_id: user.company_id ?? null,
+    owner_user_id: user.id,
+    state,
+    state_version: 2,
+    updated_by: user.id,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from("dbs_control_snapshots")
+    .upsert(payload, { onConflict: "scope_key" })
+    .select("state, state_version, updated_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
 
 function dbsControlStateHasData(state: Record<string, unknown> | null | undefined) {
   if (!state) return false;
@@ -34,7 +84,10 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_READY") {
         try {
-          const cloud = await getDbsControlCloudState();
+          const isAdministrative = profile.data?.role_key === "SUPER_ADMIN";
+          const cloud = isAdministrative
+            ? await getDbsControlClientCloudState()
+            : await getDbsControlCloudState();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
@@ -53,7 +106,9 @@ function DbsControlPage() {
               "*",
             );
           } else if (localState) {
-            const saved = await saveDbsControlCloudState({ state: localState });
+            const saved = isAdministrative
+              ? await saveDbsControlClientCloudState(localState)
+              : await saveDbsControlCloudState({ state: localState });
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
@@ -144,7 +199,11 @@ function DbsControlPage() {
           const state = pendingStateRef.current;
           if (!state) return;
           try {
-            await saveDbsControlCloudState({ state });
+            if (profile.data?.role_key === "SUPER_ADMIN") {
+              await saveDbsControlClientCloudState(state);
+            } else {
+              await saveDbsControlCloudState({ state });
+            }
             setCloudError(null);
           } catch (err) {
             console.error("DBS Control cloud save:", err);
