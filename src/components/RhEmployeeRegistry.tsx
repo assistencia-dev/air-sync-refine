@@ -122,9 +122,9 @@ export function RhEmployeeRegistry() {
             <option value="todos">Todos os acessos</option><option value="com_acesso">Com acesso</option><option value="sem_acesso">Sem acesso</option>
           </select>
         </div>
-        {error && (
+        {(error || employees.isError) && (
           <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">
-            {error}
+            {error || (employees.error instanceof Error ? employees.error.message : "Não foi possível carregar o Cadastro de Funcionários.")}
           </p>
         )}
         <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -588,6 +588,7 @@ function EmployeeForm({
             />
           ))}
         </div>
+        {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível salvar o funcionário."}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onClose}
