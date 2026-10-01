@@ -135,6 +135,7 @@
 
             <div class="nav-section">Gestão de Ativos & Clientes</div>
             <li class="nav-item" onclick="switchTab('tab-clientes', this)"><span>Clientes Corporativos</span></li>
+            <li class="nav-item" onclick="switchTab('tab-importacao', this)"><span>Importação em Massa</span></li>
             <li class="nav-item" onclick="switchTab('tab-equipamentos', this)"><span>Parque de Equipamentos</span></li>
             <li class="nav-item" onclick="switchTab('tab-tecnicos', this)"><span>Equipe Técnica & Logins</span></li>
 
@@ -391,6 +392,31 @@
                     </thead>
                     <tbody id="cli-table-body"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- IMPORTAÇÃO EM MASSA -->
+        <div id="tab-importacao" class="tab-view">
+            <div class="data-card" style="padding:20px; margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin-bottom:5px;">Importação em Massa · Base Operacional</h3>
+                        <p style="font-size:11px;color:var(--text-muted);max-width:760px;">Importe clientes, equipamentos, técnicos, serviços e peças por CSV ou Excel. A importação é não destrutiva: registros existentes são atualizados quando identificados e nunca são apagados por uma planilha.</p>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" type="button" onclick="baixarModeloImportacao()">Baixar modelo Excel</button>
+                </div>
+                <div class="form-grid" style="margin-top:16px;">
+                    <div class="form-group"><label>Tipo de cadastro</label><select id="import-tipo" onchange="atualizarImportacaoUI()"><option value="clientes">Clientes</option><option value="equipamentos">Equipamentos</option><option value="tecnicos">Técnicos</option><option value="servicos">Serviços</option><option value="pecas">Peças / Estoque</option></select></div>
+                    <div class="form-group"><label>Arquivo CSV / Excel</label><input type="file" id="import-arquivo" accept=".csv,.xlsx,.xls" onchange="prepararImportacao(event)"></div>
+                    <div class="form-group"><label>Identificador de atualização</label><div id="import-chave" style="padding:7px 10px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:#f8fafc;font-size:12px;">CNPJ / CPF</div></div>
+                </div>
+                <div id="import-mensagem" style="margin-top:12px;font-size:11px;color:var(--text-muted);"></div>
+                <div id="import-resumo" style="display:none;margin-top:14px;"></div>
+                <div style="margin-top:14px;text-align:right;"><button id="import-confirmar" class="btn btn-primary" type="button" onclick="confirmarImportacao()" disabled>Validar e importar</button></div>
+            </div>
+            <div id="import-preview" class="data-card" style="display:none;">
+                <div class="data-header"><h3>Pré-visualização e validação</h3><span id="import-contagem" style="font-size:10px;color:var(--text-muted);"></span></div>
+                <div style="overflow:auto;max-height:360px;"><table><thead id="import-preview-head"></thead><tbody id="import-preview-body"></tbody></table></div>
             </div>
         </div>
 
@@ -1275,6 +1301,7 @@
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();
     </script>
+    <script src="/dbs-control-import.js?v=20261001-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20260930-2"></script>
     <script src="/dbs-control-ux.js?v=20260930-1"></script>
 </body>
