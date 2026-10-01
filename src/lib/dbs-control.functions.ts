@@ -39,9 +39,16 @@ function normalizeState(state: Record<string, unknown>) {
 }
 
 async function getCollaboratorEmployee(userId: string) {
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("users")
+    .select("id, email")
+    .eq("id", userId)
+    .maybeSingle();
+  if (userError) throw new Error(userError.message);
+
   const { data, error } = await supabaseAdmin
     .from("rh_employees")
-    .select("id, full_name, unit, is_active")
+    .select("id, full_name, unit, is_active, registration_data")
     .eq("ponto_portal_user_id", userId)
     .eq("ponto_access_enabled", true)
     .eq("dbs_control_access_enabled", true)
@@ -49,12 +56,21 @@ async function getCollaboratorEmployee(userId: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data ?? null;
+  if (!data) return null;
+  const registrationEmail = String((data.registration_data as Record<string, unknown> | null)?.email ?? "").trim().toLowerCase();
+  return {
+    ...data,
+    login_email: String(user?.email ?? "").trim().toLowerCase() || registrationEmail || null,
+  };
 }
 
-function filterCollaboratorState(state: Record<string, unknown>, employeeId: string) {
+function filterCollaboratorState(state: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const normalized = normalizeState(state);
-  const technicians = (normalized.tecnicos as any[]).filter((tech) => String(tech?.employeeId ?? "") === employeeId);
+  const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
+  const technicians = (normalized.tecnicos as any[]).filter((tech) =>
+    String(tech?.employeeId ?? "") === employeeId ||
+    (normalizedEmail && String(tech?.email ?? "").trim().toLowerCase() === normalizedEmail)
+  );
   const technicianIds = new Set(technicians.map((tech) => String(tech.id)));
 
   const orders = (normalized.ordens as any[]).filter((order) => technicianIds.has(String(order?.tecnicoId)));
@@ -81,10 +97,14 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
   };
 }
 
-function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string) {
+function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const current = normalizeState(currentState);
-  const incoming = filterCollaboratorState(incomingState, employeeId);
-  const currentTechs = (current.tecnicos as any[]).filter((tech) => String(tech?.employeeId ?? "") === employeeId);
+  const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
+  const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
+  const currentTechs = (current.tecnicos as any[]).filter((tech) =>
+    String(tech?.employeeId ?? "") === employeeId ||
+    (normalizedEmail && String(tech?.email ?? "").trim().toLowerCase() === normalizedEmail)
+  );
   const technicianIds = new Set(currentTechs.map((tech) => String(tech.id)));
   const currentOrders = current.ordens as any[];
   const incomingOrders = incoming.ordens as any[];
@@ -132,7 +152,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
     return {
       ...data,
-      state: filterCollaboratorState(data.state as Record<string, unknown>, employee.id),
+      state: filterCollaboratorState(data.state as Record<string, unknown>, employee.id, employee.login_email),
     };
   });
 
@@ -168,6 +188,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         current.state as Record<string, unknown>,
         data.state,
         employee.id,
+        employee.login_email,
       );
       ownerUserId = current.owner_user_id ?? user.id;
     }
