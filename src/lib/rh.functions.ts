@@ -350,7 +350,7 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!employee) throw new Error("Funcionário não encontrado.");
 
-    const [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns] = await Promise.all([
+    const [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns, advances] = await Promise.all([
       supabaseAdmin.from("rh_employee_contracts").select("*").eq("employee_id", data.employee_id).order("is_current", { ascending: false }).order("created_at", { ascending: false }),
       supabaseAdmin.from("rh_employee_dependents").select("*").eq("employee_id", data.employee_id).order("full_name"),
       supabaseAdmin.from("rh_employee_documents").select("*").eq("employee_id", data.employee_id).order("expires_at"),
@@ -359,10 +359,16 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
       supabaseAdmin.from("rh_employees").select("id, benefit_type, fare_cents, trips_per_day, benefit_configured, is_active, registry_employee_id").eq("registry_employee_id", data.employee_id),
       supabaseAdmin.from("rh_ponto_records").select("id, work_date, punch_type, punched_at, inside_radius, note").eq("employee_id", data.employee_id).order("punched_at", { ascending: false }).limit(100),
       supabaseAdmin.from("rh_payroll_runs").select("id, period_id, gross_cents, discount_cents, net_cents, fgts_base_cents, status, calculated_at").eq("employee_id", data.employee_id).order("calculated_at", { ascending: false }).limit(24),
+      supabaseAdmin.from("rh_employee_advances").select("id, advance_type, description, amount_cents, competence, authorized, status, created_at").eq("employee_id", data.employee_id).order("competence", { ascending: false }).order("created_at", { ascending: false }),
     ]);
-    for (const result of [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns]) {
+    for (const result of [contracts, dependents, documents, events, access, benefits, pointRecords, payrollRuns, advances]) {
       if (result.error) throw new Error(result.error.message);
     }
+    const benefitIds = (benefits.data ?? []).map((item: any) => item.id).filter(Boolean);
+    const topupsResult = benefitIds.length
+      ? await supabaseAdmin.from("rh_topups").select("id, benefit_type, employee_id, amount_cents, paid_at, created_at").in("employee_id", benefitIds).order("paid_at", { ascending: false })
+      : { data: [], error: null };
+    if (topupsResult.error) throw new Error(topupsResult.error.message);
     return {
       employee,
       contracts: contracts.data ?? [],
@@ -371,6 +377,8 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
       events: events.data ?? [],
       access: access.data ?? null,
       benefits: benefits.data ?? [],
+      benefitTopups: topupsResult.data ?? [],
+      advances: advances.data ?? [],
       pointRecords: pointRecords.data ?? [],
       payrollRuns: payrollRuns.data ?? [],
     };
