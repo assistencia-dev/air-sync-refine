@@ -42,6 +42,10 @@ body{font-family:Arial,Helvetica,sans-serif;color:#172033;margin:0;font-size:11p
 .section{margin:14px 0 0;border:1px solid #d9dee7;border-radius:7px;overflow:hidden;break-inside:avoid}
 .section h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0;padding:8px 10px;background:#f3f5f8;border-bottom:1px solid #d9dee7}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+.cards,.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.cards>div,.kpi{border:1px solid #d9dee7;border-radius:8px;padding:10px;background:#fff}
+.cards span,.kpi span{display:block;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}
+.cards b,.kpi b{display:block;font-size:17px;margin-top:5px;color:#172033}
 .item{padding:8px 10px;border-bottom:1px solid #eef1f5}
 .label{font-size:8px;text-transform:uppercase;color:#64748b;font-weight:700}
 .value{margin-top:3px;font-weight:600;white-space:pre-wrap}
@@ -51,6 +55,7 @@ th{background:#f3f5f8;font-size:9px;text-transform:uppercase}
 .total{font-weight:800;background:#f8fafc}
 .footer{margin-top:18px;color:#64748b;font-size:9px}
 @media print{.no-print{display:none!important}}
+@media(max-width:760px){.cards,.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
