@@ -749,12 +749,43 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
 
     // O portal do colaborador consulta esta relação. Sem ela, o botão pode
     // parecer salvo no cadastro, mas o colaborador continua sem vínculo.
-    const { data: existingAccess, error: existingAccessError } = await supabaseAdmin
+    const { data: accessRows, error: accessRowsError } = await supabaseAdmin
       .from("rh_employee_access")
-      .select("id")
+      .select("id, employee_id, user_id, access_enabled, login_identifier, updated_at, created_at")
       .eq("employee_id", data.employee_id)
-      .maybeSingle();
-    if (existingAccessError) throw new Error(existingAccessError.message);
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (accessRowsError) throw new Error(accessRowsError.message);
+
+    const currentAccess = accessRows?.[0] ?? null;
+    const sameActiveLink = Boolean(
+      currentAccess?.access_enabled &&
+      currentAccess.user_id === appUser.id &&
+      currentAccess.employee_id === data.employee_id &&
+      employee.ponto_access_enabled &&
+      employee.ponto_portal_user_id === appUser.id
+    );
+
+    if (sameActiveLink) {
+      return {
+        ok: true,
+        enabled: true,
+        already_linked: true,
+        dbs_control_enabled: data.dbs_control_enabled,
+        user: { id: appUser.id, username: appUser.username, email: appUser.email },
+        initial_password: null,
+      };
+    }
+
+    // Mantém somente um vínculo ativo para este funcionário. Registros antigos,
+    // se existirem por versões anteriores do sistema, são preservados como inativos.
+    const { error: deactivateOldAccessError } = await supabaseAdmin
+      .from("rh_employee_access")
+      .update({ access_enabled: false })
+      .eq("employee_id", data.employee_id)
+      .eq("access_enabled", true);
+    if (deactivateOldAccessError) throw new Error(deactivateOldAccessError.message);
 
     const accessPayload = {
       employee_id: data.employee_id,
@@ -762,10 +793,11 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       access_enabled: true,
       login_identifier: identifier,
     };
-    if (existingAccess?.id) {
+
+    if (currentAccess?.id) {
       const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
         .update(accessPayload)
-        .eq("id", existingAccess.id);
+        .eq("id", currentAccess.id);
       if (accessUpdateError) throw new Error(accessUpdateError.message);
     } else {
       const { error: accessInsertError } = await supabaseAdmin.from("rh_employee_access")
