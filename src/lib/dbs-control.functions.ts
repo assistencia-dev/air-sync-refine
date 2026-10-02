@@ -46,7 +46,7 @@ async function getCollaboratorEmployee(userId: string) {
     .maybeSingle();
   if (userError) throw new Error(userError.message);
 
-  const { data, error } = await supabaseAdmin
+  const direct = await supabaseAdmin
     .from("rh_employees")
     .select("id, full_name, unit, is_active, registration_data")
     .eq("ponto_portal_user_id", userId)
@@ -55,7 +55,32 @@ async function getCollaboratorEmployee(userId: string) {
     .eq("is_active", true)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (direct.error) throw new Error(direct.error.message);
+
+  let data = direct.data;
+  if (!data) {
+    const access = await supabaseAdmin
+      .from("rh_employee_access")
+      .select("employee_id")
+      .eq("user_id", userId)
+      .eq("access_enabled", true)
+      .maybeSingle();
+
+    if (access.error) throw new Error(access.error.message);
+    if (access.data?.employee_id) {
+      const fallback = await supabaseAdmin
+        .from("rh_employees")
+        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, dbs_control_access_enabled")
+        .eq("id", access.data.employee_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (fallback.error) throw new Error(fallback.error.message);
+      if (fallback.data?.ponto_access_enabled && fallback.data?.dbs_control_access_enabled) {
+        data = fallback.data;
+      }
+    }
+  }
+
   if (!data) return null;
   const registrationEmail = String((data.registration_data as Record<string, unknown> | null)?.email ?? "").trim().toLowerCase();
   return {
@@ -75,10 +100,16 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
 
   // employeeId é a referência canônica. tecnicoId continua sendo aceito para
   // preservar OS antigas que ainda não receberam o vínculo central do RH.
-  const orders = (normalized.ordens as any[]).filter((order) =>
-    String(order?.employeeId ?? "") === employeeId ||
-    technicianIds.has(String(order?.tecnicoId))
-  );
+  const orders = (normalized.ordens as any[])
+    .filter((order) =>
+      String(order?.employeeId ?? "") === employeeId ||
+      technicianIds.has(String(order?.tecnicoId))
+    )
+    .map((order) => (
+      String(order?.employeeId ?? "") === employeeId
+        ? order
+        : { ...order, employeeId }
+    ));
   const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
   const equipmentIds = new Set(orders.map((order) => String(order?.equipamentoId)).filter(Boolean));
   const serviceIds = new Set(orders.map((order) => String(order?.servicoId)).filter(Boolean));
@@ -138,18 +169,23 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     }
     const parts = current.pecas as any[];
     const partById = new Map(parts.map((part) => [String(part?.id), part]));
-    for (const [partId, quantity] of newQty) {
-      const delta = quantity - (oldQty.get(partId) ?? 0);
+    const allPartIds = new Set([...oldQty.keys(), ...newQty.keys()]);
+    for (const partId of allPartIds) {
+      const delta = (newQty.get(partId) ?? 0) - (oldQty.get(partId) ?? 0);
       if (delta <= 0) continue;
       const stock = partById.get(partId);
       if (!stock) throw new Error("Uma peça utilizada na OS não existe mais no estoque.");
-      if (Number(stock.qtd ?? 0) < delta) throw new Error(`Estoque insuficiente para a peça ${stock.nome ?? partId}.`);
+      if (Number(stock.qtd ?? 0) < delta) {
+        throw new Error(`Estoque insuficiente para a peça ${stock.nome ?? partId}.`);
+      }
     }
-    for (const [partId, quantity] of newQty) {
-      const delta = quantity - (oldQty.get(partId) ?? 0);
+    for (const partId of allPartIds) {
+      const delta = (newQty.get(partId) ?? 0) - (oldQty.get(partId) ?? 0);
       if (!delta) continue;
       const stock = partById.get(partId);
-      if (stock) stock.qtd = Math.max(0, Number(stock.qtd ?? 0) - delta);
+      if (stock) {
+        stock.qtd = Math.max(0, Number(stock.qtd ?? 0) - delta);
+      }
     }
 
     return {
@@ -256,7 +292,13 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       .single();
 
     if (error) throw new Error(error.message);
-    return user.role_key === "COLABORADOR"
-      ? { ...saved, state: filterCollaboratorState(saved.state as Record<string, unknown>, (await getCollaboratorEmployee(user.id))!.id) }
-      : saved;
+    if (user.role_key === "COLABORADOR") {
+      const employee = await getCollaboratorEmployee(user.id);
+      if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+      return {
+        ...saved,
+        state: filterCollaboratorState(saved.state as Record<string, unknown>, employee.id, employee.login_email),
+      };
+    }
+    return saved;
   });
