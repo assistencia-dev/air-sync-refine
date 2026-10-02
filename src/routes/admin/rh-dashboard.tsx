@@ -49,13 +49,13 @@ function RHDashboard() {
     <div className="min-h-screen" style={{ background: '#090D16' }}>
       {/* Header */}
       <div className="border-b border-slate-800/80 sticky top-0 z-40" style={{ background: '#0F172A' }}>
-        <div className="container max-w-7xl mx-auto px-4 py-6">
+        <div className="container max-w-7xl mx-auto px-4 py-5">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: 'rgba(245, 158, 11, 0.2)' }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner" style={{ background: 'rgba(245, 158, 11, 0.16)' }}>
               <Users className="w-6 h-6" style={{ color: '#F59E0B' }} />
             </div>
             <div>
-              <h1 className="text-3xl font-bold" style={{ color: '#F8FAFC' }}>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: '#F8FAFC' }}>
                 Gestão de RH
               </h1>
               <p className="text-sm mt-1" style={{ color: '#94A3B8' }}>
@@ -70,10 +70,10 @@ function RHDashboard() {
       <div className="container max-w-7xl mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab List */}
-          <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5" style={{ background: 'rgba(30, 41, 59, 0.5)', borderColor: '#334155', borderWidth: '1px' }}>
+          <TabsList className="flex h-auto w-full flex-wrap gap-2 rounded-2xl border border-slate-700 bg-[#111827] p-2 shadow-lg">
             <TabsTrigger
               value="dp"
-              className="flex items-center gap-2 data-[state=active]:font-bold data-[state=active]:text-white"
+              className="min-h-11 flex-1 basis-[145px] rounded-xl px-3 py-2.5 text-xs font-bold transition-all data-[state=active]:font-black data-[state=active]:text-white data-[state=active]:shadow-md"
               style={{ color: activeTab === 'dp' ? '#F59E0B' : '#94A3B8' }}
             >
               <BriefcaseBusiness className="w-4 h-4" />
