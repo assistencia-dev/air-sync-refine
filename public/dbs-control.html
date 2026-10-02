@@ -7,6 +7,7 @@
     <!-- Bibliotecas para Geração de PDF e Exportação em ZIP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --sidebar-width: 270px;
@@ -473,6 +474,37 @@
             .data-card { margin-bottom: 12px; }
         }
 
+
+        /* DBS CONTROL IDENTITY — azul e branco, com sidebar navy */
+        :root {
+            --color-bg:#f6f9fc;
+            --color-surface:#ffffff;
+            --color-sidebar:#0b1b2b;
+            --color-sidebar-hover:#12314b;
+            --color-primary:#0878c9;
+            --color-primary-dark:#075f9f;
+            --text-main:#102235;
+            --text-muted:#66788a;
+            --border-color:#d7e2ec;
+            --border-light:#e6edf3;
+            --shadow-sm:0 1px 3px rgba(16,34,53,.06);
+        }
+        aside{background:var(--color-sidebar)!important;color:#fff!important;border-right:0!important;}
+        .brand-header{background:#081522!important;border-bottom:1px solid rgba(255,255,255,.08)!important;}
+        .brand-title{color:#fff!important;}
+        .brand-badge{background:var(--color-primary)!important;color:#fff!important;border-color:transparent!important;}
+        .nav-section{color:#7f95aa!important;}
+        .nav-item{color:#b7c6d4!important;border-left-color:transparent!important;background:transparent!important;}
+        .nav-item:hover,.nav-item.active{background:#12314b!important;color:#fff!important;border-left-color:#19a7e0!important;}
+        main,body{background:var(--color-bg)!important;color:var(--text-main)!important;}
+        header{background:#fff!important;border-bottom:1px solid var(--border-light)!important;box-shadow:none!important;}
+        .btn-primary{background:var(--color-primary)!important;color:#fff!important;}
+        .btn-primary:hover{background:var(--color-primary-dark)!important;}
+        .btn-secondary{background:#fff!important;color:#23405a!important;border-color:#cddbe7!important;}
+        .data-header{background:#fbfdff!important;}
+        th{background:#f4f8fb!important;}
+        .metric-card,.data-card,.day-kpi,.day-toolbar,.employee-toolbar,.employee-order,.employee-empty,.quick-start-action{box-shadow:var(--shadow-sm)!important;}
+
     </style>
 </head>
 <body>
@@ -753,7 +785,10 @@
         <!-- CADASTRO DE EQUIPAMENTOS -->
         <div id="tab-equipamentos" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Cadastrar Equipamento / Ativo de Cliente</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <h3 style="margin-bottom: 0;">Cadastrar Equipamento / Ativo de Cliente</h3>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('tab-importacao');document.getElementById('import-tipo').value='equipamentos';atualizarImportacaoUI();">Importar equipamentos por planilha</button>
+                </div>
                 <form id="form-equipamento" onsubmit="salvarEquipamento(event)">
                     <div class="form-grid">
                         <div class="form-group">
@@ -826,7 +861,10 @@
         <!-- CLIENTES -->
         <div id="tab-clientes" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Cadastrar Novo Cliente Corporativo</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <h3 style="margin-bottom: 0;">Cadastrar Novo Cliente Corporativo</h3>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('tab-importacao');document.getElementById('import-tipo').value='clientes';atualizarImportacaoUI();">Importar clientes por planilha</button>
+                </div>
                 <form id="form-cliente" onsubmit="salvarCliente(event)">
                     <div class="form-grid">
                         <div class="form-group"><label>Razão Social / Nome</label><input type="text" id="cli-nome" required></div>
@@ -863,7 +901,10 @@
                         <h3 style="margin-bottom:5px;">Importação em Massa · Base Operacional</h3>
                         <p style="font-size:11px;color:var(--text-muted);max-width:760px;">Importe clientes, equipamentos, técnicos, serviços e peças por CSV ou Excel. A importação é não destrutiva: registros existentes são atualizados quando identificados e nunca são apagados por uma planilha.</p>
                     </div>
-                    <button class="btn btn-secondary btn-sm" type="button" onclick="baixarModeloImportacao()">Baixar modelo CSV</button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="baixarModeloImportacao()">Baixar modelo</button>
+                        <button class="btn btn-primary btn-sm" type="button" onclick="switchTab('tab-importacao')">Importar planilha</button>
+                    </div>
                 </div>
                 <div class="form-grid" style="margin-top:16px;">
                     <div class="form-group"><label>Tipo de cadastro</label><select id="import-tipo" onchange="atualizarImportacaoUI()"><option value="clientes">Clientes</option><option value="equipamentos">Equipamentos</option><option value="tecnicos">Técnicos</option><option value="servicos">Serviços</option><option value="pecas">Peças / Estoque</option></select></div>
@@ -1952,6 +1993,214 @@
                 '<div class="field-checklist">' + itens + '</div>' +
                 '<div class="field-check-note">Você pode concluir a OS sem marcar o checklist. Marque apenas o que foi realmente verificado.</div></section>';
         }
+        // IMPORTAÇÃO DE PLANILHAS — clientes e equipamentos
+        let DBS_CONTROL_IMPORT_ROWS = [];
+        let DBS_CONTROL_IMPORT_TYPE = 'clientes';
+
+        function normalizarImportacaoTexto(value) {
+            return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        }
+
+        function valorColunaImportacao(row, aliases) {
+            const normalized = {};
+            Object.keys(row || {}).forEach(k => normalized[normalizarImportacaoTexto(k)] = row[k]);
+            for (const alias of aliases) {
+                const key = normalizarImportacaoTexto(alias);
+                if (Object.prototype.hasOwnProperty.call(normalized, key) && String(normalized[key] ?? '').trim() !== '') return normalized[key];
+            }
+            return '';
+        }
+
+        function normalizarDocumentoImportacao(value) {
+            return String(value ?? '').replace(/\\D/g, '');
+        }
+
+        function normalizarChaveImportacao(value) {
+            return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+        }
+
+        function proximoIdSeguro(lista) {
+            return lista.reduce((max, item) => Math.max(max, Number(item?.id) || 0), 0) + 1;
+        }
+
+        function atualizarImportacaoUI() {
+            const tipo = document.getElementById('import-tipo')?.value || 'clientes';
+            DBS_CONTROL_IMPORT_TYPE = tipo;
+            const chave = document.getElementById('import-chave');
+            if (chave) chave.textContent = tipo === 'equipamentos' ? 'TAG do equipamento + cliente' : tipo === 'clientes' ? 'CNPJ / CPF' : 'Identificador do cadastro';
+            const msg = document.getElementById('import-mensagem');
+            if (msg) msg.textContent = tipo === 'clientes'
+                ? 'Use CNPJ/CPF para atualizar um cliente existente sem criar duplicidade.'
+                : tipo === 'equipamentos'
+                    ? 'O equipamento será vinculado ao cliente pelo CNPJ/CPF ou pelo nome. Equipamentos sem cliente identificável não entram.'
+                    : 'A importação em massa está preparada para manter os cadastros existentes.';
+        }
+
+        function prepararImportacao(event) {
+            const file = event?.target?.files?.[0];
+            const msg = document.getElementById('import-mensagem');
+            const preview = document.getElementById('import-preview');
+            const confirm = document.getElementById('import-confirmar');
+            if (!file) return;
+            if (typeof XLSX === 'undefined') {
+                if (msg) msg.textContent = 'Leitor de planilhas não carregado. Atualize a página e tente novamente.';
+                return;
+            }
+            const tipo = document.getElementById('import-tipo')?.value || 'clientes';
+            DBS_CONTROL_IMPORT_TYPE = tipo;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+                    validarEPrepararImportacao(rows, tipo);
+                } catch (error) {
+                    DBS_CONTROL_IMPORT_ROWS = [];
+                    if (preview) preview.style.display = 'none';
+                    if (confirm) confirm.disabled = true;
+                    if (msg) msg.textContent = 'Não foi possível ler a planilha. Verifique se a primeira aba contém os dados e tente novamente.';
+                    console.error('Importação de planilha:', error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function validarEPrepararImportacao(rows, tipo) {
+            const msg = document.getElementById('import-mensagem');
+            const resumo = document.getElementById('import-resumo');
+            const preview = document.getElementById('import-preview');
+            const head = document.getElementById('import-preview-head');
+            const body = document.getElementById('import-preview-body');
+            const count = document.getElementById('import-contagem');
+            const confirm = document.getElementById('import-confirmar');
+            const safeRows = Array.isArray(rows) ? rows.filter(r => Object.values(r || {}).some(v => String(v ?? '').trim() !== '')) : [];
+            DBS_CONTROL_IMPORT_ROWS = safeRows.map((row, index) => {
+                const base = { rowNumber: index + 2, raw: row, valid: true, action: 'novo', error: '' };
+                if (tipo === 'clientes') {
+                    const nome = String(valorColunaImportacao(row, ['nome','razao social','razao_social','nome fantasia']) || '').trim();
+                    const doc = String(valorColunaImportacao(row, ['cnpj','cpf','cnpj cpf','documento']) || '').trim();
+                    if (!nome) { base.valid = false; base.error = 'Nome/razão social não informado.'; }
+                    else if (!normalizarDocumentoImportacao(doc)) { base.valid = false; base.error = 'CNPJ/CPF não informado.'; }
+                    base.nome = nome; base.cnpj = doc;
+                    base.endereco = String(valorColunaImportacao(row, ['endereco','endereço','endereco completo','endereço completo']) || '').trim();
+                    base.contato = String(valorColunaImportacao(row, ['contato','pessoa de contato','responsavel','responsável','telefone']) || '').trim();
+                    const existing = ERP_STATE.clientes.find(c => normalizarDocumentoImportacao(c.cnpj) === normalizarDocumentoImportacao(doc));
+                    if (existing) base.action = 'atualizar';
+                } else if (tipo === 'equipamentos') {
+                    const tag = String(valorColunaImportacao(row, ['tag','codigo tag','código tag','identificador','identificador interno']) || '').trim();
+                    const clienteDoc = String(valorColunaImportacao(row, ['cliente cnpj','cliente_cnpj','cnpj cliente','cnpj']) || '').trim();
+                    const clienteNome = String(valorColunaImportacao(row, ['cliente','cliente nome','nome cliente','razao social cliente']) || '').trim();
+                    const cliente = ERP_STATE.clientes.find(c =>
+                        (clienteDoc && normalizarDocumentoImportacao(c.cnpj) === normalizarDocumentoImportacao(clienteDoc)) ||
+                        (clienteNome && normalizarChaveImportacao(c.nome) === normalizarChaveImportacao(clienteNome))
+                    );
+                    if (!tag) { base.valid = false; base.error = 'TAG/identificador não informado.'; }
+                    else if (!cliente) { base.valid = false; base.error = 'Cliente não localizado por CNPJ/CPF ou nome.'; }
+                    base.tag = tag; base.clienteId = cliente?.id || null;
+                    base.tipoEquipamento = String(valorColunaImportacao(row, ['tipo','tipo equipamento','equipamento']) || '').trim();
+                    base.marca = String(valorColunaImportacao(row, ['marca','fabricante']) || '').trim();
+                    base.modelo = String(valorColunaImportacao(row, ['modelo']) || '').trim();
+                    base.serie = String(valorColunaImportacao(row, ['serie','série','numero de serie','número de série']) || '').trim();
+                    base.capacidade = String(valorColunaImportacao(row, ['capacidade','btus','btu','tr']) || '').trim();
+                    base.ambiente = String(valorColunaImportacao(row, ['ambiente','setor','local','local de instalacao','local de instalação']) || '').trim();
+                    const existing = ERP_STATE.equipamentos.find(e => String(e.tag || '').trim().toLowerCase() === tag.toLowerCase() && String(e.clienteId) === String(base.clienteId));
+                    if (existing) base.action = 'atualizar';
+                } else {
+                    base.valid = false;
+                    base.error = 'Nesta etapa, a importação por planilha está liberada para Clientes e Equipamentos.';
+                }
+                return base;
+            });
+            const valid = DBS_CONTROL_IMPORT_ROWS.filter(r => r.valid);
+            const invalid = DBS_CONTROL_IMPORT_ROWS.filter(r => !r.valid);
+            if (count) count.textContent = safeRows.length + ' linha(s) analisada(s)';
+            if (msg) msg.textContent = valid.length
+                ? valid.length + ' linha(s) pronta(s) para importação; ' + invalid.length + ' com pendência.'
+                : 'Nenhuma linha válida para importar. Corrija a planilha e envie novamente.';
+            if (resumo) {
+                resumo.style.display = 'block';
+                resumo.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+                    '<span class="badge badge-concluido">' + valid.length + ' válidas</span>' +
+                    '<span class="badge badge-pendente">' + invalid.length + ' pendências</span>' +
+                    '<span class="badge badge-andamento">' + valid.filter(r => r.action === 'atualizar').length + ' atualizações</span>' +
+                    '</div>';
+            }
+            if (head) head.innerHTML = '<tr><th>Linha</th><th>Cadastro</th><th>Identificação</th><th>Cliente</th><th>Situação</th></tr>';
+            if (body) body.innerHTML = DBS_CONTROL_IMPORT_ROWS.slice(0, 200).map(r => {
+                const cadastro = tipo === 'clientes' ? r.nome : (r.tag || '—');
+                const identificacao = tipo === 'clientes' ? r.cnpj : (r.tipoEquipamento || '—');
+                const cliente = tipo === 'equipamentos' ? (ERP_STATE.clientes.find(c => String(c.id) === String(r.clienteId))?.nome || '—') : '—';
+                return '<tr><td>' + r.rowNumber + '</td><td><strong>' + escDbsControl(cadastro) + '</strong></td><td>' + escDbsControl(identificacao) + '</td><td>' + escDbsControl(cliente) + '</td><td>' +
+                    (r.valid ? '<span class="badge badge-concluido">' + (r.action === 'atualizar' ? 'Atualizar' : 'Novo') + '</span>' : '<span class="badge badge-danger">' + escDbsControl(r.error) + '</span>') +
+                    '</td></tr>';
+            }).join('');
+            if (preview) preview.style.display = safeRows.length ? 'block' : 'none';
+            if (confirm) confirm.disabled = valid.length === 0;
+        }
+
+        function confirmarImportacao() {
+            const valid = DBS_CONTROL_IMPORT_ROWS.filter(r => r.valid);
+            if (!valid.length) return;
+            const tipo = DBS_CONTROL_IMPORT_TYPE;
+            let novos = 0, atualizados = 0;
+            if (tipo === 'clientes') {
+                valid.forEach(r => {
+                    const doc = normalizarDocumentoImportacao(r.cnpj);
+                    let cliente = ERP_STATE.clientes.find(c => normalizarDocumentoImportacao(c.cnpj) === doc);
+                    if (cliente) {
+                        cliente.nome = r.nome || cliente.nome;
+                        cliente.cnpj = r.cnpj || cliente.cnpj;
+                        if (r.endereco) cliente.endereco = r.endereco;
+                        if (r.contato) cliente.contato = r.contato;
+                        atualizados++;
+                    } else {
+                        ERP_STATE.clientes.push({ id: proximoIdSeguro(ERP_STATE.clientes), nome:r.nome, cnpj:r.cnpj, endereco:r.endereco, contato:r.contato });
+                        novos++;
+                    }
+                });
+            } else if (tipo === 'equipamentos') {
+                valid.forEach(r => {
+                    let eq = ERP_STATE.equipamentos.find(e => String(e.tag || '').trim().toLowerCase() === r.tag.toLowerCase() && String(e.clienteId) === String(r.clienteId));
+                    if (eq) {
+                        eq.tipo = r.tipoEquipamento || eq.tipo;
+                        eq.marca = r.marca || eq.marca;
+                        eq.modelo = r.modelo || eq.modelo;
+                        eq.serie = r.serie || eq.serie;
+                        eq.capacidade = r.capacidade || eq.capacidade;
+                        eq.ambiente = r.ambiente || eq.ambiente;
+                        atualizados++;
+                    } else {
+                        ERP_STATE.equipamentos.push({ id: proximoIdSeguro(ERP_STATE.equipamentos), clienteId:r.clienteId, tag:r.tag, tipo:r.tipoEquipamento, marca:r.marca, modelo:r.modelo, serie:r.serie, capacidade:r.capacidade, ambiente:r.ambiente });
+                        novos++;
+                    }
+                });
+            }
+            saveState();
+            renderizarTudo();
+            const msg = document.getElementById('import-mensagem');
+            if (msg) msg.textContent = 'Importação concluída: ' + novos + ' novo(s) e ' + atualizados + ' atualizado(s). Nenhum cadastro existente foi apagado.';
+            const confirm = document.getElementById('import-confirmar');
+            if (confirm) confirm.disabled = true;
+            DBS_CONTROL_IMPORT_ROWS = [];
+            const file = document.getElementById('import-arquivo');
+            if (file) file.value = '';
+        }
+
+        function baixarModeloImportacao() {
+            const tipo = document.getElementById('import-tipo')?.value || 'clientes';
+            const headers = tipo === 'equipamentos'
+                ? ['cliente_cnpj','cliente_nome','tag','tipo','marca','modelo','serie','capacidade','ambiente']
+                : ['nome','cnpj','endereco','contato'];
+            const csv = headers.join(';') + '\n' + headers.map(h => h).join(';') + '\n';
+            const blob = new Blob(['\\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'modelo_importacao_' + tipo + '.csv';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 500);
+        }
+
         function salvarNovaOS(e) {
             e.preventDefault();
             const cliId = parseInt(document.getElementById('os-select-cliente').value);
