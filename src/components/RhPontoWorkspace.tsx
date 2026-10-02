@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { openRhPrint } from "@/lib/rh.exports";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, UserX, AlertTriangle, BriefcaseBusiness, ChevronRight, ClipboardCheck, Filter, History, Save, Search, XCircle, FileDown, FileSpreadsheet } from "lucide-react";
 import { getMyProfile } from "@/lib/auth.functions";
@@ -167,9 +168,7 @@ function PontoRh() {
       <table><thead><tr><th>Indicador</th><th>Resultado</th></tr></thead><tbody>
       <tr><td>Colaborador</td><td>${esc(item.employee.full_name)}</td></tr><tr><td>Unidade</td><td>${esc(item.employee.unit||"Sem unidade")}</td></tr><tr><td>Competência</td><td>${esc(monthLabel)}</td></tr><tr><td>Horas previstas</td><td>${moneyTime(item.expected)}</td></tr><tr><td>Horas trabalhadas</td><td>${moneyTime(item.worked)}</td></tr><tr><td>Faltas</td><td>${item.absences}</td></tr><tr><td>Atestados</td><td>${item.attestados}</td></tr><tr><td>Atrasos</td><td>${moneyTime(item.late)}</td></tr><tr><td>Horas extras</td><td>${moneyTime(item.overtime)}</td></tr><tr><td>Saídas antecipadas</td><td>${moneyTime(item.early)}</td></tr><tr><td>Ponto incompleto</td><td>${item.incomplete}</td></tr><tr><td>Outras ocorrências justificadas</td><td>${item.justified}</td></tr>
       </tbody></table>`;
-    const w=window.open("","_blank","width=1200,height=800"); if(!w) return;
-    w.document.write(`<!doctype html><html><head><title>DBS AIR · ${esc(title)}</title><style>body{font-family:Arial,sans-serif;color:#172033;padding:28px}h1{margin:0;font-size:22px}h2{font-size:13px;color:#64748b;margin:5px 0 22px;text-transform:capitalize}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.cards div{border:1px solid #dbe2ea;border-radius:10px;padding:12px}.cards span{display:block;color:#64748b;font-size:9px;font-weight:bold;text-transform:uppercase}.cards b{display:block;font-size:18px;margin-top:5px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}th{background:#f1f5f9;font-size:9px;text-transform:uppercase}.footer{margin-top:22px;color:#64748b;font-size:9px}@media print{body{padding:10px}.no-print{display:none}}@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}}</style></head><body><h1>DBS AIR REFRIGERAÇÃO LTDA</h1><h2>${esc(title)} · ${esc(item.employee.full_name)} · ${esc(monthLabel)}</h2>${body}<div class="footer">As marcações originais permanecem preservadas. Ocorrências administrativas são registradas separadamente pelo RH.</div><button class="no-print" onclick="window.print()" style="margin-top:18px;padding:9px 14px">Imprimir / Salvar PDF</button></body></html>`);
-    w.document.close();
+    openRhPrint(title, item.employee.full_name + " · " + monthLabel, body);
   };
 
   const openMonthlyReport = () => {
@@ -180,9 +179,7 @@ function PontoRh() {
     const totalExtra = monthlySummary.reduce((a,r)=>a+r.overtime,0);
     const totalLate = monthlySummary.reduce((a,r)=>a+r.late,0);
     const rowsHtml = monthlySummary.map(r => `<tr><td><strong>${r.employee.full_name}</strong><br><small>${r.employee.unit||"Sem unidade"}</small></td><td>${r.days}</td><td>${moneyTime(r.expected)}</td><td>${moneyTime(r.worked)}</td><td>${moneyTime(r.overtime)}</td><td>${moneyTime(r.late)}</td><td>${r.early ? moneyTime(r.early) : "—"}</td><td>${r.absences}</td><td>${r.justified}</td><td>${r.incomplete}</td></tr>`).join("");
-    const w = window.open("", "_blank", "width=1200,height=800");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>Espelho RH - ${monthLabel}</title><style>
+    const body = `<!doctype html><html><head><title>Espelho RH - ${monthLabel}</title><style>
       body{font-family:Arial,sans-serif;color:#172033;padding:32px}h1{margin:0;font-size:24px}h2{font-size:14px;margin:4px 0 24px;color:#64748b;text-transform:capitalize}
       .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.kpi{border:1px solid #e2e8f0;border-radius:10px;padding:12px}.kpi b{display:block;font-size:20px;margin-top:5px}.kpi span{font-size:10px;color:#64748b;text-transform:uppercase;font-weight:bold}
       table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f1f5f9;text-align:left;text-transform:uppercase;font-size:9px}th,td{padding:9px;border-bottom:1px solid #e2e8f0}small{color:#64748b}.footer{margin-top:25px;font-size:10px;color:#64748b}
@@ -192,7 +189,8 @@ function PontoRh() {
     <table><thead><tr><th>Colaborador</th><th>Dias</th><th>Previsto</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Saída ant.</th><th>Faltas</th><th>Justif.</th><th>Incompleto</th></tr></thead><tbody>${rowsHtml}</tbody></table>
     <p class="footer">Relatório gerado pelo módulo RH. As marcações originais permanecem preservadas; ocorrências administrativas são tratadas separadamente.</p>
     <button class="no-print" onclick="window.print()" style="margin-top:20px;padding:10px 16px">Imprimir / Salvar PDF</button></body></html>`);
-    w.document.close();
+    w.document.close(;
+    openRhPrint("Relatório Gerencial de Folha de Ponto", monthLabel, body);
   };
 
   const active=(employees.data??[]).filter((e:any)=>e.ponto_access_enabled).length;
