@@ -638,7 +638,7 @@ export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
-    const { data, error } = await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key")
+    const { data, error } = await supabaseAdmin.from("users").select("id, auth_id, username, email, cpf, full_name, status, role_key")
       .eq("role_key", "COLABORADOR").eq("status", "ativo").order("full_name");
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -646,11 +646,11 @@ export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; dbs_control_enabled?: boolean }) => {
+  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; user_id?: string; dbs_control_enabled?: boolean }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     if ((input.enabled || input.dbs_control_enabled) && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
     if (input.dbs_control_enabled && !input.enabled) throw new Error("O DBS CONTROL exige acesso à Folha de Ponto no mesmo login.");
-    return { ...input, login_identifier: input.login_identifier?.trim() || undefined, dbs_control_enabled: Boolean(input.dbs_control_enabled) };
+    return { ...input, login_identifier: input.login_identifier?.trim() || undefined, user_id: input.user_id?.trim() || undefined, dbs_control_enabled: Boolean(input.dbs_control_enabled) };
   })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
@@ -702,16 +702,34 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       return { ok: true, enabled: false, user: null, initial_password: null };
     }
     const identifier = data.login_identifier!;
-    const digits = identifier.replace(/\\D/g, "");
-    const isEmail = identifier.includes("@");
-    let query = supabaseAdmin.from("users").select("id, username, email, cpf, full_name, role_key, status").limit(1);
-    if (isEmail) query = query.ilike("email", identifier);
-    else if (digits.length === 11) query = query.eq("cpf", digits);
-    else query = query.ilike("username", identifier);
-    const { data: appUser, error: userError } = await query.maybeSingle();
+    let appUser: any = null;
+    let userError: any = null;
+
+    // O vínculo deve usar o ID interno do usuário, não um texto (username/e-mail)
+    // que pode mudar ou até coincidir com outro cadastro.
+    if (data.user_id) {
+      const result = await supabaseAdmin
+        .from("users")
+        .select("id, auth_id, username, email, cpf, full_name, role_key, status")
+        .eq("id", data.user_id)
+        .maybeSingle();
+      appUser = result.data;
+      userError = result.error;
+    } else {
+      const digits = identifier.replace(/\\D/g, "");
+      const isEmail = identifier.includes("@");
+      let query = supabaseAdmin.from("users").select("id, auth_id, username, email, cpf, full_name, role_key, status").limit(1);
+      if (isEmail) query = query.ilike("email", identifier);
+      else if (digits.length === 11) query = query.eq("cpf", digits);
+      else query = query.ilike("username", identifier);
+      const result = await query.maybeSingle();
+      appUser = result.data;
+      userError = result.error;
+    }
     if (userError) throw new Error(userError.message);
     if (!appUser) throw new Error("Usuário não encontrado. Crie primeiro o acesso em Usuários vinculados.");
     if (appUser.status !== "ativo") throw new Error("O usuário encontrado está inativo.");
+    if (!appUser.auth_id) throw new Error("Este usuário ainda não possui uma conta de login autenticável. Recrie/complete o acesso em Usuários vinculados antes de vincular ao RH.");
     if (["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(appUser.role_key)) throw new Error("Este login pertence a um administrador e não pode ser vinculado ao funcionário.");
     if (appUser.role_key !== "COLABORADOR") throw new Error("O usuário precisa estar classificado como COLABORADOR em Usuários vinculados.");
     const { data: currentLink, error: currentLinkError } = await supabaseAdmin
