@@ -77,6 +77,7 @@ function AdminPage() {
   }, [profile.data, navigate]);
 
   const isSuperAdmin = profile.data?.role_key === "SUPER_ADMIN";
+  const canAccessRh = isSuperAdmin || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "");
 
   async function signOut() {
     await qc.cancelQueries();
@@ -118,7 +119,7 @@ function AdminPage() {
           >
             <Users className="h-4 w-4" /> Usuários vinculados
           </button>
-          {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
+          {canAccessRh && (
             <button
               onClick={() => setTab("passage")}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "passage" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
