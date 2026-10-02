@@ -7,6 +7,8 @@ import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
 
+// DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
+
 export const Route = createFileRoute("/_authenticated/dbs-control")({
   head: () => ({ meta: [{ title: "DBS CONTROL · DBS Air" }, { name: "robots", content: "noindex" }] }),
   component: DbsControlPage,
