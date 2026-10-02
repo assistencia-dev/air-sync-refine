@@ -138,7 +138,6 @@ function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups, payroll }: { r
     const now = new Date();
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).reduce((sum, x) => sum + Number(x.amount_cents ?? 0), 0);
-  const estimatedDailyBenefits = vtDaily + vaDaily;
   return <section className="space-y-5">
     <div className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm sm:p-7">
       <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#F59E0B]">RH · folha e custos</p>
@@ -148,8 +147,8 @@ function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups, payroll }: { r
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard label={latest ? "Bruto da última folha" : "Salários cadastrados"} value={money(salaryTotal)} />
       {latest && <SummaryCard label="Líquido da última folha" value={money(realNet)} />}
-      <SummaryCard label="Benefícios pagos no mês" value={money(benefitsMonth)} />
-      <SummaryCard label="Custo diário VT + VA" value={money(estimatedDailyBenefits)} />
+      <SummaryCard label="Competência da folha" value={latest ? String(latest.competence).slice(0,7) : "Sem folha calculada"} />
+      <SummaryCard label="Vale/benefícios pagos no mês" value={money(benefitsMonth)} />
       <SummaryCard label="Funcionários com salário" value={registry.filter(e => String(e.registration_data?.salary ?? "").trim()).length} />
     </div>
     <div className="grid gap-4 lg:grid-cols-2">
