@@ -32,12 +32,11 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const alerts = useQuery({ queryKey: ["rh-workspace-alerts"], queryFn: () => getRhDashboardAlerts(), staleTime: 30_000 });
 
   const summary = useMemo(() => {
-    const unique = new Set<string>();
-    for (const e of [...(registry.data ?? []), ...(vt.data ?? []), ...(va.data ?? [])]) unique.add((e.full_name + "|" + e.unit).toLowerCase());
+    const employees = registry.data ?? [];
     const vtTotal = (vtTopups.data ?? []).reduce((n, x) => n + Number(x.amount_cents ?? 0), 0);
     const vaTotal = (vaTopups.data ?? []).reduce((n, x) => n + Number(x.amount_cents ?? 0), 0);
     return {
-      employees: unique.size,
+      employees: employees.length,
       ponto: (ponto.data ?? []).filter((e: any) => e.ponto_access_enabled).length,
       vt: (vt.data ?? []).length,
       va: (va.data ?? []).length,
