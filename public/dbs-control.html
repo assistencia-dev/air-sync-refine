@@ -639,10 +639,16 @@
 
         function saveState() {
             const persistableState = getPersistableState();
-            localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                version: DBS_CONTROL_STATE_VERSION,
-                data: persistableState
-            }));
+            // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
+            // espaço (principalmente por fotos), o salvamento na nuvem ainda deve ocorrer.
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
             if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state: persistableState }, '*');
             }
@@ -672,17 +678,29 @@
                     }));
                 } catch (_) {}
                 return migrated;
-            } catch {
-                localStorage.removeItem('DBS_AIR_ERP_STATE');
+            } catch (error) {
+                // Nunca apaga silenciosamente um cache que não conseguiu ser lido.
+                // Mantemos uma cópia bruta para diagnóstico e iniciamos uma sessão vazia.
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
+                        raw: saved,
+                        backedUpAt: new Date().toISOString(),
+                        reason: String(error?.message || error || 'JSON inválido')
+                    }));
+                } catch (_) {}
+                console.error('Cache local do DBS CONTROL inválido; backup preservado.', error);
                 return JSON.parse(JSON.stringify(INITIAL_STATE));
             }
         }
 
         function resetarDadosPadrao() {
-            if(confirm("Este botão limpa os dados locais deste navegador. Deseja continuar?")) {
+            if (window.parent !== window) {
+                alert("O DBS CONTROL está conectado à base compartilhada. O cache local não pode ser limpo por este botão, para evitar apagar dados da empresa.");
+                return;
+            }
+            if(confirm("Este botão limpa somente os dados locais deste navegador. Deseja continuar?")) {
                 localStorage.removeItem('DBS_AIR_ERP_STATE');
                 ERP_STATE = JSON.parse(JSON.stringify(INITIAL_STATE));
-                saveState();
                 renderizarTudo();
             }
         }
@@ -1274,6 +1292,13 @@
             const canvas = document.getElementById(id);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+            const width = Math.max(320, Math.round(rect.width));
+            const height = Math.max(100, Math.round(rect.height));
+            canvas.width = Math.round(width * ratio);
+            canvas.height = Math.round(height * ratio);
+            ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
             
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#0f172a';
@@ -1377,7 +1402,7 @@
                 return;
             }
 
-            const finishButton = document.querySelector(`[onclick="concluirOSMobile('${osId}')"]`);
+            const finishButton = canvas.closest('.employee-execution-body')?.querySelector('.employee-finish');
             if (finishButton) { finishButton.disabled = true; finishButton.textContent = 'Salvando atendimento...'; }
 
             try {
