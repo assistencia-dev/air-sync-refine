@@ -115,7 +115,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
+          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-bold text-white"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
           <button onClick={() => exportRhEmployeeRegistryPdf(filteredEmployees)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-slate-900"><FileDown className="h-4 w-4"/>Relatório / PDF</button>
           <button
             onClick={() => {
@@ -130,13 +130,13 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
       </div>
       <div className="p-5 sm:p-7">
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ativos</p><p className="mt-1 text-2xl font-black text-emerald-300">{activeCount}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ativos</p><p className="mt-1 text-2xl font-black text-emerald-700">{activeCount}</p></div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Inativos</p><p className="mt-1 text-2xl font-black text-slate-600">{inactiveCount}</p></div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Acessos vinculados</p><p className="mt-1 text-2xl font-black text-sky-300">{accessCount}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Acessos vinculados</p><p className="mt-1 text-2xl font-black text-sky-700">{accessCount}</p></div>
         </div>
         <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, unidade, cargo ou CPF..." className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-500" />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-200">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700">
             <option value="ativos">Somente ativos</option><option value="todos">Todos os funcionários</option><option value="inativos">Somente inativos</option>
           </select>
           <select value={accessFilter} onChange={(e) => setAccessFilter(e.target.value as typeof accessFilter)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-200">
