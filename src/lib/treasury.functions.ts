@@ -55,7 +55,7 @@ export const saveTreasuryCloudState = createServerFn({ method: "POST" })
 
     const { data: saved, error } = await supabaseAdmin
       .from("treasury_snapshots")
-      .upsert(payload, { onConflict: "scope_key" })
+      .upsert(payload as any, { onConflict: "scope_key" })
       .select("state, state_version, updated_at")
       .single();
 

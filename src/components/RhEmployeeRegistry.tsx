@@ -343,7 +343,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
     queryFn: () => getRhEmployee360({ data: { employee_id: employee.id } }),
   });
   const data = q.data;
-  const registration = data?.employee?.registration_data ?? employee.registration_data ?? {};
+  const registration = (data?.employee?.registration_data ?? employee.registration_data ?? {}) as Record<string, any>;
   const money = (c: unknown) => {
     const n = Number(c ?? 0);
     return Number.isFinite(n) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n / 100) : "—";

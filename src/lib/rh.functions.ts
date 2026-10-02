@@ -490,7 +490,7 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       const { data: employee, error } = await supabaseAdmin.from("rh_employees").update({
         full_name: data.full_name,
         unit: data.unit,
-        registration_data: data.registration_data,
+        registration_data: data.registration_data as any,
         is_active: current.is_active,
       }).eq("id", data.id)
         .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
@@ -514,7 +514,7 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       registry_employee_id: null,
     };
     const { data: created, error: createError } = await supabaseAdmin.from("rh_employees")
-      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false })
+      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false } as any)
       .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
     if (createError) throw new Error(createError.message);
     const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)

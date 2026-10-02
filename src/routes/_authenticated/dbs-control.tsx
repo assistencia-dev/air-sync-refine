@@ -54,7 +54,7 @@ function DbsControlPage() {
               "*",
             );
           } else if (localState) {
-            const saved = await saveDbsControlCloudState({ state: localState });
+            const saved = await saveDbsControlCloudState({ data: { state: localState } });
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
@@ -90,9 +90,11 @@ function DbsControlPage() {
           let employeeId = existing?.id;
           if (!employeeId) {
             const created = await saveRhEmployeeRecord({
-              full_name: name,
-              unit: "Não informado",
-              registration_data: { email, phone, position, source: "DBS_CONTROL" },
+              data: {
+                full_name: name,
+                unit: "Não informado",
+                registration_data: { email, phone, position, source: "DBS_CONTROL" },
+              },
             } as any);
             employeeId = created.id;
           }
@@ -110,19 +112,23 @@ function DbsControlPage() {
 
           if (!linked) {
             await createClientUser({
-              full_name: name,
-              email,
-              role_key: "COLABORADOR",
-              password,
-            });
+              data: {
+                full_name: name,
+                email,
+                role_key: "COLABORADOR",
+                password,
+              },
+            } as any);
           }
 
           await saveRhEmployeeAccess({
-            employee_id: employeeId,
-            enabled: true,
-            login_identifier: email,
-            dbs_control_enabled: true,
-          });
+            data: {
+              employee_id: employeeId,
+              enabled: true,
+              login_identifier: email,
+              dbs_control_enabled: true,
+            },
+          } as any);
 
           iframeRef.current?.contentWindow?.postMessage(
             { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: true, email, employee_id: employeeId, name, position, phone },
@@ -145,7 +151,7 @@ function DbsControlPage() {
           const state = pendingStateRef.current;
           if (!state) return;
           try {
-            await saveDbsControlCloudState({ state });
+            await saveDbsControlCloudState({ data: { state } });
             setCloudError(null);
           } catch (err) {
             console.error("DBS Control cloud save:", err);

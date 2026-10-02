@@ -70,7 +70,7 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
   };
   const { data, error } = await supabase
     .from("treasury_snapshots")
-    .upsert(payload, { onConflict: "scope_key" })
+    .upsert(payload as any, { onConflict: "scope_key" })
     .select("state, state_version, updated_at")
     .single();
   if (error) throw new Error(error.message);
@@ -141,7 +141,7 @@ function TreasuryPage() {
                 { type: "DBS_TREASURY_CLOUD_STATE", state: cloudState },
                 "*",
               );
-            } else {
+            } else if (localState) {
               localState._meta = {
                 ...(localState._meta || {}),
                 version: 5,
