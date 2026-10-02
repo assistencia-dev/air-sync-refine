@@ -107,9 +107,11 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   return input;
 }).handler(async ({ context, data }) => {
   const employee = await getEmployee(context.userId);
-  const { data: rows, error } = await supabaseAdmin.from("rh_ponto_records").select("punch_type").eq("employee_id", employee.id).eq("work_date", data.work_date).order("punched_at", { ascending: false }).limit(1);
+  const { data: rows, error } = await supabaseAdmin.from("rh_ponto_records").select("punch_type").eq("employee_id", employee.id).eq("work_date", data.work_date).order("punched_at", { ascending: true });
   if (error) throw new Error(error.message);
-  const last = rows?.[0]?.punch_type as PointType | undefined;
+  const existingTypes = (rows ?? []).map((row) => row.punch_type as PointType);
+  if (existingTypes.includes(data.punch_type)) throw new Error("Esta marcação já foi registrada hoje.");
+  const last = existingTypes[existingTypes.length - 1];
   const next = TYPES[Math.min(last ? TYPES.indexOf(last) + 1 : 0, TYPES.length)];
   if (!next || data.punch_type !== next) throw new Error(`A próxima marcação deve ser ${next ?? "nenhuma"}.`);
 
