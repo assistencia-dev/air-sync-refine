@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Download, FileText, Plus, WalletCards } from "lucide-react";
 import { createRhEmployeeAdvance, cancelRhEmployeeAdvance, listRhEmployeeAdvances } from "@/lib/rh.finance.functions";
@@ -299,7 +299,7 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) {
   return (
     <label className={className + " text-xs font-bold text-slate-700"}>
       {label}
@@ -312,6 +312,6 @@ function Info({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-bold text-slate-800">{value}</p></div>;
 }
 
-function Kpi({ label, value }: { label: string; value: React.ReactNode }) {
+function Kpi({ label, value }: { label: string; value: ReactNode }) {
   return <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-lg font-black text-slate-900">{value}</p></div>;
 }
