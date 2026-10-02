@@ -1,3 +1,4 @@
+// DBS AIR RH: viewport-safe vale request flow; message remains optional.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, CheckCircle2, Clock3, FileText, PenLine, Plus, Send, WalletCards, X, Eraser } from "lucide-react";
