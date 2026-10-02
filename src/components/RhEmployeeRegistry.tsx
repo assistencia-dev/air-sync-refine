@@ -88,7 +88,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
     if (!employee) return;
     setEditing(employee);
     setFormOpen(true);
-  }, [initialEmployeeId, employees.isLoading, employeeList]);
+  }, [initialEmployeeId, employees.isLoading, employees.data]);
   const activeCount = employeeList.filter((employee) => employee.is_active).length;
   const inactiveCount = employeeList.length - activeCount;
   const accessCount = employeeList.filter((employee) => employee.access?.access_enabled).length;
