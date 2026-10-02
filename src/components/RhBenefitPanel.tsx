@@ -175,7 +175,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
           />
         )}
         {section === "history" && (
-          <HistoryList employees={activeEmployees} topups={(topups.data ?? []) as Topup[]} />
+          <HistoryList benefitType={benefitType} employees={activeEmployees} topups={(topups.data ?? []) as Topup[]} />
         )}
       </div>
       {employeeModal && (
@@ -436,7 +436,7 @@ function TopupForm({
   );
 }
 
-function HistoryList({ employees, topups }: { employees: Employee[]; topups: Topup[] }) {
+function HistoryList({ benefitType, employees, topups }: { benefitType: RhBenefitType; employees: Employee[]; topups: Topup[] }) {
   const byId = useMemo(() => new Map(employees.map((item) => [item.id, item])), [employees]);
   return (
     <div>

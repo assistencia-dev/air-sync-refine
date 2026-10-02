@@ -12,7 +12,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
-import type { EmployeeBenefitConfig } from './benefitCalculations';
+import type { EmployeeBenefitConfig } from '@/utils/benefitCalculations';
 import {
   configureRhEmployeeBenefit,
   deactivateRhEmployeeRecord,
@@ -20,6 +20,7 @@ import {
   listRhEmployees,
   reactivateRhEmployeeRecord,
   saveRhEmployeeRecord,
+  updateRhEmployee,
 } from '@/lib/rh.functions';
 
 // Type alias for rh_employees row

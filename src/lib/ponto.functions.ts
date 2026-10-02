@@ -87,7 +87,7 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
   } else patch.ponto_portal_user_id = null;
   const { data: employeeRecord } = await supabaseAdmin.from("rh_employees").select("id, registry_employee_id, is_active").eq("id", data.employee_id).maybeSingle();
   if (!employeeRecord || !employeeRecord.is_active) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
-  const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(patch).eq("id", data.employee_id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
+  const { data: employee, error } = await supabaseAdmin.from("rh_employees").update(patch as any).eq("id", data.employee_id).select("id, full_name, ponto_access_enabled, ponto_portal_user_id").single();
   if (error) throw new Error(error.message);
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: actor.id, action: data.enabled ? "ACESSO_PONTO_LIBERADO" : "ACESSO_PONTO_REVOGADO", details: { portal_identifier: data.enabled ? data.portal_identifier : null } });
   return employee;
