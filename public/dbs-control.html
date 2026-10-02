@@ -257,6 +257,222 @@
         body.dbs-control-employee-mode #tab-compras { display:none !important; }
         body.dbs-control-employee-mode #tab-pwa { display:block !important; }
         body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:700px; }
+    
+        /* VISUAL LIGHT PASS v1 */
+        /* Apenas refinamento visual: nenhuma função, campo, fluxo ou dado é removido. */
+        :root {
+            --color-bg: #f6f8fb;
+            --color-surface: #ffffff;
+            --color-sidebar: #ffffff;
+            --color-sidebar-hover: #f0f7ff;
+            --color-primary: #1677d2;
+            --color-primary-dark: #0f63b7;
+            --color-accent: #16a36b;
+            --color-warning: #d99000;
+            --color-danger: #d94a4a;
+            --text-main: #172033;
+            --text-muted: #667085;
+            --border-color: #dfe5ec;
+            --border-light: #e9edf2;
+            --radius-sm: 6px;
+            --radius-md: 9px;
+            --shadow-sm: 0 1px 2px rgba(15,23,42,.035);
+        }
+
+        body {
+            background: var(--color-bg);
+            color: var(--text-main);
+            font-size: 13px;
+        }
+
+        aside {
+            border-right: 1px solid var(--border-light);
+            background: #fff;
+            color: var(--text-main);
+        }
+
+        .brand-header {
+            padding: 16px 18px;
+            background: #fff;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .brand-title { color: #18304d; }
+        .brand-badge {
+            background: #eaf4ff;
+            color: #1267b5;
+            border: 1px solid #d5e9fb;
+        }
+
+        .nav-menu { padding: 8px 0; }
+
+        .nav-section {
+            padding: 12px 18px 5px;
+            color: #98a2b3;
+        }
+
+        .nav-item {
+            margin: 2px 8px;
+            padding: 8px 10px;
+            border-left: 2px solid transparent;
+            border-radius: 7px;
+            color: #526174;
+            font-weight: 600;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background: #f0f7ff;
+            color: #1267b5;
+            border-left-color: var(--color-primary);
+        }
+
+        header {
+            padding: 12px 22px;
+            border-bottom: 1px solid var(--border-light);
+            box-shadow: none;
+        }
+
+        .page-title h1 { font-size: 16px; }
+        .page-title p { color: #7a8699; }
+
+        .btn {
+            box-shadow: none;
+            border-radius: 7px;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+        }
+
+        .btn-secondary {
+            background: #fff;
+            border-color: #dfe5ec;
+            color: #344054;
+        }
+
+        .tab-view {
+            padding: 18px 22px;
+        }
+
+        .metrics-grid {
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .metric-card {
+            border-radius: 9px;
+            padding: 13px 14px;
+            box-shadow: none;
+        }
+
+        .metric-value { font-size: 21px; }
+
+        .data-card {
+            border-radius: 9px;
+            box-shadow: none;
+            margin-bottom: 16px;
+        }
+
+        .data-header {
+            padding: 11px 14px;
+            background: #fbfcfe;
+        }
+
+        .filter-bar input,
+        .filter-bar select,
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            border-color: #dfe5ec;
+            box-shadow: none;
+        }
+
+        th {
+            background: #f7f9fc;
+            border-bottom-color: #e5e9ef;
+            padding: 8px 11px;
+        }
+
+        td {
+            padding: 9px 11px;
+            border-bottom-color: #edf0f4;
+        }
+
+        tr:hover { background: #fafcff; }
+
+        .kanban-board { gap: 10px; }
+        .kanban-col {
+            background: #f8fafc;
+            border-color: #e5e9ef;
+            border-radius: 9px;
+            padding: 10px;
+        }
+
+        .kanban-card {
+            border-color: #e5e9ef;
+            box-shadow: none;
+            border-radius: 7px;
+        }
+
+        .day-kpi-grid { gap: 10px; margin-bottom: 13px; }
+        .day-kpi {
+            border-radius: 9px;
+            box-shadow: none;
+            padding: 12px 13px;
+        }
+
+        .day-toolbar {
+            padding: 12px 14px;
+            border-radius: 9px;
+            margin-bottom: 13px;
+        }
+
+        .quick-start-grid { gap: 8px; padding: 12px 14px; }
+        .quick-start-action {
+            border-radius: 8px;
+            box-shadow: none;
+        }
+
+        .quick-flow {
+            padding: 9px 14px 11px;
+            background: #fbfcfe;
+        }
+
+        .employee-hero {
+            border-radius: 14px;
+            box-shadow: none;
+        }
+
+        .employee-toolbar,
+        .employee-order,
+        .employee-empty {
+            box-shadow: none;
+            border-radius: 12px;
+        }
+
+        .employee-grid > div { background: #f8fafc; }
+
+        /* Mantém o aplicativo do técnico com sua identidade própria, apenas reduzindo peso. */
+        .pwa-wrapper {
+            box-shadow: 0 4px 14px rgba(15,23,42,.12);
+        }
+
+        .pwa-box {
+            box-shadow: none;
+        }
+
+        @media(max-width:900px) {
+            .tab-view { padding: 14px 14px; }
+            header { padding: 11px 14px; }
+        }
+
+        @media(max-width:600px) {
+            aside { width: 235px; }
+            .metrics-grid { gap: 8px; }
+            .data-card { margin-bottom: 12px; }
+        }
+
     </style>
 </head>
 <body>
