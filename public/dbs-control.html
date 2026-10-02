@@ -171,6 +171,17 @@
           .employee-finish { margin-left:0; width:100%; }
         }
     
+        .employee-execution { background:linear-gradient(180deg,#fbfdff 0%,#f8fafc 100%); border:1px solid #dbe7f3; border-radius:16px; padding:14px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
+        .employee-execution summary { padding:2px 2px 10px; }
+        .employee-execution-body { margin-top:12px; gap:13px; }
+        .employee-fields-single label { display:block; }
+        .employee-fields-single textarea { min-height:118px; resize:vertical; line-height:1.55; }
+        .field-required { display:inline-flex; margin-left:6px; padding:2px 6px; border-radius:999px; background:#eff6ff; color:#2563eb; font-size:8px; letter-spacing:.04em; vertical-align:middle; }
+        .field-check-card { padding:12px; border:1px solid #dbe7f3; border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.035); }
+        .field-check-title { display:block; color:#0f172a; font-size:11px; font-weight:900; }
+        .field-check-summary small { display:block; margin-top:3px; color:#64748b; font-size:9px; font-weight:600; }
+        .field-check-item { cursor:pointer; transition:border-color .15s ease,background .15s ease,transform .15s ease; }
+        .field-check-item:hover { border-color:#bfdbfe; background:#f8fbff; transform:translateY(-1px); }
         .field-checklist { display:grid; gap:7px; margin-top:8px; }
         .field-check-item { display:flex; align-items:flex-start; gap:8px; padding:9px 10px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; font-size:11px; color:#334155; }
         .field-check-item input { margin-top:2px; accent-color:var(--color-primary); }
@@ -904,7 +915,7 @@
                 if (pChecklist !== sChecklist) {
                     const done = (s.checklist || []).filter(i => i.concluido).length;
                     const total = (s.checklist || []).length;
-                    adicionarHistoricoOS(os, 'checklist', 'Checklist atualizado', `${done}/${total} itens obrigatórios conferidos.`);
+                    adicionarHistoricoOS(os, 'checklist', 'Checklist atualizado', `${done}/${total} itens conferidos.`);
                 }
                 if (p.valor !== s.valor) adicionarHistoricoOS(os, 'financeiro', 'Valor da OS alterado', `R$ ${Number(p.valor || 0).toFixed(2)} → R$ ${Number(s.valor || 0).toFixed(2)}`);
             });
@@ -1122,12 +1133,19 @@
             doc.text(`Status Atual: ${o.status}`, 14, 134);
 
             doc.setFont("helvetica", "bold");
-            doc.text("Descrição do Trabalho / Diagnóstico:", 14, 144);
+            doc.text("Solicitação / descrição inicial:", 14, 144);
             doc.setFont("helvetica", "normal");
-            const descLines = doc.splitTextToSize(o.desc, 180);
+            const descLines = doc.splitTextToSize(o.desc || '—', 180);
             doc.text(descLines, 14, 150);
 
-            let curY = 165;
+            let curY = 150 + (descLines.length * 5) + 7;
+            doc.setFont("helvetica", "bold");
+            doc.text("Relato técnico da execução:", 14, curY);
+            doc.setFont("helvetica", "normal");
+            const relatoPDF = o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '—';
+            const relatoLines = doc.splitTextToSize(relatoPDF, 180);
+            doc.text(relatoLines, 14, curY + 6);
+            curY += 12 + (relatoLines.length * 5);
             if (o.pecasUsadas && o.pecasUsadas.length > 0) {
                 doc.setFont("helvetica", "bold");
                 doc.text("Insumos/Peças Aplicados:", 14, curY);
@@ -1140,15 +1158,14 @@
             }
 
             // CHECKLIST DE EXECUÇÃO
-            const checklistPDF = Array.isArray(o.checklist) ? o.checklist : [];
+            const checklistPDF = Array.isArray(o.checklist) ? o.checklist.filter(item => item && item.concluido) : [];
             if (checklistPDF.length) {
                 doc.setFont("helvetica", "bold");
-                doc.text("4. CHECKLIST DE EXECUÇÃO", 14, curY + 4);
+                doc.text("4. CHECKLIST CONFERIDO", 14, curY + 4);
                 curY += 10;
                 doc.setFont("helvetica", "normal");
                 checklistPDF.forEach(item => {
-                    const mark = item.concluido ? "[X]" : "[ ]";
-                    const lines = doc.splitTextToSize(`${mark} ${item.titulo}`, 175);
+                    const lines = doc.splitTextToSize(`[X] ${item.titulo}`, 175);
                     doc.text(lines, 14, curY);
                     curY += 5 * lines.length;
                     if (curY > 270) { doc.addPage(); curY = 20; }
@@ -1234,15 +1251,13 @@
                 .filter(Boolean);
 
             const incompletas = selecionadas.filter(os =>
-                !String(os.diagnostico || '').trim() ||
-                !String(os.trabalhoExecutado || '').trim() ||
-                !String(os.assinatura || '').trim() ||
-                (Array.isArray(os.checklist) && os.checklist.length > 0 && !checklistConcluido(os))
+                !String(os.relatoTecnico || os.diagnostico || os.trabalhoExecutado || '').trim() ||
+                !String(os.assinatura || '').trim()
             );
 
             if (incompletas.length) {
                 alert(
-                    `Não é possível concluir em lote. ${incompletas.length} OS(s) ainda possuem itens obrigatórios de execução pendentes (diagnóstico, trabalho, assinatura ou checklist). \\n\\nFinalize a execução pelo DBS CONTROL antes de concluir.`
+                    `Não é possível concluir em lote. ${incompletas.length} OS(s) ainda possuem informações obrigatórias de execução pendentes (relato técnico ou assinatura). \\n\\nFinalize a execução pelo DBS CONTROL antes de concluir.`
                 );
                 return;
             }
@@ -1355,7 +1370,7 @@
                 const checklistTotal = Array.isArray(o.checklist) ? o.checklist.length : 0;
                 const checklistDone = Array.isArray(o.checklist) ? o.checklist.filter(i => i.concluido).length : 0;
                 const checklistOk = !checklistTotal || checklistDone === checklistTotal;
-                const complete = hasDiag && hasWork && hasSig && checklistOk;
+                const complete = hasDiag && hasWork && hasSig;
                 const statusClass = o.status === 'Concluída' ? 'ok' : (/aguardando/i.test(o.status || '') ? 'wait' : 'pending');
                 const checkHtml = `<div class="day-check"><b>${hasDiag ? '✓' : '○'} Diagnóstico</b> · <b>${hasWork ? '✓' : '○'} Execução</b> · <b>${hasSig ? '✓' : '○'} Assinatura</b><br><span>${hasEvidence ? '✓ Evidência fotográfica registrada' : '○ Sem foto de evidência'}</span><br><span>${checklistTotal ? (checklistOk ? '✓ Checklist conferido' : '○ Checklist ' + checklistDone + '/' + checklistTotal) : '○ Checklist não configurado'}</span></div>`;
                 const conclusion = o.status === 'Concluída'
@@ -1634,18 +1649,23 @@
             ];
         }
 
+        function tipoPermiteChecklist(tipo) {
+            const t = String(tipo || '').toLowerCase();
+            return t.includes('preventiva') || t.includes('pmoc');
+        }
+
         function garantirChecklistOS(os) {
-            if (!os || !Array.isArray(os.checklist)) return [];
+            if (!os || !tipoPermiteChecklist(os.tipo) || !Array.isArray(os.checklist)) return [];
             return os.checklist;
         }
 
         function criarChecklistSeNecessario(os) {
-            if (!os) return [];
+            if (!os || !tipoPermiteChecklist(os.tipo)) return [];
             if (!Array.isArray(os.checklist) || !os.checklist.length) {
                 os.checklist = obterChecklistPadrao(os.tipo).map((titulo, index) => ({
-                    id: `check-${index + 1}`,
+                    id: 'check-' + (index + 1),
                     titulo,
-                    obrigatorio: true,
+                    obrigatorio: false,
                     concluido: false,
                     concluidoEm: null
                 }));
@@ -1658,30 +1678,64 @@
             return checklist.length > 0 && checklist.every(item => !item.obrigatorio || item.concluido);
         }
 
-        function marcarChecklistOS(osId, index, checked) {
+        function capturarRascunhoExecucao(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             if (!os) return;
+            const relato = document.getElementById('dbs-mob-relato-' + osId);
+            const canvas = document.getElementById('sig-canvas-' + osId);
+            if (relato) {
+                const valor = String(relato.value || '');
+                os.relatoTecnico = valor;
+                os.diagnostico = valor;
+                os.trabalhoExecutado = valor;
+            }
+            if (canvas) {
+                try {
+                    const assinatura = canvas.toDataURL('image/png');
+                    if (assinatura && assinatura.length > 200) os.assinatura = assinatura;
+                } catch (_) {}
+            }
+        }
+
+        function atualizarResumoChecklistDOM(osId) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os) return;
+            const checklist = garantirChecklistOS(os);
+            const total = checklist.length;
+            const concluidos = checklist.filter(i => i.concluido).length;
+            const badge = document.querySelector('[data-checklist-badge="' + osId + '"]');
+            if (badge) {
+                badge.textContent = total ? (concluidos + '/' + total + ' conferidos') : 'Opcional';
+                badge.className = 'field-check-badge ' + (total && concluidos === total ? 'done' : 'pending');
+            }
+        }
+
+        function marcarChecklistOS(osId, index, checked) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os || !tipoPermiteChecklist(os.tipo)) return;
+            capturarRascunhoExecucao(osId);
             const checklist = criarChecklistSeNecessario(os);
             if (!checklist[index]) return;
             checklist[index].concluido = Boolean(checked);
             checklist[index].concluidoEm = checked ? new Date().toISOString() : null;
             os.checklistAtualizadoEm = new Date().toISOString();
             saveState();
-            renderizarPWAScreen();
+            atualizarResumoChecklistDOM(osId);
         }
 
         function renderizarChecklistExecucao(os) {
+            if (!tipoPermiteChecklist(os?.tipo)) return '';
             const checklist = garantirChecklistOS(os);
-            if (!checklist.length) {
-                return '<div class="field-check-note">Esta OS é anterior à implantação do checklist. O fluxo existente permanece preservado.</div>';
-            }
+            if (!checklist.length) return '<div class="field-check-note">Checklist opcional para serviços preventivos e PMOC. Nenhum item foi aplicado a esta OS.</div>';
             const total = checklist.length;
             const concluidos = checklist.filter(i => i.concluido).length;
-            return `<div class="field-check-summary"><span>Checklist obrigatório</span><span class="field-check-badge ${concluidos === total ? 'done' : 'pending'}">${concluidos}/${total} concluídos</span></div>
-                <div class="field-checklist">${checklist.map((item, index) => `<label class="field-check-item"><input type="checkbox" ${item.concluido ? 'checked' : ''} onchange="marcarChecklistOS('${String(os.id).replace(/'/g,"\\'")}',${index},this.checked)"><span>${escDbsControl(item.titulo)}</span></label>`).join('')}</div>
-                <div class="field-check-note">Todos os itens obrigatórios precisam ser conferidos antes de concluir o atendimento.</div>`;
+            const itens = checklist.map((item, index) => '<label class="field-check-item"><input type="checkbox" ' + (item.concluido ? 'checked' : '') + ' onchange="marcarChecklistOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',' + index + ',this.checked)"><span>' + escDbsControl(item.titulo) + '</span></label>').join('');
+            return '<section class="field-check-card">' +
+                '<div class="field-check-summary"><div><span class="field-check-title">Checklist da preventiva / PMOC</span><small>Opcional · só entra no relatório se houver itens conferidos</small></div>' +
+                '<span class="field-check-badge ' + (concluidos > 0 && concluidos === total ? 'done' : 'pending') + '" data-checklist-badge="' + escDbsControl(os.id) + '">' + concluidos + '/' + total + ' conferidos</span></div>' +
+                '<div class="field-checklist">' + itens + '</div>' +
+                '<div class="field-check-note">Você pode concluir a OS sem marcar o checklist. Marque apenas o que foi realmente verificado.</div></section>';
         }
-
         function salvarNovaOS(e) {
             e.preventDefault();
             const cliId = parseInt(document.getElementById('os-select-cliente').value);
@@ -1707,13 +1761,15 @@
                 status: "Em Atendimento",
                 desc: document.getElementById('os-desc').value,
                 pecasUsadas: [],
-                checklist: obterChecklistPadrao(document.getElementById('os-select-tipo').value).map((titulo, index) => ({
-                    id: `check-${index + 1}`,
-                    titulo,
-                    obrigatorio: true,
-                    concluido: false,
-                    concluidoEm: null
-                })),
+                checklist: tipoPermiteChecklist(document.getElementById('os-select-tipo').value)
+                    ? obterChecklistPadrao(document.getElementById('os-select-tipo').value).map((titulo, index) => ({
+                        id: 'check-' + (index + 1),
+                        titulo,
+                        obrigatorio: false,
+                        concluido: false,
+                        concluidoEm: null
+                    }))
+                    : [],
                 assinatura: null,
                 fotoAntes: null,
                 fotoDepois: null
@@ -1828,9 +1884,10 @@
                             <div class="employee-execution-body">
                               <label>Peça / insumo</label>
                               <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
-                              <div class="employee-fields">
-                                <label>Diagnóstico<textarea id="dbs-mob-diag-${o.id}" rows="3" placeholder="Descreva a causa encontrada...">${escHtml(o.diagnostico || '')}</textarea></label>
-                                <label>Trabalho executado<textarea id="dbs-mob-work-${o.id}" rows="3" placeholder="Descreva o serviço realizado...">${escHtml(o.trabalhoExecutado || '')}</textarea></label>
+                              <div class="employee-fields employee-fields-single">
+                                <label>Relato técnico do atendimento <span class="field-required">Obrigatório</span>
+                                  <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado...">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
+                                </label>
                               </div>
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
                               <div class="employee-photo-grid">
@@ -1947,22 +2004,14 @@
         async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => o.id === osId);
             const canvas = document.getElementById(`sig-canvas-${osId}`);
-            const diagnosis = document.getElementById(`dbs-mob-diag-${osId}`);
-            const work = document.getElementById(`dbs-mob-work-${osId}`);
+            const relatoInput = document.getElementById(`dbs-mob-relato-${osId}`);
             const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
             const afterInput = document.getElementById(`dbs-mob-after-${osId}`);
 
             if (!os) return;
 
-            const diagnostico = String(diagnosis?.value || '').trim();
-            const trabalhoExecutado = String(work?.value || '').trim();
-            if (!diagnostico) { alert('Informe o diagnóstico antes de concluir a OS.'); diagnosis?.focus(); return; }
-            if (!trabalhoExecutado) { alert('Informe o trabalho executado antes de concluir a OS.'); work?.focus(); return; }
-            if (Array.isArray(os.checklist) && os.checklist.length > 0 && !checklistConcluido(os)) {
-                const pendentes = os.checklist.filter(item => item.obrigatorio && !item.concluido).length;
-                alert(`Conclua os ${pendentes} item(ns) pendentes do checklist antes de finalizar a OS.`);
-                return;
-            }
+            const relatoTecnico = String(relatoInput?.value || '').trim();
+            if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
             if (!canvas) { alert('A assinatura do cliente não foi carregada.'); return; }
 
             const signature = canvas.toDataURL('image/png');
@@ -1983,8 +2032,9 @@
                 ]);
 
                 os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
-                os.diagnostico = diagnostico;
-                os.trabalhoExecutado = trabalhoExecutado;
+                os.relatoTecnico = relatoTecnico;
+                os.diagnostico = relatoTecnico;
+                os.trabalhoExecutado = relatoTecnico;
                 os.fotoAntes = fotoAntes;
                 os.fotoDepois = fotoDepois;
                 os.assinatura = signature;
