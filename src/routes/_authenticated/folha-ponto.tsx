@@ -25,19 +25,22 @@ function FolhaPontoPage() {
   return (
     <main className="min-h-screen bg-[#f4f7f6] px-4 py-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="px-2 text-xs font-black uppercase tracking-wider text-slate-500">Portal do colaborador</div>
-          <div className="flex gap-1">
-            <button className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-white">Folha de Ponto</button>
-            {controlAccess.data?.enabled && (
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/dbs-control", replace: true })}
-                className="rounded-lg px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-50"
-              >
-                Minhas OS
-              </button>
-            )}
+        <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-600">DBS AIR · Portal do colaborador</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{profile.data?.full_name ?? profile.data?.username ?? "Colaborador"}</p>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+              <button type="button" className="rounded-lg bg-white px-4 py-2 text-xs font-black text-slate-900 shadow-sm">Folha de Ponto</button>
+              {controlAccess.data?.enabled && (
+                <button type="button" onClick={() => navigate({ to: "/dbs-control", replace: true })} className="rounded-lg px-4 py-2 text-xs font-black text-slate-600 transition hover:bg-white hover:text-slate-900">Minhas OS</button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-[11px] font-bold text-slate-400 sm:px-6">
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Sessão autenticada</span>
+            <span>Use o menu acima para alternar entre sua jornada e suas ordens de serviço.</span>
           </div>
         </div>
         <RhPontoEmployeePortal />
