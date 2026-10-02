@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 async function requireRhOperator(context: { userId: string }) {
-  const { data, error } = await supabaseAdmin.from("users").select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+  const { data, error } = await supabaseAdmin.from("users").select("id, username, role_key, status").eq("auth_id", context.userId).maybeSingle();
   if (error || !data || data.status !== "ativo" || (
     !["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "") &&
     !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")
