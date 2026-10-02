@@ -54,7 +54,13 @@ function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setError(null); setLoading(true);
     try {
-      const { email } = await resolveLogin({ data: { identifier } });
+      // E-mail pode autenticar diretamente no Supabase. Isso evita que uma
+      // indisponibilidade momentânea do resolver administrativo bloqueie o login
+      // em outro navegador/dispositivo. Usuário/CPF continuam usando o resolver.
+      const normalizedIdentifier = identifier.trim();
+      const email = normalizedIdentifier.includes("@")
+        ? normalizedIdentifier
+        : (await resolveLogin({ data: { identifier: normalizedIdentifier } })).email;
       const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
       if (signErr) throw signErr;
       const { data: session } = await supabase.auth.getSession();
