@@ -30,8 +30,12 @@ function FolhaPontoPage() {
           <div className="flex gap-1">
             <button className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-white">Folha de Ponto</button>
             {controlAccess.data?.enabled && (
-              <button onClick={() => navigate({ to: "/dbs-control" })} className="rounded-lg px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-50">
-                DBS CONTROL
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/dbs-control", replace: true })}
+                className="rounded-lg px-3 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-50"
+              >
+                Minhas OS
               </button>
             )}
           </div>
