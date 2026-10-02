@@ -673,16 +673,16 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
 
       // Mantém a tabela de acesso dedicada sincronizada com o cadastro central.
-      const { data: existingAccess, error: existingAccessError } = await supabaseAdmin
+      const { data: existingAccessRows, error: existingAccessError } = await supabaseAdmin
         .from("rh_employee_access")
         .select("id")
         .eq("employee_id", data.employee_id)
-        .maybeSingle();
+        .limit(50);
       if (existingAccessError) throw new Error(existingAccessError.message);
-      if (existingAccess?.id) {
+      if (existingAccessRows?.length) {
         const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
-          .update({ access_enabled: false, login_identifier: null })
-          .eq("id", existingAccess.id);
+          .update({ access_enabled: false })
+          .eq("employee_id", data.employee_id);
         if (accessUpdateError) throw new Error(accessUpdateError.message);
       }
 
@@ -697,8 +697,8 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
         actor_user_id: operator.id,
         action: "ACESSO_FUNCIONARIO_REVOGADO",
         entity_type: "rh_employee_access",
-        entity_id: existingAccess?.id ?? data.employee_id,
-        after_data: { access_enabled: false, login_identifier: null, user_id: linked?.ponto_portal_user_id ?? null },
+        entity_id: existingAccessRows?.[0]?.id ?? data.employee_id,
+        after_data: { access_enabled: false, login_identifier_preserved: true, user_id: linked?.ponto_portal_user_id ?? null },
       });
       return { ok: true, enabled: false, user: null, initial_password: null };
     }
