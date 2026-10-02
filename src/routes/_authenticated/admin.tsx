@@ -196,7 +196,7 @@ function AdminPage() {
           icon={<Users className="w-3.5 h-3.5" />}
           label="Usuários Vinculados"
         />
-        {NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "") && (
+        {canAccessRh && (
           <TabBtn
             active={tab === "passage"}
             onClick={() => setTab("passage")}
