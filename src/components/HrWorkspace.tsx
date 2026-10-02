@@ -131,8 +131,6 @@ function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups, payroll }: { r
       return sum + (Number.isFinite(value) ? Math.round(value * 100) : 0);
     }, 0);
   const realNet = latest?.rh_payroll_runs?.reduce((sum:number, r:any) => sum + Number(r.net_cents ?? 0), 0) ?? 0;
-  const vtDaily = vt.reduce((sum, e) => sum + Number(e.fare_cents ?? 0) * Number(e.trips_per_day ?? 1), 0);
-  const vaDaily = va.reduce((sum, e) => sum + Number(e.fare_cents ?? 0), 0);
   const benefitsMonth = [...vtTopups, ...vaTopups].filter(x => {
     const d = new Date(String(x.paid_at).length === 10 ? x.paid_at + "T12:00:00" : x.paid_at);
     const now = new Date();
