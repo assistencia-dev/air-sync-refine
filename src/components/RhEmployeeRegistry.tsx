@@ -563,8 +563,7 @@ function EmployeeForm({
               {employee ? "Editar funcionário" : "Novo funcionário"}
             </h3>
             <p className="mt-1 text-xs text-slate-400">
-              Preencha manualmente conforme a ficha funcional. O PDF é apenas um anexo, sem
-              interpretação automática.
+              Cadastro central do funcionário. Preencha somente informações que pertencem à ficha funcional; contratos, documentos, dependentes e histórico são registros complementares e não aparecem como campos fictícios neste formulário.
             </p>
           </div>
           <button onClick={onClose} className="text-xs font-bold text-slate-400">
@@ -584,16 +583,39 @@ function EmployeeForm({
             placeholder="Unidade / setor *"
             className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm sm:col-span-2"
           />
-          {FIELDS.map(([key, label]) => (
-            <input
-              key={key}
-              value={values[key] ?? ""}
-              onChange={(e) => update(key, e.target.value)}
-              placeholder={label}
-              type={key.includes("date") ? "date" : "text"}
-              className={`rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm ${key === "notes" ? "sm:col-span-2" : ""}`}
-            />
-          ))}
+          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => (
+                <label key={key} className="text-xs font-bold text-slate-400">{label}
+                  <input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Dados funcionais e remuneração</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {FIELDS.filter(([key]) => ["job_title","admission_date","salary","payment_type","work_hours","pis","ctps"].includes(key)).map(([key,label]) => (
+                <label key={key} className="text-xs font-bold text-slate-400">{label}
+                  {key==="payment_type" ? <select value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="">Selecione…</option><option>Mensal</option><option>Quinzenal</option><option>Semanal</option><option>Outro</option></select> :
+                   <input value={values[key] ?? ""} onChange={(e)=>update(key,key==="salary"?e.target.value.replace(/[^0-9,]/g,""):e.target.value)} type={key==="admission_date"?"date":"text"} placeholder={key==="salary"?"0,00":key==="work_hours"?"Ex.: 08:00 às 18:00":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/>}
+                  {key==="salary" && <span className="mt-1 block text-[10px] font-normal text-slate-500">Informe somente o valor em reais. Ex.: 3.500,00.</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
+            <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Dados bancários e observações</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {FIELDS.filter(([key]) => ["bank","bank_account","notes"].includes(key)).map(([key,label]) => (
+                <label key={key} className={`text-xs font-bold text-slate-400 ${key==="notes"?"sm:col-span-2":""}`}>{label}
+                  {key==="notes" ? <textarea rows={3} value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/> :
+                  <input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/>}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button
