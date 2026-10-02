@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown } from "lucide-react";
+import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown, FileSpreadsheet } from "lucide-react";
 import {
   deactivateRhEmployeeRecord,
   reactivateRhEmployeeRecord,
@@ -92,6 +92,16 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
   const activeCount = employeeList.filter((employee) => employee.is_active).length;
   const inactiveCount = employeeList.length - activeCount;
   const accessCount = employeeList.filter((employee) => employee.access?.access_enabled).length;
+  const exportEmployees = () => {
+    const rows = [["Nome","Unidade","Cargo","CPF","Admissão","Salário","Status","Acesso"]];
+    for (const e of filteredEmployees) {
+      const r = e.registration_data ?? {};
+      rows.push([e.full_name,e.unit,r.job_title ?? "",r.cpf ?? "",r.admission_date ?? "",r.salary ?? "",e.is_active ? "Ativo" : "Inativo",e.access?.access_enabled ? "Liberado" : "Sem acesso"]);
+    }
+    const csv = rows.map(row => row.map(v => "\"" + String(v ?? "").replace(/\"/g,'\"\"') + "\"").join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download="rh_funcionarios.csv"; a.click(); URL.revokeObjectURL(url);
+  };
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
@@ -104,15 +114,18 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
             Cadastro mestre utilizado pelo DP, Ponto, Folha, Vale Passagem, Vale Alimentação e acessos.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50"
-        >
-          <Plus className="h-4 w-4" /> Novo funcionário
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#141F33] px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>Exportar CSV</button>
+          <button
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50"
+          >
+            <Plus className="h-4 w-4" /> Novo funcionário
+          </button>
+        </div>
       </div>
       <div className="p-5 sm:p-7">
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
