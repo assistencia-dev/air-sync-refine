@@ -99,6 +99,75 @@
         .pwa-box { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 1px solid var(--border-light); margin-bottom: 10px; box-shadow: var(--shadow-sm); }
         
         canvas.sig-canvas { border: 1px dashed var(--border-color); background: #fff; border-radius: 4px; cursor: crosshair; width: 100%; height: 100px; touch-action: none; }
+        body.dbs-control-employee-mode { background:#f1f5f9; }
+        body.dbs-control-employee-mode aside { width:270px; background:#0b1324; }
+        body.dbs-control-employee-mode main { margin-left:270px; }
+        body.dbs-control-employee-mode .pwa-wrapper { max-width:1100px !important; margin:0 auto; padding:0; background:transparent; box-shadow:none; }
+        body.dbs-control-employee-mode .pwa-screen { height:auto; min-height:calc(100vh - 110px); background:transparent; border-radius:0; overflow:visible; }
+        body.dbs-control-employee-mode .pwa-header-bar { display:none; }
+        body.dbs-control-employee-mode .pwa-body-content { padding:0; overflow:visible; }
+        .employee-hero { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding:24px; border-radius:20px; background:linear-gradient(135deg,#020617,#0f172a); color:#fff; box-shadow:0 12px 28px rgba(15,23,42,.12); }
+        .employee-eyebrow { font-size:10px; font-weight:900; letter-spacing:.18em; color:#7dd3fc; }
+        .employee-hero h2 { margin:7px 0 4px; font-size:26px; }
+        .employee-hero p { margin:0; color:#cbd5e1; font-size:12px; max-width:650px; }
+        .employee-count { min-width:120px; padding:12px 14px; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(255,255,255,.06); text-align:center; }
+        .employee-count strong { display:block; font-size:24px; }
+        .employee-count span { font-size:10px; color:#94a3b8; font-weight:800; text-transform:uppercase; }
+        .employee-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:16px 0; padding:14px 16px; border:1px solid #e2e8f0; border-radius:16px; background:#fff; }
+        .employee-toolbar strong,.employee-toolbar span { display:block; }
+        .employee-toolbar strong { font-size:14px; color:#0f172a; }
+        .employee-toolbar span { margin-top:2px; font-size:11px; color:#64748b; }
+        .employee-orders { display:grid; gap:14px; }
+        .employee-order { padding:18px; border:1px solid #e2e8f0; border-radius:18px; background:#fff; box-shadow:0 5px 18px rgba(15,23,42,.05); }
+        .employee-order-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+        .employee-protocol { font-size:10px; font-weight:900; color:#0284c7; text-transform:uppercase; letter-spacing:.12em; }
+        .employee-order h3 { margin:5px 0 0; font-size:17px; color:#0f172a; }
+        .employee-status { display:inline-flex; align-items:center; padding:6px 9px; border-radius:999px; font-size:10px; font-weight:900; white-space:nowrap; }
+        .employee-status-active { background:#e0f2fe; color:#0369a1; }
+        .employee-status-wait { background:#fef3c7; color:#92400e; }
+        .employee-status-done { background:#dcfce7; color:#166534; }
+        .employee-status-cancelled { background:#fee2e2; color:#991b1b; }
+        .employee-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:15px; }
+        .employee-grid>div { padding:10px 12px; border-radius:12px; background:#f8fafc; }
+        .employee-grid small,.employee-description small { display:block; color:#94a3b8; font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+        .employee-grid b { display:block; margin-top:4px; color:#334155; font-size:11px; }
+        .employee-description { margin-top:12px; padding-top:12px; border-top:1px solid #f1f5f9; }
+        .employee-description p { margin:5px 0 0; color:#475569; font-size:12px; line-height:1.6; white-space:pre-wrap; }
+        .employee-meta-row { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:#64748b; }
+        .employee-complete { margin-top:13px; padding:10px 12px; border-radius:12px; background:#f0fdf4; color:#166534; font-size:11px; font-weight:800; }
+        .employee-execution { margin-top:14px; border-top:1px solid #e2e8f0; padding-top:14px; }
+        .employee-execution summary { cursor:pointer; display:flex; justify-content:space-between; font-size:12px; font-weight:900; color:#0f172a; list-style:none; }
+        .employee-execution summary::-webkit-details-marker { display:none; }
+        .employee-execution-body { margin-top:14px; display:grid; gap:11px; }
+        .employee-execution-body label { font-size:10px; font-weight:900; color:#475569; text-transform:uppercase; letter-spacing:.05em; }
+        .employee-execution-body select,.employee-execution-body textarea { width:100%; margin-top:5px; border:1px solid #cbd5e1; border-radius:10px; padding:9px 10px; background:#fff; font-size:12px; color:#0f172a; }
+        .employee-inline { display:flex; gap:8px; align-items:center; }
+        .employee-inline select { flex:1; }
+        .employee-fields,.employee-photo-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .employee-photo-grid label { padding:10px; border:1px dashed #cbd5e1; border-radius:12px; background:#f8fafc; }
+        .employee-photo-grid input { width:100%; margin-top:7px; font-size:10px; }
+        .employee-finish { margin-left:auto; }
+        .employee-empty { padding:48px 20px; border:1px dashed #cbd5e1; border-radius:18px; background:#fff; text-align:center; }
+        .employee-icon { width:46px; height:46px; margin:0 auto 12px; display:grid; place-items:center; border-radius:14px; background:#e0f2fe; color:#0369a1; font-size:20px; }
+        .employee-empty h3 { margin:0; font-size:16px; color:#0f172a; }
+        .employee-empty p { margin:7px auto 0; max-width:520px; font-size:12px; line-height:1.6; color:#64748b; }
+        @media(max-width:800px){
+          body.dbs-control-employee-mode aside { display:none; }
+          body.dbs-control-employee-mode main { margin-left:0; }
+          .employee-hero { padding:20px; align-items:flex-start; flex-direction:column; }
+          .employee-count { width:100%; }
+          .employee-grid,.employee-fields,.employee-photo-grid { grid-template-columns:1fr 1fr; }
+        }
+        @media(max-width:520px){
+          .employee-grid,.employee-fields,.employee-photo-grid { grid-template-columns:1fr; }
+          .employee-order { padding:14px; }
+          .employee-order-top { flex-direction:column; }
+          .employee-status { align-self:flex-start; }
+          .employee-toolbar { align-items:flex-start; flex-direction:column; }
+          .employee-toolbar button { width:100%; }
+          .employee-inline { flex-direction:column; align-items:stretch; }
+          .employee-finish { margin-left:0; width:100%; }
+        }
             body.dbs-control-employee-mode aside .nav-menu .nav-section,
         body.dbs-control-employee-mode aside .nav-menu .nav-item { display:none !important; }
         body.dbs-control-employee-mode aside .nav-menu .nav-item[data-employee-visible="true"] { display:flex !important; }
@@ -1085,88 +1154,99 @@
 
         function renderizarPWAScreen() {
             const area = document.getElementById('pwa-content-area');
+            if (!area) return;
 
             if (!ERP_STATE.sessionTecnicoLogado) {
-                area.innerHTML = `
-                    <div style="padding: 10px 0; text-align:center;">
-                        <h4 style="margin-bottom: 4px;">Acesso ao App de Campo</h4>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Entre com suas credenciais corporativas</p>
-
-                        <form onsubmit="efetuarLoginPWA(event)">
-                            <div class="form-group" style="text-align:left; margin-bottom: 10px;">
-                                <label>E-mail</label>
-                                <input type="email" id="pwa-login-email" required value="elias@dbsair.com.br">
-                            </div>
-                            <div class="form-group" style="text-align:left; margin-bottom: 16px;">
-                                <label>Senha</label>
-                                <input type="password" id="pwa-login-senha" required value="123">
-                            </div>
-                            <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Acessar Minhas OS</button>
-                        </form>
-                    </div>
-                `;
-            } else {
-                const tec = ERP_STATE.sessionTecnicoLogado;
-                const minhasOS = ERP_STATE.ordens.filter(o => String(o.tecnicoId ?? '') === String(tec.id ?? ''));
-
-                area.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">
-                        <div>
-                            <strong style="font-size:12px;">${tec.nome}</strong>
-                            <p style="font-size:10px; color:var(--text-muted);">${tec.posicao}</p>
-                        </div>
-                        <button class="btn btn-secondary btn-sm" onclick="logoutPWA()">Sair</button>
-                    </div>
-
-                    <div style="font-weight:700; font-size:11px; text-transform:uppercase; margin-bottom:8px;">Ordens Despachadas (${minhasOS.length})</div>
-
-                    ${minhasOS.map(o => {
-                        const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
-                        const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
-                        const isConcluido = o.status === "Concluída";
-                        return `
-                            <div class="pwa-box">
-                                <span class="badge badge-corretiva">${o.id} -${o.tipo}</span>
-                                <h4 style="margin-top:6px; font-size:13px;">${cli.nome}</h4>
-                                <p style="font-size:11px; color:var(--text-muted);">Endereço: ${cli.endereco}</p>
-                                
-                                <div style="background:#f1f5f9; padding:8px; border-radius:4px; margin:8px 0; border:1px solid var(--border-color);">
-                                    <div style="font-size:11px; font-weight:700; color:var(--color-primary-dark);">ATIVO: ${eq.tag} -${eq.tipo}</div>
-                                    <div style="font-size:10px; color:var(--text-main);">Marca: ${eq.marca} \vert{} Modelo:${eq.modelo}</div>
-                                </div>
-
-                                <p style="font-size:11px; margin-bottom:8px;"><strong>Serviço:</strong> ${o.desc}</p>${isConcluido ? `
-                                    <div style="padding:6px; background:#dcfce7; color:#166534; text-align:center; font-weight:700; border-radius:4px;">Atendimento Concluído</div>
-                                ` : `
-                                    <div style="border-top:1px solid var(--border-light); padding-top:8px; margin-top:8px;">
-                                        <label style="font-size:10px; font-weight:700;">Adicionar Insumo/Peça:</label>
-                                        <div style="display:flex; gap:4px; margin-bottom:8px;">
-                                            <select id="pwa-peca-select-${o.id}" style="font-size:10px; flex:1;">
-                                                ${ERP_STATE.pecas.map(p => `<option value="${p.id}">${p.nome} (Estq:${p.qtd})</option>`).join('')}
-                                            </select>
-                                            <button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">+</button>
-                                        </div>
-
-                                        <label style="font-size:10px; font-weight:700;">Assinatura Digital do Cliente:</label>
-                                        <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
-                                        <button class="btn btn-secondary btn-sm" style="margin-top:2px; font-size:9px;" onclick="limparCanvas('${o.id}')">Limpar Assinatura</button>
-
-                                        <button class="btn btn-success btn-sm" style="width:100%; margin-top:10px; justify-content:center;" onclick="concluirOSMobile('${o.id}')">Concluir e Colher Assinatura</button>
-                                    </div>
-                                `}
-                            </div>
-                        `;
-                    }).join('')}
-                `;
-
-                // INICIALIZAR CANVASES DE ASSINATURA ATIVOS
-                minhasOS.forEach(o => {
-                    if (o.status !== "Concluída") {
-                        setTimeout(() => initCanvas(`sig-canvas-${o.id}`), 100);
-                    }
-                });
+                area.innerHTML = '<div class="employee-empty"><div class="employee-icon">🔐</div><h3>Acesso ao atendimento de campo</h3><p>Seu acesso é controlado pelo portal autenticado. Não é necessário um segundo login aqui.</p></div>';
+                return;
             }
+
+            const tec = ERP_STATE.sessionTecnicoLogado;
+            const canonicalEmployeeId = String(tec.employeeId || '');
+            const minhasOS = ERP_STATE.ordens.filter(o => {
+                const assigned = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId));
+                if (String(o.tecnicoId ?? '') === String(tec.id ?? '')) return true;
+                if (canonicalEmployeeId && assigned?.employeeId && String(assigned.employeeId) === canonicalEmployeeId) return true;
+                if (canonicalEmployeeId && o.employeeId && String(o.employeeId) === canonicalEmployeeId) return true;
+                return false;
+            });
+
+            const statusMeta = (status) => {
+                const s = String(status || 'Em Atendimento');
+                if (s === 'Concluída') return ['Concluída','employee-status-done'];
+                if (/aguardando peça/i.test(s)) return ['Aguardando peça','employee-status-wait'];
+                if (/aguardando cliente/i.test(s)) return ['Aguardando cliente','employee-status-wait'];
+                if (/cancelad/i.test(s)) return ['Cancelada','employee-status-cancelled'];
+                return [s,'employee-status-active'];
+            };
+            const escHtml = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+            area.innerHTML = `
+              <div class="employee-hero">
+                <div>
+                  <div class="employee-eyebrow">DBS CONTROL · ATENDIMENTO DE CAMPO</div>
+                  <h2>Olá, ${escHtml(tec.nome || 'Colaborador')}</h2>
+                  <p>Veja suas ordens, registre a execução e conclua o atendimento sem acessar o painel administrativo.</p>
+                </div>
+                <div class="employee-count"><strong>${minhasOS.length}</strong><span>OS atribuídas</span></div>
+              </div>
+
+              <div class="employee-toolbar">
+                <div><strong>Minhas OS</strong><span>${minhasOS.length ? 'Ordens atribuídas a você' : 'Nenhum chamado atribuído no momento'}</span></div>
+                <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">Atualizar</button>
+              </div>
+
+              <div class="employee-orders">
+                ${minhasOS.length ? minhasOS.map(o => {
+                    const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
+                    const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
+                    const meta = statusMeta(o.status);
+                    const isConcluido = o.status === 'Concluída';
+                    return `
+                      <article class="employee-order">
+                        <div class="employee-order-top">
+                          <div>
+                            <span class="employee-protocol">OS ${escHtml(o.id)}</span>
+                            <h3>${escHtml(cli.nome || 'Cliente não informado')}</h3>
+                          </div>
+                          <span class="employee-status ${meta[1]}">${escHtml(meta[0])}</span>
+                        </div>
+                        <div class="employee-grid">
+                          <div><small>Atendimento</small><b>${escHtml(o.tipo || 'Serviço')}</b></div>
+                          <div><small>Data</small><b>${escHtml(o.data || '—')}</b></div>
+                          <div><small>Equipamento</small><b>${escHtml(eq.tag || eq.tipo || 'Não informado')}</b></div>
+                          <div><small>Local</small><b>${escHtml(cli.endereco || o.localAtendimento || 'Não informado')}</b></div>
+                        </div>
+                        <div class="employee-description"><small>Solicitação</small><p>${escHtml(o.desc || 'Sem descrição cadastrada.')}</p></div>
+                        ${o.prioridade || o.sla ? `<div class="employee-meta-row">${o.prioridade ? '<span>Prioridade: <b>'+escHtml(o.prioridade)+'</b></span>' : ''}${o.sla ? '<span>SLA: <b>'+escHtml(o.sla)+'</b></span>' : ''}</div>` : ''}
+                        ${isConcluido ? '<div class="employee-complete">✓ Atendimento concluído. Evidências e assinatura permanecem registradas.</div>' : `
+                          <details class="employee-execution">
+                            <summary>Executar atendimento <span>›</span></summary>
+                            <div class="employee-execution-body">
+                              <label>Peça / insumo</label>
+                              <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
+                              <div class="employee-fields">
+                                <label>Diagnóstico<textarea id="dbs-mob-diag-${o.id}" rows="3" placeholder="Descreva a causa encontrada...">${escHtml(o.diagnostico || '')}</textarea></label>
+                                <label>Trabalho executado<textarea id="dbs-mob-work-${o.id}" rows="3" placeholder="Descreva o serviço realizado...">${escHtml(o.trabalhoExecutado || '')}</textarea></label>
+                              </div>
+                              <div class="employee-photo-grid">
+                                <label>Foto antes<input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
+                                <label>Foto depois<input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}"></label>
+                              </div>
+                              <label>Assinatura do cliente</label>
+                              <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
+                              <div class="employee-inline"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button></div>
+                            </div>
+                          </details>
+                        `}
+                      </article>`;
+                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>Nenhum chamado atribuído</h3><p>Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.</p></div>'}
+              </div>
+            `;
+
+            minhasOS.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
         }
+
 
         function initCanvas(id) {
             const canvas = document.getElementById(id);
