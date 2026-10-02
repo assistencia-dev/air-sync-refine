@@ -17,5 +17,5 @@ CREATE INDEX IF NOT EXISTS rh_employee_advances_competence_idx ON public.rh_empl
 GRANT ALL ON public.rh_employee_advances TO service_role;
 GRANT SELECT ON public.rh_employee_advances TO authenticated;
 ALTER TABLE public.rh_employee_advances ENABLE ROW LEVEL SECURITY;
-CREATE POLICY rh_employee_advances_admin_select ON public.rh_employee_advances FOR SELECT TO authenticated USING (public.is_admin());
-CREATE TRIGGER rh_employee_advances_updated_at BEFORE UPDATE ON public.rh_employee_advances FOR EACH ROW EXECUTE FUNCTION public.rh_set_updated_at();
+DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'rh_employee_advances' AND policyname = 'rh_employee_advances_admin_select') THEN CREATE POLICY rh_employee_advances_admin_select ON public.rh_employee_advances FOR SELECT TO authenticated USING (public.is_admin()); END IF; END $;
+DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'rh_employee_advances_updated_at') THEN CREATE TRIGGER rh_employee_advances_updated_at BEFORE UPDATE ON public.rh_employee_advances FOR EACH ROW EXECUTE FUNCTION public.rh_set_updated_at(); END IF; END $;
