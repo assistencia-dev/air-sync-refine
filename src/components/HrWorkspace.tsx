@@ -37,14 +37,14 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   }, [registry.data, vt.data, va.data, ponto.data, vtTopups.data, vaTopups.data]);
 
   const tabs: { key: HrSection; label: string; icon: React.ReactNode; active: string }[] = [
-    { key: "resumo", label: "Resumo do RH", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
-    { key: "custos", label: "Folha e Custos", icon: <Calculator className="h-4 w-4" />, active: "bg-[#0F172A] text-white shadow-md" },
+    { key: "resumo", label: "Resumo do RH", icon: <Shield className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
+    { key: "custos", label: "Folha e Custos", icon: <Calculator className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
     { key: "financeiro", label: "Vales & Descontos", icon: <WalletCards className="h-4 w-4" />, active: "bg-slate-900 text-white shadow-md" },
-    { key: "gestao", label: "Gestão RH / DP", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
+    { key: "gestao", label: "Gestão RH / DP", icon: <Shield className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
     { key: "ponto", label: "Folha de Ponto", icon: <Clock3 className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
-    { key: "cadastro", label: "Cadastro de Funcionários", icon: <IdCard className="h-4 w-4" />, active: "bg-[#F59E0B] text-white shadow-md" },
+    { key: "cadastro", label: "Cadastro de Funcionários", icon: <IdCard className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
     { key: "passagem", label: "Vale Passagem", icon: <WalletCards className="h-4 w-4" />, active: "bg-[#0F172A] text-white shadow-md" },
-    { key: "alimentacao", label: "Vale Alimentação", icon: <Utensils className="h-4 w-4" />, active: "bg-[#F59E0B] text-[#102b3b] shadow-md" },
+    { key: "alimentacao", label: "Vale Alimentação", icon: <Utensils className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
   ];
 
   return (
@@ -56,9 +56,9 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
           <p className="mt-1 text-xs text-slate-400">Cadastro central de colaboradores compartilhado pelas duas ferramentas de benefício.</p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          <nav className="flex flex-wrap gap-2" aria-label="Módulos de RH">
+          <nav className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="Módulos de RH">
             {tabs.map((t) => (
-              <button key={t.key} onClick={() => setSection(t.key)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${section === t.key ? t.active : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
+              <button key={t.key} onClick={() => setSection(t.key)} className={`min-h-12 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[11px] font-bold transition ${section === t.key ? "bg-sky-600 text-white shadow-md" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>
                 {t.icon} {t.label}
               </button>
             ))}
