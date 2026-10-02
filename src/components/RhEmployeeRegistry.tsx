@@ -526,14 +526,20 @@ function EmployeeAccessForm({
   const [linkedUserId, setLinkedUserId] = useState(employee.access?.user_id ?? "");
   const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
   const [dbsControlEnabled, setDbsControlEnabled] = useState(employee.access?.dbs_control_access_enabled ?? false);
+   const [confirmed, setConfirmed] = useState(Boolean(employee.access?.access_enabled && employee.access?.user_id));
+   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const collaboratorUsers = useQuery({
     queryKey: ["rh-collaborator-users"],
     queryFn: () => listRhCollaboratorUsers(),
-  });
-  const save = useMutation({
-    mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login, user_id: linkedUserId, dbs_control_enabled: dbsControlEnabled } }),
-    onSuccess: onDone,
-  });
+  });   const selectedUser = (collaboratorUsers.data ?? []).find((user: any) => user.id === linkedUserId);
+   const save = useMutation({
+     mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login, user_id: linkedUserId, dbs_control_enabled: dbsControlEnabled } }),
+     onSuccess: (result: any) => {
+       setConfirmed(Boolean(result?.enabled));
+       setSuccessMessage(result?.already_linked ? "Vínculo já estava confirmado. Nenhum novo vínculo foi criado." : "Vínculo confirmado com sucesso. Este login agora está ligado a este funcionário.");
+       onDone();
+     },
+   });
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-[#02060d]/70 p-4">
@@ -550,7 +556,7 @@ function EmployeeAccessForm({
           <label className="block text-xs font-bold text-slate-600">
             Usuário vinculado
             <select
-              value={login}
+              value={linkedUserId}
               onChange={(e) => {
                 const selectedId = e.target.value;
                 const selected = (collaboratorUsers.data ?? []).find((user: any) => user.id === selectedId);
@@ -562,7 +568,7 @@ function EmployeeAccessForm({
             >
               <option value="">Selecione o login criado em Usuários vinculados</option>
               {(collaboratorUsers.data ?? []).map((user: any) => (
-                <option key={user.id} value={user.username || user.email || user.cpf || ""}>
+                <option key={user.id} value={user.id}>
                   {user.full_name || user.username || user.email} · {user.username || user.email}
                 </option>
               ))}
@@ -571,6 +577,21 @@ function EmployeeAccessForm({
               )}
             </select>
             <p className="mt-1 text-[10px] font-normal text-slate-400">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
+           </label>
+           {confirmed && linkedUserId && (
+             <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
+               <div className="flex items-start gap-3">
+                 <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,.12)]" />
+                 <div className="min-w-0">
+                   <p className="text-xs font-black uppercase tracking-wider text-emerald-300">Vínculo confirmado</p>
+                   <p className="mt-1 text-sm font-bold text-white">{selectedUser?.full_name || login}</p>
+                   <p className="mt-1 text-[11px] text-emerald-100/70">Login: {selectedUser?.username || selectedUser?.email || login}</p>
+                   <p className="mt-1 text-[10px] text-emerald-100/60">Este funcionário já possui um vínculo ativo. Para trocar o login, selecione outro usuário e salve uma única vez.</p>
+                 </div>
+               </div>
+             </div>
+           )}
+           {successMessage && <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">{successMessage}</p>}
           </label>
           <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-600">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
@@ -587,8 +608,8 @@ function EmployeeAccessForm({
         {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível vincular o acesso."}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button>
-          <button onClick={() => save.mutate()} disabled={save.isPending || (enabled && (!login.trim() || !linkedUserId))} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
-            <KeyRound className="h-4 w-4" /> {save.isPending ? "Vinculando..." : "Vincular acesso"}
+          <button onClick={() => save.mutate()} disabled={save.isPending || !enabled || !login.trim() || !linkedUserId || (confirmed && linkedUserId === employee.access?.user_id && employee.access?.access_enabled)} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
+             <KeyRound className="h-4 w-4" /> {save.isPending ? "Confirmando..." : (confirmed && linkedUserId === employee.access?.user_id && employee.access?.access_enabled ? "Vínculo já confirmado" : (confirmed ? "Trocar vínculo" : "Confirmar vínculo"))}
           </button>
         </div>
       </div>
