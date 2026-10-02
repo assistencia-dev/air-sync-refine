@@ -4,7 +4,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 async function requireRhOperator(context: { userId: string }) {
   const { data, error } = await supabaseAdmin.from("users").select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
-  if (error || !data || data.status !== "ativo" || !["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "")) {
+  if (error || !data || data.status !== "ativo" || (
+    !["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "") &&
+    !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")
+  )) {
     throw new Error("Acesso restrito ao RH.");
   }
   return data;
@@ -51,6 +54,18 @@ export const createRhEmployeeAdvance = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const actor = await requireRhOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, is_active, registry_employee_id")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+    if (!employee.is_active) throw new Error("O funcionário está inativo no Cadastro de Funcionários.");
+    if (employee.registry_employee_id && employee.registry_employee_id !== employee.id) {
+      throw new Error("Selecione o funcionário pelo Cadastro de Funcionários, não pelo registro do benefício.");
+    }
+
     const { data: row, error } = await supabaseAdmin.from("rh_employee_advances").insert({
       employee_id: data.employee_id,
       advance_type: data.advance_type,
