@@ -143,6 +143,15 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_OPEN_RH_EMPLOYEE") {
+        const employeeId = String(msg.employee_id || "").trim();
+        if (employeeId) {
+          sessionStorage.setItem("DBS_RH_OPEN_EMPLOYEE", employeeId);
+          await navigate({ to: "/admin/rh-dashboard", replace: true });
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_SAVE") {
         pendingStateRef.current = msg.state;
         if (!cloudReadyRef.current) return;
