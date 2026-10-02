@@ -559,106 +559,61 @@ function EmployeeAccessForm({
   );
 }
 
-function EmployeeForm({
-  employee,
-  onClose,
-  onDone,
-}: {
-  employee: Employee | null;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function EmployeeForm({ employee, onClose, onDone }: { employee: Employee | null; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(employee?.full_name ?? "");
   const [unit, setUnit] = useState(employee?.unit ?? "");
-  const [values, setValues] = useState<Record<string, string>>(employee?.registration_data ?? {});
+  const [values, setValues] = useState<Record<string, any>>(employee?.registration_data ?? {});
+  const [error, setError] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: () =>
-      saveRhEmployeeRecord({
-        data: { id: employee?.id, full_name: name, unit, registration_data: values },
-      }),
+    mutationFn: () => saveRhEmployeeRecord({ data: { id: employee?.id, full_name: name, unit, registration_data: values } }),
     onSuccess: onDone,
+    onError: (e) => setError(e instanceof Error ? e.message : "Não foi possível salvar o funcionário."),
   });
-  const update = (key: string, value: string) =>
-    setValues((current) => ({ ...current, [key]: value }));
+  const update = (key: string, value: any) => setValues((current) => ({ ...current, [key]: value }));
+  const money = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) return "";
+    return (Number(digits) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const weeklyHours = Number(values.weekly_hours || 0);
+  const salaryCents = Number(values.salary_cents || 0) || (() => {
+    const n = Number(String(values.salary || "").replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  })();
+  const monthlyDivisor = weeklyHours > 0 ? weeklyHours * 5 : 220;
+  const hourlyCents = monthlyDivisor > 0 ? Math.round(salaryCents / monthlyDivisor) : 0;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#02060d]/70 p-4">
-      <div className="my-6 w-full max-w-3xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-xl font-black text-slate-50">
-              {employee ? "Editar funcionário" : "Novo funcionário"}
-            </h3>
-            <p className="mt-1 text-xs text-slate-400">
-              Cadastro central do funcionário. Preencha somente informações que pertencem à ficha funcional; contratos, documentos, dependentes e histórico são registros complementares e não aparecem como campos fictícios neste formulário.
-            </p>
-          </div>
-          <button onClick={onClose} className="text-xs font-bold text-slate-400">
-            Fechar
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#02060d]/75 p-4">
+      <div className="my-6 w-full max-w-5xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-400">RH · cadastro central</p><h3 className="mt-1 text-xl font-black text-slate-50">{employee ? "Editar funcionário" : "Novo funcionário"}</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">Esta é a ficha mestre. Salário, jornada e horários alimentam contrato, ponto e cálculos do RH.</p></div><button onClick={onClose} className="text-xs font-bold text-slate-400">Fechar</button></div>
+        {error && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-200">{error}</div>}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nome completo *"
-            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm sm:col-span-2"
-          />
-          <input
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="Unidade / setor *"
-            className="rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-slate-100 placeholder:text-slate-400 py-2.5 text-sm sm:col-span-2"
-          />
-          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
-            <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => (
-                <label key={key} className="text-xs font-bold text-slate-400">{label}
-                  <input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/>
-                </label>
-              ))}
-            </div>
+          <Field label="Nome completo *" value={name} onChange={setName} className="sm:col-span-2" />
+          <Field label="Unidade / setor *" value={unit} onChange={setUnit} className="sm:col-span-2" />
+          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p><div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => <label key={key} className="text-xs font-bold text-slate-400">{label}<input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/></label>)}
+          </div></div>
+          <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Remuneração e contrato</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-xs font-bold text-slate-400">Salário base (R$)<input value={values.salary ?? ""} onChange={e=>{const formatted=money(e.target.value); update("salary",formatted); update("salary_cents",formatted?Math.round(Number(formatted.replace(/\./g,"").replace(",","."))*100):0)}} inputMode="numeric" placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Jornada semanal (h)<input value={values.weekly_hours ?? ""} onChange={e=>update("weekly_hours",e.target.value.replace(/[^0-9,.]/g,"").replace(",","."))} inputMode="decimal" placeholder="44" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Admissão<input type="date" value={values.admission_date ?? ""} onChange={e=>update("admission_date",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Pagamento<select value={values.payment_type ?? ""} onChange={e=>update("payment_type",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="">Selecione…</option><option>Mensal</option><option>Quinzenal</option><option>Semanal</option></select></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Regime<select value={values.work_regime ?? "presencial"} onChange={e=>update("work_regime",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="presencial">Presencial</option><option value="hibrido">Híbrido</option><option value="remoto">Remoto</option></select></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Cargo / função<input value={values.job_title ?? ""} onChange={e=>update("job_title",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
           </div>
-          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
-            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Dados funcionais e remuneração</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {FIELDS.filter(([key]) => ["job_title","admission_date","salary","payment_type","work_hours","pis","ctps"].includes(key)).map(([key,label]) => (
-                <label key={key} className="text-xs font-bold text-slate-400">{label}
-                  {key==="payment_type" ? <select value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="">Selecione…</option><option>Mensal</option><option>Quinzenal</option><option>Semanal</option><option>Outro</option></select> :
-                   <input value={values[key] ?? ""} onChange={(e)=>update(key,key==="salary"?e.target.value.replace(/[^0-9,]/g,""):e.target.value)} type={key==="admission_date"?"date":"text"} placeholder={key==="salary"?"0,00":key==="work_hours"?"Ex.: 08:00 às 18:00":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/>}
-                  {key==="salary" && <span className="mt-1 block text-[10px] font-normal text-slate-500">Informe somente o valor em reais. Ex.: 3.500,00.</span>}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4">
-            <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Dados bancários e observações</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {FIELDS.filter(([key]) => ["bank","bank_account","notes"].includes(key)).map(([key,label]) => (
-                <label key={key} className={`text-xs font-bold text-slate-400 ${key==="notes"?"sm:col-span-2":""}`}>{label}
-                  {key==="notes" ? <textarea rows={3} value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/> :
-                  <input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/>}
-                </label>
-              ))}
-            </div>
-          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{([["entry_time","Entrada"],["lunch_start","Saída almoço"],["lunch_end","Retorno almoço"],["exit_time","Saída"]] as const).map(([key,label])=><label key={key} className="text-xs font-bold text-slate-400">{label}<input type="time" value={values[key] ?? ""} onChange={e=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>)}</div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-xs font-bold text-slate-400">Intervalo (min)<input type="number" min="0" value={values.break_minutes ?? ""} onChange={e=>update("break_minutes",e.target.value)} placeholder="60" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Tolerância (min)<input type="number" min="0" value={values.tolerance_minutes ?? 5} onChange={e=>update("tolerance_minutes",e.target.value)} placeholder="5" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Escala / turno<input value={values.work_shift ?? ""} onChange={e=>update("work_shift",e.target.value)} placeholder="Ex.: 5x2 · Administrativo" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+          </div></div>
+          <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3"><Calc label="Valor hora de referência" value={hourlyCents ? "R$ " + (hourlyCents/100).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /><Calc label="Valor dia de referência" value={salaryCents ? "R$ " + (salaryCents/100/30).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /><Calc label="Hora extra +50% de referência" value={hourlyCents ? "R$ " + (hourlyCents*1.5/100).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /></div>
+          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Documentação e observações</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-slate-400">CPF<input value={values.cpf ?? ""} onChange={e=>update("cpf",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label><label className="text-xs font-bold text-slate-400">PIS<input value={values.pis ?? ""} onChange={e=>update("pis",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label><label className="text-xs font-bold text-slate-400 sm:col-span-2">Observações<textarea value={values.notes ?? ""} onChange={e=>update("notes",e.target.value)} rows={3} className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label></div></div>
         </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-xs font-bold text-slate-600"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => save.mutate()}
-            disabled={save.isPending || !name.trim() || !unit.trim()}
-            className="rounded-lg bg-[#F59E0B] px-4 py-2 text-xs font-black text-[#0B0F19] disabled:opacity-50"
-          >
-            {save.isPending ? "Salvando..." : "Salvar funcionário"}
-          </button>
-        </div>
+        <div className="mt-6 flex justify-end gap-2"><button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button><button onClick={()=>save.mutate()} disabled={save.isPending||!name.trim()||!unit.trim()} className="rounded-lg bg-[#F59E0B] px-5 py-2.5 text-xs font-black text-slate-950">{save.isPending?"Salvando…":"Salvar funcionário"}</button></div>
       </div>
     </div>
   );
 }
+function Field({label,value,onChange,className=""}:{label:string;value:string;onChange:(v:string)=>void;className?:string}){return <label className={className+" text-xs font-bold text-slate-400"}>{label}<input value={value} onChange={e=>onChange(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>}
+function Calc({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-slate-700 bg-[#0F172A] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-slate-100">{value}</p></div>}
