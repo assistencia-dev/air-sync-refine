@@ -1101,7 +1101,7 @@
                     <td><span class="badge badge-concluido">Ativo</span></td>
                     <td>
                       ${t.employeeId
-                        ? '<button type="button" class="btn btn-secondary btn-sm" onclick="abrirFichaRH(\\'' + String(t.employeeId).replace(/'/g, '') + '\\')">Ficha RH</button>'
+                        ? '<button type="button" class="btn btn-secondary btn-sm" onclick="abrirFichaRH(&quot;' + String(t.employeeId).replace(/"/g, '') + '&quot;)">Ficha RH</button>'
                         : '<span style="font-size:10px;color:var(--text-muted);">Sem vínculo RH</span>'}
                     </td>
                 </tr>
