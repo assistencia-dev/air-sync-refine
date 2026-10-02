@@ -7,7 +7,7 @@
  */
 import { RhEmployeeRegistry } from '@/components/RhEmployeeRegistry';
 
-export function TabGestaoColaboradores() {
+export function TabGestaoColaboradores({ initialEmployeeId }: { initialEmployeeId?: string | null }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-800 bg-[#0F172A] p-5">
@@ -20,7 +20,7 @@ export function TabGestaoColaboradores() {
           Folha, Ponto, Vale Passagem, Vale Alimentação e controle de acessos.
         </p>
       </div>
-      <RhEmployeeRegistry />
+      <RhEmployeeRegistry initialEmployeeId={initialEmployeeId} />
     </div>
   );
 }
