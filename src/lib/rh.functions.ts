@@ -649,6 +649,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; user_id?: string; dbs_control_enabled?: boolean }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     if ((input.enabled || input.dbs_control_enabled) && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
+    if ((input.enabled || input.dbs_control_enabled) && !input.user_id?.trim()) throw new Error("Selecione o usuário exato criado em Usuários vinculados.");
     if (input.dbs_control_enabled && !input.enabled) throw new Error("O DBS CONTROL exige acesso à Folha de Ponto no mesmo login.");
     return { ...input, login_identifier: input.login_identifier?.trim() || undefined, user_id: input.user_id?.trim() || undefined, dbs_control_enabled: Boolean(input.dbs_control_enabled) };
   })
@@ -743,6 +744,18 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     if (currentLink?.length) {
       throw new Error(`Este usuário já está vinculado ao funcionário ${currentLink[0].full_name}.`);
     }
+    const { data: accessUserLink, error: accessUserLinkError } = await supabaseAdmin
+      .from("rh_employee_access")
+      .select("employee_id")
+      .eq("user_id", appUser.id)
+      .eq("access_enabled", true)
+      .neq("employee_id", data.employee_id)
+      .limit(1);
+    if (accessUserLinkError) throw new Error(accessUserLinkError.message);
+    if (accessUserLink?.length) {
+      throw new Error("Este login já está vinculado a outro funcionário do RH.");
+    }
+
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
       .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id, dbs_control_access_enabled: data.dbs_control_enabled }).eq("id", data.employee_id);
     if (updateError) throw new Error(updateError.message);
