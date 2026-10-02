@@ -546,6 +546,85 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
     await supabaseAdmin.from("rh_audit_log").insert({ employee_id: employee.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_CRIADO", entity_type: "rh_employees", entity_id: employee.id, before_data: null, after_data: employee });
     return employee;
   });
+export const getRhDashboardAlerts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireNativeOperator(context);
+
+    const [employeesResult, accessResult, requestsResult, advancesResult, documentsResult, contractsResult, pointResult] = await Promise.all([
+      supabaseAdmin.from("rh_employees")
+        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, ponto_portal_user_id")
+        .eq("registry_employee_id", null)
+        .order("full_name"),
+      supabaseAdmin.from("rh_employee_access").select("employee_id, access_enabled"),
+      supabaseAdmin.from("rh_employee_requests").select("id, employee_id, request_type, status, requested_at, payload")
+        .in("status", ["aberta", "em_analise"]).order("requested_at", { ascending: false }).limit(100),
+      supabaseAdmin.from("rh_employee_advances").select("id, employee_id, amount_cents, competence, status, authorized")
+        .eq("status", "programado").eq("authorized", true).order("competence", { ascending: true }),
+      supabaseAdmin.from("rh_employee_documents").select("id, employee_id, document_type, expires_at, status")
+        .not("expires_at", "is", null).order("expires_at", { ascending: true }).limit(100),
+      supabaseAdmin.from("rh_employee_contracts").select("employee_id, is_current, salary_cents, weekly_hours")
+        .eq("is_current", true),
+      supabaseAdmin.from("rh_ponto_records").select("id, employee_id, work_date, punch_type")
+        .order("work_date", { ascending: false }).limit(500),
+    ]);
+    for (const result of [employeesResult, accessResult, requestsResult, advancesResult, documentsResult, contractsResult, pointResult]) {
+      if (result.error) throw new Error(result.error.message);
+    }
+
+    const employees = employeesResult.data ?? [];
+    const activeEmployees = employees.filter((e: any) => e.is_active);
+    const employeeById = new Map(employees.map((e: any) => [e.id, e]));
+    const linkedIds = new Set((accessResult.data ?? []).filter((a: any) => a.access_enabled).map((a: any) => a.employee_id));
+    const requests = requestsResult.data ?? [];
+    const advances = advancesResult.data ?? [];
+    const documents = documentsResult.data ?? [];
+    const contracts = contractsResult.data ?? [];
+    const point = pointResult.data ?? [];
+    const today = new Date();
+    const inDays = (value: string, days: number) => {
+      const d = new Date(value + "T12:00:00");
+      const target = new Date(today);
+      target.setHours(12, 0, 0, 0);
+      return d.getTime() <= target.getTime() + days * 86400000;
+    };
+
+    const noAccess = activeEmployees.filter((e: any) => !linkedIds.has(e.id) && !e.ponto_access_enabled);
+    const incompleteRegistration = activeEmployees.filter((e: any) => {
+      const r = (e.registration_data ?? {}) as Record<string, any>;
+      return !r.cpf || !r.job_title || !r.admission_date || !r.salary_cents;
+    });
+    const incompleteContract = activeEmployees.filter((e: any) => !contracts.some((c: any) => c.employee_id === e.id && c.salary_cents != null && c.weekly_hours != null));
+    const documentAlerts = documents.filter((d: any) => d.expires_at && inDays(String(d.expires_at), 30) && d.status !== "cancelado");
+    const employeePointCounts = new Map<string, Set<string>>();
+    for (const row of point) {
+      const set = employeePointCounts.get(row.employee_id) ?? new Set<string>();
+      set.add(String(row.work_date) + "|" + String(row.punch_type));
+      employeePointCounts.set(row.employee_id, set);
+    }
+
+    return {
+      totals: {
+        activeEmployees: activeEmployees.length,
+        inactiveEmployees: employees.filter((e: any) => !e.is_active).length,
+        linkedAccess: activeEmployees.filter((e: any) => linkedIds.has(e.id) || e.ponto_access_enabled).length,
+        openRequests: requests.length,
+        pendingAdvances: advances.length,
+        expiringDocuments: documentAlerts.length,
+        incompleteRegistration: incompleteRegistration.length,
+        incompleteContract: incompleteContract.length,
+      },
+      alerts: {
+        noAccess: noAccess.slice(0, 8).map((e: any) => ({ id: e.id, name: e.full_name, unit: e.unit })),
+        incompleteRegistration: incompleteRegistration.slice(0, 8).map((e: any) => ({ id: e.id, name: e.full_name, unit: e.unit })),
+        incompleteContract: incompleteContract.slice(0, 8).map((e: any) => ({ id: e.id, name: e.full_name, unit: e.unit })),
+        requests: requests.slice(0, 8).map((r: any) => ({ id: r.id, employee_id: r.employee_id, name: employeeById.get(r.employee_id)?.full_name ?? "Funcionário", type: r.request_type, requested_at: r.requested_at, payload: r.payload })),
+        advances: advances.slice(0, 8).map((a: any) => ({ id: a.id, employee_id: a.employee_id, name: employeeById.get(a.employee_id)?.full_name ?? "Funcionário", amount_cents: a.amount_cents, competence: a.competence, status: a.status })),
+        documents: documentAlerts.slice(0, 8).map((d: any) => ({ id: d.id, employee_id: d.employee_id, name: employeeById.get(d.employee_id)?.full_name ?? "Funcionário", document_type: d.document_type, expires_at: d.expires_at })),
+      },
+    };
+  });
+
 export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -607,7 +686,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       if (existingAccessError) throw new Error(existingAccessError.message);
       if (existingAccess?.id) {
         const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
-          .update({ access_enabled: false, login_identifier: null, user_id: linked?.ponto_portal_user_id ?? null })
+          .update({ access_enabled: false, login_identifier: null })
           .eq("id", existingAccess.id);
         if (accessUpdateError) throw new Error(accessUpdateError.message);
       }
@@ -617,6 +696,14 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
         actor_user_id: operator.id,
         action: "ACESSO_FUNCIONARIO_REVOGADO",
         details: { user_id: linked?.ponto_portal_user_id ?? null },
+      });
+      await supabaseAdmin.from("rh_audit_log").insert({
+        employee_id: data.employee_id,
+        actor_user_id: operator.id,
+        action: "ACESSO_FUNCIONARIO_REVOGADO",
+        entity_type: "rh_employee_access",
+        entity_id: existingAccess?.id ?? data.employee_id,
+        after_data: { access_enabled: false, login_identifier: null, user_id: linked?.ponto_portal_user_id ?? null },
       });
       return { ok: true, enabled: false, user: null, initial_password: null };
     }
@@ -675,6 +762,14 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     }
 
     await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_LIBERADO", details: { login_identifier: identifier, user_id: appUser.id } });
+    await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id,
+      actor_user_id: operator.id,
+      action: "ACESSO_FUNCIONARIO_LIBERADO",
+      entity_type: "rh_employee_access",
+      entity_id: existingAccess?.id ?? data.employee_id,
+      after_data: { access_enabled: true, login_identifier: identifier, user_id: appUser.id, dbs_control_access_enabled: data.dbs_control_enabled },
+    });
     return { ok: true, enabled: true, dbs_control_enabled: data.dbs_control_enabled, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
   });
 
