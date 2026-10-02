@@ -135,9 +135,10 @@ function PontoRh() {
     return [...byEmployee.values()].sort((a,b)=>a.employee.full_name.localeCompare(b.employee.full_name,"pt-BR"));
   }, [employees.data, report.data, management.data, reportDate]);
 
+  const timeText = (value:number) => String(Math.floor(Math.abs(Number(value||0))/60)).padStart(2,"0")+":"+String(Math.abs(Number(value||0))%60).padStart(2,"0");
   const exportMonthlyCsv = () => {
     const rows = [["Funcionário","Unidade","Horas previstas","Horas trabalhadas","Horas extras","Atrasos","Saídas antecipadas","Faltas","Atestados","Ponto incompleto","Outras ocorrências"]];
-    for (const item of monthlySummary) rows.push([item.employee.full_name,item.employee.unit,formatMinutes(item.expected),formatMinutes(item.worked),formatMinutes(item.overtime),formatMinutes(item.late),formatMinutes(item.early),String(item.absences),String(item.attestados),String(item.incomplete),String(item.justified)]);
+    for (const item of monthlySummary) rows.push([item.employee.full_name,item.employee.unit,timeText(item.expected),timeText(item.worked),timeText(item.overtime),timeText(item.late),timeText(item.early),String(item.absences),String(item.attestados),String(item.incomplete),String(item.justified)]);
     const csv = rows.map(row=>row.map(v=>"\"" + String(v??"").replace(/\"/g,'\"\"') + "\"").join(";")).join("\n");
     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="espelho_rh_"+reportDate+".csv";a.click();URL.revokeObjectURL(url);
   };
