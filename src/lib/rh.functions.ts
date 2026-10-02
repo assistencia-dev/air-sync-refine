@@ -717,7 +717,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       appUser = result.data;
       userError = result.error;
     } else {
-      const digits = identifier.replace(/\\D/g, "");
+      const digits = identifier.replace(/\D/g, "");
       const isEmail = identifier.includes("@");
       let query = supabaseAdmin.from("users").select("id, auth_id, username, email, cpf, full_name, role_key, status").limit(1);
       if (isEmail) query = query.ilike("email", identifier);
@@ -824,7 +824,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
       actor_user_id: operator.id,
       action: "ACESSO_FUNCIONARIO_LIBERADO",
       entity_type: "rh_employee_access",
-      entity_id: existingAccess?.id ?? data.employee_id,
+      entity_id: accessRows?.[0]?.id ?? data.employee_id,
       after_data: { access_enabled: true, login_identifier: identifier, user_id: appUser.id, dbs_control_access_enabled: data.dbs_control_enabled },
     });
     return { ok: true, enabled: true, dbs_control_enabled: data.dbs_control_enabled, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
