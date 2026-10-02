@@ -355,6 +355,18 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
     const n = Number(c ?? 0);
     return Number.isFinite(n) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n / 100) : "—";
   };
+  const registrationMoney = (value: unknown) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "—";
+    const n = Number(raw.replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n) : raw;
+  };
+  const dateText = (value: unknown) => {
+    const raw = String(value ?? "");
+    if (!raw) return "—";
+    const d = new Date(raw.includes("T") ? raw : raw + "T12:00:00");
+    return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString("pt-BR");
+  };
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#02060d]/75 p-4">
       <div className="mx-auto my-6 w-full max-w-6xl overflow-hidden rounded-2xl bg-[#1E293B] shadow-2xl">
@@ -387,7 +399,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
           <div className="grid gap-5 lg:grid-cols-2">
             <Employee360Section title="Dados funcionais">
               <InfoGrid items={[
-                ["Salário cadastrado", registration.salary || (data?.contracts?.[0]?.salary_cents != null ? money(data.contracts[0].salary_cents) : "—")],
+                ["Salário cadastrado", registration.salary ? registrationMoney(registration.salary) : (data?.contracts?.[0]?.salary_cents != null ? money(data.contracts[0].salary_cents) : "—")],
                 ["Tipo de pagamento", registration.payment_type || "—"],
                 ["Jornada", registration.work_hours || (data?.contracts?.[0]?.weekly_hours ? data.contracts[0].weekly_hours + " h/semana" : "—")],
                 ["PIS", registration.pis || "—"],
@@ -400,7 +412,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
                 ["Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada"],
                 ["DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado"],
                 ["Login", data?.access?.login_identifier || "—"],
-                ["Registro criado", data?.employee?.created_at ? new Date(data.employee.created_at).toLocaleDateString("pt-BR") : "—"],
+                ["Registro criado", data?.employee?.created_at ? dateText(data.employee.created_at) : "—"],
               ]} />
             </Employee360Section>
           </div>
