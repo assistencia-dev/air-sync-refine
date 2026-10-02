@@ -2,13 +2,13 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator,
-  UsersRound, BriefcaseBusiness, ChevronRight, Download, RefreshCw
+  UsersRound, BriefcaseBusiness, ChevronRight, Download, RefreshCw, AlertTriangle, FileWarning, UserRoundCheck, ClipboardList
 } from "lucide-react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
 import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
 import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
 import { RhDpCenter } from "@/components/RhDpCenter";
-import { listRhEmployeeRegistry, listRhEmployees, listRhTopups } from "@/lib/rh.functions";
+import { getRhDashboardAlerts, listRhEmployeeRegistry, listRhEmployees, listRhTopups } from "@/lib/rh.functions";
 import { listRhPayroll } from "@/lib/rh.dp.functions";
 import { RhEmployeeFinance } from "@/components/RhEmployeeFinance";
 import { listRhPontoEmployees } from "@/lib/ponto.functions";
@@ -29,6 +29,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const vtTopups = useQuery({ queryKey: ["rh-workspace-vt-topups"], queryFn: () => listRhTopups({ data: { benefit_type: "passagem" } }) });
   const vaTopups = useQuery({ queryKey: ["rh-workspace-va-topups"], queryFn: () => listRhTopups({ data: { benefit_type: "alimentacao" } }) });
   const payroll = useQuery({ queryKey: ["rh-workspace-payroll"], queryFn: () => listRhPayroll() });
+  const alerts = useQuery({ queryKey: ["rh-workspace-alerts"], queryFn: () => getRhDashboardAlerts(), staleTime: 30_000 });
 
   const summary = useMemo(() => {
     const unique = new Set<string>();
@@ -182,6 +183,35 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
               <QuickAction icon={<WalletCards />} title="Lançar vale" text="Desconto em folha" onClick={() => setSection("financeiro")} />
             </div>
           </section>
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-600">Controle operacional</p>
+                <h2 className="mt-1 text-lg font-black text-slate-900">Pendências que merecem atenção</h2>
+                <p className="mt-1 text-sm text-slate-500">O sistema cruza cadastro, acesso, documentos, solicitações e lançamentos para apontar o que precisa de ação.</p>
+              </div>
+              <button onClick={() => alerts.refetch()} disabled={alerts.isFetching} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 disabled:opacity-50">
+                <RefreshCw className={"h-3.5 w-3.5 " + (alerts.isFetching ? "animate-spin" : "")}/> Atualizar
+              </button>
+            </div>
+            {alerts.isError ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800">Não foi possível atualizar o painel operacional agora. As demais áreas do RH continuam disponíveis.</div>
+            ) : (
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <AlertKpi label="Solicitações abertas" value={alerts.data?.totals.openRequests ?? 0} icon={<ClipboardList />} tone="amber" onClick={() => setSection("gestao")} />
+                  <AlertKpi label="Vales programados" value={alerts.data?.totals.pendingAdvances ?? 0} icon={<WalletCards />} tone="blue" onClick={() => setSection("financeiro")} />
+                  <AlertKpi label="Sem acesso vinculado" value={alerts.data?.totals.noAccess?.length ?? 0} icon={<UserRoundCheck />} tone="violet" onClick={() => setSection("cadastro")} />
+                  <AlertKpi label="Documentos vencendo" value={alerts.data?.totals.expiringDocuments ?? 0} icon={<FileWarning />} tone="rose" onClick={() => setSection("cadastro")} />
+                </div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  <AlertList title="Cadastro incompleto" count={alerts.data?.totals.incompleteRegistration ?? 0} items={alerts.data?.alerts.incompleteRegistration ?? []} icon={<AlertTriangle />} onOpen={() => setSection("cadastro")} />
+                  <AlertList title="Contrato incompleto" count={alerts.data?.totals.incompleteContract ?? 0} items={alerts.data?.alerts.incompleteContract ?? []} icon={<BriefcaseBusiness />} onOpen={() => setSection("cadastro")} />
+                  <AlertList title="Documentos próximos do vencimento" count={alerts.data?.totals.expiringDocuments ?? 0} items={alerts.data?.alerts.documents ?? []} icon={<FileWarning />} onOpen={() => setSection("cadastro")} />
+                </div>
+              </>
+            )}
+          </section>
         </div>
       )}
 
@@ -194,6 +224,36 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       {section === "passagem" && <RhBenefitPanel benefitType="passagem" />}
     </div>
   );
+}
+
+function AlertKpi({ label, value, icon, tone, onClick }: { label: string; value: number; icon: ReactNode; tone: "amber"|"blue"|"violet"|"rose"; onClick: () => void }) {
+  const toneClass = {
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+    blue: "bg-sky-50 text-sky-700 border-sky-100",
+    violet: "bg-violet-50 text-violet-700 border-violet-100",
+    rose: "bg-rose-50 text-rose-700 border-rose-100",
+  }[tone];
+  return <button onClick={onClick} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+    <span className={"grid h-10 w-10 place-items-center rounded-xl border " + toneClass}>{icon}</span>
+    <span><span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</span><strong className="mt-1 block text-2xl font-black text-slate-900">{value}</strong></span>
+  </button>;
+}
+
+function AlertList({ title, count, items, icon, onOpen }: { title: string; count: number; items: any[]; icon: ReactNode; onOpen: () => void }) {
+  return <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2"><span className="text-amber-600">{icon}</span><h3 className="text-xs font-black text-slate-900">{title}</h3></div>
+      <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-500">{count}</span>
+    </div>
+    <div className="mt-3 space-y-2">
+      {items.slice(0, 5).map((item: any) => <button key={item.id} onClick={onOpen} className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left hover:border-slate-300">
+        <span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{item.name}</span><span className="block truncate text-[10px] text-slate-400">{item.unit || item.document_type || "Verificar cadastro"}</span></span>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300"/>
+      </button>)}
+      {!items.length && <p className="py-4 text-center text-[11px] text-emerald-700">Nenhuma pendência encontrada.</p>}
+    </div>
+    {count > 5 && <button onClick={onOpen} className="mt-3 text-[10px] font-black uppercase tracking-wider text-sky-600">Abrir módulo e revisar todas</button>}
+  </section>;
 }
 
 function MiniHeaderStat({ label, value }: { label: string; value: ReactNode }) {
