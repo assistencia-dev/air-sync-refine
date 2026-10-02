@@ -414,10 +414,15 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <Employee360Section title="Dados funcionais">
               <InfoGrid items={[
                 ["Salário cadastrado", registration.salary ? registrationMoney(registration.salary) : (data?.contracts?.[0]?.salary_cents != null ? money(data.contracts[0].salary_cents) : "—")],
+                ["Valor hora", (() => { const salary = Number(registration.salary_cents ?? data?.contracts?.[0]?.salary_cents ?? 0); const hours = Number(registration.weekly_hours ?? data?.contracts?.[0]?.weekly_hours ?? 44); return salary > 0 && hours > 0 ? money(Math.round(salary / (hours * 5))) : "—"; })()],
+                ["Valor dia", (() => { const salary = Number(registration.salary_cents ?? data?.contracts?.[0]?.salary_cents ?? 0); return salary > 0 ? money(Math.round(salary / 30)) : "—"; })()],
                 ["Tipo de pagamento", registration.payment_type || "—"],
-                ["Jornada", registration.work_hours || (data?.contracts?.[0]?.weekly_hours ? data.contracts[0].weekly_hours + " h/semana" : "—")],
+                ["Jornada semanal", registration.weekly_hours ? String(registration.weekly_hours).replace(".", ",") + " h/semana" : (data?.contracts?.[0]?.weekly_hours ? String(data.contracts[0].weekly_hours).replace(".", ",") + " h/semana" : "—")],
                 ["PIS", registration.pis || "—"],
                 ["CTPS", registration.ctps || "—"],
+                ["Entrada", registration.entry_time || "—"],
+                ["Almoço", registration.lunch_start && registration.lunch_end ? registration.lunch_start + " às " + registration.lunch_end : "—"],
+                ["Saída", registration.exit_time || "—"],
                 ["Telefone", registration.phone || "—"],
               ]} />
             </Employee360Section>
