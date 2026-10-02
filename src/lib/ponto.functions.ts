@@ -153,17 +153,26 @@ function pointSummary(records: Array<{ punch_type: PointType; punched_at: string
 
   const expectedStart = minutesFromTime(employee?.ponto_entrada_prevista);
   const expectedEnd = minutesFromTime(employee?.ponto_saida_prevista);
+  const lunchStart = minutesFromTime(employee?.ponto_almoco_inicio_previsto);
+  const lunchEnd = minutesFromTime(employee?.ponto_almoco_fim_previsto);
+  const configuredBreak = Number(employee?.registration_data?.break_minutes ?? 0);
+  const breakMinutes = lunchStart != null && lunchEnd != null && lunchEnd >= lunchStart
+    ? lunchEnd - lunchStart
+    : Math.max(0, Number.isFinite(configuredBreak) ? configuredBreak : 0);
+  const tolerance = Math.max(0, Number(employee?.registration_data?.tolerance_minutes ?? 5));
+  const spanMinutes = expectedStart != null && expectedEnd != null && expectedEnd >= expectedStart
+    ? expectedEnd - expectedStart
+    : 0;
+  const expectedMinutes = spanMinutes > 0 ? Math.max(0, spanMinutes - breakMinutes) : null;
   const actualStart = minutesFromTime(byType.get("entrada"));
   const actualEnd = minutesFromTime(byType.get("saida"));
 
   return {
     worked_minutes: workedMinutes,
-    expected_minutes: expectedStart != null && expectedEnd != null && expectedEnd >= expectedStart
-      ? expectedEnd - expectedStart
-      : null,
-    late_minutes: expectedStart != null && actualStart != null ? Math.max(0, actualStart - expectedStart) : 0,
-    early_leave_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, expectedEnd - actualEnd) : 0,
-    overtime_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, actualEnd - expectedEnd) : 0,
+    expected_minutes: expectedMinutes,
+    late_minutes: expectedStart != null && actualStart != null ? Math.max(0, actualStart - expectedStart - tolerance) : 0,
+    early_leave_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, expectedEnd - actualEnd - tolerance) : 0,
+    overtime_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, actualEnd - expectedEnd - tolerance) : 0,
     missing_punches: (["entrada", "almoco_saida", "almoco_retorno", "saida"] as PointType[])
       .filter((type) => !byType.has(type)),
   };
