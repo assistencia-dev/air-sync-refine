@@ -106,6 +106,8 @@
         body.dbs-control-employee-mode .pwa-screen { height:auto; min-height:calc(100vh - 110px); background:transparent; border-radius:0; overflow:visible; }
         body.dbs-control-employee-mode .pwa-header-bar { display:none; }
         body.dbs-control-employee-mode .pwa-body-content { padding:0; overflow:visible; }
+        #tab-tecnicos .btn.btn-secondary.btn-sm { padding:6px 9px; font-size:10px; font-weight:800; }
+        #tab-tecnicos table td, #tab-tecnicos table th { vertical-align:middle; }
         .employee-hero { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding:24px; border-radius:20px; background:linear-gradient(135deg,#020617,#0f172a); color:#fff; box-shadow:0 12px 28px rgba(15,23,42,.12); }
         .employee-eyebrow { font-size:10px; font-weight:900; letter-spacing:.18em; color:#7dd3fc; }
         .employee-hero h2 { margin:7px 0 4px; font-size:26px; }
@@ -266,6 +268,7 @@
                             <th>Tipo</th>
                             <th>Valor Total</th>
                             <th>Status</th>
+                            <th>Cadastro RH</th>
                         </tr>
                     </thead>
                     <tbody id="dash-table-body"></tbody>
@@ -1076,6 +1079,18 @@
             renderizarTudo();
         }
 
+        function abrirFichaRH(employeeId) {
+            if (!employeeId) {
+                alert('Este colaborador ainda não possui vínculo com o Cadastro Central do RH.');
+                return;
+            }
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_RH_EMPLOYEE', employee_id: employeeId }, '*');
+                return;
+            }
+            alert('Abra o DBS CONTROL pelo portal DBS AIR para acessar a ficha central do RH.');
+        }
+
         function renderizarTecnicos() {
             document.getElementById('tec-table-body').innerHTML = ERP_STATE.tecnicos.map(t => `
                 <tr>
@@ -1084,6 +1099,11 @@
                     <td><span class="badge badge-cargo">${t.posicao}</span></td>
                     <td>${t.fone}</td>
                     <td><span class="badge badge-concluido">Ativo</span></td>
+                    <td>
+                      ${t.employeeId
+                        ? '<button type="button" class="btn btn-secondary btn-sm" onclick="abrirFichaRH(\\'' + String(t.employeeId).replace(/'/g, '') + '\\')">Ficha RH</button>'
+                        : '<span style="font-size:10px;color:var(--text-muted);">Sem vínculo RH</span>'}
+                    </td>
                 </tr>
             `).join('');
         }
