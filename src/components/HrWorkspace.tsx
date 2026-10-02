@@ -12,7 +12,7 @@ import { listRhPontoEmployees } from "@/lib/ponto.functions";
 
 export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 
-type HrSection = "resumo" | "custos" | "ponto" | "passagem" | "alimentacao" | "cadastro" | "gestao";
+type HrSection = "resumo" | "custos" | "financeiro" | "ponto" | "passagem" | "alimentacao" | "cadastro" | "gestao";
 
 /**
  * Área de trabalho do RH.
@@ -52,8 +52,8 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       <div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-[#1E293B] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[.2em] text-slate-400">Área de trabalho</p>
-          <h1 className="mt-1 text-xl font-black tracking-tight text-slate-50">RH — Benefícios e cadastro</h1>
-          <p className="mt-1 text-xs text-slate-400">Cadastro central de colaboradores compartilhado pelas duas ferramentas de benefício.</p>
+          <h1 className="mt-1 text-xl font-black tracking-tight text-slate-50">RH — Gestão Integrada</h1>
+          <p className="mt-1 text-xs text-slate-400">Cadastro central de colaboradores compartilhado por Ponto, DP, Folha, Benefícios, Financeiro e acessos.</p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <nav className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="Módulos de RH">
