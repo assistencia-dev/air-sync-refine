@@ -188,11 +188,19 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
       }
     }
 
+    const incomingStatus = String(incomingOrder.status ?? "").trim();
+    const allowedEmployeeStatuses = new Set([
+      "Em Atendimento",
+      "Aguardando peça",
+      "Aguardando cliente",
+      "Concluída",
+    ]);
+
     return {
       ...currentOrder,
       // O colaborador só pode atualizar a execução da própria OS.
-      // Os dados administrativos/originais permanecem intactos.
-      status: incomingOrder.status ?? currentOrder.status,
+      // Dados administrativos/originais (inclusive valor) permanecem intactos.
+      status: allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status,
       diagnostico: incomingOrder.diagnostico ?? currentOrder.diagnostico ?? "",
       trabalhoExecutado: incomingOrder.trabalhoExecutado ?? currentOrder.trabalhoExecutado ?? "",
       fotoAntes: incomingOrder.fotoAntes ?? currentOrder.fotoAntes ?? null,
@@ -202,7 +210,6 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
       concluidoEm: incomingOrder.concluidoEm ?? currentOrder.concluidoEm ?? null,
       concluidoPorEmployeeId: incomingOrder.concluidoPorEmployeeId ?? currentOrder.concluidoPorEmployeeId ?? null,
       pecasUsadas: newParts,
-      valor: Number.isFinite(Number(incomingOrder.valor)) ? Number(incomingOrder.valor) : currentOrder.valor,
     };
   });
 
