@@ -443,6 +443,15 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <Employee360Section title={`Documentos (${data?.documents?.length ?? 0})`}><TimelineList empty="Nenhum documento registrado." items={(data?.documents ?? []).map((x: any) => ({ title: x.document_type, text: [x.file_name, x.expires_at && "Validade: " + x.expires_at, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
             <Employee360Section title={`Histórico (${data?.events?.length ?? 0})`}><TimelineList empty="Nenhum evento registrado." items={(data?.events ?? []).map((x: any) => ({ title: x.event_type, text: [x.event_date, x.status].filter(Boolean).join(" · ") }))} /></Employee360Section>
           </div>
+          <Employee360Section title={`Auditoria (${data?.auditLog?.length ?? 0})`}>
+            <TimelineList
+              empty="Nenhuma alteração auditada."
+              items={(data?.auditLog ?? []).map((x: any) => ({
+                title: auditLabel(x.action),
+                text: [x.created_at ? new Date(x.created_at).toLocaleString("pt-BR") : "", x.entity_type].filter(Boolean).join(" · "),
+              }))}
+            />
+          </Employee360Section>
           <div className="grid gap-5 lg:grid-cols-3">
             <Employee360Section title={`Benefícios (${data?.benefits?.length ?? 0})`}>
               <TimelineList empty="Nenhum benefício vinculado." items={(data?.benefits ?? []).map((x: any) => ({
@@ -471,6 +480,23 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
       </div>
     </div>
   );
+}
+
+function auditLabel(action: string) {
+  const labels: Record<string, string> = {
+    CADASTRO_FUNCIONARIO_CRIADO: "Cadastro criado",
+    CADASTRO_FUNCIONARIO_ATUALIZADO: "Cadastro atualizado",
+    CONTRATO_CRIADO: "Contrato criado",
+    CONTRATO_ATUALIZADO: "Contrato atualizado",
+    ACESSO_FUNCIONARIO_LIBERADO: "Acesso liberado",
+    ACESSO_FUNCIONARIO_REVOGADO: "Acesso revogado",
+    VALE_SOLICITADO_PELO_COLABORADOR: "Vale solicitado pelo colaborador",
+    VALE_AUTORIZADO_E_VINCULADO_A_FOLHA: "Vale autorizado e vinculado à folha",
+    VALE_RECUSADO_PELO_RH: "Vale recusado pelo RH",
+    VALE_DESCONTO_CRIADO: "Vale/desconto lançado",
+    VALE_DESCONTO_CANCELADO: "Vale/desconto cancelado",
+  };
+  return labels[action] ?? action.replaceAll("_", " ").toLowerCase().replace(/^./, (x) => x.toUpperCase());
 }
 
 function MiniCard({ icon, title, value }: { icon: ReactNode; title: string; value: string }) {
