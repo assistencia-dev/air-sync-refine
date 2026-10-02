@@ -553,8 +553,7 @@ export const getRhDashboardAlerts = createServerFn({ method: "GET" })
 
     const [employeesResult, accessResult, requestsResult, advancesResult, documentsResult, contractsResult, pointResult] = await Promise.all([
       supabaseAdmin.from("rh_employees")
-        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, ponto_portal_user_id")
-        .eq("registry_employee_id", null)
+        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, ponto_portal_user_id, registry_employee_id")
         .order("full_name"),
       supabaseAdmin.from("rh_employee_access").select("employee_id, access_enabled"),
       supabaseAdmin.from("rh_employee_requests").select("id, employee_id, request_type, status, requested_at, payload")
@@ -572,7 +571,7 @@ export const getRhDashboardAlerts = createServerFn({ method: "GET" })
       if (result.error) throw new Error(result.error.message);
     }
 
-    const employees = employeesResult.data ?? [];
+    const employees = (employeesResult.data ?? []).filter((e: any) => !e.registry_employee_id || e.registry_employee_id === e.id);
     const activeEmployees = employees.filter((e: any) => e.is_active);
     const employeeById = new Map(employees.map((e: any) => [e.id, e]));
     const linkedIds = new Set((accessResult.data ?? []).filter((a: any) => a.access_enabled).map((a: any) => a.employee_id));
@@ -596,13 +595,6 @@ export const getRhDashboardAlerts = createServerFn({ method: "GET" })
     });
     const incompleteContract = activeEmployees.filter((e: any) => !contracts.some((c: any) => c.employee_id === e.id && c.salary_cents != null && c.weekly_hours != null));
     const documentAlerts = documents.filter((d: any) => d.expires_at && inDays(String(d.expires_at), 30) && d.status !== "cancelado");
-    const employeePointCounts = new Map<string, Set<string>>();
-    for (const row of point) {
-      const set = employeePointCounts.get(row.employee_id) ?? new Set<string>();
-      set.add(String(row.work_date) + "|" + String(row.punch_type));
-      employeePointCounts.set(row.employee_id, set);
-    }
-
     return {
       totals: {
         activeEmployees: activeEmployees.length,
