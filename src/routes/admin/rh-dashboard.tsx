@@ -10,7 +10,7 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, CreditCard, Utensils, Clock3, BriefcaseBusiness } from 'lucide-react';
 import { RhPontoWorkspace } from '@/components/RhPontoWorkspace';
@@ -35,6 +35,15 @@ export const Route = createFileRoute('/admin/rh-dashboard')({
  */
 function RHDashboard() {
   const [activeTab, setActiveTab] = useState('gestao');
+  const [openEmployeeId, setOpenEmployeeId] = useState<string | null>(null);
+  useEffect(() => {
+    const employeeId = sessionStorage.getItem('DBS_RH_OPEN_EMPLOYEE');
+    if (employeeId) {
+      sessionStorage.removeItem('DBS_RH_OPEN_EMPLOYEE');
+      setOpenEmployeeId(employeeId);
+      setActiveTab('gestao');
+    }
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: '#090D16' }}>
@@ -127,7 +136,7 @@ function RHDashboard() {
 
           {/* Tab 1: Gestão de Colaboradores */}
           <TabsContent value="gestao" className="space-y-6">
-            <TabGestaoColaboradores />
+            <TabGestaoColaboradores initialEmployeeId={openEmployeeId} />
           </TabsContent>
 
           {/* Tab 2: Vale Passagem */}
