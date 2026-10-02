@@ -103,10 +103,10 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download="rh_funcionarios.csv"; a.click(); URL.revokeObjectURL(url);
   };
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,.35)]">
+      <div className="flex flex-col gap-4 border-b border-slate-200 bg-gradient-to-br from-[#0F172A] via-[#172554] to-[#0F172A] px-5 py-6 text-white sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[.2em] text-[#F59E0B]">
+          <p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-300">
             RH · cadastro central
           </p>
           <h2 className="mt-1 text-2xl font-black">Funcionários</h2>
@@ -115,14 +115,14 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#141F33] px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
+          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
           <button onClick={() => exportRhEmployeeRegistryPdf(filteredEmployees)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-slate-900"><FileDown className="h-4 w-4"/>Relatório / PDF</button>
           <button
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs font-black text-slate-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-slate-50"
           >
             <Plus className="h-4 w-4" /> Novo funcionário
           </button>
@@ -130,16 +130,16 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
       </div>
       <div className="p-5 sm:p-7">
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Ativos</p><p className="mt-1 text-2xl font-black text-emerald-300">{activeCount}</p></div>
-          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Inativos</p><p className="mt-1 text-2xl font-black text-slate-300">{inactiveCount}</p></div>
-          <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Acessos vinculados</p><p className="mt-1 text-2xl font-black text-sky-300">{accessCount}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ativos</p><p className="mt-1 text-2xl font-black text-emerald-300">{activeCount}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Inativos</p><p className="mt-1 text-2xl font-black text-slate-600">{inactiveCount}</p></div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Acessos vinculados</p><p className="mt-1 text-2xl font-black text-sky-300">{accessCount}</p></div>
         </div>
         <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, unidade, cargo ou CPF..." className="w-full rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#F59E0B]" />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-xs font-bold text-slate-200">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, unidade, cargo ou CPF..." className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-500" />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-200">
             <option value="ativos">Somente ativos</option><option value="todos">Todos os funcionários</option><option value="inativos">Somente inativos</option>
           </select>
-          <select value={accessFilter} onChange={(e) => setAccessFilter(e.target.value as typeof accessFilter)} className="rounded-xl border border-slate-700 bg-[#141F33] px-4 py-3 text-xs font-bold text-slate-200">
+          <select value={accessFilter} onChange={(e) => setAccessFilter(e.target.value as typeof accessFilter)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-200">
             <option value="todos">Todos os acessos</option><option value="com_acesso">Com acesso</option><option value="sem_acesso">Sem acesso</option>
           </select>
         </div>
@@ -148,9 +148,9 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
             {error}
           </p>
         )}
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
-            <thead className="bg-[#141F33] text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">Unidade</th>
@@ -195,7 +195,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
             </tbody>
           </table>
           {!employees.isLoading && employeeList.length > 0 && !filteredEmployees.length && (
-            <div className="p-10 text-center"><UsersRound className="mx-auto h-8 w-8 text-slate-600" /><p className="mt-2 text-sm font-bold text-slate-500">Nenhum funcionário encontrado</p><p className="mt-1 text-xs text-slate-400">Ajuste a busca ou os filtros para localizar o cadastro.</p></div>
+            <div className="p-10 text-center"><UsersRound className="mx-auto h-8 w-8 text-slate-600" /><p className="mt-2 text-sm font-bold text-slate-400">Nenhum funcionário encontrado</p><p className="mt-1 text-xs text-slate-400">Ajuste a busca ou os filtros para localizar o cadastro.</p></div>
           )}
           {!employees.isLoading && !employeeList.length && (
             <div className="p-10 text-center">
@@ -290,13 +290,13 @@ function EmployeeRow({
     }
   }
   return (
-    <tr className="border-t border-slate-800 align-top">
-      <td className="px-4 py-3 font-semibold text-slate-100">
+    <tr className="border-t border-slate-200 align-top">
+      <td className="px-4 py-3 font-semibold text-slate-800">
         {employee.full_name}
         {!employee.is_active && <span className="ml-2 inline-flex rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold text-slate-400">Inativo</span>}
       </td>
-      <td className="px-4 py-3 text-slate-300">{employee.unit}</td>
-      <td className="px-4 py-3 text-slate-300">{employee.registration_data?.job_title || "—"}</td>
+      <td className="px-4 py-3 text-slate-600">{employee.unit}</td>
+      <td className="px-4 py-3 text-slate-600">{employee.registration_data?.job_title || "—"}</td>
       <td className="px-4 py-3">
         <div className="flex flex-wrap gap-1.5">
           {employee.ficha_file_name ? (
@@ -333,10 +333,10 @@ function EmployeeRow({
         {employee.access?.access_enabled ? (
           <div>
             <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300">Liberado</span>
-            <p className="mt-1 text-[10px] text-slate-500">{employee.access.login_identifier ?? employee.access.user?.username ?? "Acesso vinculado"}</p>
+            <p className="mt-1 text-[10px] text-slate-400">{employee.access.login_identifier ?? employee.access.user?.username ?? "Acesso vinculado"}</p>
           </div>
         ) : (
-          <span className="text-[11px] text-slate-500">Sem acesso</span>
+          <span className="text-[11px] text-slate-400">Sem acesso</span>
         )}
       </td>
       <td className="px-4 py-3 text-right">
@@ -384,7 +384,7 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#02060d]/75 p-4">
       <div className="mx-auto my-6 w-full max-w-6xl overflow-hidden rounded-2xl bg-[#1E293B] shadow-2xl">
-        <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#0F172A] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-[#0F172A] p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[.2em] text-sky-400">RH · ficha 360°</p>
             <h3 className="mt-1 text-2xl font-black text-slate-50">{employee.full_name}</h3>
@@ -394,11 +394,11 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
             <button
               onClick={() => data && exportRhEmployeeFichaPdf(employee, data)}
               disabled={!data}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#F59E0B] px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50"
             >
               <FileDown className="h-4 w-4" /> Exportar ficha PDF
             </button>
-            <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800">Fechar</button>
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-800">Fechar</button>
           </div>
         </div>
         {q.isLoading ? <div className="p-10 text-center text-sm text-slate-400">Carregando ficha completa...</div> :
@@ -474,16 +474,16 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
 }
 
 function MiniCard({ icon, title, value }: { icon: ReactNode; title: string; value: string }) {
-  return <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="flex items-center gap-2 text-slate-400">{icon}<span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div><p className="mt-2 truncate text-sm font-bold text-slate-100">{value}</p></div>;
+  return <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-slate-400">{icon}<span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div><p className="mt-2 truncate text-sm font-bold text-slate-800">{value}</p></div>;
 }
 function Employee360Section({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-3 flex items-center gap-2"><FileStack className="h-4 w-4 text-sky-400" /><h4 className="text-sm font-black text-slate-100">{title}</h4></div>{children}</section>;
+  return <section className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center gap-2"><FileStack className="h-4 w-4 text-sky-400" /><h4 className="text-sm font-black text-slate-800">{title}</h4></div>{children}</section>;
 }
 function InfoGrid({ items }: { items: [string, string][] }) {
-  return <div className="grid gap-2 sm:grid-cols-2">{items.map(([k,v]) => <div key={k} className="rounded-lg bg-[#0F172A] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k}</p><p className="mt-1 text-xs font-semibold text-slate-200">{v}</p></div>)}</div>;
+  return <div className="grid gap-2 sm:grid-cols-2">{items.map(([k,v]) => <div key={k} className="rounded-lg bg-[#0F172A] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{k}</p><p className="mt-1 text-xs font-semibold text-slate-200">{v}</p></div>)}</div>;
 }
 function TimelineList({ items, empty }: { items: { title: string; text: string }[]; empty: string }) {
-  if (!items.length) return <p className="text-xs text-slate-500">{empty}</p>;
+  if (!items.length) return <p className="text-xs text-slate-400">{empty}</p>;
   return <div className="space-y-2">{items.slice(0,8).map((x,i) => <div key={i} className="rounded-lg bg-[#0F172A] p-3"><p className="text-xs font-bold text-slate-200">{x.title}</p><p className="mt-1 text-[11px] text-slate-400">{x.text}</p></div>)}</div>;
 }
 
@@ -520,13 +520,13 @@ function EmployeeAccessForm({
           <button onClick={onClose} className="text-xs font-bold text-slate-400">Fechar</button>
         </div>
         <div className="mt-5 space-y-4">
-          <label className="block text-xs font-bold text-slate-300">
+          <label className="block text-xs font-bold text-slate-600">
             Usuário vinculado
             <select
               value={login}
               onChange={(e) => setLogin(e.target.value)}
               disabled={collaboratorUsers.isLoading}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"
             >
               <option value="">Selecione o login criado em Usuários vinculados</option>
               {(collaboratorUsers.data ?? []).map((user: any) => (
@@ -538,17 +538,17 @@ function EmployeeAccessForm({
                 <option value={login}>{login} · vínculo atual</option>
               )}
             </select>
-            <p className="mt-1 text-[10px] font-normal text-slate-500">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
+            <p className="mt-1 text-[10px] font-normal text-slate-400">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
           </label>
-          <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-300">
+          <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-600">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             Acesso à Folha de Ponto liberado para este funcionário
           </label>
-          <label className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs font-bold text-slate-300">
+          <label className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs font-bold text-slate-600">
             <input type="checkbox" checked={dbsControlEnabled} onChange={(e) => { setDbsControlEnabled(e.target.checked); if (e.target.checked) setEnabled(true); }} />
             Liberar <span className="text-emerald-300">DBS CONTROL</span> para este funcionário
           </label>
-          <p className="text-[10px] text-slate-500">
+          <p className="text-[10px] text-slate-400">
             O DBS CONTROL usa o mesmo login do funcionário. Desmarcar aqui remove apenas o módulo CONTROL; o cadastro e o login continuam preservados.
           </p>
         </div>
@@ -595,30 +595,30 @@ function EmployeeForm({ employee, onClose, onDone }: { employee: Employee | null
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Nome completo *" value={name} onChange={setName} className="sm:col-span-2" />
           <Field label="Unidade / setor *" value={unit} onChange={setUnit} className="sm:col-span-2" />
-          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p><div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => <label key={key} className="text-xs font-bold text-slate-400">{label}<input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500"/></label>)}
+          <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p><div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => <label key={key} className="text-xs font-bold text-slate-400">{label}<input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400"/></label>)}
           </div></div>
           <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Remuneração e contrato</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="text-xs font-bold text-slate-400">Salário base (R$)<input value={values.salary ?? ""} onChange={e=>{const formatted=money(e.target.value); update("salary",formatted); update("salary_cents",formatted?Math.round(Number(formatted.replace(/\./g,"").replace(",","."))*100):0)}} inputMode="numeric" placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
-            <label className="text-xs font-bold text-slate-400">Jornada semanal (h)<input value={values.weekly_hours ?? ""} onChange={e=>update("weekly_hours",e.target.value.replace(/[^0-9,.]/g,"").replace(",","."))} inputMode="decimal" placeholder="44" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
-            <label className="text-xs font-bold text-slate-400">Admissão<input type="date" value={values.admission_date ?? ""} onChange={e=>update("admission_date",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
-            <label className="text-xs font-bold text-slate-400">Pagamento<select value={values.payment_type ?? ""} onChange={e=>update("payment_type",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="">Selecione…</option><option>Mensal</option><option>Quinzenal</option><option>Semanal</option></select></label>
-            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Regime<select value={values.work_regime ?? "presencial"} onChange={e=>update("work_regime",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"><option value="presencial">Presencial</option><option value="hibrido">Híbrido</option><option value="remoto">Remoto</option></select></label>
-            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Cargo / função<input value={values.job_title ?? ""} onChange={e=>update("job_title",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Salário base (R$)<input value={values.salary ?? ""} onChange={e=>{const formatted=money(e.target.value); update("salary",formatted); update("salary_cents",formatted?Math.round(Number(formatted.replace(/\./g,"").replace(",","."))*100):0)}} inputMode="numeric" placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
+            <label className="text-xs font-bold text-slate-400">Jornada semanal (h)<input value={values.weekly_hours ?? ""} onChange={e=>update("weekly_hours",e.target.value.replace(/[^0-9,.]/g,"").replace(",","."))} inputMode="decimal" placeholder="44" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
+            <label className="text-xs font-bold text-slate-400">Admissão<input type="date" value={values.admission_date ?? ""} onChange={e=>update("admission_date",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
+            <label className="text-xs font-bold text-slate-400">Pagamento<select value={values.payment_type ?? ""} onChange={e=>update("payment_type",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"><option value="">Selecione…</option><option>Mensal</option><option>Quinzenal</option><option>Semanal</option></select></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Regime<select value={values.work_regime ?? "presencial"} onChange={e=>update("work_regime",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"><option value="presencial">Presencial</option><option value="hibrido">Híbrido</option><option value="remoto">Remoto</option></select></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Cargo / função<input value={values.job_title ?? ""} onChange={e=>update("job_title",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{([["entry_time","Entrada"],["lunch_start","Saída almoço"],["lunch_end","Retorno almoço"],["exit_time","Saída"]] as const).map(([key,label])=><label key={key} className="text-xs font-bold text-slate-400">{label}<input type="time" value={values[key] ?? ""} onChange={e=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>)}</div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{([["entry_time","Entrada"],["lunch_start","Saída almoço"],["lunch_end","Retorno almoço"],["exit_time","Saída"]] as const).map(([key,label])=><label key={key} className="text-xs font-bold text-slate-400">{label}<input type="time" value={values[key] ?? ""} onChange={e=>update(key,e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>)}</div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="text-xs font-bold text-slate-400">Intervalo (min)<input type="number" min="0" value={values.break_minutes ?? ""} onChange={e=>update("break_minutes",e.target.value)} placeholder="60" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
-            <label className="text-xs font-bold text-slate-400">Tolerância (min)<input type="number" min="0" value={values.tolerance_minutes ?? 5} onChange={e=>update("tolerance_minutes",e.target.value)} placeholder="5" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
-            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Escala / turno<input value={values.work_shift ?? ""} onChange={e=>update("work_shift",e.target.value)} placeholder="Ex.: 5x2 · Administrativo" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>
+            <label className="text-xs font-bold text-slate-400">Intervalo (min)<input type="number" min="0" value={values.break_minutes ?? ""} onChange={e=>update("break_minutes",e.target.value)} placeholder="60" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
+            <label className="text-xs font-bold text-slate-400">Tolerância (min)<input type="number" min="0" value={values.tolerance_minutes ?? 5} onChange={e=>update("tolerance_minutes",e.target.value)} placeholder="5" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
+            <label className="text-xs font-bold text-slate-400 lg:col-span-2">Escala / turno<input value={values.work_shift ?? ""} onChange={e=>update("work_shift",e.target.value)} placeholder="Ex.: 5x2 · Administrativo" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>
           </div></div>
           <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3"><Calc label="Valor hora de referência" value={hourlyCents ? "R$ " + (hourlyCents/100).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /><Calc label="Valor dia de referência" value={salaryCents ? "R$ " + (salaryCents/100/30).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /><Calc label="Hora extra +50% de referência" value={hourlyCents ? "R$ " + (hourlyCents*1.5/100).toLocaleString("pt-BR",{minimumFractionDigits:2}) : "—"} /></div>
-          <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Documentação e observações</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-slate-400">CPF<input value={values.cpf ?? ""} onChange={e=>update("cpf",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label><label className="text-xs font-bold text-slate-400">PIS<input value={values.pis ?? ""} onChange={e=>update("pis",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label><label className="text-xs font-bold text-slate-400 sm:col-span-2">Observações<textarea value={values.notes ?? ""} onChange={e=>update("notes",e.target.value)} rows={3} className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label></div></div>
+          <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-violet-300">Documentação e observações</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-slate-400">CPF<input value={values.cpf ?? ""} onChange={e=>update("cpf",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label><label className="text-xs font-bold text-slate-400">PIS<input value={values.pis ?? ""} onChange={e=>update("pis",e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label><label className="text-xs font-bold text-slate-400 sm:col-span-2">Observações<textarea value={values.notes ?? ""} onChange={e=>update("notes",e.target.value)} rows={3} className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label></div></div>
         </div>
-        <div className="mt-6 flex justify-end gap-2"><button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button><button onClick={()=>save.mutate()} disabled={save.isPending||!name.trim()||!unit.trim()} className="rounded-lg bg-[#F59E0B] px-5 py-2.5 text-xs font-black text-slate-950">{save.isPending?"Salvando…":"Salvar funcionário"}</button></div>
+        <div className="mt-6 flex justify-end gap-2"><button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button><button onClick={()=>save.mutate()} disabled={save.isPending||!name.trim()||!unit.trim()} className="rounded-lg bg-sky-600 px-5 py-2.5 text-xs font-black text-slate-950">{save.isPending?"Salvando…":"Salvar funcionário"}</button></div>
       </div>
     </div>
   );
 }
-function Field({label,value,onChange,className=""}:{label:string;value:string;onChange:(v:string)=>void;className?:string}){return <label className={className+" text-xs font-bold text-slate-400"}>{label}<input value={value} onChange={e=>onChange(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-100"/></label>}
-function Calc({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-slate-700 bg-[#0F172A] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-black text-slate-100">{value}</p></div>}
+function Field({label,value,onChange,className=""}:{label:string;value:string;onChange:(v:string)=>void;className?:string}){return <label className={className+" text-xs font-bold text-slate-400"}>{label}<input value={value} onChange={e=>onChange(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"/></label>}
+function Calc({label,value}:{label:string;value:string}){return <div className="rounded-xl border border-slate-700 bg-[#0F172A] p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 text-lg font-black text-slate-800">{value}</p></div>}
