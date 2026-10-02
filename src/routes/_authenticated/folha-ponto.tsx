@@ -5,6 +5,7 @@ import { getMyProfile } from "@/lib/auth.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
 import { hasMyDbsControlAccess } from "@/lib/rh.functions";
 import { RhPontoEmployeePortal } from "@/components/RhPontoWorkspace";
+import { EmployeeRhRequestsPanel } from "@/components/EmployeeRhRequestsPanel";
 
 export const Route = createFileRoute("/_authenticated/folha-ponto")({
   head: () => ({ meta: [{ title: "Folha de Ponto · DBS Air" }, { name: "robots", content: "noindex" }] }),
@@ -44,6 +45,7 @@ function FolhaPontoPage() {
           </div>
         </div>
         <RhPontoEmployeePortal />
+        {!isRh && <EmployeeRhRequestsPanel />}
       </div>
     </main>
   );
