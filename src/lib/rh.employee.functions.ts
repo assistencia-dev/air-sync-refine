@@ -6,8 +6,21 @@ async function getMyEmployee(context: { userId: string }) {
   const { data: user, error: ue } = await supabaseAdmin.from("users").select("id").eq("auth_id", context.userId).maybeSingle();
   if (ue || !user) throw new Error("Usuário não encontrado.");
   const { data: access, error: ae } = await supabaseAdmin.from("rh_employee_access").select("employee_id").eq("user_id", user.id).eq("access_enabled", true).maybeSingle();
-  if (ae || !access) throw new Error("Seu acesso ainda não está vinculado a um funcionário do RH.");
-  return { userId: user.id, employeeId: access.employee_id };
+  if (ae) throw new Error(ae.message);
+  if (access) return { userId: user.id, employeeId: access.employee_id };
+
+  // Compatibilidade com vínculos já gravados no cadastro central antes da tabela
+  // de acesso ter sido sincronizada.
+  const { data: canonical, error: canonicalError } = await supabaseAdmin
+    .from("rh_employees")
+    .select("id")
+    .eq("ponto_portal_user_id", user.id)
+    .eq("ponto_access_enabled", true)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (canonicalError) throw new Error(canonicalError.message);
+  if (!canonical) throw new Error("Seu acesso ainda não está vinculado a um funcionário do RH.");
+  return { userId: user.id, employeeId: canonical.id };
 }
 
 export const createMyRhEmployeeRequest = createServerFn({ method: "POST" })
