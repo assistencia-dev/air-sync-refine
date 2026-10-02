@@ -1119,12 +1119,14 @@
 
             const srv = ERP_STATE.servicos.find(s => s.id === srvId);
 
+            const tecnicoSelecionado = ERP_STATE.tecnicos.find(t => String(t.id) === String(tecId));
             const novaOS = {
                 id: `OS-0${4891 + ERP_STATE.ordens.length}`,
                 data: new Date().toLocaleDateString('pt-BR'),
                 clienteId: cliId,
                 equipamentoId: equipId,
                 tecnicoId: tecId,
+                employeeId: tecnicoSelecionado?.employeeId || null,
                 servicoId: srvId,
                 tipo: document.getElementById('os-select-tipo').value,
                 valor: srv ? srv.valor : 0.00,
@@ -1185,10 +1187,10 @@
             const canonicalEmployeeId = String(tec.employeeId || '');
             const minhasOS = ERP_STATE.ordens.filter(o => {
                 const assigned = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId));
-                if (String(o.tecnicoId ?? '') === String(tec.id ?? '')) return true;
+                // employeeId é a fonte principal; tecnicoId permanece como fallback para OS antigas.
+                if (canonicalEmployeeId && String(o.employeeId ?? '') === canonicalEmployeeId) return true;
                 if (canonicalEmployeeId && assigned?.employeeId && String(assigned.employeeId) === canonicalEmployeeId) return true;
-                if (canonicalEmployeeId && o.employeeId && String(o.employeeId) === canonicalEmployeeId) return true;
-                return false;
+                return String(o.tecnicoId ?? '') === String(tec.id ?? '');
             });
 
             const statusMeta = (status) => {
@@ -1312,32 +1314,98 @@
 
         function adicionarPecaMobile(osId) {
             const os = ERP_STATE.ordens.find(o => o.id === osId);
-            const pecaId = parseInt(document.getElementById(`pwa-peca-select-${osId}`).value);
+            const select = document.getElementById(`pwa-peca-select-${osId}`);
+            const pecaId = select ? parseInt(select.value) : NaN;
             const peca = ERP_STATE.pecas.find(p => p.id === pecaId);
 
             if (os && peca) {
                 if (peca.qtd < 1) { alert("Estoque insuficiente!"); return; }
                 peca.qtd -= 1;
-                os.valor += peca.venda;
+                os.valor = Number(os.valor || 0) + Number(peca.venda || 0);
+                if (!Array.isArray(os.pecasUsadas)) os.pecasUsadas = [];
                 os.pecasUsadas.push({ id: peca.id, nome: peca.nome, venda: peca.venda, qtd: 1 });
+                os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
                 saveState();
                 renderizarTudo();
                 alert(`Peça ${peca.nome} adicionada com sucesso!`);
             }
         }
 
-        function concluirOSMobile(osId) {
+        function readExecutionPhoto(file, maxSize = 1280, quality = 0.78) {
+            return new Promise((resolve, reject) => {
+                if (!file) return resolve(null);
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('Não foi possível ler a foto.'));
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(img.width * scale));
+                        canvas.height = Math.max(1, Math.round(img.height * scale));
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return reject(new Error('Não foi possível preparar a foto.'));
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = () => reject(new Error('A foto selecionada é inválida.'));
+                    img.src = String(reader.result);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => o.id === osId);
             const canvas = document.getElementById(`sig-canvas-${osId}`);
+            const diagnosis = document.getElementById(`dbs-mob-diag-${osId}`);
+            const work = document.getElementById(`dbs-mob-work-${osId}`);
+            const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
+            const afterInput = document.getElementById(`dbs-mob-after-${osId}`);
 
-            if (os) {
-                if (canvas) {
-                    os.assinatura = canvas.toDataURL();
-                }
+            if (!os) return;
+
+            const diagnostico = String(diagnosis?.value || '').trim();
+            const trabalhoExecutado = String(work?.value || '').trim();
+            if (!diagnostico) { alert('Informe o diagnóstico antes de concluir a OS.'); diagnosis?.focus(); return; }
+            if (!trabalhoExecutado) { alert('Informe o trabalho executado antes de concluir a OS.'); work?.focus(); return; }
+            if (!canvas) { alert('A assinatura do cliente não foi carregada.'); return; }
+
+            const signature = canvas.toDataURL('image/png');
+            if (!signature || signature.length < 200) {
+                alert('Registre a assinatura do cliente antes de concluir a OS.');
+                return;
+            }
+
+            const finishButton = document.querySelector(`[onclick="concluirOSMobile('${osId}')"]`);
+            if (finishButton) { finishButton.disabled = true; finishButton.textContent = 'Salvando atendimento...'; }
+
+            try {
+                const beforeFile = beforeInput?.files?.[0] || null;
+                const afterFile = afterInput?.files?.[0] || null;
+                const [fotoAntes, fotoDepois] = await Promise.all([
+                    beforeFile ? readExecutionPhoto(beforeFile) : Promise.resolve(os.fotoAntes || null),
+                    afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
+                ]);
+
+                os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
+                os.diagnostico = diagnostico;
+                os.trabalhoExecutado = trabalhoExecutado;
+                os.fotoAntes = fotoAntes;
+                os.fotoDepois = fotoDepois;
+                os.assinatura = signature;
+                os.assinaturaEm = new Date().toISOString();
+                os.concluidoEm = new Date().toISOString();
+                os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
                 os.status = "Concluída";
+
                 saveState();
                 renderizarTudo();
-                alert(`OS ${osId} finalizada com sucesso! Assinatura gravada.`);
+                alert(`OS ${osId} finalizada com sucesso. Diagnóstico, execução, evidências e assinatura foram salvos.`);
+            } catch (err) {
+                console.error('Falha ao concluir OS', err);
+                alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
+                if (finishButton) { finishButton.disabled = false; finishButton.textContent = 'Concluir atendimento'; }
             }
         }
 
