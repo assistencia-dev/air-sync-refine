@@ -9,54 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
-import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
-import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
-import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
-import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
-import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
+import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
+import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
+import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
+import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
+import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
-  id: '/admin/rh-dashboard',
-  path: '/admin/rh-dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
-  id: '/treasury',
-  path: '/treasury',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
-  id: '/portal',
-  path: '/portal',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPassageRoute = AuthenticatedPassageRouteImport.update({
-  id: '/passage',
-  path: '/passage',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
-  id: '/folha-ponto',
-  path: '/folha-ponto',
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
@@ -64,10 +44,30 @@ const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
   path: '/dbs-control',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
+  id: '/folha-ponto',
+  path: '/folha-ponto',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPassageRoute = AuthenticatedPassageRouteImport.update({
+  id: '/passage',
+  path: '/passage',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
+  id: '/treasury',
+  path: '/treasury',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
+  id: '/admin/rh-dashboard',
+  path: '/admin/rh-dashboard',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -151,11 +151,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -165,46 +165,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/rh-dashboard': {
-      id: '/admin/rh-dashboard'
-      path: '/admin/rh-dashboard'
-      fullPath: '/admin/rh-dashboard'
-      preLoaderRoute: typeof AdminRhDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/treasury': {
-      id: '/_authenticated/treasury'
-      path: '/treasury'
-      fullPath: '/treasury'
-      preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/portal': {
-      id: '/_authenticated/portal'
-      path: '/portal'
-      fullPath: '/portal'
-      preLoaderRoute: typeof AuthenticatedPortalRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/passage': {
-      id: '/_authenticated/passage'
-      path: '/passage'
-      fullPath: '/passage'
-      preLoaderRoute: typeof AuthenticatedPassageRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/folha-ponto': {
-      id: '/_authenticated/folha-ponto'
-      path: '/folha-ponto'
-      fullPath: '/folha-ponto'
-      preLoaderRoute: typeof AuthenticatedFolhaPontoRouteImport
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dbs-control': {
@@ -214,12 +186,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDbsControlRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+    '/_authenticated/folha-ponto': {
+      id: '/_authenticated/folha-ponto'
+      path: '/folha-ponto'
+      fullPath: '/folha-ponto'
+      preLoaderRoute: typeof AuthenticatedFolhaPontoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/passage': {
+      id: '/_authenticated/passage'
+      path: '/passage'
+      fullPath: '/passage'
+      preLoaderRoute: typeof AuthenticatedPassageRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/portal': {
+      id: '/_authenticated/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof AuthenticatedPortalRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/treasury': {
+      id: '/_authenticated/treasury'
+      path: '/treasury'
+      fullPath: '/treasury'
+      preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/admin/rh-dashboard': {
+      id: '/admin/rh-dashboard'
+      path: '/admin/rh-dashboard'
+      fullPath: '/admin/rh-dashboard'
+      preLoaderRoute: typeof AdminRhDashboardRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
