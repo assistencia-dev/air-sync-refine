@@ -127,7 +127,7 @@ export const listBenefitRequests = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
 
-    const ids = (rows ?? []).map((r) => r.id);
+    const ids = (rows ?? []).map((r: any) => r.id);
     const counts = new Map<string, number>();
     if (ids.length) {
       const { data: atts } = await db
@@ -138,7 +138,7 @@ export const listBenefitRequests = createServerFn({ method: "POST" })
       for (const a of atts ?? [])
         counts.set(a.request_id, (counts.get(a.request_id) ?? 0) + 1);
     }
-    return (rows ?? []).map((r) => ({
+    return (rows ?? []).map((r: any) => ({
       ...(r as unknown as Omit<BenefitRequest, "attachments_count">),
       attachments_count: counts.get(r.id) ?? 0,
     }));
@@ -294,7 +294,7 @@ export const changeRequestStatus = createServerFn({ method: "POST" })
     if (error || !row) throw new Error("Solicitação não encontrada.");
 
     const kind = assertKind(row.kind);
-    const flow = flowFor(kind);
+    const flow = flowFor(kind) as readonly string[];
     const isException = (EXCEPTION_STATUS as readonly string[]).includes(data.status);
     if (!isException && !flow.includes(data.status)) throw new Error("Situação inválida.");
 
@@ -486,7 +486,7 @@ export const listRequestAudit = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
 
-    const userIds = [...new Set((rows ?? []).map((r) => r.user_id).filter(Boolean))] as string[];
+    const userIds = [...new Set((rows ?? []).map((r: any) => r.user_id).filter(Boolean))] as string[];
     const names = new Map<string, string>();
     if (userIds.length) {
       const { data: users } = await supabaseAdmin
@@ -495,7 +495,7 @@ export const listRequestAudit = createServerFn({ method: "POST" })
         .in("id", userIds);
       for (const u of users ?? []) names.set(u.id, u.full_name ?? u.username ?? "Operador");
     }
-    return (rows ?? []).map((r) => ({
+    return (rows ?? []).map((r: any) => ({
       id: r.id,
       action: r.action,
       status_from: r.status_from,
