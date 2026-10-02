@@ -112,6 +112,16 @@ export const approveRhEmployeeValeRequest = createServerFn({ method: "POST" })
       await supabaseAdmin.from("rh_audit_log").insert({ actor_user_id: actor.id, employee_id: request.employee_id, action: "VALE_RECUSADO_PELO_RH", entity_type: "rh_employee_requests", entity_id: request.id, before_data: request, after_data: rejected });
       return { request: rejected, advance: null };
     }
+    const requestMarker = "REQ:" + request.id;
+    const { data: existingAdvance, error: existingAdvanceError } = await supabaseAdmin.from("rh_employee_advances")
+      .select("*").eq("employee_id", request.employee_id).eq("notes", requestMarker).maybeSingle();
+    if (existingAdvanceError) throw new Error(existingAdvanceError.message);
+    if (existingAdvance) {
+      const { data: resolvedExisting } = await supabaseAdmin.from("rh_employee_requests")
+        .update({ status: "resolvida", resolved_at: new Date().toISOString(), resolved_by: actor.id })
+        .eq("id", request.id).select("*").single();
+      return { request: resolvedExisting ?? request, advance: existingAdvance };
+    }
     const { data: advance, error: advanceError } = await supabaseAdmin.from("rh_employee_advances").insert({
       employee_id: request.employee_id,
       advance_type: payload.advance_type === "ADIANTAMENTO" ? "ADIANTAMENTO" : "VALE",
@@ -120,14 +130,10 @@ export const approveRhEmployeeValeRequest = createServerFn({ method: "POST" })
       competence: String(payload.competence) + "-01",
       authorized: true,
       status: "programado",
-      notes: data.note ?? "Solicitação assinada pelo colaborador e autorizada pelo RH.",
+      notes: requestMarker,
       created_by: actor.id,
-      source_request_id: request.id,
     }).select("*").single();
-    if (advanceError) {
-      if (advanceError.code === "23505") throw new Error("Esta solicitação já foi transformada em lançamento de folha.");
-      throw new Error(advanceError.message);
-    }
+    if (advanceError) throw new Error(advanceError.message);
     const { data: resolved, error: resolvedError } = await supabaseAdmin.from("rh_employee_requests")
       .update({ status: "resolvida", resolved_at: new Date().toISOString(), resolved_by: actor.id })
       .eq("id", request.id).select("*").single();
