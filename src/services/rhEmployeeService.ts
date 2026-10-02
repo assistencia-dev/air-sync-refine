@@ -234,7 +234,7 @@ export async function updateEmployeeDailyRates(employeeId: string, rates: { vt_t
   if (!current) throw new Error('Colaborador não encontrado.');
   const daily = current.benefit_type === 'passagem' ? rates.vt_tariff_unit : rates.va_daily_rate;
   const updated = await updateRhEmployee({ data: { id: employeeId, benefit_type: current.benefit_type as 'passagem' | 'alimentacao', full_name: current.full_name, unit: current.unit, fare_cents: daily === undefined ? current.fare_cents : Math.round(daily * 100), trips_per_day: current.benefit_type === 'passagem' ? rates.vt_trips_per_day ?? current.trips_per_day : 1 } });
-  return toEmployeeWithCosts(updated);
+  return toEmployeeWithCosts(updated as any);
 }
 
 /**
