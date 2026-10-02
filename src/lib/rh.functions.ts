@@ -598,6 +598,20 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
         .eq("id", data.employee_id);
       if (error) throw new Error(error.message);
 
+      // Mantém a tabela de acesso dedicada sincronizada com o cadastro central.
+      const { data: existingAccess, error: existingAccessError } = await supabaseAdmin
+        .from("rh_employee_access")
+        .select("id")
+        .eq("employee_id", data.employee_id)
+        .maybeSingle();
+      if (existingAccessError) throw new Error(existingAccessError.message);
+      if (existingAccess?.id) {
+        const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
+          .update({ access_enabled: false, login_identifier: null, user_id: linked?.ponto_portal_user_id ?? null })
+          .eq("id", existingAccess.id);
+        if (accessUpdateError) throw new Error(accessUpdateError.message);
+      }
+
       await supabaseAdmin.from("rh_ponto_audit").insert({
         employee_id: data.employee_id,
         actor_user_id: operator.id,
@@ -633,6 +647,33 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
     const { error: updateError } = await supabaseAdmin.from("rh_employees")
       .update({ ponto_access_enabled: true, ponto_portal_user_id: appUser.id, dbs_control_access_enabled: data.dbs_control_enabled }).eq("id", data.employee_id);
     if (updateError) throw new Error(updateError.message);
+
+    // O portal do colaborador consulta esta relação. Sem ela, o botão pode
+    // parecer salvo no cadastro, mas o colaborador continua sem vínculo.
+    const { data: existingAccess, error: existingAccessError } = await supabaseAdmin
+      .from("rh_employee_access")
+      .select("id")
+      .eq("employee_id", data.employee_id)
+      .maybeSingle();
+    if (existingAccessError) throw new Error(existingAccessError.message);
+
+    const accessPayload = {
+      employee_id: data.employee_id,
+      user_id: appUser.id,
+      access_enabled: true,
+      login_identifier: identifier,
+    };
+    if (existingAccess?.id) {
+      const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
+        .update(accessPayload)
+        .eq("id", existingAccess.id);
+      if (accessUpdateError) throw new Error(accessUpdateError.message);
+    } else {
+      const { error: accessInsertError } = await supabaseAdmin.from("rh_employee_access")
+        .insert(accessPayload);
+      if (accessInsertError) throw new Error(accessInsertError.message);
+    }
+
     await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: data.employee_id, actor_user_id: operator.id, action: "ACESSO_FUNCIONARIO_LIBERADO", details: { login_identifier: identifier, user_id: appUser.id } });
     return { ok: true, enabled: true, dbs_control_enabled: data.dbs_control_enabled, user: { id: appUser.id, username: appUser.username, email: appUser.email }, initial_password: null };
   });
