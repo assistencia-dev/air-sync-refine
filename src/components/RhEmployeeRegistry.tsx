@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown, FileSpreadsheet } from "lucide-react";
 import {
@@ -473,10 +473,10 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
   );
 }
 
-function MiniCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
+function MiniCard({ icon, title, value }: { icon: ReactNode; title: string; value: string }) {
   return <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="flex items-center gap-2 text-slate-400">{icon}<span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div><p className="mt-2 truncate text-sm font-bold text-slate-100">{value}</p></div>;
 }
-function Employee360Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Employee360Section({ title, children }: { title: string; children: ReactNode }) {
   return <section className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-3 flex items-center gap-2"><FileStack className="h-4 w-4 text-sky-400" /><h4 className="text-sm font-black text-slate-100">{title}</h4></div>{children}</section>;
 }
 function InfoGrid({ items }: { items: [string, string][] }) {
