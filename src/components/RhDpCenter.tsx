@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, ClipboardList, Clock3, FileWarning, HeartPulse, PlayCircle, UserPlus, WalletCards, FileDown, FileSpreadsheet, Download } from "lucide-react";
 import { RhDpTools } from "@/components/RhDpTools";
@@ -51,8 +51,8 @@ export function RhDpCenter(){
  </section>
 }
 
-function Panel({children}:{children:React.ReactNode}){return <div className="rounded-2xl border border-slate-800 bg-[#1E293B] p-6 text-sm text-slate-300">{children}</div>}
-function Card({label,value,icon:Icon}:{label:string;value:React.ReactNode;icon:any}){return <article className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-[.15em] text-slate-400">{label}</span><Icon className="h-4 w-4 text-[#F59E0B]"/></div><strong className="mt-2 block text-2xl font-black text-slate-50">{value}</strong></article>}
+function Panel({children}:{children:ReactNode}){return <div className="rounded-2xl border border-slate-800 bg-[#1E293B] p-6 text-sm text-slate-300">{children}</div>}
+function Card({label,value,icon:Icon}:{label:string;value:ReactNode;icon:any}){return <article className="rounded-2xl border border-slate-800 bg-[#1E293B] p-5"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-[.15em] text-slate-400">{label}</span><Icon className="h-4 w-4 text-[#F59E0B]"/></div><strong className="mt-2 block text-2xl font-black text-slate-50">{value}</strong></article>}
 function Dashboard({data}:any){return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Card label="Funcionários ativos" value={data.employees} icon={ClipboardList}/><Card label="Folhas abertas" value={data.payrollOpen} icon={WalletCards}/><Card label="Férias em atenção" value={data.vacationsDue} icon={CalendarDays}/><Card label="Documentos / exames" value={data.documentsExpiring+data.examsExpiring} icon={FileWarning}/></div><div className="grid gap-4 lg:grid-cols-3"><Panel><b>Admissões pendentes</b><p className="mt-2 text-2xl font-black text-slate-50">{data.admissionsPending}</p></Panel><Panel><b>Solicitações abertas</b><p className="mt-2 text-2xl font-black text-slate-50">{data.requestsOpen}</p></Panel><Panel><b>Funcionários inativos</b><p className="mt-2 text-2xl font-black text-slate-50">{data.inactive}</p></Panel></div><Panel><b className="text-slate-100">Alertas operacionais</b><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{[[data.vacationsDue,"Férias próximas"],[data.documentsExpiring,"Documentos vencendo"],[data.examsExpiring,"Exames vencendo"],[data.admissionsPending,"Admissões em andamento"]].map(([n,l])=><div key={String(l)} className="rounded-xl border border-slate-700 bg-[#141F33] p-3 text-xs"><strong className="text-[#F59E0B]">{n}</strong><span className="ml-2 text-slate-400">{l}</span></div>)}</div></Panel></div>}
 
 function Payroll({data,refresh}:{data:any;refresh:()=>void}){
@@ -160,6 +160,6 @@ function Requests({employees,refresh}:{employees:any[];data:any;refresh:()=>void
 }
 
 function employeeName(employees:any[],id:string){return employees.find(e=>e.id===id)?.full_name??"Funcionário"}
-function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="mt-3 block text-xs font-bold text-slate-300">{label}{children}</label>}
+function Field({label,children}:{label:string;children:ReactNode}){return <label className="mt-3 block text-xs font-bold text-slate-300">{label}{children}</label>}
 function Select({label,value,onChange,employees}:{label:string;value:string;onChange:(v:string)=>void;employees:any[]}){return <Field label={label}><select value={value} onChange={e=>onChange(e.target.value)} className={inputClass}><option value="">Selecione…</option>{employees.filter(e=>e.is_active).map(e=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select></Field>}
 function ErrorText({e}:{e:unknown}){return <p className="mt-3 text-xs font-semibold text-red-300">{e instanceof Error?e.message:"Não foi possível concluir a operação."}</p>}
