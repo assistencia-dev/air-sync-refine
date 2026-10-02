@@ -73,7 +73,12 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
   );
   const technicianIds = new Set(technicians.map((tech) => String(tech.id)));
 
-  const orders = (normalized.ordens as any[]).filter((order) => technicianIds.has(String(order?.tecnicoId)));
+  // employeeId é a referência canônica. tecnicoId continua sendo aceito para
+  // preservar OS antigas que ainda não receberam o vínculo central do RH.
+  const orders = (normalized.ordens as any[]).filter((order) =>
+    String(order?.employeeId ?? "") === employeeId ||
+    technicianIds.has(String(order?.tecnicoId))
+  );
   const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
   const equipmentIds = new Set(orders.map((order) => String(order?.equipamentoId)).filter(Boolean));
   const serviceIds = new Set(orders.map((order) => String(order?.servicoId)).filter(Boolean));
@@ -110,8 +115,12 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
   const incomingOrders = incoming.ordens as any[];
   const incomingById = new Map(incomingOrders.map((order) => [String(order?.id), order]));
 
+  const isMine = (order: any) =>
+    String(order?.employeeId ?? "") === employeeId ||
+    technicianIds.has(String(order?.tecnicoId));
+
   const mergedOrders = currentOrders.map((currentOrder) => {
-    if (!technicianIds.has(String(currentOrder?.tecnicoId))) return currentOrder;
+    if (!isMine(currentOrder)) return currentOrder;
     const incomingOrder = incomingById.get(String(currentOrder?.id));
     if (!incomingOrder) return currentOrder;
 
@@ -145,8 +154,17 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
 
     return {
       ...currentOrder,
+      // O colaborador só pode atualizar a execução da própria OS.
+      // Os dados administrativos/originais permanecem intactos.
       status: incomingOrder.status ?? currentOrder.status,
-      assinatura: incomingOrder.assinatura ?? currentOrder.assinatura,
+      diagnostico: incomingOrder.diagnostico ?? currentOrder.diagnostico ?? "",
+      trabalhoExecutado: incomingOrder.trabalhoExecutado ?? currentOrder.trabalhoExecutado ?? "",
+      fotoAntes: incomingOrder.fotoAntes ?? currentOrder.fotoAntes ?? null,
+      fotoDepois: incomingOrder.fotoDepois ?? currentOrder.fotoDepois ?? null,
+      assinatura: incomingOrder.assinatura ?? currentOrder.assinatura ?? null,
+      assinaturaEm: incomingOrder.assinaturaEm ?? currentOrder.assinaturaEm ?? null,
+      concluidoEm: incomingOrder.concluidoEm ?? currentOrder.concluidoEm ?? null,
+      concluidoPorEmployeeId: incomingOrder.concluidoPorEmployeeId ?? currentOrder.concluidoPorEmployeeId ?? null,
       pecasUsadas: newParts,
       valor: Number.isFinite(Number(incomingOrder.valor)) ? Number(incomingOrder.valor) : currentOrder.valor,
     };
