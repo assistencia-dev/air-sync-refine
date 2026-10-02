@@ -170,12 +170,48 @@
           .employee-inline { flex-direction:column; align-items:stretch; }
           .employee-finish { margin-left:0; width:100%; }
         }
-            body.dbs-control-employee-mode aside .nav-menu .nav-section,
+    
+        /* Atividades do dia + histórico operacional */
+        .day-kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+        .day-kpi { background:#fff; border:1px solid var(--border-light); border-radius:12px; padding:13px 14px; box-shadow:var(--shadow-sm); }
+        .day-kpi span { display:block; color:var(--text-muted); font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+        .day-kpi strong { display:block; margin-top:5px; font-size:22px; color:var(--text-main); }
+        .day-toolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; padding:14px 16px; background:#fff; border:1px solid var(--border-light); border-radius:12px; margin-bottom:16px; }
+        .day-toolbar .form-group { min-width:150px; flex:1; }
+        .day-toolbar .form-group.search { min-width:220px; flex:2; }
+        .day-toolbar input,.day-toolbar select { width:100%; padding:8px 10px; border:1px solid var(--border-color); border-radius:7px; background:#fff; font-size:12px; }
+        .day-status { display:inline-flex; align-items:center; padding:4px 7px; border-radius:999px; font-size:9px; font-weight:900; white-space:nowrap; }
+        .day-status.ok { background:#dcfce7; color:#166534; }
+        .day-status.pending { background:#fef3c7; color:#92400e; }
+        .day-status.wait { background:#e0f2fe; color:#0369a1; }
+        .day-status.missing { background:#fee2e2; color:#991b1b; }
+        .day-check { font-size:10px; color:#64748b; line-height:1.55; }
+        .day-check b { color:#334155; }
+        .day-table-wrap { overflow:auto; }
+        .day-table { min-width:1050px; }
+        .history-filter-grid { display:grid; grid-template-columns:repeat(3,minmax(170px,1fr)); gap:10px; width:100%; }
+        .history-filter-grid input,.history-filter-grid select { width:100%; padding:8px 10px; border:1px solid var(--border-color); border-radius:7px; background:#fff; font-size:12px; }
+        .history-event { font-weight:800; color:#0f172a; }
+        .history-detail { color:#64748b; font-size:10px; max-width:420px; white-space:pre-wrap; }
+        .os-history-modal { position:fixed; inset:0; z-index:1000; background:rgba(2,6,23,.55); display:flex; align-items:center; justify-content:center; padding:20px; }
+        .os-history-dialog { width:min(900px,100%); max-height:min(760px,90vh); overflow:auto; background:#fff; border-radius:16px; box-shadow:0 25px 70px rgba(2,6,23,.25); }
+        .os-history-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:18px 20px; border-bottom:1px solid var(--border-light); position:sticky; top:0; background:#fff; z-index:2; }
+        .os-history-head h3 { margin:0; font-size:16px; }
+        .os-history-head p { margin:4px 0 0; color:#64748b; font-size:11px; }
+        .os-history-list { padding:16px 20px 22px; display:grid; gap:10px; }
+        .os-history-item { display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+        .os-history-time { color:#64748b; font-size:10px; font-weight:800; }
+        .os-history-empty { padding:30px 20px; text-align:center; color:#64748b; }
+        @media(max-width:900px){ .day-kpi-grid { grid-template-columns:repeat(2,minmax(140px,1fr)); } .history-filter-grid { grid-template-columns:1fr; } }
+        @media(max-width:520px){ .day-kpi-grid { grid-template-columns:1fr 1fr; gap:8px; } .day-toolbar .form-group,.day-toolbar .form-group.search { min-width:100%; } .os-history-item { grid-template-columns:1fr; gap:5px; } }
+
+        body.dbs-control-employee-mode aside .nav-menu .nav-section,
         body.dbs-control-employee-mode aside .nav-menu .nav-item { display:none !important; }
         body.dbs-control-employee-mode aside .nav-menu .nav-item[data-employee-visible="true"] { display:flex !important; }
         body.dbs-control-employee-mode header .btn-secondary,
         body.dbs-control-employee-mode header .btn-primary { display:none !important; }
         body.dbs-control-employee-mode #tab-dashboard,
+        body.dbs-control-employee-mode #tab-atividades,
         body.dbs-control-employee-mode #tab-despacho,
         body.dbs-control-employee-mode #tab-ordens,
         body.dbs-control-employee-mode #tab-nova-os,
@@ -200,6 +236,7 @@
         <ul class="nav-menu">
             <div class="nav-section">Painel Geral</div>
             <li class="nav-item active" onclick="switchTab('tab-dashboard', this)"><span>Dashboard Principal</span></li>
+            <li class="nav-item" onclick="switchTab('tab-atividades', this)"><span>Atividades do Dia</span></li>
             <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
             <li class="nav-item" onclick="switchTab('tab-ordens', this)"><span>Gestão de OS (Exportação PDF)</span></li>
             <li class="nav-item" onclick="switchTab('tab-nova-os', this)"><span>Abrir Chamado / OS</span></li>
@@ -273,6 +310,76 @@
                     </thead>
                     <tbody id="dash-table-body"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- ATIVIDADES DO DIA + CONFERÊNCIA + HISTÓRICO -->
+        <div id="tab-atividades" class="tab-view">
+            <div class="data-card" style="padding:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                    <div>
+                        <h3 style="margin-bottom:4px;">Atividades do Dia</h3>
+                        <p style="font-size:11px;color:var(--text-muted);">Painel de conferência operacional: o que está programado, quem está executando e o que já foi concluído.</p>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarAtividadesDia()">Atualizar conferência</button>
+                </div>
+                <div class="day-toolbar">
+                    <div class="form-group">
+                        <label>Data</label>
+                        <input type="date" id="day-filter-date" onchange="renderizarAtividadesDia()">
+                    </div>
+                    <div class="form-group">
+                        <label>Colaborador</label>
+                        <select id="day-filter-tecnico" onchange="renderizarAtividadesDia()"><option value="">Todos os colaboradores</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cliente</label>
+                        <select id="day-filter-cliente" onchange="renderizarAtividadesDia()"><option value="">Todos os clientes</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="day-filter-status" onchange="renderizarAtividadesDia()">
+                            <option value="TODOS">Todos</option>
+                            <option value="Em Atendimento">Em Atendimento</option>
+                            <option value="Aguardando peça">Aguardando peça</option>
+                            <option value="Aguardando cliente">Aguardando cliente</option>
+                            <option value="Concluída">Concluída</option>
+                        </select>
+                    </div>
+                    <div class="form-group search">
+                        <label>Busca rápida</label>
+                        <input type="search" id="day-filter-search" oninput="renderizarAtividadesDia()" placeholder="OS, cliente, TAG, colaborador...">
+                    </div>
+                </div>
+                <div id="day-kpis" class="day-kpi-grid"></div>
+                <div class="day-table-wrap">
+                    <table class="day-table">
+                        <thead>
+                            <tr>
+                                <th>OS</th><th>Cliente</th><th>Colaborador</th><th>Horário/Data</th><th>Status</th><th>Conferência da Execução</th><th>Conclusão</th><th style="text-align:right;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="day-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="data-card" style="padding:16px;">
+                <div style="margin-bottom:14px;">
+                    <h3 style="margin-bottom:4px;">Histórico Operacional</h3>
+                    <p style="font-size:11px;color:var(--text-muted);">Linha do tempo das alterações e etapas da OS, com filtros por cliente e colaborador para a conferência administrativa.</p>
+                </div>
+                <div class="history-filter-grid" style="margin-bottom:14px;">
+                    <div class="form-group"><label>Cliente</label><select id="history-filter-cliente" onchange="renderizarHistoricoOperacional()"><option value="">Todos os clientes</option></select></div>
+                    <div class="form-group"><label>Colaborador</label><select id="history-filter-tecnico" onchange="renderizarHistoricoOperacional()"><option value="">Todos os colaboradores</option></select></div>
+                    <div class="form-group"><label>Buscar OS / evento</label><input type="search" id="history-filter-search" oninput="renderizarHistoricoOperacional()" placeholder="Ex.: OS-4891, concluída, diagnóstico..."></div>
+                </div>
+                <div class="day-table-wrap">
+                    <table>
+                        <thead><tr><th>Data/Hora</th><th>OS</th><th>Cliente</th><th>Colaborador</th><th>Evento</th><th>Detalhes</th><th style="text-align:right;">OS</th></tr></thead>
+                        <tbody id="history-table-body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -624,12 +731,123 @@
             pecas: [],
             servicos: [],
             compras: [],
-            ordens: []
+            ordens: [],
+            osHistorico: []
         };
 
         let ERP_STATE = loadState();
+        let DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+        if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
         let DBS_CONTROL_CLOUD_READY = false;
         let DBS_CONTROL_CLOUD_HYDRATING = false;
+
+
+        function criarSnapshotHistoricoOS(ordens) {
+            return (Array.isArray(ordens) ? ordens : []).reduce((acc, o) => {
+                acc[String(o.id)] = {
+                    id: o.id,
+                    data: o.data || '',
+                    clienteId: o.clienteId ?? null,
+                    tecnicoId: o.tecnicoId ?? null,
+                    status: o.status || '',
+                    diagnostico: String(o.diagnostico || ''),
+                    trabalhoExecutado: String(o.trabalhoExecutado || ''),
+                    assinatura: Boolean(o.assinatura),
+                    fotoAntes: Boolean(o.fotoAntes),
+                    fotoDepois: Boolean(o.fotoDepois),
+                    valor: Number(o.valor || 0)
+                };
+                return acc;
+            }, {});
+        }
+
+        function escDbsControl(value) {
+            return String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        }
+
+        function formatarDataHoraHistorico(value) {
+            if (!value) return '—';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return escDbsControl(value);
+            return d.toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+        }
+
+        function dataOSParaISO(value) {
+            const raw = String(value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+            const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+            const d = new Date(raw);
+            if (!Number.isNaN(d.getTime())) {
+                const y = d.getFullYear();
+                const mo = String(d.getMonth()+1).padStart(2,'0');
+                const da = String(d.getDate()).padStart(2,'0');
+                return `${y}-${mo}-${da}`;
+            }
+            return '';
+        }
+
+        function nomeClienteOS(o) {
+            return (ERP_STATE.clientes.find(c => String(c.id) === String(o?.clienteId)) || {}).nome || 'Cliente não informado';
+        }
+
+        function nomeTecnicoOS(o) {
+            return (ERP_STATE.tecnicos.find(t => String(t.id) === String(o?.tecnicoId)) || {}).nome || 'Não atribuído';
+        }
+
+        function garantirHistoricoInicial() {
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            if (ERP_STATE.osHistorico.length || !Array.isArray(ERP_STATE.ordens) || !ERP_STATE.ordens.length) return;
+            const agora = new Date().toISOString();
+            ERP_STATE.osHistorico = ERP_STATE.ordens.map(o => ({
+                id: `hist-${o.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+                osId: o.id,
+                createdAt: agora,
+                clienteId: o.clienteId ?? null,
+                tecnicoId: o.tecnicoId ?? null,
+                tipo: 'registro_existente',
+                evento: 'OS já existente no DBS CONTROL',
+                detalhe: 'Registro histórico inicial criado sem alterar os dados da ordem.'
+            }));
+        }
+
+        function adicionarHistoricoOS(os, tipo, evento, detalhe) {
+            if (!os) return;
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            ERP_STATE.osHistorico.push({
+                id: `hist-${os.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+                osId: os.id,
+                createdAt: new Date().toISOString(),
+                clienteId: os.clienteId ?? null,
+                tecnicoId: os.tecnicoId ?? null,
+                tipo,
+                evento,
+                detalhe: String(detalhe || '')
+            });
+        }
+
+        function registrarHistoricoOS() {
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            const atual = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+            const anterior = DBS_CONTROL_LAST_OS_SNAPSHOT || {};
+            Object.values(atual).forEach(s => {
+                const p = anterior[String(s.id)];
+                const os = ERP_STATE.ordens.find(o => String(o.id) === String(s.id));
+                if (!p) {
+                    adicionarHistoricoOS(os, 'criacao', 'OS criada', 'Ordem de serviço registrada no DBS CONTROL.');
+                    return;
+                }
+                if (p.status !== s.status) adicionarHistoricoOS(os, 'status', 'Status alterado', `${p.status || 'Sem status'} → ${s.status || 'Sem status'}`);
+                if (p.tecnicoId !== s.tecnicoId) adicionarHistoricoOS(os, 'atribuicao', 'Colaborador alterado', `${nomeTecnicoOS({ tecnicoId:p.tecnicoId })} → ${nomeTecnicoOS(os)}`);
+                if (p.diagnostico !== s.diagnostico) adicionarHistoricoOS(os, 'execucao', 'Diagnóstico atualizado', s.diagnostico ? 'Diagnóstico registrado/atualizado pelo atendimento.' : 'Diagnóstico removido.');
+                if (p.trabalhoExecutado !== s.trabalhoExecutado) adicionarHistoricoOS(os, 'execucao', 'Trabalho executado atualizado', s.trabalhoExecutado ? 'Descrição do trabalho executado registrada/atualizada.' : 'Descrição do trabalho executado removida.');
+                if (p.assinatura !== s.assinatura) adicionarHistoricoOS(os, 'evidencia', s.assinatura ? 'Assinatura do cliente registrada' : 'Assinatura do cliente removida');
+                if (p.fotoAntes !== s.fotoAntes) adicionarHistoricoOS(os, 'evidencia', s.fotoAntes ? 'Foto antes registrada' : 'Foto antes removida');
+                if (p.fotoDepois !== s.fotoDepois) adicionarHistoricoOS(os, 'evidencia', s.fotoDepois ? 'Foto depois registrada' : 'Foto depois removida');
+                if (p.valor !== s.valor) adicionarHistoricoOS(os, 'financeiro', 'Valor da OS alterado', `R$ ${Number(p.valor || 0).toFixed(2)} → R$ ${Number(s.valor || 0).toFixed(2)}`);
+            });
+            DBS_CONTROL_LAST_OS_SNAPSHOT = atual;
+        }
 
         function getPersistableState() {
             const snapshot = JSON.parse(JSON.stringify(ERP_STATE));
@@ -638,6 +856,7 @@
         }
 
         function saveState() {
+            registrarHistoricoOS();
             const persistableState = getPersistableState();
             // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
             // espaço (principalmente por fotos), o salvamento na nuvem ainda deve ocorrer.
@@ -739,7 +958,9 @@
             try {
                 const currentSession = ERP_STATE.sessionTecnicoLogado || null;
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
+                if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
                 localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
                     version: DBS_CONTROL_STATE_VERSION,
                     data: getPersistableState()
@@ -765,7 +986,10 @@
             renderizarPecas();
             renderizarServicos();
             renderizarCompras();
+            garantirHistoricoInicial();
             renderizarOrdens();
+            renderizarAtividadesDia();
+            renderizarHistoricoOperacional();
             renderizarKanban();
             renderizarPWAScreen();
             atualizarSelects();
@@ -971,6 +1195,156 @@
 
                 tr[i].style.display = (matchSearch && matchStatus) ? "" : "none";
             }
+        }
+
+
+        function popularFiltrosOperacionais() {
+            const dayTec = document.getElementById('day-filter-tecnico');
+            const dayCli = document.getElementById('day-filter-cliente');
+            const histTec = document.getElementById('history-filter-tecnico');
+            const histCli = document.getElementById('history-filter-cliente');
+            const tecnicoAtual = dayTec?.value || '';
+            const clienteAtual = dayCli?.value || '';
+            const histTecnicoAtual = histTec?.value || '';
+            const histClienteAtual = histCli?.value || '';
+            const tecnicos = ERP_STATE.tecnicos || [];
+            const clientes = ERP_STATE.clientes || [];
+            const optTec = '<option value="">Todos os colaboradores</option>' + tecnicos.map(t => `<option value="${escDbsControl(t.id)}">${escDbsControl(t.nome)}</option>`).join('');
+            const optCli = '<option value="">Todos os clientes</option>' + clientes.map(cl => `<option value="${escDbsControl(cl.id)}">${escDbsControl(cl.nome)}</option>`).join('');
+            if (dayTec) { dayTec.innerHTML = optTec; dayTec.value = tecnicoAtual; }
+            if (histTec) { histTec.innerHTML = optTec; histTec.value = histTecnicoAtual; }
+            if (dayCli) { dayCli.innerHTML = optCli; dayCli.value = clienteAtual; }
+            if (histCli) { histCli.innerHTML = optCli; histCli.value = histClienteAtual; }
+        }
+
+        function obterDataFiltroDia() {
+            const input = document.getElementById('day-filter-date');
+            if (input?.value) return input.value;
+            const now = new Date();
+            const iso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            if (input) input.value = iso;
+            return iso;
+        }
+
+        function renderizarAtividadesDia() {
+            const tbody = document.getElementById('day-table-body');
+            const kpis = document.getElementById('day-kpis');
+            if (!tbody || !kpis) return;
+            popularFiltrosOperacionais();
+            const date = obterDataFiltroDia();
+            const tecId = document.getElementById('day-filter-tecnico')?.value || '';
+            const cliId = document.getElementById('day-filter-cliente')?.value || '';
+            const status = document.getElementById('day-filter-status')?.value || 'TODOS';
+            const search = String(document.getElementById('day-filter-search')?.value || '').trim().toLowerCase();
+
+            const all = (ERP_STATE.ordens || []).filter(o => dataOSParaISO(o.data) === date);
+            const filtered = all.filter(o => {
+                const cli = nomeClienteOS(o);
+                const tec = nomeTecnicoOS(o);
+                const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
+                const hay = [o.id, cli, tec, eq.tag, o.tipo, o.desc, o.status].join(' ').toLowerCase();
+                return (!tecId || String(o.tecnicoId) === String(tecId))
+                    && (!cliId || String(o.clienteId) === String(cliId))
+                    && (status === 'TODOS' || String(o.status) === status)
+                    && (!search || hay.includes(search));
+            });
+
+            const completed = filtered.filter(o => o.status === 'Concluída').length;
+            const inProgress = filtered.filter(o => o.status !== 'Concluída').length;
+            const withExecution = filtered.filter(o => String(o.diagnostico || '').trim() && String(o.trabalhoExecutado || '').trim()).length;
+            const missingSignature = filtered.filter(o => o.status === 'Concluída' && !String(o.assinatura || '').trim()).length;
+            kpis.innerHTML = [
+                ['Programadas', filtered.length],
+                ['Em atendimento', inProgress],
+                ['Concluídas', completed],
+                ['Pendências de conferência', missingSignature + filtered.filter(o => o.status !== 'Concluída' && (!String(o.diagnostico || '').trim() || !String(o.trabalhoExecutado || '').trim())).length]
+            ].map(([label,value]) => `<div class="day-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
+
+            if (!filtered.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="padding:34px;text-align:center;color:#64748b;">Nenhuma atividade encontrada para os filtros selecionados.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(o => {
+                const cli = nomeClienteOS(o);
+                const tec = nomeTecnicoOS(o);
+                const hasDiag = Boolean(String(o.diagnostico || '').trim());
+                const hasWork = Boolean(String(o.trabalhoExecutado || '').trim());
+                const hasSig = Boolean(String(o.assinatura || '').trim());
+                const hasEvidence = Boolean(o.fotoAntes || o.fotoDepois);
+                const complete = hasDiag && hasWork && hasSig;
+                const statusClass = o.status === 'Concluída' ? 'ok' : (/aguardando/i.test(o.status || '') ? 'wait' : 'pending');
+                const checkHtml = `<div class="day-check"><b>${hasDiag ? '✓' : '○'} Diagnóstico</b> · <b>${hasWork ? '✓' : '○'} Execução</b> · <b>${hasSig ? '✓' : '○'} Assinatura</b><br><span>${hasEvidence ? '✓ Evidência fotográfica registrada' : '○ Sem foto de evidência'}</span></div>`;
+                const conclusion = o.status === 'Concluída'
+                    ? `<span class="day-status ${complete ? 'ok' : 'missing'}">${complete ? 'Conferida' : 'Concluída com pendência'}</span>`
+                    : '<span class="day-status pending">Em aberto</span>';
+                return `<tr>
+                    <td><strong>${escDbsControl(o.id)}</strong></td>
+                    <td>${escDbsControl(cli)}</td>
+                    <td>${escDbsControl(tec)}</td>
+                    <td>${escDbsControl(o.data || '—')}</td>
+                    <td><span class="day-status ${statusClass}">${escDbsControl(o.status || 'Sem status')}</span></td>
+                    <td>${checkHtml}</td>
+                    <td>${conclusion}</td>
+                    <td style="text-align:right;white-space:nowrap;"><button class="btn btn-secondary btn-sm" onclick="abrirHistoricoOS('${String(o.id).replace(/'/g,"\\'")}')">Histórico</button> <button class="btn btn-primary btn-sm" onclick="baixarPDFIndividual('${String(o.id).replace(/'/g,"\\'")}')">PDF</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderizarHistoricoOperacional() {
+            const tbody = document.getElementById('history-table-body');
+            if (!tbody) return;
+            popularFiltrosOperacionais();
+            const cliId = document.getElementById('history-filter-cliente')?.value || '';
+            const tecId = document.getElementById('history-filter-tecnico')?.value || '';
+            const search = String(document.getElementById('history-filter-search')?.value || '').trim().toLowerCase();
+            const historico = (ERP_STATE.osHistorico || []).slice().sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+            const filtered = historico.filter(h => {
+                const os = ERP_STATE.ordens.find(o => String(o.id) === String(h.osId)) || {};
+                const cli = nomeClienteOS({ clienteId: h.clienteId ?? os.clienteId });
+                const tec = nomeTecnicoOS({ tecnicoId: h.tecnicoId ?? os.tecnicoId });
+                const hay = [h.osId, h.evento, h.detalhe, cli, tec].join(' ').toLowerCase();
+                return (!cliId || String(h.clienteId ?? os.clienteId) === String(cliId))
+                    && (!tecId || String(h.tecnicoId ?? os.tecnicoId) === String(tecId))
+                    && (!search || hay.includes(search));
+            });
+            if (!filtered.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="padding:30px;text-align:center;color:#64748b;">Nenhum evento histórico encontrado.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = filtered.slice(0, 300).map(h => {
+                const os = ERP_STATE.ordens.find(o => String(o.id) === String(h.osId)) || {};
+                const cli = nomeClienteOS({ clienteId: h.clienteId ?? os.clienteId });
+                const tec = nomeTecnicoOS({ tecnicoId: h.tecnicoId ?? os.tecnicoId });
+                return `<tr>
+                    <td style="white-space:nowrap;">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</td>
+                    <td><strong>${escDbsControl(h.osId)}</strong></td>
+                    <td>${escDbsControl(cli)}</td>
+                    <td>${escDbsControl(tec)}</td>
+                    <td><span class="history-event">${escDbsControl(h.evento)}</span></td>
+                    <td><div class="history-detail">${escDbsControl(h.detalhe)}</div></td>
+                    <td style="text-align:right;"><button class="btn btn-secondary btn-sm" onclick="abrirHistoricoOS('${String(h.osId).replace(/'/g,"\\'")}')">Abrir</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function abrirHistoricoOS(osId) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os) return;
+            const cli = nomeClienteOS(os);
+            const tec = nomeTecnicoOS(os);
+            const eventos = (ERP_STATE.osHistorico || []).filter(h => String(h.osId) === String(os.id)).sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const modal = document.createElement('div');
+            modal.className = 'os-history-modal';
+            modal.innerHTML = `<div class="os-history-dialog" role="dialog" aria-modal="true">
+                <div class="os-history-head">
+                    <div><h3>Histórico da ${escDbsControl(os.id)}</h3><p>${escDbsControl(cli)} · ${escDbsControl(tec)} · Status: ${escDbsControl(os.status || '—')}</p></div>
+                    <button class="btn btn-secondary btn-sm" type="button">Fechar</button>
+                </div>
+                <div class="os-history-list">${eventos.length ? eventos.map(h => `<div class="os-history-item"><div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</div><div><div class="history-event">${escDbsControl(h.evento)}</div><div class="history-detail" style="margin-top:4px;">${escDbsControl(h.detalhe)}</div></div></div>`).join('') : '<div class="os-history-empty">Ainda não há eventos registrados para esta OS.</div>'}</div>
+            </div>`;
+            modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('.os-history-head button')) modal.remove(); });
+            document.body.appendChild(modal);
         }
 
         function renderizarOrdens() {
