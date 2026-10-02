@@ -926,10 +926,27 @@
             const checkboxes = document.querySelectorAll('.chk-os-item:checked');
             if (checkboxes.length === 0) { alert("Selecione ao menos uma OS para concluir!"); return; }
 
-            if (confirm(`Deseja concluir as ${checkboxes.length} OSs selecionadas?`)) {
-                checkboxes.forEach(chk => {
-                    const os = ERP_STATE.ordens.find(o => o.id === chk.value);
-                    if (os) os.status = "Concluída";
+            const selecionadas = Array.from(checkboxes)
+                .map(chk => ERP_STATE.ordens.find(o => o.id === chk.value))
+                .filter(Boolean);
+
+            const incompletas = selecionadas.filter(os =>
+                !String(os.diagnostico || '').trim() ||
+                !String(os.trabalhoExecutado || '').trim() ||
+                !String(os.assinatura || '').trim()
+            );
+
+            if (incompletas.length) {
+                alert(
+                    `Não é possível concluir em lote. ${incompletas.length} OS(s) ainda não possuem diagnóstico, trabalho executado e assinatura do cliente. \\n\\nFinalize a execução pelo DBS CONTROL antes de concluir.`
+                );
+                return;
+            }
+
+            if (confirm(`Deseja concluir as ${selecionadas.length} OSs selecionadas?`)) {
+                selecionadas.forEach(os => {
+                    os.status = "Concluída";
+                    os.concluidoEm = os.concluidoEm || new Date().toISOString();
                 });
                 saveState();
                 renderizarTudo();
