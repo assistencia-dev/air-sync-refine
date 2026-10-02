@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, CheckCircle2, Clock3, FileText, PenLine, Plus, Send, WalletCards, X, Eraser } from "lucide-react";
 import { createMyRhEmployeeRequest, createMyRhEmployeeValeRequest, listMyRhEmployeeRequests } from "@/lib/rh.employee.functions";
@@ -62,8 +62,8 @@ export function EmployeeRhRequestsPanel() {
 
   useEffect(()=>{ if(!valeOpen) return; const canvas=canvasRef.current; if(!canvas)return; const ratio=window.devicePixelRatio||1; canvas.width=700*ratio; canvas.height=180*ratio; canvas.style.width="100%"; canvas.style.height="180px"; const ctx=canvas.getContext("2d"); if(ctx){ctx.scale(ratio,ratio);ctx.lineWidth=2;ctx.lineCap="round";ctx.strokeStyle="#0f172a";}},[valeOpen]);
   const point=(e:PointerEvent)=>{const canvas=canvasRef.current;if(!canvas)return;const rect=canvas.getBoundingClientRect();return{x:e.clientX-rect.left,y:e.clientY-rect.top};};
-  const start=(e:React.PointerEvent<HTMLCanvasElement>)=>{drawing.current=true;const p=point(e.nativeEvent);if(!p)return;const ctx=canvasRef.current?.getContext("2d");ctx?.beginPath();ctx?.moveTo(p.x,p.y);canvasRef.current?.setPointerCapture(e.pointerId);};
-  const move=(e:React.PointerEvent<HTMLCanvasElement>)=>{if(!drawing.current)return;const p=point(e.nativeEvent);if(!p)return;const ctx=canvasRef.current?.getContext("2d");ctx?.lineTo(p.x,p.y);ctx?.stroke();};
+  const start=(e:ReactPointerEvent<HTMLCanvasElement>)=>{drawing.current=true;const p=point(e.nativeEvent);if(!p)return;const ctx=canvasRef.current?.getContext("2d");ctx?.beginPath();ctx?.moveTo(p.x,p.y);canvasRef.current?.setPointerCapture(e.pointerId);};
+  const move=(e:ReactPointerEvent<HTMLCanvasElement>)=>{if(!drawing.current)return;const p=point(e.nativeEvent);if(!p)return;const ctx=canvasRef.current?.getContext("2d");ctx?.lineTo(p.x,p.y);ctx?.stroke();};
   const end=()=>{drawing.current=false;};
   function clearSignature(){const canvas=canvasRef.current;if(!canvas)return;const ctx=canvas.getContext("2d");if(ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}
 
