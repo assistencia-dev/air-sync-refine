@@ -1107,7 +1107,7 @@
                 `;
             } else {
                 const tec = ERP_STATE.sessionTecnicoLogado;
-                const minhasOS = ERP_STATE.ordens.filter(o => o.tecnicoId === tec.id);
+                const minhasOS = ERP_STATE.ordens.filter(o => String(o.tecnicoId ?? '') === String(tec.id ?? ''));
 
                 area.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">
@@ -1296,9 +1296,19 @@
                     (employeeName && String(t.nome || '').trim().toLowerCase() === normalized)
                 );
                 if (found) {
-                    ERP_STATE.sessionTecnicoLogado = found;
+                    ERP_STATE.sessionTecnicoLogado = {
+                        ...found,
+                        employeeId: found.employeeId || params.get('employee_id') || null,
+                        email: String(found.email || employeeEmail).trim().toLowerCase()
+                    };
                 } else if (employeeName) {
-                    ERP_STATE.sessionTecnicoLogado = { id: '__rh__', employeeId: params.get('employee_id') || null, email: employeeEmail, nome: employeeName, posicao: 'Colaborador DBS AIR' };
+                    ERP_STATE.sessionTecnicoLogado = {
+                        id: '__rh__',
+                        employeeId: params.get('employee_id') || null,
+                        email: employeeEmail,
+                        nome: employeeName,
+                        posicao: 'Colaborador DBS AIR'
+                    };
                 }
                 const title = document.getElementById('view-title');
                 const subtitle = document.getElementById('view-subtitle');
@@ -1308,7 +1318,7 @@
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();
     </script>
-    <script src="/dbs-control-import.js?v=20261001-2"></script>
+    <script src="/dbs-control-import.js?v=20261002-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20260930-2"></script>
     <script src="/dbs-control-ux.js?v=20260930-1"></script>
 </body>
