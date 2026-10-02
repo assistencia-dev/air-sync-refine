@@ -6,6 +6,8 @@ import { RhEmployeeRegistry } from "@/components/RhEmployeeRegistry";
 import { RhPontoWorkspace } from "@/components/RhPontoWorkspace";
 import { RhDpCenter } from "@/components/RhDpCenter";
 import { listRhEmployeeRegistry, listRhEmployees, listRhTopups } from "@/lib/rh.functions";
+import { listRhPayroll } from "@/lib/rh.dp.functions";
+import { RhEmployeeFinance } from "@/components/RhEmployeeFinance";
 import { listRhPontoEmployees } from "@/lib/ponto.functions";
 
 export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
@@ -25,6 +27,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const ponto = useQuery({ queryKey: ["rh-workspace-ponto"], queryFn: () => listRhPontoEmployees() });
   const vtTopups = useQuery({ queryKey: ["rh-workspace-vt-topups"], queryFn: () => listRhTopups({ data: { benefit_type: "passagem" } }) });
   const vaTopups = useQuery({ queryKey: ["rh-workspace-va-topups"], queryFn: () => listRhTopups({ data: { benefit_type: "alimentacao" } }) });
+  const payroll = useQuery({ queryKey: ["rh-workspace-payroll"], queryFn: () => listRhPayroll() });
   const summary = useMemo(() => {
     const unique = new Set<string>();
     for (const e of [...(registry.data ?? []), ...(vt.data ?? []), ...(va.data ?? [])]) unique.add((e.full_name + "|" + e.unit).toLowerCase());
@@ -36,6 +39,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const tabs: { key: HrSection; label: string; icon: React.ReactNode; active: string }[] = [
     { key: "resumo", label: "Resumo do RH", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
     { key: "custos", label: "Folha e Custos", icon: <Calculator className="h-4 w-4" />, active: "bg-[#0F172A] text-white shadow-md" },
+    { key: "financeiro", label: "Vales & Descontos", icon: <WalletCards className="h-4 w-4" />, active: "bg-slate-900 text-white shadow-md" },
     { key: "gestao", label: "Gestão RH / DP", icon: <Shield className="h-4 w-4" />, active: "bg-[#102b3b] text-white shadow-md" },
     { key: "ponto", label: "Folha de Ponto", icon: <Clock3 className="h-4 w-4" />, active: "bg-sky-600 text-white shadow-md" },
     { key: "cadastro", label: "Cadastro de Funcionários", icon: <IdCard className="h-4 w-4" />, active: "bg-[#F59E0B] text-white shadow-md" },
@@ -89,7 +93,8 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
       {section === "gestao" && <RhDpCenter />}
-      {section === "custos" && <RhPayrollSummary registry={registry.data ?? []} vt={vt.data ?? []} va={va.data ?? []} vtTopups={vtTopups.data ?? []} vaTopups={vaTopups.data ?? []} />}
+      {section === "custos" && <RhPayrollSummary registry={registry.data ?? []} vt={vt.data ?? []} va={va.data ?? []} vtTopups={vtTopups.data ?? []} vaTopups={vaTopups.data ?? []} payroll={payroll.data ?? []} />}
+      {section === "financeiro" && <RhEmployeeFinance />}
       {section === "ponto" && <RhPontoWorkspace />}
       {section === "cadastro" && <RhEmployeeRegistry />}
       {section === "alimentacao" && <RhBenefitPanel benefitType="alimentacao" />}
@@ -115,13 +120,17 @@ function StatusCard({ title, text, ok }: { title: string; text: string; ok: bool
   </div>;
 }
 
-function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups }: { registry: any[]; vt: any[]; va: any[]; vtTopups: any[]; vaTopups: any[] }) {
+function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups, payroll }: { registry: any[]; vt: any[]; va: any[]; vtTopups: any[]; vaTopups: any[]; payroll: any[] }) {
   const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-  const salaryTotal = registry.reduce((sum, e) => {
-    const raw = String(e.registration_data?.salary ?? "").replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", ".");
-    const value = Number(raw);
-    return sum + (Number.isFinite(value) ? Math.round(value * 100) : 0);
-  }, 0);
+  const latest = payroll[0];
+  const salaryTotal = latest?.rh_payroll_runs?.length
+    ? latest.rh_payroll_runs.reduce((sum:number, r:any) => sum + Number(r.gross_cents ?? 0), 0)
+    : registry.reduce((sum, e) => {
+      const raw = String(e.registration_data?.salary ?? "").replace(/[^0-9,.-]/g, "").replace(/\./g, "").replace(",", ".");
+      const value = Number(raw);
+      return sum + (Number.isFinite(value) ? Math.round(value * 100) : 0);
+    }, 0);
+  const realNet = latest?.rh_payroll_runs?.reduce((sum:number, r:any) => sum + Number(r.net_cents ?? 0), 0) ?? 0;
   const vtDaily = vt.reduce((sum, e) => sum + Number(e.fare_cents ?? 0) * Number(e.trips_per_day ?? 1), 0);
   const vaDaily = va.reduce((sum, e) => sum + Number(e.fare_cents ?? 0), 0);
   const benefitsMonth = [...vtTopups, ...vaTopups].filter(x => {
@@ -137,8 +146,9 @@ function RhPayrollSummary({ registry, vt, va, vtTopups, vaTopups }: { registry: 
       <p className="mt-1 text-xs text-slate-400">Cálculo consolidado usando os dados já cadastrados. Não lança valores automaticamente em folha ou financeiro.</p>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard label="Salários cadastrados" value={money(salaryTotal)} />
-      <SummaryCard label="Benefícios no mês" value={money(benefitsMonth)} />
+      <SummaryCard label={latest ? "Bruto da última folha" : "Salários cadastrados"} value={money(salaryTotal)} />
+      {latest && <SummaryCard label="Líquido da última folha" value={money(realNet)} />}
+      <SummaryCard label="Benefícios pagos no mês" value={money(benefitsMonth)} />
       <SummaryCard label="Custo diário VT + VA" value={money(estimatedDailyBenefits)} />
       <SummaryCard label="Funcionários com salário" value={registry.filter(e => String(e.registration_data?.salary ?? "").trim()).length} />
     </div>
