@@ -214,6 +214,20 @@
         @media(max-width:900px){ .day-kpi-grid { grid-template-columns:repeat(2,minmax(140px,1fr)); } .history-filter-grid { grid-template-columns:1fr; } }
         @media(max-width:520px){ .day-kpi-grid { grid-template-columns:1fr 1fr; gap:8px; } .day-toolbar .form-group,.day-toolbar .form-group.search { min-width:100%; } .os-history-item { grid-template-columns:1fr; gap:5px; } }
 
+        .quick-start-subtitle { margin-top:4px; font-size:11px; color:var(--text-muted); text-transform:none; letter-spacing:0; font-weight:500; }
+        .quick-start-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px 16px; }
+        .quick-start-action { border:1px solid var(--border-light); background:#fff; border-radius:10px; padding:12px; display:flex; align-items:center; gap:10px; text-align:left; cursor:pointer; transition:.15s ease; color:var(--text-main); }
+        .quick-start-action:hover { border-color:#93c5fd; background:#f8fbff; transform:translateY(-1px); }
+        .quick-start-action.primary { border-color:#bae6fd; background:#f0f9ff; }
+        .quick-start-action strong { display:block; font-size:12px; }
+        .quick-start-action small { display:block; margin-top:3px; color:var(--text-muted); font-size:10px; line-height:1.35; }
+        .quick-start-icon { width:30px; height:30px; flex:0 0 30px; display:grid; place-items:center; border-radius:8px; background:#e0f2fe; color:#0369a1; font-size:16px; font-weight:800; }
+        .quick-flow { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 16px 13px; border-top:1px solid var(--border-light); background:#f8fafc; color:#475569; font-size:10px; }
+        .quick-flow-label { font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:#0f172a; margin-right:3px; }
+        .quick-flow b { color:#94a3b8; }
+        @media(max-width:1000px){ .quick-start-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media(max-width:560px){ .quick-start-grid { grid-template-columns:1fr; } .quick-flow { align-items:flex-start; } }
+
         body.dbs-control-employee-mode aside .nav-menu .nav-section,
         body.dbs-control-employee-mode aside .nav-menu .nav-item { display:none !important; }
         body.dbs-control-employee-mode aside .nav-menu .nav-item[data-employee-visible="true"] { display:flex !important; }
@@ -247,22 +261,22 @@
             <li class="nav-item active" onclick="switchTab('tab-dashboard', this)"><span>Dashboard Principal</span></li>
             <li class="nav-item" onclick="switchTab('tab-atividades', this)"><span>Atividades do Dia</span></li>
             <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
-            <li class="nav-item" onclick="switchTab('tab-ordens', this)"><span>Gestão de OS (Exportação PDF)</span></li>
-            <li class="nav-item" onclick="switchTab('tab-nova-os', this)"><span>Abrir Chamado / OS</span></li>
+            <li class="nav-item" title="Consulte, filtre, conclua e exporte suas ordens de serviço" onclick="switchTab('tab-ordens', this)"><span>Ordens de Serviço</span></li>
+            <li class="nav-item" title="Crie uma nova ordem de serviço e envie para a equipe" onclick="switchTab('tab-nova-os', this)"><span>Nova OS</span></li>
 
             <div class="nav-section">Gestão de Ativos & Clientes</div>
-            <li class="nav-item" onclick="switchTab('tab-clientes', this)"><span>Clientes Corporativos</span></li>
+            <li class="nav-item" title="Cadastre e consulte clientes" onclick="switchTab('tab-clientes', this)"><span>Clientes</span></li>
             <li class="nav-item" onclick="switchTab('tab-importacao', this)"><span>Importação em Massa</span></li>
             <li class="nav-item" onclick="switchTab('tab-equipamentos', this)"><span>Parque de Equipamentos</span></li>
-            <li class="nav-item" onclick="switchTab('tab-tecnicos', this)"><span>Equipe Técnica & Logins</span></li>
+            <li class="nav-item" title="Cadastre técnicos e gerencie seus acessos" onclick="switchTab('tab-tecnicos', this)"><span>Equipe Técnica</span></li>
 
             <div class="nav-section">Insumos & Operação</div>
-            <li class="nav-item" onclick="switchTab('tab-pecas', this)"><span>Cadastro de Peças</span></li>
-            <li class="nav-item" onclick="switchTab('tab-servicos', this)"><span>Tabela de Serviços</span></li>
-            <li class="nav-item" onclick="switchTab('tab-compras', this)"><span>Pedidos de Compras</span></li>
+            <li class="nav-item" title="Controle peças e estoque" onclick="switchTab('tab-pecas', this)"><span>Peças & Estoque</span></li>
+            <li class="nav-item" title="Cadastre serviços para usar diretamente na OS" onclick="switchTab('tab-servicos', this)"><span>Serviços</span></li>
+            <li class="nav-item" title="Acompanhe solicitações e pedidos de compra" onclick="switchTab('tab-compras', this)"><span>Compras</span></li>
 
             <div class="nav-section">Mobile Field Service</div>
-            <li class="nav-item" data-employee-visible="true" onclick="switchTab('tab-pwa', this)"><span>DBS CONTROL · Minhas OS</span></li>
+            <li class="nav-item" data-employee-visible="true" title="Veja e execute somente as suas OS" onclick="switchTab('tab-pwa', this)"><span>Minhas OS</span></li>
         </ul>
     </aside>
 
@@ -296,6 +310,37 @@
                 <div class="metric-card">
                     <div class="metric-title">OS Concluídas</div>
                     <div class="metric-value" id="dash-os-concluidas" style="color:var(--color-accent);">0</div>
+                </div>
+            </div>
+
+            <div class="data-card quick-start-card">
+                <div class="data-header">
+                    <div>
+                        <h3>Comece por aqui</h3>
+                        <p class="quick-start-subtitle">As ações mais usadas ficam a um clique.</p>
+                    </div>
+                </div>
+                <div class="quick-start-grid">
+                    <button class="quick-start-action primary" type="button" onclick="switchTab('tab-nova-os')">
+                        <span class="quick-start-icon">＋</span>
+                        <span><strong>Nova OS</strong><small>Criar e despachar uma ordem</small></span>
+                    </button>
+                    <button class="quick-start-action" type="button" onclick="switchTab('tab-atividades')">
+                        <span class="quick-start-icon">✓</span>
+                        <span><strong>Atividades do Dia</strong><small>Acompanhar o que está acontecendo</small></span>
+                    </button>
+                    <button class="quick-start-action" type="button" onclick="switchTab('tab-ordens')">
+                        <span class="quick-start-icon">▤</span>
+                        <span><strong>Ordens de Serviço</strong><small>Buscar, conferir e exportar</small></span>
+                    </button>
+                    <button class="quick-start-action" type="button" onclick="switchTab('tab-clientes')">
+                        <span class="quick-start-icon">⌂</span>
+                        <span><strong>Clientes</strong><small>Consultar cadastro e equipamentos</small></span>
+                    </button>
+                </div>
+                <div class="quick-flow">
+                    <span class="quick-flow-label">Fluxo normal</span>
+                    <span>1. Criar OS</span><b>→</b><span>2. Despachar</span><b>→</b><span>3. Acompanhar</span><b>→</b><span>4. Conferir conclusão</span>
                 </div>
             </div>
 
