@@ -96,7 +96,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
     const rows = [["Nome","Unidade","Cargo","CPF","Admissão","Salário","Status","Acesso"]];
     for (const e of filteredEmployees) {
       const r = e.registration_data ?? {};
-      rows.push([e.full_name,e.unit,r.job_title ?? "",r.cpf ?? "",r.admission_date ?? "",r.salary ?? "",e.is_active ? "Ativo" : "Inativo",e.access?.access_enabled ? "Liberado" : "Sem acesso"]);
+      rows.push([e.full_name,e.unit,r.job_title ?? "",r.cpf ?? "",r.admission_date ?? "",r.salary_cents != null ? (Number(r.salary_cents)/100).toLocaleString("pt-BR",{minimumFractionDigits:2}) : (r.salary ?? ""),e.is_active ? "Ativo" : "Inativo",e.access?.access_enabled ? "Liberado" : "Sem acesso"]);
     }
     const csv = rows.map(row => row.map(v => "\"" + String(v ?? "").replace(/\"/g,'\"\"') + "\"").join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"});
