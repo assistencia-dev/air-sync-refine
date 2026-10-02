@@ -174,7 +174,7 @@ export function exportRhEmployeeRegistryPdf(rows: any[]) {
     <div class="section"><h2>Cadastro central</h2><table><thead><tr><th>Funcionário</th><th>Unidade</th><th>Cargo</th><th>CPF</th><th>Admissão</th><th>Salário</th><th>Status</th><th>Acesso</th></tr></thead><tbody>
       ${rows.map((x) => {
         const r = x.registration_data ?? {};
-        return `<tr><td>${esc(x.full_name)}</td><td>${esc(x.unit)}</td><td>${esc(r.job_title)}</td><td>${esc(r.cpf)}</td><td>${esc(r.admission_date)}</td><td>${esc(money(r.salary))}</td><td>${x.is_active ? "Ativo" : "Inativo"}</td><td>${x.access?.access_enabled ? "Liberado" : "Sem acesso"}</td></tr>`;
+        return `<tr><td>${esc(x.full_name)}</td><td>${esc(x.unit)}</td><td>${esc(r.job_title)}</td><td>${esc(r.cpf)}</td><td>${esc(r.admission_date)}</td><td>${esc(money(r.salary_cents ?? r.salary))}</td><td>${x.is_active ? "Ativo" : "Inativo"}</td><td>${x.access?.access_enabled ? "Liberado" : "Sem acesso"}</td></tr>`;
       }).join("")}
     </tbody></table></div>`;
   openRhPrint("Cadastro central de funcionários", "Relatório gerencial · RH / DP", body);
