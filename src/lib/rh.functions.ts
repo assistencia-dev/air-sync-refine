@@ -13,6 +13,33 @@ type EmployeeRecordInput = {
   registration_data?: Record<string, unknown> | null;
 };
 
+function moneyToCents(value: unknown) {
+  const raw = String(value ?? "").trim().replace(/[^0-9,.-]/g, "");
+  if (!raw) return null;
+  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const n = Number(normalized);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+}
+function numberValue(value: unknown) {
+  const n = Number(String(value ?? "").replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+function validTime(value: unknown) {
+  const raw = String(value ?? "").trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(raw) ? raw : null;
+}
+function normalizeEmployeeRegistration(input: Record<string, unknown> | null | undefined) {
+  const data = { ...(input ?? {}) } as Record<string, unknown>;
+  const salaryCents = moneyToCents(data.salary_cents ?? data.salary);
+  if (salaryCents != null) { data.salary_cents = salaryCents; data.salary = (salaryCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }); }
+  const weeklyHours = numberValue(data.weekly_hours ?? data.work_hours);
+  if (weeklyHours != null) { data.weekly_hours = weeklyHours; data.work_hours = weeklyHours.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + " h/semana"; }
+  for (const key of ["entry_time", "exit_time", "lunch_start", "lunch_end"]) { const normalized = validTime(data[key]); if (normalized) data[key] = normalized; }
+  const breakMinutes = numberValue(data.break_minutes); if (breakMinutes != null) data.break_minutes = Math.round(breakMinutes);
+  const toleranceMinutes = numberValue(data.tolerance_minutes); if (toleranceMinutes != null) data.tolerance_minutes = Math.round(toleranceMinutes);
+  return data;
+}
+
 async function requireNativeOperator(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
@@ -481,65 +508,44 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
     if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
-    return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim() };
+    return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim(), registration_data: normalizeEmployeeRegistration(input.registration_data) };
   })
   .handler(async ({ context, data }) => {
-    await requireNativeOperator(context);
+    const actor = await requireNativeOperator(context);
+    const registration = normalizeEmployeeRegistration(data.registration_data);
+    const salaryCents = moneyToCents(registration.salary_cents ?? registration.salary);
+    const weeklyHours = numberValue(registration.weekly_hours);
+    const admissionDate = /^\d{4}-\d{2}-\d{2}$/.test(String(registration.admission_date ?? "")) ? String(registration.admission_date) : null;
+    const entryTime = validTime(registration.entry_time);
+    const exitTime = validTime(registration.exit_time);
+    const lunchStart = validTime(registration.lunch_start);
+    const lunchEnd = validTime(registration.lunch_end);
     if (data.id) {
-      // Editar o cadastro central não reativa um funcionário inativo.
-      const { data: current, error: currentError } = await supabaseAdmin
-        .from("rh_employees")
-        .select("*")
-        .eq("id", data.id)
-        .maybeSingle();
+      const { data: current, error: currentError } = await supabaseAdmin.from("rh_employees").select("*").eq("id", data.id).maybeSingle();
       if (currentError) throw new Error(currentError.message);
       if (!current) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
-
       const { data: employee, error } = await supabaseAdmin.from("rh_employees").update({
-        full_name: data.full_name,
-        unit: data.unit,
-        registration_data: data.registration_data as any,
-        is_active: current.is_active,
-      }).eq("id", data.id)
-        .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+        full_name: data.full_name, unit: data.unit, registration_data: registration as any, is_active: current.is_active,
+        ponto_entrada_prevista: entryTime, ponto_saida_prevista: exitTime, ponto_almoco_inicio_previsto: lunchStart, ponto_almoco_fim_previsto: lunchEnd,
+      }).eq("id", data.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
       if (error) throw new Error(error.message);
-      await supabaseAdmin.from("rh_audit_log").insert({
-        employee_id: data.id,
-        actor_user_id: context.userId,
-        action: "CADASTRO_FUNCIONARIO_ATUALIZADO",
-        entity_type: "rh_employees",
-        entity_id: data.id,
-        before_data: current,
-        after_data: employee,
-      });
+      const { data: currentContract } = await supabaseAdmin.from("rh_employee_contracts").select("id").eq("employee_id", data.id).eq("is_current", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const contractPayload = { employee_id: data.id, contract_type: String(registration.contract_type ?? "CLT"), admission_date: admissionDate, salary_cents: salaryCents, salary_effective_from: admissionDate, work_regime: String(registration.work_regime ?? "presencial"), weekly_hours: weeklyHours, work_shift: String(registration.work_shift ?? ""), notes: String(registration.notes ?? ""), is_current: true, updated_at: new Date().toISOString() };
+      if (currentContract?.id) { const { error: contractError } = await supabaseAdmin.from("rh_employee_contracts").update(contractPayload).eq("id", currentContract.id); if (contractError) throw new Error(contractError.message); }
+      else { const { error: contractError } = await supabaseAdmin.from("rh_employee_contracts").insert(contractPayload); if (contractError) throw new Error(contractError.message); }
+      await supabaseAdmin.from("rh_audit_log").insert({ employee_id: data.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_ATUALIZADO", entity_type: "rh_employees", entity_id: data.id, before_data: current, after_data: employee });
       return employee;
     }
-    const payload = {
-      full_name: data.full_name,
-      unit: data.unit,
-      registration_data: data.registration_data ?? {},
-      is_active: true,
-      registry_employee_id: null,
-    };
-    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees")
-      .insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false } as any)
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
+    const payload = { full_name: data.full_name, unit: data.unit, registration_data: registration ?? {}, is_active: true, registry_employee_id: null, ponto_entrada_prevista: entryTime, ponto_saida_prevista: exitTime, ponto_almoco_inicio_previsto: lunchStart, ponto_almoco_fim_previsto: lunchEnd };
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees").insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false } as any).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
     if (createError) throw new Error(createError.message);
-    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id)
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
     if (linkError) throw new Error(linkError.message);
-    await supabaseAdmin.from("rh_audit_log").insert({
-      employee_id: employee.id,
-      actor_user_id: context.userId,
-      action: "CADASTRO_FUNCIONARIO_CRIADO",
-      entity_type: "rh_employees",
-      entity_id: employee.id,
-      before_data: null,
-      after_data: employee,
-    });
+    const { error: contractError } = await supabaseAdmin.from("rh_employee_contracts").insert({ employee_id: employee.id, contract_type: String(registration.contract_type ?? "CLT"), admission_date: admissionDate, salary_cents: salaryCents, salary_effective_from: admissionDate, work_regime: String(registration.work_regime ?? "presencial"), weekly_hours: weeklyHours, work_shift: String(registration.work_shift ?? ""), notes: String(registration.notes ?? ""), is_current: true });
+    if (contractError) throw new Error(contractError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({ employee_id: employee.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_CRIADO", entity_type: "rh_employees", entity_id: employee.id, before_data: null, after_data: employee });
     return employee;
   });
-
 export const getMyEmployeePortalAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
