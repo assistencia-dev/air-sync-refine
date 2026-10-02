@@ -1,3 +1,20 @@
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 150">
+  <rect width="520" height="150" fill="white"/>
+  <text x="18" y="82" font-family="Arial,Helvetica,sans-serif" font-size="74" font-weight="500" fill="#123B87">dbs</text>
+  <g transform="translate(205 18)">
+    <path d="M55 10 C95 18 105 55 87 78 C74 95 50 92 37 78 C25 64 29 43 43 31 C48 26 53 21 55 10Z" fill="#18A7E0"/>
+    <path d="M104 55 C102 95 70 111 47 98 C30 89 27 67 37 52 C47 36 66 32 81 39 C91 44 98 50 104 55Z" fill="#1B6FCB"/>
+    <path d="M61 109 C25 108 6 78 19 54 C28 37 49 32 66 42 C82 51 87 71 80 87 C76 97 69 103 61 109Z" fill="#79BE32"/>
+    <path d="M14 49 C8 17 37 1 63 8 C80 13 91 29 87 45 C82 62 65 71 49 66 C31 61 22 54 14 49Z" fill="#32C48D"/>
+    <circle cx="57" cy="57" r="24" fill="white" stroke="#D6DDE7" stroke-width="2"/>
+    <path d="M57 39v36M39 57h36M45 45l24 24M69 45L45 69" stroke="#7B8794" stroke-width="2" opacity=".65"/>
+    <circle cx="57" cy="57" r="7" fill="#F7FAFC" stroke="#7B8794" stroke-width="2"/>
+  </g>
+  <text x="318" y="82" font-family="Arial,Helvetica,sans-serif" font-size="74" font-weight="500" fill="#123B87">air</text>
+  <text x="104" y="118" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="500" fill="#172033">REFRIGERAÇÃO</text>
+</svg>`;
+const LOGO_DATA_URI = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(LOGO_SVG);
+
 function esc(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -16,9 +33,11 @@ function printableHtml(title: string, subtitle: string, body: string) {
 @page{size:A4;margin:14mm}
 *{box-sizing:border-box}
 body{font-family:Arial,Helvetica,sans-serif;color:#172033;margin:0;font-size:11px}
-.header{border-bottom:2px solid #172033;padding-bottom:12px;margin-bottom:18px}
-.brand{font-size:18px;font-weight:800;letter-spacing:.02em}
-.title{font-size:16px;font-weight:800;margin-top:5px}
+.header{border-bottom:2px solid #123B87;padding-bottom:12px;margin-bottom:18px}
+.brand-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.brand-logo{width:118px;height:auto;display:block}
+.brand-meta{font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:#64748b;font-weight:800}
+.title{font-size:18px;font-weight:800;margin-top:4px;color:#172033}
 .subtitle{color:#64748b;margin-top:4px}
 .section{margin:14px 0 0;border:1px solid #d9dee7;border-radius:7px;overflow:hidden;break-inside:avoid}
 .section h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0;padding:8px 10px;background:#f3f5f8;border-bottom:1px solid #d9dee7}
@@ -35,7 +54,7 @@ th{background:#f3f5f8;font-size:9px;text-transform:uppercase}
 </style>
 </head>
 <body>
-<div class="header"><div class="brand">DBS AIR</div><div class="title">${esc(title)}</div><div class="subtitle">${esc(subtitle)}</div></div>
+<div class="header"><div class="brand-row"><img class="brand-logo" src="${LOGO_DATA_URI}" alt="DBS AIR Refrigeração"/><div class="brand-meta">Gestão Integrada · RH / DP</div></div><div class="title">${esc(title)}</div><div class="subtitle">${esc(subtitle)}</div></div>
 ${body}
 <div class="footer">Documento gerado pelo módulo RH / DP · DBS AIR · ${new Date().toLocaleString("pt-BR")}</div>
 <script>window.onload=()=>{setTimeout(()=>window.print(),250)}</script>
