@@ -2012,7 +2012,7 @@
         }
 
         function normalizarDocumentoImportacao(value) {
-            return String(value ?? '').replace(/\\D/g, '');
+            return String(value ?? '').replace(/\D/g, '');
         }
 
         function normalizarChaveImportacao(value) {
