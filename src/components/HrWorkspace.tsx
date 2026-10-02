@@ -63,9 +63,9 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   }));
 
   return (
-    <div className="space-y-5">
-      <header className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="relative bg-[#0F172A] px-5 py-6 text-white sm:px-7 sm:py-7">
+    <div className="space-y-6">
+      <header className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,.35)]">
+        <div className="relative bg-gradient-to-br from-[#0F172A] via-[#172554] to-[#0F172A] px-5 py-6 text-white sm:px-7 sm:py-7">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -96,18 +96,25 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
 
-        <div className="p-3 sm:p-4">
-          <div className="grid gap-3 lg:grid-cols-4">
+        <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-[.18em] text-slate-400">Navegação do RH</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">Escolha uma área ou use as ações rápidas abaixo.</p>
+            </div>
+            <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 sm:inline-flex">Dados centralizados</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {grouped.map(({ group, items }) => (
-              <div key={group} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
-                <p className="px-2 pb-2 pt-1 text-[9px] font-black uppercase tracking-[.16em] text-slate-400">{group}</p>
+              <div key={group} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-1.5">
+                <p className="px-2 pb-1.5 pt-1 text-[9px] font-black uppercase tracking-[.14em] text-slate-400">{group}</p>
                 <div className="grid gap-1">
                   {items.map(t => (
                     <button
                       key={t.key}
                       onClick={() => setSection(t.key)}
                       className={[
-                        "flex min-h-10 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-bold transition",
+                        "flex min-h-10 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-bold transition-all",
                         section === t.key
                           ? "bg-[#0F172A] text-white shadow-sm"
                           : "text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm",
@@ -124,6 +131,13 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
       </header>
+
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickAction icon={<UsersRound />} title="Novo funcionário" text="Cadastro central" onClick={() => setSection("cadastro")} />
+        <QuickAction icon={<Clock3 />} title="Conferir ponto" text="Espelho e jornada" onClick={() => setSection("ponto")} />
+        <QuickAction icon={<BriefcaseBusiness />} title="Solicitações RH" text="Fila de atendimento" onClick={() => setSection("gestao")} />
+        <QuickAction icon={<WalletCards />} title="Vale / adiantamento" text="Lançar desconto" onClick={() => setSection("financeiro")} />
+      </section>
 
       {section === "resumo" && (
         <div className="space-y-5">
