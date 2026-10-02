@@ -53,17 +53,16 @@ export const createMyRhEmployeeValeRequest = createServerFn({ method: "POST" })
     advance_type: "VALE" | "ADIANTAMENTO";
     amount_cents: number;
     competence: string;
-    reason: string;
+    reason?: string;
     signature_name: string;
     signature_data: string;
   }) => {
     if (!input?.amount_cents || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0) throw new Error("Informe um valor válido.");
     if (!/^\d{4}-\d{2}$/.test(input.competence)) throw new Error("Informe uma competência válida.");
-    if (!input.reason?.trim() || input.reason.trim().length < 5) throw new Error("Informe o motivo da solicitação.");
     if (!input.signature_name?.trim()) throw new Error("Informe o nome para assinatura.");
     if (!input.signature_data?.startsWith("data:image/")) throw new Error("Assine a solicitação antes de enviar.");
     if (input.signature_data.length > 700000) throw new Error("A assinatura ficou muito grande. Assine novamente com traço mais simples.");
-    return { ...input, reason: input.reason.trim(), signature_name: input.signature_name.trim() };
+    return { ...input, reason: input.reason?.trim() || "", signature_name: input.signature_name.trim() };
   })
   .handler(async ({ context, data }) => {
     const { userId, employeeId } = await getMyEmployee(context);
