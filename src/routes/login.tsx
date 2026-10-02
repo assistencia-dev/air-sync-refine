@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { ShieldCheck, LogIn, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveLogin } from "@/lib/auth.functions";
@@ -51,7 +51,7 @@ function LoginPage() {
     return () => { cancelled = true; };
   }, [navigate]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault(); setError(null); setLoading(true);
     try {
       // E-mail autentica diretamente. Para o SUPER ADMIN nativo, usamos o
