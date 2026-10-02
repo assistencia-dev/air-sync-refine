@@ -196,8 +196,8 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261002-1`
-    : "/dbs-control.html?v=20261002-1";
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261002-2`
+    : "/dbs-control.html?v=20261002-2";
 
   return (
     <main className="min-h-screen bg-slate-100">
