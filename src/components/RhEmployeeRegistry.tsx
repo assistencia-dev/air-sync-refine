@@ -12,7 +12,7 @@ import {
   listRhCollaboratorUsers,
   getRhEmployee360,
 } from "@/lib/rh.functions";
-import { exportRhEmployeeFichaPdf } from "@/lib/rh.exports";
+import { exportRhEmployeeFichaPdf, exportRhEmployeeRegistryPdf } from "@/lib/rh.exports";
 
 type Employee = {
   id: string;
@@ -115,7 +115,8 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#141F33] px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>Exportar CSV</button>
+          <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#141F33] px-4 py-2.5 text-xs font-bold text-slate-200"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
+          <button onClick={() => exportRhEmployeeRegistryPdf(filteredEmployees)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-slate-900"><FileDown className="h-4 w-4"/>Relatório / PDF</button>
           <button
             onClick={() => {
               setEditing(null);
