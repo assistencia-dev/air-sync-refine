@@ -48,3 +48,5 @@ function FolhaPontoPage() {
     </main>
   );
 }
+
+// Portal do colaborador: shell compartilhado com Folha de Ponto e DBS CONTROL.
