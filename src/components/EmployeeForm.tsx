@@ -64,7 +64,7 @@ export function EmployeeForm({ initialData, onSuccess, onCancel }: EmployeeFormP
     formState: { errors },
     reset,
   } = useForm<EmployeeFormData>({
-    resolver: zodResolver(employeeFormSchema),
+    resolver: zodResolver(employeeFormSchema) as any,
     defaultValues: initialData ? {
       full_name: initialData.full_name,
       benefit_type: initialData.benefit_type === 'passagem' ? 'VT' : 'VA',
