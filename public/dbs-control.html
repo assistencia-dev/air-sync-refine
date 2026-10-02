@@ -1590,6 +1590,11 @@
         }
 
         function garantirChecklistOS(os) {
+            if (!os || !Array.isArray(os.checklist)) return [];
+            return os.checklist;
+        }
+
+        function criarChecklistSeNecessario(os) {
             if (!os) return [];
             if (!Array.isArray(os.checklist) || !os.checklist.length) {
                 os.checklist = obterChecklistPadrao(os.tipo).map((titulo, index) => ({
@@ -1611,7 +1616,7 @@
         function marcarChecklistOS(osId, index, checked) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             if (!os) return;
-            const checklist = garantirChecklistOS(os);
+            const checklist = criarChecklistSeNecessario(os);
             if (!checklist[index]) return;
             checklist[index].concluido = Boolean(checked);
             checklist[index].concluidoEm = checked ? new Date().toISOString() : null;
@@ -1622,6 +1627,9 @@
 
         function renderizarChecklistExecucao(os) {
             const checklist = garantirChecklistOS(os);
+            if (!checklist.length) {
+                return '<div class="field-check-note">Esta OS é anterior à implantação do checklist. O fluxo existente permanece preservado.</div>';
+            }
             const total = checklist.length;
             const concluidos = checklist.filter(i => i.concluido).length;
             return `<div class="field-check-summary"><span>Checklist obrigatório</span><span class="field-check-badge ${concluidos === total ? 'done' : 'pending'}">${concluidos}/${total} concluídos</span></div>
