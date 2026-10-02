@@ -54,18 +54,41 @@ function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setError(null); setLoading(true);
     try {
-      // E-mail pode autenticar diretamente no Supabase. Isso evita que uma
-      // indisponibilidade momentânea do resolver administrativo bloqueie o login
-      // em outro navegador/dispositivo. Usuário/CPF continuam usando o resolver.
+      // E-mail autentica diretamente. Para o SUPER ADMIN nativo, usamos o
+      // e-mail técnico conhecido sem depender do resolver administrativo.
+      // Isso evita que uma falha isolada de server function impeça o acesso.
       const normalizedIdentifier = identifier.trim();
       const email = normalizedIdentifier.includes("@")
         ? normalizedIdentifier
-        : (await resolveLogin({ data: { identifier: normalizedIdentifier } })).email;
+        : normalizedIdentifier.toUpperCase() === "DBSASSISTENCIA123"
+          ? "dbsassistencia123@dbsair.internal"
+          : (await resolveLogin({ data: { identifier: normalizedIdentifier } })).email;
+
       const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
       if (signErr) throw signErr;
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new Error("Sessão não estabelecida.");
-      const { data: profile } = await supabase.from("users").select("role_key").eq("auth_id", session.session.user.id).maybeSingle();
+
+      // Em alguns navegadores o evento de sessão chega alguns milissegundos
+      // depois do signIn. Aguarde a sessão antes de consultar o perfil/rotear.
+      let sessionUserId: string | null = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const { data: session } = await supabase.auth.getSession();
+        sessionUserId = session.session?.user.id ?? null;
+        if (sessionUserId) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      if (!sessionUserId) throw new Error("Sessão não estabelecida. Tente novamente.");
+
+      let profile: { role_key: string | null } | null = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const { data } = await supabase
+          .from("users")
+          .select("role_key")
+          .eq("auth_id", sessionUserId)
+          .maybeSingle();
+        profile = data;
+        if (profile?.role_key) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
       const isAdmin = profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL";
       const isCollaborator = profile?.role_key === "COLABORADOR";
       if (isAdmin) {
