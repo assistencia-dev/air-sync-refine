@@ -592,7 +592,6 @@ function EmployeeAccessForm({
              </div>
            )}
            {successMessage && <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">{successMessage}</p>}
-          </label>
           <label className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#0F172A] p-3 text-xs font-bold text-slate-600">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             Acesso à Folha de Ponto liberado para este funcionário
