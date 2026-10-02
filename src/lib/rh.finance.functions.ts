@@ -86,6 +86,56 @@ export const createRhEmployeeAdvance = createServerFn({ method: "POST" })
     return row;
   });
 
+
+export const approveRhEmployeeValeRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { request_id: string; authorized: boolean; note?: string }) => {
+    if (!input?.request_id) throw new Error("Solicitação inválida.");
+    return { ...input, note: input.note?.trim() || null };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireRhOperator(context);
+    const { data: request, error: requestError } = await supabaseAdmin.from("rh_employee_requests")
+      .select("id, employee_id, request_type, status, payload").eq("id", data.request_id).maybeSingle();
+    if (requestError) throw new Error(requestError.message);
+    if (!request || request.request_type !== "vale") throw new Error("Solicitação de vale não encontrada.");
+    if (["resolvida", "cancelada"].includes(request.status)) throw new Error("Esta solicitação já foi encerrada.");
+    const payload = (request.payload ?? {}) as Record<string, any>;
+    const amount = Number(payload.amount_cents ?? 0);
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error("A solicitação não possui um valor válido.");
+    if (!payload.signature_data || !payload.signature_name || !payload.signed_at) throw new Error("A solicitação não possui assinatura válida.");
+    if (!data.authorized) {
+      const { data: rejected, error: rejectError } = await supabaseAdmin.from("rh_employee_requests")
+        .update({ status: "cancelada", resolved_at: new Date().toISOString(), resolved_by: actor.id })
+        .eq("id", request.id).select("*").single();
+      if (rejectError) throw new Error(rejectError.message);
+      await supabaseAdmin.from("rh_audit_log").insert({ actor_user_id: actor.id, employee_id: request.employee_id, action: "VALE_RECUSADO_PELO_RH", entity_type: "rh_employee_requests", entity_id: request.id, before_data: request, after_data: rejected });
+      return { request: rejected, advance: null };
+    }
+    const { data: advance, error: advanceError } = await supabaseAdmin.from("rh_employee_advances").insert({
+      employee_id: request.employee_id,
+      advance_type: payload.advance_type === "ADIANTAMENTO" ? "ADIANTAMENTO" : "VALE",
+      description: payload.title ? String(payload.title) + " · " + String(payload.description ?? "") : "Vale solicitado pelo colaborador",
+      amount_cents: amount,
+      competence: String(payload.competence) + "-01",
+      authorized: true,
+      status: "programado",
+      notes: data.note ?? "Solicitação assinada pelo colaborador e autorizada pelo RH.",
+      created_by: actor.id,
+      source_request_id: request.id,
+    }).select("*").single();
+    if (advanceError) {
+      if (advanceError.code === "23505") throw new Error("Esta solicitação já foi transformada em lançamento de folha.");
+      throw new Error(advanceError.message);
+    }
+    const { data: resolved, error: resolvedError } = await supabaseAdmin.from("rh_employee_requests")
+      .update({ status: "resolvida", resolved_at: new Date().toISOString(), resolved_by: actor.id })
+      .eq("id", request.id).select("*").single();
+    if (resolvedError) throw new Error(resolvedError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({ actor_user_id: actor.id, employee_id: request.employee_id, action: "VALE_AUTORIZADO_E_VINCULADO_A_FOLHA", entity_type: "rh_employee_advances", entity_id: advance.id, before_data: request, after_data: advance });
+    return { request: resolved, advance };
+  });
+
 export const cancelRhEmployeeAdvance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => {
