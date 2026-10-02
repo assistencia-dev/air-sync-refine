@@ -523,6 +523,7 @@ function EmployeeAccessForm({
   onDone: () => void;
 }) {
   const [login, setLogin] = useState(employee.access?.login_identifier ?? employee.access?.user?.username ?? "");
+  const [linkedUserId, setLinkedUserId] = useState(employee.access?.user_id ?? "");
   const [enabled, setEnabled] = useState(employee.access?.access_enabled ?? false);
   const [dbsControlEnabled, setDbsControlEnabled] = useState(employee.access?.dbs_control_access_enabled ?? false);
   const collaboratorUsers = useQuery({
@@ -530,7 +531,7 @@ function EmployeeAccessForm({
     queryFn: () => listRhCollaboratorUsers(),
   });
   const save = useMutation({
-    mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login, dbs_control_enabled: dbsControlEnabled } }),
+    mutationFn: () => saveRhEmployeeAccess({ data: { employee_id: employee.id, enabled, login_identifier: login, user_id: linkedUserId, dbs_control_enabled: dbsControlEnabled } }),
     onSuccess: onDone,
   });
 
@@ -550,7 +551,12 @@ function EmployeeAccessForm({
             Usuário vinculado
             <select
               value={login}
-              onChange={(e) => setLogin(e.target.value)}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                const selected = (collaboratorUsers.data ?? []).find((user: any) => user.id === selectedId);
+                setLinkedUserId(selectedId);
+                setLogin(selected?.username || selected?.email || selected?.cpf || "");
+              }}
               disabled={collaboratorUsers.isLoading}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800"
             >
@@ -560,8 +566,8 @@ function EmployeeAccessForm({
                   {user.full_name || user.username || user.email} · {user.username || user.email}
                 </option>
               ))}
-              {login && !(collaboratorUsers.data ?? []).some((user: any) => (user.username || user.email || user.cpf) === login) && (
-                <option value={login}>{login} · vínculo atual</option>
+              {linkedUserId && !(collaboratorUsers.data ?? []).some((user: any) => user.id === linkedUserId) && (
+                <option value={linkedUserId}>{login} · vínculo atual</option>
               )}
             </select>
             <p className="mt-1 text-[10px] font-normal text-slate-400">O login é criado e administrado exclusivamente em Usuários vinculados com o papel COLABORADOR.</p>
@@ -581,7 +587,7 @@ function EmployeeAccessForm({
         {save.error && <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{save.error instanceof Error ? save.error.message : "Não foi possível vincular o acesso."}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Cancelar</button>
-          <button onClick={() => save.mutate()} disabled={save.isPending || (enabled && !login.trim())} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
+          <button onClick={() => save.mutate()} disabled={save.isPending || (enabled && (!login.trim() || !linkedUserId))} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
             <KeyRound className="h-4 w-4" /> {save.isPending ? "Vinculando..." : "Vincular acesso"}
           </button>
         </div>
