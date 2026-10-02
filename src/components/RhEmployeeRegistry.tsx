@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown } from "lucide-react";
 import {
@@ -50,7 +50,7 @@ const FIELDS = [
   ["notes", "Observações"],
 ] as const;
 
-export function RhEmployeeRegistry() {
+export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: string | null }) {
   const qc = useQueryClient();
   const employees = useQuery({
     queryKey: ["rh-employee-registry"],
@@ -82,6 +82,13 @@ export function RhEmployeeRegistry() {
       return matchesSearch && matchesStatus && matchesAccess;
     });
   }, [employeeList, search, statusFilter, accessFilter]);
+  useEffect(() => {
+    if (!initialEmployeeId || employees.isLoading) return;
+    const employee = employeeList.find((item) => item.id === initialEmployeeId);
+    if (!employee) return;
+    setEditing(employee);
+    setFormOpen(true);
+  }, [initialEmployeeId, employees.isLoading, employeeList]);
   const activeCount = employeeList.filter((employee) => employee.is_active).length;
   const inactiveCount = employeeList.length - activeCount;
   const accessCount = employeeList.filter((employee) => employee.access?.access_enabled).length;
