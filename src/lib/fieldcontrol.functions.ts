@@ -9,7 +9,7 @@ type AppUser = { id: string; company_id: string | null; role_key: string; status
 async function requireDbsControlAdmin(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, company_id, role_key, status")
+    .select("id, company_id, unit_id, role_key, status")
     .eq("auth_id", context.userId)
     .maybeSingle();
 
@@ -18,8 +18,55 @@ async function requireDbsControlAdmin(context: { userId: string }) {
   if (!["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(data.role_key)) {
     throw new Error("Somente administradores do DBS CONTROL podem gerenciar a integração FieldControl.");
   }
-  if (!data.company_id) throw new Error("Usuário sem empresa vinculada.");
-  return data as AppUser;
+
+  // Corrige automaticamente perfis administrativos antigos que ficaram sem company_id.
+  // Primeiro aproveita a empresa da unidade; se não houver, recupera/cria a empresa principal da DBS Air.
+  let companyId = data.company_id as string | null;
+  if (!companyId && data.unit_id) {
+    const { data: unit, error: unitError } = await supabaseAdmin
+      .from("units")
+      .select("company_id")
+      .eq("id", data.unit_id)
+      .maybeSingle();
+    if (unitError) throw new Error(unitError.message);
+    companyId = unit?.company_id ?? null;
+  }
+
+  if (!companyId) {
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .select("id")
+      .or("legal_name.ilike.%DBS AIR%,trade_name.ilike.%DBS AIR%")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (companyError) throw new Error(companyError.message);
+    companyId = company?.id ?? null;
+  }
+
+  if (!companyId) {
+    const { data: createdCompany, error: createCompanyError } = await supabaseAdmin
+      .from("companies")
+      .insert({
+        legal_name: "DBS AIR REFRIGERAÇÃO LTDA",
+        trade_name: "DBS AIR",
+        account_type: "empresa",
+      })
+      .select("id")
+      .single();
+    if (createCompanyError) throw new Error(createCompanyError.message);
+    companyId = createdCompany.id;
+  }
+
+  if (!data.company_id) {
+    const { error: linkError } = await supabaseAdmin
+      .from("users")
+      .update({ company_id: companyId })
+      .eq("id", data.id);
+    if (linkError) throw new Error(linkError.message);
+  }
+
+  return { ...data, company_id: companyId } as AppUser;
 }
 
 function normalizeText(value: unknown) {
