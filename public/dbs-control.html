@@ -1761,8 +1761,8 @@
         function salvarEquipamento(e) {
             e.preventDefault();
             const novo = {
-                id: ERP_STATE.equipamentos.length + 1,
-                clienteId: parseInt(document.getElementById('eq-select-cliente').value),
+                id: crypto.randomUUID(),
+                clienteId: String(document.getElementById('eq-select-cliente').value || ''),
                 tag: document.getElementById('eq-tag').value,
                 tipo: document.getElementById('eq-tipo').value,
                 marca: document.getElementById('eq-marca').value,
@@ -1796,9 +1796,9 @@
         }
 
         function atualizarEquipamentosDoClienteOS() {
-            const cliId = parseInt(document.getElementById('os-select-cliente').value);
+            const cliId = String(document.getElementById('os-select-cliente').value || '');
             const equipSelect = document.getElementById('os-select-equipamento');
-            const equipamentosDoCliente = ERP_STATE.equipamentos.filter(e => e.clienteId === cliId);
+            const equipamentosDoCliente = ERP_STATE.equipamentos.filter(e => String(e.clienteId) === cliId);
 
             if (equipamentosDoCliente.length === 0) {
                 equipSelect.innerHTML = `<option value="">Nenhum equipamento cadastrado</option>`;
@@ -1812,7 +1812,7 @@
         function salvarCliente(e) {
             e.preventDefault();
             const novo = {
-                id: ERP_STATE.clientes.length + 1,
+                id: crypto.randomUUID(),
                 nome: document.getElementById('cli-nome').value,
                 cnpj: document.getElementById('cli-cnpj').value,
                 endereco: document.getElementById('cli-endereco').value,
@@ -2227,12 +2227,14 @@
 
         function salvarNovaOS(e) {
             e.preventDefault();
-            const cliId = parseInt(document.getElementById('os-select-cliente').value);
-            const equipId = parseInt(document.getElementById('os-select-equipamento').value);
-            const tecId = parseInt(document.getElementById('os-select-tecnico').value);
-            const srvId = parseInt(document.getElementById('os-select-servico').value);
+            const cliId = String(document.getElementById('os-select-cliente').value || '');
+            const equipId = String(document.getElementById('os-select-equipamento').value || '');
+            const tecId = String(document.getElementById('os-select-tecnico').value || '');
+            const srvId = String(document.getElementById('os-select-servico').value || '');
 
+            if (!cliId) { alert("Selecione um cliente válido!"); return; }
             if (!equipId) { alert("Selecione um equipamento válido!"); return; }
+            if (!srvId) { alert("Selecione um serviço válido!"); return; }
 
             const srv = ERP_STATE.servicos.find(s => s.id === srvId);
 
