@@ -168,7 +168,7 @@ function DbsControlPage() {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
           } else if (action === "sync_preview" || action === "sync_apply") {
             const result = await syncFieldControl({ data: { mode: action === "sync_apply" ? "apply" : "preview" } });
-            if (action === "sync_apply" && result?.ok && result?.status !== "error") {
+            if (action === "sync_apply" && result?.ok && (result as any)?.status !== "error") {
               const importedState = await getFieldControlImportedState();
               const currentCloud = await getDbsControlCloudState();
               const currentState = currentCloud?.state && typeof currentCloud.state === "object" && !Array.isArray(currentCloud.state)

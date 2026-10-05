@@ -656,7 +656,7 @@ export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
     const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, is_active, registry_employee_id").eq("id", data.employee_id).eq("is_active", true).maybeSingle();
+      .select("id, full_name, unit, is_active, registry_employee_id, ponto_access_enabled, ponto_portal_user_id").eq("id", data.employee_id).eq("is_active", true).maybeSingle();
     if (employeeError) throw new Error(employeeError.message);
     if (!employee) throw new Error("Funcionário não encontrado ou inativo.");
     if (!data.enabled) {
