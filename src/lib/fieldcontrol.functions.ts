@@ -181,8 +181,36 @@ function detailPayload(value: any) {
 }
 
 function externalOrderCustomerId(order: any) {
-  const c = jsonObject(order?.customer);
-  return pickId(c) || pickId(order?.customerId);
+  const candidates = [
+    order?.customer,
+    order?.customerId,
+    order?.client,
+    order?.clientId,
+    order?.customer?.id,
+    order?.customer?.identifier,
+    order?.location?.customer,
+    order?.location?.customerId,
+  ];
+  for (const candidate of candidates) {
+    const id = pickId(candidate);
+    if (id) return id;
+    if (typeof candidate === "string" && normalizeText(candidate)) return normalizeText(candidate);
+  }
+  return "";
+}
+
+function externalOrderCustomerName(order: any) {
+  const candidates = [
+    order?.customer?.name,
+    order?.customer?.legalName,
+    order?.customer?.tradeName,
+    order?.client?.name,
+    order?.client?.legalName,
+    order?.client?.tradeName,
+    order?.customerName,
+    order?.clientName,
+  ];
+  return candidates.map(normalizeText).find(Boolean) || "";
 }
 
 async function getIntegration(companyId: string) {
@@ -717,10 +745,10 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           if (serviceRefsResult.error) throw new Error(serviceRefsResult.error.message);
           if (existingOrdersResult.error) throw new Error(existingOrdersResult.error.message);
 
-          const existingProtocols = new Set<string>(
+          const protocolOwnerByValue = new Map<string, string>(
             (existingOrdersResult.data ?? [])
-              .map((row: any) => normalizeText(row.protocol))
-              .filter(Boolean)
+              .filter((row: any) => normalizeText(row.protocol))
+              .map((row: any) => [normalizeText(row.protocol), String(row.id)])
           );
 
           const orderLocalByExternal = new Map<string,string>(
@@ -737,24 +765,42 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           for (const order of orders) {
             const externalId = pickId(order);
             const externalCustomerId = externalOrderCustomerId(order);
-            const localClientId = externalCustomerId ? localClientByExternal.get(externalCustomerId) : undefined;
-            if (!externalId || !localClientId) continue;
+            const customerName = externalOrderCustomerName(order);
+            let localClientId = externalCustomerId ? localClientByExternal.get(externalCustomerId) : undefined;
 
-            const serviceExternalId = pickId(order?.service);
+            // Algumas contas do FieldControl devolvem a OS com o cliente expandido
+            // ou apenas com o nome. Tenta o ID primeiro e depois o nome normalizado.
+            if (!localClientId && customerName) {
+              const normalizedCustomer = normalizeKey(customerName);
+              for (const [externalId, customer] of customerByExternal.entries()) {
+                if (normalizeKey(pickName(customer)) === normalizedCustomer) {
+                  localClientId = localClientByExternal.get(externalId);
+                  if (localClientId) break;
+                }
+              }
+            }
+            if (!externalId || !localClientId) {
+              errors.push(`OS ${externalId || "sem ID"} ignorada: cliente do FieldControl não foi localizado no DBS CONTROL.`);
+              continue;
+            }
+
+            const serviceExternalId = pickId(order?.service) || pickId(order?.serviceId);
             const serviceId = serviceExternalId ? (serviceLocalByExternal.get(serviceExternalId) ?? null) : null;
-            let protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120) || `OS-${externalId}`;
             const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
+            let protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120) || `OS-${externalId}`;
 
-            if (existingProtocols.has(protocol)) {
+            // O protocolo é único no DBS CONTROL. Só considera colisão quando
+            // pertence a outra OS; a própria OS pode manter seu protocolo.
+            if (protocolOwnerByValue.has(protocol) && protocolOwnerByValue.get(protocol) !== localId) {
               const suffix = `-FC-${externalId.slice(-12)}`;
               protocol = `${protocol.slice(0, Math.max(1, 120 - suffix.length))}${suffix}`;
               let n = 2;
-              while (existingProtocols.has(protocol)) {
+              while (protocolOwnerByValue.has(protocol) && protocolOwnerByValue.get(protocol) !== localId) {
                 const extra = `-${n++}`;
                 protocol = `${protocol.slice(0, Math.max(1, 120 - suffix.length - extra.length))}${suffix}${extra}`;
               }
             }
-            existingProtocols.add(protocol);
+            protocolOwnerByValue.set(protocol, localId);
 
             const status = normalizeText(order.status ?? order.state ?? "aberta").toLowerCase();
 
@@ -798,10 +844,34 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           }
 
           const batchSize = 200;
+
+          // Se uma linha problemática fizer um lote inteiro falhar, divide o lote
+          // até isolar a OS problemática. Assim as outras OS continuam entrando.
+          const upsertOrdersResilient = async (batch: any[]): Promise<void> => {
+            if (!batch.length) return;
+            const { error } = await supabaseAdmin.from("dbs_control_work_orders").upsert(batch, { onConflict: "id" });
+            if (!error) return;
+            if (batch.length === 1) {
+              const row = batch[0];
+              const fallbackSuffix = `-FC-${String(row.id).replace(/-/g, "").slice(-12)}`;
+              const fallbackProtocol = `${String(row.protocol || "OS").slice(0, Math.max(1, 120 - fallbackSuffix.length))}${fallbackSuffix}`;
+              const retry = await supabaseAdmin.from("dbs_control_work_orders")
+                .upsert([{ ...row, protocol: fallbackProtocol }], { onConflict: "id" });
+              if (retry.error) {
+                errors.push(`OS ${row.id} não importada: ${retry.error.message}`);
+                return;
+              }
+              protocolOwnerByValue.set(fallbackProtocol, String(row.id));
+              return;
+            }
+            const middle = Math.ceil(batch.length / 2);
+            await upsertOrdersResilient(batch.slice(0, middle));
+            await upsertOrdersResilient(batch.slice(middle));
+          };
+
           for (let i = 0; i < workOrders.length; i += batchSize) {
             const batch = workOrders.slice(i, i + batchSize);
-            const { error } = await supabaseAdmin.from("dbs_control_work_orders").upsert(batch, { onConflict: "id" });
-            if (error) throw new Error(error.message);
+            await upsertOrdersResilient(batch);
             const done = Math.min(i + batch.length, workOrders.length);
             const progress = Math.min(98, 70 + Math.round((done / Math.max(workOrders.length, 1)) * 28));
             await publishProgress("running", { stage: "ordens", progress, orders_processed: done, orders_total: workOrders.length });
