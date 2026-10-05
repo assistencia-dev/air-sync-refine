@@ -145,9 +145,33 @@ function contactFromCustomer(customer: any) {
   };
 }
 
+function locationListFromCustomer(customer: any) {
+  const raw = customer?.locations ?? customer?.sites ?? customer?.addresses;
+  if (Array.isArray(raw) && raw.length) return raw;
+  const primary = customer?.primaryLocation ?? customer?.location;
+  if (primary && typeof primary === "object") return [primary];
+  return [];
+}
+
 function equipmentListFromCustomer(customer: any) {
-  const raw = customer?.equipments ?? customer?.equipment ?? customer?.assets ?? [];
-  return Array.isArray(raw) ? raw : [];
+  const direct = customer?.equipments ?? customer?.equipment ?? customer?.assets;
+  const out = Array.isArray(direct) ? [...direct] : [];
+  for (const location of locationListFromCustomer(customer)) {
+    const nested = location?.equipments ?? location?.equipment ?? location?.assets;
+    if (Array.isArray(nested)) out.push(...nested);
+  }
+  const seen = new Set<string>();
+  return out.filter((eq: any) => {
+    const id = pickId(eq);
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function detailPayload(value: any) {
+  return value?.customer ?? value?.data ?? value;
 }
 
 function externalOrderCustomerId(order: any) {
@@ -349,69 +373,97 @@ export const syncFieldControl = createServerFn({ method: "POST" })
         localClientByExternal.set(externalId, localId as string);
         summary.customers.upserted += 1;
 
-        const locationId = pickId(c?.primaryLocation ?? c?.location);
-        if (locationId && localId) {
-          const locationRef = await supabaseAdmin
-            .from("dbs_control_external_refs")
-            .select("local_id")
-            .eq("company_id", companyId)
-            .eq("provider", "fieldcontrol")
-            .eq("entity_type", "site")
-            .eq("external_id", locationId)
-            .maybeSingle();
-          if (locationRef.error) throw new Error(locationRef.error.message);
 
-          let siteId = locationRef.data?.local_id as string | null | undefined;
-          if (siteId) {
-            await supabaseAdmin.from("dbs_control_sites").update({
-              client_id: localId,
-              name: normalizeText(c?.primaryLocation?.name ?? c?.location?.name ?? "Local principal"),
-              address_json: address,
-              contact_name: contact.contact_name || null,
-              contact_phone: contact.contact_phone || null,
-              contact_email: contact.contact_email || null,
-              updated_at: new Date().toISOString(),
-            }).eq("id", siteId).eq("client_id", localId);
-          } else {
-            const { data: site, error } = await supabaseAdmin.from("dbs_control_sites").insert({
-              client_id: localId,
-              name: normalizeText(c?.primaryLocation?.name ?? c?.location?.name ?? "Local principal"),
-              address_json: address,
-              contact_name: contact.contact_name || null,
-              contact_phone: contact.contact_phone || null,
-              contact_email: contact.contact_email || null,
-            }).select("id").single();
-            if (error) throw new Error(error.message);
-            siteId = site.id;
-          }
-          await supabaseAdmin.from("dbs_control_external_refs").upsert({
-            company_id: companyId,
-            provider: "fieldcontrol",
-            entity_type: "site",
-            external_id: locationId,
-            local_id: siteId,
-            metadata: { client_external_id: externalId },
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "company_id,provider,entity_type,external_id" });
-          summary.sites.fetched += 1;
-          summary.sites.upserted += 1;
-        }
       }
 
-      // O cadastro de cliente do FieldControl pode carregar equipamentos embutidos.
-      // Também tentamos o endpoint de detalhe para contas que não os entregam na lista.
+      // O endpoint de lista de clientes não entrega necessariamente as localizações/equipamentos.
+      // O detalhe do cliente é a fonte correta para esses vínculos. Também aceitamos
+      // localizações/equipamentos aninhados dentro da resposta de detalhe.
       for (const c of customers) {
         const externalCustomerId = pickId(c);
         if (!externalCustomerId) continue;
-        let details = equipmentListFromCustomer(c);
-        if (!details.length && summary.details_attempted < 500) {
+
+        let detailCustomer = c;
+        if (summary.details_attempted < 500) {
           summary.details_attempted += 1;
           try {
             const { res, data: detail } = await fetchJson(`/customers/${encodeURIComponent(externalCustomerId)}`, integration.api_key);
-            if (res.ok) details = equipmentListFromCustomer(detail);
-            else summary.details_failed += 1;
+            if (res.ok) {
+              detailCustomer = detailPayload(detail) ?? c;
+            } else {
+              summary.details_failed += 1;
+            }
           } catch {
             summary.details_failed += 1;
+          }
+        }
+
+        const locations = locationListFromCustomer(detailCustomer);
+        const details = equipmentListFromCustomer(detailCustomer);
+
+        if (locations.length) {
+          summary.sites.fetched += locations.length;
+          if (data.mode === "apply") {
+            const localClientId = localClientByExternal.get(externalCustomerId);
+            if (localClientId) {
+              for (let index = 0; index < locations.length; index += 1) {
+                const location = locations[index];
+                const locationId = pickId(location) || `location:${externalCustomerId}:${index}`;
+                const locationRef = await supabaseAdmin
+                  .from("dbs_control_external_refs")
+                  .select("local_id")
+                  .eq("company_id", companyId)
+                  .eq("provider", "fieldcontrol")
+                  .eq("entity_type", "site")
+                  .eq("external_id", locationId)
+                  .maybeSingle();
+                if (locationRef.error) throw new Error(locationRef.error.message);
+
+                const address = addressFromCustomer(location);
+                const contact = contactFromCustomer({
+                  ...c,
+                  ...location,
+                  address: location?.address ?? c?.address,
+                });
+                const siteName = normalizeText(location?.name ?? location?.description) || (index === 0 ? "Local principal" : `Local ${index + 1}`);
+                let siteId = locationRef.data?.local_id as string | null | undefined;
+
+                if (siteId) {
+                  const { error } = await supabaseAdmin.from("dbs_control_sites").update({
+                    client_id: localClientId,
+                    name: siteName,
+                    address_json: address,
+                    contact_name: contact.contact_name || null,
+                    contact_phone: contact.contact_phone || null,
+                    contact_email: contact.contact_email || null,
+                    updated_at: new Date().toISOString(),
+                  }).eq("id", siteId).eq("client_id", localClientId);
+                  if (error) throw new Error(error.message);
+                } else {
+                  const { data: site, error } = await supabaseAdmin.from("dbs_control_sites").insert({
+                    client_id: localClientId,
+                    name: siteName,
+                    address_json: address,
+                    contact_name: contact.contact_name || null,
+                    contact_phone: contact.contact_phone || null,
+                    contact_email: contact.contact_email || null,
+                  }).select("id").single();
+                  if (error) throw new Error(error.message);
+                  siteId = site.id;
+                }
+
+                await supabaseAdmin.from("dbs_control_external_refs").upsert({
+                  company_id: companyId,
+                  provider: "fieldcontrol",
+                  entity_type: "site",
+                  external_id: locationId,
+                  local_id: siteId,
+                  metadata: { client_external_id: externalCustomerId, name: siteName },
+                  updated_at: new Date().toISOString(),
+                }, { onConflict: "company_id,provider,entity_type,external_id" });
+                summary.sites.upserted += 1;
+              }
+            }
           }
         }
 
