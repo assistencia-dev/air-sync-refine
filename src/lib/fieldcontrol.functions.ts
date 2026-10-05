@@ -303,7 +303,6 @@ export const syncFieldControl = createServerFn({ method: "POST" })
         localClientByExternal.set(externalId, localId as string);
         summary.customers.upserted += 1;
 
-        const address = addressFromCustomer(c);
         const locationId = pickId(c?.primaryLocation ?? c?.location);
         if (locationId && localId) {
           const locationRef = await supabaseAdmin
