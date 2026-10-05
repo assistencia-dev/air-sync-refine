@@ -915,6 +915,30 @@
                 <div id="import-resumo" style="display:none;margin-top:14px;"></div>
                 <div style="margin-top:14px;text-align:right;"><button id="import-confirmar" class="btn btn-primary" type="button" onclick="confirmarImportacao()" disabled>Validar e importar</button></div>
             </div>
+            <div id="dbs-fieldcontrol-static" class="data-card" style="padding:20px;margin-bottom:20px;border:1px solid #bae6fd;background:#fff;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0 0 5px;">Sincronização FieldControl</h3>
+                        <p style="font-size:11px;color:var(--text-muted);max-width:760px;">Conecte o DBS CONTROL ao FieldControl para trazer clientes, locais, equipamentos, serviços, OS e técnicos. A sincronização é não destrutiva.</p>
+                    </div>
+                    <span id="dbs-fc-status-static" class="badge" style="background:#f1f5f9;color:#64748b;">Não configurado</span>
+                </div>
+                <div class="form-grid" style="margin-top:16px;">
+                    <div class="form-group" style="grid-column:span 2;">
+                        <label>Chave API FieldControl</label>
+                        <input id="dbs-fc-api-key-static" type="password" autocomplete="new-password" placeholder="Cole aqui a chave API do FieldControl">
+                        <small style="font-size:9px;color:var(--text-muted);">A chave é enviada diretamente ao servidor e não será exibida novamente.</small>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                    <button id="dbs-fc-save-static" class="btn btn-primary btn-sm" type="button">Salvar chave e testar</button>
+                    <button id="dbs-fc-test-static" class="btn btn-secondary btn-sm" type="button">Testar conexão</button>
+                    <button id="dbs-fc-preview-static" class="btn btn-secondary btn-sm" type="button">Pré-visualizar sincronização</button>
+                    <button id="dbs-fc-apply-static" class="btn btn-success btn-sm" type="button">Sincronizar base</button>
+                </div>
+                <div id="dbs-fc-message-static" style="margin-top:12px;font-size:11px;color:var(--text-muted);"></div>
+                <div id="dbs-fc-summary-static" style="display:none;margin-top:12px;"></div>
+            </div>
             <div id="import-preview" class="data-card" style="display:none;">
                 <div class="data-header"><h3>Pré-visualização e validação</h3><span id="import-contagem" style="font-size:10px;color:var(--text-muted);"></span></div>
                 <div style="overflow:auto;max-height:360px;"><table><thead id="import-preview-head"></thead><tbody id="import-preview-body"></tbody></table></div>
@@ -2598,5 +2622,41 @@
     <script src="/dbs-control-import.js?v=20261002-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20260930-2"></script>
     <script src="/dbs-control-ux.js?v=20260930-1"></script>
+    <script>
+    (function bootFieldControlStaticPanel(){
+        function init(){
+            if(window.__dbsFieldControlStaticReady)return;
+            const card=document.getElementById('dbs-fieldcontrol-static');
+            if(!card)return;
+            window.__dbsFieldControlStaticReady=true;
+            const status=document.getElementById('dbs-fc-status-static');
+            const msg=document.getElementById('dbs-fc-message-static');
+            const summary=document.getElementById('dbs-fc-summary-static');
+            const send=(action,extra)=>{msg.textContent='Processando...';window.parent.postMessage(Object.assign({type:'DBS_CONTROL_FIELDCONTROL',action:action},extra||{}),'*');};
+            document.getElementById('dbs-fc-save-static').onclick=function(){const key=document.getElementById('dbs-fc-api-key-static').value.trim();if(!key){msg.textContent='Informe a chave API antes de salvar.';return;}send('save_key',{apiKey:key});};
+            document.getElementById('dbs-fc-test-static').onclick=function(){send('test');};
+            document.getElementById('dbs-fc-preview-static').onclick=function(){send('sync_preview');};
+            document.getElementById('dbs-fc-apply-static').onclick=function(){if(confirm('A sincronização é não destrutiva e não apaga registros existentes. Continuar?'))send('sync_apply');};
+            window.addEventListener('message',function(event){
+                if(event.source!==window.parent)return;
+                const m=event.data||{};
+                if(m.type!=='DBS_CONTROL_FIELDCONTROL_RESULT')return;
+                if(!m.ok){status.textContent='Erro';status.style.background='#fee2e2';status.style.color='#991b1b';msg.textContent=m.error||'Falha na integração FieldControl.';return;}
+                const result=m.result||{};
+                if(m.action==='status'){const configured=!!result.configured;status.textContent=configured?'Configurado':'Não configurado';status.style.background=configured?'#dcfce7':'#f1f5f9';status.style.color=configured?'#166534':'#64748b';msg.textContent=configured?'Chave já configurada no servidor.':'';return;}
+                if(m.action==='save_key'||m.action==='test'){status.textContent='Conectado';status.style.background='#dcfce7';status.style.color='#166534';msg.textContent=m.action==='save_key'?'Chave salva e conexão validada com sucesso.':'Conexão FieldControl validada.';return;}
+                const s=result.summary||{};
+                const rows=[['Clientes',s.customers?.fetched,s.customers?.upserted],['Locais',s.sites?.fetched,s.sites?.upserted],['Equipamentos',s.equipment?.fetched,s.equipment?.upserted],['Serviços',s.services?.fetched,s.services?.upserted],['OS',s.orders?.fetched,s.orders?.upserted],['Técnicos',s.employees?.fetched,'—']];
+                summary.style.display='block';
+                summary.innerHTML='<div style="font-weight:900;margin-bottom:8px;">'+(m.action==='sync_apply'?'Sincronização concluída':'Pré-visualização da sincronização')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">'+rows.map(function(x){return '<div style="padding:9px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc;"><small style="display:block;font-size:9px;color:#64748b;font-weight:800;text-transform:uppercase;">'+x[0]+'</small><b style="display:block;margin-top:3px;">'+String(x[1]??0)+'</b><span style="font-size:9px;color:#64748b;">'+(m.action==='sync_apply'?'gravados: '+String(x[2]??0):'encontrados')+'</span></div>';}).join('')+'</div>';
+                msg.textContent=(result.errors&&result.errors.length)?result.errors.join(' | '):(m.action==='sync_apply'?'Base DBS CONTROL atualizada sem apagar registros.':'Nenhum dado foi alterado.');
+                if(m.action==='sync_apply'){status.textContent='Sincronizado';status.style.background='#dcfce7';status.style.color='#166534';}
+            });
+            window.parent.postMessage({type:'DBS_CONTROL_FIELDCONTROL',action:'status'},'*');
+        }
+        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+        setTimeout(init,500);
+    })();
+    </script>
 </body>
 </html>
