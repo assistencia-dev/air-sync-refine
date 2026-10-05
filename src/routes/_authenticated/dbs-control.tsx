@@ -42,6 +42,45 @@ function DbsControlPage() {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
 
+      if (msg.type === "DBS_CONTROL_REFRESH_MASTER_DATA") {
+        try {
+          const importedState = await getFieldControlImportedState();
+          const currentCloud = await getDbsControlCloudState();
+          const currentState = currentCloud?.state && typeof currentCloud.state === "object" && !Array.isArray(currentCloud.state)
+            ? currentCloud.state as Record<string, unknown>
+            : {};
+          const mergeById = (current: unknown, incoming: unknown) => {
+            const currentItems = Array.isArray(current) ? current as any[] : [];
+            const incomingItems = Array.isArray(incoming) ? incoming as any[] : [];
+            const incomingIds = new Set(incomingItems.map((item) => String(item?.id ?? "")));
+            const preserved = currentItems.filter((item) => !incomingIds.has(String(item?.id ?? "")));
+            return [...preserved, ...incomingItems];
+          };
+          const mergedState = {
+            ...currentState,
+            tecnicos: mergeById(currentState.tecnicos, importedState.tecnicos),
+            clientes: mergeById(currentState.clientes, importedState.clientes),
+            equipamentos: mergeById(currentState.equipamentos, importedState.equipamentos),
+            servicos: mergeById(currentState.servicos, importedState.servicos),
+            ordens: mergeById(currentState.ordens, importedState.ordens),
+            pecas: Array.isArray(currentState.pecas) ? currentState.pecas : [],
+            compras: Array.isArray(currentState.compras) ? currentState.compras : [],
+            orcamentos: Array.isArray(currentState.orcamentos) ? currentState.orcamentos : [],
+            osHistorico: Array.isArray(currentState.osHistorico) ? currentState.osHistorico : [],
+          };
+          const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
+        } catch (err) {
+          console.error("DBS Control master refresh:", err);
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_MASTER_REFRESH_RESULT",
+            ok: false,
+            error: err instanceof Error ? err.message : "Falha ao atualizar a base principal.",
+          }, "*");
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_READY") {
         try {
           const cloud = await getDbsControlCloudState();
