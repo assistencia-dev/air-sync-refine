@@ -100,6 +100,7 @@ function jsonObject(value: unknown): Record<string, any> {
 }
 
 function pickId(item: any) {
+  if (typeof item === "string" || typeof item === "number") return normalizeText(item);
   return normalizeText(item?.id ?? item?._id ?? item?.identifier);
 }
 
@@ -603,7 +604,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
       const equipmentLocalByExternal = new Map<string, string>();
       const localSiteByExternal = new Map<string, string>();
       for (const eq of allEquipment) {
-        const customerId = pickId(eq?.customer);
+        const customerId = pickId(eq?.customer) || normalizeText(eq?.customerId ?? eq?.clientId ?? eq?.client?.id);
         if (!customerId) continue;
         const list = equipmentByCustomer.get(customerId) ?? [];
         list.push(eq);
@@ -715,7 +716,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             .maybeSingle();
           if (eqRef.error) throw new Error(eqRef.error.message);
 
-          const equipmentLocationExternalId = pickId(eq?.location) || normalizeText(eq?.locationId);
+          const equipmentLocationExternalId = pickId(eq?.location) || normalizeText(eq?.locationId ?? eq?.siteId);
           const payload = {
             client_id: localClientId,
             site_id: equipmentLocationExternalId ? (localSiteByExternal.get(equipmentLocationExternalId) ?? null) : null,
@@ -867,13 +868,13 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               continue;
             }
 
-            const serviceExternalId = pickId(order?.service) || pickId(order?.serviceId);
+            const serviceExternalId = pickId(order?.service) || normalizeText(order?.serviceId);
             const serviceId = serviceExternalId ? (serviceLocalByExternal.get(serviceExternalId) ?? null) : null;
             const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
             const firstTask = Array.isArray(order?.tasks) ? (order.tasks[0] ?? {}) : {};
-            const taskEmployeeId = pickId(firstTask?.employee) || pickId(firstTask?.employeeId) || pickId(order?.employee) || pickId(order?.employeeId);
+            const taskEmployeeId = pickId(firstTask?.employee) || normalizeText(firstTask?.employeeId) || pickId(order?.employee) || normalizeText(order?.employeeId);
             const assignedEmployeeId = taskEmployeeId ? (localEmployeeByExternal.get(taskEmployeeId) ?? null) : null;
-            const orderLocationId = pickId(order?.location) || pickId(order?.site) || pickId(order?.address);
+            const orderLocationId = pickId(order?.location) || normalizeText(order?.locationId ?? order?.siteId) || pickId(order?.site) || pickId(order?.address);
             const localSiteId = orderLocationId ? (localSiteByExternal.get(orderLocationId) ?? null) : null;
             let protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120) || `OS-${externalId}`;
 
@@ -925,7 +926,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
                 ? order.equipment
                 : order?.equipment ? [order.equipment] : [];
             for (const orderEquipment of orderEquipments) {
-              const externalEquipmentId = pickId(orderEquipment);
+              const externalEquipmentId = pickId(orderEquipment) || normalizeText(orderEquipment);
               if (!externalEquipmentId) continue;
               // O mapa de equipamentos já foi importado antes desta etapa.
               const equipmentLocal = equipmentLocalByExternal.get(externalEquipmentId);
