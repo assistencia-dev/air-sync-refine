@@ -24,7 +24,7 @@ export type RhAdvance = {
   status: "programado" | "descontado" | "cancelado";
   notes: string | null;
   created_at: string;
-  employee?: { full_name: string; unit: string; registration_data: Record<string, unknown> | null } | null;
+  employee?: { full_name: string; unit: string; registration_data: any } | null;
 };
 
 export const listRhEmployeeAdvances = createServerFn({ method: "GET" })

@@ -200,7 +200,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <AlertKpi label="Solicitações abertas" value={alerts.data?.totals.openRequests ?? 0} icon={<ClipboardList />} tone="amber" onClick={() => setSection("gestao")} />
                   <AlertKpi label="Vales programados" value={alerts.data?.totals.pendingAdvances ?? 0} icon={<WalletCards />} tone="blue" onClick={() => setSection("financeiro")} />
-                  <AlertKpi label="Sem acesso vinculado" value={alerts.data?.totals.noAccess ?? 0} icon={<UserRoundCheck />} tone="violet" onClick={() => setSection("cadastro")} />
+                  <AlertKpi label="Sem acesso vinculado" value={(alerts.data?.totals as any)?.noAccess ?? 0} icon={<UserRoundCheck />} tone="violet" onClick={() => setSection("cadastro")} />
                   <AlertKpi label="Documentos vencendo" value={alerts.data?.totals.expiringDocuments ?? 0} icon={<FileWarning />} tone="rose" onClick={() => setSection("cadastro")} />
                 </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-3">
