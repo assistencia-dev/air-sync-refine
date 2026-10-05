@@ -1330,6 +1330,7 @@
             renderizarTudo();
             if (window.parent !== window) {
                 window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
+                window.parent.postMessage({ type: 'DBS_CONTROL_REFRESH_MASTER_DATA' }, '*');
             }
         };
 
@@ -2572,10 +2573,18 @@
         function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${c.valor.toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
 
         function atualizarSelects() {
-            document.getElementById('os-select-cliente').innerHTML = ERP_STATE.clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-            document.getElementById('eq-select-cliente').innerHTML = ERP_STATE.clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-            document.getElementById('os-select-tecnico').innerHTML = ERP_STATE.tecnicos.map(t => `<option value="${t.id}">${t.nome} (${t.posicao})</option>`).join('');
-            document.getElementById('os-select-servico').innerHTML = ERP_STATE.servicos.map(s => `<option value="${s.id}">${s.nome} (R$ ${s.valor.toFixed(2)})</option>`).join('');
+            const cli = document.getElementById('os-select-cliente');
+            const eqCli = document.getElementById('eq-select-cliente');
+            const tec = document.getElementById('os-select-tecnico');
+            const srv = document.getElementById('os-select-servico');
+            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+            const tecnicos = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
+            const servicos = Array.isArray(ERP_STATE.servicos) ? ERP_STATE.servicos : [];
+            const optionText = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            if (cli) cli.innerHTML = '<option value="">Selecione o cliente...</option>' + clientes.map(c => `<option value="${optionText(c.id)}">${optionText(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome')}</option>`).join('');
+            if (eqCli) eqCli.innerHTML = '<option value="">Selecione o cliente...</option>' + clientes.map(c => `<option value="${optionText(c.id)}">${optionText(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome')}</option>`).join('');
+            if (tec) tec.innerHTML = '<option value="">Selecione o técnico...</option>' + tecnicos.map(t => `<option value="${optionText(t.id)}">${optionText(t.nome || 'Técnico sem nome')} (${optionText(t.posicao || 'Técnico')})</option>`).join('');
+            if (srv) srv.innerHTML = '<option value="">Selecione o serviço...</option>' + servicos.map(s => `<option value="${optionText(s.id)}">${optionText(s.nome || 'Serviço')} (R$ ${Number(s.valor || 0).toFixed(2).replace('.', ',')})</option>`).join('');
             atualizarEquipamentosDoClienteOS();
         }
 
