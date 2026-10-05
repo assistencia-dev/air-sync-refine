@@ -505,7 +505,63 @@
         th{background:#f4f8fb!important;}
         .metric-card,.data-card,.day-kpi,.day-toolbar,.employee-toolbar,.employee-order,.employee-empty,.quick-start-action{box-shadow:var(--shadow-sm)!important;}
 
-    </style>
+            /* DBS CONTROL · Premium usability layer */
+        :root{
+            --color-bg:#f4f7fb;
+            --color-surface:#ffffff;
+            --color-sidebar:#082b57;
+            --color-sidebar-hover:#103f78;
+            --color-primary:#1769d1;
+            --color-primary-dark:#0e4fa7;
+            --color-accent:#0f9f8f;
+            --text-main:#10243f;
+            --text-muted:#65758b;
+            --border-color:#cbd8e8;
+            --border-light:#e5ecf4;
+            --radius-sm:8px;
+            --radius-md:12px;
+            --shadow-sm:0 2px 10px rgba(16,36,63,.055);
+        }
+        body{font-size:13px;color:var(--text-main)}
+        aside{background:linear-gradient(180deg,#082b57 0%,#0b376d 100%);box-shadow:8px 0 28px rgba(8,43,87,.10)}
+        .brand-header{background:rgba(2,28,59,.42);border-bottom-color:rgba(255,255,255,.10)}
+        .brand-badge{background:#2d82df;border-radius:999px;padding:3px 8px}
+        .nav-item{margin:2px 9px;padding:10px 12px;border-radius:9px;border-left:3px solid transparent}
+        .nav-item:hover,.nav-item.active{background:rgba(255,255,255,.09);border-left-color:#67adff}
+        main{background:var(--color-bg)}
+        header{background:rgba(255,255,255,.96);box-shadow:0 1px 0 var(--border-light)}
+        .page-title h1{font-size:18px;letter-spacing:-.02em}
+        .btn{min-height:35px;border-radius:9px;padding:8px 13px;transition:transform .12s ease,box-shadow .12s ease,background .12s ease}
+        .btn:hover{transform:translateY(-1px);box-shadow:0 5px 15px rgba(16,36,63,.10)}
+        .btn:active{transform:none}
+        .btn:disabled{opacity:.58;cursor:wait;transform:none}
+        .btn-primary{background:linear-gradient(135deg,#1d73dc,#1559b8)}
+        .btn-primary:hover{background:linear-gradient(135deg,#216fd0,#104b9c)}
+        .btn-success{background:#129b8c}
+        .btn-secondary{background:#fff;border-color:#cdd9e8}
+        .tab-view{padding:22px 26px}
+        .data-card,.metric-card,.kanban-card{border-radius:14px;box-shadow:var(--shadow-sm)}
+        .data-header{background:#fbfdff;padding:14px 17px}
+        .form-group input,.form-group select,.form-group textarea,.filter-bar input,.filter-bar select{
+            min-height:38px;border-radius:9px;border-color:#cbd8e8;background:#fff;color:#10243f;
+            transition:border-color .15s ease,box-shadow .15s ease
+        }
+        .form-group input:focus,.form-group select:focus,.form-group textarea:focus,.filter-bar input:focus,.filter-bar select:focus{
+            border-color:#4a91df;box-shadow:0 0 0 3px rgba(23,105,209,.11)
+        }
+        .form-group select{cursor:pointer}
+        #tab-nova-os .data-card{max-width:1120px;margin-left:auto;margin-right:auto}
+        #tab-nova-os .form-group label{letter-spacing:.03em}
+        #os-select-cliente,#os-select-tecnico,#os-select-servico{font-weight:600}
+        #os-select-cliente:not(:placeholder-shown),#os-select-tecnico:not(:placeholder-shown){background:#fbfdff}
+        #dbs-os-equipment-picker{border-color:#cbd8e8!important;border-radius:10px!important}
+        #dbs-os-equipment-picker label{cursor:pointer}
+        table th{padding:10px 12px}
+        table td{padding:11px 12px}
+        tr:hover{background:#f8fbff}
+        .badge{border-radius:999px;padding:4px 8px}
+        @media(max-width:800px){.tab-view{padding:15px}.form-grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 
@@ -1347,8 +1403,9 @@
             renderizarHistoricoOperacional();
             renderizarKanban();
             renderizarPWAScreen();
-            atualizarSelects();
+            try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores', error); }
             atualizarMetricas();
+            setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
         }
 
         function switchTab(tabId, element) {
