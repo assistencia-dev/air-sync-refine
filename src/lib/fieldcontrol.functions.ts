@@ -328,8 +328,8 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_sites").select("*"),
       supabaseAdmin.from("dbs_control_equipment").select("*"),
       supabaseAdmin.from("dbs_control_service_catalog").select("*").order("name"),
-      supabaseAdmin.from("dbs_control_work_orders").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }),
-      supabaseAdmin.from("dbs_control_work_order_equipment").select("*"),
+      supabaseAdmin.from("dbs_control_work_orders").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }).range(0, 4999),
+      supabaseAdmin.from("dbs_control_work_order_equipment").select("*").range(0, 9999),
     ]);
     for (const result of [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult]) {
       if (result.error) throw new Error(result.error.message);
