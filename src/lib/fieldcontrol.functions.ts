@@ -445,6 +445,77 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     return { tecnicos: technicians, clientes: clients, equipamentos: equipment, pecas: [], servicos: services, compras: [], ordens: orders, osHistorico: [] };
   });
 
+export const getFieldControlWorkOrderDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { workOrderId: string }) => ({ workOrderId: normalizeText(input?.workOrderId) }))
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlAdmin(context);
+    const companyId = user.company_id as string;
+    const integration = await getIntegration(companyId);
+    if (!integration?.api_key) throw new Error("Configure a chave de API do FieldControl antes de consultar o histórico.");
+
+    const ref = await supabaseAdmin.from("dbs_control_external_refs")
+      .select("external_id,local_id")
+      .eq("company_id", companyId)
+      .eq("provider", "fieldcontrol")
+      .eq("entity_type", "work_order")
+      .eq("local_id", data.workOrderId)
+      .maybeSingle();
+    if (ref.error) throw new Error(ref.error.message);
+    if (!ref.data?.external_id) throw new Error("Esta OS não possui vínculo com uma OS do FieldControl.");
+
+    const externalId = String(ref.data.external_id);
+    const [tasksRes, commentsRes, materialsRes, formsRes, attachmentsRes] = await Promise.all([
+      fetchJson(`/orders/${encodeURIComponent(externalId)}/tasks`, integration.api_key),
+      fetchJson(`/orders/${encodeURIComponent(externalId)}/comments`, integration.api_key),
+      fetchJson(`/orders/${encodeURIComponent(externalId)}/materials`, integration.api_key),
+      fetchJson(`/orders/${encodeURIComponent(externalId)}/forms`, integration.api_key),
+      fetchJson(`/orders/${encodeURIComponent(externalId)}/attachments`, integration.api_key),
+    ]);
+
+    const unpack = (result: { res: Response; data: any }, label: string) => {
+      if (!result.res.ok) throw new Error(`FieldControl ${label}: HTTP ${result.res.status}`);
+      return Array.isArray(result.data?.items) ? result.data.items : Array.isArray(result.data) ? result.data : [];
+    };
+    const details = {
+      externalId,
+      tasks: unpack(tasksRes, "tasks"),
+      comments: unpack(commentsRes, "comments"),
+      materials: unpack(materialsRes, "materials"),
+      forms: unpack(formsRes, "forms"),
+      attachments: unpack(attachmentsRes, "attachments"),
+      loadedAt: new Date().toISOString(),
+    };
+
+    // Mantém uma trilha local leve. Não baixa arquivos nem duplica materiais:
+    // o histórico detalhado fica disponível sob demanda na OS.
+    const events = [
+      ...details.tasks.map((item: any) => ({ event_type: "fieldcontrol_task", details: item })),
+      ...details.comments.map((item: any) => ({ event_type: "fieldcontrol_comment", details: item })),
+      ...details.forms.map((item: any) => ({ event_type: "fieldcontrol_form", details: item })),
+      ...details.materials.map((item: any) => ({ event_type: "fieldcontrol_material", details: item })),
+      ...details.attachments.map((item: any) => ({ event_type: "fieldcontrol_attachment", details: item })),
+    ];
+    if (events.length) {
+      const payload = events.map((event: any) => ({
+        work_order_id: data.workOrderId,
+        actor_user_id: user.id,
+        event_type: event.event_type,
+        details: { source: "fieldcontrol", ...event.details },
+      }));
+      const { error: eventError } = await supabaseAdmin
+        .from("dbs_control_work_order_events")
+        .upsert(payload, { onConflict: "id" });
+      if (eventError) {
+        // A consulta continua funcionando mesmo em bases antigas sem suporte completo
+        // à trilha detalhada; não bloquear a visualização da OS por isso.
+        console.warn("DBS CONTROL: histórico FieldControl não persistido", eventError.message);
+      }
+    }
+
+    return { ok: true, details };
+  });
+
 export const syncFieldControl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { mode?: "preview" | "apply" }) => ({
