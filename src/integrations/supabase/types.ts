@@ -1036,6 +1036,66 @@ export type Database = {
           },
         ]
       }
+      rh_employee_advances: {
+        Row: {
+          advance_type: string
+          amount_cents: number
+          authorized: boolean
+          competence: string
+          created_at: string
+          created_by: string | null
+          description: string
+          employee_id: string
+          id: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          advance_type?: string
+          amount_cents: number
+          authorized?: boolean
+          competence: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          advance_type?: string
+          amount_cents?: number
+          authorized?: boolean
+          competence?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_employee_advances_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_employee_advances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_employee_contracts: {
         Row: {
           admission_date: string | null
