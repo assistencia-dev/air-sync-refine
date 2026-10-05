@@ -12,6 +12,7 @@ import {
   testFieldControlConnection,
   syncFieldControl,
   getFieldControlImportedState,
+  getFieldControlWorkOrderDetails,
 } from "@/lib/fieldcontrol.functions";
 
 // DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
@@ -41,6 +42,26 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+
+      if (msg.type === "DBS_CONTROL_FIELD_ORDER_DETAILS") {
+        try {
+          const result = await getFieldControlWorkOrderDetails({ data: { workOrderId: String(msg.workOrderId || "") } });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_FIELD_ORDER_DETAILS_RESULT",
+            ok: true,
+            workOrderId: String(msg.workOrderId || ""),
+            result,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_FIELD_ORDER_DETAILS_RESULT",
+            ok: false,
+            workOrderId: String(msg.workOrderId || ""),
+            error: err instanceof Error ? err.message : "Não foi possível carregar o histórico FieldControl.",
+          }, "*");
+        }
+        return;
+      }
 
       if (msg.type === "DBS_CONTROL_REFRESH_MASTER_DATA") {
         try {
