@@ -286,6 +286,9 @@ export const syncFieldControl = createServerFn({ method: "POST" })
     }).select("id").single();
     if (run.error) throw new Error(run.error.message);
     const runId = run.data.id;
+    const publishProgress = async (status: string, extra: Record<string, any> = {}) => {
+      await supabaseAdmin.from("dbs_control_sync_runs").update({ status, summary: { ...summary, ...extra } }).eq("id", runId);
+    };
 
     const errors: string[] = [];
     const summary: Record<string, any> = {
@@ -311,6 +314,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
       summary.customers.fetched = customers.length;
       summary.services.fetched = services.length;
       summary.employees.fetched = employees.length;
+      await publishProgress("running", { stage: "clientes_servicos_tecnicos", progress: 15 });
 
       const customerByExternal = new Map<string, any>();
       const localClientByExternal = new Map<string, string>();
@@ -522,6 +526,8 @@ export const syncFieldControl = createServerFn({ method: "POST" })
         }
       }
 
+      await publishProgress("running", { stage: "clientes_locais_equipamentos", progress: 55 });
+
       if (data.mode === "apply") {
         for (const s of services) {
           const externalId = pickId(s);
@@ -565,12 +571,15 @@ export const syncFieldControl = createServerFn({ method: "POST" })
         }
       }
 
+      await publishProgress("running", { stage: "servicos", progress: 65 });
+
       // GET /orders é usado apenas se a conta/API permitir a listagem.
       try {
         const ordersResult = await listAll("/orders", integration.api_key, 30);
         const orders = ordersResult.items;
         summary.orders.fetched = orders.length;
         if (data.mode === "apply") {
+          let processedOrders = 0;
           for (const order of orders) {
             const externalId = pickId(order);
             const externalCustomerId = externalOrderCustomerId(order);
@@ -637,6 +646,11 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               updated_at: new Date().toISOString(),
             }, { onConflict: "company_id,provider,entity_type,external_id" });
             summary.orders.upserted += 1;
+            processedOrders += 1;
+            if (processedOrders % 25 === 0) {
+              const progress = Math.min(98, 70 + Math.round((processedOrders / Math.max(orders.length, 1)) * 28));
+              await publishProgress("running", { stage: "ordens", progress });
+            }
           }
         }
       } catch (orderError) {
