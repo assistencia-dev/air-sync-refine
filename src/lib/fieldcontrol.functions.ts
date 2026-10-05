@@ -93,9 +93,14 @@ function pickName(item: any) {
   return normalizeText(item?.name ?? item?.legalName ?? item?.tradeName ?? item?.description);
 }
 
+let lastFieldControlRequestAt = 0;
+
 async function fetchJson(path: string, apiKey: string) {
+  const wait = Math.max(0, 1050 - (Date.now() - lastFieldControlRequestAt));
+  if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+  lastFieldControlRequestAt = Date.now();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
+    headers: { "X-Api-Key": apiKey, "Content-Type": "application/json", "User-Agent": "DBS-CONTROL/1.0" },
   });
   const raw = await res.text();
   let data: any = null;
@@ -124,7 +129,7 @@ async function listAll(path: string, apiKey: string, maxPages = 30) {
 function addressFromCustomer(customer: any) {
   const a = jsonObject(customer?.address ?? customer?.primaryLocation?.address ?? customer?.location?.address);
   return {
-    zipCode: normalizeText(a.zipCode ?? a.cep).replace(/\D/g, ""),
+    zipCode: normalizeText(a.zipCode ?? a.postalCode ?? a.cep).replace(/\D/g, ""),
     street: normalizeText(a.street ?? a.logradouro ?? a.address),
     number: normalizeText(a.number ?? a.numero),
     complement: normalizeText(a.complement ?? a.complemento),
@@ -138,10 +143,11 @@ function addressFromCustomer(customer: any) {
 function contactFromCustomer(customer: any) {
   const contacts = Array.isArray(customer?.contacts) ? customer.contacts : [];
   const first = jsonObject(contacts[0]);
+  const contact = jsonObject(customer?.contact);
   return {
     contact_name: normalizeText(customer?.contactName ?? first.name ?? customer?.responsibleName),
-    contact_phone: normalizeText(customer?.phone ?? customer?.phoneNumber ?? first.phone ?? first.mobile),
-    contact_email: normalizeText(customer?.email ?? customer?.emailAddress ?? first.email),
+    contact_phone: normalizeText(customer?.phone ?? customer?.phoneNumber ?? contact.phone ?? first.phone ?? first.mobile),
+    contact_email: normalizeText(customer?.email ?? customer?.emailAddress ?? contact.email ?? first.email),
   };
 }
 
@@ -303,14 +309,14 @@ export const syncFieldControl = createServerFn({ method: "POST" })
     };
 
     try {
-      const [customersResult, servicesResult, employeesResult] = await Promise.all([
-        listAll("/customers", integration.api_key),
-        listAll("/services", integration.api_key),
-        listAll("/employees", integration.api_key),
-      ]);
+      const customersResult = await listAll("/customers", integration.api_key);
+      const servicesResult = await listAll("/services", integration.api_key);
+      const employeesResult = await listAll("/employees", integration.api_key);
+      const equipmentResult = await listAll("/equipments", integration.api_key);
       const customers = customersResult.items;
       const services = servicesResult.items;
       const employees = employeesResult.items;
+      const allEquipment = equipmentResult.items;
       summary.customers.fetched = customers.length;
       summary.services.fetched = services.length;
       summary.employees.fetched = employees.length;
@@ -345,7 +351,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           const { error } = await supabaseAdmin.from("dbs_control_clients").update({
             legal_name: normalizeText(c.legalName ?? name),
             trade_name: normalizeText(c.tradeName ?? name) || null,
-            cnpj: normalizeText(c.cnpj ?? c.document ?? c.taxId) || null,
+            cnpj: normalizeText(c.cnpj ?? c.document ?? c.taxId ?? c.documentNumber) || null,
             phone: contact.contact_phone || null,
             email: contact.contact_email || null,
             notes: normalizeText(c.notes ?? c.observations) || null,
@@ -380,30 +386,33 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
       }
 
-      // O endpoint de lista de clientes não entrega necessariamente as localizações/equipamentos.
-      // O detalhe do cliente é a fonte correta para esses vínculos. Também aceitamos
-      // localizações/equipamentos aninhados dentro da resposta de detalhe.
+      // A API oficial expõe localizações e equipamentos como recursos próprios.
+      const equipmentByCustomer = new Map<string, any[]>();
+      for (const eq of allEquipment) {
+        const customerId = pickId(eq?.customer);
+        if (!customerId) continue;
+        const list = equipmentByCustomer.get(customerId) ?? [];
+        list.push(eq);
+        equipmentByCustomer.set(customerId, list);
+      }
+
       for (const c of customers) {
         const externalCustomerId = pickId(c);
         if (!externalCustomerId) continue;
 
-        let detailCustomer = c;
-        if (summary.details_attempted < 500) {
-          summary.details_attempted += 1;
-          try {
-            const { res, data: detail } = await fetchJson(`/customers/${encodeURIComponent(externalCustomerId)}`, integration.api_key);
-            if (res.ok) {
-              detailCustomer = detailPayload(detail) ?? c;
-            } else {
-              summary.details_failed += 1;
-            }
-          } catch {
-            summary.details_failed += 1;
-          }
+        let locations: any[] = [];
+        try {
+          const locationResult = await listAll(
+            `/customers/${encodeURIComponent(externalCustomerId)}/locations`,
+            integration.api_key
+          );
+          locations = locationResult.items;
+        } catch {
+          summary.details_failed += 1;
         }
+        summary.details_attempted += 1;
 
-        const locations = locationListFromCustomer(detailCustomer);
-        const details = equipmentListFromCustomer(detailCustomer);
+        const details = equipmentByCustomer.get(externalCustomerId) ?? [];
 
         if (locations.length) {
           summary.sites.fetched += locations.length;
@@ -493,14 +502,14 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
           const payload = {
             client_id: localClientId,
-            tag_code: normalizeText(eq.tag ?? eq.code ?? eq.identifier ?? eq.name) || null,
-            equipment_type: normalizeText(eq.type ?? eq.equipmentType ?? eq.category) || null,
+            tag_code: normalizeText(eq.qrCode ?? eq.name ?? eq.number) || null,
+            equipment_type: normalizeText(eq.type?.name ?? eq.type?.id ?? eq.type) || null,
             brand: normalizeText(eq.brand ?? eq.manufacturer) || null,
             model: normalizeText(eq.model ?? eq.modelName) || null,
-            serial_number: normalizeText(eq.serialNumber ?? eq.serial ?? eq.serie) || null,
+            serial_number: normalizeText(eq.number ?? eq.serialNumber ?? eq.serial ?? eq.serie) || null,
             capacity: normalizeText(eq.capacity ?? eq.capacityValue) || null,
-            environment: normalizeText(eq.environment ?? eq.locationName ?? eq.location) || null,
-            installation_date: normalizeText(eq.installationDate ?? eq.installedAt) || null,
+            environment: normalizeText(eq.location?.id ?? eq.locationName ?? eq.location) || null,
+            installation_date: normalizeText(eq.installationDate ?? eq.installedAt ?? eq.createdAt) || null,
             technical_notes: normalizeText(eq.notes ?? eq.observations) || null,
             updated_at: new Date().toISOString(),
           };
