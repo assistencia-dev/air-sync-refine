@@ -1362,13 +1362,13 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
-            const o = ERP_STATE.ordens.find(x => x.id === osId);
+            const o = ERP_STATE.ordens.find(x => String(x.id) === String(osId));
             if (!o) return null;
 
-            const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
-            const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
-            const tec = ERP_STATE.tecnicos.find(t => t.id === o.tecnicoId) || {};
-            const srv = ERP_STATE.servicos.find(s => s.id === o.servicoId) || {};
+            const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
+            const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
+            const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId)) || {};
+            const srv = ERP_STATE.servicos.find(s => String(s.id) === String(o.servicoId)) || {};
 
             // CABEÇALHO CORPORATIVO
             doc.setFillColor(15, 23, 42);
@@ -1528,7 +1528,7 @@
             if (checkboxes.length === 0) { alert("Selecione ao menos uma OS para concluir!"); return; }
 
             const selecionadas = Array.from(checkboxes)
-                .map(chk => ERP_STATE.ordens.find(o => o.id === chk.value))
+                .map(chk => ERP_STATE.ordens.find(o => String(o.id) === String(chk.value)))
                 .filter(Boolean);
 
             const incompletas = selecionadas.filter(os =>
@@ -1728,9 +1728,9 @@
 
         function renderizarOrdens() {
             const rowsHtml = ERP_STATE.ordens.map(o => {
-                const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
-                const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
-                const tec = ERP_STATE.tecnicos.find(t => t.id === o.tecnicoId) || {};
+                const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
+                const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
+                const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId)) || {};
 
                 const isConcluido = o.status === "Concluída";
                 const badgeClass = isConcluido ? "badge-concluido" : "badge-andamento";
@@ -1780,7 +1780,7 @@
         function renderizarEquipamentos() {
             document.getElementById('equip-table-body').innerHTML = ERP_STATE.equipamentos.map(eq => {
                 const cli = ERP_STATE.clientes.find(c => c.id === eq.clienteId) || {};
-                const totalOS = ERP_STATE.ordens.filter(o => o.equipamentoId === eq.id).length;
+                const totalOS = ERP_STATE.ordens.filter(o => String(o.equipamentoId) === String(eq.id)).length;
                 return `
                     <tr>
                         <td><span class="badge badge-tag">${eq.tag}</span></td>
@@ -1826,7 +1826,7 @@
 
         function renderizarClientes() {
             document.getElementById('cli-table-body').innerHTML = ERP_STATE.clientes.map(c => {
-                const qtdEquip = ERP_STATE.equipamentos.filter(e => e.clienteId === c.id).length;
+                const qtdEquip = ERP_STATE.equipamentos.filter(e => String(e.clienteId) === String(c.id)).length;
                 return `
                     <tr>
                         <td><strong>${c.nome}</strong></td>
@@ -2236,7 +2236,7 @@
             if (!equipId) { alert("Selecione um equipamento válido!"); return; }
             if (!srvId) { alert("Selecione um serviço válido!"); return; }
 
-            const srv = ERP_STATE.servicos.find(s => s.id === srvId);
+            const srv = ERP_STATE.servicos.find(s => String(s.id) === String(srvId));
 
             const tecnicoSelecionado = ERP_STATE.tecnicos.find(t => String(t.id) === String(tecId));
             const novaOS = {
@@ -2274,7 +2274,7 @@
 
         function renderizarKanban() {
             document.getElementById('kanban-board-container').innerHTML = ERP_STATE.tecnicos.map(tec => {
-                const chamados = ERP_STATE.ordens.filter(o => o.tecnicoId === tec.id);
+                const chamados = ERP_STATE.ordens.filter(o => String(o.tecnicoId) === String(tec.id));
                 return `
                     <div class="kanban-col">
                         <div class="kanban-col-header">
@@ -2282,8 +2282,8 @@
                             <span>${chamados.length} OS</span>
                         </div>
                         ${chamados.map(o => {
-                            const cli = ERP_STATE.clientes.find(c => c.id === o.clienteId) || {};
-                            const eq = ERP_STATE.equipamentos.find(e => e.id === o.equipamentoId) || {};
+                            const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
+                            const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                             return `
                                 <div class="kanban-card">
                                     <span class="badge badge-corretiva">${o.tipo}</span>
@@ -2450,7 +2450,7 @@
         }
 
         function adicionarPecaMobile(osId) {
-            const os = ERP_STATE.ordens.find(o => o.id === osId);
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const select = document.getElementById(`pwa-peca-select-${osId}`);
             const pecaId = select ? parseInt(select.value) : NaN;
             const peca = ERP_STATE.pecas.find(p => p.id === pecaId);
@@ -2493,7 +2493,7 @@
         }
 
         async function concluirOSMobile(osId) {
-            const os = ERP_STATE.ordens.find(o => o.id === osId);
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
             const relatoInput = document.getElementById(`dbs-mob-relato-${osId}`);
             const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
