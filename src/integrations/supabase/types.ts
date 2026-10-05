@@ -238,6 +238,120 @@ export type Database = {
           },
         ]
       }
+      dbs_control_external_refs: {
+        Row: {
+          company_id: string
+          created_at: string
+          entity_type: string
+          external_id: string
+          id: string
+          local_id: string | null
+          metadata: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          entity_type: string
+          external_id: string
+          id?: string
+          local_id?: string | null
+          metadata?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          entity_type?: string
+          external_id?: string
+          id?: string
+          local_id?: string | null
+          metadata?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_external_refs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_integrations: {
+        Row: {
+          api_key: string
+          company_id: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          last_sync_at: string | null
+          last_sync_status: string | null
+          last_sync_summary: Json
+          last_test_at: string | null
+          provider: string
+          status: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          api_key: string
+          company_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          last_sync_summary?: Json
+          last_test_at?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          api_key?: string
+          company_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_status?: string | null
+          last_sync_summary?: Json
+          last_test_at?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_integrations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_integrations_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_integrations_updated_by_user_id_fkey"
+            columns: ["updated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dbs_control_parts: {
         Row: {
           cost_cents: number | null
@@ -412,6 +526,60 @@ export type Database = {
           {
             foreignKeyName: "dbs_control_snapshots_updated_by_fkey"
             columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_sync_runs: {
+        Row: {
+          company_id: string
+          created_by_user_id: string | null
+          errors: Json
+          finished_at: string | null
+          id: string
+          mode: string
+          provider: string
+          started_at: string
+          status: string
+          summary: Json
+        }
+        Insert: {
+          company_id: string
+          created_by_user_id?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          mode: string
+          provider?: string
+          started_at?: string
+          status: string
+          summary?: Json
+        }
+        Update: {
+          company_id?: string
+          created_by_user_id?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          provider?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sync_runs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sync_runs_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
