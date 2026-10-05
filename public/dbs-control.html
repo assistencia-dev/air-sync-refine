@@ -1386,7 +1386,7 @@
             renderizarTudo();
             if (window.parent !== window) {
                 window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
-                window.parent.postMessage({ type: 'DBS_CONTROL_REFRESH_MASTER_DATA' }, '*');
+                // A base principal não é atualizada automaticamente na abertura. O snapshot cloud é a fonte de verdade; sincronização FieldControl é explícita.
             }
         };
 
@@ -1854,16 +1854,36 @@
         }
 
         function atualizarEquipamentosDoClienteOS() {
-            const cliId = String(document.getElementById('os-select-cliente').value || '');
+            const clientSelect = document.getElementById('os-select-cliente');
+            const cliId = String(clientSelect?.value || '');
             const equipSelect = document.getElementById('os-select-equipamento');
-            const equipamentosDoCliente = ERP_STATE.equipamentos.filter(e => String(e.clienteId) === cliId);
+            if (!equipSelect) return;
 
-            if (equipamentosDoCliente.length === 0) {
-                equipSelect.innerHTML = `<option value="">Nenhum equipamento cadastrado</option>`;
+            const previous = String(equipSelect.value || '');
+            const equipamentosDoCliente = (Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [])
+                .filter(e => String(e.clienteId) === cliId);
+
+            if (!cliId) {
+                equipSelect.innerHTML = '<option value="">Selecione o cliente primeiro...</option>';
+                equipSelect.value = '';
+                return;
+            }
+
+            if (!equipamentosDoCliente.length) {
+                equipSelect.innerHTML = '<option value="">Nenhum equipamento cadastrado</option>';
+                equipSelect.value = '';
+                return;
+            }
+
+            equipSelect.innerHTML = equipamentosDoCliente.map(e => `
+                <option value="${escDbsControl(e.id)}">${escDbsControl(e.tag || 'Equipamento')} - ${escDbsControl(e.tipo || '')} (${escDbsControl(e.ambiente || e.localizacao || '')})</option>
+            `).join('');
+
+            // Não destrua uma escolha válida durante uma simples reidratação da tela.
+            if (previous && equipamentosDoCliente.some(e => String(e.id) === previous)) {
+                equipSelect.value = previous;
             } else {
-                equipSelect.innerHTML = equipamentosDoCliente.map(e => `
-                    <option value="${e.id}">${e.tag} - ${e.tipo} (${e.ambiente})</option>
-                `).join('');
+                equipSelect.value = '';
             }
         }
 
@@ -2290,9 +2310,9 @@
             const tecId = String(document.getElementById('os-select-tecnico').value || '');
             const srvId = String(document.getElementById('os-select-servico').value || '');
 
-            if (!cliId) { alert("Selecione um cliente válido!"); return; }
-            if (!equipId) { alert("Selecione um equipamento válido!"); return; }
-            if (!srvId) { alert("Selecione um serviço válido!"); return; }
+            if (!cliId) { alert("Selecione um cliente válido para continuar."); document.getElementById('os-select-cliente')?.focus(); return; }
+            if (!equipId) { alert("Selecione pelo menos um equipamento válido para esta OS."); document.getElementById('os-select-equipamento')?.focus(); return; }
+            if (!srvId) { alert("Selecione o serviço que será executado."); document.getElementById('os-select-servico')?.focus(); return; }
 
             const srv = ERP_STATE.servicos.find(s => String(s.id) === String(srvId));
 
