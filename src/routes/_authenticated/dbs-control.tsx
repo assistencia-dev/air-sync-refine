@@ -6,6 +6,12 @@ import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers,
 import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
+import {
+  getFieldControlIntegrationStatus,
+  saveFieldControlApiKey,
+  testFieldControlConnection,
+  syncFieldControl,
+} from "@/lib/fieldcontrol.functions";
 
 // DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
 
@@ -141,6 +147,37 @@ function DbsControlPage() {
             { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: false, error: err instanceof Error ? err.message : "Falha ao criar acesso." },
             "*",
           );
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_FIELDCONTROL") {
+        try {
+          const action = String(msg.action || "");
+          if (action === "status") {
+            const result = await getFieldControlIntegrationStatus();
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
+          } else if (action === "save_key") {
+            const apiKey = String(msg.apiKey || "").trim();
+            await saveFieldControlApiKey({ data: { apiKey } });
+            const result = await testFieldControlConnection();
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result: { saved: true, test: result } }, "*");
+          } else if (action === "test") {
+            const result = await testFieldControlConnection();
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
+          } else if (action === "sync_preview" || action === "sync_apply") {
+            const result = await syncFieldControl({ data: { mode: action === "sync_apply" ? "apply" : "preview" } });
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
+          } else {
+            throw new Error("Ação FieldControl desconhecida.");
+          }
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_FIELDCONTROL_RESULT",
+            action: String(msg.action || ""),
+            ok: false,
+            error: err instanceof Error ? err.message : "Falha na integração FieldControl.",
+          }, "*");
         }
         return;
       }
