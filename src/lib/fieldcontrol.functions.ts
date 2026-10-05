@@ -275,11 +275,10 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             email: contact.contact_email || null,
             notes: normalizeText(c.notes ?? c.observations) || null,
             updated_at: new Date().toISOString(),
-          }).eq("id", localId).eq("company_id", companyId);
+          }).eq("id", localId);
           if (error) throw new Error(error.message);
         } else {
           const { data: inserted, error } = await supabaseAdmin.from("dbs_control_clients").insert({
-            company_id: companyId,
             legal_name: normalizeText(c.legalName ?? name),
             trade_name: normalizeText(c.tradeName ?? name) || null,
             cnpj: normalizeText(c.cnpj ?? c.document ?? c.taxId) || null,
