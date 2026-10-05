@@ -81,6 +81,20 @@ function normalizeKey(value: unknown) {
     .toLowerCase();
 }
 
+function normalizeDate(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+function normalizeDateTime(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
 function jsonObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 }
@@ -455,6 +469,46 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
       const customerByExternal = new Map<string, any>();
       const localClientByExternal = new Map<string, string>();
+      const localEmployeeByExternal = new Map<string, string>();
+
+      if (data.mode === "apply") {
+        for (const employee of employees) {
+          const externalId = pickId(employee);
+          const name = pickName(employee);
+          if (!externalId || !name) continue;
+          const existingEmployee = await supabaseAdmin.from("rh_employees")
+            .select("id").eq("source_system", "fieldcontrol").eq("source_key", externalId).maybeSingle();
+          if (existingEmployee.error) throw new Error(existingEmployee.error.message);
+          const payload = {
+            benefit_type: "fieldcontrol",
+            full_name: name,
+            unit: "DBS AIR",
+            fare_cents: 0,
+            trips_per_day: 1,
+            is_active: true,
+            registration_data: {
+              source: "FieldControl",
+              fieldControlId: externalId,
+              email: normalizeText(employee.email ?? employee.emailAddress),
+              phone: normalizeText(employee.phone ?? employee.mobile),
+              position: normalizeText(employee.position ?? employee.role ?? "Técnico FieldControl"),
+            },
+            source_system: "fieldcontrol",
+            source_key: externalId,
+            updated_at: new Date().toISOString(),
+          };
+          let localEmployeeId = existingEmployee.data?.id as string | undefined;
+          if (localEmployeeId) {
+            const { error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", localEmployeeId);
+            if (error) throw new Error(error.message);
+          } else {
+            const { data: inserted, error } = await supabaseAdmin.from("rh_employees").insert(payload).select("id").single();
+            if (error) throw new Error(error.message);
+            localEmployeeId = inserted.id;
+          }
+          localEmployeeByExternal.set(externalId, localEmployeeId);
+        }
+      }
 
       for (const c of customers) {
         const externalId = pickId(c);
@@ -644,7 +698,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             serial_number: normalizeText(eq.number ?? eq.serialNumber ?? eq.serial ?? eq.serie) || null,
             capacity: normalizeText(eq.capacity ?? eq.capacityValue) || null,
             environment: normalizeText(eq.location?.id ?? eq.locationName ?? eq.location) || null,
-            installation_date: normalizeText(eq.installationDate ?? eq.installedAt ?? eq.createdAt) || null,
+            installation_date: normalizeDate(eq.installationDate ?? eq.installedAt ?? eq.createdAt),
             technical_notes: normalizeText(eq.notes ?? eq.observations) || null,
             updated_at: new Date().toISOString(),
           };
@@ -787,6 +841,11 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             const serviceExternalId = pickId(order?.service) || pickId(order?.serviceId);
             const serviceId = serviceExternalId ? (serviceLocalByExternal.get(serviceExternalId) ?? null) : null;
             const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
+            const firstTask = Array.isArray(order?.tasks) ? (order.tasks[0] ?? {}) : {};
+            const taskEmployeeId = pickId(firstTask?.employee) || pickId(firstTask?.employeeId) || pickId(order?.employee) || pickId(order?.employeeId);
+            const assignedEmployeeId = taskEmployeeId ? (localEmployeeByExternal.get(taskEmployeeId) ?? null) : null;
+            const orderLocationId = pickId(order?.location) || pickId(order?.site) || pickId(order?.address);
+            const localSiteId = orderLocationId ? (localSiteByExternal.get(orderLocationId) ?? null) : null;
             let protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120) || `OS-${externalId}`;
 
             // O protocolo é único no DBS CONTROL. Só considera colisão quando
@@ -808,12 +867,14 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               id: localId,
               protocol,
               client_id: localClientId,
+              site_id: localSiteId,
+              assigned_employee_id: assignedEmployeeId,
               service_id: serviceId,
               type: normalizeText(order.type ?? order.service?.name ?? "corretiva").toLowerCase(),
               priority: normalizeText(order.priority ?? "normal").toLowerCase(),
               status,
-              scheduled_at: order.scheduledAt ? new Date(order.scheduledAt).toISOString() : null,
-              completed_at: order.completedAt ? new Date(order.completedAt).toISOString() : null,
+              scheduled_at: normalizeDateTime(order.scheduledAt ?? order.scheduling?.dateTime ?? (order.scheduling?.date && order.scheduling?.time ? `${order.scheduling.date}T${order.scheduling.time}` : null)),
+              completed_at: normalizeDateTime(order.completedAt ?? order.completed_at),
               description: normalizeText(order.description ?? order.request ?? "") || null,
               technical_opinion: normalizeText(order.technicalOpinion ?? order.report ?? "") || null,
               observation: normalizeText(order.observation ?? order.notes ?? "") || null,
