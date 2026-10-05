@@ -11,6 +11,7 @@ import {
   saveFieldControlApiKey,
   testFieldControlConnection,
   syncFieldControl,
+  getFieldControlImportedState,
 } from "@/lib/fieldcontrol.functions";
 
 // DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
@@ -167,6 +168,38 @@ function DbsControlPage() {
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
           } else if (action === "sync_preview" || action === "sync_apply") {
             const result = await syncFieldControl({ data: { mode: action === "sync_apply" ? "apply" : "preview" } });
+            if (action === "sync_apply" && result?.ok && result?.status !== "error") {
+              const importedState = await getFieldControlImportedState();
+              const currentCloud = await getDbsControlCloudState();
+              const currentState = currentCloud?.state && typeof currentCloud.state === "object" && !Array.isArray(currentCloud.state)
+                ? currentCloud.state as Record<string, unknown>
+                : null;
+              // A FieldControl import becomes visible in the DBS CONTROL immediately,
+              // but existing manually created records are preserved. Imported records
+              // are identified by their database UUIDs and therefore update idempotently.
+              const mergeById = (current: unknown, incoming: unknown) => {
+                const currentItems = Array.isArray(current) ? current as any[] : [];
+                const incomingItems = Array.isArray(incoming) ? incoming as any[] : [];
+                const incomingIds = new Set(incomingItems.map((item) => String(item?.id ?? "")));
+                const preserved = currentItems.filter((item) => !incomingIds.has(String(item?.id ?? "")));
+                return [...preserved, ...incomingItems];
+              };
+              const base = currentState ?? {};
+              const mergedState = {
+                ...base,
+                tecnicos: mergeById(base.tecnicos, importedState.tecnicos),
+                clientes: mergeById(base.clientes, importedState.clientes),
+                equipamentos: mergeById(base.equipamentos, importedState.equipamentos),
+                pecas: Array.isArray(base.pecas) ? base.pecas : [],
+                servicos: mergeById(base.servicos, importedState.servicos),
+                compras: Array.isArray(base.compras) ? base.compras : [],
+                ordens: mergeById(base.ordens, importedState.ordens),
+                osHistorico: Array.isArray(base.osHistorico) ? base.osHistorico : [],
+              };
+              const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+              iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
+              result.summary = { ...result.summary, visible_in_dbs_control: true };
+            }
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
           } else {
             throw new Error("Ação FieldControl desconhecida.");
