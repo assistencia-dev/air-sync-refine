@@ -699,7 +699,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           // portanto não podemos fazer 3 consultas ao Supabase para cada uma das 1.434 OS.
           // Pré-carregamos as referências e gravamos em lotes para a sincronização terminar
           // em segundos/minutos, sem perder os vínculos.
-          const [orderRefsResult, serviceRefsResult] = await Promise.all([
+          const [orderRefsResult, serviceRefsResult, existingOrdersResult] = await Promise.all([
             supabaseAdmin.from("dbs_control_external_refs")
               .select("external_id,local_id")
               .eq("company_id", companyId)
@@ -710,9 +710,18 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               .eq("company_id", companyId)
               .eq("provider", "fieldcontrol")
               .eq("entity_type", "service"),
+            supabaseAdmin.from("dbs_control_work_orders")
+              .select("id,protocol"),
           ]);
           if (orderRefsResult.error) throw new Error(orderRefsResult.error.message);
           if (serviceRefsResult.error) throw new Error(serviceRefsResult.error.message);
+          if (existingOrdersResult.error) throw new Error(existingOrdersResult.error.message);
+
+          const existingProtocols = new Set<string>(
+            (existingOrdersResult.data ?? [])
+              .map((row: any) => normalizeText(row.protocol))
+              .filter(Boolean)
+          );
 
           const orderLocalByExternal = new Map<string,string>(
             (orderRefsResult.data ?? []).map((row: any) => [String(row.external_id), String(row.local_id)])
@@ -733,10 +742,22 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
             const serviceExternalId = pickId(order?.service);
             const serviceId = serviceExternalId ? (serviceLocalByExternal.get(serviceExternalId) ?? null) : null;
-            const protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120);
+            let protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120) || `OS-${externalId}`;
+            const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
+
+            if (existingProtocols.has(protocol)) {
+              const suffix = `-FC-${externalId.slice(-12)}`;
+              protocol = `${protocol.slice(0, Math.max(1, 120 - suffix.length))}${suffix}`;
+              let n = 2;
+              while (existingProtocols.has(protocol)) {
+                const extra = `-${n++}`;
+                protocol = `${protocol.slice(0, Math.max(1, 120 - suffix.length - extra.length))}${suffix}${extra}`;
+              }
+            }
+            existingProtocols.add(protocol);
+
             const status = normalizeText(order.status ?? order.state ?? "aberta").toLowerCase();
 
-            const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
             workOrders.push({
               id: localId,
               protocol,
