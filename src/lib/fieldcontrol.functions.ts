@@ -695,7 +695,36 @@ export const syncFieldControl = createServerFn({ method: "POST" })
         const orders = ordersResult.items;
         summary.orders.fetched = orders.length;
         if (data.mode === "apply") {
-          let processedOrders = 0;
+          // Aplicação em lote: a API do FieldControl é limitada a ~1 req/s,
+          // portanto não podemos fazer 3 consultas ao Supabase para cada uma das 1.434 OS.
+          // Pré-carregamos as referências e gravamos em lotes para a sincronização terminar
+          // em segundos/minutos, sem perder os vínculos.
+          const [orderRefsResult, serviceRefsResult] = await Promise.all([
+            supabaseAdmin.from("dbs_control_external_refs")
+              .select("external_id,local_id")
+              .eq("company_id", companyId)
+              .eq("provider", "fieldcontrol")
+              .eq("entity_type", "work_order"),
+            supabaseAdmin.from("dbs_control_external_refs")
+              .select("external_id,local_id")
+              .eq("company_id", companyId)
+              .eq("provider", "fieldcontrol")
+              .eq("entity_type", "service"),
+          ]);
+          if (orderRefsResult.error) throw new Error(orderRefsResult.error.message);
+          if (serviceRefsResult.error) throw new Error(serviceRefsResult.error.message);
+
+          const orderLocalByExternal = new Map<string,string>(
+            (orderRefsResult.data ?? []).map((row: any) => [String(row.external_id), String(row.local_id)])
+          );
+          const serviceLocalByExternal = new Map<string,string>(
+            (serviceRefsResult.data ?? []).map((row: any) => [String(row.external_id), String(row.local_id)])
+          );
+
+          const workOrders: any[] = [];
+          const workOrderRefs: any[] = [];
+          const equipmentLinks: Array<{work_order_id:string; equipment_id:string}> = [];
+
           for (const order of orders) {
             const externalId = pickId(order);
             const externalCustomerId = externalOrderCustomerId(order);
@@ -703,22 +732,13 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             if (!externalId || !localClientId) continue;
 
             const serviceExternalId = pickId(order?.service);
-            let serviceId: string | null = null;
-            if (serviceExternalId) {
-              const ref = await supabaseAdmin
-                .from("dbs_control_external_refs")
-                .select("local_id")
-                .eq("company_id", companyId)
-                .eq("provider", "fieldcontrol")
-                .eq("entity_type", "service")
-                .eq("external_id", serviceExternalId)
-                .maybeSingle();
-              serviceId = ref.data?.local_id ?? null;
-            }
-
+            const serviceId = serviceExternalId ? (serviceLocalByExternal.get(serviceExternalId) ?? null) : null;
             const protocol = normalizeText(order.identifier ?? order.code ?? externalId).slice(0, 120);
             const status = normalizeText(order.status ?? order.state ?? "aberta").toLowerCase();
-            const payload = {
+
+            const localId = orderLocalByExternal.get(externalId) || crypto.randomUUID();
+            workOrders.push({
+              id: localId,
               protocol,
               client_id: localClientId,
               service_id: serviceId,
@@ -731,28 +751,8 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               technical_opinion: normalizeText(order.technicalOpinion ?? order.report ?? "") || null,
               observation: normalizeText(order.observation ?? order.notes ?? "") || null,
               updated_at: new Date().toISOString(),
-            };
-
-            const ref = await supabaseAdmin
-              .from("dbs_control_external_refs")
-              .select("local_id")
-              .eq("company_id", companyId)
-              .eq("provider", "fieldcontrol")
-              .eq("entity_type", "work_order")
-              .eq("external_id", externalId)
-              .maybeSingle();
-            if (ref.error) throw new Error(ref.error.message);
-
-            let localId = ref.data?.local_id as string | null | undefined;
-            if (localId) {
-              const { error } = await supabaseAdmin.from("dbs_control_work_orders").update(payload).eq("id", localId);
-              if (error) throw new Error(error.message);
-            } else {
-              const { data: inserted, error } = await supabaseAdmin.from("dbs_control_work_orders").insert(payload).select("id").single();
-              if (error) throw new Error(error.message);
-              localId = inserted.id;
-            }
-            await supabaseAdmin.from("dbs_control_external_refs").upsert({
+            });
+            workOrderRefs.push({
               company_id: companyId,
               provider: "fieldcontrol",
               entity_type: "work_order",
@@ -760,7 +760,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               local_id: localId,
               metadata: {},
               updated_at: new Date().toISOString(),
-            }, { onConflict: "company_id,provider,entity_type,external_id" });
+            });
 
             const orderEquipments = Array.isArray(order?.equipments)
               ? order.equipments
@@ -770,30 +770,40 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             for (const orderEquipment of orderEquipments) {
               const externalEquipmentId = pickId(orderEquipment);
               if (!externalEquipmentId) continue;
-              const equipmentRef = await supabaseAdmin
-                .from("dbs_control_external_refs")
-                .select("local_id")
-                .eq("company_id", companyId)
-                .eq("provider", "fieldcontrol")
-                .eq("entity_type", "equipment")
-                .eq("external_id", externalEquipmentId)
-                .maybeSingle();
-              if (equipmentRef.error) throw new Error(equipmentRef.error.message);
-              if (equipmentRef.data?.local_id) {
-                const { error: linkError } = await supabaseAdmin
-                  .from("dbs_control_work_order_equipment")
-                  .upsert({ work_order_id: localId, equipment_id: equipmentRef.data.local_id }, { onConflict: "work_order_id,equipment_id" });
-                if (linkError) throw new Error(linkError.message);
-              }
-            }
-
-            summary.orders.upserted += 1;
-            processedOrders += 1;
-            if (processedOrders % 25 === 0) {
-              const progress = Math.min(98, 70 + Math.round((processedOrders / Math.max(orders.length, 1)) * 28));
-              await publishProgress("running", { stage: "ordens", progress });
+              // O mapa de equipamentos já foi importado antes desta etapa.
+              const equipmentLocal = equipmentLocalByExternal.get(externalEquipmentId);
+              if (equipmentLocal) equipmentLinks.push({ work_order_id: localId, equipment_id: equipmentLocal });
             }
           }
+
+          const batchSize = 200;
+          for (let i = 0; i < workOrders.length; i += batchSize) {
+            const batch = workOrders.slice(i, i + batchSize);
+            const { error } = await supabaseAdmin.from("dbs_control_work_orders").upsert(batch, { onConflict: "id" });
+            if (error) throw new Error(error.message);
+            const done = Math.min(i + batch.length, workOrders.length);
+            const progress = Math.min(98, 70 + Math.round((done / Math.max(workOrders.length, 1)) * 28));
+            await publishProgress("running", { stage: "ordens", progress, orders_processed: done, orders_total: workOrders.length });
+          }
+
+          for (let i = 0; i < workOrderRefs.length; i += batchSize) {
+            const batch = workOrderRefs.slice(i, i + batchSize);
+            const { error } = await supabaseAdmin.from("dbs_control_external_refs")
+              .upsert(batch, { onConflict: "company_id,provider,entity_type,external_id" });
+            if (error) throw new Error(error.message);
+          }
+
+          if (equipmentLinks.length) {
+            for (let i = 0; i < equipmentLinks.length; i += batchSize) {
+              const batch = equipmentLinks.slice(i, i + batchSize);
+              const { error } = await supabaseAdmin.from("dbs_control_work_order_equipment")
+                .upsert(batch, { onConflict: "work_order_id,equipment_id" });
+              if (error) throw new Error(error.message);
+            }
+          }
+
+          summary.orders.upserted = workOrders.length;
+        }
         }
       } catch (orderError) {
         errors.push(orderError instanceof Error ? orderError.message : "Não foi possível listar as OS do FieldControl.");
