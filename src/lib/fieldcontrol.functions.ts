@@ -343,10 +343,11 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     if (localEmployees.error) throw new Error(localEmployees.error.message);
     for (const employee of localEmployees.data ?? []) localEmployeeByExternal.set(String(employee.source_key), employee);
 
-    const technicians = employeesResult.items.map((employee: any) => {
+    const technicianMap = new Map<string, any>();
+    for (const employee of employeesResult.items) {
       const externalId = pickId(employee);
       const local = localEmployeeByExternal.get(externalId);
-      return {
+      const tech = {
         id: local?.id || externalId,
         employeeId: local?.id || null,
         nome: pickName(employee) || local?.full_name || "Técnico FieldControl",
@@ -355,7 +356,11 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
         posicao: normalizeText(employee.position ?? employee.role ?? "Técnico FieldControl"),
         fieldControlId: externalId,
       };
-    }).filter((tech: any) => tech.id);
+      if (!tech.id) continue;
+      const key = String(tech.employeeId || tech.fieldControlId || tech.nome).trim().toLowerCase();
+      if (!technicianMap.has(key)) technicianMap.set(key, tech);
+    }
+    const technicians = Array.from(technicianMap.values());
 
     const clients = (clientsResult.data ?? []).map((client: any) => ({
       id: client.id,
