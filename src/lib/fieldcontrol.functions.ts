@@ -272,6 +272,109 @@ export const testFieldControlConnection = createServerFn({ method: "POST" })
     };
   });
 
+export const getFieldControlImportedState = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsControlAdmin(context);
+    const companyId = user.company_id as string;
+    const integration = await getIntegration(companyId);
+    if (!integration?.api_key) throw new Error("Configure a chave de API do FieldControl antes de carregar a base.");
+
+    const [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult] = await Promise.all([
+      supabaseAdmin.from("dbs_control_clients").select("*").order("legal_name"),
+      supabaseAdmin.from("dbs_control_sites").select("*"),
+      supabaseAdmin.from("dbs_control_equipment").select("*"),
+      supabaseAdmin.from("dbs_control_service_catalog").select("*").order("name"),
+      supabaseAdmin.from("dbs_control_work_orders").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }),
+      supabaseAdmin.from("dbs_control_work_order_equipment").select("*"),
+    ]);
+    for (const result of [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult]) {
+      if (result.error) throw new Error(result.error.message);
+    }
+
+    const employeesResult = await listAll("/employees", integration.api_key);
+    const technicians = employeesResult.items.map((employee: any) => ({
+      id: pickId(employee),
+      employeeId: null,
+      nome: pickName(employee) || "Técnico FieldControl",
+      email: normalizeText(employee.email ?? employee.emailAddress) || "",
+      fone: normalizeText(employee.phone ?? employee.mobile) || "",
+      posicao: normalizeText(employee.position ?? employee.role ?? "Técnico FieldControl"),
+      fieldControlId: pickId(employee),
+    })).filter((tech: any) => tech.id);
+
+    const clients = (clientsResult.data ?? []).map((client: any) => ({
+      id: client.id,
+      nome: client.trade_name || client.legal_name,
+      razaoSocial: client.legal_name,
+      cnpj: client.cnpj || "",
+      email: client.email || "",
+      telefone: client.phone || "",
+      observacoes: client.notes || "",
+      origem: "FieldControl",
+    }));
+    const sites = sitesResult.data ?? [];
+    const siteById = new Map(sites.map((site: any) => [String(site.id), site]));
+    const clientById = new Map(clients.map((client: any) => [String(client.id), client]));
+    for (const site of sites) {
+      const client = clientById.get(String(site.client_id));
+      if (!client) continue;
+      if (!client.endereco) client.endereco = {};
+      client.endereco = site.address_json ?? client.endereco;
+      if (!client.contato) client.contato = site.contact_name || "";
+    }
+
+    const equipment = (equipmentResult.data ?? []).map((eq: any) => ({
+      id: eq.id,
+      clienteId: eq.client_id,
+      siteId: eq.site_id,
+      tag: eq.tag_code || "",
+      tipo: eq.equipment_type || "",
+      marca: eq.brand || "",
+      modelo: eq.model || "",
+      serie: eq.serial_number || "",
+      capacidade: eq.capacity || "",
+      localizacao: eq.environment || (eq.site_id ? siteById.get(String(eq.site_id))?.name : "") || "",
+      dataInstalacao: eq.installation_date || "",
+      observacoes: eq.technical_notes || "",
+      status: eq.status || "ativo",
+      origem: "FieldControl",
+    }));
+    const equipmentIdsByOrder = new Map<string, string[]>();
+    for (const link of linksResult.data ?? []) {
+      const list = equipmentIdsByOrder.get(String(link.work_order_id)) ?? [];
+      list.push(String(link.equipment_id));
+      equipmentIdsByOrder.set(String(link.work_order_id), list);
+    }
+    const services = (servicesResult.data ?? []).map((service: any) => ({
+      id: service.id,
+      nome: service.name,
+      descricao: service.description || "",
+      valor: Number(service.table_value_cents || 0) / 100,
+      duracao: service.estimated_hours || 0,
+      origem: "FieldControl",
+    }));
+    const orders = (ordersResult.data ?? []).map((order: any) => ({
+      id: order.id,
+      clienteId: order.client_id,
+      servicoId: order.service_id,
+      protocolo: order.protocol || "",
+      tipo: order.type || "corretiva",
+      prioridade: order.priority || "normal",
+      status: order.status || "aberta",
+      data: order.scheduled_at || "",
+      concluidoEm: order.completed_at || "",
+      diagnostico: order.technical_opinion || "",
+      descricao: order.description || "",
+      observacao: order.observation || "",
+      equipamentoId: equipmentIdsByOrder.get(String(order.id))?.[0] || null,
+      equipamentoIds: equipmentIdsByOrder.get(String(order.id)) || [],
+      origem: "FieldControl",
+    }));
+
+    return { tecnicos: technicians, clientes: clients, equipamentos: equipment, pecas: [], servicos: services, compras: [], ordens: orders, osHistorico: [] };
+  });
+
 export const syncFieldControl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { mode?: "preview" | "apply" }) => ({
@@ -388,6 +491,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
       // A API oficial expõe localizações e equipamentos como recursos próprios.
       const equipmentByCustomer = new Map<string, any[]>();
+      const localSiteByExternal = new Map<string, string>();
       for (const eq of allEquipment) {
         const customerId = pickId(eq?.customer);
         if (!customerId) continue;
@@ -465,6 +569,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
                   siteId = site.id;
                 }
 
+                localSiteByExternal.set(locationId, siteId as string);
                 await supabaseAdmin.from("dbs_control_external_refs").upsert({
                   company_id: companyId,
                   provider: "fieldcontrol",
@@ -500,8 +605,10 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             .maybeSingle();
           if (eqRef.error) throw new Error(eqRef.error.message);
 
+          const equipmentLocationExternalId = pickId(eq?.location) || normalizeText(eq?.locationId);
           const payload = {
             client_id: localClientId,
+            site_id: equipmentLocationExternalId ? (localSiteByExternal.get(equipmentLocationExternalId) ?? null) : null,
             tag_code: normalizeText(eq.qrCode ?? eq.name ?? eq.number) || null,
             equipment_type: normalizeText(eq.type?.name ?? eq.type?.id ?? eq.type) || null,
             brand: normalizeText(eq.brand ?? eq.manufacturer) || null,
@@ -654,6 +761,32 @@ export const syncFieldControl = createServerFn({ method: "POST" })
               metadata: {},
               updated_at: new Date().toISOString(),
             }, { onConflict: "company_id,provider,entity_type,external_id" });
+
+            const orderEquipments = Array.isArray(order?.equipments)
+              ? order.equipments
+              : Array.isArray(order?.equipment)
+                ? order.equipment
+                : order?.equipment ? [order.equipment] : [];
+            for (const orderEquipment of orderEquipments) {
+              const externalEquipmentId = pickId(orderEquipment);
+              if (!externalEquipmentId) continue;
+              const equipmentRef = await supabaseAdmin
+                .from("dbs_control_external_refs")
+                .select("local_id")
+                .eq("company_id", companyId)
+                .eq("provider", "fieldcontrol")
+                .eq("entity_type", "equipment")
+                .eq("external_id", externalEquipmentId)
+                .maybeSingle();
+              if (equipmentRef.error) throw new Error(equipmentRef.error.message);
+              if (equipmentRef.data?.local_id) {
+                const { error: linkError } = await supabaseAdmin
+                  .from("dbs_control_work_order_equipment")
+                  .upsert({ work_order_id: localId, equipment_id: equipmentRef.data.local_id }, { onConflict: "work_order_id,equipment_id" });
+                if (linkError) throw new Error(linkError.message);
+              }
+            }
+
             summary.orders.upserted += 1;
             processedOrders += 1;
             if (processedOrders % 25 === 0) {
