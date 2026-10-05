@@ -79,7 +79,7 @@ function DbsControlPage() {
           };
           const mergedState = {
             ...currentState,
-            tecnicos: mergeById(currentState.tecnicos, importedState.tecnicos),
+            tecnicos: Array.from(new Map(mergeById(currentState.tecnicos, importedState.tecnicos).map((t:any) => [String(t.employeeId || t.fieldControlId || t.id || t.nome || ''), t])).values()),
             clientes: mergeById(currentState.clientes, importedState.clientes),
             equipamentos: mergeById(currentState.equipamentos, importedState.equipamentos),
             servicos: mergeById(currentState.servicos, importedState.servicos),
