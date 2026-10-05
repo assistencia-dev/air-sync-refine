@@ -600,6 +600,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
       // A API oficial expõe localizações e equipamentos como recursos próprios.
       const equipmentByCustomer = new Map<string, any[]>();
+      const equipmentLocalByExternal = new Map<string, string>();
       const localSiteByExternal = new Map<string, string>();
       for (const eq of allEquipment) {
         const customerId = pickId(eq?.customer);
@@ -747,6 +748,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             metadata: { client_external_id: externalCustomerId },
             updated_at: new Date().toISOString(),
           }, { onConflict: "company_id,provider,entity_type,external_id" });
+          equipmentLocalByExternal.set(externalId, localId as string);
           summary.equipment.upserted += 1;
         }
       }
