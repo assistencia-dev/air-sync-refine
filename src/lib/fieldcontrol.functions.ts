@@ -335,24 +335,37 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     }
 
     const employeesResult = await listAll("/employees", integration.api_key);
-    const technicians = employeesResult.items.map((employee: any) => ({
-      id: pickId(employee),
-      employeeId: null,
-      nome: pickName(employee) || "Técnico FieldControl",
-      email: normalizeText(employee.email ?? employee.emailAddress) || "",
-      fone: normalizeText(employee.phone ?? employee.mobile) || "",
-      posicao: normalizeText(employee.position ?? employee.role ?? "Técnico FieldControl"),
-      fieldControlId: pickId(employee),
-    })).filter((tech: any) => tech.id);
+    const localEmployeeByExternal = new Map<string, any>();
+    const localEmployees = await supabaseAdmin.from("rh_employees")
+      .select("id,source_key,full_name,registration_data")
+      .eq("source_system", "fieldcontrol");
+    if (localEmployees.error) throw new Error(localEmployees.error.message);
+    for (const employee of localEmployees.data ?? []) localEmployeeByExternal.set(String(employee.source_key), employee);
+
+    const technicians = employeesResult.items.map((employee: any) => {
+      const externalId = pickId(employee);
+      const local = localEmployeeByExternal.get(externalId);
+      return {
+        id: local?.id || externalId,
+        employeeId: local?.id || null,
+        nome: pickName(employee) || local?.full_name || "Técnico FieldControl",
+        email: normalizeText(employee.email ?? employee.emailAddress) || "",
+        fone: normalizeText(employee.phone ?? employee.mobile) || "",
+        posicao: normalizeText(employee.position ?? employee.role ?? "Técnico FieldControl"),
+        fieldControlId: externalId,
+      };
+    }).filter((tech: any) => tech.id);
 
     const clients = (clientsResult.data ?? []).map((client: any) => ({
       id: client.id,
       nome: client.trade_name || client.legal_name,
+      nomeFantasia: client.trade_name || "",
       razaoSocial: client.legal_name,
       cnpj: client.cnpj || "",
       email: client.email || "",
       telefone: client.phone || "",
       observacoes: client.notes || "",
+      endereco: "",
       origem: "FieldControl",
     }));
     const sites = sitesResult.data ?? [];
@@ -361,9 +374,20 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     for (const site of sites) {
       const client = clientById.get(String(site.client_id));
       if (!client) continue;
-      if (!client.endereco) client.endereco = {};
-      client.endereco = site.address_json ?? client.endereco;
+      const address = site.address_json ?? {};
+      const addressText = [
+        address.street,
+        address.number,
+        address.complement,
+        address.neighborhood,
+        address.city,
+        address.state,
+        address.zipCode ? `CEP ${address.zipCode}` : ""
+      ].filter(Boolean).join(", ");
+      if (!client.endereco || typeof client.endereco !== "string") client.endereco = addressText;
       if (!client.contato) client.contato = site.contact_name || "";
+      if (!client.telefone) client.telefone = site.contact_phone || "";
+      if (!client.email) client.email = site.contact_email || "";
     }
 
     const equipment = (equipmentResult.data ?? []).map((eq: any) => ({
@@ -399,6 +423,9 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     const orders = (ordersResult.data ?? []).map((order: any) => ({
       id: order.id,
       clienteId: order.client_id,
+      siteId: order.site_id || null,
+      tecnicoId: order.assigned_employee_id || null,
+      employeeId: order.assigned_employee_id || null,
       servicoId: order.service_id,
       protocolo: order.protocol || "",
       tipo: order.type || "corretiva",
