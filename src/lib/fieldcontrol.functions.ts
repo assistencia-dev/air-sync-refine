@@ -804,7 +804,6 @@ export const syncFieldControl = createServerFn({ method: "POST" })
 
           summary.orders.upserted = workOrders.length;
         }
-        }
       } catch (orderError) {
         errors.push(orderError instanceof Error ? orderError.message : "Não foi possível listar as OS do FieldControl.");
       }
