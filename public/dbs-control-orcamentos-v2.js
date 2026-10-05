@@ -57,17 +57,17 @@
 
   function refreshQuoteEquipment() {
     ensureState();
-    var id = Number(document.getElementById("orc-cliente").value);
+    var id = String(document.getElementById("orc-cliente").value || "");
     var select = document.getElementById("orc-equipamento");
     if (!select) return;
-    var list = ERP_STATE.equipamentos.filter(function (e) { return e.clienteId === id; });
+    var list = ERP_STATE.equipamentos.filter(function (e) { return String(e.clienteId) === id; });
     select.innerHTML = '<option value="">Serviço geral / sem equipamento</option>' + list.map(function (e) {
       return '<option value="' + e.id + '">' + e.tag + ' - ' + e.tipo + ' (' + e.ambiente + ')</option>';
     }).join("");
   }
 
   function refreshQuoteTotal() {
-    var service = ERP_STATE.servicos.find(function (s) { return s.id === Number(document.getElementById("orc-servico").value); });
+    var service = ERP_STATE.servicos.find(function (s) { return String(s.id) === String(document.getElementById("orc-servico").value || ""); });
     var qty = Math.max(1, Number(document.getElementById("orc-qtd").value || 1));
     var discount = Math.max(0, Number(document.getElementById("orc-desconto").value || 0));
     var subtotal = service ? Number(service.valor || 0) * qty : 0;
@@ -88,8 +88,8 @@
 
   function saveQuote(ev) {
     ev.preventDefault(); ensureState();
-    var clientId = Number(document.getElementById("orc-cliente").value);
-    var serviceId = Number(document.getElementById("orc-servico").value);
+    var clientId = String(document.getElementById("orc-cliente").value || "");
+    var serviceId = String(document.getElementById("orc-servico").value || "");
     var service = ERP_STATE.servicos.find(function (s) { return s.id === serviceId; });
     if (!clientId || !service) { alert("Cadastre cliente e serviço antes de criar o orçamento."); return; }
     var qty = Math.max(1, Number(document.getElementById("orc-qtd").value || 1));
@@ -118,7 +118,7 @@
     var filter = document.getElementById("orc-filtro").value;
     var rows = ERP_STATE.orcamentos.filter(function (o) { return filter === "TODOS" || o.status === filter; }).map(function (o) {
       var c = ERP_STATE.clientes.find(function (x) { return x.id === o.clienteId; }) || {};
-      var s = ERP_STATE.servicos.find(function (x) { return x.id === (o.servicoId || o.serviceId); }) || {};
+      var s = ERP_STATE.servicos.find(function (x) { return String(x.id) === String(o.servicoId || o.serviceId); }) || {};
       var action = '<button class="btn btn-secondary btn-sm" onclick="window.quoteStatus(\'' + o.id + '\',\'Aprovado\')">Aprovar</button>';
       if (o.status === "Aprovado") action = '<button class="btn btn-success btn-sm" onclick="window.quoteToOs(\'' + o.id + '\')">Gerar OS</button>';
       if (o.status === "Convertido em OS") action = '<span class="badge badge-concluido">' + (o.osId || "OS") + "</span>";
@@ -153,7 +153,7 @@
   function migrateTechnicianLinks() {
     ensureState(); var changed = false;
     ERP_STATE.ordens.forEach(function (o) {
-      var tech = ERP_STATE.tecnicos.find(function (t) { return (o.tecnicoEmployeeId && t.employeeId === o.tecnicoEmployeeId) || (o.tecnicoEmail && String(t.email || t.loginEmail || "").toLowerCase() === String(o.tecnicoEmail).toLowerCase()) || t.id === o.tecnicoId; });
+      var tech = ERP_STATE.tecnicos.find(function (t) { return (o.tecnicoEmployeeId && String(t.employeeId || "") === String(o.tecnicoEmployeeId || "")) || (o.tecnicoEmail && String(t.email || t.loginEmail || "").toLowerCase() === String(o.tecnicoEmail).toLowerCase()) || String(t.id) === String(o.tecnicoId); });
       if (tech) {
         if (!o.tecnicoEmployeeId && tech.employeeId) { o.tecnicoEmployeeId = tech.employeeId; changed = true; }
         if (!o.tecnicoEmail && (tech.email || tech.loginEmail)) { o.tecnicoEmail = tech.email || tech.loginEmail; changed = true; }
