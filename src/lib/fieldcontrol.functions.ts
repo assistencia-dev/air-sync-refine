@@ -584,7 +584,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           localId = inserted.id;
         }
 
-        await supabaseAdmin.from("dbs_control_external_refs").upsert({
+        const { error: refUpsertError } = await supabaseAdmin.from("dbs_control_external_refs").upsert({
           company_id: companyId,
           provider: "fieldcontrol",
           entity_type: "client",
@@ -593,6 +593,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
           metadata: { name },
           updated_at: new Date().toISOString(),
         }, { onConflict: "company_id,provider,entity_type,external_id" });
+        if (refUpsertError) throw new Error(refUpsertError.message);
         localClientByExternal.set(externalId, localId as string);
         summary.customers.upserted += 1;
 
@@ -681,7 +682,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
                 }
 
                 localSiteByExternal.set(locationId, siteId as string);
-                await supabaseAdmin.from("dbs_control_external_refs").upsert({
+                const { error: refUpsertError } = await supabaseAdmin.from("dbs_control_external_refs").upsert({
                   company_id: companyId,
                   provider: "fieldcontrol",
                   entity_type: "site",
@@ -690,6 +691,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
                   metadata: { client_external_id: externalCustomerId, name: siteName },
                   updated_at: new Date().toISOString(),
                 }, { onConflict: "company_id,provider,entity_type,external_id" });
+                if (refUpsertError) throw new Error(refUpsertError.message);
                 summary.sites.upserted += 1;
               }
             }
@@ -740,7 +742,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             if (error) throw new Error(error.message);
             localId = inserted.id;
           }
-          await supabaseAdmin.from("dbs_control_external_refs").upsert({
+          const { error: refUpsertError } = await supabaseAdmin.from("dbs_control_external_refs").upsert({
             company_id: companyId,
             provider: "fieldcontrol",
             entity_type: "equipment",
@@ -749,6 +751,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             metadata: { client_external_id: externalCustomerId },
             updated_at: new Date().toISOString(),
           }, { onConflict: "company_id,provider,entity_type,external_id" });
+          if (refUpsertError) throw new Error(refUpsertError.message);
           equipmentLocalByExternal.set(externalId, localId as string);
           summary.equipment.upserted += 1;
         }
@@ -786,7 +789,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             if (error) throw new Error(error.message);
             localId = inserted.id;
           }
-          await supabaseAdmin.from("dbs_control_external_refs").upsert({
+          const { error: refUpsertError } = await supabaseAdmin.from("dbs_control_external_refs").upsert({
             company_id: companyId,
             provider: "fieldcontrol",
             entity_type: "service",
@@ -795,6 +798,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             metadata: {},
             updated_at: new Date().toISOString(),
           }, { onConflict: "company_id,provider,entity_type,external_id" });
+          if (refUpsertError) throw new Error(refUpsertError.message);
           summary.services.upserted += 1;
         }
       }
