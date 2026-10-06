@@ -1973,6 +1973,12 @@
                 capacidade: document.getElementById('eq-capacidade').value,
                 ambiente: document.getElementById('eq-ambiente').value
             };
+            if (!novo.clienteId) { alert('Vincule o equipamento a um cliente antes de salvar.'); return; }
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
+            if (novo.tag && ERP_STATE.equipamentos.some(eq => String(eq.clienteId) === novo.clienteId && norm(eq.tag) === norm(novo.tag))) {
+                alert('Já existe um equipamento com esta TAG para este cliente.');
+                return;
+            }
             ERP_STATE.equipamentos.push(novo);
             saveState();
             document.getElementById('form-equipamento').reset();
@@ -2033,12 +2039,19 @@
 
         function salvarCliente(e) {
             e.preventDefault();
+            const nome = document.getElementById('cli-nome').value.trim();
+            const cnpj = document.getElementById('cli-cnpj').value.trim();
+            const endereco = document.getElementById('cli-endereco').value.trim();
+            const contato = document.getElementById('cli-contato').value.trim();
+            const norm = value => String(value || '').replace(/\\D/g,'');
+            if (!nome || !cnpj || !endereco || !contato) return;
+            if (norm(cnpj) && ERP_STATE.clientes.some(c => norm(c.cnpj) === norm(cnpj))) {
+                alert('Já existe um cliente cadastrado com este CNPJ/CPF. Revise o cadastro antes de criar outro.');
+                return;
+            }
             const novo = {
                 id: crypto.randomUUID(),
-                nome: document.getElementById('cli-nome').value,
-                cnpj: document.getElementById('cli-cnpj').value,
-                endereco: document.getElementById('cli-endereco').value,
-                contato: document.getElementById('cli-contato').value
+                nome, cnpj, endereco, contato
             };
             ERP_STATE.clientes.push(novo);
             saveState();
@@ -2786,11 +2799,40 @@
         }
 
         // AUXILIARES
-        function salvarPeca(e) { e.preventDefault(); ERP_STATE.pecas.push({ id: ERP_STATE.pecas.length + 1, sku: document.getElementById('peca-sku').value, nome: document.getElementById('peca-nome').value, qtd: parseInt(document.getElementById('peca-qtd').value), custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) }); saveState(); document.getElementById('form-peca').reset(); renderizarTudo(); }
+        function salvarPeca(e) {
+            e.preventDefault();
+            const sku = document.getElementById('peca-sku').value.trim();
+            const nome = document.getElementById('peca-nome').value.trim();
+            if (!sku || !nome) return;
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
+            if (ERP_STATE.pecas.some(p => norm(p.sku) === norm(sku))) {
+                alert('Já existe uma peça com este SKU.');
+                return;
+            }
+            ERP_STATE.pecas.push({ id: crypto.randomUUID(), sku, nome, qtd: parseInt(document.getElementById('peca-qtd').value), custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) });
+            saveState(); document.getElementById('form-peca').reset(); renderizarTudo();
+        }
         function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${Number(p.custo||0).toFixed(2)}</td><td>R$ ${Number(p.venda||0).toFixed(2)}</td></tr>`).join(''); }
-        function salvarServico(e) { e.preventDefault(); ERP_STATE.servicos.push({ id: ERP_STATE.servicos.length + 1, nome: document.getElementById('serv-nome').value, horas: parseFloat(document.getElementById('serv-horas').value), valor: parseFloat(document.getElementById('serv-valor').value) }); saveState(); document.getElementById('form-servico').reset(); renderizarTudo(); }
+        function salvarServico(e) {
+            e.preventDefault();
+            const nome = document.getElementById('serv-nome').value.trim();
+            const horas = parseFloat(document.getElementById('serv-horas').value);
+            const valor = parseFloat(document.getElementById('serv-valor').value);
+            if (!nome) return;
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
+            if (ERP_STATE.servicos.some(s => norm(s.nome) === norm(nome))) {
+                alert('Já existe um serviço com este nome no catálogo.');
+                return;
+            }
+            ERP_STATE.servicos.push({ id: crypto.randomUUID(), nome, horas, valor });
+            saveState(); document.getElementById('form-servico').reset(); renderizarTudo();
+        }
         function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${Number(s.valor||0).toFixed(2)}</td></tr>`).join(''); }
-        function salvarCompra(e) { e.preventDefault(); ERP_STATE.compras.push({ id: ERP_STATE.compras.length + 1, fornecedor: document.getElementById('comp-fornecedor').value, item: document.getElementById('comp-item').value, qtd: parseInt(document.getElementById('comp-qtd').value), valor: parseFloat(document.getElementById('comp-valor').value), status: "Enviado" }); saveState(); document.getElementById('form-compra').reset(); renderizarTudo(); }
+        function salvarCompra(e) {
+            e.preventDefault();
+            ERP_STATE.compras.push({ id: crypto.randomUUID(), fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim(), qtd: parseInt(document.getElementById('comp-qtd').value), valor: parseFloat(document.getElementById('comp-valor').value), status: "Enviado" });
+            saveState(); document.getElementById('form-compra').reset(); renderizarTudo();
+        }
         function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${Number(c.valor||0).toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
 
         function atualizarSelects() {
@@ -2853,7 +2895,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261006-1"></script>
+    <script src="/dbs-control-ux.js?v=20261006-2"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
