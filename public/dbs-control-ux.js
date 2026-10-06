@@ -144,6 +144,8 @@
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();setTimeout(boot,500);setTimeout(boot,1500);
   function installFieldControlSyncPanel(){
     if(window.__dbsFieldControlPanel)return;
+    // O painel oficial fica no HTML principal; não duplicar a área da API.
+    if(document.getElementById("dbs-fieldcontrol-static")){ window.__dbsFieldControlPanel=true; return; }
     const tab=document.getElementById("tab-importacao");
     if(!tab)return;
     const card=document.createElement("div");
