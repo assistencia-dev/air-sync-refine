@@ -792,6 +792,358 @@
             *, *::before, *::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; }
         }
 
+
+        /* DBS CONTROL · NOVA OS PREMIUM
+           Refinamento visual + rolagem dedicada. Sem alterar IDs, eventos, regras ou dados. */
+        #tab-nova-os {
+            overflow-y:auto !important;
+            overflow-x:hidden !important;
+            scroll-behavior:smooth;
+            scrollbar-gutter:stable;
+            padding:24px 28px 36px;
+        }
+        #tab-nova-os::-webkit-scrollbar { width:9px; }
+        #tab-nova-os::-webkit-scrollbar-thumb {
+            background:linear-gradient(180deg,#5aa9ff,#1769d1);
+            border-radius:999px;
+            border:2px solid transparent;
+            background-clip:padding-box;
+        }
+        .nova-os-shell {
+            width:min(1180px,100%);
+            margin:0 auto;
+        }
+        .nova-os-hero {
+            position:relative;
+            overflow:hidden;
+            border:1px solid rgba(126,180,245,.22);
+            border-radius:26px;
+            padding:26px 28px;
+            color:#fff;
+            background:
+                radial-gradient(circle at 88% 12%,rgba(73,169,255,.28),transparent 30%),
+                radial-gradient(circle at 65% 100%,rgba(30,118,220,.22),transparent 36%),
+                linear-gradient(135deg,#071d3a 0%,#0b3970 54%,#125aa8 100%);
+            box-shadow:0 20px 55px rgba(11,64,125,.20);
+        }
+        .nova-os-hero::after {
+            content:"";
+            position:absolute;
+            width:230px;
+            height:230px;
+            right:-90px;
+            bottom:-130px;
+            border-radius:50%;
+            border:1px solid rgba(255,255,255,.12);
+            box-shadow:0 0 0 28px rgba(255,255,255,.025),0 0 0 56px rgba(255,255,255,.018);
+            pointer-events:none;
+        }
+        .nova-os-eyebrow {
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            padding:5px 9px;
+            border:1px solid rgba(255,255,255,.14);
+            border-radius:999px;
+            background:rgba(255,255,255,.08);
+            color:#a9d7ff;
+            font-size:9px;
+            font-weight:900;
+            letter-spacing:.16em;
+            text-transform:uppercase;
+        }
+        .nova-os-eyebrow-dot {
+            width:6px;
+            height:6px;
+            border-radius:50%;
+            background:#67c3ff;
+            box-shadow:0 0 0 4px rgba(103,195,255,.12),0 0 14px rgba(103,195,255,.8);
+        }
+        .nova-os-hero h2 {
+            margin:11px 0 5px;
+            font-size:clamp(22px,3vw,30px);
+            line-height:1.1;
+            letter-spacing:-.035em;
+            font-weight:900;
+        }
+        .nova-os-hero p {
+            max-width:760px;
+            margin:0;
+            color:#d4e5f7;
+            font-size:12px;
+            line-height:1.65;
+        }
+        .nova-os-flow {
+            position:relative;
+            z-index:1;
+            display:flex;
+            flex-wrap:wrap;
+            gap:7px;
+            margin-top:18px;
+        }
+        .nova-os-flow span {
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:7px 10px;
+            border-radius:10px;
+            background:rgba(255,255,255,.075);
+            border:1px solid rgba(255,255,255,.10);
+            color:#dcecff;
+            font-size:10px;
+            font-weight:800;
+        }
+        .nova-os-flow b {
+            display:grid;
+            place-items:center;
+            width:18px;
+            height:18px;
+            border-radius:50%;
+            background:#2b82df;
+            color:#fff;
+            font-size:9px;
+        }
+        .nova-os-layout {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 280px;
+            gap:16px;
+            align-items:start;
+            margin-top:16px;
+        }
+        .nova-os-form-card,
+        .nova-os-side-card {
+            background:#fff;
+            border:1px solid #dce7f3;
+            border-radius:20px;
+            box-shadow:0 8px 26px rgba(16,36,63,.055);
+        }
+        .nova-os-form-card { padding:20px; }
+        .nova-os-form-head {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:14px;
+            padding-bottom:15px;
+            border-bottom:1px solid #edf2f7;
+        }
+        .nova-os-form-head h3 {
+            margin:0;
+            font-size:15px;
+            color:#102a47;
+            font-weight:900;
+        }
+        .nova-os-form-head p {
+            margin:4px 0 0;
+            color:#71829a;
+            font-size:10px;
+            line-height:1.5;
+        }
+        .nova-os-secure-badge {
+            flex:0 0 auto;
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:6px 9px;
+            border-radius:999px;
+            background:#eff8ff;
+            border:1px solid #d7ecff;
+            color:#1267b5;
+            font-size:9px;
+            font-weight:900;
+        }
+        .nova-os-section {
+            margin-top:17px;
+            padding:16px;
+            border:1px solid #e4edf6;
+            border-radius:16px;
+            background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);
+        }
+        .nova-os-section-head {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin-bottom:13px;
+        }
+        .nova-os-section-number {
+            display:grid;
+            place-items:center;
+            width:28px;
+            height:28px;
+            border-radius:9px;
+            color:#fff;
+            background:linear-gradient(135deg,#2c86e4,#125bb1);
+            box-shadow:0 5px 13px rgba(23,105,209,.20);
+            font-size:10px;
+            font-weight:900;
+        }
+        .nova-os-section-head strong {
+            display:block;
+            color:#183b61;
+            font-size:11px;
+            font-weight:900;
+        }
+        .nova-os-section-head span {
+            display:block;
+            margin-top:2px;
+            color:#8291a5;
+            font-size:9px;
+        }
+        .nova-os-form-card .form-grid {
+            gap:14px;
+        }
+        .nova-os-form-card .form-group {
+            gap:6px;
+        }
+        .nova-os-form-card .form-group label {
+            color:#435a72;
+            font-size:9px;
+            letter-spacing:.055em;
+        }
+        .nova-os-form-card .form-group input,
+        .nova-os-form-card .form-group select,
+        .nova-os-form-card .form-group textarea {
+            min-height:42px;
+            border-color:#cfdeeb;
+            border-radius:11px;
+            background:#fff;
+            box-shadow:0 1px 2px rgba(15,23,42,.025);
+        }
+        .nova-os-form-card .form-group textarea {
+            min-height:118px;
+            padding-top:11px;
+            line-height:1.55;
+            resize:vertical;
+        }
+        .nova-os-form-card .form-group input:hover,
+        .nova-os-form-card .form-group select:hover,
+        .nova-os-form-card .form-group textarea:hover {
+            border-color:#aac7e3;
+        }
+        .nova-os-form-card .form-group input:focus,
+        .nova-os-form-card .form-group select:focus,
+        .nova-os-form-card .form-group textarea:focus {
+            border-color:#4d9be5;
+            box-shadow:0 0 0 4px rgba(23,105,209,.09),0 4px 14px rgba(23,105,209,.05);
+        }
+        .nova-os-actionbar {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-top:16px;
+            padding-top:15px;
+            border-top:1px solid #e8eef5;
+        }
+        .nova-os-action-note {
+            color:#8291a5;
+            font-size:9px;
+            line-height:1.5;
+        }
+        .nova-os-submit {
+            min-height:44px;
+            padding:10px 17px;
+            border-radius:11px;
+            background:linear-gradient(135deg,#2382e2,#1359b4);
+            box-shadow:0 8px 20px rgba(23,105,209,.22);
+            font-size:11px;
+            font-weight:900;
+        }
+        .nova-os-submit:hover {
+            background:linear-gradient(135deg,#2b8dec,#0f50a5);
+            box-shadow:0 11px 24px rgba(23,105,209,.28);
+        }
+        .nova-os-side-card {
+            position:sticky;
+            top:4px;
+            padding:18px;
+        }
+        .nova-os-side-kicker {
+            color:#1671c9;
+            font-size:9px;
+            font-weight:900;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+        }
+        .nova-os-side-card h3 {
+            margin:5px 0 4px;
+            color:#132f4e;
+            font-size:15px;
+            font-weight:900;
+        }
+        .nova-os-side-card > p {
+            color:#71829a;
+            font-size:10px;
+            line-height:1.55;
+        }
+        .nova-os-side-list {
+            display:grid;
+            gap:8px;
+            margin-top:15px;
+        }
+        .nova-os-side-item {
+            display:flex;
+            gap:9px;
+            align-items:flex-start;
+            padding:10px;
+            border:1px solid #e4edf6;
+            border-radius:12px;
+            background:#f8fbff;
+        }
+        .nova-os-side-item b {
+            display:grid;
+            place-items:center;
+            flex:0 0 auto;
+            width:24px;
+            height:24px;
+            border-radius:8px;
+            background:#e2f2ff;
+            color:#1267b5;
+            font-size:9px;
+        }
+        .nova-os-side-item strong {
+            display:block;
+            color:#294663;
+            font-size:10px;
+            font-weight:900;
+        }
+        .nova-os-side-item span {
+            display:block;
+            margin-top:2px;
+            color:#7b8ba0;
+            font-size:9px;
+            line-height:1.45;
+        }
+        .nova-os-side-status {
+            margin-top:12px;
+            padding:11px 12px;
+            border:1px solid #dcefe8;
+            border-radius:12px;
+            background:#f2fbf7;
+            color:#157257;
+            font-size:9px;
+            font-weight:800;
+            line-height:1.5;
+        }
+        @media(max-width:980px){
+            #tab-nova-os{padding:18px 18px 30px}
+            .nova-os-layout{grid-template-columns:1fr}
+            .nova-os-side-card{position:static}
+        }
+        @media(max-width:640px){
+            #tab-nova-os{padding:12px 10px 28px}
+            .nova-os-hero{padding:20px;border-radius:20px}
+            .nova-os-form-card{padding:13px;border-radius:16px}
+            .nova-os-section{padding:13px;border-radius:14px}
+            .nova-os-form-head{flex-direction:column}
+            .nova-os-secure-badge{align-self:flex-start}
+            .nova-os-actionbar{align-items:stretch;flex-direction:column}
+            .nova-os-submit{width:100%;justify-content:center}
+            .nova-os-side-card{padding:15px}
+        }
+        @media(prefers-reduced-motion:reduce){
+            #tab-nova-os{scroll-behavior:auto}
+        }
+
 </style>
 </head>
 <body>
@@ -1030,45 +1382,104 @@
 
         <!-- ABERTURA DE OS -->
         <div id="tab-nova-os" class="tab-view">
-            <div class="data-card" style="padding: 20px;">
-                <h3 style="margin-bottom: 14px;">Abertura de Chamado / Ordem de Serviço</h3>
-                <form id="form-nova-os" onsubmit="salvarNovaOS(event)">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Cliente Corporativo</label>
-                            <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Equipamento do Cliente (TAG / Setor)</label>
-                            <select id="os-select-equipamento" required>
-                                <option value="">Selecione primeiro o cliente...</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Técnico Responsável</label>
-                            <select id="os-select-tecnico" required></select>
-                        </div>
-                        <div class="form-group">
-                            <label>Tipo de Serviço</label>
-                            <select id="os-select-tipo" required>
-                                <option>Manutenção Corretiva</option>
-                                <option>Manutenção Preventiva / PMOC</option>
-                                <option>Instalação / Start-Up</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Serviço Principal Tabela</label>
-                            <select id="os-select-servico" required></select>
-                        </div>
+            <div class="nova-os-shell">
+                <section class="nova-os-hero">
+                    <span class="nova-os-eyebrow"><i class="nova-os-eyebrow-dot"></i> Ordem de Serviço</span>
+                    <h2>Emitir nova OS</h2>
+                    <p>Registre o atendimento, vincule o equipamento correto e já deixe a equipe responsável pronta para o despacho. A emissão continua usando os mesmos cadastros e regras do DBS CONTROL.</p>
+                    <div class="nova-os-flow" aria-label="Fluxo de emissão">
+                        <span><b>1</b> Cadastro</span>
+                        <span><b>2</b> Equipamento</span>
+                        <span><b>3</b> Serviço</span>
+                        <span><b>4</b> Despacho</span>
                     </div>
-                    <div class="form-group" style="margin-top: 12px;">
-                        <label>Descrição do Problema / Instruções para o Técnico</label>
-                        <textarea id="os-desc" rows="3" required placeholder="Ex: Equipamento apresentando ruído na evaporadora e pouca refrigeração..."></textarea>
-                    </div>
-                    <div style="margin-top: 14px; text-align: right;">
-                        <button type="submit" class="btn btn-primary">Emitir e Despachar OS</button>
-                    </div>
-                </form>
+                </section>
+
+                <div class="nova-os-layout">
+                    <section class="nova-os-form-card">
+                        <div class="nova-os-form-head">
+                            <div>
+                                <h3>Dados da ordem de serviço</h3>
+                                <p>Preencha os campos abaixo. Os cadastros são os mesmos utilizados no restante do sistema.</p>
+                            </div>
+                            <span class="nova-os-secure-badge">● Fluxo operacional</span>
+                        </div>
+
+                        <form id="form-nova-os" onsubmit="salvarNovaOS(event)">
+                            <div class="nova-os-section">
+                                <div class="nova-os-section-head">
+                                    <span class="nova-os-section-number">01</span>
+                                    <div><strong>Cliente e equipamento</strong><span>Defina exatamente onde o atendimento será realizado.</span></div>
+                                </div>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Cliente Corporativo</label>
+                                        <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Equipamento do Cliente (TAG / Setor)</label>
+                                        <select id="os-select-equipamento" required>
+                                            <option value="">Selecione primeiro o cliente...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="nova-os-section">
+                                <div class="nova-os-section-head">
+                                    <span class="nova-os-section-number">02</span>
+                                    <div><strong>Responsável e serviço</strong><span>Escolha a equipe e o tipo de atendimento.</span></div>
+                                </div>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Técnico Responsável</label>
+                                        <select id="os-select-tecnico" required></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Tipo de Serviço</label>
+                                        <select id="os-select-tipo" required>
+                                            <option>Manutenção Corretiva</option>
+                                            <option>Manutenção Preventiva / PMOC</option>
+                                            <option>Instalação / Start-Up</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Serviço Principal Tabela</label>
+                                        <select id="os-select-servico" required></select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="nova-os-section">
+                                <div class="nova-os-section-head">
+                                    <span class="nova-os-section-number">03</span>
+                                    <div><strong>Descrição do atendimento</strong><span>Deixe a orientação clara para quem vai executar a OS.</span></div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Descrição do Problema / Instruções para o Técnico</label>
+                                    <textarea id="os-desc" rows="4" required placeholder="Ex: Equipamento apresentando ruído na evaporadora e pouca refrigeração..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="nova-os-actionbar">
+                                <span class="nova-os-action-note">Ao emitir, a OS segue para o fluxo operacional existente e permanece vinculada aos mesmos registros.</span>
+                                <button type="submit" class="btn btn-primary nova-os-submit">Emitir e Despachar OS</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <aside class="nova-os-side-card">
+                        <div class="nova-os-side-kicker">Experiência de emissão</div>
+                        <h3>Mais claro. Mais rápido.</h3>
+                        <p>A tela agora organiza a decisão na ordem em que a operação acontece, sem mudar o funcionamento da OS.</p>
+                        <div class="nova-os-side-list">
+                            <div class="nova-os-side-item"><b>01</b><div><strong>Vínculo correto</strong><span>Cliente → equipamento do próprio cliente.</span></div></div>
+                            <div class="nova-os-side-item"><b>02</b><div><strong>Responsável definido</strong><span>Técnico e serviço ficam registrados na mesma emissão.</span></div></div>
+                            <div class="nova-os-side-item"><b>03</b><div><strong>Orientação completa</strong><span>A descrição acompanha a OS para a execução.</span></div></div>
+                        </div>
+                        <div class="nova-os-side-status">✓ Estrutura preservada: IDs, eventos, validações e função de emissão continuam os mesmos.</div>
+                    </aside>
+                </div>
             </div>
         </div>
 
