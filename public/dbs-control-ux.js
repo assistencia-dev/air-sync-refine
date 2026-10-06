@@ -602,3 +602,183 @@
 
   })();
 })();
+
+/* DBS CONTROL — segunda camada de reforma UX 2026-10-06
+   Apenas apresentação/navegação. Nenhuma rotina de dados é removida.
+*/
+(function installDbsControlOperationalLayer(){
+  if(window.__dbsControlOperationalLayer)return;
+  window.__dbsControlOperationalLayer=true;
+
+  const style=document.createElement("style");
+  style.id="dbs-control-operational-layer-20261006";
+  style.textContent=String.raw\`
+    main>header .page-title h1{letter-spacing:-.03em!important}
+    .tab-view>.data-card{margin-bottom:14px!important}
+    .tab-view>.data-card>.data-header h3,.tab-view>.data-card>div>h3{font-size:12px!important;line-height:1.25!important}
+    .tab-view .data-header p{font-size:10px!important;color:#718096!important}
+    .tab-view .form-group label{font-size:9px!important;letter-spacing:.02em!important}
+    .tab-view .form-group input,.tab-view .form-group select,.tab-view .form-group textarea{border-radius:8px!important;border-color:#d5e0eb!important}
+
+    #tab-dashboard .metrics-grid{grid-template-columns:repeat(4,minmax(150px,1fr))!important;gap:8px!important;margin-bottom:14px!important}
+    #tab-dashboard .metric-card{min-height:76px!important;padding:11px 13px!important;border-radius:10px!important}
+    #tab-dashboard .metric-title{font-size:9px!important;text-transform:none!important;color:#73869b!important}
+    #tab-dashboard .metric-value{font-size:21px!important}
+    #tab-dashboard .quick-start-grid{gap:7px!important}
+    #tab-dashboard .quick-start-action{min-height:54px!important;flex-basis:160px!important;border-radius:9px!important}
+    #tab-dashboard .quick-flow{display:none!important}
+    #tab-dashboard .data-card:last-child{margin-top:2px!important}
+    #tab-dashboard .data-card:last-child .data-header{padding-bottom:9px!important}
+    #tab-dashboard .data-card:last-child .data-header h3{font-size:12px!important}
+    #tab-dashboard .data-card:last-child table th:nth-child(7),#tab-dashboard .data-card:last-child table td:nth-child(7),
+    #tab-dashboard .data-card:last-child table th:nth-child(9),#tab-dashboard .data-card:last-child table td:nth-child(9){display:none!important}
+
+    #tab-nova-os .os-premium-body{display:flex!important;flex-direction:column!important;gap:0!important}
+    #tab-nova-os .os-premium-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}
+    #tab-nova-os .os-premium-row-service{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    #tab-nova-os .os-premium-divider{height:1px!important;background:#edf2f7!important;border:0!important}
+    #tab-nova-os .os-premium-description{max-width:100%!important}
+    #tab-nova-os .os-premium-footer{position:sticky!important;bottom:0!important;background:rgba(255,255,255,.97)!important;backdrop-filter:blur(8px)!important;border-top:1px solid #e5edf5!important}
+    #tab-nova-os .os-premium-field:focus-within label,#tab-nova-os .os-premium-description:focus-within label{color:#1769d1!important}
+    #tab-nova-os #os-select-cliente{display:none!important}
+    #tab-nova-os .os-premium-client:after{content:"Selecione o cliente para liberar os equipamentos vinculados";display:block;font-size:9px;color:#8292a6;margin-top:4px}
+
+    #tab-ordens .data-card{border-radius:10px!important}
+    #tab-ordens .data-header{gap:9px!important}
+    #tab-ordens table{font-size:11px!important}
+    #tab-ordens th{white-space:nowrap!important}
+    #tab-ordens td{padding:8px 10px!important}
+    #tab-ordens .btn{min-height:29px!important}
+    #tab-ordens .badge{border-radius:999px!important;padding:4px 8px!important}
+    #tab-ordens .badge-pmoc{background:#eaf4ff!important;color:#1769d1!important}
+    #tab-ordens .badge-andamento{background:#fff7df!important;color:#9a6700!important}
+    #tab-ordens .badge-concluido{background:#e9f8ef!important;color:#167345!important}
+
+    #tab-atividades>.data-card{border-radius:10px!important}
+    #tab-atividades>.data-card:first-child,#tab-atividades>.data-card:nth-child(2){padding:14px!important}
+    #tab-atividades .day-toolbar{padding:10px 12px!important;margin-bottom:12px!important}
+    #tab-atividades .day-kpi-grid{grid-template-columns:repeat(4,minmax(130px,1fr))!important}
+    #tab-atividades .day-kpi{padding:10px 12px!important}
+    #tab-atividades .day-kpi strong{font-size:19px!important}
+    #tab-atividades .day-table{min-width:960px!important}
+    #tab-atividades .history-filter-grid{gap:8px!important}
+
+    #tab-clientes .data-card,#tab-equipamentos .data-card,#tab-tecnicos .data-card,#tab-servicos .data-card,#tab-pecas .data-card,#tab-compras .data-card{border-radius:10px!important}
+    #tab-clientes .data-card:first-child,#tab-equipamentos .data-card:first-child,#tab-tecnicos .data-card:first-child,#tab-servicos .data-card:first-child,#tab-pecas .data-card:first-child,#tab-compras .data-card:first-child{padding:14px!important}
+    #tab-clientes .data-card:first-child h3,#tab-equipamentos .data-card:first-child h3,#tab-tecnicos .data-card:first-child h3,#tab-servicos .data-card:first-child h3,#tab-pecas .data-card:first-child h3,#tab-compras .data-card:first-child h3{font-size:13px!important}
+
+    .table-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important}
+    @media(max-width:900px){
+      #tab-dashboard .metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+      #tab-nova-os .os-premium-row,#tab-nova-os .os-premium-row-service{grid-template-columns:1fr!important}
+      #tab-atividades .day-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    }
+    @media(max-width:640px){
+      #tab-dashboard .metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+      #tab-dashboard .metric-card{min-height:70px!important}
+      #tab-dashboard .metric-value{font-size:19px!important}
+      #tab-ordens .data-header{align-items:stretch!important}
+      #tab-ordens .data-header>div{width:100%!important}
+      #tab-ordens .data-header .filter-bar{flex-direction:column!important;align-items:stretch!important}
+      #tab-ordens .data-header .filter-bar input,#tab-ordens .data-header .filter-bar select{width:100%!important}
+      #tab-atividades .day-kpi-grid{grid-template-columns:1fr 1fr!important}
+    }
+  \`;
+  document.head.appendChild(style);
+
+  const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const state=()=>window.ERP_STATE||null;
+  const statusKey=s=>norm(s).replace(/\s+/g," ").trim();
+  const isDone=s=>/conclu|finaliz/.test(statusKey(s));
+  const isCancelled=s=>/cancel/.test(statusKey(s));
+  const isActive=s=>/atendimento|campo|despach|execu/.test(statusKey(s));
+  const isPending=s=>/pend|aguard|agend/.test(statusKey(s));
+
+  function todayISO(){
+    const d=new Date(),p=n=>String(n).padStart(2,"0");
+    return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+  }
+  function orderDateISO(o){
+    try{if(typeof window.dataOSParaISO==="function")return window.dataOSParaISO(o?.data);}catch(_){}
+    const raw=String(o?.data||"").trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+    const m=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return m?m[3]+"-"+m[2]+"-"+m[1]:"";
+  }
+  function clientName(o,st){return (st?.clientes||[]).find(c=>String(c.id)===String(o?.clienteId))?.nome||"Cliente não identificado";}
+  function techName(o,st){return (st?.tecnicos||[]).find(t=>String(t.id)===String(o?.tecnicoId))?.nome||"Não atribuído";}
+  function equipmentName(o,st){const e=(st?.equipamentos||[]).find(x=>String(x.id)===String(o?.equipamentoId));return e?.tag||e?.tipo||"—";}
+  function timeOf(o){return o?.horario||o?.hora||o?.horaInicio||"";}
+
+  function ensureDashboardOperational(){
+    const tab=document.getElementById("tab-dashboard");if(!tab)return;
+    let panel=document.getElementById("dbs-dashboard-operational");
+    if(!panel){panel=document.createElement("section");panel.id="dbs-dashboard-operational";panel.className="dbs-dashboard-operational";const quick=tab.querySelector(".quick-start-card");if(quick)quick.insertAdjacentElement("afterend",panel);else tab.insertBefore(panel,tab.firstElementChild);}
+    const st=state();if(!st)return;
+    const orders=Array.isArray(st.ordens)?st.ordens:[];
+    const today=todayISO();
+    const todayOrders=orders.filter(o=>orderDateISO(o)===today);
+    const attention=orders.filter(o=>{
+      if(isCancelled(o.status))return false;
+      if(isDone(o.status))return !String(o.assinatura||"").trim()||(!String(o.diagnostico||"").trim()&&!String(o.relatoTecnico||"").trim())||!String(o.trabalhoExecutado||"").trim();
+      return isPending(o.status)||isActive(o.status)||!o.status;
+    }).slice(0,6);
+    const todayRows=todayOrders.slice().sort((a,b)=>String(timeOf(a)).localeCompare(String(timeOf(b)))).slice(0,8);
+    const rowHtml=todayRows.length?todayRows.map(o=>{
+      const stt=String(o.status||"Pendente"),statusClass=isDone(stt)?"done":(isActive(stt)?"active":(isPending(stt)?"pending":"neutral"));
+      return \`<tr><td><strong>\${esc(o.id)}</strong></td><td>\${esc(clientName(o,st))}</td><td>\${esc(techName(o,st))}</td><td>\${esc(equipmentName(o,st))}</td><td>\${esc(timeOf(o)||"—")}</td><td><span class="dbs-op-status \${statusClass}">\${esc(stt)}</span></td><td style="text-align:right"><button class="btn btn-secondary btn-sm dbs-op-open" data-os="\${esc(o.id)}">Abrir OS</button></td></tr>\`;
+    }).join(""):\`<tr><td colspan="7" style="padding:24px;text-align:center;color:#718096">Nenhum atendimento registrado para hoje.</td></tr>\`;
+    const attentionHtml=attention.length?attention.map(o=>{
+      const reasons=[];
+      if(isDone(o.status)){if(!String(o.assinatura||"").trim())reasons.push("assinatura");if(!String(o.diagnostico||"").trim()&&!String(o.relatoTecnico||"").trim())reasons.push("diagnóstico");if(!String(o.trabalhoExecutado||"").trim())reasons.push("execução");}
+      else reasons.push(String(o.status||"pendente"));
+      return \`<button type="button" class="dbs-op-attention" data-os="\${esc(o.id)}"><span><strong>OS \${esc(o.id)}</strong><small>\${esc(clientName(o,st))}</small></span><span>\${esc(reasons.join(" · "))}</span></button>\`;
+    }).join(""):\`<div class="dbs-op-empty">Nenhuma pendência crítica identificada.</div>\`;
+    panel.innerHTML=\`
+      <div class="dbs-op-main"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">OPERAÇÃO DE HOJE</span><h2>Atendimentos de hoje</h2></div><button type="button" class="btn btn-secondary btn-sm" id="dbs-op-refresh">Atualizar</button></div><div class="dbs-op-table"><table><thead><tr><th>OS</th><th>Cliente</th><th>Técnico</th><th>Ativo</th><th>Horário</th><th>Status</th><th></th></tr></thead><tbody>\${rowHtml}</tbody></table></div></div>
+      <aside class="dbs-op-side"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">CONFERÊNCIA</span><h2>Atenção necessária</h2></div></div>\${attentionHtml}</aside>\`;
+    panel.querySelectorAll(".dbs-op-open,.dbs-op-attention").forEach(btn=>{btn.onclick=()=>{const id=btn.getAttribute("data-os");if(typeof window.openOsDetail==="function"){window.openOsDetail(id);return;}if(typeof window.abrirHistoricoOS==="function"){window.abrirHistoricoOS(id);return;}if(typeof window.switchTab==="function")window.switchTab("tab-ordens");};});
+    panel.querySelector("#dbs-op-refresh")?.addEventListener("click",ensureDashboardOperational);
+  }
+
+  function updateDashboardKpis(){
+    const st=state();if(!st)return;
+    const orders=Array.isArray(st.ordens)?st.ordens:[];
+    const open=orders.filter(o=>!isDone(o.status)&&!isCancelled(o.status)).length;
+    const active=orders.filter(o=>isActive(o.status)).length;
+    const done=orders.filter(o=>isDone(o.status)).length;
+    const pending=orders.filter(o=>isPending(o.status)||!o.status).length;
+    [["dash-client-count","OS abertas",open],["dash-equip-count","Em atendimento",active],["dash-os-andamento","OS concluídas",done],["dash-os-concluidas","Pendentes",pending]].forEach(([id,label,value])=>{
+      const card=document.getElementById(id)?.closest(".metric-card");if(!card)return;
+      const title=card.querySelector(".metric-title"),valueEl=document.getElementById(id);
+      if(title)title.textContent=label;if(valueEl)valueEl.textContent=String(value);
+    });
+  }
+
+  function normalizeStatusBadges(){
+    document.querySelectorAll("#tab-ordens .badge,#tab-dashboard .badge,#tab-atividades .day-status").forEach(el=>{
+      const txt=String(el.textContent||"").trim();
+      el.classList.remove("dbs-status-open","dbs-status-active","dbs-status-done","dbs-status-pending","dbs-status-cancelled");
+      if(isDone(txt))el.classList.add("dbs-status-done");else if(isCancelled(txt))el.classList.add("dbs-status-cancelled");else if(isActive(txt))el.classList.add("dbs-status-active");else if(isPending(txt))el.classList.add("dbs-status-pending");else el.classList.add("dbs-status-open");
+    });
+  }
+
+  function compactSectionHeadings(){
+    document.querySelectorAll(".tab-view").forEach(tab=>tab.querySelectorAll(":scope>h3").forEach(h=>{h.style.fontSize="13px";h.style.marginBottom="6px";}));
+  }
+  function refreshLayer(){try{updateDashboardKpis();ensureDashboardOperational();normalizeStatusBadges();compactSectionHeadings();}catch(e){console.warn("DBS operational UX",e);}}
+
+  if(typeof window.renderizarTudo==="function"&&!window.__dbsOperationalRenderWrapped){
+    const original=window.renderizarTudo;
+    window.renderizarTudo=function(){const result=original.apply(this,arguments);setTimeout(refreshLayer,0);return result;};
+    window.__dbsOperationalRenderWrapped=true;
+  }
+  if(typeof window.switchTab==="function"&&!window.__dbsOperationalSwitchWrapped){
+    const original=window.switchTab;
+    window.switchTab=function(){const result=original.apply(this,arguments);setTimeout(refreshLayer,0);return result;};
+    window.__dbsOperationalSwitchWrapped=true;
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",refreshLayer);else refreshLayer();
+  setTimeout(refreshLayer,250);setTimeout(refreshLayer,900);
+})();
