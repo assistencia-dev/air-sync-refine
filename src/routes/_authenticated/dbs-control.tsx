@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { getDbsControlCloudState, saveDbsControlCloudState } from "@/lib/dbs-control.functions";
+import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -42,6 +42,24 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+
+      if (msg.type === "DBS_CONTROL_DB_AUDIT") {
+        try {
+          const result = await auditDbsControlDatabase();
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DB_AUDIT_RESULT",
+            ok: true,
+            result,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DB_AUDIT_RESULT",
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível auditar a base de produção.",
+          }, "*");
+        }
+        return;
+      }
 
       if (msg.type === "DBS_CONTROL_FIELD_ORDER_DETAILS") {
         try {
