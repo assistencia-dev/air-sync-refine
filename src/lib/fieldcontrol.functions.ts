@@ -380,7 +380,7 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     for (const site of sites) {
       const client = clientById.get(String(site.client_id));
       if (!client) continue;
-      const address = site.address_json ?? {};
+      const address: any = site.address_json ?? {};
       const addressText = [
         address.street,
         address.number,

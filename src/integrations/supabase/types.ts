@@ -1607,6 +1607,8 @@ export type Database = {
           ponto_saida_prevista: string | null
           registration_data: Json
           registry_employee_id: string | null
+          source_key: string | null
+          source_system: string | null
           trips_per_day: number
           unit: string
           updated_at: string
@@ -1633,6 +1635,8 @@ export type Database = {
           ponto_saida_prevista?: string | null
           registration_data?: Json
           registry_employee_id?: string | null
+          source_key?: string | null
+          source_system?: string | null
           trips_per_day?: number
           unit: string
           updated_at?: string
@@ -1659,6 +1663,8 @@ export type Database = {
           ponto_saida_prevista?: string | null
           registration_data?: Json
           registry_employee_id?: string | null
+          source_key?: string | null
+          source_system?: string | null
           trips_per_day?: number
           unit?: string
           updated_at?: string
