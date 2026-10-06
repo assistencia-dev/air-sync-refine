@@ -576,13 +576,41 @@ export const syncFieldControl = createServerFn({ method: "POST" })
       const localEmployeeByExternal = new Map<string, string>();
 
       if (data.mode === "apply") {
+        // Identidade do técnico: FieldControl ID é a chave principal.
+        // E-mail funciona como segunda chave somente quando houver exatamente um
+        // funcionário local compatível. Nunca usamos apenas o nome para unir pessoas.
+        const localEmployeesResult = await supabaseAdmin.from("rh_employees")
+          .select("id,source_key,full_name,registration_data")
+          .eq("source_system", "fieldcontrol");
+        if (localEmployeesResult.error) throw new Error(localEmployeesResult.error.message);
+
+        const localBySource = new Map<string, any>();
+        const localByEmail = new Map<string, any[]>();
+        for (const local of localEmployeesResult.data ?? []) {
+          if (local.source_key) localBySource.set(String(local.source_key), local);
+          const email = normalizeText((local.registration_data as any)?.email).toLowerCase();
+          if (email) {
+            const bucket = localByEmail.get(email) ?? [];
+            bucket.push(local);
+            localByEmail.set(email, bucket);
+          }
+        }
+
         for (const employee of employees) {
           const externalId = pickId(employee);
           const name = pickName(employee);
           if (!externalId || !name) continue;
-          const existingEmployee = await supabaseAdmin.from("rh_employees")
-            .select("id").eq("source_system", "fieldcontrol").eq("source_key", externalId).maybeSingle();
-          if (existingEmployee.error) throw new Error(existingEmployee.error.message);
+
+          const employeeEmail = normalizeText(employee.email ?? employee.emailAddress).toLowerCase();
+          let existingEmployee = localBySource.get(externalId);
+
+          // Se o ID externo mudou, reaproveita um único cadastro pelo e-mail.
+          // Se houver mais de um candidato, não escolhe arbitrariamente.
+          if (!existingEmployee && employeeEmail) {
+            const candidates = localByEmail.get(employeeEmail) ?? [];
+            if (candidates.length === 1) existingEmployee = candidates[0];
+          }
+
           const payload = {
             benefit_type: "fieldcontrol",
             full_name: name,
@@ -601,7 +629,7 @@ export const syncFieldControl = createServerFn({ method: "POST" })
             source_key: externalId,
             updated_at: new Date().toISOString(),
           };
-          let localEmployeeId = existingEmployee.data?.id as string | undefined;
+          let localEmployeeId = existingEmployee?.id as string | undefined;
           if (localEmployeeId) {
             const { error } = await supabaseAdmin.from("rh_employees").update(payload).eq("id", localEmployeeId);
             if (error) throw new Error(error.message);
