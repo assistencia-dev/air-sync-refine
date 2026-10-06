@@ -350,21 +350,21 @@ function DbsControlPage() {
     : "/dbs-control.html?v=20261006-1";
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
+    <main className="min-h-screen bg-[#f4f8fc]">
+      <div className="flex h-10 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
           {cloudError && <span className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-600">Erro de sincronização</span>}
         </div>
         <button
           type="button"
           onClick={() => navigate({ to: employeeMode ? "/folha-ponto" : "/admin", replace: true })}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
         >
           ← Voltar ao menu principal
         </button>
       </div>
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-3rem)] w-full border-0" allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-2.5rem)] w-full border-0" allow="camera; geolocation" />
     </main>
   );
 }
