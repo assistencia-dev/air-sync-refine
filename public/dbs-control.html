@@ -561,6 +561,43 @@
         tr:hover{background:#f8fbff}
         .badge{border-radius:999px;padding:4px 8px}
         @media(max-width:800px){.tab-view{padding:15px}.form-grid{grid-template-columns:1fr}}
+
+        /* DBS CONTROL — camada visual premium e segura, sem alterar funções existentes */
+        :root{
+          --color-bg:#f4f8fc; --color-surface:#ffffff; --color-sidebar:#082b57; --color-sidebar-hover:#10457f;
+          --color-primary:#1769d1; --color-primary-dark:#0e4fa7; --color-accent:#0f9f8f;
+          --text-main:#10243f; --text-muted:#64748b; --border-color:#d8e3ef; --border-light:#e7eef6;
+          --radius-sm:8px; --radius-md:12px; --shadow-sm:0 4px 14px rgba(16,36,63,.055);
+        }
+        body{background:var(--color-bg);font-size:13px}
+        aside{background:linear-gradient(180deg,#082b57 0%,#0b376d 55%,#092d5b 100%);box-shadow:8px 0 28px rgba(8,43,87,.10)}
+        .brand-header{background:rgba(3,25,52,.45);padding:20px;border-bottom:1px solid rgba(255,255,255,.12)}
+        .brand-title{font-size:16px;letter-spacing:.35px}.brand-badge{background:#1c74df;border-radius:999px;padding:4px 8px}
+        .nav-menu{padding:12px 10px}.nav-section{padding:15px 12px 6px;color:#8fb3da;font-size:9px;letter-spacing:1.1px}
+        .nav-item{margin:2px 0;padding:10px 12px;border-left:3px solid transparent;border-radius:9px;color:#d5e4f4;font-size:12px}
+        .nav-item:hover{background:rgba(255,255,255,.08);color:#fff}.nav-item.active{background:rgba(255,255,255,.13);color:#fff;border-left-color:#62b0ff}
+        main{background:var(--color-bg)}header{padding:15px 26px;background:rgba(255,255,255,.94);border-bottom:1px solid var(--border-light);box-shadow:0 2px 12px rgba(16,36,63,.04)}
+        .page-title h1{font-size:18px;color:#10243f}.page-title p{color:#71829a}
+        .tab-view{padding:22px 26px}.data-card,.metric-card{border-color:var(--border-light);border-radius:14px;box-shadow:var(--shadow-sm)}
+        .data-header{background:#f8fbff;border-bottom-color:var(--border-light);padding:13px 16px}.data-header h3{color:#173555}
+        .btn{min-height:34px;border-radius:9px;transition:transform .12s ease,box-shadow .12s ease,background .12s ease}
+        .btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,36,63,.10)}
+        .btn-primary{background:#1769d1}.btn-primary:hover{background:#0e4fa7}.btn-success{background:#0f9f8f}.btn-secondary{background:#fff;border-color:#d5e1ed}
+        .form-group input,.form-group select,.form-group textarea,.filter-bar input,.filter-bar select{min-height:38px;border-radius:9px;border-color:#cfdceb;color:#10243f}
+        .form-group input:focus,.form-group select:focus,.form-group textarea:focus,.filter-bar input:focus,.filter-bar select:focus{border-color:#5a9ee8;box-shadow:0 0 0 3px rgba(23,105,209,.10)}
+        table th{background:#f4f8fc;color:#62758d;border-bottom-color:#dbe6f1}table td{border-bottom-color:#edf2f7}tr:hover{background:#f7fbff}
+        .metric-card{padding:16px}.metric-value{color:#12355d}.badge{border-radius:999px}
+        .dbs-central-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;margin:16px 0}
+        .dbs-central-card{background:#fff;border:1px solid #dfe9f3;border-radius:14px;padding:15px;box-shadow:0 4px 14px rgba(16,36,63,.045)}
+        .dbs-central-card small{display:block;color:#71829a;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+        .dbs-central-card strong{display:block;margin-top:5px;font-size:24px;color:#123b69}
+        .dbs-central-card span{display:block;margin-top:4px;color:#71829a;font-size:10px}
+        .dbs-integrity{border:1px solid #dce7f2;border-radius:14px;background:#fff;padding:16px}
+        .dbs-integrity-ok{padding:12px;border-radius:10px;background:#ecfdf5;color:#12634f;font-size:11px;font-weight:800}
+        .dbs-integrity-issue{padding:12px;border-radius:10px;background:#fff7ed;color:#9a4d08;border:1px solid #fed7aa;margin-bottom:8px;font-size:11px}
+        .dbs-integrity-issue b{display:block;margin-bottom:3px}
+        @media(max-width:900px){.dbs-central-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
+        @media(max-width:520px){.dbs-central-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -578,6 +615,9 @@
             <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
             <li class="nav-item" title="Consulte, filtre, conclua e exporte suas ordens de serviço" onclick="switchTab('tab-ordens', this)"><span>Ordens de Serviço</span></li>
             <li class="nav-item" title="Crie uma nova ordem de serviço e envie para a equipe" onclick="switchTab('tab-nova-os', this)"><span>Nova OS</span></li>
+
+            <div class="nav-section">Base de Informação</div>
+            <li class="nav-item active-data-center" title="Visão central dos cadastros e integridade da base" onclick="switchTab('tab-cadastros', this)"><span>Central de Cadastros</span></li>
 
             <div class="nav-section">Gestão de Ativos & Clientes</div>
             <li class="nav-item" title="Cadastre e consulte clientes" onclick="switchTab('tab-clientes', this)"><span>Clientes</span></li>
@@ -911,6 +951,35 @@
                     </thead>
                     <tbody id="equip-table-body"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- CENTRAL DE CADASTROS -->
+        <div id="tab-cadastros" class="tab-view">
+            <div class="data-card" style="padding:22px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#1769d1;">Base de informação</div>
+                        <h2 style="margin-top:5px;font-size:22px;color:#102f52;">Central de Cadastros</h2>
+                        <p style="margin-top:5px;max-width:760px;color:#64748b;font-size:12px;line-height:1.55;">Este é o núcleo do DBS CONTROL. Clientes, locais, equipamentos, serviços, equipe e OS precisam compartilhar os mesmos IDs e vínculos. Esta área mostra a base carregada e aponta inconsistências antes que elas contaminem a operação.</p>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="renderizarCentralCadastros()">Atualizar conferência</button>
+                </div>
+                <div id="dbs-central-counts" class="dbs-central-grid"></div>
+                <div id="dbs-central-integrity" class="dbs-integrity"></div>
+            </div>
+            <div class="data-card" style="padding:18px;">
+                <div class="data-header" style="margin:-18px -18px 16px;">
+                    <div><h3>Acesso rápido aos cadastros</h3><span style="display:block;margin-top:3px;font-size:10px;color:#71829a;">Cadastre primeiro aqui ou vá direto ao cadastro correspondente. A Nova OS sempre usa estes mesmos registros.</span></div>
+                </div>
+                <div style="display:flex;gap:9px;flex-wrap:wrap;">
+                    <button class="btn btn-primary" type="button" onclick="switchTab('tab-clientes')">Clientes</button>
+                    <button class="btn btn-secondary" type="button" onclick="switchTab('tab-equipamentos')">Equipamentos</button>
+                    <button class="btn btn-secondary" type="button" onclick="switchTab('tab-servicos')">Serviços</button>
+                    <button class="btn btn-secondary" type="button" onclick="switchTab('tab-tecnicos')">Equipe Técnica</button>
+                    <button class="btn btn-secondary" type="button" onclick="switchTab('tab-importacao')">Importação / Integrações</button>
+                    <button class="btn btn-success" type="button" onclick="switchTab('tab-nova-os')">Abrir Nova OS</button>
+                </div>
             </div>
         </div>
 
@@ -1390,11 +1459,77 @@
             }
         };
 
+        function renderizarCentralCadastros() {
+            const st = ERP_STATE || {};
+            const clientes = Array.isArray(st.clientes) ? st.clientes : [];
+            const equipamentos = Array.isArray(st.equipamentos) ? st.equipamentos : [];
+            const servicos = Array.isArray(st.servicos) ? st.servicos : [];
+            const tecnicos = Array.isArray(st.tecnicos) ? st.tecnicos : [];
+            const ordens = Array.isArray(st.ordens) ? st.ordens : [];
+            const norm = v => String(v ?? '').trim().toLocaleLowerCase('pt-BR');
+            const dup = (arr, keyFn) => {
+                const m = new Map();
+                arr.forEach(x => { const k=keyFn(x); if(k){ const a=m.get(k)||[]; a.push(x); m.set(k,a); }});
+                return Array.from(m.entries()).filter(([,a])=>a.length>1);
+            };
+            const issues = [];
+            const checkIds = (label, arr) => {
+                const d=dup(arr,x=>String(x?.id??''));
+                if(d.length) issues.push({label,detail:d.slice(0,5).map(([k,a])=>k+' ('+a.length+' registros)').join('; ')});
+            };
+            checkIds('IDs duplicados', clientes);
+            checkIds('IDs duplicados', equipamentos);
+            checkIds('IDs duplicados', servicos);
+            checkIds('IDs duplicados', tecnicos);
+            checkIds('IDs duplicados', ordens);
+
+            const clientById=new Set(clientes.map(x=>String(x.id)));
+            const equipById=new Set(equipamentos.map(x=>String(x.id)));
+            const serviceById=new Set(servicos.map(x=>String(x.id)));
+            const techById=new Set(tecnicos.map(x=>String(x.id)));
+
+            const orphanEquip=equipamentos.filter(x=>x.clienteId!=null && !clientById.has(String(x.clienteId)));
+            if(orphanEquip.length) issues.push({label:'Equipamentos sem cliente válido',detail:orphanEquip.slice(0,8).map(x=>x.tag||x.id).join(', ')});
+            const orphanOsClient=ordens.filter(x=>x.clienteId!=null && !clientById.has(String(x.clienteId)));
+            if(orphanOsClient.length) issues.push({label:'OS com cliente inexistente',detail:orphanOsClient.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsService=ordens.filter(x=>x.servicoId!=null && !serviceById.has(String(x.servicoId)));
+            if(orphanOsService.length) issues.push({label:'OS com serviço inexistente',detail:orphanOsService.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsTech=ordens.filter(x=>x.tecnicoId!=null && !techById.has(String(x.tecnicoId)));
+            if(orphanOsTech.length) issues.push({label:'OS com técnico inexistente',detail:orphanOsTech.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsEquip=ordens.filter(x=>x.equipamentoId!=null && !equipById.has(String(x.equipamentoId)));
+            if(orphanOsEquip.length) issues.push({label:'OS com equipamento inexistente',detail:orphanOsEquip.slice(0,8).map(x=>x.id).join(', ')});
+
+            const dupClientCnpj=dup(clientes,x=>norm(x.cnpj));
+            if(dupClientCnpj.length) issues.push({label:'CNPJ/CPF repetido',detail:dupClientCnpj.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupClientName=dup(clientes,x=>norm(x.nome));
+            if(dupClientName.length) issues.push({label:'Nome de cliente repetido',detail:dupClientName.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupService=dup(servicos,x=>norm(x.nome));
+            if(dupService.length) issues.push({label:'Serviço repetido',detail:dupService.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupTechEmail=dup(tecnicos,x=>norm(x.email));
+            if(dupTechEmail.length) issues.push({label:'E-mail de técnico repetido',detail:dupTechEmail.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupFcId=dup(tecnicos,x=>norm(x.fieldControlId));
+            if(dupFcId.length) issues.push({label:'ID FieldControl de técnico repetido',detail:dupFcId.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupEquipTag=dup(equipamentos,x=>String(x.clienteId||'')+'|'+norm(x.tag));
+            if(dupEquipTag.length) issues.push({label:'TAG duplicada dentro do mesmo cliente',detail:dupEquipTag.slice(0,8).map(([k,a])=>k.split('|')[1]+' ('+a.length+')').join('; ')});
+
+            const counts=document.getElementById('dbs-central-counts');
+            if(counts) counts.innerHTML=[
+              ['Clientes',clientes.length,'Cadastro principal'],
+              ['Equipamentos',equipamentos.length,'Ativos vinculados'],
+              ['Serviços',servicos.length,'Catálogo operacional'],
+              ['Técnicos',tecnicos.length,'Equipe disponível']
+            ].map(x=>'<div class="dbs-central-card"><small>'+x[0]+'</small><strong>'+x[1]+'</strong><span>'+x[2]+'</span></div>').join('');
+            const box=document.getElementById('dbs-central-integrity');
+            if(box) box.innerHTML=issues.length
+              ? '<div style="font-weight:900;color:#7c4a03;margin-bottom:10px">Conferência encontrou '+issues.length+' ponto(s) para revisar</div>'+issues.slice(0,20).map(x=>'<div class="dbs-integrity-issue"><b>'+escDbsControl(x.label)+'</b><span>'+escDbsControl(x.detail)+'</span></div>').join('')
+              : '<div class="dbs-integrity-ok">✓ Estrutura carregada sem inconsistências de vínculo detectáveis no estado atual.</div>';
+        }
+
         function renderizarTudo() {
             // Cada bloco é isolado: um registro importado incompleto não pode impedir
             // a montagem dos seletores da Nova OS.
             const safe = (fn) => { try { fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
-            [renderizarTecnicos, renderizarClientes, renderizarEquipamentos, renderizarPecas, renderizarServicos, renderizarCompras, garantirHistoricoInicial, renderizarOrdens, renderizarAtividadesDia, renderizarHistoricoOperacional, renderizarKanban, renderizarPWAScreen].forEach(fn => { if (typeof fn === 'function') safe(fn); });
+            [renderizarTecnicos, renderizarClientes, renderizarEquipamentos, renderizarPecas, renderizarServicos, renderizarCompras, garantirHistoricoInicial, renderizarOrdens, renderizarAtividadesDia, renderizarHistoricoOperacional, renderizarKanban, renderizarPWAScreen, renderizarCentralCadastros].forEach(fn => { if (typeof fn === 'function') safe(fn); });
             try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores', error); }
             safe(atualizarMetricas);
             setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
@@ -2716,9 +2851,9 @@
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();
     </script>
-    <script src="/dbs-control-import.js?v=20261005-2"></script>
-    <script src="/dbs-control-orcamentos-v2.js?v=20261005-2"></script>
-    <script src="/dbs-control-ux.js?v=20261005-2"></script>
+    <script src="/dbs-control-import.js?v=20261006-1"></script>
+    <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
+    <script src="/dbs-control-ux.js?v=20261006-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
