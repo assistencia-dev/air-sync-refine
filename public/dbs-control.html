@@ -1469,6 +1469,10 @@
             } finally {
                 DBS_CONTROL_CLOUD_HYDRATING = false;
                 DBS_CONTROL_CLOUD_READY = true;
+                if (!DBS_CONTROL_DB_AUDIT_REQUESTED && new URLSearchParams(window.location.search).get('mode') !== 'employee') {
+                    DBS_CONTROL_DB_AUDIT_REQUESTED = true;
+                    setTimeout(() => solicitarAuditoriaBanco(), 900);
+                }
             }
         });
 
@@ -1481,6 +1485,7 @@
         };
 
         let DBS_CONTROL_DB_AUDIT_RUNNING = false;
+        let DBS_CONTROL_DB_AUDIT_REQUESTED = false;
         function solicitarAuditoriaBanco() {
             const body = document.getElementById('dbs-central-db-audit-body');
             const status = document.getElementById('dbs-central-db-audit-status');
