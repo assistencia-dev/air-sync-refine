@@ -598,6 +598,200 @@
         .dbs-integrity-issue b{display:block;margin-bottom:3px}
         @media(max-width:900px){.dbs-central-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}}
         @media(max-width:520px){.dbs-central-grid{grid-template-columns:1fr}}
+
+        /* DBS CONTROL UX / RESPONSIVE HARDENING
+           Visual e usabilidade apenas: nenhuma regra de negócio é alterada. */
+        html, body { width:100%; min-width:0; max-width:100%; }
+        body { min-height:100vh; overflow:hidden; }
+        aside { min-height:0; overflow:hidden; }
+        .nav-menu {
+            min-height:0;
+            overscroll-behavior:contain;
+            scrollbar-width:thin;
+            scrollbar-color:rgba(255,255,255,.28) transparent;
+        }
+        .nav-menu::-webkit-scrollbar,
+        .tab-view::-webkit-scrollbar,
+        .table-scroll::-webkit-scrollbar,
+        .data-card::-webkit-scrollbar { width:8px; height:8px; }
+        .nav-menu::-webkit-scrollbar-thumb,
+        .tab-view::-webkit-scrollbar-thumb,
+        .table-scroll::-webkit-scrollbar-thumb,
+        .data-card::-webkit-scrollbar-thumb {
+            background:rgba(100,116,139,.35);
+            border-radius:999px;
+        }
+        main { min-width:0; min-height:0; overflow:hidden; }
+        header {
+            flex:0 0 auto;
+            min-width:0;
+            gap:16px;
+        }
+        header > .page-title { min-width:0; flex:1 1 auto; }
+        header > div:last-child { flex:0 0 auto; flex-wrap:wrap; }
+        .page-title h1, .page-title p {
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+        .tab-view {
+            min-width:0;
+            min-height:0;
+            overflow-y:auto;
+            overflow-x:hidden;
+            overscroll-behavior:contain;
+            scrollbar-gutter:stable;
+        }
+        .tab-view > * { min-width:0; }
+        .data-card, .metric-card, .kanban-board, .form-grid, .filter-bar {
+            min-width:0;
+        }
+        .data-card { overflow:visible; }
+        .data-card > .data-header { position:relative; z-index:1; }
+        .table-scroll {
+            width:100%;
+            max-width:100%;
+            overflow-x:auto;
+            overflow-y:hidden;
+            -webkit-overflow-scrolling:touch;
+            scrollbar-width:thin;
+            scrollbar-gutter:stable;
+        }
+        .table-scroll > table {
+            width:100%;
+            min-width:720px;
+        }
+        .table-scroll table th {
+            position:sticky;
+            top:0;
+            z-index:1;
+        }
+        .table-scroll td, .table-scroll th {
+            overflow-wrap:anywhere;
+        }
+        .filter-bar input, .filter-bar select {
+            max-width:100%;
+        }
+        .form-group { min-width:0; }
+        .form-group input, .form-group select, .form-group textarea {
+            width:100%;
+            max-width:100%;
+        }
+        .quick-start-action, .employee-order, .kanban-card {
+            min-width:0;
+        }
+        .quick-start-action span:last-child,
+        .employee-order-top > div,
+        .employee-grid > div { min-width:0; }
+        @media (max-width:1180px) {
+            :root { --sidebar-width:235px; }
+            .tab-view { padding-left:20px; padding-right:20px; }
+            header { padding-left:20px; padding-right:20px; }
+            .metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .kanban-board { grid-template-columns:repeat(2,minmax(250px,1fr)); }
+            .quick-start-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        }
+        @media (max-width:820px) {
+            :root { --sidebar-width:210px; }
+            .brand-header { padding:14px 14px; }
+            .nav-menu { padding:8px 7px; }
+            .nav-item { padding:9px 10px; font-size:11.5px; }
+            .nav-section { padding:12px 10px 5px; }
+            header { align-items:flex-start; }
+            header > div:last-child { justify-content:flex-end; }
+            .page-title h1 { font-size:16px; }
+            .tab-view { padding:14px; }
+            .data-header { align-items:flex-start; }
+            .data-header .filter-bar { width:100%; }
+            .filter-bar input, .filter-bar select { flex:1 1 180px; }
+            .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .kanban-board { grid-template-columns:1fr; }
+        }
+        @media (max-width:640px) {
+            body { display:block; overflow:hidden; }
+            aside {
+                width:100%;
+                height:auto;
+                max-height:118px;
+                flex:0 0 auto;
+                position:relative;
+                z-index:20;
+            }
+            .brand-header {
+                height:50px;
+                padding:10px 14px;
+            }
+            .nav-menu {
+                display:flex;
+                align-items:center;
+                gap:4px;
+                padding:7px 8px 9px;
+                overflow-x:auto;
+                overflow-y:hidden;
+                white-space:nowrap;
+                max-height:68px;
+            }
+            .nav-section { display:none; }
+            .nav-item {
+                flex:0 0 auto;
+                margin:0;
+                padding:8px 11px;
+                border-left:0;
+                border-bottom:2px solid transparent;
+                border-radius:8px;
+            }
+            .nav-item:hover, .nav-item.active {
+                border-left-color:transparent;
+                border-bottom-color:#62b0ff;
+            }
+            main {
+                width:100%;
+                height:calc(100vh - 118px);
+                overflow:hidden;
+            }
+            header {
+                padding:10px 12px;
+                gap:8px;
+                flex-wrap:wrap;
+            }
+            header > .page-title { flex-basis:100%; }
+            header > div:last-child { width:100%; justify-content:flex-start; }
+            header > div:last-child .btn { flex:1 1 auto; justify-content:center; }
+            .page-title h1, .page-title p { white-space:normal; }
+            .tab-view { padding:12px; }
+            .metrics-grid,
+            .form-grid,
+            .quick-start-grid { grid-template-columns:1fr; }
+            .metric-card { padding:12px; }
+            .metric-value { font-size:20px; }
+            .data-header { gap:9px; }
+            .filter-bar { width:100%; }
+            .filter-bar input, .filter-bar select { width:100%!important; flex:1 1 100%; }
+            .data-header > div:last-child { width:100%; display:flex!important; flex-wrap:wrap; }
+            .data-header > div:last-child .btn { flex:1 1 180px; justify-content:center; }
+            .day-toolbar .form-group,
+            .day-toolbar .form-group.search { min-width:100%; }
+            .history-filter-grid { grid-template-columns:1fr; }
+            .employee-grid, .employee-fields, .employee-photo-grid { grid-template-columns:1fr; }
+            .employee-hero { padding:18px; }
+            .employee-toolbar { padding:12px; }
+            .os-history-modal { padding:8px; }
+            .os-history-dialog { max-height:94vh; border-radius:12px; }
+        }
+        @media (max-width:420px) {
+            .brand-title { font-size:14px; }
+            .brand-badge { font-size:8px; }
+            .nav-item { font-size:11px; padding:7px 9px; }
+            header > div:last-child .btn { min-width:0; padding-left:9px; padding-right:9px; }
+            .tab-view { padding:9px; }
+            .data-card { margin-bottom:10px; }
+            .data-header { padding:10px 11px; }
+            .data-header h3 { font-size:12px; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+            *, *::before, *::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; }
+        }
+
 </style>
 </head>
 <body>
@@ -3008,5 +3202,25 @@
         setTimeout(init,500);
     })();
     </script>
+
+<script>
+(function(){
+    function prepareResponsiveTables(){
+        document.querySelectorAll('table').forEach(function(table){
+            if(table.parentElement && table.parentElement.classList.contains('table-scroll')) return;
+            var wrapper=document.createElement('div');
+            wrapper.className='table-scroll';
+            table.parentNode.insertBefore(wrapper,table);
+            wrapper.appendChild(table);
+        });
+    }
+    if(document.readyState==='loading'){
+        document.addEventListener('DOMContentLoaded',prepareResponsiveTables,{once:true});
+    }else{
+        prepareResponsiveTables();
+    }
+})();
+</script>
+
 </body>
 </html>
