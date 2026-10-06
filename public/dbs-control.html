@@ -1941,11 +1941,11 @@
                                        type="text"
                                        list="os-client-options"
                                        autocomplete="off"
-                                       placeholder="Digite o nome ou CNPJ..."
+                                       placeholder="Digite o nome ou CNPJ..." required
                                        oninput="sincronizarClienteOSPorBusca()"
                                        onchange="sincronizarClienteOSPorBusca()">
                                 <datalist id="os-client-options"></datalist>
-                                <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required aria-hidden="true" tabindex="-1"></select>
+                                <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" aria-hidden="true" tabindex="-1"></select>
                             </div>
 
                             <div class="form-group os-premium-field os-premium-equipment">
