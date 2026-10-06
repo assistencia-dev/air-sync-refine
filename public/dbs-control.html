@@ -1391,6 +1391,15 @@
         };
 
         function renderizarTudo() {
+            // Cada bloco é isolado: um registro importado incompleto não pode impedir
+            // a montagem dos seletores da Nova OS.
+            const safe = (fn) => { try { fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
+            [renderizarTecnicos, renderizarClientes, renderizarEquipamentos, renderizarPecas, renderizarServicos, renderizarCompras, garantirHistoricoInicial, renderizarOrdens, renderizarAtividadesDia, renderizarHistoricoOperacional, renderizarKanban, renderizarPWAScreen].forEach(fn => { if (typeof fn === 'function') safe(fn); });
+            try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores', error); }
+            safe(atualizarMetricas);
+            setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
+        }
+        function __renderizarTudoLegado() {
             renderizarTecnicos();
             renderizarClientes();
             renderizarEquipamentos();
@@ -1531,7 +1540,7 @@
             // VALOR E ASSINATURA DIGITAL
             doc.setFontSize(12);
             doc.setFont("helvetica", "bold");
-            doc.text(`VALOR TOTAL DA OS: R$ ${o.valor.toFixed(2)}`, 14, curY + 10);
+            doc.text(`VALOR TOTAL DA OS: R$ ${Number(o.valor||0).toFixed(2)}`, 14, curY + 10);
 
             const sigY = curY + 30;
             doc.setLineWidth(0.5);
@@ -1802,7 +1811,7 @@
                         <td><span class="badge badge-tag">${eq.tag || 'S/N'}</span> ${eq.tipo || ''}</td>
                         <td>${tec.nome || '-'}</td>
                         <td><span class="badge badge-pmoc">${o.tipo}</span></td>
-                        <td>R$ ${o.valor.toFixed(2)}</td>
+                        <td>R$ ${Number(o.valor||0).toFixed(2)}</td>
                         <td><span class="badge ${badgeClass}">${o.status}</span></td>
                         <td style="text-align:right;">
                             <button class="btn btn-secondary btn-sm" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
@@ -2318,7 +2327,7 @@
 
             const tecnicoSelecionado = ERP_STATE.tecnicos.find(t => String(t.id) === String(tecId));
             const novaOS = {
-                id: `OS-0${4891 + ERP_STATE.ordens.length}`,
+                id: (() => { let n = 4891 + ERP_STATE.ordens.length; const ids = new Set(ERP_STATE.ordens.map(o => String(o.id))); while (ids.has('OS-0' + n)) n++; return 'OS-0' + n; })(),
                 data: new Date().toLocaleDateString('pt-BR'),
                 clienteId: cliId,
                 equipamentoId: equipId,
@@ -2643,11 +2652,11 @@
 
         // AUXILIARES
         function salvarPeca(e) { e.preventDefault(); ERP_STATE.pecas.push({ id: ERP_STATE.pecas.length + 1, sku: document.getElementById('peca-sku').value, nome: document.getElementById('peca-nome').value, qtd: parseInt(document.getElementById('peca-qtd').value), custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) }); saveState(); document.getElementById('form-peca').reset(); renderizarTudo(); }
-        function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${p.custo.toFixed(2)}</td><td>R$ ${p.venda.toFixed(2)}</td></tr>`).join(''); }
+        function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${Number(p.custo||0).toFixed(2)}</td><td>R$ ${Number(p.venda||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarServico(e) { e.preventDefault(); ERP_STATE.servicos.push({ id: ERP_STATE.servicos.length + 1, nome: document.getElementById('serv-nome').value, horas: parseFloat(document.getElementById('serv-horas').value), valor: parseFloat(document.getElementById('serv-valor').value) }); saveState(); document.getElementById('form-servico').reset(); renderizarTudo(); }
-        function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${s.valor.toFixed(2)}</td></tr>`).join(''); }
+        function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${Number(s.valor||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarCompra(e) { e.preventDefault(); ERP_STATE.compras.push({ id: ERP_STATE.compras.length + 1, fornecedor: document.getElementById('comp-fornecedor').value, item: document.getElementById('comp-item').value, qtd: parseInt(document.getElementById('comp-qtd').value), valor: parseFloat(document.getElementById('comp-valor').value), status: "Enviado" }); saveState(); document.getElementById('form-compra').reset(); renderizarTudo(); }
-        function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${c.valor.toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
+        function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${Number(c.valor||0).toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
 
         function atualizarSelects() {
             const cli = document.getElementById('os-select-cliente');
