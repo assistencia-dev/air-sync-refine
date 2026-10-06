@@ -1368,6 +1368,106 @@
             #tab-nova-os .nova-os-section { padding:13px 0; }
         }
 
+ 
+        /* NOVA OS — UX CLEAN / PREMIUM
+           Uma ação por campo, uma hierarquia por etapa. Sem alterações de dados ou regras. */
+        #tab-nova-os.dbs-nova-os-clean{
+            padding:24px 30px 44px!important;
+            overflow-y:auto!important;
+            overflow-x:hidden!important;
+            scrollbar-gutter:stable;
+            background:
+                radial-gradient(circle at 78% 0%,rgba(43,133,226,.055),transparent 24%),
+                #f5f8fc;
+        }
+        .nova-clean-shell{width:min(1080px,100%);margin:0 auto;}
+        .nova-clean-head{
+            display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+            padding:4px 2px 20px;
+        }
+        .nova-clean-kicker{
+            display:flex;align-items:center;gap:7px;
+            color:#1672c8;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
+        }
+        .nova-clean-kicker span{width:7px;height:7px;border-radius:50%;background:#2c91e8;box-shadow:0 0 0 4px rgba(44,145,232,.10);}
+        .nova-clean-head h2{
+            margin:7px 0 3px;color:#102b49;font-size:26px;line-height:1.08;letter-spacing:-.035em;font-weight:900;
+        }
+        .nova-clean-head p{margin:0;color:#73869b;font-size:11px;}
+        .nova-clean-steps{display:flex;align-items:center;gap:8px;padding-bottom:3px;white-space:nowrap;}
+        .nova-clean-steps span{
+            color:#8494a7;font-size:9px;font-weight:800;
+        }
+        .nova-clean-steps span.is-active{color:#1672c8;}
+        .nova-clean-steps i{width:20px;height:1px;background:#d5e1ec;}
+        .nova-clean-form{
+            background:#fff;border:1px solid #dce6f0;border-radius:18px;
+            box-shadow:0 12px 34px rgba(16,42,67,.055);overflow:hidden;
+        }
+        .nova-clean-section{padding:22px 24px;border-bottom:1px solid #edf2f7;}
+        .nova-clean-section-title{display:flex;align-items:center;gap:11px;margin-bottom:16px;}
+        .nova-clean-index{
+            display:grid;place-items:center;width:27px;height:27px;border-radius:8px;
+            background:#edf6ff;color:#176bc3;font-size:9px;font-weight:900;flex:0 0 auto;
+        }
+        .nova-clean-section-title strong{display:block;color:#183b5c;font-size:12px;font-weight:900;}
+        .nova-clean-section-title small{display:block;margin-top:2px;color:#8493a5;font-size:9px;}
+        .nova-clean-grid{display:grid;gap:14px;}
+        .nova-clean-grid-two{grid-template-columns:1fr 1fr;}
+        .nova-clean-grid-three{grid-template-columns:1.05fr .95fr 1fr;}
+        .nova-clean-section .form-group{gap:6px;}
+        .nova-clean-section .form-group label{
+            color:#536a81;font-size:9px;font-weight:900;letter-spacing:.045em;text-transform:uppercase;
+        }
+        .nova-clean-section .form-group label em{
+            font-style:normal;color:#9aa8b7;font-weight:600;text-transform:none;letter-spacing:0;
+        }
+        .nova-clean-section select,
+        .nova-clean-section input,
+        .nova-clean-section textarea{
+            width:100%;min-height:43px;padding:10px 12px;border:1px solid #cfdce9;border-radius:10px;
+            background:#fff;color:#163450;font-size:12px;outline:none;
+            transition:border-color .16s,box-shadow .16s,background .16s;
+        }
+        .nova-clean-section select{cursor:pointer;font-weight:650;}
+        .nova-clean-section select:hover,
+        .nova-clean-section textarea:hover{border-color:#adc7df;background:#fcfeff;}
+        .nova-clean-section select:focus,
+        .nova-clean-section input:focus,
+        .nova-clean-section textarea:focus{
+            border-color:#4a97df;box-shadow:0 0 0 4px rgba(23,105,209,.09);
+        }
+        .nova-clean-section textarea{min-height:128px;resize:vertical;line-height:1.55;}
+        .nova-clean-description{padding-bottom:20px;}
+        .nova-clean-footer{
+            display:flex;align-items:center;justify-content:space-between;gap:20px;
+            padding:16px 24px;background:#fbfdff;
+        }
+        .nova-clean-footer strong{display:block;color:#284762;font-size:10px;font-weight:900;}
+        .nova-clean-footer span{display:block;margin-top:3px;color:#8493a5;font-size:9px;}
+        .nova-clean-submit{
+            min-height:43px;padding:10px 16px;border-radius:10px;
+            background:linear-gradient(135deg,#2788e8,#155db8)!important;
+            box-shadow:0 8px 20px rgba(23,105,209,.18)!important;
+            font-size:11px;font-weight:900;
+        }
+        .nova-clean-submit b{font-size:15px;line-height:0;font-weight:500;}
+        @media(max-width:900px){
+            #tab-nova-os.dbs-nova-os-clean{padding:18px 18px 34px!important;}
+            .nova-clean-head{align-items:flex-start;flex-direction:column;gap:12px;}
+            .nova-clean-grid-three{grid-template-columns:1fr 1fr;}
+        }
+        @media(max-width:620px){
+            #tab-nova-os.dbs-nova-os-clean{padding:13px 10px 30px!important;}
+            .nova-clean-head h2{font-size:22px;}
+            .nova-clean-steps{display:none;}
+            .nova-clean-form{border-radius:15px;}
+            .nova-clean-section{padding:18px 15px;}
+            .nova-clean-grid-two,.nova-clean-grid-three{grid-template-columns:1fr;}
+            .nova-clean-footer{align-items:stretch;flex-direction:column;padding:15px;}
+            .nova-clean-submit{width:100%;justify-content:center;}
+        }
+
 </style>
 </head>
 <body>
@@ -1605,108 +1705,95 @@
         </div>
 
         <!-- ABERTURA DE OS -->
-        <div id="tab-nova-os" class="tab-view">
-            <div class="nova-os-shell">
-                <section class="nova-os-hero">
-                    <span class="nova-os-eyebrow"><i class="nova-os-eyebrow-dot"></i> Ordem de Serviço</span>
-                    <h2>Emitir nova OS</h2>
-                    <p>Registre o atendimento, vincule o equipamento correto e já deixe a equipe responsável pronta para o despacho. A emissão continua usando os mesmos cadastros e regras do DBS CONTROL.</p>
-                    <div class="nova-os-flow" aria-label="Fluxo de emissão">
-                        <span><b>1</b> Cadastro</span>
-                        <span><b>2</b> Equipamento</span>
-                        <span><b>3</b> Serviço</span>
-                        <span><b>4</b> Despacho</span>
+        <div id="tab-nova-os" class="tab-view dbs-nova-os-clean">
+            <div class="nova-clean-shell">
+                <div class="nova-clean-head">
+                    <div>
+                        <div class="nova-clean-kicker"><span></span> Operação</div>
+                        <h2>Nova ordem de serviço</h2>
+                        <p>Informe apenas o necessário para despachar o atendimento.</p>
                     </div>
-                </section>
+                    <div class="nova-clean-steps" aria-label="Etapas">
+                        <span class="is-active">1 Dados</span>
+                        <i></i><span>2 Atendimento</span><i></i><span>3 Despacho</span>
+                    </div>
+                </div>
 
-                <div class="nova-os-layout">
-                    <section class="nova-os-form-card">
-                        <div class="nova-os-form-head">
+                <form id="form-nova-os" onsubmit="salvarNovaOS(event)" class="nova-clean-form">
+                    <section class="nova-clean-section">
+                        <div class="nova-clean-section-title">
+                            <span class="nova-clean-index">01</span>
                             <div>
-                                <h3>Dados da ordem de serviço</h3>
-                                <p>Preencha os campos abaixo. Os cadastros são os mesmos utilizados no restante do sistema.</p>
+                                <strong>Onde será o atendimento?</strong>
+                                <small>Cliente e equipamento</small>
                             </div>
-                            <span class="nova-os-secure-badge">● Fluxo operacional</span>
                         </div>
-
-                        <form id="form-nova-os" onsubmit="salvarNovaOS(event)">
-                            <div class="nova-os-section">
-                                <div class="nova-os-section-head">
-                                    <span class="nova-os-section-number">01</span>
-                                    <div><strong>Cliente e equipamento</strong><span>Defina exatamente onde o atendimento será realizado.</span></div>
-                                </div>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label>Cliente Corporativo</label>
-                                        <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Equipamento do Cliente (TAG / Setor)</label>
-                                        <select id="os-select-equipamento" required>
-                                            <option value="">Selecione primeiro o cliente...</option>
-                                        </select>
-                                    </div>
-                                </div>
+                        <div class="nova-clean-grid nova-clean-grid-two">
+                            <div class="form-group">
+                                <label>Cliente corporativo</label>
+                                <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
                             </div>
-
-                            <div class="nova-os-section">
-                                <div class="nova-os-section-head">
-                                    <span class="nova-os-section-number">02</span>
-                                    <div><strong>Responsável e serviço</strong><span>Escolha a equipe e o tipo de atendimento.</span></div>
-                                </div>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label>Técnico Responsável</label>
-                                        <select id="os-select-tecnico" required></select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Tipo de Serviço</label>
-                                        <select id="os-select-tipo" required>
-                                            <option>Manutenção Corretiva</option>
-                                            <option>Manutenção Preventiva / PMOC</option>
-                                            <option>Instalação / Start-Up</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Serviço Principal Tabela</label>
-                                        <select id="os-select-servico" required></select>
-                                    </div>
-                                </div>
+                            <div class="form-group">
+                                <label>Equipamento <em>do cliente selecionado</em></label>
+                                <select id="os-select-equipamento" required>
+                                    <option value="">Selecione o cliente primeiro</option>
+                                </select>
                             </div>
-
-                            <div class="nova-os-section">
-                                <div class="nova-os-section-head">
-                                    <span class="nova-os-section-number">03</span>
-                                    <div><strong>Descrição do atendimento</strong><span>Deixe a orientação clara para quem vai executar a OS.</span></div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Descrição do Problema / Instruções para o Técnico</label>
-                                    <textarea id="os-desc" rows="4" required placeholder="Ex: Equipamento apresentando ruído na evaporadora e pouca refrigeração..."></textarea>
-                                </div>
-                            </div>
-
-                            <div class="nova-os-actionbar">
-                                <span class="nova-os-action-note">Ao emitir, a OS segue para o fluxo operacional existente e permanece vinculada aos mesmos registros.</span>
-                                <button type="submit" class="btn btn-primary nova-os-submit">Emitir e Despachar OS</button>
-                            </div>
-                        </form>
+                        </div>
                     </section>
 
-                    <aside class="nova-os-side-card">
-                        <div class="nova-os-side-kicker">Experiência de emissão</div>
-                        <h3>Mais claro. Mais rápido.</h3>
-                        <p>A tela agora organiza a decisão na ordem em que a operação acontece, sem mudar o funcionamento da OS.</p>
-                        <div class="nova-os-side-list">
-                            <div class="nova-os-side-item"><b>01</b><div><strong>Vínculo correto</strong><span>Cliente → equipamento do próprio cliente.</span></div></div>
-                            <div class="nova-os-side-item"><b>02</b><div><strong>Responsável definido</strong><span>Técnico e serviço ficam registrados na mesma emissão.</span></div></div>
-                            <div class="nova-os-side-item"><b>03</b><div><strong>Orientação completa</strong><span>A descrição acompanha a OS para a execução.</span></div></div>
+                    <section class="nova-clean-section">
+                        <div class="nova-clean-section-title">
+                            <span class="nova-clean-index">02</span>
+                            <div>
+                                <strong>Como será atendido?</strong>
+                                <small>Responsável e serviço</small>
+                            </div>
                         </div>
-                        <div class="nova-os-side-status">✓ Estrutura preservada: IDs, eventos, validações e função de emissão continuam os mesmos.</div>
-                    </aside>
-                </div>
+                        <div class="nova-clean-grid nova-clean-grid-three">
+                            <div class="form-group">
+                                <label>Técnico responsável</label>
+                                <select id="os-select-tecnico" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tipo de atendimento</label>
+                                <select id="os-select-tipo" required>
+                                    <option>Manutenção Corretiva</option>
+                                    <option>Manutenção Preventiva / PMOC</option>
+                                    <option>Instalação / Start-Up</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Serviço principal</label>
+                                <select id="os-select-servico" required></select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="nova-clean-section nova-clean-description">
+                        <div class="nova-clean-section-title">
+                            <span class="nova-clean-index">03</span>
+                            <div>
+                                <strong>O que precisa ser feito?</strong>
+                                <small>Descrição para a equipe de campo</small>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Problema / instruções</label>
+                            <textarea id="os-desc" rows="5" required placeholder="Descreva o problema, sintoma ou orientação para o técnico..."></textarea>
+                        </div>
+                    </section>
+
+                    <div class="nova-clean-footer">
+                        <div>
+                            <strong>Pronto para despachar?</strong>
+                            <span>Confira cliente, equipamento e técnico antes de emitir.</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary nova-clean-submit">Emitir e despachar OS <b>→</b></button>
+                    </div>
+                </form>
             </div>
         </div>
-
         <!-- CADASTRO DE EQUIPAMENTOS -->
         <div id="tab-equipamentos" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
@@ -3856,6 +3943,9 @@
     }
 })();
 </script>
+
+
+
 
 </body>
 </html>
