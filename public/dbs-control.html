@@ -3945,27 +3945,7 @@
 </script>
 
 
-<script id="dbs-nova-os-single-client">
-(function(){
-  function normalizeNovaClientField(){
-    var root=document.getElementById('tab-nova-os');
-    if(!root) return;
-    var canonical=document.getElementById('os-select-cliente');
-    if(!canonical) return;
-    root.querySelectorAll('input, [role="combobox"]').forEach(function(el){
-      if(el===canonical || el.closest('#os-select-cliente')) return;
-      var ph=(el.getAttribute('placeholder')||'').toLowerCase();
-      var aria=(el.getAttribute('aria-label')||'').toLowerCase();
-      var txt=(el.textContent||'').toLowerCase();
-      if((ph+aria+txt).includes('nome, cnpj') || (ph+aria+txt).includes('cliente corporativo')){
-        el.remove();
-      }
-    });
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',normalizeNovaClientField,{once:true});
-  else normalizeNovaClientField();
-})();
-</script>
+
 
 </body>
 </html>
