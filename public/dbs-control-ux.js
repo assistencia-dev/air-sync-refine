@@ -189,4 +189,416 @@
   else setTimeout(installFieldControlSyncPanel,100);
   setTimeout(installFieldControlSyncPanel,800);
 
+
+  /* DBS CONTROL UX REFORM 2026-10-06 */
+  (function installDbsControlUxReform(){
+    if(window.__dbsControlUxReformInstalled)return;
+    window.__dbsControlUxReformInstalled=true;
+
+    const style=document.createElement("style");
+    style.id="dbs-control-ux-reform-20261006";
+    style.textContent=`
+      /* --- Shell: one hierarchy, one page header --- */
+      :root{
+        --dbs-blue:#1769d1;
+        --dbs-blue-dark:#0e4fa7;
+        --dbs-ink:#10243f;
+        --dbs-muted:#66788a;
+        --dbs-bg:#f5f8fc;
+        --dbs-line:#e4ebf3;
+        --dbs-soft:#f8fbff;
+        --sidebar-width:238px;
+      }
+      html,body{background:var(--dbs-bg)!important;color:var(--dbs-ink)!important;}
+      body{font-size:13px!important;}
+      aside{
+        width:var(--sidebar-width)!important;
+        background:#082b57!important;
+        background-image:none!important;
+        box-shadow:none!important;
+      }
+      .brand-header{
+        min-height:62px!important;
+        padding:14px 16px!important;
+        background:#07264a!important;
+        box-shadow:none!important;
+      }
+      .nav-menu{padding:8px 8px 16px!important;}
+      .nav-section{
+        padding:14px 11px 5px!important;
+        margin-top:4px!important;
+        color:#8fb3da!important;
+        font-size:9px!important;
+        letter-spacing:.13em!important;
+      }
+      .nav-item{
+        margin:2px 0!important;
+        min-height:35px!important;
+        padding:8px 11px!important;
+        border:0!important;
+        border-radius:8px!important;
+        color:#c6d5e5!important;
+        font-size:12px!important;
+        font-weight:650!important;
+        background:transparent!important;
+        box-shadow:none!important;
+        transform:none!important;
+      }
+      .nav-item:hover{background:#103f78!important;color:#fff!important;}
+      .nav-item.active{
+        background:#12477f!important;
+        color:#fff!important;
+        box-shadow:inset 3px 0 0 #55a9ef!important;
+      }
+      main{background:var(--dbs-bg)!important;}
+      main>header{
+        min-height:66px!important;
+        padding:12px 24px!important;
+        background:#fff!important;
+        border-bottom:1px solid var(--dbs-line)!important;
+        box-shadow:none!important;
+        backdrop-filter:none!important;
+      }
+      .page-title h1{
+        font-size:19px!important;
+        line-height:1.15!important;
+        font-weight:800!important;
+        letter-spacing:-.025em!important;
+      }
+      .page-title p{
+        margin-top:3px!important;
+        font-size:11px!important;
+        color:var(--dbs-muted)!important;
+      }
+      main>header>.page-title{min-width:0;}
+      main>header>div:last-child{gap:7px!important;}
+      main>header>div:last-child .btn{min-height:34px!important;}
+      main>header>div:last-child .btn-secondary{
+        font-size:10px!important;
+        color:#66788a!important;
+        border-color:#e0e7ef!important;
+        background:#fff!important;
+      }
+
+      /* --- Pages: breathing room without nested boxes --- */
+      .tab-view{
+        padding:20px 24px 34px!important;
+        background:transparent!important;
+      }
+      .data-card{
+        border:1px solid var(--dbs-line)!important;
+        border-radius:12px!important;
+        box-shadow:0 2px 9px rgba(16,42,67,.035)!important;
+        margin-bottom:14px!important;
+        background:#fff!important;
+      }
+      .data-header{
+        min-height:48px!important;
+        padding:11px 15px!important;
+        background:#fff!important;
+        border-bottom:1px solid #edf2f7!important;
+      }
+      .data-header h3{
+        font-size:12px!important;
+        font-weight:800!important;
+        letter-spacing:0!important;
+        text-transform:none!important;
+      }
+      .metric-card{
+        border:1px solid var(--dbs-line)!important;
+        border-radius:11px!important;
+        box-shadow:none!important;
+        padding:14px!important;
+      }
+      .metrics-grid{gap:10px!important;margin-bottom:14px!important;}
+      .metric-title{font-size:9px!important;letter-spacing:.04em!important;}
+      .metric-value{font-size:23px!important;margin-top:3px!important;}
+      .filter-bar{gap:8px!important;}
+      .filter-bar input,.filter-bar select{
+        min-height:36px!important;
+        border-radius:8px!important;
+        border-color:#d5e0eb!important;
+      }
+      table th{
+        padding:9px 11px!important;
+        background:#f8fafc!important;
+        color:#718399!important;
+        font-size:9px!important;
+        text-transform:none!important;
+        letter-spacing:.02em!important;
+      }
+      table td{padding:10px 11px!important;}
+      tr:hover{background:#f8fbff!important;}
+
+      /* Dashboard: one operational surface */
+      #tab-dashboard .quick-start-card{
+        border:0!important;
+        box-shadow:none!important;
+        background:transparent!important;
+        margin-bottom:14px!important;
+      }
+      #tab-dashboard .quick-start-card .data-header{
+        padding:0 0 8px!important;
+        border:0!important;
+        background:transparent!important;
+      }
+      #tab-dashboard .quick-start-card .data-header h3,
+      #tab-dashboard .quick-start-card .quick-start-subtitle,
+      #tab-dashboard .quick-start-card .quick-flow{display:none!important;}
+      #tab-dashboard .quick-start-grid{
+        display:flex!important;
+        gap:8px!important;
+        padding:0!important;
+        overflow-x:auto!important;
+      }
+      #tab-dashboard .quick-start-action{
+        flex:1 0 180px!important;
+        min-height:58px!important;
+        padding:10px 12px!important;
+        border:1px solid #e1e9f2!important;
+        border-radius:9px!important;
+        box-shadow:none!important;
+        transform:none!important;
+      }
+      #tab-dashboard .quick-start-action:hover{transform:none!important;box-shadow:none!important;}
+
+      /* Operational pages: form card becomes a clean working surface */
+      .dbs-ux-form-card{
+        border:0!important;
+        box-shadow:none!important;
+        background:transparent!important;
+        padding:0!important;
+      }
+      .dbs-ux-form-card>h3{
+        display:none!important;
+      }
+      .dbs-ux-form-card>.data-header h3{display:none!important;}
+      .dbs-ux-form-card>.data-header{
+        min-height:0!important;
+        padding:0 0 9px!important;
+        background:transparent!important;
+        border:0!important;
+      }
+      .dbs-ux-form-card form{
+        padding:18px!important;
+        background:#fff!important;
+        border:1px solid var(--dbs-line)!important;
+        border-radius:12px!important;
+        box-shadow:0 2px 9px rgba(16,42,67,.035)!important;
+      }
+      .dbs-ux-form-card .form-group label{
+        font-size:9px!important;
+        letter-spacing:.035em!important;
+      }
+
+      /* OS list: filter first, no decorative header block */
+      #tab-ordens .data-card>.data-header{
+        padding:12px 14px!important;
+        background:#fff!important;
+      }
+      #tab-ordens .data-header>div:first-child{flex:1 1 420px!important;}
+      #tab-ordens .data-header .filter-bar{width:100%!important;}
+      #tab-ordens .data-header .filter-bar input{width:min(360px,100%)!important;}
+      #tab-ordens .data-header .filter-bar select{width:180px!important;}
+
+      /* Activities: KPIs and filters stay compact */
+      #tab-atividades .data-card:first-child{
+        border:0!important;
+        box-shadow:none!important;
+        background:transparent!important;
+      }
+      #tab-atividades .data-card:first-child>.day-toolbar{
+        background:#fff!important;
+        border:1px solid var(--dbs-line)!important;
+        border-radius:10px!important;
+        box-shadow:none!important;
+      }
+      .day-kpi-grid{gap:9px!important;margin-bottom:12px!important;}
+      .day-kpi{border:1px solid var(--dbs-line)!important;border-radius:10px!important;box-shadow:none!important;}
+
+      /* Flatten the first registration block on CRUD pages; data remains intact. */
+      .dbs-ux-registration>.data-header{padding:0 0 8px!important;}
+      .dbs-ux-registration>.data-header,
+      .dbs-ux-registration>h3{background:transparent!important;border:0!important;}
+      .dbs-ux-registration>h3{display:none!important;}
+      .dbs-ux-registration form{background:#fff!important;}
+
+      /* Nova OS: one page hierarchy, no hero-on-hero/card stack. */
+      #tab-nova-os.dbs-os-premium{
+        padding:20px 24px 36px!important;
+        background:transparent!important;
+      }
+      #tab-nova-os .os-premium-shell{width:min(1080px,100%)!important;}
+      #tab-nova-os .os-premium-top{
+        min-height:66px!important;
+        padding:14px 18px!important;
+        border-radius:12px 12px 0 0!important;
+        background:#082b57!important;
+        background-image:none!important;
+        box-shadow:none!important;
+      }
+      #tab-nova-os .os-premium-heading span,
+      #tab-nova-os .os-premium-mark{display:none!important;}
+      #tab-nova-os .os-premium-heading h2{font-size:18px!important;}
+      #tab-nova-os .os-premium-meta{display:none!important;}
+      #tab-nova-os .os-premium-form{
+        border-radius:0 0 12px 12px!important;
+        box-shadow:0 2px 9px rgba(16,42,67,.035)!important;
+      }
+      #tab-nova-os .os-premium-body{padding:20px!important;}
+      #tab-nova-os .os-premium-divider{margin:18px 0!important;}
+      #tab-nova-os .os-premium-description{margin-top:18px!important;}
+      #tab-nova-os .os-premium-footer{padding:11px 20px!important;}
+      #tab-nova-os .os-premium-submit{
+        background:var(--dbs-blue)!important;
+        box-shadow:none!important;
+      }
+
+      /* Remove visual duplication from internal headings, never from their data/actions. */
+      .dbs-ux-no-title>h3{display:none!important;}
+      .dbs-ux-no-title>.data-header h3{display:none!important;}
+
+      @media(max-width:900px){
+        :root{--sidebar-width:220px;}
+        .tab-view{padding:16px 16px 28px!important;}
+        main>header{padding:10px 16px!important;}
+      }
+      @media(max-width:640px){
+        aside{width:100%!important;max-height:118px!important;}
+        .nav-menu{padding:7px 8px!important;}
+        main{height:calc(100vh - 118px)!important;}
+        main>header{padding:9px 12px!important;}
+        .tab-view{padding:12px 10px 26px!important;}
+        #tab-nova-os.dbs-os-premium{padding:12px 10px 28px!important;}
+        #tab-nova-os .os-premium-body{padding:16px 14px!important;}
+        #tab-nova-os .os-premium-top{padding:13px 14px!important;}
+        .dbs-ux-form-card form{padding:14px!important;}
+      }
+    `;
+    document.head.appendChild(style);
+
+    const titleMap={
+      "tab-dashboard":["Dashboard","Visão operacional do DBS Control"],
+      "tab-atividades":["Atividades do Dia","Acompanhamento dos atendimentos de hoje"],
+      "tab-despacho":["Despacho","Distribuição e acompanhamento dos atendimentos"],
+      "tab-ordens":["Ordens de Serviço","Acompanhe e gerencie os atendimentos"],
+      "tab-nova-os":["Nova OS","Abra e encaminhe um novo atendimento"],
+      "tab-cadastros":["Cadastros","Base central e integridade das informações"],
+      "tab-clientes":["Clientes","Cadastro, ativos e histórico de atendimento"],
+      "tab-importacao":["Importação / Integrações","Entrada e sincronização de dados"],
+      "tab-equipamentos":["Equipamentos","Ativos instalados e histórico operacional"],
+      "tab-tecnicos":["Técnicos","Equipe de campo e acessos"],
+      "tab-pecas":["Peças e Estoque","Insumos utilizados na operação"],
+      "tab-servicos":["Serviços","Catálogo utilizado nas ordens de serviço"],
+      "tab-compras":["Compras","Pedidos e insumos da operação"],
+      "tab-pwa":["Minhas OS","Atendimentos atribuídos ao colaborador"]
+    };
+
+    function activeTab(){
+      return document.querySelector(".tab-view.active");
+    }
+
+    function scrollToFirstForm(id){
+      const form=document.getElementById(id);
+      if(form)form.scrollIntoView({behavior:"smooth",block:"start"});
+    }
+
+    function syncPageHeader(){
+      const tab=activeTab(), id=tab?.id;
+      if(!id||!titleMap[id])return;
+      const [title,subtitle]=titleMap[id];
+      const h=document.getElementById("view-title"), p=document.getElementById("view-subtitle");
+      if(h)h.textContent=title;
+      if(p)p.textContent=subtitle;
+      const headerAction=document.querySelector("main>header>div:last-child .btn-primary");
+      if(!headerAction)return;
+      const actions={
+        "tab-dashboard":["+ Nova OS",()=>window.switchTab&&window.switchTab("tab-nova-os")],
+        "tab-atividades":["+ Nova OS",()=>window.switchTab&&window.switchTab("tab-nova-os")],
+        "tab-despacho":["+ Nova OS",()=>window.switchTab&&window.switchTab("tab-nova-os")],
+        "tab-ordens":["+ Nova OS",()=>window.switchTab&&window.switchTab("tab-nova-os")],
+        "tab-nova-os":["Emitir OS",()=>document.getElementById("form-nova-os")?.requestSubmit()],
+        "tab-cadastros":["+ Nova OS",()=>window.switchTab&&window.switchTab("tab-nova-os")],
+        "tab-clientes":["+ Novo cliente",()=>scrollToFirstForm("form-cliente")],
+        "tab-importacao":["Importar planilha",()=>document.getElementById("import-arquivo")?.click()],
+        "tab-equipamentos":["+ Novo equipamento",()=>scrollToFirstForm("form-equipamento")],
+        "tab-tecnicos":["+ Novo técnico",()=>scrollToFirstForm("form-tecnico")],
+        "tab-pecas":["+ Nova peça",()=>scrollToFirstForm("form-peca")],
+        "tab-servicos":["+ Novo serviço",()=>scrollToFirstForm("form-servico")],
+        "tab-compras":["+ Nova compra",()=>scrollToFirstForm("form-compra")],
+        "tab-pwa":["Atualizar OS",()=>typeof window.renderizarPWA==="function"&&window.renderizarPWA()]
+      };
+      const cfg=actions[id];
+      if(cfg){headerAction.textContent=cfg[0];headerAction.onclick=cfg[1];}
+    }
+
+    function classifyPages(){
+      const ids=["tab-clientes","tab-equipamentos","tab-tecnicos","tab-pecas","tab-servicos","tab-compras"];
+      ids.forEach(id=>{
+        const tab=document.getElementById(id); if(!tab)return;
+        const first=tab.querySelector(".data-card");
+        if(first)first.classList.add("dbs-ux-form-card","dbs-ux-registration");
+        const directHeading=first?.querySelector(":scope>h3");
+        if(directHeading)first.classList.add("dbs-ux-no-title");
+      });
+      ["tab-dashboard","tab-atividades","tab-ordens","tab-cadastros","tab-importacao"].forEach(id=>{
+        const tab=document.getElementById(id);if(tab)tab.classList.add("dbs-ux-page");
+      });
+      const nova=document.getElementById("tab-nova-os"); if(nova)nova.classList.add("dbs-ux-page");
+    }
+
+    function normalizeNav(){
+      const sections=[...document.querySelectorAll("aside .nav-section")];
+      const items=[...document.querySelectorAll("aside .nav-item")];
+      const labels={
+        "Dashboard Principal":"Dashboard",
+        "Quadros de Despacho":"Despacho",
+        "Nova OS":"Nova OS",
+        "Central de Cadastros":"Cadastros",
+        "Importação em Massa":"Importação / Integrações",
+        "Parque de Equipamentos":"Equipamentos",
+        "Equipe Técnica":"Técnicos",
+        "Peças & Estoque":"Peças e Estoque",
+        "Serviços":"Serviços",
+        "Compras":"Compras"
+      };
+      items.forEach(item=>{
+        const span=item.querySelector("span");
+        if(span&&labels[span.textContent.trim()])span.textContent=labels[span.textContent.trim()];
+      });
+      if(sections[0])sections[0].textContent="OPERAÇÃO";
+      if(sections[1])sections[1].textContent="CADASTROS";
+      if(sections[2])sections[2].textContent="GESTÃO";
+      if(sections[3])sections[3].textContent="CAMPO";
+    }
+
+    function installSwitchObserver(){
+      if(typeof window.switchTab==="function"&&!window.__dbsSwitchTabWrapped){
+        const original=window.switchTab;
+        window.switchTab=function(tabId,el){
+          const result=original.apply(this,arguments);
+          setTimeout(()=>{classifyPages();normalizeNav();syncPageHeader();},0);
+          return result;
+        };
+        window.__dbsSwitchTabWrapped=true;
+      }
+      const observer=new MutationObserver(()=>syncPageHeader());
+      document.querySelectorAll(".tab-view").forEach(t=>observer.observe(t,{attributes:true,attributeFilter:["class"]}));
+      syncPageHeader();
+    }
+
+    function bootReform(){
+      classifyPages();
+      normalizeNav();
+      installSwitchObserver();
+      syncPageHeader();
+    }
+
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bootReform);
+    else bootReform();
+    setTimeout(bootReform,250);
+    setTimeout(bootReform,1000);
+  })();
+
+  })();
 })();
