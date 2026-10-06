@@ -1144,6 +1144,230 @@
             #tab-nova-os{scroll-behavior:auto}
         }
 
+
+        /* DBS CONTROL · PREMIUM UI SYSTEM
+           Hierarquia visual reduzida: menos molduras, mais espaço, foco no conteúdo.
+           Não altera IDs, eventos, regras de negócio ou dados. */
+        :root {
+            --sidebar-width: 252px;
+            --color-bg: #f4f8fc;
+            --color-surface: #ffffff;
+            --color-sidebar: #071a33;
+            --color-sidebar-hover: #0d2d55;
+            --color-primary: #1674d1;
+            --color-primary-dark: #0b56ad;
+            --color-accent: #16a879;
+            --text-main: #102a43;
+            --text-muted: #6b7f95;
+            --border-color: #d5e2ef;
+            --border-light: #e7eef6;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --shadow-sm: 0 2px 10px rgba(16,42,67,.045);
+        }
+
+        body {
+            background:
+                radial-gradient(circle at 78% -12%,rgba(66,151,232,.08),transparent 28%),
+                #f4f8fc;
+        }
+
+        aside {
+            background:
+                radial-gradient(circle at 20% 0%,rgba(34,126,219,.14),transparent 28%),
+                linear-gradient(180deg,#071a33 0%,#09264a 100%);
+            box-shadow:8px 0 28px rgba(8,35,65,.07);
+        }
+
+        .brand-header {
+            min-height:64px;
+            padding:15px 18px;
+            background:rgba(4,18,38,.55);
+            border-bottom:1px solid rgba(255,255,255,.07);
+            backdrop-filter:blur(12px);
+        }
+        .brand-title { font-size:14px; letter-spacing:.7px; }
+        .brand-badge {
+            padding:4px 8px;
+            border-radius:999px;
+            background:linear-gradient(135deg,#2588eb,#0d61c1);
+            box-shadow:0 5px 14px rgba(24,116,209,.25);
+        }
+
+        .nav-menu { padding:8px 9px 16px; }
+        .nav-section {
+            padding:16px 12px 6px;
+            color:#7691ad;
+            font-size:9px;
+            letter-spacing:.13em;
+        }
+        .nav-item {
+            margin:2px 0;
+            padding:9px 12px;
+            min-height:36px;
+            border:0;
+            border-radius:10px;
+            color:#b6c9dc;
+            font-size:12px;
+            font-weight:650;
+            transition:background .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease;
+        }
+        .nav-item:hover {
+            background:rgba(255,255,255,.055);
+            color:#fff;
+            border-left-color:transparent;
+            transform:translateX(1px);
+        }
+        .nav-item.active {
+            color:#fff;
+            border-left:0;
+            background:linear-gradient(90deg,rgba(30,132,225,.25),rgba(255,255,255,.055));
+            box-shadow:inset 3px 0 0 #29a9ff,0 5px 16px rgba(0,0,0,.08);
+        }
+
+        main { min-width:0; }
+        main > header {
+            min-height:62px;
+            padding:10px 24px;
+            background:rgba(255,255,255,.94);
+            border-bottom:1px solid #e4edf6;
+            box-shadow:0 3px 18px rgba(16,42,67,.035);
+            backdrop-filter:blur(14px);
+        }
+        .page-title h1 { font-size:16px; letter-spacing:-.02em; }
+        .page-title p { color:#7890a8; font-size:10px; }
+
+        .tab-view {
+            padding:20px 26px 32px;
+        }
+
+        .data-card {
+            border-radius:16px;
+            border-color:#e1eaf3;
+            box-shadow:0 7px 25px rgba(20,48,77,.045);
+            margin-bottom:16px;
+        }
+        .data-header {
+            padding:13px 17px;
+            background:#fff;
+            border-bottom-color:#edf2f7;
+        }
+        .data-header h3 {
+            color:#173653;
+            font-size:12px;
+            letter-spacing:.01em;
+            text-transform:none;
+        }
+
+        .metric-card {
+            border-radius:15px;
+            border-color:#e3ebf4;
+            box-shadow:0 7px 22px rgba(20,48,77,.04);
+        }
+
+        .btn {
+            min-height:34px;
+            border-radius:9px;
+            box-shadow:none;
+        }
+        .btn-primary {
+            background:linear-gradient(135deg,#2185e4,#1261bd);
+            box-shadow:0 6px 16px rgba(22,116,209,.16);
+        }
+        .btn-primary:hover {
+            background:linear-gradient(135deg,#2b91ef,#0e57ae);
+            transform:translateY(-1px);
+        }
+        .btn-secondary {
+            background:#fff;
+            border-color:#d5e2ef;
+            color:#36516b;
+        }
+        .btn-secondary:hover { background:#f6faff; border-color:#bcd2e8; }
+
+        .form-group label {
+            color:#526a82;
+            font-size:9px;
+            letter-spacing:.045em;
+        }
+        .form-group input,.form-group select,.form-group textarea {
+            min-height:40px;
+            border-color:#d2e0ec;
+            border-radius:10px;
+            transition:border-color .16s ease,box-shadow .16s ease;
+        }
+        .form-group input:focus,.form-group select:focus,.form-group textarea:focus {
+            border-color:#4a99df;
+            box-shadow:0 0 0 4px rgba(22,116,209,.08);
+        }
+
+        th {
+            background:#f7fafd;
+            color:#71869b;
+            border-bottom-color:#e1eaf3;
+            font-size:9px;
+        }
+        td { border-bottom-color:#edf2f7; }
+        tr:hover { background:#f8fbff; }
+
+        /* Remove "stacked boxes" feeling from ordinary section headers. */
+        .data-card > .data-header + table,
+        .data-card > .data-header + .table-scroll { border-top:0; }
+
+        @media(max-width:820px){
+            :root { --sidebar-width:220px; }
+            main > header { padding:9px 16px; }
+            .tab-view { padding:16px 16px 28px; }
+        }
+        @media(max-width:640px){
+            main > header { min-height:56px; padding:8px 12px; }
+            .tab-view { padding:12px 10px 26px; }
+        }
+
+
+        /* Nova OS: premium, not over-framed. */
+        #tab-nova-os .nova-os-hero {
+            padding:20px 24px;
+            border-radius:20px;
+            box-shadow:0 14px 38px rgba(11,64,125,.16);
+        }
+        #tab-nova-os .nova-os-hero p { max-width:900px; }
+        #tab-nova-os .nova-os-flow { margin-top:13px; }
+        #tab-nova-os .nova-os-form-card {
+            padding:18px;
+            border-radius:17px;
+        }
+        #tab-nova-os .nova-os-form-head {
+            padding:2px 2px 12px;
+        }
+        #tab-nova-os .nova-os-section {
+            margin-top:12px;
+            padding:14px;
+            border:0;
+            border-top:1px solid #edf2f7;
+            border-radius:0;
+            background:transparent;
+        }
+        #tab-nova-os .nova-os-section:first-of-type {
+            padding-top:14px;
+        }
+        #tab-nova-os .nova-os-section-head { margin-bottom:10px; }
+        #tab-nova-os .nova-os-section-number {
+            width:25px;
+            height:25px;
+            border-radius:8px;
+            box-shadow:none;
+        }
+        #tab-nova-os .nova-os-side-card {
+            border-radius:17px;
+            box-shadow:0 7px 22px rgba(20,48,77,.045);
+        }
+        @media(max-width:640px){
+            #tab-nova-os .nova-os-hero { padding:17px 18px; }
+            #tab-nova-os .nova-os-form-card { padding:14px; }
+            #tab-nova-os .nova-os-section { padding:13px 0; }
+        }
+
 </style>
 </head>
 <body>
