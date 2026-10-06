@@ -1468,6 +1468,220 @@
             .nova-clean-submit{width:100%;justify-content:center;}
         }
 
+
+        /* DBS CONTROL · NOVA OS — redesenho final
+           Uma tela de operação, não uma sequência de cards. */
+        #tab-nova-os.dbs-os-premium{
+            padding:26px 30px 46px!important;
+            overflow-y:auto!important;
+            overflow-x:hidden!important;
+            scrollbar-gutter:stable;
+            background:#f5f8fc;
+        }
+        .os-premium-shell{
+            width:min(1040px,100%);
+            margin:0 auto;
+        }
+        .os-premium-top{
+            min-height:86px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:20px;
+            padding:18px 22px;
+            border-radius:18px 18px 0 0;
+            color:#fff;
+            background:
+                radial-gradient(circle at 88% 15%,rgba(82,180,255,.20),transparent 28%),
+                linear-gradient(115deg,#081d39 0%,#0c315d 58%,#1265b5 100%);
+            box-shadow:0 12px 30px rgba(10,55,105,.14);
+        }
+        .os-premium-heading{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            min-width:0;
+        }
+        .os-premium-mark{
+            display:grid;
+            place-items:center;
+            width:34px;
+            height:34px;
+            flex:0 0 auto;
+            border:1px solid rgba(255,255,255,.16);
+            border-radius:10px;
+            background:rgba(255,255,255,.09);
+            color:#9dd8ff;
+            font-size:9px;
+            font-weight:950;
+            letter-spacing:.08em;
+        }
+        .os-premium-heading span{
+            display:block;
+            color:#83c9ff;
+            font-size:8px;
+            font-weight:900;
+            letter-spacing:.16em;
+            text-transform:uppercase;
+        }
+        .os-premium-heading h2{
+            margin:2px 0 0;
+            color:#fff;
+            font-size:20px;
+            line-height:1.1;
+            letter-spacing:-.025em;
+            font-weight:900;
+        }
+        .os-premium-meta{
+            flex:0 0 auto;
+            padding:6px 9px;
+            border:1px solid rgba(255,255,255,.13);
+            border-radius:999px;
+            background:rgba(255,255,255,.07);
+            color:#cde7fb;
+            font-size:9px;
+            font-weight:800;
+        }
+        .os-premium-form{
+            overflow:hidden;
+            border:1px solid #dbe6f0;
+            border-top:0;
+            border-radius:0 0 18px 18px;
+            background:#fff;
+            box-shadow:0 12px 34px rgba(16,42,67,.055);
+        }
+        .os-premium-body{
+            padding:24px 25px 20px;
+        }
+        .os-premium-row{
+            display:grid;
+            gap:14px;
+        }
+        .os-premium-row-location{
+            grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);
+        }
+        .os-premium-row-service{
+            grid-template-columns:1.05fr .9fr 1fr;
+        }
+        .os-premium-field{min-width:0;}
+        .os-premium-field label,
+        .os-premium-description label{
+            display:block;
+            margin-bottom:6px;
+            color:#425a72;
+            font-size:9px;
+            font-weight:900;
+            letter-spacing:.06em;
+            text-transform:uppercase;
+        }
+        .os-premium-field input,
+        .os-premium-field select,
+        .os-premium-description textarea{
+            width:100%;
+            min-height:43px;
+            border:1px solid #cfdeeb;
+            border-radius:10px;
+            background:#fff;
+            color:#183752;
+            font-size:12px;
+            outline:0;
+            box-shadow:0 1px 2px rgba(16,42,67,.025);
+            transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+        }
+        .os-premium-field input{
+            padding:10px 12px;
+        }
+        .os-premium-field select{
+            padding:9px 11px;
+            cursor:pointer;
+            font-weight:650;
+        }
+        .os-premium-field input::placeholder,
+        .os-premium-description textarea::placeholder{
+            color:#9aa9b8;
+        }
+        .os-premium-field input:hover,
+        .os-premium-field select:hover,
+        .os-premium-description textarea:hover{
+            border-color:#aec7de;
+            background:#fcfeff;
+        }
+        .os-premium-field input:focus,
+        .os-premium-field select:focus,
+        .os-premium-description textarea:focus{
+            border-color:#3f91df;
+            box-shadow:0 0 0 4px rgba(23,105,209,.085);
+        }
+        #os-select-cliente{
+            position:absolute!important;
+            width:1px!important;
+            height:1px!important;
+            opacity:0!important;
+            pointer-events:none!important;
+            overflow:hidden!important;
+        }
+        .os-premium-divider{
+            height:1px;
+            margin:22px 0;
+            background:#edf2f7;
+        }
+        .os-premium-description{
+            margin-top:22px;
+        }
+        .os-premium-description textarea{
+            min-height:116px;
+            padding:11px 12px;
+            resize:vertical;
+            line-height:1.55;
+        }
+        .os-premium-footer{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:18px;
+            min-height:64px;
+            padding:11px 25px;
+            border-top:1px solid #e9f0f6;
+            background:#fbfdff;
+        }
+        .os-premium-footer span{
+            color:#8493a4;
+            font-size:9px;
+        }
+        .os-premium-submit{
+            min-height:40px;
+            padding:9px 16px;
+            border-radius:10px;
+            background:linear-gradient(135deg,#2688e8,#155db7)!important;
+            box-shadow:0 7px 17px rgba(23,105,209,.17)!important;
+            font-size:10px;
+            font-weight:900;
+        }
+        .os-premium-submit b{
+            margin-left:4px;
+            font-size:14px;
+            font-weight:500;
+        }
+        @media(max-width:850px){
+            #tab-nova-os.dbs-os-premium{padding:18px 18px 34px!important;}
+            .os-premium-row-service{grid-template-columns:1fr 1fr;}
+            .os-premium-row-service .form-group:last-child{grid-column:1/-1;}
+        }
+        @media(max-width:620px){
+            #tab-nova-os.dbs-os-premium{padding:12px 10px 28px!important;}
+            .os-premium-top{min-height:72px;padding:15px;border-radius:15px 15px 0 0;}
+            .os-premium-heading h2{font-size:18px;}
+            .os-premium-meta{display:none;}
+            .os-premium-form{border-radius:0 0 15px 15px;}
+            .os-premium-body{padding:18px 15px 16px;}
+            .os-premium-row-location,.os-premium-row-service{grid-template-columns:1fr;}
+            .os-premium-row-service .form-group:last-child{grid-column:auto;}
+            .os-premium-divider{margin:18px 0;}
+            .os-premium-description{margin-top:18px;}
+            .os-premium-footer{align-items:stretch;flex-direction:column;padding:13px 15px;}
+            .os-premium-submit{width:100%;justify-content:center;}
+        }
+
 </style>
 </head>
 <body>
@@ -1705,91 +1919,77 @@
         </div>
 
         <!-- ABERTURA DE OS -->
-        <div id="tab-nova-os" class="tab-view dbs-nova-os-clean">
-            <div class="nova-clean-shell">
-                <div class="nova-clean-head">
-                    <div>
-                        <div class="nova-clean-kicker"><span></span> Operação</div>
-                        <h2>Nova ordem de serviço</h2>
-                        <p>Informe apenas o necessário para despachar o atendimento.</p>
+        <div id="tab-nova-os" class="tab-view dbs-os-premium">
+            <div class="os-premium-shell">
+                <div class="os-premium-top">
+                    <div class="os-premium-heading">
+                        <div class="os-premium-mark">OS</div>
+                        <div>
+                            <span>Operação</span>
+                            <h2>Nova ordem de serviço</h2>
+                        </div>
                     </div>
-                    <div class="nova-clean-steps" aria-label="Etapas">
-                        <span class="is-active">1 Dados</span>
-                        <i></i><span>2 Atendimento</span><i></i><span>3 Despacho</span>
-                    </div>
+                    <div class="os-premium-meta">Nova emissão</div>
                 </div>
 
-                <form id="form-nova-os" onsubmit="salvarNovaOS(event)" class="nova-clean-form">
-                    <section class="nova-clean-section">
-                        <div class="nova-clean-section-title">
-                            <span class="nova-clean-index">01</span>
-                            <div>
-                                <strong>Onde será o atendimento?</strong>
-                                <small>Cliente e equipamento</small>
+                <form id="form-nova-os" onsubmit="salvarNovaOS(event)" class="os-premium-form">
+                    <div class="os-premium-body">
+                        <div class="os-premium-row os-premium-row-location">
+                            <div class="form-group os-premium-field os-premium-client">
+                                <label for="os-client-search">Cliente</label>
+                                <input id="os-client-search"
+                                       type="text"
+                                       list="os-client-options"
+                                       autocomplete="off"
+                                       placeholder="Digite o nome ou CNPJ..." required
+                                       oninput="sincronizarClienteOSPorBusca()"
+                                       onchange="sincronizarClienteOSPorBusca()">
+                                <datalist id="os-client-options"></datalist>
+                                <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" aria-hidden="true" tabindex="-1"></select>
                             </div>
-                        </div>
-                        <div class="nova-clean-grid nova-clean-grid-two">
-                            <div class="form-group">
-                                <label>Cliente corporativo</label>
-                                <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" required></select>
-                            </div>
-                            <div class="form-group">
-                                <label>Equipamento <em>do cliente selecionado</em></label>
+
+                            <div class="form-group os-premium-field os-premium-equipment">
+                                <label for="os-select-equipamento">Equipamento</label>
                                 <select id="os-select-equipamento" required>
-                                    <option value="">Selecione o cliente primeiro</option>
+                                    <option value="">Selecione o cliente primeiro...</option>
                                 </select>
                             </div>
                         </div>
-                    </section>
 
-                    <section class="nova-clean-section">
-                        <div class="nova-clean-section-title">
-                            <span class="nova-clean-index">02</span>
-                            <div>
-                                <strong>Como será atendido?</strong>
-                                <small>Responsável e serviço</small>
-                            </div>
-                        </div>
-                        <div class="nova-clean-grid nova-clean-grid-three">
-                            <div class="form-group">
-                                <label>Técnico responsável</label>
+                        <div class="os-premium-divider"></div>
+
+                        <div class="os-premium-row os-premium-row-service">
+                            <div class="form-group os-premium-field">
+                                <label for="os-select-tecnico">Técnico responsável</label>
                                 <select id="os-select-tecnico" required></select>
                             </div>
-                            <div class="form-group">
-                                <label>Tipo de atendimento</label>
+
+                            <div class="form-group os-premium-field">
+                                <label for="os-select-tipo">Tipo de atendimento</label>
                                 <select id="os-select-tipo" required>
                                     <option>Manutenção Corretiva</option>
                                     <option>Manutenção Preventiva / PMOC</option>
                                     <option>Instalação / Start-Up</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label>Serviço principal</label>
+
+                            <div class="form-group os-premium-field">
+                                <label for="os-select-servico">Serviço</label>
                                 <select id="os-select-servico" required></select>
                             </div>
                         </div>
-                    </section>
 
-                    <section class="nova-clean-section nova-clean-description">
-                        <div class="nova-clean-section-title">
-                            <span class="nova-clean-index">03</span>
-                            <div>
-                                <strong>O que precisa ser feito?</strong>
-                                <small>Descrição para a equipe de campo</small>
-                            </div>
+                        <div class="form-group os-premium-description">
+                            <label for="os-desc">O que precisa ser feito?</label>
+                            <textarea id="os-desc" rows="4" required placeholder="Descreva o problema ou a orientação para o técnico..."></textarea>
                         </div>
-                        <div class="form-group">
-                            <label>Problema / instruções</label>
-                            <textarea id="os-desc" rows="5" required placeholder="Descreva o problema, sintoma ou orientação para o técnico..."></textarea>
-                        </div>
-                    </section>
+                    </div>
 
-                    <div class="nova-clean-footer">
-                        <div>
-                            <strong>Pronto para despachar?</strong>
-                            <span>Confira cliente, equipamento e técnico antes de emitir.</span>
-                        </div>
-                        <button type="submit" class="btn btn-primary nova-clean-submit">Emitir e despachar OS <b>→</b></button>
+                    <div class="os-premium-footer">
+                        <span>Cliente, equipamento, técnico e serviço são obrigatórios.</span>
+                        <button type="submit" class="btn btn-primary os-premium-submit">
+                            Emitir OS <b>→</b>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -3827,6 +4027,56 @@
         }
         function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${Number(c.valor||0).toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
 
+
+        function sincronizarClienteOSPorBusca() {
+            const input = document.getElementById('os-client-search');
+            const select = document.getElementById('os-select-cliente');
+            if (!input || !select) return;
+
+            const typed = String(input.value || '').trim().toLocaleLowerCase('pt-BR');
+            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+
+            if (!typed) {
+                select.value = '';
+                atualizarEquipamentosDoClienteOS();
+                return;
+            }
+
+            const match = clientes.find(c => {
+                const nome = String(c.nome || c.nomeFantasia || c.razaoSocial || '').trim().toLocaleLowerCase('pt-BR');
+                const cnpj = String(c.cnpj || '').trim().toLocaleLowerCase('pt-BR');
+                return typed === nome || typed === cnpj || typed === (nome + ' — ' + cnpj);
+            });
+
+            if (match) {
+                select.value = String(match.id);
+                atualizarEquipamentosDoClienteOS();
+            } else {
+                select.value = '';
+                atualizarEquipamentosDoClienteOS();
+            }
+        }
+
+        function atualizarBuscaClienteOS() {
+            const input = document.getElementById('os-client-search');
+            const datalist = document.getElementById('os-client-options');
+            const select = document.getElementById('os-select-cliente');
+            if (!input || !datalist || !select) return;
+
+            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+            datalist.innerHTML = clientes.map(c => {
+                const nome = String(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome');
+                const cnpj = String(c.cnpj || '').trim();
+                const value = cnpj ? nome + ' — ' + cnpj : nome;
+                return '<option value="' + escDbsControl(value) + '"></option>';
+            }).join('');
+
+            const selected = clientes.find(c => String(c.id) === String(select.value || ''));
+            input.value = selected
+                ? (selected.cnpj ? String(selected.nome || selected.nomeFantasia || selected.razaoSocial || 'Cliente sem nome') + ' — ' + String(selected.cnpj) : String(selected.nome || selected.nomeFantasia || selected.razaoSocial || 'Cliente sem nome'))
+                : '';
+        }
+
         function atualizarSelects() {
             const cli = document.getElementById('os-select-cliente');
             const eqCli = document.getElementById('eq-select-cliente');
@@ -3837,6 +4087,7 @@
             const servicos = Array.isArray(ERP_STATE.servicos) ? ERP_STATE.servicos : [];
             const optionText = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
             if (cli) cli.innerHTML = '<option value="">Selecione o cliente...</option>' + clientes.map(c => `<option value="${optionText(c.id)}">${optionText(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome')}</option>`).join('');
+            atualizarBuscaClienteOS();
             if (eqCli) eqCli.innerHTML = '<option value="">Selecione o cliente...</option>' + clientes.map(c => `<option value="${optionText(c.id)}">${optionText(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome')}</option>`).join('');
             if (tec) tec.innerHTML = '<option value="">Selecione o técnico...</option>' + tecnicos.map(t => `<option value="${optionText(t.id)}">${optionText(t.nome || 'Técnico sem nome')} (${optionText(t.posicao || 'Técnico')})</option>`).join('');
             if (srv) srv.innerHTML = '<option value="">Selecione o serviço...</option>' + servicos.map(s => `<option value="${optionText(s.id)}">${optionText(s.nome || 'Serviço')} (R$ ${Number(s.valor || 0).toFixed(2).replace('.', ',')})</option>`).join('');
