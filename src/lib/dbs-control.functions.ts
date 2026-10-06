@@ -309,3 +309,108 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     }
     return saved;
   });
+
+
+export const auditDbsControlDatabase = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsControlUser(context);
+    if (!["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(user.role_key)) {
+      throw new Error("A auditoria da base do DBS CONTROL é restrita à administração.");
+    }
+
+    const [
+      clientsResult, sitesResult, equipmentResult, servicesResult, employeesResult,
+      ordersResult, orderEquipmentResult, refsResult, syncRunsResult, snapshotsResult,
+    ] = await Promise.all([
+      supabaseAdmin.from("dbs_control_clients").select("id,legal_name,trade_name,cnpj,email,status"),
+      supabaseAdmin.from("dbs_control_sites").select("id,client_id,name,status"),
+      supabaseAdmin.from("dbs_control_equipment").select("id,client_id,site_id,tag_code,serial_number,status"),
+      supabaseAdmin.from("dbs_control_service_catalog").select("id,name,status"),
+      supabaseAdmin.from("rh_employees").select("id,full_name,is_active,source_system,source_key,registration_data"),
+      supabaseAdmin.from("dbs_control_work_orders").select("id,protocol,client_id,site_id,service_id,assigned_employee_id,status"),
+      supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
+      supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
+      supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
+      supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
+    ]);
+    const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
+    const firstError = results.find((r) => r.error)?.error;
+    if (firstError) throw new Error(firstError.message);
+
+    const clients=clientsResult.data??[], sites=sitesResult.data??[], equipment=equipmentResult.data??[];
+    const services=servicesResult.data??[], employees=employeesResult.data??[], orders=ordersResult.data??[];
+    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=syncRunsResult.data??[];
+    const snapshots=snapshotsResult.data??[];
+    const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
+    const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
+    const groups=(rows:any[],key:(x:any)=>string)=>{
+      const m=new Map<string,any[]>();
+      for(const row of rows){const k=key(row);if(!k)continue;const a=m.get(k)??[];a.push(row);m.set(k,a);}
+      return [...m.entries()].filter(([,a])=>a.length>1);
+    };
+    const issue=(code:string,severity:"critical"|"warning",label:string,count:number,samples:string[]=[])=>({code,severity,label,count,samples:samples.slice(0,10)});
+    const issues:any[]=[];
+    const clientIds=new Set(clients.map((x:any)=>String(x.id)));
+    const siteIds=new Set(sites.map((x:any)=>String(x.id)));
+    const equipmentIds=new Set(equipment.map((x:any)=>String(x.id)));
+    const serviceIds=new Set(services.map((x:any)=>String(x.id)));
+    const employeeIds=new Set(employees.map((x:any)=>String(x.id)));
+    const orderIds=new Set(orders.map((x:any)=>String(x.id)));
+
+    const dClient=groups(clients,x=>digits(x.cnpj));
+    if(dClient.length)issues.push(issue("client_document_duplicate","warning","CNPJ/CPF repetido entre clientes",dClient.length,dClient.map(([k,g])=>k+" · "+g.map((x:any)=>x.legal_name).join(" / "))));
+    const dName=groups(clients,x=>norm(x.legal_name));
+    if(dName.length)issues.push(issue("client_name_duplicate","warning","Nome de cliente repetido",dName.length,dName.map(([k,g])=>k+" · "+g.length+" registros")));
+    const dEmail=groups(clients,x=>norm(x.email));
+    if(dEmail.length)issues.push(issue("client_email_duplicate","warning","E-mail de cliente repetido",dEmail.length,dEmail.map(([k,g])=>k+" · "+g.length+" registros")));
+
+    const orphanSites=sites.filter((x:any)=>!clientIds.has(String(x.client_id)));
+    if(orphanSites.length)issues.push(issue("site_orphan","critical","Locais sem cliente válido",orphanSites.length,orphanSites.map((x:any)=>x.name)));
+    const dSites=groups(sites,x=>String(x.client_id)+"|"+norm(x.name));
+    if(dSites.length)issues.push(issue("site_duplicate","warning","Locais repetidos dentro do mesmo cliente",dSites.length,dSites.map(([,g])=>g[0]?.name+" · "+g.length+" registros")));
+
+    const orphanEq=equipment.filter((x:any)=>!clientIds.has(String(x.client_id)));
+    if(orphanEq.length)issues.push(issue("equipment_orphan_client","critical","Equipamentos sem cliente válido",orphanEq.length,orphanEq.map((x:any)=>x.tag_code||x.serial_number||x.id)));
+    const orphanEqSite=equipment.filter((x:any)=>x.site_id&&!siteIds.has(String(x.site_id)));
+    if(orphanEqSite.length)issues.push(issue("equipment_orphan_site","critical","Equipamentos com local inexistente",orphanEqSite.length,orphanEqSite.map((x:any)=>x.tag_code||x.id)));
+    const dTags=groups(equipment,x=>String(x.client_id)+"|"+norm(x.tag_code));
+    if(dTags.length)issues.push(issue("equipment_tag_duplicate","warning","TAG duplicada dentro do mesmo cliente",dTags.length,dTags.map(([k,g])=>k.split("|")[1]+" · "+g.length+" registros")));
+    const dSerial=groups(equipment,x=>String(x.client_id)+"|"+norm(x.serial_number));
+    if(dSerial.length)issues.push(issue("equipment_serial_duplicate","warning","Número de série repetido dentro do mesmo cliente",dSerial.length,dSerial.map(([k,g])=>k.split("|")[1]+" · "+g.length+" registros")));
+
+    const dServices=groups(services,x=>norm(x.name));
+    if(dServices.length)issues.push(issue("service_duplicate","warning","Serviço repetido no catálogo",dServices.length,dServices.map(([k,g])=>k+" · "+g.length+" registros")));
+
+    const fcEmployees=employees.filter((x:any)=>x.source_system==="fieldcontrol");
+    const dSource=groups(fcEmployees,x=>norm(x.source_key));
+    if(dSource.length)issues.push(issue("employee_source_duplicate","critical","Funcionários FieldControl com mesmo identificador externo",dSource.length,dSource.map(([k,g])=>k+" · "+g.map((x:any)=>x.full_name).join(" / "))));
+    const dEmpEmail=groups(employees,x=>norm((x.registration_data as any)?.email));
+    if(dEmpEmail.length)issues.push(issue("employee_email_duplicate","warning","E-mail presente em mais de um funcionário",dEmpEmail.length,dEmpEmail.map(([k,g])=>k+" · "+g.map((x:any)=>x.full_name).join(" / "))));
+
+    const orphanOrderClient=orders.filter((x:any)=>!clientIds.has(String(x.client_id)));
+    if(orphanOrderClient.length)issues.push(issue("order_orphan_client","critical","OS sem cliente válido",orphanOrderClient.length,orphanOrderClient.map((x:any)=>x.protocol)));
+    const orphanOrderSite=orders.filter((x:any)=>x.site_id&&!siteIds.has(String(x.site_id)));
+    if(orphanOrderSite.length)issues.push(issue("order_orphan_site","critical","OS com local inexistente",orphanOrderSite.length,orphanOrderSite.map((x:any)=>x.protocol)));
+    const orphanOrderService=orders.filter((x:any)=>x.service_id&&!serviceIds.has(String(x.service_id)));
+    if(orphanOrderService.length)issues.push(issue("order_orphan_service","critical","OS com serviço inexistente",orphanOrderService.length,orphanOrderService.map((x:any)=>x.protocol)));
+    const orphanOrderEmployee=orders.filter((x:any)=>x.assigned_employee_id&&!employeeIds.has(String(x.assigned_employee_id)));
+    if(orphanOrderEmployee.length)issues.push(issue("order_orphan_employee","critical","OS com técnico/funcionário inexistente",orphanOrderEmployee.length,orphanOrderEmployee.map((x:any)=>x.protocol)));
+    const badLinks=orderEquipment.filter((x:any)=>!orderIds.has(String(x.work_order_id))||!equipmentIds.has(String(x.equipment_id)));
+    if(badLinks.length)issues.push(issue("order_equipment_orphan","critical","Vínculos OS × equipamento inválidos",badLinks.length,badLinks.slice(0,10).map((x:any)=>String(x.work_order_id))));
+
+    const dRefs=groups(refs,x=>String(x.provider)+"|"+String(x.entity_type)+"|"+String(x.external_id));
+    if(dRefs.length)issues.push(issue("external_ref_duplicate","critical","Referências externas duplicadas",dRefs.length,dRefs.map(([k,g])=>k+" · "+g.length+" registros")));
+    const refLocals=new Map<string,any[]>();
+    for(const ref of refs){if(!ref.local_id)continue;const k=String(ref.provider)+"|"+String(ref.entity_type)+"|"+String(ref.local_id);const a=refLocals.get(k)??[];a.push(ref);refLocals.set(k,a);}
+    const localConflicts=[...refLocals.entries()].filter(([,g])=>g.length>1&&new Set(g.map((x:any)=>String(x.external_id))).size>1);
+    if(localConflicts.length)issues.push(issue("external_ref_local_conflict","warning","Um registro local aponta para vários IDs externos",localConflicts.length,localConflicts.map(([k,g])=>k+" · "+g.length+" refs")));
+
+    const snapshot=snapshots.find((x:any)=>String(x.scope_key||"").startsWith("company:"));
+    const ss=snapshot?.state as any;
+    const snapshotCounts=ss?{clientes:Array.isArray(ss.clientes)?ss.clientes.length:0,equipamentos:Array.isArray(ss.equipamentos)?ss.equipamentos.length:0,tecnicos:Array.isArray(ss.tecnicos)?ss.tecnicos.length:0,servicos:Array.isArray(ss.servicos)?ss.servicos.length:0,ordens:Array.isArray(ss.ordens)?ss.ordens.length:0}:null;
+    const counts={clients:clients.length,sites:sites.length,equipment:equipment.length,services:services.length,employees:employees.length,fieldControlEmployees:fcEmployees.length,orders:orders.length,orderEquipmentLinks:orderEquipment.length,externalRefs:refs.length};
+    const critical=issues.filter((x:any)=>x.severity==="critical").length;
+    const warnings=issues.filter((x:any)=>x.severity==="warning").length;
+    return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:syncRuns[0]??null,snapshotCounts,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
+  });
