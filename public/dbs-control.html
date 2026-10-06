@@ -963,10 +963,20 @@
                         <h2 style="margin-top:5px;font-size:22px;color:#102f52;">Central de Cadastros</h2>
                         <p style="margin-top:5px;max-width:760px;color:#64748b;font-size:12px;line-height:1.55;">Este é o núcleo do DBS CONTROL. Clientes, locais, equipamentos, serviços, equipe e OS precisam compartilhar os mesmos IDs e vínculos. Esta área mostra a base carregada e aponta inconsistências antes que elas contaminem a operação.</p>
                     </div>
-                    <button type="button" class="btn btn-primary" onclick="renderizarCentralCadastros()">Atualizar conferência</button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="btn btn-secondary" onclick="renderizarCentralCadastros()">Atualizar conferência</button>
+                        <button type="button" class="btn btn-primary" onclick="solicitarAuditoriaBanco()">Auditar banco de produção</button>
+                    </div>
                 </div>
                 <div id="dbs-central-counts" class="dbs-central-grid"></div>
                 <div id="dbs-central-integrity" class="dbs-integrity"></div>
+                <div id="dbs-central-db-audit" class="dbs-integrity" style="margin-top:12px;">
+                    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+                        <div><b>Auditoria do banco de produção</b><div style="font-size:10px;color:#71829a;margin-top:3px;">Confere os registros persistidos, vínculos e referências FieldControl. Não apaga nem mescla nada.</div></div>
+                        <span id="dbs-central-db-audit-status" class="badge" style="background:#e0f2fe;color:#0369a1;">Não executada</span>
+                    </div>
+                    <div id="dbs-central-db-audit-body" style="margin-top:10px;color:#64748b;font-size:11px;">Clique em “Auditar banco de produção” para uma conferência real.</div>
+                </div>
             </div>
             <div class="data-card" style="padding:18px;">
                 <div class="data-header" style="margin:-18px -18px 16px;">
@@ -1406,6 +1416,17 @@
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
+            if (msg.type === 'DBS_CONTROL_DB_AUDIT_RESULT') {
+                if (msg.ok) renderizarResultadoAuditoriaBanco(msg.result);
+                else {
+                    DBS_CONTROL_DB_AUDIT_RUNNING=false;
+                    const body=document.getElementById('dbs-central-db-audit-body');
+                    const status=document.getElementById('dbs-central-db-audit-status');
+                    if(status){status.textContent='ERRO';status.style.background='#fee2e2';status.style.color='#991b1b';}
+                    if(body) body.textContent=msg.error||'Não foi possível concluir a auditoria do banco.';
+                }
+                return;
+            }
             if (msg.type === 'DBS_CONTROL_TECHNICIAN_SYNCED') {
                 if (msg.ok) {
                     const syncedEmail = String(msg.email || '').trim().toLowerCase();
@@ -1458,6 +1479,56 @@
                 // A base principal não é atualizada automaticamente na abertura. O snapshot cloud é a fonte de verdade; sincronização FieldControl é explícita.
             }
         };
+
+        let DBS_CONTROL_DB_AUDIT_RUNNING = false;
+        function solicitarAuditoriaBanco() {
+            const body = document.getElementById('dbs-central-db-audit-body');
+            const status = document.getElementById('dbs-central-db-audit-status');
+            if (!body || DBS_CONTROL_DB_AUDIT_RUNNING) return;
+            if (window.parent === window) {
+                body.textContent = 'A auditoria de produção só pode ser executada dentro do DBS CONTROL autenticado.';
+                if(status) status.textContent='Indisponível';
+                return;
+            }
+            DBS_CONTROL_DB_AUDIT_RUNNING = true;
+            if(status){ status.textContent='Auditando...'; status.style.background='#fef3c7'; status.style.color='#92400e'; }
+            body.textContent='Conferindo clientes, locais, equipamentos, serviços, funcionários, OS, vínculos e referências FieldControl...';
+            window.parent.postMessage({type:'DBS_CONTROL_DB_AUDIT'}, '*');
+        }
+
+        function renderizarResultadoAuditoriaBanco(result) {
+            const body=document.getElementById('dbs-central-db-audit-body');
+            const status=document.getElementById('dbs-central-db-audit-status');
+            if(!body)return;
+            DBS_CONTROL_DB_AUDIT_RUNNING=false;
+            const r=result||{};
+            const issues=Array.isArray(r.issues)?r.issues:[];
+            const critical=issues.filter(x=>x.severity==='critical');
+            const warnings=issues.filter(x=>x.severity==='warning');
+            if(status){
+                status.textContent=r.status==='ok'?'OK':r.status==='critical'?'CRÍTICO':'ATENÇÃO';
+                status.style.background=r.status==='ok'?'#dcfce7':r.status==='critical'?'#fee2e2':'#fef3c7';
+                status.style.color=r.status==='ok'?'#166534':r.status==='critical'?'#991b1b':'#92400e';
+            }
+            const c=r.counts||{};
+            const counts='Clientes '+(c.clients??0)+' · Locais '+(c.sites??0)+' · Equipamentos '+(c.equipment??0)+' · Serviços '+(c.services??0)+' · Funcionários '+(c.employees??0)+' · OS '+(c.orders??0)+' · Vínculos OS×equipamento '+(c.orderEquipmentLinks??0);
+            let html='<div style="font-weight:800;color:#334155;margin-bottom:7px;">'+escDbsControl(counts)+'</div>';
+            html+='<div style="font-size:10px;color:#64748b;margin-bottom:9px;">Executada em '+escDbsControl(r.auditedAt||'agora')+' · '+critical.length+' crítico(s) · '+warnings.length+' aviso(s).</div>';
+            if(!issues.length){
+                html+='<div class="dbs-integrity-ok">✓ Banco de produção sem inconsistências detectáveis nesta auditoria.</div>';
+            }else{
+                html+=issues.slice(0,30).map(x=>{
+                    const color=x.severity==='critical'?'#991b1b':'#92400e';
+                    const bg=x.severity==='critical'?'#fff1f2':'#fffbeb';
+                    const samples=Array.isArray(x.samples)&&x.samples.length?' · '+x.samples.join(' | '):'';
+                    return '<div style="padding:9px 10px;border:1px solid #e2e8f0;border-radius:9px;background:'+bg+';margin-top:6px;"><b style="color:'+color+'">'+escDbsControl(x.label)+'</b><span style="display:block;margin-top:3px;color:#64748b;">'+escDbsControl(String(x.count)+' ocorrência(s)')+escDbsControl(samples)+'</span></div>';
+                }).join('');
+            }
+            if(r.latestSync){
+                html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:#334155;">Última sincronização FieldControl:</b> '+escDbsControl(r.latestSync.status||'—')+' · '+escDbsControl(r.latestSync.mode||'—')+'</div>';
+            }
+            body.innerHTML=html;
+        }
 
         function renderizarCentralCadastros() {
             const st = ERP_STATE || {};
@@ -2895,7 +2966,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261006-2"></script>
+    <script src="/dbs-control-ux.js?v=20261006-3"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
