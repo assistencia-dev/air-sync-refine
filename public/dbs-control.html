@@ -2043,7 +2043,7 @@
             const cnpj = document.getElementById('cli-cnpj').value.trim();
             const endereco = document.getElementById('cli-endereco').value.trim();
             const contato = document.getElementById('cli-contato').value.trim();
-            const norm = value => String(value || '').replace(/\\D/g,'');
+            const norm = value => String(value || '').replace(/\D/g,'');
             if (!nome || !cnpj || !endereco || !contato) return;
             if (norm(cnpj) && ERP_STATE.clientes.some(c => norm(c.cnpj) === norm(cnpj))) {
                 alert('Já existe um cliente cadastrado com este CNPJ/CPF. Revise o cadastro antes de criar outro.');
