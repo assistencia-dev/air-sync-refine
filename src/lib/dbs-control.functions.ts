@@ -219,6 +219,238 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
   };
 }
 
+
+function dbsValue(value: unknown) {
+  return value === null || value === undefined || String(value).trim() === "" ? undefined : value;
+}
+
+function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<string, unknown> | undefined) {
+  if (!current) return { ...canonical };
+  const merged: Record<string, unknown> = { ...canonical };
+  for (const [key, value] of Object.entries(current)) {
+    if (value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "")) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function hydrateDbsControlStateFromCanonicalDb(
+  state: Record<string, unknown>,
+  companyId: string | null,
+) {
+  if (!companyId) return normalizeState(state);
+
+  const [
+    clientsResult,
+    sitesResult,
+    equipmentResult,
+    servicesResult,
+    employeesResult,
+    ordersResult,
+    orderEquipmentResult,
+  ] = await Promise.all([
+    supabaseAdmin.from("dbs_control_clients")
+      .select("id,legal_name,trade_name,cnpj,phone,email,notes,status,updated_at"),
+    supabaseAdmin.from("dbs_control_sites")
+      .select("id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at"),
+    supabaseAdmin.from("dbs_control_equipment")
+      .select("id,client_id,site_id,tag_code,equipment_type,brand,model,serial_number,capacity,environment,installation_date,status,technical_notes,updated_at"),
+    supabaseAdmin.from("dbs_control_service_catalog")
+      .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
+    supabaseAdmin.from("rh_employees")
+      .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at"),
+    supabaseAdmin.from("dbs_control_work_orders")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,observation,signature_name,signature_data,total_cents,created_at,updated_at"),
+    supabaseAdmin.from("dbs_control_work_order_equipment")
+      .select("work_order_id,equipment_id"),
+  ]);
+
+  const results = [
+    clientsResult,
+    sitesResult,
+    equipmentResult,
+    servicesResult,
+    employeesResult,
+    ordersResult,
+    orderEquipmentResult,
+  ];
+  const firstError = results.find((result) => result.error)?.error;
+  if (firstError) throw new Error(firstError.message);
+
+  const current = normalizeState(state);
+  const byId = (items: unknown[]) => new Map(items.map((item: any) => [String(item?.id ?? ""), item]).filter(([id]) => id));
+  const mergeArray = (currentItems: unknown[], incomingItems: unknown[]) => {
+    const incomingById = byId(incomingItems);
+    const result = (currentItems as any[]).map((item) => mergeDbsRecord(
+      incomingById.get(String(item?.id ?? "")) ?? {},
+      item,
+    ));
+    const currentIds = new Set(result.map((item) => String(item?.id ?? "")));
+    for (const item of incomingItems as any[]) {
+      const id = String(item?.id ?? "");
+      if (id && !currentIds.has(id)) result.push(item);
+    }
+    return result;
+  };
+
+  const canonicalClients = (clientsResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    nome: row.trade_name || row.legal_name || "Cliente sem nome",
+    razaoSocial: row.legal_name || row.trade_name || "",
+    nomeFantasia: row.trade_name || "",
+    cnpj: row.cnpj || "",
+    contato: row.phone || row.email || "",
+    telefone: row.phone || "",
+    email: row.email || "",
+    status: row.status || "ativo",
+    observacoes: row.notes || "",
+  }));
+
+  const canonicalSites = (sitesResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    clienteId: String(row.client_id),
+    nome: row.name || "Local",
+    endereco: row.address_json && typeof row.address_json === "object"
+      ? [
+          row.address_json.logradouro,
+          row.address_json.numero,
+          row.address_json.complemento,
+          row.address_json.bairro,
+          row.address_json.cidade,
+          row.address_json.uf,
+          row.address_json.cep,
+        ].filter(Boolean).join(", ")
+      : String(row.address_json || ""),
+    contato: row.contact_name || "",
+    telefone: row.contact_phone || "",
+    email: row.contact_email || "",
+    observacoes: row.notes || "",
+    status: row.status || "ativo",
+  }));
+
+  const canonicalEquipment = (equipmentResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    clienteId: String(row.client_id),
+    siteId: row.site_id ? String(row.site_id) : null,
+    localId: row.site_id ? String(row.site_id) : null,
+    tag: row.tag_code || "",
+    patrimonio: row.tag_code || "",
+    codigo: row.tag_code || "",
+    tipo: row.equipment_type || "",
+    nome: row.equipment_type || row.model || "Equipamento",
+    descricao: row.technical_notes || "",
+    marca: row.brand || "",
+    fabricante: row.brand || "",
+    modelo: row.model || "",
+    serie: row.serial_number || "",
+    numeroSerie: row.serial_number || "",
+    capacidade: row.capacity || "",
+    ambiente: row.environment || "",
+    localizacao: row.environment || "",
+    dataInstalacao: row.installation_date || "",
+    status: row.status || "ativo",
+    observacoes: row.technical_notes || "",
+  }));
+
+  const canonicalServices = (servicesResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    nome: row.name || "Serviço",
+    descricao: row.description || "",
+    valor: Number(row.table_value_cents || 0) / 100,
+    valorTabela: Number(row.table_value_cents || 0) / 100,
+    horasEstimadas: row.estimated_hours ?? null,
+    status: row.status || "ativo",
+  }));
+
+  const canonicalTechnicians = (employeesResult.data ?? [])
+    .filter((row: any) => row.is_active !== false)
+    .map((row: any) => {
+      const registration = row.registration_data && typeof row.registration_data === "object" ? row.registration_data : {};
+      return {
+        id: String(row.id),
+        employeeId: String(row.id),
+        nome: row.full_name || "Colaborador",
+        email: String(registration.email || "").trim().toLowerCase(),
+        fone: registration.phone || registration.telefone || "",
+        telefone: registration.phone || registration.telefone || "",
+        posicao: registration.position || registration.cargo || "Técnico",
+        sourceSystem: row.source_system || "",
+        fieldControlId: row.source_key || "",
+      };
+    });
+
+  const statusMap: Record<string, string> = {
+    aberta: "Em Atendimento",
+    em_atendimento: "Em Atendimento",
+    andamento: "Em Atendimento",
+    concluida: "Concluída",
+    concluída: "Concluída",
+    concluido: "Concluída",
+    concluído: "Concluída",
+    cancelada: "Cancelada",
+    cancelado: "Cancelada",
+    aguardando_peca: "Aguardando peça",
+    aguardando_cliente: "Aguardando cliente",
+  };
+
+  const equipmentLinks = new Map<string, string[]>();
+  for (const link of orderEquipmentResult.data ?? []) {
+    const orderId = String((link as any).work_order_id);
+    const equipmentId = String((link as any).equipment_id);
+    const list = equipmentLinks.get(orderId) ?? [];
+    if (!list.includes(equipmentId)) list.push(equipmentId);
+    equipmentLinks.set(orderId, list);
+  }
+
+  const canonicalOrders = (ordersResult.data ?? []).map((row: any) => {
+    const equipmentIds = equipmentLinks.get(String(row.id)) ?? [];
+    const assignedEmployeeId = row.assigned_employee_id ? String(row.assigned_employee_id) : null;
+    const mappedStatus = statusMap[String(row.status || "").trim().toLowerCase()] || row.status || "Em Atendimento";
+    return {
+      id: String(row.id),
+      protocolo: row.protocol || "",
+      data: row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "",
+      dataCriacao: row.created_at || "",
+      clienteId: String(row.client_id),
+      siteId: row.site_id ? String(row.site_id) : null,
+      localId: row.site_id ? String(row.site_id) : null,
+      equipamentoId: equipmentIds[0] || null,
+      equipamentosIds: equipmentIds,
+      tecnicoId: assignedEmployeeId,
+      employeeId: assignedEmployeeId,
+      servicoId: row.service_id ? String(row.service_id) : null,
+      tipo: row.type || "corretiva",
+      prioridade: row.priority || "normal",
+      status: mappedStatus,
+      scheduledAt: row.scheduled_at || null,
+      startedAt: row.started_at || null,
+      completedAt: row.completed_at || null,
+      sla: row.sla_deadline || null,
+      desc: row.description || "",
+      diagnostico: row.technical_opinion || "",
+      observacao: row.observation || "",
+      signature_name: row.signature_name || null,
+      assinatura: row.signature_data || null,
+      valor: Number(row.total_cents || 0) / 100,
+    };
+  });
+
+  const sites = mergeArray(Array.isArray((current as any).sites) ? (current as any).sites : [], canonicalSites);
+  const locais = mergeArray(Array.isArray((current as any).locais) ? (current as any).locais : [], canonicalSites);
+
+  return {
+    ...current,
+    clientes: mergeArray(current.clientes as unknown[], canonicalClients),
+    equipamentos: mergeArray(current.equipamentos as unknown[], canonicalEquipment),
+    servicos: mergeArray(current.servicos as unknown[], canonicalServices),
+    tecnicos: mergeArray(current.tecnicos as unknown[], canonicalTechnicians),
+    ordens: mergeArray(current.ordens as unknown[], canonicalOrders),
+    sites,
+    locais,
+  };
+}
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -234,14 +466,20 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!data) return null;
 
-    if (user.role_key !== "COLABORADOR") return data;
+    const hydratedState = await hydrateDbsControlStateFromCanonicalDb(
+      data.state as Record<string, unknown>,
+      user.company_id,
+    );
+    const hydrated = { ...data, state: hydratedState };
+
+    if (user.role_key !== "COLABORADOR") return hydrated;
 
     const employee = await getCollaboratorEmployee(user.id);
     if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
 
     return {
       ...data,
-      state: filterCollaboratorState(data.state as Record<string, unknown>, employee.id, employee.login_email),
+      state: filterCollaboratorState(hydratedState, employee.id, employee.login_email),
     };
   });
 
