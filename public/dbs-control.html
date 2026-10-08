@@ -1683,6 +1683,33 @@
             .os-premium-submit{width:100%;justify-content:center;}
         }
 
+
+/* DBS CONTROL · seletor de equipamentos legível e orientado à operação */
+.dbs-equipment-picker{position:relative;width:100%;min-width:0}
+.dbs-equipment-input-shell{position:relative;display:flex;align-items:center}
+.dbs-equipment-search{width:100%;min-height:48px;padding:12px 42px 12px 14px!important;border:1px solid #cbd8e6!important;border-radius:12px!important;background:#fff!important;color:#102f52!important;font-size:13px!important;font-weight:700;outline:none;box-sizing:border-box;box-shadow:inset 0 1px 0 rgba(16,47,82,.02)}
+.dbs-equipment-search::placeholder{color:#8a9aae;font-weight:500}
+.dbs-equipment-search:focus{border-color:#72aee8!important;box-shadow:0 0 0 3px rgba(37,117,205,.10)!important}
+.dbs-equipment-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:#eef4fa;color:#49637e;width:27px;height:27px;border-radius:50%;font-size:18px;line-height:1;cursor:pointer}
+.dbs-equipment-clear:hover{background:#dceaf7;color:#174f86}
+.dbs-equipment-selected{margin-top:7px;min-height:0;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid #d8e4ef;border-radius:10px;background:#f7fbff;color:#264a6d}
+.dbs-equipment-selected:empty{display:none}
+.dbs-equipment-selected-label{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#4e82b6}
+.dbs-equipment-selected strong{font-size:12px;line-height:1.3;color:#173d63}
+.dbs-equipment-selected span:last-child{font-size:10px;line-height:1.4;color:#6b7f93;word-break:break-word}
+.dbs-equipment-options{position:absolute;z-index:100;left:0;right:0;top:calc(100% + 7px);max-height:300px;overflow:auto;padding:6px;border:1px solid #d5e1ec;border-radius:12px;background:#fff;box-shadow:0 18px 42px rgba(30,64,95,.16)}
+.dbs-equipment-option{display:flex;width:100%;flex-direction:column;gap:3px;padding:10px 11px;border:0;border-radius:9px;background:#fff;text-align:left;cursor:pointer}
+.dbs-equipment-option:hover,.dbs-equipment-option:focus{background:#f1f7fd;outline:none}
+.dbs-equipment-option-title{font-size:12px;font-weight:900;line-height:1.25;color:#153b61}
+.dbs-equipment-option-meta{font-size:10px;line-height:1.35;color:#708399;white-space:normal;overflow-wrap:anywhere}
+.dbs-equipment-empty{padding:16px 12px;text-align:center;font-size:11px;color:#728397;line-height:1.45}
+.dbs-equipment-native{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.dbs-field-hint{display:block;margin-top:6px;font-size:10px;line-height:1.35;color:#7a8da2}
+@media (max-width:760px){
+  .dbs-equipment-search{min-height:50px;font-size:12px!important}
+  .dbs-equipment-options{max-height:260px}
+}
+
 </style>
 </head>
 <body>
@@ -1950,10 +1977,34 @@
                             </div>
 
                             <div class="form-group os-premium-field os-premium-equipment">
-                                <label for="os-select-equipamento">Equipamento</label>
-                                <select id="os-select-equipamento" required>
-                                    <option value="">Selecione o cliente primeiro...</option>
-                                </select>
+                                <label for="os-equipment-search">Equipamento</label>
+                                <div class="dbs-equipment-picker" id="dbs-equipment-picker">
+                                    <div class="dbs-equipment-input-shell">
+                                        <input id="os-equipment-search"
+                                               class="dbs-equipment-search"
+                                               type="text"
+                                               autocomplete="off"
+                                               placeholder="Busque por tipo, TAG, patrimônio, modelo ou ambiente..."
+                                               onfocus="abrirSeletorEquipamentosOS()"
+                                               oninput="filtrarEquipamentosOS()"
+                                               aria-autocomplete="list"
+                                               aria-controls="os-equipment-options"
+                                               aria-expanded="false">
+                                        <button type="button"
+                                                class="dbs-equipment-clear"
+                                                id="os-equipment-clear"
+                                                onclick="limparEquipamentoOS()"
+                                                aria-label="Limpar equipamento"
+                                                title="Limpar seleção"
+                                                hidden>×</button>
+                                    </div>
+                                    <div id="os-equipment-selected" class="dbs-equipment-selected" aria-live="polite"></div>
+                                    <div id="os-equipment-options" class="dbs-equipment-options" role="listbox" hidden></div>
+                                    <select id="os-select-equipamento" required class="dbs-equipment-native" aria-hidden="true" tabindex="-1">
+                                        <option value="">Selecione um equipamento...</option>
+                                    </select>
+                                </div>
+                                <small class="dbs-field-hint">Digite para localizar rapidamente pelo tipo, TAG, patrimônio, modelo ou ambiente.</small>
                             </div>
                         </div>
 
@@ -3071,39 +3122,231 @@
             }).join('');
         }
 
+        function normalizarBuscaEquipamentoOS(value) {
+            return String(value ?? '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLocaleLowerCase('pt-BR')
+                .trim();
+        }
+
+        function escaparTextoSeguroEquipamentoOS(value) {
+            return escDbsControl(String(value ?? '').trim());
+        }
+
+        function formatarEquipamentoOS(equipamento) {
+            const e = equipamento || {};
+            const tipo = String(e.tipo || e.nome || e.descricao || '').trim();
+            const tag = String(e.tag || e.patrimonio || e.codigo || e.identificacao || '').trim();
+            const patrimonio = String(e.patrimonio || e.numeroPatrimonio || '').trim();
+            const marca = String(e.marca || fabricante || '').trim();
+            const modelo = String(e.modelo || '').trim();
+            const capacidade = String(e.capacidade || e.capacidadeBtu || e.btus || '').trim();
+            const ambiente = String(e.ambiente || e.localizacao || e.setor || e.local || '').trim();
+            const serie = String(e.serie || e.numeroSerie || '').trim();
+
+            const primary = tipo || tag || modelo || 'Equipamento sem identificação';
+            const codeParts = [];
+            if (tag && normalizarBuscaEquipamentoOS(tag) !== normalizarBuscaEquipamentoOS(primary)) codeParts.push(tag);
+            if (patrimonio && normalizarBuscaEquipamentoOS(patrimonio) !== normalizarBuscaEquipamentoOS(tag)) codeParts.push('Patrimônio ' + patrimonio);
+            const technicalParts = [];
+            if (marca && modelo) technicalParts.push(marca + ' ' + modelo);
+            else if (modelo) technicalParts.push(modelo);
+            else if (marca) technicalParts.push(marca);
+            if (capacidade) technicalParts.push(capacidade);
+            if (ambiente) technicalParts.push(ambiente);
+            if (!technicalParts.length && serie) technicalParts.push('Série ' + serie);
+
+            const meta = [...codeParts, ...technicalParts].filter(Boolean).join(' · ');
+            const shortLabel = [primary, tag && normalizarBuscaEquipamentoOS(tag) !== normalizarBuscaEquipamentoOS(primary) ? tag : ''].filter(Boolean).join(' · ');
+            const searchText = [tipo, e.nome, e.descricao, tag, patrimonio, e.numeroPatrimonio, e.codigo, e.identificacao, marca, modelo, capacidade, ambiente, serie, e.localizacao, e.setor].filter(Boolean).join(' ');
+
+            return {
+                id: String(e.id ?? ''),
+                primary,
+                meta,
+                shortLabel,
+                searchText: normalizarBuscaEquipamentoOS(searchText)
+            };
+        }
+
+        function renderizarOpcoesEquipamentosOS(query) {
+            const options = document.getElementById('os-equipment-options');
+            const equipSelect = document.getElementById('os-select-equipamento');
+            const clientSelect = document.getElementById('os-select-cliente');
+            if (!options || !equipSelect || !clientSelect) return;
+
+            const cliId = String(clientSelect.value || '');
+            const equipamentos = Array.isArray(ERP_STATE.equipamentos)
+                ? ERP_STATE.equipamentos.filter(e => String(e.clienteId) === cliId)
+                : [];
+            const term = normalizarBuscaEquipamentoOS(query);
+
+            if (!cliId) {
+                options.innerHTML = '<div class="dbs-equipment-empty">Selecione o cliente primeiro.</div>';
+                return;
+            }
+
+            const filtered = equipamentos
+                .map(formatarEquipamentoOS)
+                .filter(item => !term || item.searchText.includes(term));
+
+            if (!filtered.length) {
+                options.innerHTML = '<div class="dbs-equipment-empty">Nenhum equipamento encontrado para esta busca.</div>';
+                return;
+            }
+
+            options.innerHTML = filtered.map(item => \`
+                <button type="button"
+                        class="dbs-equipment-option"
+                        role="option"
+                        data-equipment-id="\${escaparTextoSeguroEquipamentoOS(item.id)}"
+                        onclick="selecionarEquipamentoOS('\${String(item.id).replace(/'/g, "\\\\'")}')">
+                    <span class="dbs-equipment-option-title">\${escaparTextoSeguroEquipamentoOS(item.primary)}</span>
+                    \${item.meta ? '<span class="dbs-equipment-option-meta">' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+                </button>
+            \`).join('');
+        }
+
+        function renderizarEquipamentoSelecionadoOS(equipamento) {
+            const input = document.getElementById('os-equipment-search');
+            const clear = document.getElementById('os-equipment-clear');
+            const selected = document.getElementById('os-equipment-selected');
+            if (!input || !clear || !selected) return;
+
+            if (!equipamento) {
+                input.value = '';
+                input.placeholder = 'Busque por tipo, TAG, patrimônio, modelo ou ambiente...';
+                clear.hidden = true;
+                selected.innerHTML = '';
+                return;
+            }
+
+            const item = formatarEquipamentoOS(equipamento);
+            input.value = item.shortLabel;
+            input.placeholder = 'Digite para alterar a busca...';
+            clear.hidden = false;
+            selected.innerHTML = \`
+                <span class="dbs-equipment-selected-label">Selecionado</span>
+                <strong>\${escaparTextoSeguroEquipamentoOS(item.primary)}</strong>
+                \${item.meta ? '<span>' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+            \`;
+        }
+
+        function fecharSeletorEquipamentosOS() {
+            const options = document.getElementById('os-equipment-options');
+            const input = document.getElementById('os-equipment-search');
+            if (options) options.hidden = true;
+            if (input) input.setAttribute('aria-expanded', 'false');
+        }
+
+        function abrirSeletorEquipamentosOS() {
+            const clientSelect = document.getElementById('os-select-cliente');
+            const input = document.getElementById('os-equipment-search');
+            const options = document.getElementById('os-equipment-options');
+            if (!clientSelect || !input || !options) return;
+            if (!clientSelect.value) {
+                options.innerHTML = '<div class="dbs-equipment-empty">Selecione o cliente primeiro.</div>';
+            } else {
+                renderizarOpcoesEquipamentosOS(input.value);
+            }
+            options.hidden = false;
+            input.setAttribute('aria-expanded', 'true');
+        }
+
+        function filtrarEquipamentosOS() {
+            const input = document.getElementById('os-equipment-search');
+            const equipSelect = document.getElementById('os-select-equipamento');
+            if (!input || !equipSelect) return;
+
+            const selectedEquipment = (Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [])
+                .find(e => String(e.id) === String(equipSelect.value || ''));
+
+            if (selectedEquipment && input.value !== formatarEquipamentoOS(selectedEquipment).shortLabel) {
+                equipSelect.value = '';
+                renderizarEquipamentoSelecionadoOS(null);
+            }
+
+            renderizarOpcoesEquipamentosOS(input.value);
+            const options = document.getElementById('os-equipment-options');
+            if (options) {
+                options.hidden = false;
+                input.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        function selecionarEquipamentoOS(equipmentId) {
+            const equipSelect = document.getElementById('os-select-equipamento');
+            const input = document.getElementById('os-equipment-search');
+            const equipment = (Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [])
+                .find(e => String(e.id) === String(equipmentId));
+
+            if (!equipSelect || !input || !equipment) return;
+
+            equipSelect.value = String(equipment.id);
+            renderizarEquipamentoSelecionadoOS(equipment);
+            fecharSeletorEquipamentosOS();
+        }
+
+        function limparEquipamentoOS() {
+            const equipSelect = document.getElementById('os-select-equipamento');
+            const input = document.getElementById('os-equipment-search');
+            if (equipSelect) equipSelect.value = '';
+            renderizarEquipamentoSelecionadoOS(null);
+            if (input) {
+                input.focus();
+                abrirSeletorEquipamentosOS();
+            }
+        }
+
         function atualizarEquipamentosDoClienteOS() {
             const clientSelect = document.getElementById('os-select-cliente');
             const cliId = String(clientSelect?.value || '');
             const equipSelect = document.getElementById('os-select-equipamento');
-            if (!equipSelect) return;
+            const input = document.getElementById('os-equipment-search');
+            const options = document.getElementById('os-equipment-options');
+            if (!equipSelect || !input || !options) return;
 
             const previous = String(equipSelect.value || '');
             const equipamentosDoCliente = (Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [])
                 .filter(e => String(e.clienteId) === cliId);
 
             if (!cliId) {
-                equipSelect.innerHTML = '<option value="">Selecione o cliente primeiro...</option>';
+                equipSelect.innerHTML = '<option value="">Selecione um cliente...</option>';
                 equipSelect.value = '';
+                renderizarEquipamentoSelecionadoOS(null);
+                options.innerHTML = '<div class="dbs-equipment-empty">Selecione o cliente primeiro.</div>';
+                options.hidden = true;
                 return;
             }
 
             if (!equipamentosDoCliente.length) {
                 equipSelect.innerHTML = '<option value="">Nenhum equipamento cadastrado</option>';
                 equipSelect.value = '';
+                renderizarEquipamentoSelecionadoOS(null);
+                options.innerHTML = '<div class="dbs-equipment-empty">Este cliente ainda não possui equipamentos cadastrados.</div>';
+                options.hidden = true;
                 return;
             }
 
-            equipSelect.innerHTML = equipamentosDoCliente.map(e => `
-                <option value="${escDbsControl(e.id)}">${escDbsControl(e.tag || 'Equipamento')} - ${escDbsControl(e.tipo || '')} (${escDbsControl(e.ambiente || e.localizacao || '')})</option>
-            `).join('');
+            equipSelect.innerHTML = '<option value="">Selecione um equipamento...</option>' + equipamentosDoCliente.map(e => {
+                const item = formatarEquipamentoOS(e);
+                return '<option value="' + escaparTextoSeguroEquipamentoOS(item.id) + '">' + escaparTextoSeguroEquipamentoOS(item.shortLabel) + '</option>';
+            }).join('');
 
-            // Não destrua uma escolha válida durante uma simples reidratação da tela.
-            if (previous && equipamentosDoCliente.some(e => String(e.id) === previous)) {
-                equipSelect.value = previous;
-            } else {
-                equipSelect.value = '';
-            }
+            const keep = previous && equipamentosDoCliente.some(e => String(e.id) === previous);
+            equipSelect.value = keep ? previous : '';
+            const selected = keep ? equipamentosDoCliente.find(e => String(e.id) === previous) : null;
+
+            renderizarEquipamentoSelecionadoOS(selected || null);
+            renderizarOpcoesEquipamentosOS(selected ? formatarEquipamentoOS(selected).shortLabel : '');
+            options.hidden = !selected;
         }
+
+        document.addEventListener('click', function(event) {
+            const picker = document.getElementById('dbs-equipment-picker');
+            if (picker && !picker.contains(event.target)) fecharSeletorEquipamentosOS();
+        });
 
         function salvarCliente(e) {
             e.preventDefault();
