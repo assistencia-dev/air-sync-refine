@@ -111,7 +111,13 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
         : { ...order, employeeId }
     ));
   const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
-  const equipmentIds = new Set(orders.map((order) => String(order?.equipamentoId)).filter(Boolean));
+  const equipmentIds = new Set<string>();
+  for (const order of orders) {
+    if (order?.equipamentoId != null) equipmentIds.add(String(order.equipamentoId));
+    for (const equipmentId of Array.isArray(order?.equipamentosIds) ? order.equipamentosIds : []) {
+      if (equipmentId != null) equipmentIds.add(String(equipmentId));
+    }
+  }
   const serviceIds = new Set(orders.map((order) => String(order?.servicoId)).filter(Boolean));
 
   const partsUsed = new Set<string>();
