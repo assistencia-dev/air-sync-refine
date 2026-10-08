@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DBS AIR - ERP & Field Service Enterprise v6.0</title>
     <!-- Bibliotecas para Geração de PDF e Exportação em ZIP -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="/vendor/jspdf.umd.min.js"></script>
+    <script src="/dbs-control-pdf.js?v=20261008-1"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -2751,345 +2752,45 @@
             if(element) element.classList.add('active');
         }
 
-        // MOTOR DE GERAÇÃO DE PDF INDIVIDUAL
-        function gerarPDFObjeto(osId) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
-
-            const o = ERP_STATE.ordens.find(x => String(x.id) === String(osId));
-            if (!o) return null;
-
-            const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
-            const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
-            const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId)) || {};
-            const srv = ERP_STATE.servicos.find(s => String(s.id) === String(o.servicoId)) || {};
-
-            // O PDF é uma representação do MESMO registro da OS. Não criar valores novos aqui.
-            const C = {
-                navy: [15, 47, 87],
-                blue: [0, 116, 184],
-                lightBlue: [235, 246, 253],
-                ink: [31, 41, 55],
-                muted: [100, 116, 139],
-                line: [214, 222, 231],
-                soft: [248, 250, 252],
-                white: [255, 255, 255]
-            };
-            const margin = 14, pageW = 210, pageH = 297, contentW = pageW - margin * 2;
-            let y = 14, pageNo = 1;
-
-            const clean = v => String(v ?? '').trim();
-            const has = v => clean(v) !== '';
-            const money = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const textLines = (v, width) => doc.splitTextToSize(clean(v), width);
-
-            const logo = window.DBS_AIR_LOGO_PDF;
-            const drawLogo = () => {
-                try {
-                    if (logo && logo.complete && logo.naturalWidth) {
-                        doc.addImage(logo, 'JPEG', margin + 2, 10, 34, 18, undefined, 'FAST');
-                    }
-                } catch (_) {}
-            };
-
-            const footer = () => {
-                doc.setDrawColor(...C.line);
-                doc.setLineWidth(0.25);
-                doc.line(margin, 286, pageW - margin, 286);
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(7.2);
-                doc.setTextColor(...C.muted);
-                doc.text('DBS AIR · Ordem de Serviço · Registro técnico', margin, 291);
-                doc.text('OS ' + clean(o.id) + ' · Página ' + pageNo, pageW - margin, 291, { align: 'right' });
-            };
-
-            const header = first => {
-                if (first) {
-                    doc.setFillColor(...C.navy);
-                    doc.roundedRect(margin, y, contentW, 31, 2.5, 2.5, 'F');
-                    drawLogo();
-                    doc.setTextColor(...C.white);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(17);
-                    doc.text('ORDEM DE SERVIÇO', 55, 21);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(8.5);
-                    doc.text('DBS AIR · Atendimento técnico', 55, 27);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(9);
-                    doc.text('Nº ' + clean(o.id), pageW - margin - 4, 18, { align: 'right' });
-                    doc.setFont('helvetica', 'normal');
-                    doc.text(clean(o.data) || 'Data não informada', pageW - margin - 4, 24, { align: 'right' });
-                    y += 39;
-                } else {
-                    doc.setFillColor(...C.navy);
-                    doc.rect(0, 0, pageW, 8, 'F');
-                    y = 16;
-                }
-            };
-
-            const newPage = () => {
-                footer();
-                doc.addPage();
-                pageNo++;
-                header(false);
-            };
-            const ensure = needed => { if (y + (needed || 18) > 280) newPage(); };
-
-            const section = title => {
-                ensure(17);
-                doc.setFillColor(...C.lightBlue);
-                doc.roundedRect(margin, y, contentW, 8, 1.5, 1.5, 'F');
-                doc.setTextColor(...C.navy);
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(8.7);
-                doc.text(title.toUpperCase(), margin + 4, y + 5.5);
-                y += 12;
-            };
-
-            const twoCol = (left, right) => {
-                const gap = 7, w = (contentW - gap) / 2;
-                const ll = has(left.value) ? textLines(left.value, w - 4) : [];
-                const rr = has(right.value) ? textLines(right.value, w - 4) : [];
-                if (!ll.length && !rr.length) return;
-                const h = Math.max(ll.length, rr.length, 1) * 4.2 + 7;
-                ensure(h + 2);
-                const draw = (item, x, ls) => {
-                    if (!has(item.value)) return;
-                    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2); doc.setTextColor(...C.muted);
-                    doc.text(item.label.toUpperCase(), x, y);
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(...C.ink);
-                    doc.text(ls, x, y + 4);
-                };
-                draw(left, margin, ll);
-                draw(right, margin + w + gap, rr);
-                y += h;
-            };
-
-            const field = (label, value) => {
-                if (!has(value)) return;
-                const ls = textLines(value, contentW - 4);
-                const h = Math.max(8, ls.length * 4.2 + 5);
-                ensure(h + 2);
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.2); doc.setTextColor(...C.muted);
-                doc.text(label.toUpperCase(), margin, y);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(...C.ink);
-                doc.text(ls, margin, y + 4);
-                y += h;
-            };
-
-            const paragraph = (label, value) => {
-                if (!has(value)) return;
-                const ls = textLines(value, contentW);
-                ensure(ls.length * 4.2 + 13);
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.3); doc.setTextColor(...C.ink);
-                doc.text(label, margin, y);
-                y += 4.5;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...C.ink);
-                doc.text(ls, margin, y);
-                y += ls.length * 4.2 + 4;
-            };
-
-            header(true);
-
-            // 1 — IDENTIFICAÇÃO: somente campos realmente existentes na OS.
-            section('Identificação da ordem');
-            twoCol({ label: 'Data do atendimento', value: o.data }, { label: 'Status', value: o.status });
-            twoCol({ label: 'Tipo de atendimento', value: o.tipo }, { label: 'Serviço cadastrado', value: srv.nome });
-            twoCol({ label: 'Prioridade', value: o.prioridade }, { label: 'SLA', value: o.sla });
-            if (has(o.dataHora) || has(o.horario) || has(o.inicio) || has(o.fim)) {
-                twoCol(
-                    { label: 'Data / horário', value: o.dataHora || o.horario || o.inicio },
-                    { label: 'Conclusão', value: o.concluidoEm || o.fim }
-                );
+        // Único motor: lê o mesmo estado hidratado usado pela tela, sem alterar a OS.
+        async function gerarPDFObjeto(osId) {
+            if (window.parent !== window && !DBS_CONTROL_CLOUD_READY) {
+                throw new Error('Aguarde o carregamento da base compartilhada antes de exportar.');
             }
-
-            // 2 — CLIENTE / LOCAL
-            if (has(cli.nome) || has(cli.cnpj) || has(cli.contato) || has(cli.endereco) || has(o.localAtendimento)) {
-                section('Cliente e local do atendimento');
-                field('Cliente / unidade', cli.nome);
-                twoCol({ label: 'CNPJ', value: cli.cnpj }, { label: 'Contato', value: cli.contato });
-                field('Local do atendimento', o.localAtendimento || cli.endereco);
-            }
-
-            // 3 — EQUIPAMENTO
-            const equipmentRows = Array.isArray(o.equipamentos) && o.equipamentos.length
-                ? o.equipamentos
-                : (Array.isArray(o.equipamentoIds) && o.equipamentoIds.length
-                    ? o.equipamentoIds.map(id => ERP_STATE.equipamentos.find(e => String(e.id) === String(id))).filter(Boolean)
-                    : [eq].filter(e => e && Object.keys(e).length));
-            if (equipmentRows.length) {
-                section('Equipamento atendido');
-                equipmentRows.forEach((item, index) => {
-                    if (index > 0) {
-                        ensure(12);
-                        doc.setDrawColor(...C.line);
-                        doc.line(margin, y - 2, pageW - margin, y - 2);
-                    }
-                    twoCol(
-                        { label: 'Equipamento / TAG', value: item.tag || item.nome || item.tipo },
-                        { label: 'Marca / modelo', value: [item.marca, item.modelo].filter(has).join(' / ') }
-                    );
-                    twoCol(
-                        { label: 'Nº de série', value: item.serie || item.numeroSerie },
-                        { label: 'Capacidade', value: item.capacidade }
-                    );
-                    field('Ambiente / localização', item.ambiente);
-                });
-            }
-
-            // 4 — O QUE O TÉCNICO EFETIVAMENTE PREENCHE.
-            // relatoTecnico é a entrada única do atendimento; os campos antigos são mantidos
-            // como compatibilidade e só aparecem separados quando contêm informação diferente.
-            section('Registro do atendimento');
-            paragraph('Solicitação / descrição do serviço', o.desc);
-            const relato = clean(o.relatoTecnico);
-            const diagnostico = clean(o.diagnostico);
-            const executado = clean(o.trabalhoExecutado);
-            if (relato) {
-                paragraph('Relato técnico do atendimento', relato);
-            } else if (diagnostico || executado) {
-                paragraph('Registro técnico do atendimento', diagnostico || executado);
-            }
-            if (diagnostico && relato && diagnostico !== relato) paragraph('Diagnóstico técnico', diagnostico);
-            if (executado && relato && executado !== relato && executado !== diagnostico) paragraph('Serviço executado', executado);
-            paragraph('Observações do atendimento', o.observacao || o.observacoes || o.obs);
-            paragraph('Recomendações técnicas', o.recomendacoes || o.recomendacao);
-
-            // 5 — RESPONSÁVEL: vínculo direto com o técnico atribuído à OS.
-            if (has(tec.nome) || has(tec.posicao)) {
-                section('Responsável pelo atendimento');
-                twoCol({ label: 'Técnico / executante', value: tec.nome }, { label: 'Função', value: tec.posicao });
-            }
-
-            // 6 — PEÇAS: mesmas peças registradas pelo atendimento.
-            if (Array.isArray(o.pecasUsadas) && o.pecasUsadas.length) {
-                section('Materiais e peças aplicados');
-                o.pecasUsadas.forEach(p => {
-                    const nome = clean(p.nome || p.descricao);
-                    const qtd = clean(p.qtd || p.quantidade);
-                    if (!nome && !qtd) return;
-                    const valor = p.venda != null ? ' · R$ ' + money(Number(p.venda) * Number(p.qtd || p.quantidade || 1)) : '';
-                    ensure(9);
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(...C.ink);
-                    doc.text('• ' + [nome, qtd ? 'Qtd. ' + qtd : ''].filter(Boolean).join(' · ') + valor, margin, y);
-                    y += 5;
-                });
-                y += 2;
-            }
-
-            // 7 — CHECKLIST: opcional e somente para itens realmente conferidos.
-            const checklistPDF = Array.isArray(o.checklist)
-                ? o.checklist.filter(item => item && item.concluido)
-                : [];
-            if (checklistPDF.length) {
-                section('Checklist técnico realizado');
-                checklistPDF.forEach(item => {
-                    const title = clean(item.titulo || item.descricao);
-                    if (!title) return;
-                    const ls = textLines('✓ ' + title, contentW - 2);
-                    ensure(ls.length * 4.2 + 5);
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(...C.ink);
-                    doc.text(ls, margin, y);
-                    y += ls.length * 4.2 + 1.5;
-                });
-                y += 2;
-            }
-
-            // 8 — EVIDÊNCIAS: preserva exatamente as fotos registradas na OS.
-            if (o.fotoAntes || o.fotoDepois) {
-                section('Evidências fotográficas');
-                const photoY = y;
-                const addPhoto = (src, label, x) => {
-                    if (!src) return;
-                    try {
-                        ensure(47);
-                        doc.addImage(src, 'JPEG', x, y, 56, 40, undefined, 'FAST');
-                        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.3); doc.setTextColor(...C.muted);
-                        doc.text(label, x, y + 44);
-                    } catch (_) {}
-                };
-                addPhoto(o.fotoAntes, 'Antes', margin);
-                addPhoto(o.fotoDepois, 'Depois', margin + 63);
-                y = photoY + 49;
-            }
-
-            // 9 — VALOR
-            const total = Number(o.valor || 0);
-            if (Number.isFinite(total) && total > 0) {
-                ensure(20);
-                doc.setFillColor(...C.soft);
-                doc.roundedRect(margin, y, contentW, 13, 2, 2, 'F');
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.muted);
-                doc.text('VALOR DO ATENDIMENTO', margin + 5, y + 5);
-                doc.setFontSize(12); doc.setTextColor(...C.navy);
-                doc.text('R$ ' + money(total), pageW - margin - 5, y + 8.5, { align: 'right' });
-                y += 19;
-            }
-
-            // 10 — ASSINATURA: NÃO É REMOVIDA. É o mesmo PNG salvo no registro da OS.
-            if (has(o.assinatura)) {
-                ensure(48);
-                section('Aceite do atendimento');
-                let assinaturaInserida = false;
-                try {
-                    doc.addImage(o.assinatura, 'PNG', margin + 2, y, 65, 25, undefined, 'FAST');
-                    assinaturaInserida = true;
-                } catch (_) {}
-                doc.setDrawColor(...C.line);
-                doc.line(margin, y + 27, margin + 78, y + 27);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.muted);
-                doc.text('Assinatura / aceite do cliente', margin, y + 32);
-                if (has(o.assinaturaEm)) {
-                    doc.text('Registrada em: ' + clean(o.assinaturaEm), margin + 86, y + 32);
-                }
-                if (!assinaturaInserida) {
-                    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.navy);
-                    doc.text('Aceite digital registrado no sistema', margin, y + 20);
-                }
-                y += 39;
-            }
-
-            // Registro final de rastreabilidade, sem inventar campos.
-            if (has(o.concluidoEm) || has(o.concluidoPorEmployeeId)) {
-                ensure(18);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.muted);
-                if (has(o.concluidoEm)) doc.text('Registro de conclusão: ' + clean(o.concluidoEm), margin, y);
-                if (has(o.concluidoPorEmployeeId)) doc.text('Colaborador vinculado: ' + clean(o.concluidoPorEmployeeId), margin, y + 4);
-                y += 10;
-            }
-
-            footer();
-            return doc;
+            return window.DbsControlPdf.generate(ERP_STATE, osId);
         }
 
-        function baixarPDFIndividual(osId) {
-            const doc = gerarPDFObjeto(osId);
-            if (doc) doc.save(`Ordem_de_Servico_${osId}.pdf`);
+        async function baixarPDFIndividual(osId) {
+            try {
+                const doc = await gerarPDFObjeto(osId);
+                if (doc) doc.save(`Ordem_de_Servico_${osId}.pdf`);
+            } catch (error) {
+                console.error('Exportação da OS:', error);
+                alert(error instanceof Error ? error.message : 'Não foi possível gerar o PDF. Tente novamente.');
+            }
         }
 
         async function exportarSelecionadasPDF() {
-            const checkboxes = document.querySelectorAll('.chk-os-item:checked');
-            if (checkboxes.length === 0) { alert("Selecione ao menos uma Ordem de Serviço!"); return; }
-            if (checkboxes.length === 1) { baixarPDFIndividual(checkboxes[0].value); return; }
-
-            const zip = new JSZip();
-            const folder = zip.folder("Ordens_de_Servico_DBS_AIR");
-
-            checkboxes.forEach(chk => {
-                const osId = chk.value;
-                const doc = gerarPDFObjeto(osId);
-                if (doc) {
-                    const pdfBlob = doc.output('blob');
-                    folder.file(`OS_${osId}.pdf`, pdfBlob);
+            const ids = Array.from(document.querySelectorAll('.chk-os-item:checked'), el => el.value);
+            if (!ids.length) { alert('Selecione ao menos uma Ordem de Serviço!'); return; }
+            if (ids.length === 1) { await baixarPDFIndividual(ids[0]); return; }
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder('Ordens_de_Servico_DBS_AIR');
+                for (const osId of ids) {
+                    const doc = await gerarPDFObjeto(osId);
+                    if (doc) folder.file(`OS_${osId}.pdf`, doc.output('blob'));
                 }
-            });
-
-            const zipBlob = await zip.generateAsync({ type: "blob" });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(zipBlob);
-            link.download = `Pacote_Ordens_de_Servico_${new Date().toISOString().slice(0,10)}.zip`;
-            link.click();
+                const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Pacote_Ordens_de_Servico_${new Date().toISOString().slice(0,10)}.zip`;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (error) {
+                console.error('Exportação em lote:', error);
+                alert(error instanceof Error ? error.message : 'Não foi possível exportar as OS selecionadas.');
+            }
         }
 
         function concluirSelecionadasLote() {
@@ -3569,13 +3270,17 @@
             if (relato) {
                 const valor = String(relato.value || '');
                 os.relatoTecnico = valor;
-                os.diagnostico = valor;
-                os.trabalhoExecutado = valor;
+                // Marcar checklist não apaga diagnósticos/execuções distintos já registrados.
+                if (!os.diagnostico) os.diagnostico = valor;
+                if (!os.trabalhoExecutado) os.trabalhoExecutado = valor;
             }
             if (canvas) {
                 try {
                     const assinatura = canvas.toDataURL('image/png');
-                    if (assinatura && assinatura.length > 200) os.assinatura = assinatura;
+                    const ctx = canvas.getContext('2d');
+                    const pixels = ctx?.getImageData(0, 0, canvas.width, canvas.height).data;
+                    const temTraco = pixels && pixels.some((v, i) => i % 4 === 3 && v > 0 && (pixels[i - 3] < 240 || pixels[i - 2] < 240 || pixels[i - 1] < 240));
+                    if (temTraco && assinatura && assinatura.length > 200) os.assinatura = assinatura;
                 } catch (_) {}
             }
         }
@@ -4313,7 +4018,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261006-3"></script>
+    <script src="/dbs-control-ux.js?v=20261008-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
