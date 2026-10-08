@@ -3139,7 +3139,7 @@
             const tipo = String(e.tipo || e.nome || e.descricao || '').trim();
             const tag = String(e.tag || e.patrimonio || e.codigo || e.identificacao || '').trim();
             const patrimonio = String(e.patrimonio || e.numeroPatrimonio || '').trim();
-            const marca = String(e.marca || fabricante || '').trim();
+            const marca = String(e.marca || e.fabricante || '').trim();
             const modelo = String(e.modelo || '').trim();
             const capacidade = String(e.capacidade || e.capacidadeBtu || e.btus || '').trim();
             const ambiente = String(e.ambiente || e.localizacao || e.setor || e.local || '').trim();
