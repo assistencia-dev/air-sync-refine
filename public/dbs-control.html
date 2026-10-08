@@ -2797,11 +2797,46 @@
         }
 
         function switchTab(tabId, element) {
-            document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            if(element) element.classList.add('active');
+            try {
+                const target = document.getElementById(String(tabId || ''));
+                if (!target) {
+                    console.error('DBS CONTROL: aba não encontrada:', tabId);
+                    return false;
+                }
+                document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                target.classList.add('active');
+                if (element) element.classList.add('active');
+                const titleMap = {
+                    'tab-dashboard':['Painel Operacional','Visão geral do atendimento e indicadores'],
+                    'tab-atividades':['Atividades do Dia','Acompanhamento das execuções e pendências'],
+                    'tab-despacho':['Quadros de Despacho','Distribuição e acompanhamento das Ordens de Serviço'],
+                    'tab-ordens':['Ordens de Serviço','Consulte, filtre, conclua e exporte suas OS'],
+                    'tab-nova-os':['Nova Ordem de Serviço','Crie e encaminhe uma nova OS'],
+                    'tab-cadastros':['Central de Cadastros','Visão central da base operacional'],
+                    'tab-clientes':['Clientes','Cadastro e relacionamento com clientes'],
+                    'tab-importacao':['Importação em Massa','Importe e atualize sua base com segurança'],
+                    'tab-equipamentos':['Parque de Equipamentos','Ativos e equipamentos por cliente e local'],
+                    'tab-tecnicos':['Equipe Técnica','Técnicos, vínculos RH e acessos'],
+                    'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
+                    'tab-servicos':['Serviços','Catálogo de serviços'],
+                    'tab-compras':['Compras','Solicitações e pedidos de compra'],
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador']
+                };
+                const meta = titleMap[String(tabId)];
+                const title = document.getElementById('view-title');
+                const subtitle = document.getElementById('view-subtitle');
+                if (meta) {
+                    if (title) title.textContent = meta[0];
+                    if (subtitle) subtitle.textContent = meta[1];
+                }
+                return true;
+            } catch (error) {
+                console.error('DBS CONTROL: falha ao abrir aba', tabId, error);
+                return false;
+            }
         }
+        window.switchTab = switchTab;
 
         // Único motor: lê o mesmo estado hidratado usado pela tela, sem alterar a OS.
         async function gerarPDFObjeto(osId) {
