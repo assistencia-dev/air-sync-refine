@@ -2612,9 +2612,25 @@
                     if (Array.isArray(INITIAL_STATE[key]) && !Array.isArray(migrated[key])) migrated[key] = [];
                 });
                 try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
-                        version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
-                    }));
+                    const countRecords = value => value && typeof value === 'object'
+                        ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                        : 0;
+                    const previousRaw = localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS');
+                    let previousCount = -1;
+                    if (previousRaw) {
+                        try {
+                            const previousParsed = JSON.parse(previousRaw);
+                            previousCount = countRecords(previousParsed.data && typeof previousParsed.data === 'object'
+                                ? previousParsed.data
+                                : previousParsed);
+                        } catch (_) {}
+                    }
+                    // Não substitui um backup maior por um estado local menor.
+                    if (countRecords(source) >= previousCount) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                            version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
+                        }));
+                    }
                     localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
                         version: DBS_CONTROL_STATE_VERSION, data: migrated
                     }));
