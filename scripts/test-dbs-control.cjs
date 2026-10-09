@@ -57,9 +57,9 @@ assert.match(html, /Não substitui um backup maior por um estado local menor/, "
 assert.match(html, /function verificarRecuperacaoLocalDBS\s*\(/, "A central de cadastros deve expor recuperação de cópias locais.");
 assert.match(html, /DBS_AIR_ERP_STATE_PREVIOUS/, "O fluxo de recuperação deve procurar o backup local anterior.");
 assert.match(html, /function mesclarEstadoRecuperacaoDBS\s*\(/, "A recuperação deve mesclar sem remover registros.");
-assert.match(html, /atualizarSelects\\(\\)/, "A troca de aba deve atualizar seletores dos formulários.");
-assert.match(html, /safe\\(window\\.renderizarOrcamentos\\)/, "A aba Orçamentos precisa de renderização própria.");
-assert.match(fs.readFileSync("public/dbs-control-orcamentos-v2.js", "utf8"), /window\\.renderizarOrcamentos/, "O módulo de orçamentos deve expor seu renderizador.");
+assert.match(html, /atualizarSelects\(\)/, "A troca de aba deve atualizar seletores dos formulários.");
+assert.match(html, /safe\(window\.renderizarOrcamentos\)/, "A aba Orçamentos precisa de renderização própria.");
+assert.match(fs.readFileSync("public/dbs-control-orcamentos-v2.js", "utf8"), /window\.renderizarOrcamentos/, "O módulo de orçamentos deve expor seu renderizador.");
 assert.match(html, /function switchTab\s*\(/, "A navegação principal switchTab precisa existir.");
 assert.match(html, /function renderizarAbaAtiva\s*\(/, "O renderizador sob demanda precisa existir.");
 assert.match(html, /dbs-control-employee-mode[^]*?String\(tabId\s*\|\|\s*['"]{0,1}['"]\)\s*!==\s*['"]tab-pwa['"]/, "O modo colaborador deve bloquear a navegação para abas administrativas.");
