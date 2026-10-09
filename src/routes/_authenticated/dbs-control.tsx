@@ -28,6 +28,58 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
 }
 
+function mergeDbsControlStates(
+  cloudState: Record<string, unknown>,
+  localState: Record<string, unknown> | null,
+) {
+  if (!localState) return cloudState;
+
+  const merged: Record<string, unknown> = { ...cloudState, ...localState };
+  const arrayKeys = new Set([
+    ...Object.keys(cloudState).filter((key) => Array.isArray(cloudState[key])),
+    ...Object.keys(localState).filter((key) => Array.isArray(localState[key])),
+  ]);
+
+  const identity = (item: unknown): string => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const row = item as Record<string, unknown>;
+      for (const key of ["id", "employeeId", "protocolo", "protocol", "sku", "email", "fieldControlId"]) {
+        const value = row[key];
+        if (value !== null && value !== undefined && String(value).trim()) {
+          return key + ":" + String(value).trim().toLocaleLowerCase("pt-BR");
+        }
+      }
+    }
+    return "value:" + JSON.stringify(item);
+  };
+
+  for (const key of arrayKeys) {
+    const cloudRows = Array.isArray(cloudState[key]) ? cloudState[key] as unknown[] : [];
+    const localRows = Array.isArray(localState[key]) ? localState[key] as unknown[] : [];
+    const rows = new Map<string, unknown>();
+
+    for (const row of cloudRows) rows.set(identity(row), row);
+    for (const row of localRows) {
+      const id = identity(row);
+      const existing = rows.get(id);
+      if (existing && existing && row && typeof existing === "object" && typeof row === "object" && !Array.isArray(existing) && !Array.isArray(row)) {
+        const combined: Record<string, unknown> = { ...(existing as Record<string, unknown>) };
+        for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
+          if (value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "")) {
+            combined[field] = value;
+          }
+        }
+        rows.set(id, combined);
+      } else if (!existing) {
+        rows.set(id, row);
+      }
+    }
+    merged[key] = [...rows.values()];
+  }
+
+  return merged;
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -130,17 +182,25 @@ function DbsControlPage() {
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
 
-          // Um snapshot vazio não pode substituir os dados locais já existentes.
-          // Isso é importante na primeira abertura em outro dispositivo: se ele
-          // entrou antes da migração do notebook, o snapshot vazio é apenas um
-          // estado inicial e o primeiro estado real deve ser promovido para a nuvem.
-          if (cloudState && (dbsControlStateHasData(cloudState) || !dbsControlStateHasData(localState))) {
+          if (cloudState) {
+            // A nuvem pode estar incompleta após uma falha de sincronização.
+            // Unimos registros por identidade e preservamos campos locais não vazios,
+            // em vez de substituir silenciosamente uma base local mais completa.
+            const mergedState = mergeDbsControlStates(cloudState, localState);
+            const needsMergeSave = JSON.stringify(mergedState) !== JSON.stringify(cloudState);
+            const finalState = needsMergeSave
+              ? (await saveDbsControlCloudState({ data: { state: mergedState } })).state
+              : cloudState;
+
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
+              { type: "DBS_CONTROL_CLOUD_STATE", state: finalState },
               "*",
             );
           } else if (localState) {
+            if (!access.data?.administrative) {
+              throw new Error("A base compartilhada ainda não foi criada pela administração. Os dados locais foram preservados.");
+            }
             const saved = await saveDbsControlCloudState({ data: { state: localState } });
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
