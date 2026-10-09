@@ -18,7 +18,7 @@ for (const match of html.matchAll(scriptTag)) {
   try {
     new vm.Script(source, { filename: "public/dbs-control.html:inline-script-" + parsedInlineScripts });
   } catch (error) {
-    console.error("Falha de sintaxe no script inline #" + parsedInlineScripts + ": " + error.message);
+    console.error("Falha de sintaxe no script inline #" + parsedInlineScripts + ": " + (error.stack || error.message));
     process.exitCode = 1;
   }
 }
@@ -36,7 +36,7 @@ for (const file of firstPartyScripts) {
     new vm.Script(source, { filename: file });
     parsedInlineScripts += 1;
   } catch (error) {
-    console.error("Falha de sintaxe em " + file + ": " + error.message);
+    console.error("Falha de sintaxe em " + file + ": " + (error.stack || error.message));
     process.exitCode = 1;
   }
 }
