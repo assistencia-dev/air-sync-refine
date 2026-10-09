@@ -163,6 +163,13 @@
     if (changed) window.saveState();
   }
 
+  // Expor o renderizador para a navegação por abas sob demanda.
+  window.renderizarOrcamentos = function () {
+    ensureState();
+    populateQuoteForm();
+    renderQuotes();
+  };
+
   var oldSaveState = window.saveState;
   if (typeof oldSaveState === "function") window.saveState = function () { ensureState(); oldSaveState(); };
   var oldRenderAll = window.renderizarTudo;
