@@ -2199,6 +2199,7 @@
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <button type="button" class="btn btn-secondary" onclick="renderizarCentralCadastros()">Atualizar conferência</button>
+                        <button type="button" class="btn btn-secondary" onclick="verificarRecuperacaoLocalDBS()">Verificar / recuperar cópia local</button>
                         <button type="button" class="btn btn-primary" onclick="solicitarAuditoriaBanco()">Auditar banco de produção</button>
                     </div>
                 </div>
@@ -2612,9 +2613,25 @@
                     if (Array.isArray(INITIAL_STATE[key]) && !Array.isArray(migrated[key])) migrated[key] = [];
                 });
                 try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
-                        version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
-                    }));
+                    const countRecords = value => value && typeof value === 'object'
+                        ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                        : 0;
+                    const previousRaw = localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS');
+                    let previousCount = -1;
+                    if (previousRaw) {
+                        try {
+                            const previousParsed = JSON.parse(previousRaw);
+                            previousCount = countRecords(previousParsed.data && typeof previousParsed.data === 'object'
+                                ? previousParsed.data
+                                : previousParsed);
+                        } catch (_) {}
+                    }
+                    // Não substitui um backup maior por um estado local menor.
+                    if (countRecords(source) >= previousCount) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                            version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
+                        }));
+                    }
                     localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
                         version: DBS_CONTROL_STATE_VERSION, data: migrated
                     }));
@@ -2691,6 +2708,26 @@
             DBS_CONTROL_CLOUD_HYDRATING = true;
             try {
                 const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+
+                // Preserva o estado local imediatamente antes de qualquer hidratação
+                // da nuvem. Se a nuvem estiver incompleta, esta cópia permite recuperar
+                // os dados anteriores sem depender do snapshot remoto.
+                try {
+                    const localBeforeCloud = getPersistableState();
+                    const localRecordCount = Object.keys(localBeforeCloud).reduce((total, key) =>
+                        total + (Array.isArray(localBeforeCloud[key]) ? localBeforeCloud[key].length : 0), 0);
+                    if (localRecordCount > 0) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION', JSON.stringify({
+                            version: DBS_CONTROL_STATE_VERSION,
+                            data: localBeforeCloud,
+                            backedUpAt: new Date().toISOString(),
+                            reason: 'Cópia de segurança automática antes da sincronização com a nuvem'
+                        }));
+                    }
+                } catch (backupError) {
+                    console.warn('Não foi possível gravar a cópia pré-sincronização local:', backupError);
+                }
+
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
@@ -2767,6 +2804,91 @@
                 html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:#334155;">Última sincronização FieldControl:</b> '+escDbsControl(r.latestSync.status||'—')+' · '+escDbsControl(r.latestSync.mode||'—')+'</div>';
             }
             body.innerHTML=html;
+        }
+
+        function contarRegistrosEstadoDBS(state) {
+            if (!state || typeof state !== 'object' || Array.isArray(state)) return 0;
+            return Object.values(state).reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0);
+        }
+
+        function lerBackupLocalDBS(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                let parsed = JSON.parse(raw);
+                if (parsed && typeof parsed.raw === 'string') {
+                    try { parsed = JSON.parse(parsed.raw); } catch (_) {}
+                }
+                const state = parsed?.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+                    ? parsed.data
+                    : parsed?.state && typeof parsed.state === 'object' && !Array.isArray(parsed.state)
+                        ? parsed.state
+                        : parsed;
+                if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+                return { key, state, count: contarRegistrosEstadoDBS(state), backedUpAt: parsed?.backedUpAt || null };
+            } catch (error) {
+                console.warn('Cópia local DBS não pôde ser lida:', key, error);
+                return null;
+            }
+        }
+
+        function mesclarEstadoRecuperacaoDBS(current, backup) {
+            const merged = { ...(current || {}), ...(backup || {}) };
+            const arrayKeys = new Set([
+                ...Object.keys(current || {}).filter(key => Array.isArray(current[key])),
+                ...Object.keys(backup || {}).filter(key => Array.isArray(backup[key]))
+            ]);
+            const identity = item => {
+                if (item && typeof item === 'object' && !Array.isArray(item)) {
+                    for (const key of ['id','employeeId','protocolo','protocol','sku','email','fieldControlId']) {
+                        if (item[key] !== null && item[key] !== undefined && String(item[key]).trim()) {
+                            return key + ':' + String(item[key]).trim().toLocaleLowerCase('pt-BR');
+                        }
+                    }
+                }
+                return 'value:' + JSON.stringify(item);
+            };
+            arrayKeys.forEach(key => {
+                const rows = new Map();
+                (Array.isArray(current?.[key]) ? current[key] : []).forEach(item => rows.set(identity(item), item));
+                (Array.isArray(backup?.[key]) ? backup[key] : []).forEach(item => {
+                    const id = identity(item);
+                    const old = rows.get(id);
+                    if (old && old && item && typeof old === 'object' && typeof item === 'object' && !Array.isArray(old) && !Array.isArray(item)) {
+                        const combined = { ...old };
+                        Object.entries(item).forEach(([field,value]) => {
+                            if (value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === '')) combined[field] = value;
+                        });
+                        rows.set(id, combined);
+                    } else if (!old) rows.set(id, item);
+                });
+                merged[key] = [...rows.values()];
+            });
+            return merged;
+        }
+
+        function verificarRecuperacaoLocalDBS() {
+            const keys = [
+                'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION',
+                'DBS_AIR_ERP_STATE_PREVIOUS',
+                'DBS_AIR_ERP_STATE_CORRUPTED_BACKUP'
+            ];
+            const backups = keys.map(lerBackupLocalDBS).filter(Boolean).sort((a,b) => b.count - a.count);
+            const currentCount = contarRegistrosEstadoDBS(ERP_STATE);
+            const best = backups[0];
+            if (!best || best.count === 0) {
+                alert('Não encontrei uma cópia local recuperável neste navegador. Não apague os dados do navegador. A cópia pode existir em outro computador ou sessão onde o DBS CONTROL era utilizado.');
+                return;
+            }
+            const summary = backups.map(item => item.key + ': ' + item.count + ' registros' + (item.backedUpAt ? ' (' + item.backedUpAt + ')' : '')).join('\n');
+            const preview = 'Estado atual: ' + currentCount + ' registros estimados.\nCópias encontradas:\n' + summary + '\n\nA cópia mais completa será mesclada com o estado atual; os registros existentes não serão removidos. Deseja continuar?';
+            if (!confirm(preview)) return;
+            const session = ERP_STATE.sessionTecnicoLogado || null;
+            ERP_STATE = mesclarEstadoRecuperacaoDBS(ERP_STATE, best.state);
+            if (session) ERP_STATE.sessionTecnicoLogado = session;
+            saveState();
+            renderizarTudo();
+            alert('Mesclagem local concluída. Estado antes: ' + currentCount + ' registros estimados; após: ' + contarRegistrosEstadoDBS(ERP_STATE) + '. A cópia original permanece armazenada. Confira os cadastros e as OS antes de continuar a operação.');
         }
 
         function renderizarCentralCadastros() {
@@ -2880,6 +3002,9 @@
                 case 'tab-pwa':
                     safe(renderizarPWAScreen);
                     break;
+                case 'tab-orcamentos':
+                    safe(window.renderizarOrcamentos);
+                    break;
                 case 'tab-nova-os':
                 case 'tab-importacao':
                     break;
@@ -2943,7 +3068,8 @@
                     'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
                     'tab-servicos':['Serviços','Catálogo de serviços'],
                     'tab-compras':['Compras','Solicitações e pedidos de compra'],
-                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador']
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+                    'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
                 };
                 const meta = titleMap[String(tabId)];
                 const title = document.getElementById('view-title');
@@ -2954,6 +3080,11 @@
                 }
                 // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
                 if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
+                // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
+                // aparecer vazia mesmo quando os cadastros existem na base.
+                if (typeof atualizarSelects === 'function') {
+                    try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores da aba', tabId, error); }
+                }
                 return true;
             } catch (error) {
                 console.error('DBS CONTROL: falha ao abrir aba', tabId, error);
