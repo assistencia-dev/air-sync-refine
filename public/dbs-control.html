@@ -3231,16 +3231,16 @@
                 return;
             }
 
-            options.innerHTML = filtered.map(item => \`
+            options.innerHTML = filtered.map(item => `
                 <button type="button"
                         class="dbs-equipment-option"
                         role="option"
-                        data-equipment-id="\${escaparTextoSeguroEquipamentoOS(item.id)}"
-                        onclick="selecionarEquipamentoOS('\${String(item.id).replace(/'/g, "\\\\'")}')">
-                    <span class="dbs-equipment-option-title">\${escaparTextoSeguroEquipamentoOS(item.primary)}</span>
-                    \${item.meta ? '<span class="dbs-equipment-option-meta">' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+                        data-equipment-id="${escaparTextoSeguroEquipamentoOS(item.id)}"
+                        onclick="selecionarEquipamentoOS('${String(item.id).replace(/'/g, "\\'")}')">
+                    <span class="dbs-equipment-option-title">${escaparTextoSeguroEquipamentoOS(item.primary)}</span>
+                    ${item.meta ? '<span class="dbs-equipment-option-meta">' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
                 </button>
-            \`).join('');
+            `).join('');
         }
 
         function renderizarEquipamentoSelecionadoOS(equipamento) {
@@ -3261,11 +3261,11 @@
             input.value = item.shortLabel;
             input.placeholder = 'Digite para alterar a busca...';
             clear.hidden = false;
-            selected.innerHTML = \`
+            selected.innerHTML = `
                 <span class="dbs-equipment-selected-label">Selecionado</span>
-                <strong>\${escaparTextoSeguroEquipamentoOS(item.primary)}</strong>
-                \${item.meta ? '<span>' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
-            \`;
+                <strong>${escaparTextoSeguroEquipamentoOS(item.primary)}</strong>
+                ${item.meta ? '<span>' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+            `;
         }
 
         function fecharSeletorEquipamentosOS() {
@@ -4296,7 +4296,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261008-1"></script>
+    <script src="/dbs-control-ux.js?v=20261009-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
