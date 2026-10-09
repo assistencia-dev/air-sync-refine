@@ -1714,7 +1714,12 @@
 
     <style id="dbs-employee-experience-v2">
       body.dbs-control-employee-mode { background:#f3f7fc !important; color:#14243a; }
-      body.dbs-control-employee-mode main { margin-left:0 !important; padding:0 !important; }
+      /* Colaborador: área de trabalho própria, sem menu administrativo lateral. Ocultar navegação não remove nem altera funções/dados administrativos. */
+      body.dbs-control-employee-mode aside { display:none !important; visibility:hidden !important; width:0 !important; }
+      body.dbs-control-employee-mode main { margin-left:0 !important; padding:0 !important; width:100% !important; }
+      body.dbs-control-employee-mode .nav-menu { display:none !important; }
+      body.dbs-control-employee-mode header .btn-secondary,
+      body.dbs-control-employee-mode header .btn-primary { display:none !important; }
       body.dbs-control-employee-mode #tab-pwa { padding:clamp(14px,3vw,30px) !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:1120px !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-screen { min-height:calc(100vh - 40px); }
