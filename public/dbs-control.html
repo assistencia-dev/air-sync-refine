@@ -6,7 +6,7 @@
     <title>DBS AIR - ERP & Field Service Enterprise v6.0</title>
     <!-- Bibliotecas para Geração de PDF e Exportação em ZIP -->
     <script src="/vendor/jspdf.umd.min.js"></script>
-    <script src="/dbs-control-pdf.js?v=20261008-1"></script>
+    <script src="/dbs-control-pdf.js?v=20261009-2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -2838,17 +2838,53 @@
         }
         window.switchTab = switchTab;
 
-        // Único motor: lê o mesmo estado hidratado usado pela tela, sem alterar a OS.
-        async function gerarPDFObjeto(osId) {
+        // Preferência armazenada no estado compartilhado; o modo colaborador é sempre sem valores.
+        function modoColaboradorPdf() {
+            return new URLSearchParams(window.location.search).get('mode') === 'employee';
+        }
+        function escolherModeloPdf() {
+            return new Promise(resolve => {
+                const admin = !modoColaboradorPdf();
+                const pref = ERP_STATE.configuracoesPdfDbs || {};
+                const defaultModel = admin && ['tecnica','cliente','administrativa'].includes(pref.modelo) ? pref.modelo : 'tecnica';
+                const old = document.getElementById('dbs-pdf-options-modal'); if (old) old.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'dbs-pdf-options-modal';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;';
+                const option = (value,title,desc) => '<label style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid #dbe5ef;border-radius:12px;cursor:pointer;background:#fff;margin-top:8px"><input type="radio" name="dbs-pdf-model" value="'+value+'" '+(defaultModel===value?'checked':'')+' style="margin-top:3px;accent-color:#0284c7"><span><b style="display:block;color:#0f172a;font-size:13px">'+title+'</b><small style="display:block;color:#64748b;line-height:1.45;margin-top:3px">'+desc+'</small></span></label>';
+                overlay.innerHTML = '<div style="width:min(540px,100%);max-height:90vh;overflow:auto;background:#f8fafc;border-radius:18px;box-shadow:0 24px 80px #0f172a55;padding:22px;color:#0f172a"><div style="font-size:10px;font-weight:900;letter-spacing:.14em;color:#0284c7">DBS AIR · DOCUMENTOS</div><h2 style="font-size:21px;font-weight:900;margin:6px 0">Como deseja emitir o PDF?</h2><p style="font-size:12px;color:#64748b;margin-bottom:12px">Escolha o nível de informação para esta emissão. Os dados técnicos e assinaturas são preservados.</p><div id="dbs-pdf-model-options">'+option('tecnica','OS técnica — sem valores','Para execução e registro do atendimento.')+option('cliente','OS para cliente','Documento de atendimento, com opção de mostrar valores.')+(admin?option('administrativa','OS administrativa completa — com valores','Inclui valores e total do atendimento. Disponível apenas no modo administrativo.'):'')+'</div><label id="dbs-pdf-values-row" style="display:flex;gap:9px;align-items:center;margin-top:13px;padding:11px 12px;background:#eff6ff;border-radius:10px;font-size:12px;font-weight:700"><input id="dbs-pdf-include-values" type="checkbox" '+(pref.incluirValores?'checked':'')+' style="accent-color:#0284c7"> Mostrar valores no PDF para cliente</label><label style="display:flex;gap:9px;align-items:center;margin-top:12px;font-size:12px;color:#475569"><input id="dbs-pdf-save-default" type="checkbox" style="accent-color:#0284c7"> Usar esta escolha como padrão nas próximas emissões</label><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><button type="button" id="dbs-pdf-cancel" class="btn btn-secondary">Cancelar</button><button type="button" id="dbs-pdf-confirm" class="btn btn-primary">Gerar PDF</button></div></div>';
+                document.body.appendChild(overlay);
+                const valuesRow = overlay.querySelector('#dbs-pdf-values-row');
+                const syncValues = () => { const chosen=overlay.querySelector('input[name="dbs-pdf-model"]:checked')?.value; valuesRow.style.display = chosen==='cliente' && admin ? 'flex' : 'none'; };
+                overlay.querySelectorAll('input[name="dbs-pdf-model"]').forEach(el=>el.addEventListener('change',syncValues)); syncValues();
+                const finish = value => { overlay.remove(); resolve(value); };
+                overlay.querySelector('#dbs-pdf-cancel').onclick=()=>finish(null);
+                overlay.querySelector('#dbs-pdf-confirm').onclick=()=>{
+                    const model=overlay.querySelector('input[name="dbs-pdf-model"]:checked')?.value||'tecnica';
+                    const includeValues=admin && (model==='administrativa' || (model==='cliente' && overlay.querySelector('#dbs-pdf-include-values').checked));
+                    if (overlay.querySelector('#dbs-pdf-save-default').checked) {
+                        ERP_STATE.configuracoesPdfDbs={modelo:model,incluirValores:includeValues};
+                        if (typeof window.saveState==='function') window.saveState();
+                    }
+                    finish({model,includeValues});
+                };
+            });
+        }
+
+        // Único motor: usa a base já hidratada; o renderizador também força sem valores no modo colaborador.
+        async function gerarPDFObjeto(osId, pdfOptions = { model:'tecnica', includeValues:false }) {
             if (window.parent !== window && !DBS_CONTROL_CLOUD_READY) {
                 throw new Error('Aguarde o carregamento da base compartilhada antes de exportar.');
             }
-            return window.DbsControlPdf.generate(ERP_STATE, osId);
+            const safeOptions = { includeValues: !modoColaboradorPdf() && pdfOptions.includeValues === true };
+            return window.DbsControlPdf.generate(ERP_STATE, osId, safeOptions);
         }
 
         async function baixarPDFIndividual(osId) {
             try {
-                const doc = await gerarPDFObjeto(osId);
+                const options = await escolherModeloPdf();
+                if (!options) return;
+                const doc = await gerarPDFObjeto(osId, options);
                 if (doc) doc.save(`Ordem_de_Servico_${osId}.pdf`);
             } catch (error) {
                 console.error('Exportação da OS:', error);
@@ -2859,12 +2895,18 @@
         async function exportarSelecionadasPDF() {
             const ids = Array.from(document.querySelectorAll('.chk-os-item:checked'), el => el.value);
             if (!ids.length) { alert('Selecione ao menos uma Ordem de Serviço!'); return; }
-            if (ids.length === 1) { await baixarPDFIndividual(ids[0]); return; }
             try {
+                const options = await escolherModeloPdf();
+                if (!options) return;
+                if (ids.length === 1) {
+                    const doc = await gerarPDFObjeto(ids[0], options);
+                    if (doc) doc.save(`Ordem_de_Servico_${ids[0]}.pdf`);
+                    return;
+                }
                 const zip = new JSZip();
                 const folder = zip.folder('Ordens_de_Servico_DBS_AIR');
                 for (const osId of ids) {
-                    const doc = await gerarPDFObjeto(osId);
+                    const doc = await gerarPDFObjeto(osId, options);
                     if (doc) folder.file(`OS_${osId}.pdf`, doc.output('blob'));
                 }
                 const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
@@ -4296,7 +4338,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261009-1"></script>
+    <script src="/dbs-control-ux.js?v=20261009-2"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
