@@ -589,7 +589,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_equipment").select("id,client_id,site_id,tag_code,serial_number,status"),
       supabaseAdmin.from("dbs_control_service_catalog").select("id,name,status"),
       supabaseAdmin.from("rh_employees").select("id,full_name,is_active,source_system,source_key,registration_data"),
-      supabaseAdmin.from("dbs_control_work_orders").select("id,protocol,client_id,site_id,service_id,assigned_employee_id,status"),
+      fetchAllDbsControlWorkOrders(),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
       supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
