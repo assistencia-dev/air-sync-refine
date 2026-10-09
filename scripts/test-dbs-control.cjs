@@ -52,9 +52,9 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
-assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\\s*\\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
-assert.match(cloudFunctions, /\\.range\\(offset, offset \\+ pageSize - 1\\)/, "A consulta de OS deve paginar a base completa.");
-assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\\(\\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
+assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
+assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
+assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /function mergeDbsControlStates\s*\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
 assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
 assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
