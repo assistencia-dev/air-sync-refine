@@ -24,6 +24,23 @@ for (const match of html.matchAll(scriptTag)) {
 }
 assert.ok(parsedInlineScripts > 0, "Nenhum script inline foi validado.");
 
+const firstPartyScripts = [
+  "public/dbs-control-ux.js",
+  "public/dbs-control-import.js",
+  "public/dbs-control-orcamentos-v2.js",
+  "public/dbs-control-pdf.js",
+];
+for (const file of firstPartyScripts) {
+  const source = fs.readFileSync(file, "utf8");
+  try {
+    new vm.Script(source, { filename: file });
+    parsedInlineScripts += 1;
+  } catch (error) {
+    console.error("Falha de sintaxe em " + file + ": " + error.message);
+    process.exitCode = 1;
+  }
+}
+
 const tabIds = new Set([...html.matchAll(/\bid=["'](tab-[^"']+)["']/g)].map((m) => m[1]));
 const referencedTabs = new Set();
 for (const source of [html, ux]) {
