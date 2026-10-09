@@ -776,3 +776,70 @@
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",refreshLayer);else refreshLayer();
   setTimeout(refreshLayer,250);setTimeout(refreshLayer,900);
 })();
+
+
+/* DBS CONTROL · RECUPERAÇÃO DE NAVEGAÇÃO 2026-10-09
+   Delegação em captura para manter o menu navegável mesmo se um handler legado falhar. */
+(function dbsControlNavigationRecovery(){
+  'use strict';
+  if (window.__dbsControlNavigationRecovery) return;
+  window.__dbsControlNavigationRecovery = true;
+  const titles = {
+    'tab-dashboard':['Painel Operacional','Visão geral do atendimento e indicadores'],
+    'tab-atividades':['Atividades do Dia','Acompanhamento das execuções e pendências'],
+    'tab-despacho':['Quadros de Despacho','Distribuição e acompanhamento das Ordens de Serviço'],
+    'tab-ordens':['Ordens de Serviço','Consulte, filtre, conclua e exporte suas OS'],
+    'tab-nova-os':['Nova Ordem de Serviço','Crie e encaminhe uma nova OS'],
+    'tab-cadastros':['Central de Cadastros','Visão central da base operacional'],
+    'tab-clientes':['Clientes','Cadastro e relacionamento com clientes'],
+    'tab-importacao':['Importação em Massa','Importe e atualize sua base com segurança'],
+    'tab-equipamentos':['Parque de Equipamentos','Ativos e equipamentos por cliente e local'],
+    'tab-tecnicos':['Equipe Técnica','Técnicos, vínculos RH e acessos'],
+    'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
+    'tab-servicos':['Serviços','Catálogo de serviços'],
+    'tab-compras':['Compras','Solicitações e pedidos de compra'],
+    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+    'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
+  };
+  function targetId(item){
+    const inline = item.getAttribute('onclick') || '';
+    const match = inline.match(/switchTab\\(\\s*['\"]([^'\"]+)['\"]/);
+    if (match) return match[1];
+    const text = (item.textContent || '').trim().toLocaleLowerCase('pt-BR');
+    const map = {'painel operacional':'tab-dashboard','dashboard principal':'tab-dashboard','atividades do dia':'tab-atividades','quadros de despacho':'tab-despacho','ordens de serviço':'tab-ordens','nova os':'tab-nova-os','clientes':'tab-clientes','importação em massa':'tab-importacao','parque de equipamentos':'tab-equipamentos','equipe técnica':'tab-tecnicos','peças & estoque':'tab-pecas','serviços':'tab-servicos','compras':'tab-compras','minhas os':'tab-pwa','orçamentos':'tab-orcamentos','central de cadastros':'tab-cadastros'};
+    return map[text] || '';
+  }
+  function activateDirect(id,item){
+    const target = document.getElementById(id);
+    if (!target) return false;
+    document.querySelectorAll('.tab-view').forEach(el=>el.classList.toggle('active',el===target));
+    document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el===item));
+    const meta=titles[id];
+    if(meta){const title=document.getElementById('view-title');const subtitle=document.getElementById('view-subtitle');if(title)title.textContent=meta[0];if(subtitle)subtitle.textContent=meta[1];}
+    try {
+      const renderers = {
+        'tab-dashboard':['renderizarOrdens','atualizarMetricas'],
+        'tab-atividades':['garantirHistoricoInicial','renderizarAtividadesDia','renderizarHistoricoOperacional'],
+        'tab-despacho':['renderizarKanban'],'tab-ordens':['renderizarOrdens'],
+        'tab-clientes':['renderizarClientes'],'tab-equipamentos':['renderizarEquipamentos'],
+        'tab-tecnicos':['renderizarTecnicos'],'tab-pecas':['renderizarPecas'],
+        'tab-servicos':['renderizarServicos'],'tab-compras':['renderizarCompras'],
+        'tab-cadastros':['renderizarCentralCadastros'],'tab-pwa':['renderizarPWAScreen']
+      };
+      (renderers[id]||[]).forEach(name=>{if(typeof window[name]==='function')window[name]();});
+      if(typeof window.atualizarSelects==='function')window.atualizarSelects();
+    } catch(error){console.error('DBS CONTROL: recuperação de navegação',error);}
+    return true;
+  }
+  document.addEventListener('click',function(event){
+    const item=event.target && event.target.closest ? event.target.closest('.nav-item') : null;
+    if(!item)return;
+    const id=targetId(item);
+    if(!id)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    let ok=false;
+    try { if(typeof window.switchTab==='function')ok=window.switchTab(id,item)!==false; } catch(error){console.error('DBS CONTROL: falha no menu legado',error);}
+    if(!ok)activateDirect(id,item);
+  },true);
+})();
