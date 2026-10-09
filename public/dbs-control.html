@@ -6,7 +6,7 @@
     <title>DBS AIR - ERP & Field Service Enterprise v6.0</title>
     <!-- Bibliotecas para Geração de PDF e Exportação em ZIP -->
     <script src="/vendor/jspdf.umd.min.js"></script>
-    <script src="/dbs-control-pdf.js?v=20261008-1"></script>
+    <script src="/dbs-control-pdf.js?v=20261009-1"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -1711,7 +1711,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="/dbs-control-theme.css?v=20261008-safe-ui">
+<link rel="stylesheet" href="/dbs-control-theme.css?v=20261009-safe-ui">
 </head>
 <body>
 
@@ -3232,16 +3232,16 @@
                 return;
             }
 
-            options.innerHTML = filtered.map(item => \`
+            options.innerHTML = filtered.map(item => `
                 <button type="button"
                         class="dbs-equipment-option"
                         role="option"
-                        data-equipment-id="\${escaparTextoSeguroEquipamentoOS(item.id)}"
-                        onclick="selecionarEquipamentoOS('\${String(item.id).replace(/'/g, "\\\\'")}')">
-                    <span class="dbs-equipment-option-title">\${escaparTextoSeguroEquipamentoOS(item.primary)}</span>
-                    \${item.meta ? '<span class="dbs-equipment-option-meta">' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+                        data-equipment-id="${escaparTextoSeguroEquipamentoOS(item.id)}"
+                        onclick="selecionarEquipamentoOS('${String(item.id).replace(/'/g, "\\\\'")}')">
+                    <span class="dbs-equipment-option-title">${escaparTextoSeguroEquipamentoOS(item.primary)}</span>
+                    ${item.meta ? '<span class="dbs-equipment-option-meta">' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
                 </button>
-            \`).join('');
+            `).join('');
         }
 
         function renderizarEquipamentoSelecionadoOS(equipamento) {
@@ -3262,11 +3262,11 @@
             input.value = item.shortLabel;
             input.placeholder = 'Digite para alterar a busca...';
             clear.hidden = false;
-            selected.innerHTML = \`
+            selected.innerHTML = `
                 <span class="dbs-equipment-selected-label">Selecionado</span>
-                <strong>\${escaparTextoSeguroEquipamentoOS(item.primary)}</strong>
-                \${item.meta ? '<span>' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
-            \`;
+                <strong>${escaparTextoSeguroEquipamentoOS(item.primary)}</strong>
+                ${item.meta ? '<span>' + escaparTextoSeguroEquipamentoOS(item.meta) + '</span>' : ''}
+            `;
         }
 
         function fecharSeletorEquipamentosOS() {
@@ -3966,6 +3966,13 @@
                                   <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado...">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
                                 </label>
                               </div>
+                              ${(() => {
+                                const savedObservations = [...new Set([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation].map(value => String(value ?? '').trim()).filter(Boolean))];
+                                return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Novas notas serão anexadas ao histórico.</small></div>` : '';
+                              })()}
+                              <label class="employee-observation-field">Observação complementar do técnico <span class="employee-observation-optional">Opcional · acrescentada ao histórico</span>
+                                <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas."></textarea>
+                              </label>
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
                               <div class="employee-photo-grid">
                                 <label>Foto antes<input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
@@ -4082,6 +4089,7 @@
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
             const relatoInput = document.getElementById(`dbs-mob-relato-${osId}`);
+            const observationInput = document.getElementById(`dbs-mob-observacao-${osId}`);
             const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
             const afterInput = document.getElementById(`dbs-mob-after-${osId}`);
 
@@ -4108,6 +4116,17 @@
                     afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
                 ]);
 
+                const observationText = String(observationInput?.value || '').trim();
+                if (observationText) {
+                    const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
+                        .find(key => os[key] == null || typeof os[key] === 'string') || 'observacaoComplementarTecnico';
+                    const existingObservation = typeof os[observationKey] === 'string' ? os[observationKey].trim() : '';
+                    if (!existingObservation.includes(observationText)) {
+                        const actor = ERP_STATE.sessionTecnicoLogado?.nome || os.tecnicoNome || 'Técnico';
+                        const entry = `[${new Date().toLocaleString('pt-BR')} · ${actor}] ${observationText}`;
+                        os[observationKey] = existingObservation ? `${existingObservation}\n\n${entry}` : entry;
+                    }
+                }
                 os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
                 os.relatoTecnico = relatoTecnico;
                 os.diagnostico = relatoTecnico;
@@ -4122,7 +4141,7 @@
 
                 saveState();
                 renderizarTudo();
-                alert(`OS ${osId} finalizada com sucesso. Diagnóstico, execução, evidências e assinatura foram salvos.`);
+                alert(`OS ${osId} finalizada com sucesso. Diagnóstico, execução, observações, evidências e assinatura foram salvos.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
@@ -4297,7 +4316,8 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261008-1"></script>
+    <script src="/dbs-control-ux.js?v=20261009-1"></script>
+    <script src="/dbs-control-observations.js?v=20261009-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){

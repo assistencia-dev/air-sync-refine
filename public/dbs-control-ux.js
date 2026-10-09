@@ -338,8 +338,7 @@
         background:transparent!important;
       }
       #tab-dashboard .quick-start-card .data-header h3,
-      #tab-dashboard .quick-start-card .quick-start-subtitle,
-      #tab-dashboard .quick-start-card .quick-flow{display:none!important;}
+      #tab-dashboard .quick-start-card .quick-start-subtitle{display:none!important;}
       #tab-dashboard .quick-start-grid{
         display:flex!important;
         gap:8px!important;
@@ -596,7 +595,6 @@
   })();
 
   })();
-})();
 
 /* DBS CONTROL — segunda camada de reforma UX 2026-10-06
    Apenas apresentação/navegação. Nenhuma rotina de dados é removida.
@@ -607,7 +605,7 @@
 
   const style=document.createElement("style");
   style.id="dbs-control-operational-layer-20261006";
-  style.textContent=String.raw\`
+  style.textContent=String.raw`
     main>header .page-title h1{letter-spacing:-.03em!important}
     .tab-view>.data-card{margin-bottom:14px!important}
     .tab-view>.data-card>.data-header h3,.tab-view>.data-card>div>h3{font-size:12px!important;line-height:1.25!important}
@@ -621,12 +619,10 @@
     #tab-dashboard .metric-value{font-size:21px!important}
     #tab-dashboard .quick-start-grid{gap:7px!important}
     #tab-dashboard .quick-start-action{min-height:54px!important;flex-basis:160px!important;border-radius:9px!important}
-    #tab-dashboard .quick-flow{display:none!important}
-    #tab-dashboard .data-card:last-child{margin-top:2px!important}
+    #tab-dashboard .data-card:last-child{margin-top:2px!important;overflow-x:auto!important}
+    #tab-dashboard .data-card:last-child table{min-width:880px}
     #tab-dashboard .data-card:last-child .data-header{padding-bottom:9px!important}
     #tab-dashboard .data-card:last-child .data-header h3{font-size:12px!important}
-    #tab-dashboard .data-card:last-child table th:nth-child(7),#tab-dashboard .data-card:last-child table td:nth-child(7),
-    #tab-dashboard .data-card:last-child table th:nth-child(9),#tab-dashboard .data-card:last-child table td:nth-child(9){display:none!important}
 
     #tab-nova-os .os-premium-body{display:flex!important;flex-direction:column!important;gap:0!important}
     #tab-nova-os .os-premium-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}
@@ -678,7 +674,7 @@
       #tab-ordens .data-header .filter-bar input,#tab-ordens .data-header .filter-bar select{width:100%!important}
       #tab-atividades .day-kpi-grid{grid-template-columns:1fr 1fr!important}
     }
-  \`;
+  `;
   document.head.appendChild(style);
 
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -722,17 +718,17 @@
     const todayRows=todayOrders.slice().sort((a,b)=>String(timeOf(a)).localeCompare(String(timeOf(b)))).slice(0,8);
     const rowHtml=todayRows.length?todayRows.map(o=>{
       const stt=String(o.status||"Pendente"),statusClass=isDone(stt)?"done":(isActive(stt)?"active":(isPending(stt)?"pending":"neutral"));
-      return \`<tr><td><strong>\${esc(o.id)}</strong></td><td>\${esc(clientName(o,st))}</td><td>\${esc(techName(o,st))}</td><td>\${esc(equipmentName(o,st))}</td><td>\${esc(timeOf(o)||"—")}</td><td><span class="dbs-op-status \${statusClass}">\${esc(stt)}</span></td><td style="text-align:right"><button class="btn btn-secondary btn-sm dbs-op-open" data-os="\${esc(o.id)}">Abrir OS</button></td></tr>\`;
-    }).join(""):\`<tr><td colspan="7" style="padding:24px;text-align:center;color:#718096">Nenhum atendimento registrado para hoje.</td></tr>\`;
+      return `<tr><td><strong>${esc(o.id)}</strong></td><td>${esc(clientName(o,st))}</td><td>${esc(techName(o,st))}</td><td>${esc(equipmentName(o,st))}</td><td>${esc(timeOf(o)||"—")}</td><td><span class="dbs-op-status ${statusClass}">${esc(stt)}</span></td><td style="text-align:right"><button class="btn btn-secondary btn-sm dbs-op-open" data-os="${esc(o.id)}">Abrir OS</button></td></tr>`;
+    }).join(""):`<tr><td colspan="7" style="padding:24px;text-align:center;color:#718096">Nenhum atendimento registrado para hoje.</td></tr>`;
     const attentionHtml=attention.length?attention.map(o=>{
       const reasons=[];
       if(isDone(o.status)){if(!String(o.assinatura||"").trim())reasons.push("assinatura");if(!String(o.diagnostico||"").trim()&&!String(o.relatoTecnico||"").trim())reasons.push("diagnóstico");if(!String(o.trabalhoExecutado||"").trim())reasons.push("execução");}
       else reasons.push(String(o.status||"pendente"));
-      return \`<button type="button" class="dbs-op-attention" data-os="\${esc(o.id)}"><span><strong>OS \${esc(o.id)}</strong><small>\${esc(clientName(o,st))}</small></span><span>\${esc(reasons.join(" · "))}</span></button>\`;
-    }).join(""):\`<div class="dbs-op-empty">Nenhuma pendência crítica identificada.</div>\`;
-    panel.innerHTML=\`
-      <div class="dbs-op-main"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">OPERAÇÃO DE HOJE</span><h2>Atendimentos de hoje</h2></div><button type="button" class="btn btn-secondary btn-sm" id="dbs-op-refresh">Atualizar</button></div><div class="dbs-op-table"><table><thead><tr><th>OS</th><th>Cliente</th><th>Técnico</th><th>Ativo</th><th>Horário</th><th>Status</th><th></th></tr></thead><tbody>\${rowHtml}</tbody></table></div></div>
-      <aside class="dbs-op-side"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">CONFERÊNCIA</span><h2>Atenção necessária</h2></div></div>\${attentionHtml}</aside>\`;
+      return `<button type="button" class="dbs-op-attention" data-os="${esc(o.id)}"><span><strong>OS ${esc(o.id)}</strong><small>${esc(clientName(o,st))}</small></span><span>${esc(reasons.join(" · "))}</span></button>`;
+    }).join(""):`<div class="dbs-op-empty">Nenhuma pendência crítica identificada.</div>`;
+    panel.innerHTML=`
+      <div class="dbs-op-main"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">OPERAÇÃO DE HOJE</span><h2>Atendimentos de hoje</h2></div><button type="button" class="btn btn-secondary btn-sm" id="dbs-op-refresh">Atualizar</button></div><div class="dbs-op-table"><table><thead><tr><th>OS</th><th>Cliente</th><th>Técnico</th><th>Ativo</th><th>Horário</th><th>Status</th><th></th></tr></thead><tbody>${rowHtml}</tbody></table></div></div>
+      <aside class="dbs-op-side"><div class="dbs-op-heading"><div><span class="dbs-op-eyebrow">CONFERÊNCIA</span><h2>Atenção necessária</h2></div></div>${attentionHtml}</aside>`;
     panel.querySelectorAll(".dbs-op-open,.dbs-op-attention").forEach(btn=>{btn.onclick=()=>{const id=btn.getAttribute("data-os");if(typeof window.openOsDetail==="function"){window.openOsDetail(id);return;}if(typeof window.abrirHistoricoOS==="function"){window.abrirHistoricoOS(id);return;}if(typeof window.switchTab==="function")window.switchTab("tab-ordens");};});
     panel.querySelector("#dbs-op-refresh")?.addEventListener("click",ensureDashboardOperational);
   }

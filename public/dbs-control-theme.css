@@ -240,6 +240,92 @@ summary:focus-visible {
   }
 }
 
+.employee-observation-history {
+  padding: 11px 12px;
+  border: 1px solid #e0e9f0;
+  border-left: 3px solid #70a9d3;
+  border-radius: 10px;
+  background: #f7fafc;
+}
+
+.employee-observation-history strong,
+.employee-observation-history small {
+  display: block;
+}
+
+.employee-observation-history strong {
+  color: #344f68;
+  font-size: 11px;
+}
+
+.employee-observation-history p {
+  margin: 6px 0;
+  color: #485e73;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.employee-observation-history small {
+  color: #71849a;
+  font-size: 10px;
+}
+
+.dbs-os-observation-history {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e0e9f0;
+  border-left: 3px solid #70a9d3;
+  border-radius: 9px;
+  background: #f7fafc;
+}
+
+.dbs-os-observation-history strong {
+  color: #344f68;
+  font-size: 11px;
+}
+
+.dbs-os-observation-history p {
+  margin: 7px 0 0;
+  color: #485e73;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.employee-execution-body .employee-observation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #d8e7f3;
+  border-radius: 12px;
+  background: #f7fbff;
+  color: #23405a;
+}
+
+.employee-observation-optional {
+  display: block;
+  color: #71849a;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.employee-execution-body .employee-observation-field textarea {
+  width: 100%;
+  min-height: 82px;
+  margin-top: 2px;
+  border-color: #d2e1ee;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #tab-dashboard .metric-card,
   #tab-dashboard .quick-start-action,

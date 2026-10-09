@@ -115,9 +115,11 @@
     const line = (at, color = theme.line) => { doc.setDrawColor(...color); doc.setLineWidth(0.25); doc.line(M, at, M + W, at); };
     function header(first) {
       if (first) {
-        doc.addImage(logo.data, 'PNG', M, 12, 42, 42 * logo.height / logo.width);
-        font(8, 'bold', theme.navy); doc.text('DBS AIR', M, 35);
-        font(7.3, 'normal', theme.muted); doc.text('DBS Control · Atendimento técnico', M, 40);
+        const logoRatio = logo.height / logo.width;
+        const logoHeight = Math.min(18, 44 * logoRatio);
+        const logoWidth = logoHeight / logoRatio;
+        doc.addImage(logo.data, 'PNG', M, 12, logoWidth, logoHeight);
+        font(7.3, 'normal', theme.muted); doc.text('DBS Control · Atendimento técnico', M, 12 + logoHeight + 5);
         font(13, 'bold', theme.navy); doc.text('ORDEM DE SERVIÇO', 195, 18, { align: 'right' });
         const pl = lines('Nº ' + protocol, 119, 10, 'bold'); doc.text(pl, 195, 25, { align: 'right' });
         const meta = lines(unique([o.tipo, o.status]), 119, 8); doc.text(meta, 195, 25 + pl.length * 4.5 + 2, { align: 'right' });
@@ -176,6 +178,22 @@
       }); y += 4;
     }
     function distinct(entries) { const seen = new Set(); entries.forEach(([label, value]) => { const v = clean(value); if (v && !seen.has(v)) { seen.add(v); block(label, v); } }); }
+    function observationBox(value) {
+      const wrapped = lines(present(value) ? value : 'Nenhuma observação registrada.', W - 10, 8.5);
+      let offset = 0;
+      while (offset < wrapped.length) {
+        const available = Math.floor((bottom - y - 17) / 4.5);
+        if (available < 1) { next(); continue; }
+        const take = Math.min(wrapped.length - offset, available);
+        const top = y, height = 12 + take * 4.5;
+        doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.3);
+        doc.rect(M, top, W, height, 'FD');
+        font(7, 'bold', theme.navy); doc.text(offset ? 'REGISTRO DO TÉCNICO · CONTINUAÇÃO' : 'REGISTRO DO TÉCNICO', M + 4, top + 4.5);
+        font(8.5, 'normal', theme.ink); doc.text(wrapped.slice(offset, offset + take), M + 4, top + 9);
+        y = top + height + 5; offset += take;
+        if (offset < wrapped.length) next();
+      }
+    }
     header(true);
     const location = o.localAtendimento || site.name || site.nome;
     const end = address(site.address_json || site.endereco || o.endereco || cli.endereco) || unique([cli.logradouro, cli.numero, cli.complemento, cli.bairro, cli.cidade, cli.uf, cli.cep]);
@@ -205,8 +223,10 @@
         block('Observações do equipamento', e.observacoes);
       });
     }
-    const execution = [['Relato técnico do atendimento', o.relatoTecnico], ['Diagnóstico técnico', o.diagnostico || o.technical_opinion], ['Trabalho executado', o.trabalhoExecutado], ['Observação técnica', o.observacao], ['Observações', o.observacoes], ['Observação', o.obs], ['Recomendações', o.recomendacoes], ['Recomendação', o.recomendacao]];
+    const execution = [['Relato técnico do atendimento', o.relatoTecnico], ['Diagnóstico técnico', o.diagnostico || o.technical_opinion], ['Trabalho executado', o.trabalhoExecutado], ['Recomendações', o.recomendacoes], ['Recomendação', o.recomendacao]];
     if (execution.some(x => present(x[1]))) { section('Execução técnica'); distinct(execution); }
+    const technicianObservations = unique([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation]);
+    section('Observações do técnico', 26); observationBox(technicianObservations);
     if (tec.nome || tec.posicao || tec.registro) { section('Responsável pelo atendimento'); pair(['Técnico / executante', tec.nome], ['Função / registro', unique([tec.posicao, tec.registro, tec.crea])]); }
     const checks = list(o.checklist).filter(x => x.concluido && present(x.titulo || x.descricao));
     if (checks.length) { section('Checklist técnico realizado'); table(['Item conferido', 'Registro'], checks.map(x => ['✓ ' + (x.titulo || x.descricao) + (x.observacao ? '\n' + x.observacao : ''), date(x.concluidoEm)]), [133, 47]); }
