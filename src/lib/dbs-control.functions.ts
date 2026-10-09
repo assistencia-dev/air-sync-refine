@@ -658,3 +658,196 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const warnings=issues.filter((x:any)=>x.severity==="warning").length;
     return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:syncRuns[0]??null,snapshotCounts,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
   });
+
+
+/**
+ * Métricas de produtividade calculadas somente a partir de transições reais de status
+ * registradas no histórico do DBS CONTROL. O histórico sintético de OS antigas é ignorado.
+ * Valores financeiros nunca são retornados por este endpoint.
+ */
+export const getDbsControlProductivity = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { startDate: string; endDate: string }) => {
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!input || !datePattern.test(input.startDate) || !datePattern.test(input.endDate)) {
+      throw new Error("Período de análise inválido.");
+    }
+    if (input.startDate > input.endDate) throw new Error("A data inicial deve ser anterior à data final.");
+    return { startDate: input.startDate, endDate: input.endDate };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    if (!["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(user.role_key)) {
+      throw new Error("O painel de produtividade é restrito à administração e aos gestores autorizados.");
+    }
+
+    const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+    const { data: snapshot, error } = await supabaseAdmin
+      .from("dbs_control_snapshots")
+      .select("state, updated_at")
+      .eq("scope_key", scopeKey)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!snapshot?.state) {
+      return { updatedAt: null, totalTracked: 0, totalExcluded: 0, legacyUnmeasuredCount: 0, metrics: [], completed: [], excluded: [], legacySamples: [] };
+    }
+
+    const state = snapshot.state as Record<string, unknown>;
+    const orders = Array.isArray(state.ordens) ? state.ordens as any[] : [];
+    const history = Array.isArray(state.osHistorico) ? state.osHistorico as any[] : [];
+    const technicians = Array.isArray(state.tecnicos) ? state.tecnicos as any[] : [];
+    const technicianName = (id: unknown) => {
+      const key = String(id ?? "");
+      const technician = technicians.find((item) =>
+        String(item?.id ?? "") === key || String(item?.employeeId ?? "") === key
+      );
+      return String(technician?.nome ?? technician?.full_name ?? "Técnico não identificado");
+    };
+
+    // O filtro é aplicado à data da conclusão, nunca à data artificial de cadastro.
+    const from = new Date(`${data.startDate}T00:00:00-03:00`).getTime();
+    const to = new Date(`${data.endDate}T23:59:59.999-03:00`).getTime();
+    const waitingStatuses = new Set(["Aguardando peça", "Aguardando cliente"]);
+    const validStatuses = new Set(["Em Atendimento", "Concluída", ...waitingStatuses]);
+    const eventsByOrder = new Map<string, any[]>();
+
+    for (const event of history) {
+      if (event?.tipo !== "status" || event?.evento !== "Status alterado") continue;
+      const timestamp = Date.parse(String(event.createdAt ?? ""));
+      const orderId = String(event.osId ?? "");
+      const parts = String(event.detalhe ?? "").split(" → ");
+      if (!orderId || !Number.isFinite(timestamp) || parts.length < 2) continue;
+      const previousStatus = parts[0].trim();
+      const nextStatus = parts.slice(1).join(" → ").trim();
+      if (!validStatuses.has(nextStatus)) continue;
+      const list = eventsByOrder.get(orderId) ?? [];
+      list.push({ timestamp, previousStatus, nextStatus, technicianId: event.tecnicoId ?? null });
+      eventsByOrder.set(orderId, list);
+    }
+
+    const completed: any[] = [];
+    const excluded: any[] = [];
+
+    for (const [orderId, events] of eventsByOrder) {
+      events.sort((a, b) => a.timestamp - b.timestamp);
+      const order = orders.find((item) => String(item?.id ?? "") === orderId);
+      let cycleStart: number | null = null;
+      let activeStart: number | null = null;
+      let cycleTechnicianId: string | null = null;
+      let technicianChanged = false;
+      let activeMilliseconds = 0;
+
+      const closeActiveInterval = (timestamp: number) => {
+        if (activeStart !== null) {
+          const delta = timestamp - activeStart;
+          if (delta >= 0) activeMilliseconds += delta;
+          else technicianChanged = true;
+          activeStart = null;
+        }
+      };
+
+      for (const event of events) {
+        if (event.nextStatus === "Em Atendimento") {
+          if (cycleStart === null) {
+            cycleStart = event.timestamp;
+            cycleTechnicianId = event.technicianId ? String(event.technicianId) : null;
+            technicianChanged = false;
+            activeMilliseconds = 0;
+          } else if (cycleTechnicianId && event.technicianId && cycleTechnicianId !== String(event.technicianId)) {
+            technicianChanged = true;
+          }
+          if (activeStart === null) activeStart = event.timestamp;
+          continue;
+        }
+
+        if (waitingStatuses.has(event.nextStatus)) {
+          closeActiveInterval(event.timestamp);
+          continue;
+        }
+
+        if (event.nextStatus === "Concluída") {
+          closeActiveInterval(event.timestamp);
+          const completionInPeriod = event.timestamp >= from && event.timestamp <= to;
+          if (completionInPeriod) {
+            const protocol = String(order?.protocolo ?? order?.numero ?? orderId);
+            const completionTechnicianId = event.technicianId ? String(event.technicianId) : null;
+            const finalTechnicianId = completionTechnicianId || cycleTechnicianId;
+            const elapsedMinutes = cycleStart === null ? null : Math.round((event.timestamp - cycleStart) / 60000);
+            const activeMinutes = Math.round(activeMilliseconds / 60000);
+            let reason = "";
+            if (cycleStart === null) reason = "Não há início de atendimento confiável no histórico.";
+            else if (!finalTechnicianId) reason = "Não há técnico vinculado ao evento de conclusão.";
+            else if (technicianChanged || (cycleTechnicianId && completionTechnicianId && cycleTechnicianId !== completionTechnicianId)) reason = "O técnico foi alterado durante o ciclo; conferir atribuição.";
+            else if (activeMinutes <= 0) reason = "Duração ativa nula ou inconsistente.";
+            else if (activeMinutes > 1440) reason = "Tempo ativo superior a 24 horas; conferir antes de usar.";
+            const record = {
+              orderId,
+              protocol,
+              technicianId: finalTechnicianId,
+              technicianName: technicianName(finalTechnicianId),
+              type: String(order?.tipo ?? order?.tipoOS ?? "Não informado"),
+              startedAt: cycleStart === null ? null : new Date(cycleStart).toISOString(),
+              completedAt: new Date(event.timestamp).toISOString(),
+              activeMinutes,
+              elapsedMinutes,
+              reason,
+            };
+            if (reason) excluded.push(record);
+            else completed.push(record);
+          }
+          cycleStart = null;
+          activeStart = null;
+          cycleTechnicianId = null;
+          technicianChanged = false;
+          activeMilliseconds = 0;
+        }
+      }
+    }
+
+    const completedEventOrderIds = new Set<string>();
+    for (const [orderId, events] of eventsByOrder) {
+      if (events.some((event) => event.nextStatus === "Concluída")) completedEventOrderIds.add(orderId);
+    }
+    const legacyOrders = orders.filter((order) =>
+      String(order?.status ?? "") === "Concluída" && !completedEventOrderIds.has(String(order?.id ?? ""))
+    );
+    const metricMap = new Map<string, any>();
+    for (const record of completed) {
+      const key = `${record.technicianId}::${record.type}`;
+      const item = metricMap.get(key) ?? {
+        technicianId: String(record.technicianId),
+        metricKey: key,
+        technicianName: record.technicianName,
+        type: record.type,
+        completedCount: 0,
+        activeMinutesTotal: 0,
+        elapsedMinutesTotal: 0,
+      };
+      item.completedCount += 1;
+      item.activeMinutesTotal += record.activeMinutes;
+      item.elapsedMinutesTotal += Number(record.elapsedMinutes ?? 0);
+      metricMap.set(key, item);
+    }
+    const metrics = [...metricMap.values()]
+      .map((item) => ({
+        ...item,
+        averageActiveMinutes: Math.round(item.activeMinutesTotal / item.completedCount),
+        averageElapsedMinutes: Math.round(item.elapsedMinutesTotal / item.completedCount),
+      }))
+      .sort((a, b) => b.completedCount - a.completedCount || a.technicianName.localeCompare(b.technicianName, "pt-BR"));
+
+    return {
+      updatedAt: snapshot.updated_at ?? null,
+      totalTracked: completed.length,
+      totalExcluded: excluded.length,
+      legacyUnmeasuredCount: legacyOrders.length,
+      metrics,
+      completed: completed.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 200),
+      excluded: excluded.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 100),
+      legacySamples: legacyOrders.slice(0, 20).map((order) => ({
+        orderId: String(order?.id ?? ""),
+        protocol: String(order?.protocolo ?? order?.numero ?? order?.id ?? "OS sem protocolo"),
+        technicianName: technicianName(order?.employeeId ?? order?.tecnicoId),
+      })),
+    };
+  });

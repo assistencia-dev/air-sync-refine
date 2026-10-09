@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator,
+  IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator, Activity,
   UsersRound, BriefcaseBusiness, ChevronRight, Download, RefreshCw, AlertTriangle, FileWarning, UserRoundCheck, ClipboardList
 } from "lucide-react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
@@ -11,11 +11,12 @@ import { RhDpCenter } from "@/components/RhDpCenter";
 import { getRhDashboardAlerts, listRhEmployeeRegistry, listRhEmployees, listRhTopups } from "@/lib/rh.functions";
 import { listRhPayroll } from "@/lib/rh.dp.functions";
 import { RhEmployeeFinance } from "@/components/RhEmployeeFinance";
+import { RhProductivityPanel } from "@/components/RhProductivityPanel";
 import { listRhPontoEmployees } from "@/lib/ponto.functions";
 
 export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
 
-type HrSection = "resumo" | "custos" | "financeiro" | "ponto" | "passagem" | "alimentacao" | "cadastro" | "gestao";
+type HrSection = "resumo" | "custos" | "financeiro" | "ponto" | "passagem" | "alimentacao" | "cadastro" | "gestao" | "produtividade";
 
 const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
@@ -50,6 +51,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
     { key: "gestao", label: "RH / DP", icon: <BriefcaseBusiness className="h-4 w-4" />, group: "Pessoas" },
     { key: "ponto", label: "Folha de ponto", icon: <Clock3 className="h-4 w-4" />, group: "Jornada & folha" },
     { key: "custos", label: "Folha e custos", icon: <Calculator className="h-4 w-4" />, group: "Jornada & folha" },
+    { key: "produtividade", label: "Produtividade OS", icon: <Activity className="h-4 w-4" />, group: "Jornada & folha" },
     { key: "financeiro", label: "Vales e descontos", icon: <WalletCards className="h-4 w-4" />, group: "Benefícios & financeiro" },
     { key: "passagem", label: "Vale passagem", icon: <WalletCards className="h-4 w-4" />, group: "Benefícios & financeiro" },
     { key: "alimentacao", label: "Vale alimentação", icon: <Utensils className="h-4 w-4" />, group: "Benefícios & financeiro" },
@@ -218,6 +220,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
       {section === "custos" && <RhPayrollSummary registry={registry.data ?? []} vt={vt.data ?? []} va={va.data ?? []} vtTopups={vtTopups.data ?? []} vaTopups={vaTopups.data ?? []} payroll={payroll.data ?? []} />}
       {section === "financeiro" && <RhEmployeeFinance />}
       {section === "ponto" && <RhPontoWorkspace />}
+      {section === "produtividade" && <RhProductivityPanel />}
       {section === "cadastro" && <RhEmployeeRegistry />}
       {section === "alimentacao" && <RhBenefitPanel benefitType="alimentacao" />}
       {section === "passagem" && <RhBenefitPanel benefitType="passagem" />}
