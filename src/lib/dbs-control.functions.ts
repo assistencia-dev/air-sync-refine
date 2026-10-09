@@ -241,6 +241,24 @@ function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<stri
   return merged;
 }
 
+async function fetchAllDbsControlWorkOrders() {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("dbs_control_work_orders")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,observation,signature_name,signature_data,total_cents,created_at,updated_at")
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) return { data: null, error };
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
 async function hydrateDbsControlStateFromCanonicalDb(
   state: Record<string, unknown>,
   companyId: string | null,
@@ -266,8 +284,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
       .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
     supabaseAdmin.from("rh_employees")
       .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at"),
-    supabaseAdmin.from("dbs_control_work_orders")
-      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,observation,signature_name,signature_data,total_cents,created_at,updated_at"),
+    fetchAllDbsControlWorkOrders(),
     supabaseAdmin.from("dbs_control_work_order_equipment")
       .select("work_order_id,equipment_id"),
   ]);
