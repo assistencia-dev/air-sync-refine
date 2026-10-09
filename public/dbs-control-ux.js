@@ -803,7 +803,7 @@
   };
   function targetId(item){
     const inline = item.getAttribute('onclick') || '';
-    const match = inline.match(/switchTab\\(\\s*['\"]([^'\"]+)['\"]/);
+    const match = inline.match(/switchTab\(\s*['"]([^'"]+)['"]/);
     if (match) return match[1];
     const text = (item.textContent || '').trim().toLocaleLowerCase('pt-BR');
     const map = {'painel operacional':'tab-dashboard','dashboard principal':'tab-dashboard','atividades do dia':'tab-atividades','quadros de despacho':'tab-despacho','ordens de serviço':'tab-ordens','nova os':'tab-nova-os','clientes':'tab-clientes','importação em massa':'tab-importacao','parque de equipamentos':'tab-equipamentos','equipe técnica':'tab-tecnicos','peças & estoque':'tab-pecas','serviços':'tab-servicos','compras':'tab-compras','minhas os':'tab-pwa','orçamentos':'tab-orcamentos','central de cadastros':'tab-cadastros'};
