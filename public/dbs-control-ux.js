@@ -836,6 +836,12 @@
     if(!item)return;
     const id=targetId(item);
     if(!id)return;
+    // A recuperação de navegação nunca pode retirar o colaborador da área Minhas OS.
+    if (document.body.classList.contains('dbs-control-employee-mode') && id !== 'tab-pwa') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     let ok=false;
