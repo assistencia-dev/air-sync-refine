@@ -2835,14 +2835,65 @@
               : '<div class="dbs-integrity-ok">✓ Estrutura carregada sem inconsistências de vínculo detectáveis no estado atual.</div>';
         }
 
+        function renderizarAbaAtiva(tabId) {
+            const activeId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+            const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
+            // Renderização sob demanda: não montar milhares de linhas em abas ocultas.
+            switch (activeId) {
+                case 'tab-dashboard':
+                    safe(renderizarOrdens);
+                    safe(atualizarMetricas);
+                    break;
+                case 'tab-atividades':
+                    safe(garantirHistoricoInicial);
+                    safe(renderizarAtividadesDia);
+                    safe(renderizarHistoricoOperacional);
+                    break;
+                case 'tab-despacho':
+                    safe(renderizarKanban);
+                    break;
+                case 'tab-ordens':
+                    safe(renderizarOrdens);
+                    break;
+                case 'tab-clientes':
+                    safe(renderizarClientes);
+                    break;
+                case 'tab-equipamentos':
+                    safe(renderizarEquipamentos);
+                    break;
+                case 'tab-tecnicos':
+                    safe(renderizarTecnicos);
+                    break;
+                case 'tab-pecas':
+                    safe(renderizarPecas);
+                    break;
+                case 'tab-servicos':
+                    safe(renderizarServicos);
+                    break;
+                case 'tab-compras':
+                    safe(renderizarCompras);
+                    break;
+                case 'tab-cadastros':
+                    safe(renderizarCentralCadastros);
+                    break;
+                case 'tab-pwa':
+                    safe(renderizarPWAScreen);
+                    break;
+                case 'tab-nova-os':
+                case 'tab-importacao':
+                    break;
+                default:
+                    safe(renderizarOrdens);
+                    safe(atualizarMetricas);
+            }
+        }
+
         function renderizarTudo() {
-            // Cada bloco é isolado: um registro importado incompleto não pode impedir
-            // a montagem dos seletores da Nova OS.
-            const safe = (fn) => { try { fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
-            [renderizarTecnicos, renderizarClientes, renderizarEquipamentos, renderizarPecas, renderizarServicos, renderizarCompras, garantirHistoricoInicial, renderizarOrdens, renderizarAtividadesDia, renderizarHistoricoOperacional, renderizarKanban, renderizarPWAScreen, renderizarCentralCadastros].forEach(fn => { if (typeof fn === 'function') safe(fn); });
-            try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores', error); }
+            // Atualiza dados compartilhados dos seletores sem reconstruir todas as telas.
+            const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
+            safe(renderizarAbaAtiva);
+            safe(atualizarSelects);
             safe(atualizarMetricas);
-            setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
         }
         function __renderizarTudoLegado() {
             renderizarTecnicos();
@@ -2896,6 +2947,8 @@
                     if (title) title.textContent = meta[0];
                     if (subtitle) subtitle.textContent = meta[1];
                 }
+                // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
+                if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
                 return true;
             } catch (error) {
                 console.error('DBS CONTROL: falha ao abrir aba', tabId, error);
@@ -3191,7 +3244,10 @@
         }
 
         function renderizarOrdens() {
-            const rowsHtml = ERP_STATE.ordens.map(o => {
+            const activeTabId = document.querySelector('.tab-view.active')?.id || 'tab-dashboard';
+            const dashboardMode = activeTabId === 'tab-dashboard';
+            const sourceOrders = dashboardMode ? ERP_STATE.ordens.slice(0, 8) : ERP_STATE.ordens;
+            const rowsHtml = sourceOrders.map(o => {
                 const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                 const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                 const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId)) || {};
@@ -3217,8 +3273,14 @@
                 `;
             }).join('');
 
-            document.getElementById('os-table-body').innerHTML = rowsHtml;
-            document.getElementById('dash-table-body').innerHTML = rowsHtml;
+            // O painel mostra apenas uma amostra recente; a aba de OS mantém a listagem completa.
+            if (dashboardMode) {
+                const dashboardBody = document.getElementById('dash-table-body');
+                if (dashboardBody) dashboardBody.innerHTML = rowsHtml;
+            } else if (activeTabId === 'tab-ordens') {
+                const ordersBody = document.getElementById('os-table-body');
+                if (ordersBody) ordersBody.innerHTML = rowsHtml;
+            }
         }
 
         // CADASTROS
