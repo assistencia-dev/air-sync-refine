@@ -4033,7 +4033,7 @@
                 <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
                 <div class="employee-progress-card"><span>Aguardando</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Dependem de retorno ou insumo</small></div>
                 <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length}</strong><small>Ordens finalizadas</small></div>
-                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(o => /concluída/i.test(String(o.status || '')).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
+                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length / minhasOS.length * 100 : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
               </div>
 
               <div class="employee-toolbar">
