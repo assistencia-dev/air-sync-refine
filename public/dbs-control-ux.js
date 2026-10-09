@@ -595,7 +595,6 @@
     setTimeout(bootReform,1000);
   })();
 
-  })();
 })();
 
 /* DBS CONTROL — segunda camada de reforma UX 2026-10-06
