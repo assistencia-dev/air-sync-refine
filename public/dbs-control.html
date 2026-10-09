@@ -1711,6 +1711,67 @@
 }
 
 </style>
+
+    <style id="dbs-employee-experience-v2">
+      body.dbs-control-employee-mode { background:#f3f7fc !important; color:#14243a; }
+      body.dbs-control-employee-mode main { margin-left:0 !important; padding:0 !important; }
+      body.dbs-control-employee-mode #tab-pwa { padding:clamp(14px,3vw,30px) !important; }
+      body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:1120px !important; }
+      body.dbs-control-employee-mode #tab-pwa .pwa-screen { min-height:calc(100vh - 40px); }
+      body.dbs-control-employee-mode .employee-hero {
+        display:flex; align-items:center; justify-content:space-between; gap:22px;
+        padding:clamp(22px,4vw,34px); border:1px solid #dbe7f4; border-radius:22px;
+        background:linear-gradient(120deg,#fff 0%,#f5f9ff 68%,#eaf3ff 100%);
+        box-shadow:0 12px 32px rgba(20,61,110,.07); margin-bottom:18px;
+      }
+      body.dbs-control-employee-mode .employee-eyebrow { color:#1763a6; font-size:10px; font-weight:900; letter-spacing:.15em; }
+      body.dbs-control-employee-mode .employee-hero h2 { color:#102c4c; font-size:clamp(25px,4vw,34px); line-height:1.15; font-weight:850; margin:9px 0 8px; }
+      body.dbs-control-employee-mode .employee-hero p { color:#5c6f85; font-size:13px; line-height:1.65; max-width:600px; }
+      body.dbs-control-employee-mode .employee-count { flex:0 0 128px; min-height:112px; border-radius:18px; background:#103f76; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 22px rgba(16,63,118,.18); }
+      body.dbs-control-employee-mode .employee-count strong { font-size:34px; line-height:1; font-weight:900; }
+      body.dbs-control-employee-mode .employee-count span { margin-top:9px; font-size:10px; font-weight:750; color:#dbeafe; text-align:center; }
+      body.dbs-control-employee-mode .employee-progress-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:0 0 24px; }
+      body.dbs-control-employee-mode .employee-progress-card { padding:17px 18px; border:1px solid #e0e9f3; background:#fff; border-radius:16px; box-shadow:0 5px 16px rgba(20,61,110,.035); min-width:0; }
+      body.dbs-control-employee-mode .employee-progress-card span { display:block; color:#63768b; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+      body.dbs-control-employee-mode .employee-progress-card strong { display:block; color:#163b65; font-size:27px; font-weight:900; line-height:1.2; margin-top:9px; }
+      body.dbs-control-employee-mode .employee-progress-card small { display:block; margin-top:5px; color:#8493a5; font-size:10px; }
+      body.dbs-control-employee-mode .employee-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:2px 1px 13px; border:0; background:transparent; box-shadow:none; }
+      body.dbs-control-employee-mode .employee-toolbar strong { display:block; font-size:20px; color:#173858; font-weight:900; }
+      body.dbs-control-employee-mode .employee-toolbar span { display:block; margin-top:4px; color:#6c7e91; font-size:12px; }
+      body.dbs-control-employee-mode .employee-orders { display:grid; gap:14px; }
+      body.dbs-control-employee-mode .employee-order { border:1px solid #dfe8f2; border-radius:18px; background:#fff; padding:20px; box-shadow:0 5px 18px rgba(20,61,110,.04); }
+      body.dbs-control-employee-mode .employee-order-top { gap:12px; padding-bottom:15px; border-bottom:1px solid #edf2f7; }
+      body.dbs-control-employee-mode .employee-protocol { display:inline-flex; color:#155fa3; background:#edf6ff; border-radius:7px; padding:5px 8px; font-size:10px; font-weight:900; }
+      body.dbs-control-employee-mode .employee-order-top h3 { margin-top:8px; font-size:17px; font-weight:850; color:#193a5b; }
+      body.dbs-control-employee-mode .employee-grid { gap:12px; padding:16px 0; }
+      body.dbs-control-employee-mode .employee-grid > div { background:#f7faff; border:1px solid #edf2f8; border-radius:11px; padding:11px 12px; min-width:0; }
+      body.dbs-control-employee-mode .employee-grid small, body.dbs-control-employee-mode .employee-description small { color:#71849a; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+      body.dbs-control-employee-mode .employee-grid b { display:block; margin-top:5px; color:#24415f; font-size:12px; overflow-wrap:anywhere; }
+      body.dbs-control-employee-mode .employee-description { padding:13px 14px; border-radius:11px; background:#f8fafc; }
+      body.dbs-control-employee-mode .employee-description p { color:#435970; font-size:12px; line-height:1.65; margin-top:5px; }
+      body.dbs-control-employee-mode .employee-execution { margin-top:16px; border:1px solid #dce9f7; border-radius:13px; overflow:hidden; }
+      body.dbs-control-employee-mode .employee-execution summary { padding:14px 16px; color:#164c82; background:#f1f7ff; font-weight:850; font-size:12px; cursor:pointer; }
+      body.dbs-control-employee-mode .employee-execution-body { padding:16px; }
+      body.dbs-control-employee-mode .employee-execution-body label { color:#344e68; font-size:11px; font-weight:800; }
+      body.dbs-control-employee-mode .employee-execution-body input:not([type=file]), body.dbs-control-employee-mode .employee-execution-body select, body.dbs-control-employee-mode .employee-execution-body textarea { width:100%; min-width:0; border:1px solid #d6e1ed; border-radius:10px; padding:10px 12px; color:#19344f; background:#fff; outline:none; }
+      body.dbs-control-employee-mode .employee-execution-body input:focus, body.dbs-control-employee-mode .employee-execution-body select:focus, body.dbs-control-employee-mode .employee-execution-body textarea:focus { border-color:#3984c8; box-shadow:0 0 0 3px rgba(57,132,200,.12); }
+      body.dbs-control-employee-mode .employee-execution-body .btn-success { background:#145da0; border-color:#145da0; }
+      body.dbs-control-employee-mode .employee-execution-body .btn-success:hover { background:#0f4c85; }
+      body.dbs-control-employee-mode .employee-empty { border:1px solid #dfe8f2; border-radius:18px; background:#fff; padding:32px 22px; text-align:center; }
+      @media(max-width:760px) {
+        body.dbs-control-employee-mode #tab-pwa { padding:12px !important; }
+        body.dbs-control-employee-mode .employee-hero { align-items:flex-start; padding:19px; flex-direction:column; }
+        body.dbs-control-employee-mode .employee-count { flex:0 0 auto; width:100%; min-height:76px; flex-direction:row; gap:12px; }
+        body.dbs-control-employee-mode .employee-count span { margin-top:0; }
+        body.dbs-control-employee-mode .employee-progress-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+        body.dbs-control-employee-mode .employee-progress-card { padding:13px; }
+        body.dbs-control-employee-mode .employee-progress-card strong { font-size:24px; }
+        body.dbs-control-employee-mode .employee-order { padding:14px; }
+        body.dbs-control-employee-mode .employee-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        body.dbs-control-employee-mode .employee-toolbar { align-items:flex-start; }
+      }
+    </style>
+
 </head>
 <body>
 
@@ -3968,9 +4029,16 @@
                 <div class="employee-count"><strong>${minhasOS.length}</strong><span>OS atribuídas</span></div>
               </div>
 
+              <div class="employee-progress-grid" aria-label="Resumo de produtividade">
+                <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
+                <div class="employee-progress-card"><span>Aguardando</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Dependem de retorno ou insumo</small></div>
+                <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length}</strong><small>Ordens finalizadas</small></div>
+                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length / minhasOS.length * 100 : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
+              </div>
+
               <div class="employee-toolbar">
-                <div><strong>Minhas OS</strong><span>${minhasOS.length ? 'Ordens atribuídas a você' : 'Nenhum chamado atribuído no momento'}</span></div>
-                <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">Atualizar</button>
+                <div><strong>Minhas ordens de serviço</strong><span>${minhasOS.length ? 'Acompanhe o andamento e registre cada atendimento' : 'Nenhum chamado atribuído no momento'}</span></div>
+                <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
               </div>
 
               <div class="employee-orders">
