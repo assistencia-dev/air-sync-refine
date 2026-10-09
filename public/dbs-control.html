@@ -3002,6 +3002,9 @@
                 case 'tab-pwa':
                     safe(renderizarPWAScreen);
                     break;
+                case 'tab-orcamentos':
+                    safe(window.renderizarOrcamentos);
+                    break;
                 case 'tab-nova-os':
                 case 'tab-importacao':
                     break;
@@ -3065,7 +3068,8 @@
                     'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
                     'tab-servicos':['Serviços','Catálogo de serviços'],
                     'tab-compras':['Compras','Solicitações e pedidos de compra'],
-                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador']
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+                    'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
                 };
                 const meta = titleMap[String(tabId)];
                 const title = document.getElementById('view-title');
@@ -3076,6 +3080,11 @@
                 }
                 // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
                 if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
+                // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
+                // aparecer vazia mesmo quando os cadastros existem na base.
+                if (typeof atualizarSelects === 'function') {
+                    try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores da aba', tabId, error); }
+                }
                 return true;
             } catch (error) {
                 console.error('DBS CONTROL: falha ao abrir aba', tabId, error);
