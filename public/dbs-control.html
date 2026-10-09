@@ -2836,7 +2836,8 @@
         }
 
         function renderizarAbaAtiva(tabId) {
-            const activeId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+            const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
+            const activeId = employeeMode ? 'tab-pwa' : String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
             const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
             // Renderização sob demanda: não montar milhares de linhas em abas ocultas.
             switch (activeId) {
