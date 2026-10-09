@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator,
+  IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator, Activity,
   UsersRound, BriefcaseBusiness, ChevronRight, Download, RefreshCw, AlertTriangle, FileWarning, UserRoundCheck, ClipboardList
 } from "lucide-react";
 import { RhBenefitPanel } from "@/components/RhBenefitPanel";
@@ -12,7 +12,6 @@ import { getRhDashboardAlerts, listRhEmployeeRegistry, listRhEmployees, listRhTo
 import { listRhPayroll } from "@/lib/rh.dp.functions";
 import { RhEmployeeFinance } from "@/components/RhEmployeeFinance";
 import { RhProductivityPanel } from "@/components/RhProductivityPanel";
-import { Activity } from "lucide-react";
 import { listRhPontoEmployees } from "@/lib/ponto.functions";
 
 export const VALE_PASSAGEM_URL = "https://valepassagem-d8edi3fl.manus.space";
