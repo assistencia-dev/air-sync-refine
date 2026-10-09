@@ -727,7 +727,6 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
 
     const completed: any[] = [];
     const excluded: any[] = [];
-    const seenCompletionOrderIds = new Set<string>();
 
     for (const [orderId, events] of eventsByOrder) {
       events.sort((a, b) => a.timestamp - b.timestamp);
@@ -770,7 +769,6 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
           closeActiveInterval(event.timestamp);
           const completionInPeriod = event.timestamp >= from && event.timestamp <= to;
           if (completionInPeriod) {
-            seenCompletionOrderIds.add(orderId);
             const protocol = String(order?.protocolo ?? order?.numero ?? orderId);
             const completionTechnicianId = event.technicianId ? String(event.technicianId) : null;
             const finalTechnicianId = completionTechnicianId || cycleTechnicianId;
