@@ -51,6 +51,9 @@ for (const source of [html, ux]) {
 const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
+assert.match(route, /function mergeDbsControlStates\\s*\\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
+assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
+assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
 assert.match(html, /function switchTab\s*\(/, "A navegação principal switchTab precisa existir.");
 assert.match(html, /function renderizarAbaAtiva\s*\(/, "O renderizador sob demanda precisa existir.");
 assert.match(html, /dbs-control-employee-mode[^]*?String\(tabId\s*\|\|\s*['"]{0,1}['"]\)\s*!==\s*['"]tab-pwa['"]/, "O modo colaborador deve bloquear a navegação para abas administrativas.");
