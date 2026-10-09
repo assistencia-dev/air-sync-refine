@@ -69,7 +69,7 @@ export function RhProductivityPanel() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Kpi icon={<CheckCircle2 />} label="Atendimentos medidos" value={data.totalTracked} note="Com início e conclusão confiáveis" />
-            <Kpi icon={<Clock3 />} label="Tempo ativo médio" value={duration(data.totalTracked ? Math.round(data.completed.reduce((sum, item) => sum + item.activeMinutes, 0) / data.totalTracked) : null)} note="Exclui esperas registradas" />
+            <Kpi icon={<Clock3 />} label="Tempo ativo médio" value={duration(data.totalTracked ? Math.round(data.metrics.reduce((sum, item) => sum + item.activeMinutesTotal, 0) / data.totalTracked) : null)} note="Exclui esperas registradas" />
             <Kpi icon={<AlertTriangle />} label="Conclusões para revisar" value={data.totalExcluded} note="Não entram nas médias" />
             <Kpi icon={<CalendarDays />} label="OS antigas sem medição" value={data.legacyUnmeasuredCount} note="Histórico anterior não comprovado" />
           </section>
@@ -84,16 +84,17 @@ export function RhProductivityPanel() {
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[620px] text-left text-xs">
-                <thead><tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><th className="py-3 pr-3">Técnico</th><th className="py-3 pr-3">OS medidas</th><th className="py-3 pr-3">Média ativa</th><th className="py-3 pr-3">Média corrida</th><th className="py-3">Leitura</th></tr></thead>
+                <thead><tr className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><th className="py-3 pr-3">Técnico</th><th className="py-3 pr-3">Tipo de serviço</th><th className="py-3 pr-3">OS medidas</th><th className="py-3 pr-3">Média ativa</th><th className="py-3 pr-3">Média corrida</th><th className="py-3">Leitura</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.metrics.map((item) => <tr key={item.technicianId}>
+                  {data.metrics.map((item) => <tr key={item.metricKey}>
                     <td className="py-3 pr-3 font-bold text-slate-800">{item.technicianName}</td>
+                    <td className="py-3 pr-3">{item.type}</td>
                     <td className="py-3 pr-3 tabular-nums">{item.completedCount}</td>
                     <td className="py-3 pr-3 tabular-nums">{duration(item.averageActiveMinutes)}</td>
                     <td className="py-3 pr-3 tabular-nums">{duration(item.averageElapsedMinutes)}</td>
                     <td className="py-3 text-slate-500">Indicador descritivo; não é nota automática</td>
                   </tr>)}
-                  {!data.metrics.length && <tr><td colSpan={5} className="py-8 text-center text-slate-500">Ainda não há atendimentos com histórico confiável neste período. As próximas transições registradas alimentarão o painel.</td></tr>}
+                  {!data.metrics.length && <tr><td colSpan={6} className="py-8 text-center text-slate-500">Ainda não há atendimentos com histórico confiável neste período. As próximas transições registradas alimentarão o painel.</td></tr>}
                 </tbody>
               </table>
             </div>
