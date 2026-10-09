@@ -815,10 +815,12 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
     );
     const metricMap = new Map<string, any>();
     for (const record of completed) {
-      const key = String(record.technicianId);
+      const key = `${record.technicianId}::${record.type}`;
       const item = metricMap.get(key) ?? {
-        technicianId: key,
+        technicianId: String(record.technicianId),
+        metricKey: key,
         technicianName: record.technicianName,
+        type: record.type,
         completedCount: 0,
         activeMinutesTotal: 0,
         elapsedMinutesTotal: 0,
