@@ -2691,6 +2691,26 @@
             DBS_CONTROL_CLOUD_HYDRATING = true;
             try {
                 const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+
+                // Preserva o estado local imediatamente antes de qualquer hidratação
+                // da nuvem. Se a nuvem estiver incompleta, esta cópia permite recuperar
+                // os dados anteriores sem depender do snapshot remoto.
+                try {
+                    const localBeforeCloud = getPersistableState();
+                    const localRecordCount = Object.keys(localBeforeCloud).reduce((total, key) =>
+                        total + (Array.isArray(localBeforeCloud[key]) ? localBeforeCloud[key].length : 0), 0);
+                    if (localRecordCount > 0) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION', JSON.stringify({
+                            version: DBS_CONTROL_STATE_VERSION,
+                            data: localBeforeCloud,
+                            backedUpAt: new Date().toISOString(),
+                            reason: 'Cópia de segurança automática antes da sincronização com a nuvem'
+                        }));
+                    }
+                } catch (backupError) {
+                    console.warn('Não foi possível gravar a cópia pré-sincronização local:', backupError);
+                }
+
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
