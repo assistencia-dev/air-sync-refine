@@ -2916,6 +2916,10 @@
 
         function switchTab(tabId, element) {
             try {
+                // Isolamento de perfil: o colaborador só pode abrir a própria área de OS.
+                if (document.body.classList.contains('dbs-control-employee-mode') && String(tabId || '') !== 'tab-pwa') {
+                    return false;
+                }
                 const target = document.getElementById(String(tabId || ''));
                 if (!target) {
                     console.error('DBS CONTROL: aba não encontrada:', tabId);
@@ -4442,6 +4446,15 @@
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('mode') !== 'employee') return;
                 document.body.classList.add('dbs-control-employee-mode');
+                // O menu do colaborador é uma área própria: manter somente "Minhas OS".
+                document.querySelectorAll('aside .nav-menu .nav-section, aside .nav-menu .nav-item').forEach(item => {
+                    item.style.setProperty('display', item.matches('.nav-item[data-employee-visible="true"]') ? 'flex' : 'none', 'important');
+                });
+                const employeeNav = document.querySelector('aside .nav-menu .nav-item[data-employee-visible="true"]');
+                if (employeeNav) {
+                    employeeNav.classList.add('active');
+                    employeeNav.setAttribute('aria-current', 'page');
+                }
                 const employeeName = params.get('employee_name') || '';
                 const employeeEmail = (params.get('employee_email') || '').trim().toLowerCase();
                 const normalized = employeeName.trim().toLowerCase();
@@ -4474,7 +4487,7 @@
     </script>
     <script src="/dbs-control-import.js?v=20261006-1"></script>
     <script src="/dbs-control-orcamentos-v2.js?v=20261006-1"></script>
-    <script src="/dbs-control-ux.js?v=20261009-4"></script>
+    <script src="/dbs-control-ux.js?v=20261009-5"></script>
     <script>
     (function bootFieldControlStaticPanel(){
         function init(){
