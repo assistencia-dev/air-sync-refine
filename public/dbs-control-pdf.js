@@ -77,7 +77,10 @@
       seen.add(key); return row;
     }).filter(Boolean);
   }
-  async function generate(state, id) {
+  async function generate(state, id, options = {}) {
+    // Segurança adicional no renderizador: o modo colaborador nunca gera valores financeiros.
+    const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
+    const includeValues = !employeeMode && options.includeValues === true;
     const current = list(state?.ordens).find(x => String(x.id) === String(id));
     if (!current) throw new Error('A Ordem de Serviço não está disponível na base carregada.');
     // Freeze this representation before asynchronous font/image reads; never mutate ERP_STATE.
@@ -213,11 +216,11 @@
     const parts = [...list(o.pecasUsadas), ...list(o.materiais), ...list(o.servicosUsados)];
     if (parts.length) {
       section('Materiais, peças e serviços aplicados');
-      const valued = parts.some(p => (number(p.venda ?? p.valorUnitario ?? p.unit_cents) || 0) !== 0);
+      const valued = includeValues && parts.some(p => (number(p.venda ?? p.valorUnitario ?? p.unit_cents) || 0) !== 0);
       const rows = parts.map(p => {
         const unit = p.unit_cents != null ? number(p.unit_cents) / 100 : number(p.venda ?? p.valorUnitario);
         const qty = number(p.qtd ?? p.quantidade ?? p.quantity);
-        return [clean(p.nome || p.descricao || p.description || p.id), clean(p.qtd ?? p.quantidade ?? p.quantity), ...(valued ? [unit ? money(unit) : '', unit && qty != null ? money(unit * qty) : ''] : [])];
+        return [clean(p.nome || p.descricao || p.description || p.id), clean(p.qtd ?? p.quantidade ?? p.quantity), ...(valued ? [unit != null ? money(unit) : '', unit != null && qty != null ? money(unit * qty) : ''] : [])];
       });
       table(valued ? ['Descrição', 'Qtd.', 'Unitário', 'Total'] : ['Descrição', 'Quantidade'], rows, valued ? [103, 17, 30, 30] : [145, 35]);
     }
@@ -245,7 +248,7 @@
     const nonPhotos = attachments.filter(a => !photos.some(p => p.source === (typeof a === 'string' ? a : a.url || a.file_url || a.data || a.src)));
     if (nonPhotos.length) { section('Anexos do atendimento'); nonPhotos.forEach(a => { const url = typeof a === 'string' ? a : a.url || a.file_url; block('Arquivo', typeof a === 'string' ? a : unique([a.file_name || a.name || a.title, a.file_type || a.type, url])); }); }
     const total = o.total_cents != null ? number(o.total_cents) / 100 : number(o.valor);
-    if (total != null && total !== 0) {
+    if (includeValues && total != null && total !== 0) {
       ensure(23); line(y); y += 7; font(8, 'bold', theme.muted); doc.text('VALOR DO ATENDIMENTO', M, y);
       font(13, 'bold', theme.navy); doc.text(money(total), 195, y, { align: 'right' }); y += 12;
     }
