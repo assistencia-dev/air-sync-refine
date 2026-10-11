@@ -128,30 +128,82 @@ export function exportRhPayrollPdf(competence: string, rows: any[]) {
   openRhPrint("Folha de pagamento", `Competência ${competence}`, body);
 }
 
+const PAYROLL_EXPORT_COLUMNS = [
+  "id_funcionario", "cpf", "nome_completo", "tipo_contrato", "salario_base",
+  "proventos", "salario_bruto", "desconto_inss", "desconto_irrf",
+  "outros_descontos", "total_descontos", "salario_liquido", "base_fgts",
+  "valor_fgts", "status_folha", "motivo_afastamento",
+] as const;
+
+function payrollExportRecord(row: any) {
+  const cents = (value: unknown) => Number(value ?? 0) / 100;
+  const status = String(row.status_folha ?? row.status ?? "calculada").toLowerCase();
+  return {
+    id_funcionario: String(row.id_funcionario ?? row.employee_id ?? ""),
+    cpf: String(row.cpf ?? ""),
+    nome_completo: String(row.nome_completo ?? row.employee_name ?? ""),
+    tipo_contrato: String(row.tipo_contrato ?? row.contract_type ?? "CLT"),
+    salario_base: cents(row.salario_base_cents ?? row.salary_base_cents ?? row.gross_cents),
+    proventos: cents(row.proventos_cents ?? 0),
+    salario_bruto: cents(row.gross_cents ?? 0),
+    desconto_inss: cents(row.desconto_inss_cents ?? row.inss_amount_cents ?? 0),
+    desconto_irrf: cents(row.desconto_irrf_cents ?? row.irrf_amount_cents ?? 0),
+    outros_descontos: cents(row.outros_descontos_cents ?? row.other_discounts_cents ?? 0),
+    total_descontos: cents(row.discount_cents ?? 0),
+    salario_liquido: cents(row.net_cents ?? 0),
+    base_fgts: cents(row.fgts_base_cents ?? 0),
+    valor_fgts: cents(row.valor_fgts_cents ?? row.fgts_amount_cents ?? 0),
+    status_folha: status === "calculada" ? "Calculada" : status === "pendente" ? "Pendente" : "Com Alerta",
+    motivo_afastamento: String(row.motivo_afastamento ?? ""),
+  };
+}
+
 export function exportRhPayrollExcel(competence: string, rows: any[]) {
-  const money = (v: unknown) => Number(v ?? 0) / 100;
-  const headers = ["Funcionário", "Competência", "Bruto", "Descontos", "Líquido", "FGTS", "Status"];
-  const xmlRows = rows.map(x => [x.employee_name, competence, money(x.gross_cents), money(x.discount_cents), money(x.net_cents), money(x.fgts_amount_cents ?? x.fgts_base_cents), x.status]);
-  const total = [
-    "TOTAL",
-    competence,
-    rows.reduce((n,x)=>n+money(x.gross_cents),0),
-    rows.reduce((n,x)=>n+money(x.discount_cents),0),
-    rows.reduce((n,x)=>n+money(x.net_cents),0),
-    rows.reduce((n,x)=>n+money(x.fgts_amount_cents ?? x.fgts_base_cents),0),
-    "",
-  ];
-  const row = (cells: unknown[], header = false) => `<Row>${cells.map(c => `<Cell${header ? ' ss:StyleID="Header"' : ''}><Data ss:Type="${typeof c === "number" ? "Number" : "String"}">${esc(c)}</Data></Cell>`).join("")}</Row>`;
-  const xml = `<?xml version="1.0"?>
+  const normalized = rows.map(payrollExportRecord);
+  const xmlCell = (value: unknown) => {
+    const numeric = typeof value === "number";
+    return \`<Cell><Data ss:Type="\${numeric ? "Number" : "String"}">\${esc(value)}</Data></Cell>\`;
+  };
+  const xmlRow = (values: unknown[]) => \`<Row>\${values.map(xmlCell).join("")}</Row>\`;
+  const xml = \`<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style></Styles>
-<Worksheet ss:Name="Folha"><Table>${row(headers,true)}${xmlRows.map(x=>row(x)).join("")}${row(total)}</Table></Worksheet></Workbook>`;
+<Worksheet ss:Name="Folha"><Table>\${xmlRow([...PAYROLL_EXPORT_COLUMNS])}\${normalized.map(row=>xmlRow(PAYROLL_EXPORT_COLUMNS.map(key=>row[key])).join("")}</Table></Worksheet></Workbook>\`;
   const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `folha_${competence.replace(/[^0-9-]/g, "")}.xls`;
+  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.xls\`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportRhPayrollCsv(competence: string, rows: any[]) {
+  const normalized = rows.map(payrollExportRecord);
+  const escapeCsv = (value: unknown) => {
+    const text = String(value ?? "");
+    return /[;"\r\n]/.test(text) ? \`"\${text.replace(/"/g, '""')}"\` : text;
+  };
+  const lines = [
+    [...PAYROLL_EXPORT_COLUMNS].join(";"),
+    ...normalized.map(row => PAYROLL_EXPORT_COLUMNS.map(key => escapeCsv(row[key])).join(";")),
+  ];
+  const blob = new Blob(["\uFEFF", lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.csv\`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportRhPayrollJson(competence: string, rows: any[]) {
+  const payload = { competencia: competence, registros: rows.map(payrollExportRecord) };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.json\`;
   a.click();
   URL.revokeObjectURL(url);
 }
