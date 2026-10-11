@@ -24,7 +24,7 @@ export function payrollInss2026(grossCents: number): number {
   let previous = 0;
   let total = 0;
   for (const [limit, rate] of bands) {
-    total += Math.max(0, Math.min(base, limit) - previous) * rate;
+    total += Math.round(Math.max(0, Math.min(base, limit) - previous) * rate);
     previous = limit;
     if (base <= limit) break;
   }
@@ -50,4 +50,11 @@ export function payrollIrrf2026(grossCents: number, inssCents: number, dependent
     reductionCents = Math.min(taxCents, Math.max(0, Math.round(97862 - 0.133145 * grossCents)));
   }
   return { taxCents: Math.max(0, taxCents - reductionCents), baseCents };
+}
+
+
+export function assertPayrollZeroHasJustification(grossCents: number, isActive: boolean, reason: unknown): void {
+  if (isActive && grossCents === 0 && !String(reason ?? "").trim()) {
+    throw new Error("Funcionário ativo com folha zerada sem motivo de afastamento cadastrado.");
+  }
 }
