@@ -181,7 +181,7 @@ export function exportRhPayrollExcel(competence: string, rows: any[]) {
 export function exportRhPayrollCsv(competence: string, rows: any[]) {
   const normalized = rows.map(payrollExportRecord);
   const escapeCsv = (value: unknown) => {
-    const text = String(value ?? "");
+    const text = typeof value === "number" ? value.toFixed(2).replace(".", ",") : String(value ?? "");
     return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [
