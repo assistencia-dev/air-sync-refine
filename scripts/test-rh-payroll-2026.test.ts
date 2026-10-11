@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertPayrollZeroHasJustification, isValidCpf, payrollInss2026, payrollIrrf2026 } from "../src/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026 } from "../src/utils/rhPayroll2026";
 
 describe("Motor fiscal da folha — tabelas 2026", () => {
   test("INSS progressivo no salário mínimo de 2026", () => {
@@ -24,6 +24,11 @@ describe("Motor fiscal da folha — tabelas 2026", () => {
   test("IRRF fica zerado para rendimento de R$ 4.000 após redução legal de 2026", () => {
     const inss = payrollInss2026(400000);
     expect(payrollIrrf2026(400000, inss, 0).taxCents).toBe(0);
+  });
+
+  test("FGTS é encargo patronal de 8% ou 2% para aprendiz", () => {
+    expect(payrollFgts2026(162100, "CLT")).toEqual({ baseCents: 162100, amountCents: 12968, rate: 0.08 });
+    expect(payrollFgts2026(162100, "JOVEM_APRENDIZ")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
   });
 
   test("valida CPF estrutural e dígitos verificadores", () => {
