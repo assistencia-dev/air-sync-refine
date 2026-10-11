@@ -108,11 +108,11 @@ export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSup
   ]);
   if(itemsError)throw new Error(itemsError.message);
   if(contractsError)throw new Error(contractsError.message);
-  const contractByEmployee=new Map((contracts??[]).map((x:any)=>[x.employee_id,x]));
+  const contractByEmployee=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,x] as [string,any]));
   return allPeriods.map((period:any)=>({...period,rh_payroll_runs:(period.rh_payroll_runs??[]).map((run:any)=>{
     const runItems=(items??[]).filter((item:any)=>item.period_id===period.id&&item.employee_id===run.employee_id);
     const amount=(code:string)=>Number(runItems.find((item:any)=>item.code===code)?.amount_cents??0);
-    return {...run,contract_type:contractByEmployee.get(run.employee_id)?.contract_type??"CLT",salary_base_cents:amount("SALARIO"),proventos_cents:amount("PROVENTOS"),inss_amount_cents:amount("INSS"),irrf_amount_cents:amount("IRRF"),other_discounts_cents:amount("VALE"),fgts_amount_cents:Number(run.fgts_amount_cents??amount("FGTS")),payroll_items:runItems};
+    return {...run,contract_type:contractByEmployee.get(run.employee_id)?.contract_type??"CLT",salary_base_cents:amount("SALARIO"),proventos_cents:amount("PROVENTOS"),inss_amount_cents:amount("INSS"),irrf_amount_cents:amount("IRRF"),other_discounts_cents:amount("VALE"),fgts_amount_cents:Number(run.fgts_amount_cents??0)||amount("FGTS")||Number(run.fgts_base_cents??0),payroll_items:runItems};
   })}));
 });
 
