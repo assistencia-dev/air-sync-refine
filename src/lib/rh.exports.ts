@@ -162,18 +162,18 @@ export function exportRhPayrollExcel(competence: string, rows: any[]) {
   const normalized = rows.map(payrollExportRecord);
   const xmlCell = (value: unknown) => {
     const numeric = typeof value === "number";
-    return \`<Cell><Data ss:Type="\${numeric ? "Number" : "String"}">\${esc(value)}</Data></Cell>\`;
+    return `<Cell><Data ss:Type="${numeric ? "Number" : "String"}">${esc(value)}</Data></Cell>`;
   };
-  const xmlRow = (values: unknown[]) => \`<Row>\${values.map(xmlCell).join("")}</Row>\`;
-  const xml = \`<?xml version="1.0"?>
+  const xmlRow = (values: unknown[]) => `<Row>${values.map(xmlCell).join("")}</Row>`;
+  const xml = `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Worksheet ss:Name="Folha"><Table>\${xmlRow([...PAYROLL_EXPORT_COLUMNS])}\${normalized.map(row=>xmlRow(PAYROLL_EXPORT_COLUMNS.map(key=>row[key]))).join("")}</Table></Worksheet></Workbook>\`;
+<Worksheet ss:Name="Folha"><Table>${xmlRow([...PAYROLL_EXPORT_COLUMNS])}${normalized.map(row=>xmlRow(PAYROLL_EXPORT_COLUMNS.map(key=>row[key]))).join("")}</Table></Worksheet></Workbook>`;
   const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.xls\`;
+  a.download = `folha_${competence.replace(/[^0-9-]/g, "")}.xls`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -182,7 +182,7 @@ export function exportRhPayrollCsv(competence: string, rows: any[]) {
   const normalized = rows.map(payrollExportRecord);
   const escapeCsv = (value: unknown) => {
     const text = String(value ?? "");
-    return /[;"\r\n]/.test(text) ? \`"\${text.replace(/"/g, '""')}"\` : text;
+    return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [
     [...PAYROLL_EXPORT_COLUMNS].join(";"),
@@ -192,7 +192,7 @@ export function exportRhPayrollCsv(competence: string, rows: any[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.csv\`;
+  a.download = `folha_${competence.replace(/[^0-9-]/g, "")}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -203,7 +203,7 @@ export function exportRhPayrollJson(competence: string, rows: any[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = \`folha_\${competence.replace(/[^0-9-]/g, "")}.json\`;
+  a.download = `folha_${competence.replace(/[^0-9-]/g, "")}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
