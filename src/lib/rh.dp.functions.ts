@@ -46,14 +46,14 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
   if(ee)throw new Error(ee.message);
   const ids=(employees??[]).map((e:any)=>e.id);
   const [{data:contracts,error:ce},{data:dependents,error:de},{data:advances,error:ae}]=await Promise.all([
-    ids.length?supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents,contract_type").in("employee_id",ids).eq("is_current",true):Promise.resolve({data:[],error:null}),
+    ids.length?supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents,contract_type,weekly_hours").in("employee_id",ids).eq("is_current",true):Promise.resolve({data:[],error:null}),
     ids.length?supabaseAdmin.from("rh_employee_dependents").select("employee_id,id").in("employee_id",ids).eq("is_active",true).eq("is_ir_dependent",true):Promise.resolve({data:[],error:null}),
     ids.length?supabaseAdmin.from("rh_employee_advances").select("id,employee_id,amount_cents,description").in("employee_id",ids).eq("competence",competence+"-01").eq("authorized",true).in("status",["programado","descontado"]):Promise.resolve({data:[],error:null})
   ]);
   if(ce)throw new Error(ce.message);if(de)throw new Error(de.message);if(ae)throw new Error(ae.message);
   const advancesByEmployee=new Map<string,any[]>();
   for(const a of advances??[]) advancesByEmployee.set(a.employee_id,[...(advancesByEmployee.get(a.employee_id)??[]),a]);
-  const cmap=new Map((contracts??[]).map((x:any)=>[x.employee_id,{salary:Number(x.salary_cents??0),type:x.contract_type??"CLT"}]));
+  const cmap=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,{salary:x.salary_cents==null?null:Number(x.salary_cents),type:x.contract_type??"CLT",weeklyHours:x.weekly_hours==null?null:Number(x.weekly_hours)}] as [string,any]));
   const depMap=new Map<string,number>();for(const d of dependents??[])depMap.set(d.employee_id,(depMap.get(d.employee_id)??0)+1);
   const runs=(employees??[]).map((e:any)=>{
     const registration=e.registration_data??{};
@@ -64,27 +64,31 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const cpf=String(registration.cpf??registration.CPF??"").replace(/\D/g,"");
     const name=String(e.full_name??"").trim();
     if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
-    if(name.split(/\s+/).filter(Boolean).length<2||/\d/.test(name)) throw new Error("BLOQUEIO FOLHA 2026: nome incompleto ou inválido para CPF "+cpf+".");
+    const employeeAlerts:string[]=[];
+    if(name.split(/\s+/).filter(Boolean).length<2||/\d/.test(name)) employeeAlerts.push("Nome incompleto ou contém números; revisar cadastro.");
     const leaveReason=String(registration.motivo_afastamento??registration.leave_reason??registration.afastamento_motivo??"").trim();
     try { assertPayrollZeroHasJustification(gross,true,leaveReason); } catch { throw new Error("BLOQUEIO FOLHA 2026: funcionário ativo "+name+" está com folha zerada sem motivo de afastamento cadastrado."); }
+    const monthlyHours=Number(registration.work_hours_monthly??(contract?.weeklyHours?contract.weeklyHours*5:220));
+    const categoryFloor=Number(registration.piso_categoria_cents??registration.category_floor_cents??162100);
+    if(gross>0&&monthlyHours>0&&gross/monthlyHours<categoryFloor/220) employeeAlerts.push("Remuneração horária abaixo do salário mínimo/piso proporcional cadastrado; revisar jornada e convenção coletiva.");
     const inss=payrollInss2026(gross);
     const irrf=payrollIrrf2026(gross,inss,depMap.get(e.id)??0);
-    const fgtsRate=contract?.type==="APRENDIZ"?0.02:0.08;
+    const fgtsRate=["APRENDIZ","JOVEM_APRENDIZ","JOVEM APRENDIZ"].includes(String(contract?.type??"").toUpperCase())?0.02:0.08;
     const fgtsBase=gross, fgts=Math.round(fgtsBase*fgtsRate);
     const baseNet=Math.max(0,gross-inss-irrf.taxCents);
     const employeeAdvances=advancesByEmployee.get(e.id)??[];
     const valeDiscount=employeeAdvances.reduce((n:number,a:any)=>n+Number(a.amount_cents??0),0);
     if(valeDiscount>baseNet) throw new Error("Os vales/descontos programados para "+name+" superam o líquido disponível. Ajuste os vales antes de calcular a folha.");
-    return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf.taxCents+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(gross,847555),irrf_base_cents:irrf.baseCents,fgts_base_cents:fgtsBase,fgts_amount_cents:fgts,status:"calculada",_salary:salaryBase,_proventos:proventos,_inss:inss,_irrf:irrf.taxCents,_fgts:fgts,_fgtsRate:fgtsRate,_vale:valeDiscount,_cpf:cpf,_name:name,_leaveReason:leaveReason};
+    return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf.taxCents+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(gross,847555),irrf_base_cents:irrf.baseCents,fgts_base_cents:fgtsBase,fgts_amount_cents:fgts,status:employeeAlerts.length?"com_alerta":"calculada",_alerts:employeeAlerts,_salary:salaryBase,_proventos:proventos,_inss:inss,_irrf:irrf.taxCents,_fgts:fgts,_fgtsRate:fgtsRate,_vale:valeDiscount,_cpf:cpf,_name:name,_leaveReason:leaveReason};
   });
   for(const run of runs){
     const clean={period_id:run.period_id,employee_id:run.employee_id,gross_cents:run.gross_cents,discount_cents:run.discount_cents,net_cents:run.net_cents,inss_base_cents:run.inss_base_cents,irrf_base_cents:run.irrf_base_cents,fgts_base_cents:run.fgts_base_cents,fgts_amount_cents:run.fgts_amount_cents,status:run.status};
     const {data:saved,error:re}=await supabaseAdmin.from("rh_payroll_runs").upsert(clean,{onConflict:"period_id,employee_id"}).select("*").single();if(re)throw new Error(re.message);
     const items=[["provento","SALARIO","Salário base",run._salary],["provento","PROVENTOS","Proventos e adicionais",run._proventos],["desconto","INSS","INSS empregado",run._inss],["desconto","IRRF","IRRF",run._irrf],["desconto","VALE","Vales / adiantamentos autorizados",run._vale],["encargo","FGTS","FGTS patronal",run._fgts]];
-    for(const [item_type,code,description,amount_cents] of items){const payload={item_type,description,quantity:1,rate:item_type==="encargo"?run._fgtsRate*100:100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id,employee_advances:(item_type==="desconto"&&code==="VALE"?(advancesByEmployee.get(run.employee_id)??[]).map((a:any)=>({id:a.id,amount_cents:a.amount_cents,description:a.description})):[])}};const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code",code as string).limit(1);if(xe)throw new Error(xe.message);if(existing?.[0]){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").update(payload as any).eq("id",existing[0].id);if(ie)throw new Error(ie.message);}else{const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,code,...payload} as any);if(ie)throw new Error(ie.message);}}
+    for(const [item_type,code,description,amount_cents] of items){const payload={item_type,description,quantity:1,rate:item_type==="encargo"?run._fgtsRate*100:100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id,employee_advances:(item_type==="desconto"&&code==="VALE"?(advancesByEmployee.get(run.employee_id)??[]).map((a:any)=>({id:a.id,amount_cents:a.amount_cents,description:a.description})):[]),alerts:run._alerts}};const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code",code as string).limit(1);if(xe)throw new Error(xe.message);if(existing?.[0]){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").update(payload as any).eq("id",existing[0].id);if(ie)throw new Error(ie.message);}else{const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,code,...payload} as any);if(ie)throw new Error(ie.message);}}
   }
   const {data:updated,error:ue}=await supabaseAdmin.from("rh_payroll_periods").update({status:"calculada",updated_at:new Date().toISOString()}).eq("id",period.id).select("*").single();if(ue)throw new Error(ue.message);
-  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026.1",rules:["INSS progressivo por faixas","IRRF 2026 com redução legal","FGTS patronal separado dos descontos","CPF e nome validados","folha ativa zerada bloqueada sem afastamento"]}});
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026.1",rules:["INSS progressivo por faixas","IRRF 2026 com redução legal","FGTS patronal separado dos descontos","CPF validado","folha ativa zerada bloqueada sem afastamento"],alertCount:runs.reduce((n:number,r:any)=>n+r._alerts.length,0)}});
   return {period:updated,employees:runs.length};
 });
 export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).neq("status","fechada").select("*").maybeSingle();if(error)throw new Error(error.message);if(!period)throw new Error("Folha não encontrada ou já fechada.");const {data:advancesToClose,error:ae}=await supabaseAdmin.from("rh_employee_advances").select("id").eq("competence",String(period.competence).slice(0,7)+"-01").eq("authorized",true).eq("status","programado");if(ae)throw new Error(ae.message);if((advancesToClose??[]).length){const advanceIds=(advancesToClose??[]).map((x:any)=>x.id);const {error:ue}=await supabaseAdmin.from("rh_employee_advances").update({status:"descontado",updated_at:new Date().toISOString()}).in("id",advanceIds);if(ue)throw new Error(ue.message);}await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;});
