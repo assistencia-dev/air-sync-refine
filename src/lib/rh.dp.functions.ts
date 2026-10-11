@@ -1,4 +1,4 @@
-import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -62,7 +62,10 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const proventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
     if(salaryBase<0||proventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
     const gross=salaryBase+proventos;
-    if(String(contract?.type??"").toUpperCase().includes("INTERMITENTE")) throw new Error("BLOQUEIO FOLHA 2026: contrato intermitente exige cálculo por convocação, recibos e verbas proporcionais. Este vínculo não pode ser calculado pelo motor mensal padrão.");
+    const contractType = String(contract?.type ?? "CLT");
+    if (!supportsMonthlyPayroll2026(contractType)) {
+      throw new Error("BLOQUEIO FOLHA 2026: vínculo " + contractType + " de " + String(e.full_name ?? e.id) + " não está coberto pelo motor mensal homologado. Não calculamos esse contrato como CLT; valide as regras específicas antes de continuar.");
+    }
     const cpf=String(registration.cpf??registration.CPF??"").replace(/\D/g,"");
     const name=String(e.full_name??"").trim();
     if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
