@@ -1,4 +1,4 @@
-import { isValidCpf, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, isValidCpf, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -66,7 +66,7 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
     if(name.split(/\s+/).filter(Boolean).length<2||/\d/.test(name)) throw new Error("BLOQUEIO FOLHA 2026: nome incompleto ou inválido para CPF "+cpf+".");
     const leaveReason=String(registration.motivo_afastamento??registration.leave_reason??registration.afastamento_motivo??"").trim();
-    if(gross===0&&!leaveReason) throw new Error("BLOQUEIO FOLHA 2026: funcionário ativo "+name+" está com folha zerada sem motivo de afastamento cadastrado.");
+    try { assertPayrollZeroHasJustification(gross,true,leaveReason); } catch { throw new Error("BLOQUEIO FOLHA 2026: funcionário ativo "+name+" está com folha zerada sem motivo de afastamento cadastrado."); }
     const inss=payrollInss2026(gross);
     const irrf=payrollIrrf2026(gross,inss,depMap.get(e.id)??0);
     const fgtsRate=contract?.type==="APRENDIZ"?0.02:0.08;
