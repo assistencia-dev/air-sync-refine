@@ -1,7 +1,25 @@
 import { describe, expect, test } from "bun:test";
-import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "../src/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, calculatePayrollBases2026, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "../src/utils/rhPayroll2026";
 
 describe("Motor fiscal da folha — tabelas 2026", () => {
+  test("aplica incidências fiscais individualmente por rubrica", () => {
+    const bases = calculatePayrollBases2026(300000, [
+      { description: "Hora extra", amount_cents: 50000, incidences: { inss: true, irrf: true, fgts: true } },
+      { description: "Ajuda de custo", amount_cents: 20000, incidences: { inss: false, irrf: false, fgts: false } },
+      { description: "Parcela tributável sem FGTS", amount_cents: 10000, incidences: { inss: true, irrf: true, fgts: false } },
+    ]);
+    expect(bases).toEqual({ salaryCents: 300000, proventosCents: 80000, grossCents: 380000, inssBaseCents: 360000, irrfTaxableCents: 360000, fgtsBaseCents: 350000 });
+  });
+
+  test("bloqueia proventos antigos sem incidências explícitas", () => {
+    expect(() => calculatePayrollBases2026(300000, [], 50000)).toThrow(/incidências fiscais cadastradas/);
+  });
+
+  test("rejeita rubrica sem incidências e evita duplicidade de proventos", () => {
+    expect(() => calculatePayrollBases2026(300000, [{ amount_cents: 1000, incidences: {} as any }])).toThrow(/definir explicitamente/);
+    expect(() => calculatePayrollBases2026(300000, [{ amount_cents: 1000, incidences: { inss: true, irrf: true, fgts: true } }], 50000)).toThrow(/simultaneamente/);
+  });
+
   test("INSS progressivo no salário mínimo de 2026", () => {
     expect(payrollInss2026(162100)).toBe(12158);
   });
