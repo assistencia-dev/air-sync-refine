@@ -1,4 +1,4 @@
-import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "@/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, calculatePayrollBases2026, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -59,9 +59,14 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const registration=e.registration_data??{};
     const contract=cmap.get(e.id);
     const salaryBase=Number(contract?.salary??moneyToCents(registration.salary));
-    const proventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
-    if(salaryBase<0||proventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
-    const gross=salaryBase+proventos;
+    const legacyProventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
+    const configuredRubrics=Array.isArray(registration.rubricas_folha)?registration.rubricas_folha:[];
+    if(salaryBase<0||legacyProventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
+    let bases;
+    try { bases=calculatePayrollBases2026(salaryBase,configuredRubrics,legacyProventos); }
+    catch (error) { throw new Error("BLOQUEIO FOLHA 2026 para "+String(e.full_name??e.id)+": "+(error instanceof Error?error.message:"revise as rubricas e incidências.")); }
+    const proventos=bases.proventosCents;
+    const gross=bases.grossCents;
     const contractType = String(contract?.type ?? "CLT");
     if (!supportsMonthlyPayroll2026(contractType)) {
       throw new Error("BLOQUEIO FOLHA 2026: vínculo " + contractType + " de " + String(e.full_name ?? e.id) + " não está coberto pelo motor mensal homologado. Não calculamos esse contrato como CLT; valide as regras específicas antes de continuar.");
@@ -76,15 +81,15 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const monthlyHours=Number(registration.work_hours_monthly??(contract?.weeklyHours?contract.weeklyHours*5:220));
     const categoryFloor=Number(registration.piso_categoria_cents??registration.category_floor_cents??162100);
     if(gross>0&&monthlyHours>0&&gross/monthlyHours<categoryFloor/220) employeeAlerts.push("Remuneração horária abaixo do salário mínimo/piso proporcional cadastrado; revisar jornada e convenção coletiva.");
-    const inss=payrollInss2026(gross);
-    const irrf=payrollIrrf2026(gross,inss,depMap.get(e.id)??0);
-    const fgtsResult=payrollFgts2026(gross,contract?.type);
+    const inss=payrollInss2026(bases.inssBaseCents);
+    const irrf=payrollIrrf2026(bases.irrfTaxableCents,inss,depMap.get(e.id)??0);
+    const fgtsResult=payrollFgts2026(bases.fgtsBaseCents,contract?.type);
     const fgtsRate=fgtsResult.rate, fgtsBase=fgtsResult.baseCents, fgts=fgtsResult.amountCents;
     const baseNet=Math.max(0,gross-inss-irrf.taxCents);
     const employeeAdvances=advancesByEmployee.get(e.id)??[];
     const valeDiscount=employeeAdvances.reduce((n:number,a:any)=>n+Number(a.amount_cents??0),0);
     if(valeDiscount>baseNet) throw new Error("Os vales/descontos programados para "+name+" superam o líquido disponível. Ajuste os vales antes de calcular a folha.");
-    return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf.taxCents+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(gross,847555),irrf_base_cents:irrf.baseCents,fgts_base_cents:fgtsBase,fgts_amount_cents:fgts,status:employeeAlerts.length?"com_alerta":"calculada",_alerts:employeeAlerts,_salary:salaryBase,_proventos:proventos,_inss:inss,_irrf:irrf.taxCents,_fgts:fgts,_fgtsRate:fgtsRate,_vale:valeDiscount,_cpf:cpf,_name:name,_leaveReason:leaveReason};
+    return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf.taxCents+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(bases.inssBaseCents,847555),irrf_base_cents:irrf.baseCents,fgts_base_cents:fgtsBase,fgts_amount_cents:fgts,status:employeeAlerts.length?"com_alerta":"calculada",_alerts:employeeAlerts,_salary:salaryBase,_proventos:proventos,_inss:inss,_irrf:irrf.taxCents,_fgts:fgts,_fgtsRate:fgtsRate,_vale:valeDiscount,_cpf:cpf,_name:name,_leaveReason:leaveReason};
   });
   for(const run of runs){
     const clean={period_id:run.period_id,employee_id:run.employee_id,gross_cents:run.gross_cents,discount_cents:run.discount_cents,net_cents:run.net_cents,inss_base_cents:run.inss_base_cents,irrf_base_cents:run.irrf_base_cents,fgts_base_cents:run.fgts_base_cents,fgts_amount_cents:run.fgts_amount_cents,status:run.status};
@@ -93,7 +98,7 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     for(const [item_type,code,description,amount_cents] of items){const payload={item_type,description,quantity:1,rate:item_type==="encargo"?run._fgtsRate*100:100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id,employee_advances:(item_type==="desconto"&&code==="VALE"?(advancesByEmployee.get(run.employee_id)??[]).map((a:any)=>({id:a.id,amount_cents:a.amount_cents,description:a.description})):[]),alerts:run._alerts}};const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code",code as string).limit(1);if(xe)throw new Error(xe.message);if(existing?.[0]){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").update(payload as any).eq("id",existing[0].id);if(ie)throw new Error(ie.message);}else{const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,code,...payload} as any);if(ie)throw new Error(ie.message);}}
   }
   const {data:updated,error:ue}=await supabaseAdmin.from("rh_payroll_periods").update({status:"calculada",updated_at:new Date().toISOString()}).eq("id",period.id).select("*").single();if(ue)throw new Error(ue.message);
-  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026.1",rules:["INSS progressivo por faixas","IRRF 2026 com redução legal","FGTS patronal separado dos descontos","CPF validado","folha ativa zerada bloqueada sem afastamento"],alertCount:runs.reduce((n:number,r:any)=>n+r._alerts.length,0)}});
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026.1",rules:["INSS progressivo por faixas e base por incidência de rubrica","IRRF 2026 com redução legal e rendimentos tributáveis por rubrica","FGTS patronal separado dos descontos e base por incidência de rubrica","CPF validado","folha ativa zerada bloqueada sem afastamento"],alertCount:runs.reduce((n:number,r:any)=>n+r._alerts.length,0)}});
   return {period:updated,employees:runs.length};
 });
 export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
