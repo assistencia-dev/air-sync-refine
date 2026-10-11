@@ -81,3 +81,9 @@ if (process.exitCode) {
   console.log("Referências estáticas de navegação verificadas: " + referencedTabs.size);
   console.log("Fluxo de sincronização, renderização e isolamento do colaborador presentes.");
 }
+
+assert.match(html, /id=["']ops-overview-grid["']/, "O painel precisa apresentar a fila operacional.");
+assert.match(html, /function renderizarResumoOperacional\s*\(/, "Os indicadores operacionais devem ser calculados a partir do estado real.");
+assert.match(html, /Sem técnico vinculado/, "O painel deve identificar OS abertas sem técnico.");
+assert.match(html, /Vínculos a conferir/, "O painel deve sinalizar referências cadastrais não resolvidas.");
+assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional deve atualizar ao abrir o dashboard.");
