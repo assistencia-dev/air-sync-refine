@@ -34,9 +34,12 @@ describe("Motor fiscal da folha — tabelas 2026", () => {
     expect(supportsMonthlyPayroll2026("INTERMITENTE")).toBe(false);
   });
 
-  test("FGTS é encargo patronal de 8% ou 2% para aprendiz", () => {
+  test("FGTS é encargo patronal de 8% ou 2% para aprendiz, independentemente da grafia", () => {
     expect(payrollFgts2026(162100, "CLT")).toEqual({ baseCents: 162100, amountCents: 12968, rate: 0.08 });
     expect(payrollFgts2026(162100, "JOVEM_APRENDIZ")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(162100, "Jovem Aprendiz")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(162100, "jovem-aprendiz")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(Number.NaN, "CLT")).toEqual({ baseCents: 0, amountCents: 0, rate: 0.08 });
   });
 
   test("valida CPF estrutural e dígitos verificadores", () => {
