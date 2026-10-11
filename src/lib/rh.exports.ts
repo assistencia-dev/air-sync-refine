@@ -119,7 +119,7 @@ export function exportRhPayrollPdf(competence: string, rows: any[]) {
   <div class="item"><div class="label">Bruto</div><div class="value">${money(totalGross)}</div></div>
   <div class="item"><div class="label">Descontos</div><div class="value">${money(totalDiscount)}</div></div>
   <div class="item"><div class="label">Líquido</div><div class="value">${money(totalNet)}</div></div>
-  <div class="item"><div class="label">FGTS / base registrada</div><div class="value">${money(totalFgts)}</div></div>
+  <div class="item"><div class="label">FGTS patronal</div><div class="value">${money(totalFgts)}</div></div>
   </div></div>
   <div class="section"><h2>Folha detalhada</h2><table><thead><tr><th>Funcionário</th><th>Bruto</th><th>Descontos</th><th>Líquido</th><th>FGTS</th><th>Status</th></tr></thead><tbody>
   ${rows.map(x => `<tr><td>${esc(x.employee_name)}</td><td>${money(x.gross_cents)}</td><td>${money(x.discount_cents)}</td><td>${money(x.net_cents)}</td><td>${money(x.fgts_amount_cents ?? x.fgts_base_cents)}</td><td>${esc(x.status)}</td></tr>`).join("")}
