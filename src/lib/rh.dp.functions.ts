@@ -174,3 +174,52 @@ export const saveRhDepartment=createServerFn({method:"POST"}).middleware([requir
 export const saveRhPosition=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id?:string;name:string;code?:string;cbo?:string})=>{if(!input?.name?.trim())throw new Error("Informe o nome do cargo.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload={name:data.name.trim(),code:data.code?.trim()||null,cbo:data.cbo?.trim()||null,is_active:true,updated_at:new Date().toISOString()};const q=data.id?supabaseAdmin.from("rh_positions").update(payload).eq("id",data.id):supabaseAdmin.from("rh_positions").insert(payload);const {data:row,error}=await q.select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"CARGO_SALVO",entity_type:"rh_positions",entity_id:row.id,after_data:row});return row;});
 export const saveRhWorkSchedule=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id?:string;name:string;weekly_hours?:number;break_minutes?:number;tolerance_minutes?:number})=>{if(!input?.name?.trim())throw new Error("Informe o nome da jornada.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload={name:data.name.trim(),weekly_hours:data.weekly_hours??44,break_minutes:data.break_minutes??60,tolerance_minutes:data.tolerance_minutes??5,is_active:true,updated_at:new Date().toISOString()};const q=data.id?supabaseAdmin.from("rh_work_schedules").update(payload).eq("id",data.id):supabaseAdmin.from("rh_work_schedules").insert(payload);const {data:row,error}=await q.select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"JORNADA_SALVA",entity_type:"rh_work_schedules",entity_id:row.id,after_data:row});return row;});
 export const createRhDependent=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;full_name:string;cpf?:string;birth_date?:string;relationship?:string;is_ir_dependent?:boolean;is_health_dependent?:boolean})=>{if(!input?.employee_id||!input.full_name?.trim())throw new Error("Funcionário e nome do dependente são obrigatórios.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_employee_dependents").insert({...data,full_name:data.full_name.trim()}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"DEPENDENTE_CRIADO",entity_type:"rh_employee_dependents",entity_id:row.id,after_data:row});return row;});
+
+
+export type RhPayrollRubricInput2026 = {
+  description: string;
+  amount_cents: number;
+  incidences: { inss: boolean; irrf: boolean; fgts: boolean };
+};
+
+export const saveRhPayrollRubrics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { employee_id: string; rubrics: RhPayrollRubricInput2026[] }) => {
+    if (!input?.employee_id || !Array.isArray(input.rubrics)) throw new Error("Cadastro de rubricas inválido.");
+    for (const rubric of input.rubrics) {
+      if (!rubric.description?.trim()) throw new Error("Informe a descrição de cada rubrica.");
+      if (!Number.isSafeInteger(rubric.amount_cents) || rubric.amount_cents < 0) throw new Error("Informe um valor válido em cada rubrica.");
+      if (!rubric.incidences || typeof rubric.incidences.inss !== "boolean" || typeof rubric.incidences.irrf !== "boolean" || typeof rubric.incidences.fgts !== "boolean") {
+        throw new Error("Defina explicitamente as incidências de INSS, IRRF e FGTS em cada rubrica.");
+      }
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireRhOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees").select("id, registration_data, full_name")
+      .eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    const registration = { ...((employee.registration_data ?? {}) as Record<string, unknown>) };
+    const legacy = Number(registration.proventos_cents ?? moneyToCents(registration.proventos ?? 0));
+    if (legacy > 0 && data.rubrics.length) {
+      throw new Error("Este funcionário tem proventos antigos cadastrados. Zere/migre esse valor no cadastro antes de salvar as rubricas, para não duplicar remuneração.");
+    }
+    registration.rubricas_folha = data.rubrics.map((rubric) => ({
+      description: rubric.description.trim(),
+      amount_cents: rubric.amount_cents,
+      incidences: { ...rubric.incidences },
+    }));
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from("rh_employees").update({ registration_data: registration, updated_at: new Date().toISOString() })
+      .eq("id", data.employee_id).select("id, full_name, registration_data").single();
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({
+      actor_user_id: actor.id, employee_id: data.employee_id, action: "RUBRICAS_FOLHA_ATUALIZADAS",
+      entity_type: "rh_employees", entity_id: data.employee_id,
+      after_data: { employee_name: employee.full_name, rubrics: registration.rubricas_folha },
+    });
+    return updated;
+  });
