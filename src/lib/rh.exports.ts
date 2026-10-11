@@ -112,7 +112,7 @@ export function exportRhPayrollPdf(competence: string, rows: any[]) {
   const totalGross = rows.reduce((n, x) => n + Number(x.gross_cents ?? 0), 0);
   const totalDiscount = rows.reduce((n, x) => n + Number(x.discount_cents ?? 0), 0);
   const totalNet = rows.reduce((n, x) => n + Number(x.net_cents ?? 0), 0);
-  const totalFgts = rows.reduce((n, x) => n + Number(x.fgts_base_cents ?? 0), 0);
+  const totalFgts = rows.reduce((n, x) => n + Number(x.fgts_amount_cents ?? x.fgts_base_cents ?? 0), 0);
   const body = `<div class="section"><h2>Resumo da competência</h2><div class="grid">
   <div class="item"><div class="label">Competência</div><div class="value">${esc(competence)}</div></div>
   <div class="item"><div class="label">Funcionários</div><div class="value">${rows.length}</div></div>
@@ -122,7 +122,7 @@ export function exportRhPayrollPdf(competence: string, rows: any[]) {
   <div class="item"><div class="label">FGTS / base registrada</div><div class="value">${money(totalFgts)}</div></div>
   </div></div>
   <div class="section"><h2>Folha detalhada</h2><table><thead><tr><th>Funcionário</th><th>Bruto</th><th>Descontos</th><th>Líquido</th><th>FGTS</th><th>Status</th></tr></thead><tbody>
-  ${rows.map(x => `<tr><td>${esc(x.employee_name)}</td><td>${money(x.gross_cents)}</td><td>${money(x.discount_cents)}</td><td>${money(x.net_cents)}</td><td>${money(x.fgts_base_cents)}</td><td>${esc(x.status)}</td></tr>`).join("")}
+  ${rows.map(x => `<tr><td>${esc(x.employee_name)}</td><td>${money(x.gross_cents)}</td><td>${money(x.discount_cents)}</td><td>${money(x.net_cents)}</td><td>${money(x.fgts_amount_cents ?? x.fgts_base_cents)}</td><td>${esc(x.status)}</td></tr>`).join("")}
   <tr class="total"><td>TOTAL</td><td>${money(totalGross)}</td><td>${money(totalDiscount)}</td><td>${money(totalNet)}</td><td>${money(totalFgts)}</td><td></td></tr>
   </tbody></table></div>`;
   openRhPrint("Folha de pagamento", `Competência ${competence}`, body);
@@ -131,14 +131,14 @@ export function exportRhPayrollPdf(competence: string, rows: any[]) {
 export function exportRhPayrollExcel(competence: string, rows: any[]) {
   const money = (v: unknown) => Number(v ?? 0) / 100;
   const headers = ["Funcionário", "Competência", "Bruto", "Descontos", "Líquido", "FGTS", "Status"];
-  const xmlRows = rows.map(x => [x.employee_name, competence, money(x.gross_cents), money(x.discount_cents), money(x.net_cents), money(x.fgts_base_cents), x.status]);
+  const xmlRows = rows.map(x => [x.employee_name, competence, money(x.gross_cents), money(x.discount_cents), money(x.net_cents), money(x.fgts_amount_cents ?? x.fgts_base_cents), x.status]);
   const total = [
     "TOTAL",
     competence,
     rows.reduce((n,x)=>n+money(x.gross_cents),0),
     rows.reduce((n,x)=>n+money(x.discount_cents),0),
     rows.reduce((n,x)=>n+money(x.net_cents),0),
-    rows.reduce((n,x)=>n+money(x.fgts_base_cents),0),
+    rows.reduce((n,x)=>n+money(x.fgts_amount_cents ?? x.fgts_base_cents),0),
     "",
   ];
   const row = (cells: unknown[], header = false) => `<Row>${cells.map(c => `<Cell${header ? ' ss:StyleID="Header"' : ''}><Data ss:Type="${typeof c === "number" ? "Number" : "String"}">${esc(c)}</Data></Cell>`).join("")}</Row>`;
