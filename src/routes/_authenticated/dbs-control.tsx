@@ -414,7 +414,7 @@ function DbsControlPage() {
       <div className="flex h-10 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
-          {cloudError && <span className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-600">Erro de sincronização</span>}
+          {cloudError && <span role="alert" title={cloudError} className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-700">Erro de sincronização</span>}
         </div>
         <button
           type="button"
@@ -424,6 +424,18 @@ function DbsControlPage() {
           ← Voltar ao menu principal
         </button>
       </div>
+      {cloudError && (
+        <section role="alert" aria-live="polite" className="mx-4 mt-3 rounded-xl border border-rose-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-rose-700">A sincronização do DBS CONTROL falhou</p>
+              <p className="mt-1 break-words text-xs leading-5 text-slate-700">{cloudError}</p>
+              <p className="mt-2 text-[11px] text-slate-500">Não exclua nem recadastre OS para corrigir este aviso.</p>
+            </div>
+            <button type="button" onClick={() => { setCloudError(null); cloudReadyRef.current = false; if (iframeRef.current) iframeRef.current.src = iframeRef.current.src; }} className="shrink-0 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-800">Tentar sincronizar novamente</button>
+          </div>
+        </section>
+      )}
       <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-2.5rem)] w-full border-0" allow="camera; geolocation" />
     </main>
   );
