@@ -46,6 +46,8 @@ describe("Motor fiscal da folha — tabelas 2026", () => {
 
   test("motor mensal só aceita CLT e aprendizagem; bloqueia vínculos sem regra homologada", () => {
     expect(supportsMonthlyPayroll2026("CLT")).toBe(true);
+    expect(supportsMonthlyPayroll2026(undefined)).toBe(false);
+    expect(supportsMonthlyPayroll2026("")).toBe(false);
     expect(supportsMonthlyPayroll2026("JOVEM APRENDIZ")).toBe(true);
     expect(supportsMonthlyPayroll2026("ESTÁGIO")).toBe(false);
     expect(supportsMonthlyPayroll2026("PJ")).toBe(false);
