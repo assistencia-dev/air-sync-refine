@@ -87,3 +87,8 @@ assert.match(html, /function renderizarResumoOperacional\s*\(/, "Os indicadores 
 assert.match(html, /Sem técnico vinculado/, "O painel deve identificar OS abertas sem técnico.");
 assert.match(html, /Vínculos a conferir/, "O painel deve sinalizar referências cadastrais não resolvidas.");
 assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional deve atualizar ao abrir o dashboard.");
+
+assert.match(html, /function alternarCronometroOS\s*\(/, 'Cronômetro do técnico precisa permitir iniciar e pausar.');
+assert.match(html, /function obterSegundosAtendimento\s*\(/, 'Duração deve considerar intervalos registrados.');
+assert.match(html, /tempoAtendimentoSegundos/, 'Tempo acumulado deve ser persistido junto à OS.');
+assert.match(html, /tipo:'conclusao'/, 'Fechamento deve registrar evento do cronômetro.');
