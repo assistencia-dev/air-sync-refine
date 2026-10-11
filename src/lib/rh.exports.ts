@@ -168,7 +168,7 @@ export function exportRhPayrollExcel(competence: string, rows: any[]) {
   const xml = \`<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Worksheet ss:Name="Folha"><Table>\${xmlRow([...PAYROLL_EXPORT_COLUMNS])}\${normalized.map(row=>xmlRow(PAYROLL_EXPORT_COLUMNS.map(key=>row[key])).join("")}</Table></Worksheet></Workbook>\`;
+<Worksheet ss:Name="Folha"><Table>\${xmlRow([...PAYROLL_EXPORT_COLUMNS])}\${normalized.map(row=>xmlRow(PAYROLL_EXPORT_COLUMNS.map(key=>row[key]))).join("")}</Table></Worksheet></Workbook>\`;
   const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
