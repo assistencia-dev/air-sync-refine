@@ -1777,6 +1777,24 @@
       }
     </style>
 
+<style>
+        /* DBS CONTROL · fila operacional baseada exclusivamente nos registros carregados */
+        .ops-overview { margin: 0 0 16px; }
+        .ops-overview-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; padding:14px 16px 10px; }
+        .ops-overview-head h3 { margin:0 0 4px; font-size:14px; color:var(--text-main); }
+        .ops-overview-head p { margin:0; color:var(--text-muted); font-size:11px; }
+        .ops-overview-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; padding:0 16px 16px; }
+        .ops-kpi { display:flex; align-items:flex-start; gap:11px; min-width:0; width:100%; text-align:left; border:1px solid var(--border-color); background:#fff; border-radius:9px; padding:13px; cursor:pointer; color:var(--text-main); transition:border-color .15s,background .15s; }
+        .ops-kpi:hover { border-color:#9cccf4; background:#f8fbff; }
+        .ops-kpi:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+        .ops-kpi-number { font-size:23px; line-height:1.1; font-weight:800; letter-spacing:-.03em; color:#173b62; }
+        .ops-kpi-label { display:block; font-size:12px; font-weight:750; margin-bottom:5px; }
+        .ops-kpi-hint { display:block; font-size:10px; line-height:1.45; color:var(--text-muted); }
+        .ops-kpi-icon { display:grid; place-items:center; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#edf6ff; color:#1267b5; font-size:17px; }
+        .ops-overview-foot { padding:0 16px 13px; color:var(--text-muted); font-size:10px; }
+        @media(max-width:760px) { .ops-overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); padding:0 12px 12px; gap:8px; } .ops-overview-head { padding:12px 12px 10px; } .ops-kpi { padding:10px; gap:8px; } .ops-kpi-icon { width:30px; height:30px; flex-basis:30px; } .ops-kpi-number { font-size:20px; } }
+        @media(max-width:420px) { .ops-overview-grid { grid-template-columns:1fr; } }
+</style>
 </head>
 <body>
 
@@ -1876,6 +1894,15 @@
                     <span>1. Criar OS</span><b>→</b><span>2. Despachar</span><b>→</b><span>3. Acompanhar</span><b>→</b><span>4. Conferir conclusão</span>
                 </div>
             </div>
+
+            <section class="data-card ops-overview" aria-labelledby="ops-overview-title">
+                <div class="ops-overview-head">
+                    <div><h3 id="ops-overview-title">Fila operacional</h3><p>Prioridades calculadas a partir das OS e dos cadastros atualmente carregados.</p></div>
+                    <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarResumoOperacional()">Atualizar indicadores</button>
+                </div>
+                <div class="ops-overview-grid" id="ops-overview-grid" aria-live="polite"></div>
+                <div class="ops-overview-foot" id="ops-overview-foot">Os indicadores não substituem a conferência de prazos e registros.</div>
+            </section>
 
             <div class="data-card">
                 <div class="data-header">
@@ -2957,6 +2984,47 @@
               : '<div class="dbs-integrity-ok">✓ Estrutura carregada sem inconsistências de vínculo detectáveis no estado atual.</div>';
         }
 
+        function renderizarResumoOperacional() {
+            const grid = document.getElementById('ops-overview-grid');
+            const foot = document.getElementById('ops-overview-foot');
+            if (!grid || typeof ERP_STATE !== 'object' || !ERP_STATE) return;
+            const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
+            const clients = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+            const equipment = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
+            const technicians = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
+            const norm = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
+            const statusOf = order => norm(order.status);
+            const completed = order => /conclu[ií]d/.test(statusOf(order));
+            const cancelled = order => /cancelad/.test(statusOf(order));
+            const openOrders = orders.filter(order => !completed(order) && !cancelled(order));
+            const waiting = openOrders.filter(order => /aguardando/.test(statusOf(order)));
+            const inProgress = openOrders.filter(order => /atendimento|execu[cç][aã]o|em andamento/.test(statusOf(order)));
+            const unassigned = openOrders.filter(order => {
+                const id = String(order.tecnicoId ?? order.employeeId ?? '').trim();
+                if (!id) return true;
+                return !technicians.some(technician => String(technician.id ?? '') === id || String(technician.employeeId ?? '') === id);
+            });
+            const clientLinkIssues = orders.filter(order => {
+                const id = String(order.clienteId ?? '').trim();
+                return !id || !clients.some(client => String(client.id ?? '') === id);
+            });
+            const equipmentLinkIssues = orders.filter(order => {
+                const id = String(order.equipamentoId ?? '').trim();
+                // Equipamento pode ser opcional em algumas OS; só sinalizamos vínculos preenchidos que não resolvem.
+                return Boolean(id) && !equipment.some(item => String(item.id ?? '') === id);
+            });
+            const cards = [
+                { label:'OS abertas', value:openOrders.length, hint:'Ainda não concluídas ou canceladas', icon:'▤', tab:'tab-ordens' },
+                { label:'Em atendimento', value:inProgress.length, hint:'Em execução segundo o status registrado', icon:'⚙', tab:'tab-atividades' },
+                { label:'Aguardando retorno', value:waiting.length, hint:'Peça, cliente ou outra dependência', icon:'◷', tab:'tab-atividades' },
+                { label:'Sem técnico vinculado', value:unassigned.length, hint:'OS abertas que precisam de atribuição', icon:'♙', tab:'tab-despacho' },
+                { label:'Concluídas', value:orders.filter(completed).length, hint:'Conforme o status salvo na OS', icon:'✓', tab:'tab-ordens' },
+                { label:'Vínculos a conferir', value:clientLinkIssues.length + equipmentLinkIssues.length, hint:'Referências de cliente/equipamento não resolvidas', icon:'⌕', tab:'tab-cadastros' }
+            ];
+            grid.innerHTML = cards.map(card => '<button type="button" class="ops-kpi" onclick="switchTab(\''+card.tab+'\')" aria-label="'+card.label+': '+card.value+'. Abrir área relacionada."><span class="ops-kpi-icon" aria-hidden="true">'+card.icon+'</span><span style="min-width:0;display:block"><span class="ops-kpi-label">'+card.label+'</span><strong class="ops-kpi-number">'+Number(card.value).toLocaleString('pt-BR')+'</strong><small class="ops-kpi-hint">'+card.hint+'</small></span></button>').join('');
+            if (foot) foot.textContent = 'Base analisada: '+orders.length.toLocaleString('pt-BR')+' OS carregadas. '+clientLinkIssues.length.toLocaleString('pt-BR')+' OS com cliente não resolvido e '+equipmentLinkIssues.length.toLocaleString('pt-BR')+' com vínculo de equipamento não resolvido. Confira os detalhes antes de corrigir cadastros.';
+        }
+
         function renderizarAbaAtiva(tabId) {
             const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
             const activeId = employeeMode ? 'tab-pwa' : String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
@@ -2966,6 +3034,7 @@
                 case 'tab-dashboard':
                     safe(renderizarOrdens);
                     safe(atualizarMetricas);
+                    safe(renderizarResumoOperacional);
                     break;
                 case 'tab-atividades':
                     safe(garantirHistoricoInicial);
