@@ -53,12 +53,17 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
   if(ce)throw new Error(ce.message);if(de)throw new Error(de.message);if(ae)throw new Error(ae.message);
   const advancesByEmployee=new Map<string,any[]>();
   for(const a of advances??[]) advancesByEmployee.set(a.employee_id,[...(advancesByEmployee.get(a.employee_id)??[]),a]);
-  const cmap=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,{salary:x.salary_cents==null?null:Number(x.salary_cents),type:x.contract_type??"CLT",weeklyHours:x.weekly_hours==null?null:Number(x.weekly_hours)}] as [string,any]));
+  const contractsByEmployee=new Map<string,any[]>();
+  for(const row of contracts??[]) contractsByEmployee.set(row.employee_id,[...(contractsByEmployee.get(row.employee_id)??[]),row]);
+  const duplicateContract=(contracts??[]).find((row:any)=>(contractsByEmployee.get(row.employee_id)??[]).length>1);
+  if(duplicateContract) throw new Error("BLOQUEIO FOLHA 2026: há mais de um vínculo atual para o mesmo funcionário. Revise os múltiplos vínculos antes de calcular; esta situação ainda não está homologada.");
+  const cmap=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,{salary:x.salary_cents==null?null:Number(x.salary_cents),type:x.contract_type,weeklyHours:x.weekly_hours==null?null:Number(x.weekly_hours)}] as [string,any]));
   const depMap=new Map<string,number>();for(const d of dependents??[])depMap.set(d.employee_id,(depMap.get(d.employee_id)??0)+1);
   const runs=(employees??[]).map((e:any)=>{
     const registration=e.registration_data??{};
     const contract=cmap.get(e.id);
-    const salaryBase=Number(contract?.salary??moneyToCents(registration.salary));
+    if(!contract) throw new Error("BLOQUEIO FOLHA 2026: "+String(e.full_name??e.id)+" não possui vínculo atual cadastrado. Cadastre e confira o contrato antes de calcular; o sistema não presumirá CLT.");
+    const salaryBase=Number(contract.salary??moneyToCents(registration.salary));
     const legacyProventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
     const configuredRubrics=Array.isArray(registration.rubricas_folha)?registration.rubricas_folha:[];
     if(salaryBase<0||legacyProventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
@@ -67,7 +72,8 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     catch (error) { throw new Error("BLOQUEIO FOLHA 2026 para "+String(e.full_name??e.id)+": "+(error instanceof Error?error.message:"revise as rubricas e incidências.")); }
     const proventos=bases.proventosCents;
     const gross=bases.grossCents;
-    const contractType = String(contract?.type ?? "CLT");
+    const contractType = String(contract.type ?? "").trim();
+    if(!contractType) throw new Error("BLOQUEIO FOLHA 2026: tipo de contrato ausente para "+String(e.full_name??e.id)+".");
     if (!supportsMonthlyPayroll2026(contractType)) {
       throw new Error("BLOQUEIO FOLHA 2026: vínculo " + contractType + " de " + String(e.full_name ?? e.id) + " não está coberto pelo motor mensal homologado. Não calculamos esse contrato como CLT; valide as regras específicas antes de continuar.");
     }
