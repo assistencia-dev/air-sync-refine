@@ -66,8 +66,10 @@ export function supportsMonthlyPayroll2026(contractType: unknown): boolean {
 }
 
 export function payrollFgts2026(baseCents: number, contractType: unknown) {
-  const normalized = String(contractType ?? "").trim().toUpperCase();
-  const rate = ["APRENDIZ", "JOVEM_APRENDIZ", "JOVEM APRENDIZ"].includes(normalized) ? 0.02 : 0.08;
-  const baseCentsSafe = Math.max(0, Math.trunc(baseCents));
+  // Use the same normalization as the eligibility check so spelling variations
+  // cannot accidentally apply the standard 8% rate to an apprentice.
+  const normalized = String(contractType ?? "").trim().toUpperCase().replace(/[ -]+/g, "_");
+  const rate = ["APRENDIZ", "JOVEM_APRENDIZ"].includes(normalized) ? 0.02 : 0.08;
+  const baseCentsSafe = Math.max(0, Math.trunc(Number.isFinite(baseCents) ? baseCents : 0));
   return { baseCents: baseCentsSafe, amountCents: Math.round(baseCentsSafe * rate), rate };
 }
