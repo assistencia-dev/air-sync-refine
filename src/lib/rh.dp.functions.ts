@@ -1,3 +1,4 @@
+import { isValidCpf, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -10,45 +11,6 @@ async function requireRhOperator(context: { userId: string }) {
   return data;
 }
 const moneyToCents=(value:unknown)=>{const raw=String(value??"").trim();if(!raw)return 0;const n=Number(raw.replace(/[^0-9,.-]/g,"").replace(/\./g,"").replace(",","."));return Number.isFinite(n)?Math.round(n*100):0;};
-
-function isValidCpf(value: unknown): boolean {
-  const cpf = String(value ?? "").replace(/\D/g, "");
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
-  for (let length = 9; length <= 10; length++) {
-    let sum = 0;
-    for (let i = 0; i < length; i++) sum += Number(cpf[i]) * (length + 1 - i);
-    let digit = (sum * 10) % 11;
-    if (digit === 10) digit = 0;
-    if (digit !== Number(cpf[length])) return false;
-  }
-  return true;
-}
-function payrollInss2026(grossCents: number): number {
-  const base = Math.max(0, Math.min(Math.trunc(grossCents), 847555));
-  const bands: Array<[number, number]> = [[162100, 0.075], [290284, 0.09], [435427, 0.12], [847555, 0.14]];
-  let previous = 0, total = 0;
-  for (const [limit, rate] of bands) {
-    total += Math.max(0, Math.min(base, limit) - previous) * rate;
-    previous = limit;
-    if (base <= limit) break;
-  }
-  return Math.round(total);
-}
-function payrollIrrf2026(grossCents: number, inssCents: number, dependents: number) {
-  const legalBase = Math.max(0, grossCents - inssCents - Math.max(0, dependents) * 18959);
-  const simplifiedBase = Math.max(0, grossCents - 60720);
-  const base = Math.min(legalBase, simplifiedBase);
-  let tax = 0;
-  if (base > 466468) tax = base * 0.275 - 90873;
-  else if (base > 375105) tax = base * 0.225 - 67549;
-  else if (base > 282665) tax = base * 0.15 - 39416;
-  else if (base > 242880) tax = base * 0.075 - 18216;
-  tax = Math.max(0, Math.round(tax));
-  let reduction = 0;
-  if (grossCents <= 500000) reduction = Math.min(tax, 31289);
-  else if (grossCents <= 735000) reduction = Math.min(tax, Math.max(0, Math.round(97862 - 0.133145 * grossCents)));
-  return { taxCents: Math.max(0, tax - reduction), baseCents: base };
-}
 
 export const getRhManagementDashboard=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{
   await requireRhOperator(context);
