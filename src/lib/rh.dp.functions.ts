@@ -41,7 +41,7 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
   if(pe)throw new Error(pe.message); if(!period)throw new Error("Competência não encontrada.");
   if(period.status==="fechada")throw new Error("Folha fechada não pode ser recalculada.");
   const competence=String(period.competence).slice(0,7);
-  if(competence!=="2026-01"&&competence<"2026-01")throw new Error("O motor fiscal parametrizado desta versão está homologado para competências a partir de 01/2026.");
+  if(!/^2026-(0[1-9]|1[0-2])$/.test(competence))throw new Error("O motor fiscal desta versão está homologado somente para competências de 01/2026 a 12/2026. Não calcule outros anos com tabelas de 2026.");
   const {data:employees,error:ee}=await supabaseAdmin.from("rh_employees").select("id,full_name,registration_data").eq("is_active",true);
   if(ee)throw new Error(ee.message);
   const ids=(employees??[]).map((e:any)=>e.id);
@@ -62,6 +62,7 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const proventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
     if(salaryBase<0||proventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
     const gross=salaryBase+proventos;
+    if(String(contract?.type??"").toUpperCase().includes("INTERMITENTE")) throw new Error("BLOQUEIO FOLHA 2026: contrato intermitente exige cálculo por convocação, recibos e verbas proporcionais. Este vínculo não pode ser calculado pelo motor mensal padrão.");
     const cpf=String(registration.cpf??registration.CPF??"").replace(/\D/g,"");
     const name=String(e.full_name??"").trim();
     if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
