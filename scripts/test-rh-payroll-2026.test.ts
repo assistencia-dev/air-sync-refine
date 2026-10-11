@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026 } from "../src/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "../src/utils/rhPayroll2026";
 
 describe("Motor fiscal da folha — tabelas 2026", () => {
   test("INSS progressivo no salário mínimo de 2026", () => {
@@ -24,6 +24,14 @@ describe("Motor fiscal da folha — tabelas 2026", () => {
   test("IRRF fica zerado para rendimento de R$ 4.000 após redução legal de 2026", () => {
     const inss = payrollInss2026(400000);
     expect(payrollIrrf2026(400000, inss, 0).taxCents).toBe(0);
+  });
+
+  test("motor mensal só aceita CLT e aprendizagem; bloqueia vínculos sem regra homologada", () => {
+    expect(supportsMonthlyPayroll2026("CLT")).toBe(true);
+    expect(supportsMonthlyPayroll2026("JOVEM APRENDIZ")).toBe(true);
+    expect(supportsMonthlyPayroll2026("ESTÁGIO")).toBe(false);
+    expect(supportsMonthlyPayroll2026("PJ")).toBe(false);
+    expect(supportsMonthlyPayroll2026("INTERMITENTE")).toBe(false);
   });
 
   test("FGTS é encargo patronal de 8% ou 2% para aprendiz", () => {
