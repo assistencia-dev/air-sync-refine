@@ -1,4 +1,4 @@
-import { assertPayrollZeroHasJustification, isValidCpf, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
+import { assertPayrollZeroHasJustification, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -60,7 +60,8 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     const contract=cmap.get(e.id);
     const salaryBase=Number(contract?.salary??moneyToCents(registration.salary));
     const proventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
-    const gross=Math.max(0,salaryBase+proventos);
+    if(salaryBase<0||proventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
+    const gross=salaryBase+proventos;
     const cpf=String(registration.cpf??registration.CPF??"").replace(/\D/g,"");
     const name=String(e.full_name??"").trim();
     if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
@@ -73,8 +74,8 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
     if(gross>0&&monthlyHours>0&&gross/monthlyHours<categoryFloor/220) employeeAlerts.push("Remuneração horária abaixo do salário mínimo/piso proporcional cadastrado; revisar jornada e convenção coletiva.");
     const inss=payrollInss2026(gross);
     const irrf=payrollIrrf2026(gross,inss,depMap.get(e.id)??0);
-    const fgtsRate=["APRENDIZ","JOVEM_APRENDIZ","JOVEM APRENDIZ"].includes(String(contract?.type??"").toUpperCase())?0.02:0.08;
-    const fgtsBase=gross, fgts=Math.round(fgtsBase*fgtsRate);
+    const fgtsResult=payrollFgts2026(gross,contract?.type);
+    const fgtsRate=fgtsResult.rate, fgtsBase=fgtsResult.baseCents, fgts=fgtsResult.amountCents;
     const baseNet=Math.max(0,gross-inss-irrf.taxCents);
     const employeeAdvances=advancesByEmployee.get(e.id)??[];
     const valeDiscount=employeeAdvances.reduce((n:number,a:any)=>n+Number(a.amount_cents??0),0);
