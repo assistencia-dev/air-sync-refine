@@ -58,3 +58,11 @@ export function assertPayrollZeroHasJustification(grossCents: number, isActive: 
     throw new Error("Funcionário ativo com folha zerada sem motivo de afastamento cadastrado.");
   }
 }
+
+
+export function payrollFgts2026(baseCents: number, contractType: unknown) {
+  const normalized = String(contractType ?? "").trim().toUpperCase();
+  const rate = ["APRENDIZ", "JOVEM_APRENDIZ", "JOVEM APRENDIZ"].includes(normalized) ? 0.02 : 0.08;
+  const baseCentsSafe = Math.max(0, Math.trunc(baseCents));
+  return { baseCents: baseCentsSafe, amountCents: Math.round(baseCentsSafe * rate), rate };
+}
