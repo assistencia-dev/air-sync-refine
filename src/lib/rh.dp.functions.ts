@@ -204,8 +204,13 @@ export const saveRhPayrollRubrics = createServerFn({ method: "POST" })
     if (!employee) throw new Error("Funcionário não encontrado.");
     const registration = { ...((employee.registration_data ?? {}) as Record<string, unknown>) };
     const legacy = Number(registration.proventos_cents ?? moneyToCents(registration.proventos ?? 0));
+    const rubricTotal = data.rubrics.reduce((sum, rubric) => sum + rubric.amount_cents, 0);
+    if (legacy > 0 && data.rubrics.length && rubricTotal !== legacy) {
+      throw new Error("Para migrar os proventos antigos sem alterar a remuneração, a soma das novas rubricas precisa ser exatamente " + (legacy / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + ".");
+    }
     if (legacy > 0 && data.rubrics.length) {
-      throw new Error("Este funcionário tem proventos antigos cadastrados. Zere/migre esse valor no cadastro antes de salvar as rubricas, para não duplicar remuneração.");
+      registration.proventos_cents = 0;
+      registration.proventos = "0,00";
     }
     registration.rubricas_folha = data.rubrics.map((rubric) => ({
       description: rubric.description.trim(),
