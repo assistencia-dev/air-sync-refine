@@ -61,7 +61,9 @@ export function assertPayrollZeroHasJustification(grossCents: number, isActive: 
 
 
 export function supportsMonthlyPayroll2026(contractType: unknown): boolean {
-  const normalized = String(contractType ?? "CLT").trim().toUpperCase().replace(/[ -]+/g, "_");
+  const raw = String(contractType ?? "").trim();
+  if (!raw) return false;
+  const normalized = raw.toUpperCase().replace(/[ -]+/g, "_");
   return ["CLT", "APRENDIZ", "JOVEM_APRENDIZ"].includes(normalized);
 }
 
