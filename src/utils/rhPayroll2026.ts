@@ -73,3 +73,40 @@ export function payrollFgts2026(baseCents: number, contractType: unknown) {
   const baseCentsSafe = Math.max(0, Math.trunc(Number.isFinite(baseCents) ? baseCents : 0));
   return { baseCents: baseCentsSafe, amountCents: Math.round(baseCentsSafe * rate), rate };
 }
+
+
+export type PayrollRubric2026 = {
+  description?: string;
+  amount_cents: number;
+  incidences: { inss: boolean; irrf: boolean; fgts: boolean };
+};
+
+export function calculatePayrollBases2026(
+  salaryCents: number,
+  rubrics: PayrollRubric2026[],
+  legacyProventosCents = 0,
+) {
+  const salary = Math.trunc(Number(salaryCents));
+  if (!Number.isFinite(salary) || salary < 0) throw new Error("Salário-base inválido.");
+  if (legacyProventosCents > 0 && rubrics.length === 0) {
+    throw new Error("Existem proventos sem rubricas e incidências fiscais cadastradas. Cadastre cada rubrica com incidências de INSS, IRRF e FGTS antes de calcular a folha; nenhum cálculo foi presumido.");
+  }
+  let totalProventos = 0, inssBase = salary, irrfTaxable = salary, fgtsBase = salary;
+  for (const rubric of rubrics) {
+    const amount = Number(rubric.amount_cents);
+    if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("Valor inválido em rubrica de folha.");
+    if (!rubric.incidences || typeof rubric.incidences.inss !== "boolean" ||
+      typeof rubric.incidences.irrf !== "boolean" || typeof rubric.incidences.fgts !== "boolean") {
+      throw new Error("Cada rubrica precisa definir explicitamente as incidências de INSS, IRRF e FGTS.");
+    }
+    totalProventos += amount;
+    if (rubric.incidences.inss) inssBase += amount;
+    if (rubric.incidences.irrf) irrfTaxable += amount;
+    if (rubric.incidences.fgts) fgtsBase += amount;
+  }
+  if (legacyProventosCents > 0 && rubrics.length > 0) {
+    throw new Error("Há proventos antigos e rubricas detalhadas simultaneamente. Migre os valores para as rubricas para evitar duplicidade.");
+  }
+  return { salaryCents: salary, proventosCents: totalProventos, grossCents: salary + totalProventos,
+    inssBaseCents: inssBase, irrfTaxableCents: irrfTaxable, fgtsBaseCents: fgtsBase };
+}
