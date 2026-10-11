@@ -89,7 +89,27 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
 });
 export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).neq("status","fechada").select("*").maybeSingle();if(error)throw new Error(error.message);if(!period)throw new Error("Folha não encontrada ou já fechada.");const {data:advancesToClose,error:ae}=await supabaseAdmin.from("rh_employee_advances").select("id").eq("competence",String(period.competence).slice(0,7)+"-01").eq("authorized",true).eq("status","programado");if(ae)throw new Error(ae.message);if((advancesToClose??[]).length){const advanceIds=(advancesToClose??[]).map((x:any)=>x.id);const {error:ue}=await supabaseAdmin.from("rh_employee_advances").update({status:"descontado",updated_at:new Date().toISOString()}).in("id",advanceIds);if(ue)throw new Error(ue.message);}await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;});
 
-export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{await requireRhOperator(context);const {data,error}=await supabaseAdmin.from("rh_payroll_periods").select("*,rh_payroll_runs(*)").order("competence",{ascending:false});if(error)throw new Error(error.message);return data??[];});
+export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{
+  await requireRhOperator(context);
+  const {data:periods,error}=await supabaseAdmin.from("rh_payroll_periods").select("*,rh_payroll_runs(*)").order("competence",{ascending:false});
+  if(error)throw new Error(error.message);
+  const allPeriods=periods??[];
+  const periodIds=allPeriods.map((p:any)=>p.id);
+  const employeeIds=[...new Set(allPeriods.flatMap((p:any)=>(p.rh_payroll_runs??[]).map((r:any)=>r.employee_id)))];
+  if(!periodIds.length||!employeeIds.length)return allPeriods;
+  const [{data:items,error:itemsError},{data:contracts,error:contractsError}]=await Promise.all([
+    supabaseAdmin.from("rh_payroll_items").select("*").in("period_id",periodIds),
+    supabaseAdmin.from("rh_employee_contracts").select("employee_id,contract_type,salary_cents").in("employee_id",employeeIds).eq("is_current",true)
+  ]);
+  if(itemsError)throw new Error(itemsError.message);
+  if(contractsError)throw new Error(contractsError.message);
+  const contractByEmployee=new Map((contracts??[]).map((x:any)=>[x.employee_id,x]));
+  return allPeriods.map((period:any)=>({...period,rh_payroll_runs:(period.rh_payroll_runs??[]).map((run:any)=>{
+    const runItems=(items??[]).filter((item:any)=>item.period_id===period.id&&item.employee_id===run.employee_id);
+    const amount=(code:string)=>Number(runItems.find((item:any)=>item.code===code)?.amount_cents??0);
+    return {...run,contract_type:contractByEmployee.get(run.employee_id)?.contract_type??"CLT",salary_base_cents:amount("SALARIO"),proventos_cents:amount("PROVENTOS"),inss_amount_cents:amount("INSS"),irrf_amount_cents:amount("IRRF"),other_discounts_cents:amount("VALE"),fgts_amount_cents:Number(run.fgts_amount_cents??amount("FGTS")),payroll_items:runItems};
+  })}));
+});
 
 export const createRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;start_date:string;end_date:string;days:number;vacation_period_id?:string;notes?:string})=>{if(!input?.employee_id||!input.start_date||!input.end_date||!input.days)throw new Error("Preencha funcionário, período e dias.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").insert({...data,status:"solicitada"}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"FERIAS_SOLICITADAS",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
 export const updateRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id:string;status:"aprovada"|"reprovada"|"cancelada";notes?:string})=>{if(!input?.id)throw new Error("Solicitação inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload:any={status:data.status,notes:data.notes??null};if(data.status==="aprovada"){payload.approved_at=new Date().toISOString();payload.approved_by=actor.id;}const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").update(payload).eq("id",data.id).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:row.employee_id,action:"FERIAS_STATUS_ALTERADO",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
