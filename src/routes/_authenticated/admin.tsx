@@ -9,6 +9,7 @@ import {
   Pencil,
   RefreshCw,
   Shield,
+  ShieldCheck,
   Ticket,
   Users,
   WalletCards,
