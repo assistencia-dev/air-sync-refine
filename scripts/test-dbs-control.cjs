@@ -5,6 +5,9 @@ const assert = require("node:assert/strict");
 const html = fs.readFileSync("public/dbs-control.html", "utf8");
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
 const ux = fs.readFileSync("public/dbs-control-ux.js", "utf8");
+const pdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
+const observations = fs.readFileSync("public/dbs-control-observations.js", "utf8");
+const theme = fs.readFileSync("public/dbs-control-theme.css", "utf8");
 
 let parsedInlineScripts = 0;
 const scriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
@@ -29,6 +32,7 @@ const firstPartyScripts = [
   "public/dbs-control-import.js",
   "public/dbs-control-orcamentos-v2.js",
   "public/dbs-control-pdf.js",
+  "public/dbs-control-observations.js",
 ];
 for (const file of firstPartyScripts) {
   const source = fs.readFileSync(file, "utf8");
@@ -72,6 +76,46 @@ assert.match(route, /msg\.type === ["']DBS_CONTROL_SAVE["']/, "A rota deve receb
 assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sincronizar o estado inicial do iframe.");
 assert.match(route, /setTimeout\(async \(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
 assert.match(ux, /DOMContentLoaded/, "A camada UX precisa ter inicialização compatível com carregamento tardio.");
+assert.match(html, /dbs-control-theme\.css/, "O tema visual do DBS Control precisa estar carregado.");
+assert.doesNotMatch(ux, /quick-flow\{display:none!important\}/, "O guia de fluxo do dashboard não deve ser ocultado.");
+assert.doesNotMatch(ux, /table th:nth-child\((?:7|9)\).*display:none/i, "Colunas do dashboard não devem ser removidas da visualização.");
+assert.match(ux, /overflow-x:auto!important/, "Tabelas amplas devem usar rolagem horizontal em telas estreitas.");
+assert.match(theme, /employee-observation-field/, "O tema deve contemplar a área de observações do colaborador.");
+assert.match(html, /employee-observation-field/, "A execução deve oferecer campo complementar separado para observações técnicas.");
+assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
+assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
+assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
+assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
+assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
+assert.match(observations, /Nenhuma observação registrada\./, "O detalhe administrativo deve exibir um estado vazio explícito.");
+
+const appendHelper = cloudFunctions.match(/function mergeAppendOnlyCollaboratorObservations\(currentOrder: any, incomingOrder: any\) \{[\s\S]*?\n\}\n(?=\nfunction mergeCollaboratorOrderState)/)?.[0];
+assert.ok(appendHelper, "A função isolada de merge append-only deve existir.");
+const helperForTest = appendHelper
+  .replace("currentOrder: any", "currentOrder")
+  .replace("incomingOrder: any", "incomingOrder")
+  .replace("const merged: Record<string, string> = {};", "const merged = {};") +
+  "\nglobalThis.mergeAppendOnlyCollaboratorObservations = mergeAppendOnlyCollaboratorObservations;";
+const observationTestContext = vm.createContext({});
+vm.runInContext(helperForTest, observationTestContext);
+const oldNote = "Nota antiga que deve permanecer.";
+const newEntry = "[11/10/2026 13:30 · Técnico] Nota nova.";
+const appended = observationTestContext.mergeAppendOnlyCollaboratorObservations(
+  { observacao: oldNote },
+  { observacao: oldNote + "\n\n" + newEntry },
+);
+assert.equal(appended.observacao, oldNote + "\n\n" + newEntry, "Uma nota nova deve ser anexada sem substituir o histórico.");
+const rejectedOverwrite = observationTestContext.mergeAppendOnlyCollaboratorObservations(
+  { observacao: oldNote },
+  { observacao: "Tentativa de substituir o histórico." },
+);
+assert.equal(JSON.stringify(rejectedOverwrite), "{}", "Uma substituição do histórico deve ser ignorada.");
+const concurrent = observationTestContext.mergeAppendOnlyCollaboratorObservations(
+  { observacao: oldNote + "\n\n[11/10/2026 13:29 · Outro técnico] Nota concorrente." },
+  { observacao: oldNote + "\n\n" + newEntry },
+);
+assert.match(concurrent.observacao, /Nota concorrente\./, "O merge concorrente deve manter a nota já salva no servidor.");
+assert.match(concurrent.observacao, /Nota nova\./, "O merge concorrente deve anexar a nova nota do colaborador.");
 
 if (process.exitCode) {
   console.error("DBS CONTROL: smoke checks falharam.");

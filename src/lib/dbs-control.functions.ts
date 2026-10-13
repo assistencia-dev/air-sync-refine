@@ -139,6 +139,38 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
   };
 }
 
+function mergeAppendOnlyCollaboratorObservations(currentOrder: any, incomingOrder: any) {
+  const merged: Record<string, string> = {};
+  const fields = ["observacao", "observacaoTecnico", "observacaoComplementarTecnico"];
+
+  for (const field of fields) {
+    const currentValue = currentOrder?.[field];
+    const incomingValue = incomingOrder?.[field];
+    if (currentValue != null && typeof currentValue !== "string") continue;
+    if (typeof incomingValue !== "string") continue;
+
+    const existing = String(currentValue ?? "").trim();
+    const incoming = incomingValue.trim();
+    if (!incoming || incoming === existing) continue;
+
+    // Normal client update: the submitted history extends the stored history.
+    if (existing ? incoming.startsWith(`${existing}\n\n[`) : incoming.startsWith("[")) {
+      merged[field] = incoming;
+      continue;
+    }
+
+    // Concurrent update: keep the server history and append only new timestamped entries.
+    const knownEntries = new Set(existing.split(/\n\n/).map((entry) => entry.trim()).filter(Boolean));
+    const additions = incoming
+      .split(/\n\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => /^\[[^\]]+\]\s+/.test(entry) && !knownEntries.has(entry));
+    if (additions.length) merged[field] = [existing, ...additions].filter(Boolean).join("\n\n");
+  }
+
+  return merged;
+}
+
 function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const current = normalizeState(currentState);
   const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
@@ -204,6 +236,7 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
 
     return {
       ...currentOrder,
+      ...mergeAppendOnlyCollaboratorObservations(currentOrder, incomingOrder),
       // O colaborador só pode atualizar a execução da própria OS.
       // Dados administrativos/originais (inclusive valor) permanecem intactos.
       status: allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status,

@@ -1,7 +1,7 @@
 /* DBS AIR — single OS document renderer. No storage reads or writes. */
 (function () {
   'use strict';
-  const theme = { blue: [2, 132, 199], navy: [15, 47, 87], ink: [31, 41, 55], muted: [100, 116, 139], line: [214, 222, 231], soft: [243, 248, 252] };
+  const theme = { blue: [2, 132, 199], navy: [15, 47, 87], green: [34, 197, 94], ink: [31, 41, 55], muted: [100, 116, 139], line: [214, 222, 231], soft: [243, 248, 252], panel: [248, 250, 252] };
   const logoUrl = '/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg';
   let resources;
   const list = v => Array.isArray(v) ? v.filter(Boolean) : [];
@@ -34,6 +34,32 @@
     if (!r.ok) throw new Error('Não foi possível carregar as fontes do documento. Tente novamente.');
     return base64(await r.arrayBuffer());
   }
+  function trimLogoMargins(canvas, context) {
+    if (!context || typeof context.getImageData !== 'function') return canvas;
+    let pixels;
+    try { pixels = context.getImageData(0, 0, canvas.width, canvas.height).data; }
+    catch (_) { return canvas; }
+    let left = canvas.width, top = canvas.height, right = -1, bottom = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4;
+        if (pixels[i + 3] > 24 && (pixels[i] < 244 || pixels[i + 1] < 244 || pixels[i + 2] < 244)) {
+          left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+        }
+      }
+    }
+    if (right < left || bottom < top) return canvas;
+    const padX = Math.ceil(canvas.width * 0.025), padY = Math.ceil(canvas.height * 0.035);
+    const x = Math.max(0, left - padX), y = Math.max(0, top - padY);
+    const width = Math.min(canvas.width - x, right - left + 1 + padX * 2);
+    const height = Math.min(canvas.height - y, bottom - top + 1 + padY * 2);
+    const cropped = document.createElement('canvas');
+    cropped.width = width; cropped.height = height;
+    const croppedContext = cropped.getContext('2d');
+    if (!croppedContext) return canvas;
+    croppedContext.drawImage(canvas, x, y, width, height, 0, 0, width, height);
+    return cropped;
+  }
   async function image(source, label) {
     const src = typeof source === 'object' ? source.data || source.url || source.storage_path || source.src : source;
     if (!present(src)) throw new Error('O arquivo de ' + label + ' não possui endereço disponível para exportação.');
@@ -51,7 +77,8 @@
           const ctx = canvas.getContext('2d');
           if (!ctx || !canvas.width || !canvas.height) throw new Error('Imagem inválida');
           ctx.drawImage(img, 0, 0);
-          resolve({ data: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+          const output = label === 'logo DBS AIR' ? trimLogoMargins(canvas, ctx) : canvas;
+          resolve({ data: output.toDataURL('image/png'), width: output.width, height: output.height });
         } catch (_) { reject(new Error('Não foi possível incluir ' + label + ' no PDF. Verifique o arquivo ou sua permissão de acesso.')); }
       };
       img.onerror = () => { clearTimeout(timer); reject(new Error('Não foi possível carregar ' + label + '. O PDF não foi gerado para evitar omitir a evidência.')); };
@@ -78,7 +105,7 @@
     }).filter(Boolean);
   }
   async function generate(state, id, options = {}) {
-    // Segurança adicional no renderizador: o modo colaborador nunca gera valores financeiros.
+    // Preserve the permission boundary: collaborators never receive financial values.
     const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
     const includeValues = !employeeMode && options.includeValues === true;
     const current = list(state?.ordens).find(x => String(x.id) === String(id));
@@ -118,42 +145,51 @@
     const line = (at, color = theme.line) => { doc.setDrawColor(...color); doc.setLineWidth(0.25); doc.line(M, at, M + W, at); };
     function header(first) {
       if (first) {
-        doc.addImage(logo.data, 'PNG', M, 12, 42, 42 * logo.height / logo.width);
-        font(8, 'bold', theme.navy); doc.text('DBS AIR', M, 35);
-        font(7.3, 'normal', theme.muted); doc.text('DBS Control · Atendimento técnico', M, 40);
-        font(13, 'bold', theme.navy); doc.text('ORDEM DE SERVIÇO', 195, 18, { align: 'right' });
-        const pl = lines('Nº ' + protocol, 119, 10, 'bold'); doc.text(pl, 195, 25, { align: 'right' });
-        const meta = lines(unique([o.tipo, o.status]), 119, 8); doc.text(meta, 195, 25 + pl.length * 4.5 + 2, { align: 'right' });
-        y = Math.max(47, 25 + pl.length * 4.5 + meta.length * 4 + 7);
+        const top = 10, height = 34;
+        doc.setFillColor(...theme.panel); doc.setDrawColor(...theme.line); doc.setLineWidth(0.35); doc.rect(M, top, W, height, 'FD');
+        doc.setFillColor(...theme.blue); doc.rect(M, top, 1.5, height, 'F');
+        doc.setFillColor(...theme.green); doc.rect(M + 1.5, top, 0.7, height, 'F');
+        const scale = Math.min(48 / logo.width, 22 / logo.height);
+        const logoWidth = logo.width * scale, logoHeight = logo.height * scale;
+        doc.addImage(logo.data, 'PNG', M + 6, top + (height - logoHeight) / 2, logoWidth, logoHeight);
+        font(7.2, 'bold', theme.blue); doc.text('ORDEM DE SERVIÇO', 195, 17, { align: 'right' });
+        const pl = lines('Nº ' + protocol, 115, 10, 'bold'); doc.text(pl, 195, 25, { align: 'right' });
+        const status = lines('STATUS · ' + (present(o.status) ? clean(o.status) : 'Não informado'), 115, 7.5);
+        doc.text(status, 195, 34, { align: 'right' });
+        y = 50; line(y, theme.blue); y += 8;
       } else {
-        font(8, 'bold', theme.navy); doc.text('DBS AIR · ORDEM DE SERVIÇO', M, 15);
-        const pl = lines(protocol, 90, 7.5); doc.text(pl, 195, 15, { align: 'right' }); y = 21 + Math.max(0, pl.length - 1) * 4;
+        doc.setFillColor(...theme.blue); doc.rect(M, 11, W, 1, 'F');
+        doc.setFillColor(...theme.green); doc.rect(M, 11, 16, 1, 'F');
+        font(7.8, 'bold', theme.navy); doc.text('DBS AIR · ORDEM DE SERVIÇO', M, 18);
+        const pl = lines('OS ' + protocol, 100, 7.5); doc.text(pl, 195, 18, { align: 'right' });
+        y = 23 + Math.max(0, pl.length - 1) * 3.5; line(y); y += 7;
       }
-      line(y, theme.blue); y += 8;
     }
     const next = () => { doc.addPage(); header(false); };
     const ensure = h => { if (y + h > bottom) next(); };
-    function section(title, minimum = 20) {
+    function section(title, minimum = 12) {
       ensure(12 + minimum); sectionNumber++;
-      font(8.7, 'bold', theme.navy); doc.text(String(sectionNumber).padStart(2, '0') + '  ' + title.toUpperCase(), M, y);
-      y += 3; line(y); y += 6;
+      doc.setFillColor(...theme.blue); doc.rect(M, y - 3, 7, 7, 'F');
+      font(6.8, 'bold', [255, 255, 255]); doc.text(String(sectionNumber).padStart(2, '0'), M + 3.5, y + 1.8, { align: 'center' });
+      font(8.5, 'bold', theme.navy); doc.text(title.toUpperCase(), M + 10, y + 1.5);
+      line(y + 5); y += 10;
     }
     function block(label, value) {
       if (!present(value)) return;
-      const text = lines(value); ensure(13);
-      font(7.2, 'bold', theme.muted); doc.text(label.toUpperCase(), M, y); y += 5;
+      const text = lines(value); ensure(11);
+      font(7.2, 'bold', theme.muted); doc.text(label.toUpperCase(), M, y); y += 4.2;
       for (const row of text) {
-        if (y + 4.5 > bottom) { next(); font(7, 'bold', theme.muted); doc.text(label.toUpperCase() + ' · CONTINUAÇÃO', M, y); y += 5; }
-        font(); doc.text(row, M, y); y += 4.5;
+        if (y + 4.1 > bottom) { next(); font(7, 'bold', theme.muted); doc.text(label.toUpperCase() + ' · CONTINUAÇÃO', M, y); y += 4.2; }
+        font(); doc.text(row, M, y); y += 4.1;
       }
-      y += 4;
+      y += 2.5;
     }
     function pair(left, right) {
       const cells = [left, right].filter(x => present(x[1]));
       if (!cells.length) return;
       const widths = cells.length === 2 ? [87, 87] : [W];
       const wrapped = cells.map((c, i) => lines(c[1], widths[i], 8.8));
-      const height = 8 + Math.max(...wrapped.map(x => x.length)) * 4.4;
+      const height = 7.4 + Math.max(...wrapped.map(x => x.length)) * 4.2;
       if (height > 200) { cells.forEach(c => block(...c)); return; }
       ensure(height);
       cells.forEach((c, i) => { const x = M + i * 93; font(7, 'bold', theme.muted); doc.text(c[0].toUpperCase(), x, y); font(8.8); doc.text(wrapped[i], x, y + 4.8); });
@@ -179,6 +215,22 @@
       }); y += 4;
     }
     function distinct(entries) { const seen = new Set(); entries.forEach(([label, value]) => { const v = clean(value); if (v && !seen.has(v)) { seen.add(v); block(label, v); } }); }
+    function observationBox(value) {
+      const wrapped = lines(present(value) ? value : 'Nenhuma observação registrada.', W - 10, 8.5);
+      let offset = 0;
+      while (offset < wrapped.length) {
+        const available = Math.floor((bottom - y - 17) / 4.5);
+        if (available < 1) { next(); continue; }
+        const take = Math.min(wrapped.length - offset, available);
+        const top = y, height = 12 + take * 4.5;
+        doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.3);
+        doc.rect(M, top, W, height, 'FD');
+        font(7, 'bold', theme.navy); doc.text(offset ? 'REGISTRO DO TÉCNICO · CONTINUAÇÃO' : 'REGISTRO DO TÉCNICO', M + 4, top + 4.5);
+        font(8.5, 'normal', theme.ink); doc.text(wrapped.slice(offset, offset + take), M + 4, top + 9);
+        y = top + height + 5; offset += take;
+        if (offset < wrapped.length) next();
+      }
+    }
     header(true);
     const location = o.localAtendimento || site.name || site.nome;
     const end = address(site.address_json || site.endereco || o.endereco || cli.endereco) || unique([cli.logradouro, cli.numero, cli.complemento, cli.bairro, cli.cidade, cli.uf, cli.cep]);
@@ -191,10 +243,11 @@
       block('Endereço', end); block('Informações do cliente / acesso', cli.observacoes);
     }
     section('Resumo do atendimento');
-    pair(['Serviço', srv.nome || o.servico], ['Responsável técnico', tec.nome || o.tecnicoNome]);
-    pair(['Tipo / status', unique([o.tipo, o.status])], ['Prioridade / SLA', unique([o.prioridade, date(o.sla)])]);
-    pair(['Abertura', date(o.criadoEm || o.created_at)], ['Atendimento / agendamento', date(o.dataHora || o.data || o.scheduled_at)]);
-    pair(['Início', date(o.inicio || o.started_at || o.horario)], ['Conclusão', date(o.concluidoEm || o.fim || o.completed_at)]);
+    pair(['Serviço', srv.nome || o.servico], ['Tipo / status', unique([o.tipo, o.status])]);
+    pair(['Responsável técnico', tec.nome || o.tecnicoNome], ['Função / registro', unique([tec.posicao, tec.registro, tec.crea])]);
+    pair(['Prioridade / SLA', unique([o.prioridade, date(o.sla)])], ['Abertura', date(o.criadoEm || o.created_at)]);
+    pair(['Atendimento / agendamento', date(o.dataHora || o.data || o.scheduled_at)], ['Início', date(o.inicio || o.started_at || o.horario)]);
+    pair(['Conclusão', date(o.concluidoEm || o.fim || o.completed_at)], ['', '']);
     distinct([['Solicitação / descrição do serviço', o.desc], ['Descrição', o.descricao || o.description], ['Sintoma relatado', o.sintoma], ['Orientações ao técnico', o.orientacoes]]);
     if (eqs.length) {
       section('Equipamentos vinculados');
@@ -208,9 +261,10 @@
         block('Observações do equipamento', e.observacoes);
       });
     }
-    const execution = [['Relato técnico do atendimento', o.relatoTecnico], ['Diagnóstico técnico', o.diagnostico || o.technical_opinion], ['Trabalho executado', o.trabalhoExecutado], ['Observação técnica', o.observacao], ['Observações', o.observacoes], ['Observação', o.obs], ['Recomendações', o.recomendacoes], ['Recomendação', o.recomendacao]];
+    const execution = [['Relato técnico do atendimento', o.relatoTecnico], ['Diagnóstico técnico', o.diagnostico || o.technical_opinion], ['Trabalho executado', o.trabalhoExecutado], ['Recomendações', o.recomendacoes], ['Recomendação', o.recomendacao]];
     if (execution.some(x => present(x[1]))) { section('Execução técnica'); distinct(execution); }
-    if (tec.nome || tec.posicao || tec.registro) { section('Responsável pelo atendimento'); pair(['Técnico / executante', tec.nome], ['Função / registro', unique([tec.posicao, tec.registro, tec.crea])]); }
+    const technicianObservations = unique([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation]);
+    section('Observações do técnico', 14); observationBox(technicianObservations);
     const checks = list(o.checklist).filter(x => x.concluido && present(x.titulo || x.descricao));
     if (checks.length) { section('Checklist técnico realizado'); table(['Item conferido', 'Registro'], checks.map(x => ['✓ ' + (x.titulo || x.descricao) + (x.observacao ? '\n' + x.observacao : ''), date(x.concluidoEm)]), [133, 47]); }
     const parts = [...list(o.pecasUsadas), ...list(o.materiais), ...list(o.servicosUsados)];
@@ -220,7 +274,7 @@
       const rows = parts.map(p => {
         const unit = p.unit_cents != null ? number(p.unit_cents) / 100 : number(p.venda ?? p.valorUnitario);
         const qty = number(p.qtd ?? p.quantidade ?? p.quantity);
-        return [clean(p.nome || p.descricao || p.description || p.id), clean(p.qtd ?? p.quantidade ?? p.quantity), ...(valued ? [unit != null ? money(unit) : '', unit != null && qty != null ? money(unit * qty) : ''] : [])];
+        return [clean(p.nome || p.descricao || p.description || p.id), clean(p.qtd ?? p.quantidade ?? p.quantity), ...(valued ? [unit ? money(unit) : '', unit && qty != null ? money(unit * qty) : ''] : [])];
       });
       table(valued ? ['Descrição', 'Qtd.', 'Unitário', 'Total'] : ['Descrição', 'Quantidade'], rows, valued ? [103, 17, 30, 30] : [145, 35]);
     }

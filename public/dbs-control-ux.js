@@ -338,8 +338,7 @@
         background:transparent!important;
       }
       #tab-dashboard .quick-start-card .data-header h3,
-      #tab-dashboard .quick-start-card .quick-start-subtitle,
-      #tab-dashboard .quick-start-card .quick-flow{display:none!important;}
+      #tab-dashboard .quick-start-card .quick-start-subtitle{display:none!important;}
       #tab-dashboard .quick-start-grid{
         display:flex!important;
         gap:8px!important;
@@ -620,12 +619,10 @@
     #tab-dashboard .metric-value{font-size:21px!important}
     #tab-dashboard .quick-start-grid{gap:7px!important}
     #tab-dashboard .quick-start-action{min-height:54px!important;flex-basis:160px!important;border-radius:9px!important}
-    #tab-dashboard .quick-flow{display:none!important}
-    #tab-dashboard .data-card:last-child{margin-top:2px!important}
+    #tab-dashboard .data-card:last-child{margin-top:2px!important;overflow-x:auto!important}
+    #tab-dashboard .data-card:last-child table{min-width:1120px}
     #tab-dashboard .data-card:last-child .data-header{padding-bottom:9px!important}
     #tab-dashboard .data-card:last-child .data-header h3{font-size:12px!important}
-    #tab-dashboard .data-card:last-child table th:nth-child(7),#tab-dashboard .data-card:last-child table td:nth-child(7),
-    #tab-dashboard .data-card:last-child table th:nth-child(9),#tab-dashboard .data-card:last-child table td:nth-child(9){display:none!important}
 
     #tab-nova-os .os-premium-body{display:flex!important;flex-direction:column!important;gap:0!important}
     #tab-nova-os .os-premium-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}
