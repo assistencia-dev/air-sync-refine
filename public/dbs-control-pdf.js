@@ -154,8 +154,13 @@
         doc.addImage(logo.data, 'PNG', M + 6, top + (height - logoHeight) / 2, logoWidth, logoHeight);
         font(7.2, 'bold', theme.blue); doc.text('ORDEM DE SERVIÇO', 195, 17, { align: 'right' });
         const pl = lines('Nº ' + protocol, 115, 10, 'bold'); doc.text(pl, 195, 25, { align: 'right' });
-        const status = lines('STATUS · ' + (present(o.status) ? clean(o.status) : 'Não informado'), 115, 7.5);
-        doc.text(status, 195, 34, { align: 'right' });
+        const rawStatus = present(o.status) ? clean(o.status) : 'Não informado';
+        const normalizedStatus = rawStatus.toLocaleLowerCase('pt-BR');
+        const statusColor = /conclu/.test(normalizedStatus) ? [220, 252, 231] : /cancel|rejeit/.test(normalizedStatus) ? [254, 226, 226] : /atendimento|andamento|aberta|aberto/.test(normalizedStatus) ? [219, 234, 254] : [241, 245, 249];
+        const statusInk = /conclu/.test(normalizedStatus) ? [22, 101, 52] : /cancel|rejeit/.test(normalizedStatus) ? [153, 27, 27] : /atendimento|andamento|aberta|aberto/.test(normalizedStatus) ? [30, 64, 175] : theme.muted;
+        const badgeW = Math.min(68, Math.max(29, doc.getTextWidth(rawStatus) + 10));
+        doc.setFillColor(...statusColor); doc.roundedRect(195 - badgeW, 29, badgeW, 8, 2, 2, 'F');
+        font(7.1, 'bold', statusInk); doc.text(rawStatus.toLocaleUpperCase('pt-BR'), 191, 34.2, { align: 'right', maxWidth: badgeW - 8 });
         y = 50; line(y, theme.blue); y += 8;
       } else {
         doc.setFillColor(...theme.blue); doc.rect(M, 11, W, 1, 'F');
