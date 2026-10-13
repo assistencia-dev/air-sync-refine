@@ -52,10 +52,11 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     if (user.role_key !== "FINANCEIRO_LEITURA" && user.role_key !== "SUPER_ADMIN") {
       throw new Error("Este painel é exclusivo para acompanhamento financeiro.");
     }
-    const scopeKey = user.company_id ? "company:" + user.company_id : null;
-    if (!scopeKey) throw new Error("Este acesso ainda precisa ser vinculado à empresa do financeiro pelo administrador.");
-    const { data: snapshot, error } = await admin.from("treasury_snapshots")
-      .select("state, updated_at").eq("scope_key", scopeKey).maybeSingle();
+    const ownerId = user.role_key === "FINANCEIRO_LEITURA" ? user.created_by : user.id;
+    const { data: owner, error: ownerError } = await admin.from("users").select("id, company_id, status").eq("id", ownerId).maybeSingle();
+    if (ownerError || !owner || owner.status !== "ativo") throw new Error("O responsável pelo financeiro não está ativo.");
+    const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
+    const { data: snapshot, error } = await admin.from("treasury_snapshots").select("state, updated_at").eq("scope_key", scopeKey).maybeSingle();
     if (error) throw new Error("Falha ao consultar o financeiro: " + error.message);
     const state = snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)
       ? snapshot.state as Record<string, any> : {};
