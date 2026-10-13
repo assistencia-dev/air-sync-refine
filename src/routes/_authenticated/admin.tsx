@@ -805,7 +805,7 @@ function EditUserModal({
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [cpf, setCpf] = useState(user.cpf ?? "");
-  const [roleKey, setRoleKey] = useState<"SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
+  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     user.role_key,
   );
   const [companyId, setCompanyId] = useState(user.company_id ?? "");
@@ -964,7 +964,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
+  const [roleKey, setRoleKey] = useState<"SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     "CLIENTE_PF",
   );
   const [companyId, setCompanyId] = useState("");
