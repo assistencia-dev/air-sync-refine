@@ -159,13 +159,41 @@ function RootComponent() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-    // Registration is intentionally non-blocking; app navigation/auth must work if SW is unavailable.
-    const register = () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
-      console.warn("DBS AIR: service worker registration unavailable", error);
-    });
-    if (document.readyState === "complete") void register();
-    else window.addEventListener("load", register, { once: true });
-    return () => window.removeEventListener("load", register);
+    let disposed = false;
+    let refreshing = false;
+    let registration: ServiceWorkerRegistration | undefined;
+
+    // Apply a newly installed worker to the open PWA instead of leaving its old UI running.
+    const onControllerChange = () => {
+      if (refreshing || disposed) return;
+      refreshing = true;
+      window.location.reload();
+    };
+    const updateWorker = async () => {
+      try {
+        registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        if (disposed) return;
+        // Explicitly ask the browser to check for a newer worker on app open/resume.
+        await registration.update();
+      } catch (error) {
+        console.warn("DBS AIR: service worker update check unavailable", error);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void updateWorker();
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+    if (document.readyState === "complete") void updateWorker();
+    else window.addEventListener("load", updateWorker, { once: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      disposed = true;
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      window.removeEventListener("load", updateWorker);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   return (

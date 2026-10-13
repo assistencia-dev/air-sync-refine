@@ -1,5 +1,5 @@
 /* DBS AIR PWA: cache only public static assets. Never cache HTML, API, auth, or business data. */
-const CACHE_NAME = "dbs-air-static-v1";
+const CACHE_NAME = "dbs-air-static-v2";
 const STATIC_ASSET = /\.(?:js|css|svg|png|jpe?g|webp|woff2?|ttf|ico)$/i;
 
 self.addEventListener("install", () => {
