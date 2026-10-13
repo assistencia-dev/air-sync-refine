@@ -27,7 +27,8 @@
   var UNIT_DIM = {"UN":"count","PÇ":"count","HRS":"time","DIA":"time","MM":"length","CM":"length","M":"length","KM":"length","M²":"area","M³":"volume","MG":"mass","G":"mass","KG":"mass","T":"mass","ML":"liquid","L":"liquid","GAL":"liquid"};
   function normalizeUnit(v){var raw=String(v||"UN").trim().toLocaleLowerCase("pt-BR");for(var key in UNIT_GROUPS){if(key.toLocaleLowerCase("pt-BR")===raw||UNIT_GROUPS[key].indexOf(raw)>=0)return key;}return String(v||"UN").trim().toUpperCase();}
   function unitSelect(cls,value){var selected=normalizeUnit(value), units=["UN","PÇ","HRS","DIA","MM","CM","M","KM","M²","M³","MG","G","KG","T","ML","L","GAL"];if(units.indexOf(selected)<0)units.push(selected);return '<select class="'+cls+'" aria-label="'+(cls==="oq-unit"?"Unidade da quantidade":"Unidade do preço")+'">'+units.map(function(u){return '<option value="'+esc(u)+'"'+(u===selected?" selected":"")+'>'+esc(u)+'</option>';}).join("")+'</select>';}
-  function convertedLine(qty, unit, price, priceUnit){var u=normalizeUnit(unit), p=normalizeUnit(priceUnit||unit);if(u===p)return qty*price;if(UNIT_DIM[u]&&UNIT_DIM[u]===UNIT_DIM[p])return qty*(UNIT_FACTOR[u]||1)/(UNIT_FACTOR[p]||1)*price;return qty*price;}
+  function unitsCompatible(unit,priceUnit){var u=normalizeUnit(unit),p=normalizeUnit(priceUnit||unit);return u===p||(!!UNIT_DIM[u]&&UNIT_DIM[u]===UNIT_DIM[p]);}
+  function convertedLine(qty, unit, price, priceUnit){var u=normalizeUnit(unit), p=normalizeUnit(priceUnit||unit);if(u===p)return qty*price;if(unitsCompatible(u,p))return qty*(UNIT_FACTOR[u]||1)/(UNIT_FACTOR[p]||1)*price;return NaN;}
   function itemRow(item, index) {
     var options = catalog().map(function (c) {
       var selected = String(item.catalogoId || "") === String(c.id) && String(item.tipo || "") === c.tipo;
@@ -68,11 +69,14 @@
     signatureCanvas.addEventListener("pointermove", function(ev){ if(!drawing)return; var p=point(ev); signatureCtx.lineTo(p.x,p.y); signatureCtx.stroke(); });
     signatureCanvas.addEventListener("pointerup", function(){ drawing=false; }); signatureCanvas.addEventListener("pointercancel", function(){ drawing=false; });
     function closeAcceptance(){ acceptance.hidden=true; activeQuoteId=null; }
+    function quoteSnapshot(q){return {id:q.id,clienteId:q.clienteId,data:q.data,validade:q.validade,pagamento:q.pagamento,desc:q.desc,itens:(q.itens||[]).map(function(i){return {tipo:i.tipo,catalogoId:i.catalogoId,descricao:i.descricao,unidade:i.unidade,unidadePreco:i.unidadePreco,quantidade:i.quantidade,valorUnitario:i.valorUnitario,total:i.total};}),subtotalProdutos:q.subtotalProdutos,subtotalServicos:q.subtotalServicos,subtotal:q.subtotal,desconto:q.desconto,total:q.total};}
+    function quoteSnapshotHash(q){var s=JSON.stringify(quoteSnapshot(q)),h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return ("00000000"+(h>>>0).toString(16)).slice(-8);}
     function commitAcceptance(status){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(activeQuoteId);}); if(!q)return;
       var name=$("oq-accept-name").value.trim(), comment=$("oq-accept-comment").value.trim();
       if(status==="Aprovado" && (!name || !signed)){ alert("Para aprovar, informe o nome do responsável e registre a assinatura."); return; }
       if(status==="Rejeitado" && !comment && !name){ alert("Informe o responsável ou o motivo da recusa."); return; }
-      q.status=status; q.aceiteWeb={status:status,responsavel:name,comentario:comment,assinatura:status==="Aprovado"?signatureCanvas.toDataURL("image/png"):null,data:new Date().toISOString()};
+      var acceptedAt=new Date().toISOString(); q.status=status;
+      q.aceiteWeb={status:status,responsavel:name,comentario:comment,assinatura:status==="Aprovado"?signatureCanvas.toDataURL("image/png"):null,data:acceptedAt,versao:1,propostaId:q.id,hashConteudo:quoteSnapshotHash(q),snapshot:quoteSnapshot(q),historico:(q.aceiteWeb&&Array.isArray(q.aceiteWeb.historico)?q.aceiteWeb.historico:[]).concat([{status:status,responsavel:name,comentario:comment,data:acceptedAt,versao:1}])};
       if(typeof window.saveState==="function")window.saveState(); closeAcceptance(); render(); alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
     }
     function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; acceptance.hidden=false; }
@@ -132,8 +136,10 @@
     Array.from(body.querySelectorAll("tr")).forEach(function (row) {
       var qty=Math.max(0,num(row.querySelector(".oq-qty").value)), price=Math.max(0,num(row.querySelector(".oq-price").value)), unit=row.querySelector(".oq-unit").value, priceUnit=row.querySelector(".oq-price-unit").value;
       var line=convertedLine(qty,unit,price,priceUnit);
-      var compatible=!UNIT_DIM[normalizeUnit(unit)]||!UNIT_DIM[normalizeUnit(priceUnit)]||UNIT_DIM[normalizeUnit(unit)]===UNIT_DIM[normalizeUnit(priceUnit)];
-      row.querySelector(".oq-line-total").title=compatible?"Quantidade convertida para a unidade do preço":"Unidades incompatíveis: cálculo direto sem conversão";
+      var compatible=unitsCompatible(unit,priceUnit);
+      row.querySelector(".oq-line-total").textContent=compatible?money(line):"Unidades incompatíveis";
+      row.querySelector(".oq-line-total").style.color=compatible?"":"#b42318";
+      row.querySelector(".oq-line-total").title=compatible?"Quantidade convertida para a unidade do preço":"Corrija a unidade da quantidade ou do preço para evitar cálculo incorreto";
       subtotal += line; row.querySelector(".oq-line-total").textContent = money(line);
     });
     var discount = Math.min(subtotal, Math.max(0, num($("oq-discount").value)));
@@ -153,11 +159,13 @@
   function save(ev) {
     ev.preventDefault();
     var items = readItems().filter(function (x) { return x.descricao && x.quantidade > 0 && x.valorUnitario >= 0; });
+    var invalidUnits=Array.from($("oq-items").querySelectorAll("tr")).some(function(row){return !unitsCompatible(row.querySelector(".oq-unit").value,row.querySelector(".oq-price-unit").value);});
+    if(invalidUnits){alert("Há itens com unidades incompatíveis. Confira se quantidade e preço usam medidas compatíveis.");return;}
     if (!$("oq-client").value) { alert("Selecione o cliente da proposta."); return; }
     if (!items.length) { alert("Adicione pelo menos um item com descrição e quantidade válida."); return; }
     var sum = totals();
-    var subtotalProdutos = items.filter(function (x) { return x.tipo === "peca"; }).reduce(function (n, x) { return n + x.quantidade * x.valorUnitario; }, 0);
-    var subtotalServicos = items.filter(function (x) { return x.tipo !== "peca"; }).reduce(function (n, x) { return n + x.quantidade * x.valorUnitario; }, 0);
+    var subtotalProdutos = items.filter(function (x) { return x.tipo === "peca"; }).reduce(function (n, x) { return n + x.total; }, 0);
+    var subtotalServicos = items.filter(function (x) { return x.tipo !== "peca"; }).reduce(function (n, x) { return n + x.total; }, 0);
     var validity = Math.max(1, num($("oq-validity").value) || 10);
     var now = new Date();
     var seq = (ERP_STATE.orcamentos || []).reduce(function (m, q) { return Math.max(m, Number(String(q.id || "").replace(/\D/g, "")) || 0); }, 1000) + 1;
@@ -248,8 +256,8 @@
       doc.text(money(num(it.quantidade || 1) * num(it.valorUnitario)).replace(/\s/g, " "), pageW - x - 2, y, { align: "right" });
       y += Math.max(7, lines.length * 4.5 + 3); doc.setDrawColor(220, 229, 237); doc.line(x, y - 2, pageW - x, y - 2);
     });
-    y += 4; check(26); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text("Subtotal de produtos: " + money(q.subtotalProdutos != null ? q.subtotalProdutos : items.filter(function (it) { return it.tipo === "peca"; }).reduce(function (n, it) { return n + num(it.quantidade) * num(it.valorUnitario); }, 0)), pageW - x, y, { align: "right" }); y += 5;
-    doc.text("Subtotal de serviços: " + money(q.subtotalServicos != null ? q.subtotalServicos : items.filter(function (it) { return it.tipo !== "peca"; }).reduce(function (n, it) { return n + num(it.quantidade) * num(it.valorUnitario); }, 0)), pageW - x, y, { align: "right" }); y += 5;
+    y += 4; check(26); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text("Subtotal de produtos: " + money(q.subtotalProdutos != null ? q.subtotalProdutos : items.filter(function (it) { return it.tipo === "peca"; }).reduce(function (n, it) { return n + num(it.total != null ? it.total : num(it.quantidade)*num(it.valorUnitario)); }, 0)), pageW - x, y, { align: "right" }); y += 5;
+    doc.text("Subtotal de serviços: " + money(q.subtotalServicos != null ? q.subtotalServicos : items.filter(function (it) { return it.tipo !== "peca"; }).reduce(function (n, it) { return n + num(it.total != null ? it.total : num(it.quantidade)*num(it.valorUnitario)); }, 0)), pageW - x, y, { align: "right" }); y += 5;
     doc.text("Subtotal geral: " + money(q.subtotal), pageW - x, y, { align: "right" }); y += 5;
     doc.text("Descontos: " + money(q.desconto), pageW - x, y, { align: "right" }); y += 7;
     doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(16, 65, 112); doc.text("TOTAL: " + money(q.total), pageW - x, y, { align: "right" }); y += 10;
