@@ -88,6 +88,7 @@ function DbsControlPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
   const cloudReadyRef = useRef(false);
+  const cloudUpdatedAtRef = useRef<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -193,6 +194,7 @@ function DbsControlPage() {
               : cloudState;
 
             cloudReadyRef.current = true;
+            cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: finalState },
               "*",
@@ -203,6 +205,7 @@ function DbsControlPage() {
             }
             const saved = await saveDbsControlCloudState({ data: { state: localState } });
             cloudReadyRef.current = true;
+            cloudUpdatedAtRef.current = saved.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
               "*",
@@ -370,7 +373,9 @@ function DbsControlPage() {
           const state = pendingStateRef.current;
           if (!state) return;
           try {
-            await saveDbsControlCloudState({ data: { state } });
+            const saved = await saveDbsControlCloudState({ data: { state } });
+            cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+            if (pendingStateRef.current === state) pendingStateRef.current = null;
             setCloudError(null);
           } catch (err) {
             console.error("DBS Control cloud save:", err);
@@ -381,8 +386,30 @@ function DbsControlPage() {
     };
 
     window.addEventListener("message", handler);
+
+    // Keep an already-open technician screen in sync with OS assignments made by
+    // administration on another device. Never hydrate over an unsaved local edit.
+    const refreshTimer = setInterval(async () => {
+      if (!cloudReadyRef.current || pendingStateRef.current || saveTimerRef.current) return;
+      try {
+        const latest = await getDbsControlCloudState();
+        if (!latest?.state || !latest.updated_at || latest.updated_at === cloudUpdatedAtRef.current) return;
+        if (pendingStateRef.current || saveTimerRef.current) return;
+        cloudUpdatedAtRef.current = latest.updated_at;
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "DBS_CONTROL_CLOUD_STATE", state: latest.state },
+          "*",
+        );
+        setCloudError(null);
+      } catch (err) {
+        console.error("DBS Control automatic refresh:", err);
+        setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
+      }
+    }, 15000);
+
     return () => {
       window.removeEventListener("message", handler);
+      clearInterval(refreshTimer);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
@@ -406,7 +433,7 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261011-main-1`
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261013-autosync-1`
     : "/dbs-control.html?v=20261011-main-1";
 
   return (
