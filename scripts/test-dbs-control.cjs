@@ -135,9 +135,9 @@ assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional de
 
 
 const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "utf8");
-assert.match(html, /dbs-control-orcamentos-flex\\.js\\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
-assert.match(quoteBuilder, /function readItems\\(/, "A proposta deve suportar uma lista de itens.");
-assert.match(quoteBuilder, /function pdf\\(/, "A proposta deve oferecer exportação PDF.");
-assert.match(quoteBuilder, /ERP_STATE\\.orcamentos\\.push\\(q\\)/, "A proposta nova deve ser salva no estado compartilhado.");
+assert.match(html, /dbs-control-orcamentos-flex\.js\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
+assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma lista de itens.");
+assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
+assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
 assert.match(quoteBuilder, /Validade e condições|VALIDADE E CONDIÇÕES/, "O PDF deve exibir validade e condições comerciais.");
-assert.doesNotMatch(quoteBuilder, /ERP_STATE\\.pecas\\s*\\.push|ERP_STATE\\.estoque\\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
+assert.doesNotMatch(quoteBuilder, /ERP_STATE\.pecas\s*\.push|ERP_STATE\.estoque\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
