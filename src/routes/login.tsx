@@ -30,6 +30,7 @@ function LoginPage() {
           .eq("auth_id", data.session.user.id)
           .maybeSingle();
         if (cancelled) return;
+        if (profile?.role_key === "FINANCEIRO_LEITURA") { navigate({ to: "/financeiro-acompanhamento", replace: true }); return; }
         if (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL") {
           navigate({ to: "/admin", replace: true });
           return;
