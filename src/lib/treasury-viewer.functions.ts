@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 async function getCaller(context: { userId: string }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.from("users")
-    .select("id, auth_id, username, full_name, email, role_key, company_id, status")
+    .select("id, auth_id, username, full_name, email, role_key, company_id, status, created_by")
     .eq("auth_id", context.userId).maybeSingle();
   if (error || !data || data.status !== "ativo") throw new Error("Acesso não autorizado.");
   return { admin: supabaseAdmin, user: data };
