@@ -166,3 +166,9 @@ assert.match(quoteBuilder, /invalidUnits/, "A proposta deve bloquear unidades in
 assert.match(quoteBuilder, /function quoteSnapshot\(/, "O aceite deve congelar os dados comerciais aceitos.");
 assert.match(quoteBuilder, /hashConteudo/, "O aceite deve registrar uma impressão digital do conteúdo.");
 assert.match(quoteBuilder, /historico:/, "O aceite deve preservar histórico de decisões.");
+assert.match(quoteBuilder, /if\(compatible\) subtotal \+= line/, "Linhas incompatíveis não podem contaminar o subtotal com NaN.");
+assert.doesNotMatch(quoteBuilder, /subtotal \+= line; row\.querySelector\("\.oq-line-total"\)\.textContent = money\(line\)/, "O total inválido não pode sobrescrever o aviso de unidade incompatível.");
+assert.match(quoteBuilder, /"M³":1000/, "Um metro cúbico deve equivaler a 1.000 litros na base de conversão.");
+assert.match(quoteBuilder, /"ML":"volume","L":"volume","GAL":"volume"/, "Mililitros, litros, galões e metros cúbicos devem compartilhar dimensão de volume.");
+assert.match(quoteBuilder, /var lineTotal = Number\.isFinite\(Number\(it\.total\)\)/, "O PDF deve usar o total já convertido salvo no item.");
+assert.match(quoteBuilder, /String\(it\.unidadePreco \|\| it\.unidade \|\| "UN"\)/, "O PDF deve mostrar a unidade-base do preço.");
