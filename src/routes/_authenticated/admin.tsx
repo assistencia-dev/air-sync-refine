@@ -9,6 +9,7 @@ import {
   Pencil,
   RefreshCw,
   Shield,
+  ShieldCheck,
   Ticket,
   Users,
   WalletCards,
@@ -131,6 +132,11 @@ function AdminPage() {
           >
             <Wrench className="h-4 w-4" /> DBS CONTROL
           </button>
+          {profile.data?.role_key === "SUPER_ADMIN" && (
+            <button onClick={() => navigate({ to: "/financeiro-acesso" })} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
+              <ShieldCheck className="h-4 w-4" /> Acesso financeiro do chefe
+            </button>
+          )}
           {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
             <button
               onClick={() => navigate({ to: "/treasury" })}

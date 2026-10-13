@@ -30,6 +30,7 @@ function LoginPage() {
           .eq("auth_id", data.session.user.id)
           .maybeSingle();
         if (cancelled) return;
+        if (profile?.role_key === "FINANCEIRO_LEITURA") { navigate({ to: "/financeiro-acompanhamento", replace: true }); return; }
         if (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL") {
           navigate({ to: "/admin", replace: true });
           return;
@@ -91,7 +92,9 @@ function LoginPage() {
       }
       const isAdmin = profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "ADMIN_OPERACIONAL";
       const isCollaborator = profile?.role_key === "COLABORADOR";
-      if (isAdmin) {
+      if (profile?.role_key === "FINANCEIRO_LEITURA") {
+        navigate({ to: "/financeiro-acompanhamento", replace: true });
+      } else if (isAdmin) {
         navigate({ to: "/admin", replace: true });
       } else if (isCollaborator) {
         // Somente colaboradores consultam o RH/Folha de Ponto.
