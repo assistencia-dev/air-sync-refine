@@ -157,3 +157,12 @@ assert.match(quoteBuilder, /function openAcceptance\(/, "A proposta deve permiti
 assert.match(quoteBuilder, /oq-accept-approve/, "O aceite web deve oferecer aprovação.");
 assert.match(quoteBuilder, /oq-accept-reject/, "O aceite web deve oferecer recusa.");
 assert.match(quoteBuilder, /signatureCanvas\.toDataURL/, "A assinatura desenhada deve ser registrada na proposta.");
+
+assert.match(quoteBuilder, /function unitsCompatible\(/, "O orçamento deve validar compatibilidade dimensional.");
+assert.match(quoteBuilder, /function convertedLine\(/, "O orçamento deve converter unidades antes de calcular.");
+assert.match(quoteBuilder, /UNIT_DIM.*mass/s, "O conversor deve reconhecer dimensões físicas.");
+assert.match(quoteBuilder, /unidadePreco/, "Cada item deve registrar a unidade usada como base do preço.");
+assert.match(quoteBuilder, /invalidUnits/, "A proposta deve bloquear unidades incompatíveis.");
+assert.match(quoteBuilder, /function quoteSnapshot\(/, "O aceite deve congelar os dados comerciais aceitos.");
+assert.match(quoteBuilder, /hashConteudo/, "O aceite deve registrar uma impressão digital do conteúdo.");
+assert.match(quoteBuilder, /historico:/, "O aceite deve preservar histórico de decisões.");
