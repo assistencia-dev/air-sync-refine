@@ -381,3 +381,91 @@ body:not(.dbs-control-employee-mode) > aside .brand-title {
   .employee-hero-brand { align-items: flex-start; flex-direction: column; gap: 8px; }
   .employee-brand-logo { width: 116px; height: 38px; }
 }
+
+
+/* Padronização visual das Ordens de Serviço — escopo administrativo, sem alterar permissões ou dados. */
+#tab-ordens > .data-card {
+  overflow: hidden;
+  border: 1px solid #dce7f1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 20px rgba(20, 54, 86, .045);
+}
+#tab-ordens .data-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e7eef5;
+  background: linear-gradient(180deg, #fff 0%, #f8fbfe 100%);
+}
+#tab-ordens .filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+}
+#tab-ordens .filter-bar input,
+#tab-ordens .filter-bar select {
+  min-height: 38px;
+  border: 1px solid #cbd9e7 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #173b5d !important;
+  padding: 8px 11px !important;
+  font-size: 12px !important;
+  outline-offset: 2px;
+}
+#tab-ordens .filter-bar input:focus,
+#tab-ordens .filter-bar select:focus {
+  border-color: #2381c2 !important;
+  box-shadow: 0 0 0 3px rgba(35, 129, 194, .12);
+}
+#tab-ordens .data-header > div:last-child { display:flex; gap:8px; flex-wrap:wrap; }
+#tab-ordens #os-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+#tab-ordens #os-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 11px;
+  background: #eef5fb;
+  color: #345571;
+  border-bottom: 1px solid #d9e6f1;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#tab-ordens #os-table tbody td {
+  padding: 12px 11px;
+  border-bottom: 1px solid #edf2f7;
+  color: #334e68;
+  vertical-align: middle;
+  line-height: 1.45;
+}
+#tab-ordens #os-table tbody tr:nth-child(even) { background: #fbfdff; }
+#tab-ordens #os-table tbody tr:hover { background: #f0f7fd; }
+#tab-ordens #os-table tbody tr:last-child td { border-bottom: 0; }
+#tab-ordens #os-table input[type="checkbox"] { accent-color: #176ca8; width: 15px; height: 15px; }
+#tab-ordens #os-table td:last-child { white-space: nowrap; }
+#tab-ordens #os-table .btn { min-height: 30px; border-radius: 7px; font-weight: 700; }
+#tab-ordens .table-responsive,
+#tab-ordens .data-card { overflow-x: auto; }
+@media (max-width: 760px) {
+  #tab-ordens .data-header { align-items: stretch; padding: 12px; }
+  #tab-ordens .filter-bar { flex-basis: 100%; }
+  #tab-ordens .filter-bar input { width: 100% !important; }
+  #tab-ordens .data-header > div:last-child { width: 100%; }
+  #tab-ordens .data-header > div:last-child .btn { flex: 1 1 160px; min-height: 38px; }
+}
