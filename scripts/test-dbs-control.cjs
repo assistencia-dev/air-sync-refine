@@ -141,3 +141,15 @@ assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportaç
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
 assert.match(quoteBuilder, /Validade e condições|VALIDADE E CONDIÇÕES/, "O PDF deve exibir validade e condições comerciais.");
 assert.doesNotMatch(quoteBuilder, /ERP_STATE\.pecas\s*\.push|ERP_STATE\.estoque\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
+
+assert.match(quoteBuilder, /DBS AIR REFRIGERACAO LTDA - ME/, "O PDF deve conter a razão social oficial do emissor.");
+assert.match(quoteBuilder, /13\.352\.707\/0001-09/, "O PDF deve conter o CNPJ oficial do emissor.");
+assert.match(quoteBuilder, /assistencia@dbsair\.com\.br/, "O PDF deve conter o e-mail comercial.");
+assert.match(quoteBuilder, /99825-6991/, "O PDF deve conter telefone/WhatsApp comercial.");
+assert.match(quoteBuilder, /oq-unit/, "Cada item deve permitir unidade de medida.");
+assert.match(quoteBuilder, /subtotalProdutos/, "O orçamento deve discriminar subtotal de produtos.");
+assert.match(quoteBuilder, /subtotalServicos/, "O orçamento deve discriminar subtotal de serviços.");
+assert.match(quoteBuilder, /function openAcceptance\(/, "A proposta deve permitir aceite web.");
+assert.match(quoteBuilder, /oq-accept-approve/, "O aceite web deve oferecer aprovação.");
+assert.match(quoteBuilder, /oq-accept-reject/, "O aceite web deve oferecer recusa.");
+assert.match(quoteBuilder, /signatureCanvas\.toDataURL/, "A assinatura desenhada deve ser registrada na proposta.");

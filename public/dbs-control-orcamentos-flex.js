@@ -22,7 +22,8 @@
       return '<option value="' + esc(c.tipo + ":" + c.id) + '"' + (selected ? " selected" : "") + '>' + esc((c.tipo === "peca" ? "Peça · " : "Serviço · ") + c.nome) + '</option>';
     }).join("");
     return '<tr data-item-row="' + index + '"><td><select class="oq-catalog" aria-label="Item do catálogo"><option value="">Item manual / descrição livre</option>' + options + '</select></td>' +
-      '<td><input class="oq-desc" aria-label="Descrição do item" value="' + esc(item.descricao || "") + '" placeholder="Descrição do produto/serviço" required></td>' +
+      '<td><input class="oq-desc" aria-label="Descrição do item" value="' + esc(item.descricao || "") + '" placeholder="Descrição do produto/serviço e escopo" required></td>' +
+      '<td><input class="oq-unit" aria-label="Unidade de medida" value="' + esc(item.unidade || "UN") + '" maxlength="12" placeholder="UN"></td>' +
       '<td><input class="oq-qty" aria-label="Quantidade" type="number" min="0.01" step="0.01" value="' + esc(item.quantidade == null ? 1 : item.quantidade) + '" required></td>' +
       '<td><input class="oq-price" aria-label="Valor unitário" type="number" min="0" step="0.01" value="' + esc(item.valorUnitario == null ? 0 : item.valorUnitario) + '" required></td>' +
       '<td class="oq-line-total" style="text-align:right;white-space:nowrap;font-weight:700">' + money(num(item.quantidade || 1) * num(item.valorUnitario)) + '</td>' +
@@ -35,17 +36,36 @@
     var tab = $("tab-orcamentos");
     if (!tab || tab.dataset.flexReady === "1") return;
     tab.dataset.flexReady = "1";
-    tab.innerHTML = '<div class="data-card oq-shell"><div class="oq-heading"><div><h2>Proposta comercial</h2><p>Monte propostas com peças, serviços ou itens livres, sem movimentar estoque.</p></div><span class="oq-brand">DBS AIR</span></div>' +
-      '<form id="oq-form"><div class="oq-grid"><label>Cliente<select id="oq-client" required></select></label><label>Validade (dias)<input id="oq-validity" type="number" min="1" value="10" required></label><label>Condição de pagamento<input id="oq-payment" value="A combinar" maxlength="180"></label><label>Desconto total (R$)<input id="oq-discount" type="number" min="0" step="0.01" value="0"></label></div>' +
+    tab.innerHTML = '<div class="data-card oq-shell"><div class="oq-heading"><div><h2>Proposta comercial</h2><p>DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09</p><p>assistencia@dbsair.com.br · (21) 99825-6991 · Rua Nabor do Rego, 481 / 2908, Ramos, Rio de Janeiro - RJ · CEP 21031-720</p><p>Monte propostas com peças, serviços ou itens livres, sem movimentar estoque.</p></div><span class="oq-brand">DBS AIR</span></div>' +
+      '<form id="oq-form"><div class="oq-grid"><label>Cliente<select id="oq-client" required></select></label><label>Validade (dias)<input id="oq-validity" type="number" min="1" value="10" required></label><label>Condição de pagamento<input id="oq-payment" value="A combinar" maxlength="180"></label><label>Desconto total (R$)<input id="oq-discount" type="number" min="0" step="0.01" value="0"></label></div><div id="oq-client-details" class="oq-client-details">Selecione um cliente para conferir os dados cadastrais.</div>' +
       '<div class="oq-items-head"><h3>Itens da proposta</h3><button type="button" class="btn btn-secondary" id="oq-add">+ Adicionar item</button></div>' +
-      '<div class="oq-table-wrap"><table class="oq-items"><thead><tr><th>Catálogo</th><th>Descrição</th><th>Qtd.</th><th>Valor unitário (R$)</th><th>Total</th><th></th></tr></thead><tbody id="oq-items"></tbody></table></div>' +
+      '<div class="oq-table-wrap"><table class="oq-items"><thead><tr><th>Catálogo</th><th>Descrição / escopo</th><th>Un.</th><th>Qtd.</th><th>Valor unitário (R$)</th><th>Total</th><th></th></tr></thead><tbody id="oq-items"></tbody></table></div>' +
       '<label class="oq-notes-label">Descrição geral, condições e observações<textarea id="oq-notes" rows="3" placeholder="Prazo de entrega, garantia, escopo, condições especiais..."></textarea></label>' +
       '<div class="oq-totals"><span>Subtotal <strong id="oq-subtotal">R$ 0,00</strong></span><span>Desconto <strong id="oq-discount-show">R$ 0,00</strong></span><span class="oq-grand">Total da proposta <strong id="oq-total">R$ 0,00</strong></span></div>' +
       '<div class="oq-actions"><button type="button" class="btn btn-secondary" id="oq-clear">Limpar formulário</button><button type="submit" class="btn btn-primary">Salvar proposta</button></div></form></div>' +
       '<div class="data-card oq-list-card"><div class="oq-list-head"><h3>Propostas registradas</h3><select id="oq-filter"><option value="TODOS">Todos os status</option><option>Rascunho</option><option>Aprovado</option><option>Rejeitado</option><option>Convertido em OS</option></select></div>' +
       '<div class="oq-table-wrap"><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead><tbody id="oq-list"></tbody></table></div></div>';
+    var acceptance = document.createElement("div"); acceptance.id = "oq-accept-modal"; acceptance.hidden = true; acceptance.innerHTML = '<div class="oq-accept-panel" role="dialog" aria-modal="true" aria-labelledby="oq-accept-title"><div class="oq-accept-head"><div><h3 id="oq-accept-title">Aceite da proposta</h3><p>Registre a decisão e a assinatura do responsável pelo cliente.</p></div><button type="button" class="btn btn-secondary" id="oq-accept-close">Fechar</button></div><label>Comentário do cliente<textarea id="oq-accept-comment" rows="3" placeholder="Comentário, ressalvas ou motivo da recusa"></textarea></label><label>Nome do responsável<input id="oq-accept-name" maxlength="160" placeholder="Nome completo"></label><label>Assinatura digital do cliente <canvas id="oq-signature" width="900" height="180" aria-label="Área para assinatura digital"></canvas></label><div class="oq-accept-actions"><button type="button" class="btn btn-secondary" id="oq-sign-clear">Limpar assinatura</button><span></span><button type="button" class="btn btn-danger" id="oq-accept-reject">Recusar orçamento</button><button type="button" class="btn btn-primary" id="oq-accept-approve">Aprovar orçamento</button></div><p class="oq-accept-note">A assinatura é registrada neste orçamento no sistema. Confirme a identidade do responsável conforme o procedimento comercial da empresa.</p></div>'; tab.appendChild(acceptance);
+    var signatureCanvas = $("oq-signature"), signatureCtx = signatureCanvas.getContext("2d"), drawing = false, activeQuoteId = null, signed = false;
+    signatureCtx.strokeStyle = "#123e65"; signatureCtx.lineWidth = 3; signatureCtx.lineCap = "round"; signatureCtx.lineJoin = "round";
+    function point(ev) { var r = signatureCanvas.getBoundingClientRect(); return { x: (ev.clientX-r.left)*signatureCanvas.width/r.width, y: (ev.clientY-r.top)*signatureCanvas.height/r.height }; }
+    signatureCanvas.addEventListener("pointerdown", function(ev){ drawing=true; signed=true; signatureCanvas.setPointerCapture(ev.pointerId); var p=point(ev); signatureCtx.beginPath(); signatureCtx.moveTo(p.x,p.y); });
+    signatureCanvas.addEventListener("pointermove", function(ev){ if(!drawing)return; var p=point(ev); signatureCtx.lineTo(p.x,p.y); signatureCtx.stroke(); });
+    signatureCanvas.addEventListener("pointerup", function(){ drawing=false; }); signatureCanvas.addEventListener("pointercancel", function(){ drawing=false; });
+    function closeAcceptance(){ acceptance.hidden=true; activeQuoteId=null; }
+    function commitAcceptance(status){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(activeQuoteId);}); if(!q)return;
+      var name=$("oq-accept-name").value.trim(), comment=$("oq-accept-comment").value.trim();
+      if(status==="Aprovado" && (!name || !signed)){ alert("Para aprovar, informe o nome do responsável e registre a assinatura."); return; }
+      if(status==="Rejeitado" && !comment && !name){ alert("Informe o responsável ou o motivo da recusa."); return; }
+      q.status=status; q.aceiteWeb={status:status,responsavel:name,comentario:comment,assinatura:status==="Aprovado"?signatureCanvas.toDataURL("image/png"):null,data:new Date().toISOString()};
+      if(typeof window.saveState==="function")window.saveState(); closeAcceptance(); render(); alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
+    }
+    function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; acceptance.hidden=false; }
+    $("oq-accept-close").addEventListener("click",closeAcceptance); $("oq-sign-clear").addEventListener("click",function(){signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height);signed=false;}); $("oq-accept-approve").addEventListener("click",function(){commitAcceptance("Aprovado");}); $("oq-accept-reject").addEventListener("click",function(){commitAcceptance("Rejeitado");});
     var client = $("oq-client");
     client.innerHTML = '<option value="">Selecione o cliente...</option>' + clients().map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "Cliente") + '</option>'; }).join("");
+    function renderClientDetails(){ var c=clients().find(function(x){return String(x.id)===String(client.value);}); var el=$("oq-client-details"); if(!c){el.textContent="Selecione um cliente para conferir os dados cadastrais.";return;} var fields=[c.razaoSocial||c.nome||c.nomeFantasia,c.filial||c.nomeFantasia,c.cnpj?"CNPJ: "+c.cnpj:(c.cpf?"CPF: "+c.cpf:""),c.email,c.telefone,[c.endereco||c.logradouro,c.numero,c.complemento,c.bairro,c.cidade||c.municipio,c.estado||c.uf,c.cep].filter(Boolean).join(", ")].filter(Boolean); el.textContent=fields.join(" · ")||"Cliente selecionado; complete os dados cadastrais no cadastro de clientes se necessário."; }
+    client.addEventListener("change",renderClientDetails); renderClientDetails();
     addItem({ tipo: "", catalogoId: "", descricao: "", quantidade: 1, valorUnitario: 0 });
     $("oq-add").addEventListener("click", function () { addItem({ tipo: "", catalogoId: "", descricao: "", quantidade: 1, valorUnitario: 0 }); });
     $("oq-items").addEventListener("change", function (ev) {
@@ -87,7 +107,7 @@
     return Array.from($("oq-items").querySelectorAll("tr")).map(function (row) {
       var selected = row.querySelector(".oq-catalog").value.split(":");
       return { tipo: selected[0] || "manual", catalogoId: selected.length > 1 ? selected.slice(1).join(":") : null,
-        descricao: row.querySelector(".oq-desc").value.trim(), quantidade: num(row.querySelector(".oq-qty").value),
+        descricao: row.querySelector(".oq-desc").value.trim(), unidade: (row.querySelector(".oq-unit").value || "UN").trim(), quantidade: num(row.querySelector(".oq-qty").value),
         valorUnitario: num(row.querySelector(".oq-price").value), total: num(row.querySelector(".oq-qty").value) * num(row.querySelector(".oq-price").value) };
     });
   }
@@ -97,12 +117,14 @@
     if (!$("oq-client").value) { alert("Selecione o cliente da proposta."); return; }
     if (!items.length) { alert("Adicione pelo menos um item com descrição e quantidade válida."); return; }
     var sum = totals();
+    var subtotalProdutos = items.filter(function (x) { return x.tipo === "peca"; }).reduce(function (n, x) { return n + x.quantidade * x.valorUnitario; }, 0);
+    var subtotalServicos = items.filter(function (x) { return x.tipo !== "peca"; }).reduce(function (n, x) { return n + x.quantidade * x.valorUnitario; }, 0);
     var validity = Math.max(1, num($("oq-validity").value) || 10);
     var now = new Date();
     var seq = (ERP_STATE.orcamentos || []).reduce(function (m, q) { return Math.max(m, Number(String(q.id || "").replace(/\D/g, "")) || 0); }, 1000) + 1;
     var first = items[0], clientId = $("oq-client").value;
     var q = { id: "ORC-" + seq, data: now.toLocaleDateString("pt-BR"), validade: new Date(now.getTime() + validity * 86400000).toLocaleDateString("pt-BR"),
-      clienteId: clientId, itens: items, subtotal: sum.subtotal, desconto: sum.discount, total: sum.total,
+      clienteId: clientId, itens: items, subtotal: sum.subtotal, subtotalProdutos: subtotalProdutos, subtotalServicos: subtotalServicos, desconto: sum.discount, total: sum.total,
       serviceId: first.tipo === "servico" ? first.catalogoId : null, servicoId: first.tipo === "servico" ? first.catalogoId : null,
       qtd: first.quantidade, valorUnitario: first.valorUnitario, pagamento: $("oq-payment").value.trim(),
       desc: $("oq-notes").value.trim(), status: "Rascunho", osId: null };
@@ -122,7 +144,7 @@
     var rows = (ERP_STATE.orcamentos || []).filter(function (q) { return filter === "TODOS" || q.status === filter; }).map(function (q) {
       var c = clients().find(function (x) { return String(x.id) === String(q.clienteId); }) || {};
       var items = quoteItems(q); var label = items.map(function (x) { return x.descricao || "Item"; }).join(", ");
-      var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> ';
+      var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> <button type="button" class="btn btn-secondary btn-sm" data-accept="' + esc(q.id) + '">Aceite Web</button> ';
       if (q.status === "Rascunho") actions += '<button type="button" class="btn btn-secondary btn-sm" data-status="Aprovado" data-id="' + esc(q.id) + '">Aprovar</button>';
       if (q.status === "Aprovado") actions += '<button type="button" class="btn btn-success btn-sm" data-os="' + esc(q.id) + '">Gerar OS</button>';
       return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td>' + esc(q.status || "Rascunho") + '</td><td class="oq-row-actions">' + actions + '</td></tr>';
@@ -131,6 +153,7 @@
     body.onclick = function (ev) {
       var b = ev.target.closest("button"); if (!b) return;
       if (b.dataset.pdf) pdf(b.dataset.pdf);
+      if (b.dataset.accept) openAcceptance(b.dataset.accept);
       if (b.dataset.status && typeof window.quoteStatus === "function") window.quoteStatus(b.dataset.id, b.dataset.status);
       if (b.dataset.os && typeof window.quoteToOs === "function") window.quoteToOs(b.dataset.os);
       render();
@@ -146,44 +169,51 @@
     var x = 15, y = 18, maxW = pageW - 30;
     function header() {
       doc.setFillColor(16, 65, 112); doc.rect(0, 0, pageW, 31, "F");
-      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("DBS AIR", x, 13);
-      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.text("PROPOSTA COMERCIAL", x, 21);
-      doc.text(String(q.id || "ORÇAMENTO"), pageW - x, 14, { align: "right" });
-      doc.text("Emitida em " + (q.data || new Date().toLocaleDateString("pt-BR")), pageW - x, 21, { align: "right" });
-      y = 41; doc.setTextColor(25, 45, 66);
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("DBS AIR REFRIGERAÇÃO", x, 11);
+      doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.text("DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09", x, 16);
+      doc.text("assistencia@dbsair.com.br · (21) 99825-6991", x, 20);
+      doc.text("Rua Nabor do Rego, 481 / 2908, Ramos, Rio de Janeiro - RJ · CEP 21031-720", x, 24);
+      doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("PROPOSTA COMERCIAL", x, 29);
+      doc.text(String(q.id || "ORÇAMENTO"), pageW - x, 13, { align: "right" });
+      doc.setFontSize(8); doc.setFont("helvetica", "normal");
+      doc.text("Emissão: " + (q.data || new Date().toLocaleDateString("pt-BR")), pageW - x, 19, { align: "right" });
+      doc.text("Validade: " + (q.validade || "A combinar"), pageW - x, 24, { align: "right" });
+      y = 38; doc.setTextColor(25, 45, 66);
     }
     function check(needed) { if (y + needed > pageH - 18) { doc.addPage(); header(); } }
     header(); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("CLIENTE", x, y); y += 6;
     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
     var clientName = C.nome || C.razaoSocial || C.nomeFantasia || "Cliente";
     doc.text(doc.splitTextToSize(String(clientName), maxW), x, y); y += 6;
-    var details = [C.cnpj ? "CNPJ: " + C.cnpj : "", C.email ? "E-mail: " + C.email : "", C.telefone ? "Telefone: " + C.telefone : "", C.endereco || C.logradouro || ""].filter(Boolean);
+    var details = [C.filial || C.nomeFantasia ? "Filial / unidade: " + (C.filial || C.nomeFantasia) : "", (C.cnpj || C.cpf) ? (C.cnpj ? "CNPJ: " + C.cnpj : "CPF: " + C.cpf) : "", C.email ? "E-mail: " + C.email : "", C.telefone ? "Telefone: " + C.telefone : "", [C.endereco || C.logradouro, C.numero ? "nº " + C.numero : "", C.complemento, C.bairro, C.cidade || C.municipio, C.estado || C.uf, C.cep ? "CEP " + C.cep : ""].filter(Boolean).join(", ")].filter(Boolean);
     details.forEach(function (t) { var lines = doc.splitTextToSize(String(t), maxW); check(lines.length * 5 + 1); doc.text(lines, x, y); y += lines.length * 5; });
     y += 5; check(12); doc.setFont("helvetica", "bold"); doc.text("ITENS E VALORES", x, y); y += 7;
     doc.setFillColor(230, 239, 248); doc.rect(x, y - 4, maxW, 8, "F"); doc.setFontSize(8);
-    doc.text("DESCRIÇÃO", x + 2, y + 1); doc.text("QTD.", 128, y + 1, { align: "right" }); doc.text("UNITÁRIO", 157, y + 1, { align: "right" }); doc.text("TOTAL", pageW - x - 2, y + 1, { align: "right" }); y += 9;
+    doc.text("DESCRIÇÃO / ESCOPO", x + 2, y + 1); doc.text("UN/QTD", 119, y + 1, { align: "right" }); doc.text("UNITÁRIO", 153, y + 1, { align: "right" }); doc.text("TOTAL", pageW - x - 2, y + 1, { align: "right" }); y += 9;
     items.forEach(function (it) {
       var lines = doc.splitTextToSize(String(it.descricao || "Item"), 86);
       check(Math.max(8, lines.length * 4.5 + 4));
       doc.setFont("helvetica", "normal"); doc.text(lines, x + 2, y);
-      doc.text(String(it.quantidade || 1), 128, y, { align: "right" });
-      doc.text(money(it.valorUnitario).replace(/\s/g, " "), 157, y, { align: "right" });
+      doc.text(String(it.unidade || "UN") + " / " + String(it.quantidade || 1), 119, y, { align: "right" });
+      doc.text(money(it.valorUnitario).replace(/\s/g, " "), 153, y, { align: "right" });
       doc.text(money(num(it.quantidade || 1) * num(it.valorUnitario)).replace(/\s/g, " "), pageW - x - 2, y, { align: "right" });
       y += Math.max(7, lines.length * 4.5 + 3); doc.setDrawColor(220, 229, 237); doc.line(x, y - 2, pageW - x, y - 2);
     });
-    y += 4; check(26); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text("Subtotal: " + money(q.subtotal), pageW - x, y, { align: "right" }); y += 6;
-    doc.text("Desconto: " + money(q.desconto), pageW - x, y, { align: "right" }); y += 7;
+    y += 4; check(26); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text("Subtotal de produtos: " + money(q.subtotalProdutos != null ? q.subtotalProdutos : items.filter(function (it) { return it.tipo === "peca"; }).reduce(function (n, it) { return n + num(it.quantidade) * num(it.valorUnitario); }, 0)), pageW - x, y, { align: "right" }); y += 5;
+    doc.text("Subtotal de serviços: " + money(q.subtotalServicos != null ? q.subtotalServicos : items.filter(function (it) { return it.tipo !== "peca"; }).reduce(function (n, it) { return n + num(it.quantidade) * num(it.valorUnitario); }, 0)), pageW - x, y, { align: "right" }); y += 5;
+    doc.text("Subtotal geral: " + money(q.subtotal), pageW - x, y, { align: "right" }); y += 5;
+    doc.text("Descontos: " + money(q.desconto), pageW - x, y, { align: "right" }); y += 7;
     doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(16, 65, 112); doc.text("TOTAL: " + money(q.total), pageW - x, y, { align: "right" }); y += 10;
     doc.setTextColor(25, 45, 66); doc.setFontSize(9); doc.setFont("helvetica", "bold"); check(15); doc.text("VALIDADE E CONDIÇÕES", x, y); y += 5;
     doc.setFont("helvetica", "normal"); var terms = "Validade: " + (q.validade || "A combinar") + "\nPagamento: " + (q.pagamento || "A combinar");
     var notes = String(q.desc || "").trim(); if (notes) terms += "\nObservações: " + notes;
     var termLines = doc.splitTextToSize(terms, maxW); check(termLines.length * 4.5 + 8); doc.text(termLines, x, y); y += termLines.length * 4.5 + 8;
     check(20); doc.setDrawColor(150, 170, 190); doc.line(x, y + 6, x + 70, y + 6); doc.line(pageW - x - 70, y + 6, pageW - x, y + 6);
-    doc.setFontSize(8); doc.text("DBS AIR · Proposta comercial", x, pageH - 8); doc.text("Página " + doc.internal.getCurrentPageInfo().pageNumber, pageW - x, pageH - 8, { align: "right" });
+    doc.setFontSize(8); doc.text("Nome e assinatura do responsável", x, y + 11); doc.text("Data: ____/____/________", pageW - x - 70, y + 11); doc.text("DBS AIR · Proposta comercial", x, pageH - 8); doc.text("Página " + doc.internal.getCurrentPageInfo().pageNumber, pageW - x, pageH - 8, { align: "right" });
     doc.save(String(q.id || "proposta").replace(/[^a-z0-9_-]/gi, "_") + ".pdf");
   }
   var style = document.createElement("style");
-  style.textContent = ".oq-shell,.oq-list-card{padding:20px;margin-bottom:18px;border:1px solid #dbe7f2;border-radius:12px;background:#fff}.oq-heading,.oq-items-head,.oq-list-head,.oq-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.oq-heading{border-bottom:1px solid #e4edf5;padding-bottom:15px;margin-bottom:16px}.oq-heading h2{font-size:18px;color:#123e68}.oq-heading p{font-size:12px;color:#647b92;margin-top:4px}.oq-brand{font-weight:900;color:#1769aa;border:1px solid #b9d7ef;border-radius:8px;padding:8px 12px}.oq-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.oq-grid label,.oq-notes-label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#36536f}.oq-grid input,.oq-grid select,.oq-notes-label textarea,.oq-items input,.oq-items select,.oq-list-head select{width:100%;min-width:0;border:1px solid #cbd9e7;border-radius:7px;background:#fff;color:#163754;padding:9px;font-size:12px}.oq-items-head{margin:22px 0 10px}.oq-items-head h3,.oq-list-head h3{font-size:14px;color:#163e65}.oq-table-wrap{width:100%;overflow:auto}.oq-items{width:100%;min-width:780px;border-collapse:collapse}.oq-items th,.oq-items td{padding:8px 6px;border-bottom:1px solid #e5edf5;text-align:left;font-size:11px}.oq-items th{background:#f1f7fc;color:#3c5a76}.oq-items td:nth-child(3){width:78px}.oq-items td:nth-child(4){width:130px}.oq-items td:nth-child(5){min-width:95px}.oq-notes-label{margin-top:16px}.oq-notes-label textarea{resize:vertical}.oq-totals{display:flex;justify-content:flex-end;gap:22px;align-items:center;flex-wrap:wrap;margin:16px 0;padding:14px;background:#f2f8fd;border:1px solid #d8e8f5;border-radius:9px;font-size:12px;color:#49627b}.oq-totals strong{display:block;color:#163e65;font-size:14px;margin-top:4px}.oq-totals .oq-grand strong{font-size:20px;color:#0b67a5}.oq-actions{justify-content:flex-end}.oq-list-head{margin-bottom:14px}.oq-row-actions{white-space:nowrap}.oq-row-actions button{margin:2px}@media(max-width:900px){.oq-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.oq-shell,.oq-list-card{padding:12px}.oq-grid{grid-template-columns:1fr}.oq-totals{justify-content:space-between;gap:12px}.oq-totals .oq-grand{width:100%}.oq-heading h2{font-size:16px}}";
+  style.textContent = ".oq-shell,.oq-list-card{padding:20px;margin-bottom:18px;border:1px solid #dbe7f2;border-radius:12px;background:#fff}.oq-heading,.oq-items-head,.oq-list-head,.oq-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.oq-heading{border-bottom:1px solid #e4edf5;padding-bottom:15px;margin-bottom:16px}.oq-heading h2{font-size:18px;color:#123e68}.oq-heading p{font-size:12px;color:#647b92;margin-top:4px}.oq-brand{font-weight:900;color:#1769aa;border:1px solid #b9d7ef;border-radius:8px;padding:8px 12px}.oq-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.oq-client-details{margin-top:10px;padding:12px 14px;border-radius:8px;background:#f5f9fd;border:1px solid #dce8f3;color:#49627b;font-size:11px;line-height:1.7;overflow-wrap:anywhere}.oq-grid label,.oq-notes-label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#36536f}.oq-grid input,.oq-grid select,.oq-notes-label textarea,.oq-items input,.oq-items select,.oq-list-head select{width:100%;min-width:0;border:1px solid #cbd9e7;border-radius:7px;background:#fff;color:#163754;padding:9px;font-size:12px}.oq-items-head{margin:22px 0 10px}.oq-items-head h3,.oq-list-head h3{font-size:14px;color:#163e65}.oq-table-wrap{width:100%;overflow:auto}.oq-items{width:100%;min-width:780px;border-collapse:collapse}.oq-items th,.oq-items td{padding:8px 6px;border-bottom:1px solid #e5edf5;text-align:left;font-size:11px}.oq-items th{background:#f1f7fc;color:#3c5a76}.oq-items td:nth-child(3){width:78px}.oq-items td:nth-child(4){width:130px}.oq-items td:nth-child(5){min-width:95px}.oq-notes-label{margin-top:16px}.oq-notes-label textarea{resize:vertical}.oq-totals{display:flex;justify-content:flex-end;gap:22px;align-items:center;flex-wrap:wrap;margin:16px 0;padding:14px;background:#f2f8fd;border:1px solid #d8e8f5;border-radius:9px;font-size:12px;color:#49627b}.oq-totals strong{display:block;color:#163e65;font-size:14px;margin-top:4px}.oq-totals .oq-grand strong{font-size:20px;color:#0b67a5}.oq-actions{justify-content:flex-end}.oq-list-head{margin-bottom:14px}.oq-row-actions{white-space:nowrap}.oq-row-actions button{margin:2px}#oq-accept-modal{position:fixed;inset:0;z-index:99999;background:rgba(8,25,43,.68);display:flex;align-items:center;justify-content:center;padding:18px}#oq-accept-modal[hidden]{display:none}.oq-accept-panel{width:min(760px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.28);display:grid;gap:14px;color:#173b5d}.oq-accept-head,.oq-accept-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.oq-accept-head h3{font-size:18px}.oq-accept-head p,.oq-accept-note{font-size:12px;color:#647b92;margin-top:4px}.oq-accept-panel label{display:grid;gap:6px;font-size:12px;font-weight:800}.oq-accept-panel input,.oq-accept-panel textarea{width:100%;padding:10px;border:1px solid #cbd9e7;border-radius:8px;font:inherit}.oq-accept-panel canvas{display:block;width:100%;height:150px;border:1px dashed #8aa6bd;border-radius:8px;background:#fff;touch-action:none}.oq-accept-actions span{flex:1}@media(max-width:900px){.oq-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.oq-shell,.oq-list-card{padding:12px}.oq-grid{grid-template-columns:1fr}.oq-totals{justify-content:space-between;gap:12px}.oq-totals .oq-grand{width:100%}.oq-heading h2{font-size:16px}}";
   document.head.appendChild(style);
   function start() { if (typeof ERP_STATE !== "undefined" && $("tab-orcamentos")) mount(); else setTimeout(start, 200); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
