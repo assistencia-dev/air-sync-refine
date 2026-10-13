@@ -140,7 +140,11 @@ assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma
 assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
 assert.match(quoteBuilder, /Validade e condições|VALIDADE E CONDIÇÕES/, "O PDF deve exibir validade e condições comerciais.");
-assert.doesNotMatch(quoteBuilder, /ERP_STATE\.pecas\s*\.push|ERP_STATE\.estoque\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
+assert.match(quoteBuilder, /function catalog\s*\(/, "A proposta deve consultar o catálogo já cadastrado.");
+assert.match(quoteBuilder, /x\.venda/, "O seletor deve usar o preço de venda do cadastro de estoque existente.");
+assert.match(quoteBuilder, /oq-quick-product/, "A proposta deve oferecer cadastro rápido de produto.");
+assert.match(quoteBuilder, /ERP_STATE\.pecas\.push\(product\)/, "O cadastro rápido deve incluir o produto no cadastro compartilhado de peças.");
+assert.match(quoteBuilder, /logo-dbs-air\.jpg/, "O cabeçalho da proposta e o PDF devem usar a logo oficial DBS Air.");
 
 assert.match(quoteBuilder, /DBS AIR REFRIGERACAO LTDA - ME/, "O PDF deve conter a razão social oficial do emissor.");
 assert.match(quoteBuilder, /13\.352\.707\/0001-09/, "O PDF deve conter o CNPJ oficial do emissor.");
