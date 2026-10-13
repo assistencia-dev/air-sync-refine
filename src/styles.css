@@ -231,14 +231,14 @@ img, video, canvas, svg {
 
 
 /* Login nativo DBS AIR — refinamento premium e responsivo, sem alterar autenticação. */
-body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 {
+body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 {
   min-height: 100dvh;
   background: #f3f7fc;
 }
-body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child {
+body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child {
   background: linear-gradient(135deg, #071d38 0%, #0b3470 58%, #0879b8 100%) !important;
 }
-body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:last-child {
+body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%) !important;
 }
 body:has(input[autocomplete="username"]) input[autocomplete="username"],
@@ -273,12 +273,12 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
   min-height: 42px;
 }
 @media (max-width: 1023px) {
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 {
     display: flex !important;
     flex-direction: column;
     min-height: 100dvh;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child {
     display: flex !important;
     min-height: 0;
     padding: 22px 22px 24px !important;
@@ -286,24 +286,24 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
     border-radius: 0 0 24px 24px;
     box-shadow: 0 8px 26px rgba(8, 29, 52, .12);
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child > div:first-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child > div:first-child {
     display: none;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child > div:last-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child > div:last-child {
     display: none;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child > div:nth-child(2) {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child > div:nth-child(2) {
     position: static;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:last-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child {
     flex: 1;
     justify-content: flex-start;
     padding: 26px 22px 30px !important;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:last-child > div {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child > div {
     max-width: 440px;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:last-child > div > div:first-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child > div > div:first-child {
     margin-bottom: 20px;
   }
   body:has(input[autocomplete="username"]) h2 {
@@ -312,10 +312,10 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
   }
 }
 @media (max-width: 420px) {
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:first-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child {
     padding: 18px 16px 20px !important;
   }
-  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\\:grid-cols-2 > div:last-child {
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child {
     padding: 22px 18px 26px !important;
   }
   body:has(input[autocomplete="username"]) form {
