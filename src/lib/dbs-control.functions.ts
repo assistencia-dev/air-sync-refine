@@ -7,12 +7,13 @@ type DbsControlUser = {
   company_id: string | null;
   role_key: string;
   status: string;
+  created_by?: string | null;
 };
 
 async function requireDbsControlUser(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, company_id, role_key, status")
+    .select("id, company_id, role_key, status, created_by")
     .eq("auth_id", context.userId)
     .maybeSingle();
 
@@ -23,6 +24,38 @@ async function requireDbsControlUser(context: { userId: string }) {
   if (!allowed.includes(data.role_key)) throw new Error("Acesso ao DBS CONTROL não autorizado.");
 
   return data as DbsControlUser;
+}
+
+async function resolveDbsControlScope(user: DbsControlUser) {
+  if (user.company_id) return { scopeKey: `company:${user.company_id}`, ownerUserId: user.id, companyId: user.company_id };
+  if (user.role_key !== "COLABORADOR") return { scopeKey: `user:${user.id}`, ownerUserId: user.id, companyId: null as string | null };
+  if (user.created_by) {
+    const { data: creator, error } = await supabaseAdmin.from("users").select("id, company_id, role_key, status").eq("id", user.created_by).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (creator && creator.status === "ativo" && ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(creator.role_key)) {
+      return creator.company_id
+        ? { scopeKey: `company:${creator.company_id}`, ownerUserId: creator.id, companyId: creator.company_id as string }
+        : { scopeKey: `user:${creator.id}`, ownerUserId: creator.id, companyId: null as string | null };
+    }
+  }
+  const { data: admins, error: adminError } = await supabaseAdmin.from("users").select("id, company_id, role_key").eq("status", "ativo").in("role_key", ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"]);
+  if (adminError) throw new Error(adminError.message);
+  const ids = (admins ?? []).map((a: any) => String(a.id));
+  const { data: snapshots, error: snapshotError } = ids.length
+    ? await supabaseAdmin.from("dbs_control_snapshots").select("scope_key, owner_user_id, company_id, updated_at").in("owner_user_id", ids).order("updated_at", { ascending: false })
+    : { data: [], error: null };
+  if (snapshotError) throw new Error(snapshotError.message);
+  const candidates = (snapshots ?? []).filter((row: any) => {
+    const owner: any = (admins ?? []).find((a: any) => String(a.id) === String(row.owner_user_id));
+    return !user.company_id || String(row.company_id ?? owner?.company_id ?? "") === String(user.company_id);
+  });
+  if (candidates.length === 1) {
+    const row: any = candidates[0];
+    const owner: any = (admins ?? []).find((a: any) => String(a.id) === String(row.owner_user_id));
+    return { scopeKey: String(row.scope_key), ownerUserId: String(row.owner_user_id), companyId: (row.company_id ?? owner?.company_id ?? null) as string | null };
+  }
+  if (candidates.length > 1) throw new Error("Há mais de uma base administrativa possível. Vincule o colaborador à empresa correta no RH.");
+  throw new Error("A base compartilhada ainda não foi criada pela administração. Os dados locais foram preservados.");
 }
 
 function normalizeState(state: Record<string, unknown>) {
@@ -511,12 +544,12 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsControlUser(context);
-    const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+    const scope = await resolveDbsControlScope(user);
 
     const { data, error } = await supabaseAdmin
       .from("dbs_control_snapshots")
       .select("state, state_version, updated_at")
-      .eq("scope_key", scopeKey)
+      .eq("scope_key", scope.scopeKey)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
@@ -549,10 +582,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
-    const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+    const scope = await resolveDbsControlScope(user);
 
     let stateToSave = data.state;
-    let ownerUserId = user.id;
+    let ownerUserId = scope.ownerUserId;
 
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
@@ -561,7 +594,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       const { data: current, error: currentError } = await supabaseAdmin
         .from("dbs_control_snapshots")
         .select("state, owner_user_id, company_id")
-        .eq("scope_key", scopeKey)
+        .eq("scope_key", scope.scopeKey)
         .maybeSingle();
 
       if (currentError) throw new Error(currentError.message);
@@ -577,8 +610,8 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     }
 
     const payload = {
-      scope_key: scopeKey,
-      company_id: user.company_id ?? null,
+      scope_key: scope.scopeKey,
+      company_id: scope.companyId,
       owner_user_id: ownerUserId,
       state: stateToSave,
       state_version: 2,
