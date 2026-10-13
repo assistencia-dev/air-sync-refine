@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   CheckCircle2,
@@ -17,6 +17,8 @@ import {
   Menu,
   X,
   ShieldCheck,
+  Download,
+  Smartphone,
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -30,6 +32,26 @@ const defaultMsg =
   "Olá. Gostaria de solicitar uma avaliação técnica para contrato de manutenção/PMOC na minha empresa.";
 
 function Index() {
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [isIosDevice, setIsIosDevice] = useState(false);
+  useEffect(() => {
+    const ua = window.navigator.userAgent;
+    setIsIosDevice(/iPad|iPhone|iPod/.test(ua) && !(window as Window & { MSStream?: unknown }).MSStream);
+    const onPrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event); };
+    const onInstalled = () => { setInstallPrompt(null); setShowInstallHelp(false); };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); };
+  }, []);
+  const handleInstallApp = async () => {
+    if (installPrompt) {
+      const promptEvent = installPrompt as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }> };
+      await promptEvent.prompt();
+      await promptEvent.userChoice;
+      setInstallPrompt(null);
+    } else { setShowInstallHelp(true); }
+  };
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const toggleFaq = (i: number) => setExpandedFaq(expandedFaq === i ? null : i);
@@ -97,6 +119,7 @@ function Index() {
             >
               <Phone className="w-4 h-4" /> Solicitar Orçamento
             </a>
+            <button type="button" onClick={handleInstallApp} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm shadow-sm transition hover:-translate-y-0.5" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }} aria-label="Baixar ou instalar o aplicativo DBS AIR"><Download className="w-4 h-4" /> Baixe o App</button>
           </nav>
 
           {/* Mobile menu button */}
@@ -119,6 +142,7 @@ function Index() {
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
               <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Portal do Cliente</a>
+<button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
               <a
                 href={wa(defaultMsg)}
                 target="_blank"
@@ -132,6 +156,16 @@ function Index() {
           </div>
         )}
       </header>
+
+      {showInstallHelp && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="install-app-title">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: "#DBEAFE", color: "#1E3A8A" }}><Smartphone className="h-6 w-6" /></div><div><h2 id="install-app-title" className="text-xl font-bold" style={{ color: "#0F172A" }}>Instale o DBS AIR</h2><p className="text-sm text-slate-500">Acesso rápido pela tela inicial</p></div></div>
+            {isIosDevice ? <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-700"><li>Abra esta página no Safari.</li><li>Toque em <strong>Compartilhar</strong> (quadrado com seta para cima).</li><li>Escolha <strong>Adicionar à Tela de Início</strong> e toque em <strong>Adicionar</strong>.</li></ol> : <div className="space-y-2 text-sm leading-relaxed text-slate-700"><p>Se o navegador oferecer a opção, abra o menu do navegador e escolha <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</p><p>Se essa opção não aparecer, tente pelo Google Chrome. A instalação depende do suporte do navegador e dos requisitos do PWA.</p></div>}
+            <button type="button" onClick={() => setShowInstallHelp(false)} className="mt-6 w-full rounded-lg px-4 py-3 font-semibold text-white" style={{ background: "#1E3A8A" }}>Entendi</button>
+          </div>
+        </div>
+      )}
 
       {/* ============ HERO ============ */}
       <section id="top" className="py-20 md:py-28 relative overflow-hidden" style={{ background: "linear-gradient(135deg,#0F172A 0%,#1E3A8A 100%)" }}>
