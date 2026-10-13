@@ -52,8 +52,8 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     if (user.role_key !== "FINANCEIRO_LEITURA" && user.role_key !== "SUPER_ADMIN") {
       throw new Error("Este painel é exclusivo para acompanhamento financeiro.");
     }
-    const scopeKey = user.company_id ? `company:${user.company_id}` : null;
-    if (!scopeKey) throw new Error("A empresa deste acesso não está vinculada. Solicite ao administrador a configuração do vínculo.");
+    const scopeKey = user.company_id ? "company:" + user.company_id : null;
+    if (!scopeKey) throw new Error("Este acesso ainda precisa ser vinculado à empresa do financeiro pelo administrador.");
     const { data: snapshot, error } = await admin.from("treasury_snapshots")
       .select("state, updated_at").eq("scope_key", scopeKey).maybeSingle();
     if (error) throw new Error("Falha ao consultar o financeiro: " + error.message);
