@@ -197,10 +197,8 @@ img, video, canvas, svg {
     min-width: 0;
     max-width: 100%;
   }
-  input, select, textarea, button {
-    font-size: max(16px, 1em);
-  }
   input, select, textarea {
+    font-size: max(16px, 1em);
     min-width: 0;
     max-width: 100%;
   }
