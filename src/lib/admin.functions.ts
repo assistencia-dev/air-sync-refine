@@ -191,7 +191,8 @@ export const createClientUser = createServerFn({ method: "POST" })
       full_name: string;
       email: string;
       cpf?: string;
-      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
+      role_key: "SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
+      create_company?: boolean;
       unit_id?: string | null;
       company_id?: string | null;
       password: string;
@@ -202,15 +203,16 @@ export const createClientUser = createServerFn({ method: "POST" })
     }) => {
       if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
       if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
+      if (!["SUPER_ADMIN", "GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
         throw new Error("Papel inválido.");
       }
       if (!input?.password || input.password.length < 8)
         throw new Error("Senha temporária muito curta.");
       const company_id = input.company_id || null;
+      const create_company = !!input.create_company && input.role_key !== "COLABORADOR" && input.role_key !== "SUPER_ADMIN";
       const new_company_name = input.new_company_name?.trim() || null;
       const new_company_cnpj = input.new_company_cnpj?.trim() || null;
-      if (input.role_key !== "COLABORADOR" && !company_id && (!new_company_name || !new_company_cnpj)) {
+      if (create_company && !company_id && (!new_company_name || !new_company_cnpj)) {
         throw new Error("Para cliente novo, informe Nome da Empresa e CNPJ.");
       }
       return {
@@ -218,6 +220,7 @@ export const createClientUser = createServerFn({ method: "POST" })
         email: input.email.trim().toLowerCase(),
         cpf: input.cpf?.replace(/\D+/g, "") || null,
         role_key: input.role_key,
+        create_company,
         unit_id: input.unit_id || null,
         company_id,
         password: input.password,
@@ -245,7 +248,7 @@ export const createClientUser = createServerFn({ method: "POST" })
     let isUnitManager = data.is_unit_manager;
 
     // Cliente novo: cria empresa + unidade automaticamente
-    if (!finalCompanyId && data.role_key !== "COLABORADOR") {
+    if (data.create_company && !finalCompanyId && data.role_key !== "COLABORADOR" && data.role_key !== "SUPER_ADMIN") {
       const { data: newCompany, error: companyErr } = await supabaseAdmin
         .from("companies")
         .insert({
