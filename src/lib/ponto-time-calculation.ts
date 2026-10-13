@@ -7,7 +7,7 @@
 export function minutesFromTime(value: string | null | undefined): number | null {
   if (!value) return null;
 
-  const plainTime = value.match(/^([01]\\d|2[0-3]):([0-5]\\d)(?::[0-5]\\d(?:\\.\\d+)?)?$/);
+  const plainTime = value.match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/);
   if (plainTime) return Number(plainTime[1]) * 60 + Number(plainTime[2]);
 
   if (!/[T ]/.test(value)) return null;
