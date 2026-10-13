@@ -5201,5 +5201,166 @@
   else boot();
 })();
 </script>
+
+<!-- Mobile selector reliability: full client search + touch-safe equipment selection. -->
+<style id="dbs-mobile-selector-fix">
+  #dbs-client-options-mobile {
+    position: absolute; inset-inline: 0; top: calc(100% + 5px); z-index: 10050;
+    max-height: min(52vh, 360px); overflow-y: auto; overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch; background: #fff; border: 1px solid #cbd8e8;
+    border-radius: 12px; box-shadow: 0 14px 36px rgba(12, 39, 69, .2); padding: 5px;
+  }
+  #dbs-client-options-mobile[hidden] { display: none !important; }
+  #dbs-client-options-mobile .dbs-client-option {
+    display: block; width: 100%; min-height: 48px; padding: 10px 12px; border: 0;
+    border-radius: 8px; background: #fff; color: #173555; text-align: left;
+    font: inherit; cursor: pointer; touch-action: manipulation; white-space: normal;
+  }
+  #dbs-client-options-mobile .dbs-client-option:active,
+  #dbs-client-options-mobile .dbs-client-option:focus { background: #edf6ff; outline: 2px solid #8dbde9; }
+  #dbs-client-options-mobile .dbs-client-option strong { display:block; font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
+  #dbs-client-options-mobile .dbs-client-option small { display:block; margin-top:3px; color:#627891; font-size:12px; overflow-wrap:anywhere; }
+  #dbs-client-options-mobile .dbs-client-empty { padding:14px 12px; color:#627891; font-size:13px; }
+  #tab-nova-os .os-premium-client { position:relative; z-index:30; min-width:0; }
+  #tab-nova-os .os-premium-equipment { position:relative; z-index:20; min-width:0; }
+  #dbs-equipment-picker { position:relative; }
+  #os-equipment-options {
+    z-index:10040; max-height:min(48vh,340px); overflow-y:auto; overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch; touch-action:pan-y;
+  }
+  #os-equipment-options .dbs-equipment-option { min-height:48px; touch-action:manipulation; }
+  @media (max-width: 640px) {
+    #dbs-client-options-mobile { max-height:46vh; }
+    #os-client-search, #os-equipment-search { min-height:48px !important; font-size:16px !important; }
+    #os-equipment-options { max-height:42vh; }
+  }
+</style>
+<script id="dbs-mobile-selector-fix-script">
+(function(){
+  function normalize(value) {
+    return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+  }
+  function clients() {
+    return (Array.isArray(window.ERP_STATE && ERP_STATE.clientes) ? ERP_STATE.clientes : [])
+      .filter(c => c && c.id != null)
+      .slice()
+      .sort((a,b) => String(a.nome || a.nomeFantasia || a.razaoSocial || '').localeCompare(String(b.nome || b.nomeFantasia || b.razaoSocial || ''), 'pt-BR'));
+  }
+  function clientName(c) { return String(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome').trim(); }
+  function clientCnpj(c) { return String(c.cnpj || c.documento || '').trim(); }
+  function label(c) { return clientCnpj(c) ? clientName(c) + ' — ' + clientCnpj(c) : clientName(c); }
+  function install() {
+    const input = document.getElementById('os-client-search');
+    const select = document.getElementById('os-select-cliente');
+    const group = input && input.closest('.os-premium-client');
+    if (!input || !select || !group || group.dataset.mobilePickerReady === 'true') return;
+    group.dataset.mobilePickerReady = 'true';
+    input.removeAttribute('list');
+    input.setAttribute('role','combobox');
+    input.setAttribute('aria-autocomplete','list');
+    input.setAttribute('aria-expanded','false');
+    input.setAttribute('aria-controls','dbs-client-options-mobile');
+    let panel = document.getElementById('dbs-client-options-mobile');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'dbs-client-options-mobile';
+      panel.setAttribute('role','listbox');
+      panel.hidden = true;
+      group.appendChild(panel);
+    }
+    function close(){ panel.hidden = true; input.setAttribute('aria-expanded','false'); }
+    function draw(){
+      const term = normalize(input.value);
+      const list = clients().filter(c => !term || normalize([clientName(c),clientCnpj(c),c.razaoSocial,c.nomeFantasia,c.email,c.telefone].filter(Boolean).join(' ')).includes(term));
+      panel.innerHTML = list.length ? list.map(c =>
+        '<button type="button" class="dbs-client-option" role="option" data-client-id="' +
+        String(c.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') +
+        '"><strong>' + escapeClient(clientName(c)) + '</strong>' +
+        (clientCnpj(c) ? '<small>' + escapeClient(clientCnpj(c)) + '</small>' : '') + '</button>'
+      ).join('') : '<div class="dbs-client-empty">Nenhum cliente encontrado. Confira o nome ou CNPJ.</div>';
+      panel.hidden = false;
+      input.setAttribute('aria-expanded','true');
+    }
+    function escapeClient(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function clearDependentData(){
+      const state = window.__DBS_NOVA_OS_SELECTION__;
+      if (state) { state.siteId = ''; if (state.equipmentIds && state.equipmentIds.clear) state.equipmentIds.clear(); }
+      if (typeof window.atualizarEquipamentosDoClienteOS === 'function') window.atualizarEquipamentosDoClienteOS();
+    }
+    function choose(id){
+      const found = clients().find(c => String(c.id) === String(id));
+      if (!found) return;
+      const changed = String(select.value || '') !== String(found.id);
+      select.value = String(found.id);
+      input.value = label(found);
+      close();
+      if (changed) clearDependentData();
+      else if (typeof window.atualizarEquipamentosDoClienteOS === 'function') window.atualizarEquipamentosDoClienteOS();
+    }
+    panel.addEventListener('pointerdown', function(event){
+      const option = event.target.closest('[data-client-id]');
+      if (!option) return;
+      event.preventDefault();
+      choose(option.getAttribute('data-client-id'));
+    });
+    input.addEventListener('focus', draw);
+    input.addEventListener('click', draw);
+    input.addEventListener('input', function(){
+      const current = clients().find(c => String(c.id) === String(select.value || ''));
+      if (!current || normalize(label(current)) !== normalize(input.value)) {
+        if (select.value) { select.value = ''; clearDependentData(); }
+      }
+      draw();
+    });
+    input.addEventListener('keydown', function(event){
+      if (event.key === 'Escape') { close(); return; }
+      if (event.key === 'ArrowDown' && panel.hidden) { event.preventDefault(); draw(); return; }
+      if (event.key === 'Enter' && !panel.hidden) {
+        const first = panel.querySelector('[data-client-id]');
+        if (first) { event.preventDefault(); choose(first.getAttribute('data-client-id')); }
+      }
+    });
+    document.addEventListener('pointerdown', function(event){
+      if (!group.contains(event.target)) close();
+    });
+    // Rebuild safely after the database-backed state becomes available or refreshes.
+    const previousUpdate = window.atualizarSelects;
+    if (typeof previousUpdate === 'function' && !previousUpdate.__mobilePickerWrapped) {
+      const wrapped = function(){
+        const result = previousUpdate.apply(this, arguments);
+        if (select.value) {
+          const chosen = clients().find(c => String(c.id) === String(select.value));
+          if (chosen && !input.value) input.value = label(chosen);
+        }
+        return result;
+      };
+      wrapped.__mobilePickerWrapped = true;
+      window.atualizarSelects = wrapped;
+    }
+    // Existing inline handler now drives the full, touch-friendly list instead of native datalist.
+    window.sincronizarClienteOSPorBusca = function(){ draw(); };
+  }
+  function bindEquipmentTouch(){
+    const panel = document.getElementById('os-equipment-options');
+    if (!panel || panel.dataset.touchPickerReady === 'true') return;
+    panel.dataset.touchPickerReady = 'true';
+    panel.addEventListener('pointerdown', function(event){
+      const option = event.target.closest('[data-equipment-id]');
+      if (!option) return;
+      event.preventDefault();
+      if (typeof window.selecionarEquipamentoOS === 'function') window.selecionarEquipamentoOS(option.getAttribute('data-equipment-id'));
+    });
+  }
+  function boot(){ install(); bindEquipmentTouch(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  let tries = 0;
+  const retry = setInterval(function(){
+    boot();
+    if ((document.getElementById('os-client-search') && document.getElementById('dbs-client-options-mobile') && document.getElementById('os-equipment-options')) || ++tries > 20) clearInterval(retry);
+  }, 250);
+})();
+</script>
+
 </body>
 </html>
