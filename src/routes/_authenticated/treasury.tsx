@@ -202,7 +202,7 @@ function TreasuryPage() {
       </header>
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100vh - 64px)" }}>
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50"><div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Carregando DBS TREASURY Enterprise Executive Suite…</p></div></div>}
-        <iframe ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} onLoad={() => setLoading(false)} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100vh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
+        <iframe ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} onLoad={() => setLoading(false)} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", minHeight: "calc(100vh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
     </div>
   );
