@@ -370,6 +370,7 @@ function DbsControlPage() {
         if (!cloudReadyRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
+          saveTimerRef.current = null;
           const state = pendingStateRef.current;
           if (!state) return;
           try {
