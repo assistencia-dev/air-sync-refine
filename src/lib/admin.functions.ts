@@ -72,8 +72,7 @@ export const updateClientUser = createServerFn({ method: "POST" })
       full_name: string;
       email: string;
       cpf?: string | null;
-      role_key: "SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
-      create_company?: boolean;
+      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
       company_id?: string | null;
       unit_id?: string | null;
       is_unit_manager?: boolean;
@@ -192,7 +191,8 @@ export const createClientUser = createServerFn({ method: "POST" })
       full_name: string;
       email: string;
       cpf?: string;
-      role_key: "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
+      role_key: "SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR";
+      create_company?: boolean;
       unit_id?: string | null;
       company_id?: string | null;
       password: string;
