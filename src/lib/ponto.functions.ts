@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isValidIsoDate } from "@/lib/ponto-date-validation";
+import { minutesFromTime } from "@/lib/ponto-time-calculation";
 
 const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
@@ -131,13 +132,6 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   return record;
 });
 
-
-function minutesFromTime(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const match = value.match(/(?:T| )([01]\d|2[0-3]):([0-5]\d)/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
 
 function durationBetween(start: string | null | undefined, end: string | null | undefined): number {
   const a = minutesFromTime(start);
