@@ -459,7 +459,7 @@ function DbsControlPage() {
           <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
         </section>
       )}
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-2.5rem)] w-full border-0" allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-2.5rem)] w-full border-0" style={{ height: "calc(100dvh - 2.5rem)" }} allow="camera; geolocation" />
     </main>
   );
 }
