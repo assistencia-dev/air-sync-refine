@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "/login",
   "name": "DBS AIR — Gestão Integrada",
   "short_name": "DBS AIR",
   "description": "Plataforma integrada DBS Air Refrigeração",
   "lang": "pt-BR",
-  "start_url": "/",
+  "start_url": "/login",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
