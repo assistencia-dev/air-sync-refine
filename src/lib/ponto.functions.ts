@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { isValidIsoDate } from "@/lib/ponto-date-validation";
 
 const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
