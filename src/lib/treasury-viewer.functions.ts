@@ -31,7 +31,7 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
     if (authError || !authData.user) throw new Error(authError?.message || "Não foi possível criar a autenticação.");
     const { error: profileError } = await admin.from("users").insert({
       auth_id: authData.user.id, username: data.username, full_name: data.full_name,
-      email: data.email, role_key: "FINANCEIRO_LEITURA", status: "ativo", created_by: user.id,
+      email: data.email, role_key: "FINANCEIRO_LEITURA" as any, status: "ativo", created_by: user.id,
       company_id: user.company_id ?? null
     });
     if (profileError) {
