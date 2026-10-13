@@ -132,11 +132,6 @@ function AdminPage() {
           >
             <Wrench className="h-4 w-4" /> DBS CONTROL
           </button>
-          {profile.data?.role_key === "SUPER_ADMIN" && (
-            <button onClick={() => navigate({ to: "/financeiro-acesso" })} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white">
-              <ShieldCheck className="h-4 w-4" /> Acesso financeiro do chefe
-            </button>
-          )}
           {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
             <button
               onClick={() => navigate({ to: "/treasury" })}
@@ -537,6 +532,8 @@ function TicketsPanel() {
 }
 
 function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+  const navigate = useNavigate();
+  const navigateToTreasuryAccess = () => navigate({ to: "/financeiro-acesso" });
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers() });
   const [confirm, setConfirm] = useState<{
@@ -571,6 +568,14 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <button
+              onClick={() => navigateToTreasuryAccess()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> Acesso do CEO
+            </button>
+          )}
           {isSuperAdmin && (
             <button
               onClick={() => setShowCreate(true)}
