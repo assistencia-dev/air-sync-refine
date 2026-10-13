@@ -4274,13 +4274,41 @@
             }
 
             const tec = ERP_STATE.sessionTecnicoLogado;
-            const canonicalEmployeeId = String(tec.employeeId || '');
+            // Atribuição canônica do RH + compatibilidade com OS antigas e cadastros
+            // técnicos legados. Alguns registros guardam employeeId; outros guardam
+            // o ID numérico do técnico em tecnicoId; outros já guardam o UUID do RH.
+            const norm = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
+            const employeeIds = new Set([tec.employeeId, tec.employee_id, tec.id]
+                .filter(value => value !== null && value !== undefined && String(value).trim())
+                .map(value => String(value).trim()));
+            const technicianIds = new Set(ERP_STATE.tecnicos
+                .filter(t => (tec.email && norm(t.email) === norm(tec.email)) ||
+                    (tec.nome && norm(t.nome) === norm(tec.nome)) ||
+                    (tec.employeeId && String(t.employeeId ?? '') === String(tec.employeeId)))
+                .flatMap(t => [t.id, t.employeeId, t.employee_id]
+                    .filter(value => value !== null && value !== undefined && String(value).trim())
+                    .map(value => String(value).trim())));
+            if (tec.id !== null && tec.id !== undefined) technicianIds.add(String(tec.id).trim());
             const minhasOS = ERP_STATE.ordens.filter(o => {
-                const assigned = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId));
-                // employeeId é a fonte principal; tecnicoId permanece como fallback para OS antigas.
-                if (canonicalEmployeeId && String(o.employeeId ?? '') === canonicalEmployeeId) return true;
-                if (canonicalEmployeeId && assigned?.employeeId && String(assigned.employeeId) === canonicalEmployeeId) return true;
-                return String(o.tecnicoId ?? '') === String(tec.id ?? '');
+                const assigned = ERP_STATE.tecnicos.find(t =>
+                    [o.tecnicoId, o.employeeId, o.assigned_employee_id, o.assignedEmployeeId]
+                        .some(value => value !== null && value !== undefined && (
+                            String(t.id ?? '') === String(value) ||
+                            String(t.employeeId ?? '') === String(value) ||
+                            String(t.employee_id ?? '') === String(value)
+                        ))
+                );
+                const orderEmployeeIds = [o.employeeId, o.employee_id, o.assigned_employee_id, o.assignedEmployeeId]
+                    .filter(value => value !== null && value !== undefined && String(value).trim())
+                    .map(value => String(value).trim());
+                if (orderEmployeeIds.some(value => employeeIds.has(value) || technicianIds.has(value))) return true;
+                const orderTechnicianId = String(o.tecnicoId ?? o.tecnico_id ?? '').trim();
+                if (orderTechnicianId && (technicianIds.has(orderTechnicianId) ||
+                    employeeIds.has(orderTechnicianId))) return true;
+                if (assigned && ((tec.employeeId && String(assigned.employeeId ?? assigned.employee_id ?? '') === String(tec.employeeId)) ||
+                    (tec.email && norm(assigned.email) === norm(tec.email)) ||
+                    (tec.nome && norm(assigned.nome) === norm(tec.nome)))) return true;
+                return false;
             });
 
             const statusMeta = (status) => {
