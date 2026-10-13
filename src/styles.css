@@ -174,3 +174,59 @@
   max-width: 100%;
   object-fit: contain;
 }
+
+/* DBS AIR — base responsiva compartilhada entre os módulos React.
+   Mantém os fluxos e os dados existentes; adapta apenas a apresentação em telas menores. */
+html {
+  width: 100%;
+  min-width: 0;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-width: 320px;
+  max-width: 100%;
+}
+img, video, canvas, svg {
+  max-width: 100%;
+}
+@media (max-width: 767px) {
+  body {
+    overflow-x: hidden;
+  }
+  #root, main, [role="main"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+  input, select, textarea, button {
+    font-size: max(16px, 1em);
+  }
+  input, select, textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+  button, [role="button"], a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  button, [role="button"] {
+    min-height: 40px;
+  }
+  table {
+    max-width: 100%;
+  }
+  /* Tabelas grandes permanecem completas e podem ser roladas sem alargar a página. */
+  [data-radix-scroll-area-viewport],
+  .overflow-x-auto,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  [role="dialog"] {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+  }
+  .fixed.inset-0 {
+    overscroll-behavior: contain;
+  }
+}
+
