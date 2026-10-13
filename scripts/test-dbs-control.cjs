@@ -172,3 +172,13 @@ assert.match(quoteBuilder, /"M³":1000/, "Um metro cúbico deve equivaler a 1.00
 assert.match(quoteBuilder, /"ML":"volume","L":"volume","GAL":"volume"/, "Mililitros, litros, galões e metros cúbicos devem compartilhar dimensão de volume.");
 assert.match(quoteBuilder, /var lineTotal = Number\.isFinite\(Number\(it\.total\)\)/, "O PDF deve usar o total já convertido salvo no item.");
 assert.match(quoteBuilder, /String\(it\.unidadePreco \|\| it\.unidade \|\| "UN"\)/, "O PDF deve mostrar a unidade-base do preço.");
+
+
+const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
+const osTheme = fs.readFileSync("public/dbs-control-theme.css", "utf8");
+assert.match(osPdf, /statusColor/, "O PDF da OS deve padronizar o status com destaque visual sem alterar o status gravado.");
+assert.match(osPdf, /roundedRect\(195 - badgeW/, "O cabeçalho do PDF deve apresentar status em selo visual consistente.");
+assert.match(osTheme, /#tab-ordens #os-table thead th/, "A lista de OS deve ter cabeçalho padronizado e legível.");
+assert.match(osTheme, /@media \(max-width: 760px\)/, "A tela de OS deve se adaptar a telas menores.");
+assert.match(html, /id="os-table-body"/, "A padronização deve manter o mesmo corpo de tabela ligado aos dados existentes.");
+assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a ação de exportar PDF.");
