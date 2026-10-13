@@ -80,7 +80,7 @@ export const updateClientUser = createServerFn({ method: "POST" })
       if (!input?.user_id) throw new Error("Usuário inválido.");
       if (!input.full_name?.trim()) throw new Error("Informe o nome completo.");
       if (!input.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-      if (!["SUPER_ADMIN", "GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
+      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
         throw new Error("Papel inválido.");
       }
       return {
@@ -203,7 +203,7 @@ export const createClientUser = createServerFn({ method: "POST" })
     }) => {
       if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
       if (!input?.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
-      if (!["GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
+      if (!["SUPER_ADMIN", "GESTOR_CONTA", "GESTOR_REGIONAL", "CLIENTE_PF", "COLABORADOR"].includes(input.role_key)) {
         throw new Error("Papel inválido.");
       }
       if (!input?.password || input.password.length < 8)
