@@ -1778,6 +1778,7 @@
     </style>
 
 <style>
+.employee-time-tracker{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0;padding:12px;border:1px solid #dbe7f3;border-radius:9px;background:#f7fbff}.employee-time-tracker small{display:block;color:var(--text-muted);font-size:10px;margin-bottom:3px}.employee-time-tracker strong{color:#173b62;font-size:21px;font-variant-numeric:tabular-nums}
         /* DBS CONTROL · fila operacional baseada exclusivamente nos registros carregados */
         .ops-overview { margin: 0 0 16px; }
         .ops-overview-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; padding:14px 16px 10px; }
@@ -4336,6 +4337,7 @@
                         </div>
                         <div class="employee-description"><small>Solicitação</small><p>${escHtml(o.desc || 'Sem descrição cadastrada.')}</p></div>
                         ${o.prioridade || o.sla ? `<div class="employee-meta-row">${o.prioridade ? '<span>Prioridade: <b>'+escHtml(o.prioridade)+'</b></span>' : ''}${o.sla ? '<span>SLA: <b>'+escHtml(o.sla)+'</b></span>' : ''}</div>` : ''}
+                        <div class="employee-time-tracker"><div><small>Tempo de atendimento</small><strong id="pwa-time-value-${o.id}">${formatarDuracaoAtendimento(obterSegundosAtendimento(o))}</strong><small id="pwa-time-state-${o.id}">${obterEstadoCronometro(o)}</small></div><button class="btn btn-secondary btn-sm" type="button" onclick="alternarCronometroOS(&quot;${escHtml(o.id)}&quot;)">Iniciar / pausar tempo</button></div>
                         ${isConcluido ? '<div class="employee-complete">✓ Atendimento concluído. Evidências e assinatura permanecem registradas.</div>' : `
                           <details class="employee-execution">
                             <summary>Executar atendimento <span>›</span></summary>
@@ -4459,6 +4461,11 @@
             });
         }
 
+        function obterSegundosAtendimento(os) { const timer=os&&os.cronometroAtendimento&&typeof os.cronometroAtendimento==='object'?os.cronometroAtendimento:{};let total=Math.max(0,Number(timer.acumuladoSegundos??os?.tempoAtendimentoSegundos??0));if(timer.emAndamentoDesde){const inicio=Date.parse(timer.emAndamentoDesde);if(Number.isFinite(inicio)&&inicio<=Date.now())total+=Math.floor((Date.now()-inicio)/1000);}return total; }
+        function formatarDuracaoAtendimento(segundos){const total=Math.max(0,Math.floor(Number(segundos)||0));return [Math.floor(total/3600),Math.floor((total%3600)/60),total%60].map(n=>String(n).padStart(2,'0')).join(':');}
+        function obterEstadoCronometro(os){const timer=os&&os.cronometroAtendimento;return timer&&timer.emAndamentoDesde?'Cronômetro em andamento':(timer&&Array.isArray(timer.eventos)&&timer.eventos.length?'Cronômetro pausado':'Ainda não iniciado');}
+        function alternarCronometroOS(osId){const os=ERP_STATE.ordens.find(item=>String(item.id)===String(osId));if(!os||os.status==='Concluída'||/cancelad/i.test(String(os.status||'')))return;const agora=new Date(),agoraIso=agora.toISOString();const timer=os.cronometroAtendimento&&typeof os.cronometroAtendimento==='object'?os.cronometroAtendimento:{acumuladoSegundos:Math.max(0,Number(os.tempoAtendimentoSegundos||0)),emAndamentoDesde:null,eventos:[]};timer.acumuladoSegundos=Math.max(0,Number(timer.acumuladoSegundos||0));timer.eventos=Array.isArray(timer.eventos)?timer.eventos:[];if(timer.emAndamentoDesde){const inicio=Date.parse(timer.emAndamentoDesde);if(Number.isFinite(inicio)&&inicio<=agora.getTime())timer.acumuladoSegundos+=Math.floor((agora.getTime()-inicio)/1000);timer.emAndamentoDesde=null;timer.eventos.push({tipo:'pausa',em:agoraIso,porEmployeeId:ERP_STATE.sessionTecnicoLogado?.employeeId||null});}else{timer.emAndamentoDesde=agoraIso;timer.eventos.push({tipo:timer.eventos.length?'retomada':'inicio',em:agoraIso,porEmployeeId:ERP_STATE.sessionTecnicoLogado?.employeeId||null});if(!/atendimento|execu[cç][aã]o|em andamento/i.test(String(os.status||'')))os.status='Em Atendimento';}os.employeeId=os.employeeId||ERP_STATE.sessionTecnicoLogado?.employeeId||null;os.cronometroAtendimento=timer;os.tempoAtendimentoSegundos=timer.acumuladoSegundos;saveState();renderizarTudo();}
+
         async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
@@ -4495,6 +4502,7 @@
                 os.trabalhoExecutado = relatoTecnico;
                 os.fotoAntes = fotoAntes;
                 os.fotoDepois = fotoDepois;
+                const timerFinal=os.cronometroAtendimento&&typeof os.cronometroAtendimento==='object'?os.cronometroAtendimento:{acumuladoSegundos:Math.max(0,Number(os.tempoAtendimentoSegundos||0)),emAndamentoDesde:null,eventos:[]};timerFinal.acumuladoSegundos=Math.max(0,Number(timerFinal.acumuladoSegundos||0));timerFinal.eventos=Array.isArray(timerFinal.eventos)?timerFinal.eventos:[];if(timerFinal.emAndamentoDesde){const inicioTimer=Date.parse(timerFinal.emAndamentoDesde),fimTimer=Date.now();if(Number.isFinite(inicioTimer)&&inicioTimer<=fimTimer)timerFinal.acumuladoSegundos+=Math.floor((fimTimer-inicioTimer)/1000);timerFinal.emAndamentoDesde=null;timerFinal.eventos.push({tipo:'conclusao',em:new Date(fimTimer).toISOString(),porEmployeeId:ERP_STATE.sessionTecnicoLogado?.employeeId||os.employeeId||null});}os.cronometroAtendimento=timerFinal;os.tempoAtendimentoSegundos=timerFinal.acumuladoSegundos;os.tempoAtendimentoFormatado=formatarDuracaoAtendimento(timerFinal.acumuladoSegundos);
                 os.assinatura = signature;
                 os.assinaturaEm = new Date().toISOString();
                 os.concluidoEm = new Date().toISOString();
