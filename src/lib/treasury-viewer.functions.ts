@@ -74,8 +74,15 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
     const { data: snapshot, error } = await admin.from("treasury_snapshots").select("state, updated_at").eq("scope_key", scopeKey).maybeSingle();
     if (error) throw new Error("Falha ao consultar o financeiro: " + error.message);
-    const state = snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)
-      ? snapshot.state as Record<string, any> : {};
+    if (!snapshot?.state || typeof snapshot.state !== "object" || Array.isArray(snapshot.state)) {
+      throw new Error("O DBS TREASURY ainda não possui um retrato financeiro sincronizado na nuvem. Entre no módulo Financeiro com a conta administradora, aguarde a sincronização terminar e tente novamente.");
+    }
+    const state = snapshot.state as Record<string, any>;
+    const hasFinancialData = ["passivos", "recorrencias", "recebimentos", "contasPagar", "bancos", "movimentacoes", "auditoria"]
+      .some((key) => Array.isArray(state[key]) && state[key].length > 0);
+    if (!hasFinancialData) {
+      throw new Error("O retrato financeiro sincronizado está vazio. Para evitar indicadores incorretos, o painel executivo ficará indisponível até o DBS TREASURY sincronizar os dados.");
+    }
     // Use a data local do servidor, sem converter meia-noite local para UTC
     // (o que pode deslocar o dia em fusos como o de Brasília).
     const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
