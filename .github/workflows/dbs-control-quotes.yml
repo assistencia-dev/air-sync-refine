@@ -1,0 +1,28 @@
+name: DBS Control quote regression
+on:
+  pull_request:
+    paths:
+      - "public/dbs-control-orcamentos-flex.js"
+      - "public/dbs-control.html"
+      - "scripts/test-dbs-control.cjs"
+      - "package.json"
+      - "bun.lock"
+  push:
+    branches: [main]
+    paths:
+      - "public/dbs-control-orcamentos-flex.js"
+      - "public/dbs-control.html"
+      - "scripts/test-dbs-control.cjs"
+      - "package.json"
+      - "bun.lock"
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test:dbs-control
+      - run: bun run build
