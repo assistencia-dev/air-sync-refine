@@ -204,9 +204,9 @@
       doc.setFillColor(16, 65, 112); doc.rect(0, 0, pageW, 31, "F");
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
       if(window.__DBS_QUOTE_LOGO_DATA){try{doc.addImage(window.__DBS_QUOTE_LOGO_DATA,"JPEG",x,3,25,22);}catch(e){} doc.text("DBS AIR REFRIGERAÇÃO",x+29,11);}else{doc.text("DBS AIR REFRIGERAÇÃO",x,11);}
-      doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.text("DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09", x, 16);
-      doc.text("assistencia@dbsair.com.br · (21) 99825-6991", x, 20);
-      doc.text("Rua Nabor do Rego, 481 (ou nº 2908), Ramos, Rio de Janeiro - RJ · CEP 21031-720", x, 24);
+      doc.setFontSize(6.5); doc.setFont("helvetica", "normal"); var companyX=window.__DBS_QUOTE_LOGO_DATA?x+29:x; doc.text("DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09", companyX, 16);
+      doc.text("assistencia@dbsair.com.br · (21) 99825-6991", companyX, 20);
+      doc.text("Rua Nabor do Rego, 481 (ou nº 2908), Ramos, Rio de Janeiro - RJ · CEP 21031-720", companyX, 24);
       doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("PROPOSTA COMERCIAL", x, 29);
       doc.text(String(q.id || "ORÇAMENTO"), pageW - x, 13, { align: "right" });
       doc.setFontSize(8); doc.setFont("helvetica", "normal");
