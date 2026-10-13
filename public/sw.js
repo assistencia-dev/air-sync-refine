@@ -2,7 +2,7 @@
 const CACHE_NAME = "dbs-air-static-v1";
 const STATIC_ASSET = /\.(?:js|css|svg|png|jpe?g|webp|woff2?|ttf|ico)$/i;
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -23,11 +23,16 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request);
-    const network = fetch(request).then((response) => {
-      if (response.ok && response.type === "basic") cache.put(request, response.clone());
+    try {
+      const response = await fetch(request);
+      if (response.ok && response.type === "basic") {
+        await cache.put(request, response.clone());
+      }
       return response;
-    });
-    return cached || network;
+    } catch (error) {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      throw error;
+    }
   })());
 });
