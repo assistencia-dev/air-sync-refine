@@ -18,7 +18,7 @@ import {
   X,
   ShieldCheck,
 } from "lucide-react";
-import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -38,7 +38,7 @@ function Index() {
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
       {/* ============ TOP UTILITY BAR ============ */}
       <div style={{ background: "#0F172A" }} className="text-white text-xs">
-        <div className="container max-w-7xl mx-auto px-4 h-9 flex items-center justify-between">
+        <div className="container max-w-7xl mx-auto px-4 h-8 flex items-center justify-between">
           <div className="hidden sm:flex items-center gap-5">
             <span className="flex items-center gap-1.5" style={{ color: "#93C5FD" }}>
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -65,13 +65,12 @@ function Index() {
 
       {/* ============ MAIN HEADER (LOGO EM DESTAQUE) ============ */}
       <header className="sticky top-0 w-full bg-white z-50 shadow-md" style={{ borderBottom: "3px solid #1E3A8A" }}>
-        <div className="container max-w-7xl mx-auto px-4 flex items-center justify-between h-24 md:h-28">
+        <div className="container max-w-7xl mx-auto px-4 flex items-center justify-between h-[88px] md:h-[96px]">
           {/* Logo XL */}
           <a href="#top" className="flex items-center gap-4 group">
-            <img
-              src={logoAsset.url}
-              alt="DBS Air Refrigeração"
-              className="h-16 md:h-20 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            <BrandLogo
+              frameClassName="rounded-xl px-2 py-1 transition-transform group-hover:scale-[1.02]"
+              imageClassName="h-[64px] md:h-[78px] w-auto max-w-[250px] md:max-w-[290px] object-contain"
             />
             <div className="hidden lg:block" style={{ borderLeft: "2px solid #E2E8F0", paddingLeft: "16px" }}>
               <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "#0284C7" }}>
@@ -119,6 +118,7 @@ function Index() {
               <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
+              <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Portal do Cliente</a>
               <a
                 href={wa(defaultMsg)}
                 target="_blank"
@@ -162,7 +162,7 @@ function Index() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5 shadow-lg"
-                  style={{ background: "#16A34A" }}
+                  style={{ background: "#0F9F8F" }}
                 >
                   <Calendar className="w-5 h-5" /> Agendar Avaliação Técnica
                 </a>
@@ -179,12 +179,12 @@ function Index() {
             {/* Right: Quick Access Card */}
             <div className="bg-white p-8 rounded-2xl shadow-2xl" style={{ boxShadow: "0 25px 50px -12px rgba(30,58,138,0.5)" }}>
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "#0F172A" }}>
-                <span className="w-1 h-6 rounded" style={{ background: "#16A34A" }} /> Acesso Rápido
+                <span className="w-1 h-6 rounded" style={{ background: "#0F9F8F" }} /> Acesso Rápido
               </h3>
               <div className="space-y-5">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#DCFCE7" }}>
-                    <Phone className="w-5 h-5" style={{ color: "#16A34A" }} />
+                    <Phone className="w-5 h-5" style={{ color: "#0F9F8F" }} />
                   </div>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#666" }}>Telefone</p>
@@ -210,7 +210,7 @@ function Index() {
                   </div>
                 </div>
                 <div className="pt-5 border-t border-gray-200">
-                  <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#16A34A" }}>Conformidade Legal</p>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#0F9F8F" }}>Conformidade Legal</p>
                   <p className="text-sm" style={{ color: "#666" }}>Lei 13.589/2018 • ANVISA • CREA/CFT</p>
                 </div>
               </div>
@@ -295,16 +295,16 @@ function Index() {
           {/* ABNT */}
           <div className="p-8 md:p-12 rounded-xl shadow-sm mb-12" style={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }}>
             <h3 className="text-2xl font-bold mb-8 flex items-center gap-3" style={{ color: "#0F172A" }}>
-              <Award className="w-7 h-7" style={{ color: "#16A34A" }} /> Normas Técnicas de Execução (ABNT)
+              <Award className="w-7 h-7" style={{ color: "#0F9F8F" }} /> Normas Técnicas de Execução (ABNT)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div style={{ borderLeft: "4px solid #16A34A", paddingLeft: "24px" }}>
+              <div style={{ borderLeft: "4px solid #0F9F8F", paddingLeft: "24px" }}>
                 <h4 className="font-bold mb-3" style={{ color: "#0F172A" }}>NBR 13971:2017</h4>
                 <p className="text-sm leading-relaxed" style={{ color: "#666" }}>
                   <strong>Sistemas de refrigeração, condicionamento de ar e bomba de calor — Manutenção programada.</strong> Define os procedimentos, frequências e responsabilidades técnicas para manutenção preventiva e corretiva de sistemas de climatização.
                 </p>
               </div>
-              <div style={{ borderLeft: "4px solid #16A34A", paddingLeft: "24px" }}>
+              <div style={{ borderLeft: "4px solid #0F9F8F", paddingLeft: "24px" }}>
                 <h4 className="font-bold mb-3" style={{ color: "#0F172A" }}>NBR 14679:2000</h4>
                 <p className="text-sm leading-relaxed" style={{ color: "#666" }}>
                   <strong>Execução de serviços de higienização em sistemas de ar condicionado.</strong> Estabelece os padrões de limpeza, desinfecção e documentação de atividades de higienização em dutos, serpentinas e componentes.
@@ -327,9 +327,9 @@ function Index() {
                 { num: 4, title: "Relatórios Mensais de Rastreabilidade", desc: "Emissão mensal de relatórios técnicos com medições de eficiência energética, análise de qualidade do ar (CO₂, fungos, bactérias), e conformidade com os padrões ANVISA." },
                 { num: 5, title: "Cronograma Personalizado", desc: "Plano de manutenção customizado conforme a carga térmica, criticidade de cada ambiente e requisitos operacionais específicos da sua empresa." },
               ].map((item) => (
-                <div key={item.num} className="p-6 rounded-lg" style={{ background: "#F8FAFC", borderLeft: "4px solid #16A34A" }}>
+                <div key={item.num} className="p-6 rounded-lg" style={{ background: "#F8FAFC", borderLeft: "4px solid #0F9F8F" }}>
                   <div className="flex items-start gap-4">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white" style={{ background: "#16A34A" }}>{item.num}</div>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white" style={{ background: "#0F9F8F" }}>{item.num}</div>
                     <div>
                       <h4 className="font-bold mb-1.5" style={{ color: "#0F172A" }}>{item.title}</h4>
                       <p className="text-sm leading-relaxed" style={{ color: "#666" }}>{item.desc}</p>
@@ -403,7 +403,7 @@ function Index() {
                 <ul className="space-y-2 mb-8 flex-1">
                   {service.benefits.map((benefit, i) => (
                     <li key={i} className="text-sm flex items-start gap-2" style={{ color: "#666" }}>
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#16A34A" }} />
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#0F9F8F" }} />
                       <span>{benefit}</span>
                     </li>
                   ))}
@@ -493,9 +493,10 @@ function Index() {
         <div className="container max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div>
-              <div className="bg-white rounded-xl p-4 inline-block mb-4">
-                <img src={logoAsset.url} alt="DBS Air Refrigeração" className="h-14 w-auto object-contain" />
-              </div>
+              <BrandLogo
+                frameClassName="rounded-xl px-4 py-3 mb-4"
+                imageClassName="h-14 w-auto object-contain"
+              />
               <p className="text-sm" style={{ color: "#94A3B8" }}>Soluções em Refrigeração e Climatização Corporativa.</p>
             </div>
 

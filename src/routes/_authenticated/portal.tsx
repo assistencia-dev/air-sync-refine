@@ -5,7 +5,7 @@ import { CheckCircle2, CircleDot, LogOut, PlusCircle, RefreshCw, Ticket } from "
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { createTicket, listMyTickets, reopenTicket } from "@/lib/tickets.functions";
-import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { BrandLogo } from "@/components/BrandLogo";
 import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -97,11 +97,7 @@ function PortalPage() {
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
-              src={logoAsset.url}
-              alt="DBS Air"
-              className="h-10 w-auto max-w-[190px] object-contain"
-            />
+            <BrandLogo frameClassName="rounded-lg px-2 py-1" imageClassName="h-9 w-auto max-w-[190px] object-contain" />
             <span className="text-xs font-bold uppercase tracking-widest text-slate-500 hidden md:inline">
               Portal do Cliente
             </span>
@@ -196,7 +192,7 @@ function PortalPage() {
               type="submit"
               disabled={mut.isPending}
               className="w-full inline-flex items-center justify-center gap-2 text-white px-4 py-2.5 rounded-md font-semibold text-sm disabled:opacity-60"
-              style={{ background: "#16A34A" }}
+              style={{ background: "#0F9F8F" }}
             >
               {mut.isPending ? "Enviando..." : "Gerar Ordem de Serviço"}
             </button>

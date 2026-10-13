@@ -30,13 +30,13 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.15 0.02 250);
-  --primary: oklch(0.58 0.14 158);
+  --primary: #1769d1;
   --primary-foreground: oklch(1 0 0);
-  --navy: oklch(0.22 0.04 255);
-  --navy-700: oklch(0.28 0.04 255);
-  --navy-900: oklch(0.16 0.03 255);
-  --green: oklch(0.58 0.14 158);
-  --green-glow: oklch(0.72 0.16 165);
+  --navy: #0b2745;
+  --navy-700: #0d3154;
+  --navy-900: #081d34;
+  --green: #0f9f8f;
+  --green-glow: #42b7df;
   --muted: oklch(0.96 0.005 250);
   --muted-foreground: oklch(0.5 0.02 250);
   --border: oklch(0.92 0.01 250);
@@ -67,7 +67,7 @@
 }
 .brand-mark {
   color: #FFFFFF;
-  background: #1E8F66;
+  background: #0F9F8F;
   padding: 2px 8px;
   border-radius: 2px;
   margin-right: 6px;
@@ -103,24 +103,24 @@
 /* Gradient hero background */
 .hero-bg {
   background:
-    radial-gradient(ellipse at top right, rgba(30,143,102,0.18), transparent 60%),
-    radial-gradient(ellipse at bottom left, rgba(30,143,102,0.10), transparent 60%),
+    radial-gradient(ellipse at top right, rgba(23,105,209,0.16), transparent 60%),
+    radial-gradient(ellipse at bottom left, rgba(66,183,223,0.10), transparent 60%),
     linear-gradient(180deg, #0E1A2E 0%, #101F38 100%);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #1E8F66, #26B37F);
+  background: linear-gradient(135deg, #1769D1, #1557B0);
   color: white;
   font-weight: 600;
   padding: 14px 24px;
   border-radius: 8px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 8px 24px -8px rgba(30,143,102,0.5);
+  box-shadow: 0 8px 24px -8px rgba(23,105,209,0.34);
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -8px rgba(30,143,102,0.65); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -8px rgba(23,105,209,0.46); }
 
 .btn-outline {
   border: 1px solid rgba(255,255,255,0.2);
@@ -145,13 +145,32 @@
 .card-service:hover {
   transform: translateY(-4px);
   box-shadow: 0 20px 40px -20px rgba(14,26,46,0.15);
-  border-color: rgba(30,143,102,0.3);
+  border-color: rgba(23,105,209,0.24);
 }
 
 .stat-num {
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
   font-size: 44px;
-  color: #1E8F66;
+  color: #1769D1;
   letter-spacing: -0.03em;
+}
+
+/* DBS Air brand lockup: same official image, visible on light and dark surfaces. */
+.dbs-brand-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(210, 224, 238, 0.9);
+  border-radius: 12px;
+  background: #fff;
+  padding: 4px 8px;
+  box-shadow: 0 4px 14px rgba(11, 39, 69, 0.08);
+}
+.dbs-brand-logo-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }

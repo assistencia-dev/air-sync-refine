@@ -31,7 +31,7 @@ import {
   updateClientUser,
 } from "@/lib/admin.functions";
 import { HrWorkspace } from "@/components/HrWorkspace";
-import logoAsset from "@/assets/logo-dbs-air.jpg.asset.json";
+import { BrandLogo } from "@/components/BrandLogo";
 import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -91,14 +91,12 @@ function AdminPage() {
       className="min-h-screen bg-[#f4f7f6]"
       style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
     >
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#102b3b] px-5 py-6 text-white shadow-[12px_0_36px_rgba(16,43,59,.16)] lg:flex">
-        <div className="flex items-center gap-2 px-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f7c945] text-sm font-black text-[#102b3b]">
-            DBS
-          </span>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#0B2745] px-5 py-6 text-white shadow-[12px_0_36px_rgba(16,43,59,.16)] lg:flex">
+        <div className="flex items-center gap-3 px-2">
+          <BrandLogo frameClassName="rounded-lg px-2 py-1" imageClassName="h-9 w-auto max-w-[155px] object-contain" />
           <div>
-            <strong className="block text-sm tracking-tight">DBS Air</strong>
-            <span className="text-[9px] font-bold uppercase tracking-[.18em] text-white/45">
+            <strong className="block text-sm tracking-tight">DBS Control</strong>
+            <span className="text-[9px] font-bold uppercase tracking-[.18em] text-white/55">
               Operações
             </span>
           </div>
@@ -109,20 +107,20 @@ function AdminPage() {
         <nav className="space-y-1">
           <button
             onClick={() => setTab("tickets")}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "tickets" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "tickets" ? "bg-[#1769D1] text-white shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
           >
             <Ticket className="h-4 w-4" /> Chamados
           </button>
           <button
             onClick={() => setTab("users")}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "users" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "users" ? "bg-[#1769D1] text-white shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
           >
             <Users className="h-4 w-4" /> Usuários vinculados
           </button>
           {canAccessRh && (
             <button
               onClick={() => setTab("passage")}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "passage" ? "bg-[#f7c945] text-[#102b3b] shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${tab === "passage" ? "bg-[#1769D1] text-white shadow-lg" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
             >
               <WalletCards className="h-4 w-4" /> RH
             </button>
@@ -154,11 +152,7 @@ function AdminPage() {
       <header className="border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur lg:pl-64">
         <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-3">
-            <img
-              src={logoAsset.url}
-              alt="DBS Air"
-              className="h-10 w-auto max-w-[190px] object-contain"
-            />
+            <BrandLogo frameClassName="lg:hidden rounded-lg px-2 py-1" imageClassName="h-8 w-auto max-w-[150px] object-contain" />
             <span
               className="text-xs font-bold uppercase tracking-widest inline-flex items-center gap-1.5"
               style={{ color: "#0284C7" }}
