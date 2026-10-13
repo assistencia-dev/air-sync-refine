@@ -23,8 +23,8 @@
     "MG":["mg","miligrama","miligramas"],"G":["g","gr","grama","gramas"],"KG":["kg","quilo","quilos","quilograma","quilogramas"],"T":["t","ton","tonelada","toneladas"],
     "ML":["ml","mililitro","mililitros"],"L":["l","lt","litro","litros"],"GAL":["gal","galão","galões"]
   };
-  var UNIT_FACTOR = {"UN":1,"PÇ":1,"HRS":1,"DIA":1,"MM":0.001,"CM":0.01,"M":1,"KM":1000,"M²":1,"M³":1,"MG":0.000001,"G":0.001,"KG":1,"T":1000,"ML":0.001,"L":1,"GAL":3.785411784};
-  var UNIT_DIM = {"UN":"count","PÇ":"count","HRS":"time","DIA":"time","MM":"length","CM":"length","M":"length","KM":"length","M²":"area","M³":"volume","MG":"mass","G":"mass","KG":"mass","T":"mass","ML":"liquid","L":"liquid","GAL":"liquid"};
+  var UNIT_FACTOR = {"UN":1,"PÇ":1,"HRS":1,"DIA":1,"MM":0.001,"CM":0.01,"M":1,"KM":1000,"M²":1,"M³":1000,"MG":0.000001,"G":0.001,"KG":1,"T":1000,"ML":0.001,"L":1,"GAL":3.785411784};
+  var UNIT_DIM = {"UN":"count","PÇ":"count","HRS":"time","DIA":"time","MM":"length","CM":"length","M":"length","KM":"length","M²":"area","M³":"volume","MG":"mass","G":"mass","KG":"mass","T":"mass","ML":"volume","L":"volume","GAL":"volume"};
   function normalizeUnit(v){var raw=String(v||"UN").trim().toLocaleLowerCase("pt-BR");for(var key in UNIT_GROUPS){if(key.toLocaleLowerCase("pt-BR")===raw||UNIT_GROUPS[key].indexOf(raw)>=0)return key;}return String(v||"UN").trim().toUpperCase();}
   function unitSelect(cls,value){var selected=normalizeUnit(value), units=["UN","PÇ","HRS","DIA","MM","CM","M","KM","M²","M³","MG","G","KG","T","ML","L","GAL"];if(units.indexOf(selected)<0)units.push(selected);return '<select class="'+cls+'" aria-label="'+(cls==="oq-unit"?"Unidade da quantidade":"Unidade do preço")+'">'+units.map(function(u){return '<option value="'+esc(u)+'"'+(u===selected?" selected":"")+'>'+esc(u)+'</option>';}).join("")+'</select>';}
   function unitsCompatible(unit,priceUnit){var u=normalizeUnit(unit),p=normalizeUnit(priceUnit||unit);return u===p||(!!UNIT_DIM[u]&&UNIT_DIM[u]===UNIT_DIM[p]);}
@@ -136,11 +136,11 @@
     Array.from(body.querySelectorAll("tr")).forEach(function (row) {
       var qty=Math.max(0,num(row.querySelector(".oq-qty").value)), price=Math.max(0,num(row.querySelector(".oq-price").value)), unit=row.querySelector(".oq-unit").value, priceUnit=row.querySelector(".oq-price-unit").value;
       var line=convertedLine(qty,unit,price,priceUnit);
-      var compatible=unitsCompatible(unit,priceUnit);
+      var compatible=unitsCompatible(unit,priceUnit) && Number.isFinite(line);
       row.querySelector(".oq-line-total").textContent=compatible?money(line):"Unidades incompatíveis";
       row.querySelector(".oq-line-total").style.color=compatible?"":"#b42318";
       row.querySelector(".oq-line-total").title=compatible?"Quantidade convertida para a unidade do preço":"Corrija a unidade da quantidade ou do preço para evitar cálculo incorreto";
-      subtotal += line; row.querySelector(".oq-line-total").textContent = money(line);
+      if(compatible) subtotal += line;
     });
     var discount = Math.min(subtotal, Math.max(0, num($("oq-discount").value)));
     $("oq-subtotal").textContent = money(subtotal);
@@ -252,8 +252,9 @@
       check(Math.max(8, lines.length * 4.5 + 4));
       doc.setFont("helvetica", "normal"); doc.text(lines, x + 2, y);
       doc.text(String(it.unidade || "UN") + " / " + String(it.quantidade || 1), 119, y, { align: "right" });
-      doc.text(money(it.valorUnitario).replace(/\s/g, " "), 153, y, { align: "right" });
-      doc.text(money(num(it.quantidade || 1) * num(it.valorUnitario)).replace(/\s/g, " "), pageW - x - 2, y, { align: "right" });
+      doc.text(money(it.valorUnitario).replace(/\s/g, " ") + " / " + String(it.unidadePreco || it.unidade || "UN"), 153, y, { align: "right" });
+      var lineTotal = Number.isFinite(Number(it.total)) ? Number(it.total) : convertedLine(num(it.quantidade || 1), it.unidade || "UN", num(it.valorUnitario), it.unidadePreco || it.unidade || "UN");
+      doc.text(money(lineTotal).replace(/\s/g, " "), pageW - x - 2, y, { align: "right" });
       y += Math.max(7, lines.length * 4.5 + 3); doc.setDrawColor(220, 229, 237); doc.line(x, y - 2, pageW - x, y - 2);
     });
     y += 4; check(26); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text("Subtotal de produtos: " + money(q.subtotalProdutos != null ? q.subtotalProdutos : items.filter(function (it) { return it.tipo === "peca"; }).reduce(function (n, it) { return n + num(it.total != null ? it.total : num(it.quantidade)*num(it.valorUnitario)); }, 0)), pageW - x, y, { align: "right" }); y += 5;
