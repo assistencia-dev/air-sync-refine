@@ -18,6 +18,8 @@ import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
+import { Route as AuthenticatedFinanceiroAcessoRouteImport } from './routes/_authenticated/financeiro-acesso'
+import { Route as AuthenticatedFinanceiroAcompanhamentoRouteImport } from './routes/_authenticated/financeiro-acompanhamento'
 import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
 
 const IndexRoute = IndexRouteImport.update({
@@ -64,6 +66,16 @@ const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
   path: '/treasury',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFinanceiroAcessoRoute = AuthenticatedFinanceiroAcessoRouteImport.update({
+  id: '/financeiro-acesso',
+  path: '/financeiro-acesso',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceiroAcompanhamentoRoute = AuthenticatedFinanceiroAcompanhamentoRouteImport.update({
+  id: '/financeiro-acompanhamento',
+  path: '/financeiro-acompanhamento',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
   id: '/admin/rh-dashboard',
   path: '/admin/rh-dashboard',
@@ -79,6 +91,8 @@ export interface FileRoutesByFullPath {
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
+  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
@@ -103,6 +117,8 @@ export interface FileRoutesById {
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
+  '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
@@ -116,6 +132,8 @@ export interface FileRouteTypes {
     | '/passage'
     | '/portal'
     | '/treasury'
+    | '/financeiro-acesso'
+    | '/financeiro-acompanhamento'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -214,6 +232,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/financeiro-acesso': {
+      id: '/_authenticated/financeiro-acesso'
+      path: '/financeiro-acesso'
+      fullPath: '/financeiro-acesso'
+      preLoaderRoute: typeof AuthenticatedFinanceiroAcessoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro-acompanhamento': {
+      id: '/_authenticated/financeiro-acompanhamento'
+      path: '/financeiro-acompanhamento'
+      fullPath: '/financeiro-acompanhamento'
+      preLoaderRoute: typeof AuthenticatedFinanceiroAcompanhamentoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/admin/rh-dashboard': {
       id: '/admin/rh-dashboard'
       path: '/admin/rh-dashboard'
@@ -231,6 +263,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
+  AuthenticatedFinanceiroAcessoRoute: typeof AuthenticatedFinanceiroAcessoRoute
+  AuthenticatedFinanceiroAcompanhamentoRoute: typeof AuthenticatedFinanceiroAcompanhamentoRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -240,6 +274,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
+  AuthenticatedFinanceiroAcessoRoute: AuthenticatedFinanceiroAcessoRoute,
+  AuthenticatedFinanceiroAcompanhamentoRoute: AuthenticatedFinanceiroAcompanhamentoRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
