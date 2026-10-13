@@ -140,4 +140,4 @@ assert.match(quoteBuilder, /function readItems\\(/, "A proposta deve suportar um
 assert.match(quoteBuilder, /function pdf\\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\\.orcamentos\\.push\\(q\\)/, "A proposta nova deve ser salva no estado compartilhado.");
 assert.match(quoteBuilder, /Validade e condições|VALIDADE E CONDIÇÕES/, "O PDF deve exibir validade e condições comerciais.");
-assert.match(quoteBuilder, /ERP_STATE\\.pecas\\s*\\.push|ERP_STATE\\.estoque\\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
+assert.doesNotMatch(quoteBuilder, /ERP_STATE\\.pecas\\s*\\.push|ERP_STATE\\.estoque\\s*=/, "A montagem da proposta não deve gravar estoque nem alterar catálogo.");
