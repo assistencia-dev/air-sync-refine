@@ -29,14 +29,22 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
       user_metadata: { full_name: data.full_name, username: data.username }
     });
     if (authError || !authData.user) throw new Error(authError?.message || "Não foi possível criar a autenticação.");
-    const { error: profileError } = await admin.from("users").insert({
+    const { data: viewerProfile, error: profileError } = await admin.from("users").insert({
       auth_id: authData.user.id, username: data.username, full_name: data.full_name,
       email: data.email, role_key: "FINANCEIRO_LEITURA" as any, status: "ativo", created_by: user.id,
       company_id: user.company_id ?? null
-    });
-    if (profileError) {
+    }).select("id").single();
+    if (profileError || !viewerProfile) {
       await admin.auth.admin.deleteUser(authData.user.id);
-      throw new Error("Não foi possível gravar o perfil: " + profileError.message);
+      throw new Error("Não foi possível gravar o perfil: " + (profileError?.message || "perfil não retornado"));
+    }
+    const { error: accessError } = await admin.from("treasury_viewer_access").insert({
+      viewer_user_id: viewerProfile.id, owner_user_id: user.id, enabled: true, created_by: user.id
+    });
+    if (accessError) {
+      await admin.from("users").delete().eq("id", viewerProfile.id);
+      await admin.auth.admin.deleteUser(authData.user.id);
+      throw new Error("Não foi possível vincular o acesso ao financeiro: " + accessError.message);
     }
     await admin.from("audit_log").insert({
       actor_user_id: user.id, action: "created_treasury_viewer",
@@ -52,7 +60,15 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     if (user.role_key !== "FINANCEIRO_LEITURA" && user.role_key !== "SUPER_ADMIN") {
       throw new Error("Este painel é exclusivo para acompanhamento financeiro.");
     }
-    const ownerId = user.role_key === "FINANCEIRO_LEITURA" ? user.created_by : user.id;
+    let ownerId = user.id;
+    if (user.role_key === "FINANCEIRO_LEITURA") {
+      const { data: access, error: accessError } = await admin.from("treasury_viewer_access")
+        .select("owner_user_id, enabled").eq("viewer_user_id", user.id).maybeSingle();
+      if (accessError || !access || access.enabled !== true) {
+        throw new Error("Este acesso de acompanhamento está desativado ou não possui vínculo financeiro.");
+      }
+      ownerId = access.owner_user_id;
+    }
     const { data: owner, error: ownerError } = await admin.from("users").select("id, company_id, status").eq("id", ownerId).maybeSingle();
     if (ownerError || !owner || owner.status !== "ativo") throw new Error("O responsável pelo financeiro não está ativo.");
     const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
@@ -60,15 +76,19 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     if (error) throw new Error("Falha ao consultar o financeiro: " + error.message);
     const state = snapshot?.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state)
       ? snapshot.state as Record<string, any> : {};
+    // Use a data local do servidor, sem converter meia-noite local para UTC
+    // (o que pode deslocar o dia em fusos como o de Brasília).
+    const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     const today = new Date(); today.setHours(0,0,0,0);
-    const isoToday = today.toISOString().slice(0,10);
-    const addDays = (n: number) => { const d = new Date(today); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
-    const pending = (state.contasPagar || []).filter((x: any) => String(x.status || "Pendente").toLowerCase() !== "pago")
+    const isoToday = dateKey(today);
+    const addDays = (n: number) => { const d = new Date(today); d.setDate(d.getDate()+n); return dateKey(d); };
+    const isPaid = (status: unknown) => ["pago","paga","quitado","quitada","baixado","baixada"].includes(String(status || "").trim().toLowerCase());
+    const pending = (state.contasPagar || []).filter((x: any) => !isPaid(x.status))
       .map((x: any) => ({ id: String(x.id || ""), fornecedor: String(x.fornecedor || "Fornecedor não informado"),
         descricao: String(x.descricao || "—"), valor: Number(x.valor) || 0, vencimento: String(x.vencimento || ""),
         status: String(x.status || "Pendente"), categoria: String(x.categoria || "") }));
     const installments = (state.passivos || []).filter((x: any) => !x.arquivado).flatMap((p: any) =>
-      (p.parcelas || []).filter((x: any) => String(x.status || "Pendente").toLowerCase() !== "pago")
+      (p.parcelas || []).filter((x: any) => !isPaid(x.status))
         .map((x: any) => ({ id: String(x.id || ""), fornecedor: String(p.credor || "Credor não informado"),
           descricao: `Parcela ${x.num || ""} · ${String(p.doc || p.documento || "Acordo")}`,
           valor: Number(x.valor) || 0, vencimento: String(x.vencimento || ""), status: String(x.status || "Pendente"), categoria: "Passivo" })));
@@ -82,7 +102,7 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
       const v = Number(x.valor) || 0;
       return total + (x.frequencia === "Anual" ? v/12 : x.frequencia === "Trimestral" ? v/3 : v);
     }, 0);
-    const incoming = (state.recebimentos || []).filter((x: any) => String(x.status || "").toLowerCase() !== "recebido");
+    const incoming = (state.recebimentos || []).filter((x: any) => !["recebido","recebida","pago","paga","quitado","quitada","baixado","baixada"].includes(String(x.status || "").trim().toLowerCase()));
     return {
       updatedAt: snapshot?.updated_at ?? null,
       today: isoToday,
