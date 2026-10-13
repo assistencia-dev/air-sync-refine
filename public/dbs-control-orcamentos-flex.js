@@ -36,7 +36,7 @@
     var tab = $("tab-orcamentos");
     if (!tab || tab.dataset.flexReady === "1") return;
     tab.dataset.flexReady = "1";
-    tab.innerHTML = '<div class="data-card oq-shell"><div class="oq-heading"><div><h2>Proposta comercial</h2><p>Monte propostas com peças, serviços ou itens livres, sem movimentar estoque.</p></div><span class="oq-brand">DBS AIR</span></div>' +
+    tab.innerHTML = '<div class="data-card oq-shell"><div class="oq-heading"><div><h2>Proposta comercial</h2><p>DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09</p><p>assistencia@dbsair.com.br · (21) 99825-6991 · Rua Nabor do Rego, 481 / 2908, Ramos, Rio de Janeiro - RJ · CEP 21031-720</p><p>Monte propostas com peças, serviços ou itens livres, sem movimentar estoque.</p></div><span class="oq-brand">DBS AIR</span></div>' +
       '<form id="oq-form"><div class="oq-grid"><label>Cliente<select id="oq-client" required></select></label><label>Validade (dias)<input id="oq-validity" type="number" min="1" value="10" required></label><label>Condição de pagamento<input id="oq-payment" value="A combinar" maxlength="180"></label><label>Desconto total (R$)<input id="oq-discount" type="number" min="0" step="0.01" value="0"></label></div>' +
       '<div class="oq-items-head"><h3>Itens da proposta</h3><button type="button" class="btn btn-secondary" id="oq-add">+ Adicionar item</button></div>' +
       '<div class="oq-table-wrap"><table class="oq-items"><thead><tr><th>Catálogo</th><th>Descrição / escopo</th><th>Un.</th><th>Qtd.</th><th>Valor unitário (R$)</th><th>Total</th><th></th></tr></thead><tbody id="oq-items"></tbody></table></div>' +
