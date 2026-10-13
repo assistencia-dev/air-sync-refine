@@ -5241,7 +5241,8 @@
     return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
   }
   function clients() {
-    return (Array.isArray(window.ERP_STATE && ERP_STATE.clientes) ? ERP_STATE.clientes : [])
+    const state = (typeof ERP_STATE !== 'undefined' && ERP_STATE) || window.ERP_STATE || null;
+    return (Array.isArray(state && state.clientes) ? state.clientes : [])
       .filter(c => c && c.id != null)
       .slice()
       .sort((a,b) => String(a.nome || a.nomeFantasia || a.razaoSocial || '').localeCompare(String(b.nome || b.nomeFantasia || b.razaoSocial || ''), 'pt-BR'));
