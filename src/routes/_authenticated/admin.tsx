@@ -632,7 +632,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     <div>{u.username ?? "—"}</div>
                     <div className="text-slate-400">{u.email ?? "—"}</div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{u.role_key}</td>
+                  <td className="px-4 py-3 text-xs">{u.role_key === "SUPER_ADMIN" ? "CEO" : u.role_key === "ADMIN_OPERACIONAL" ? "Administração operacional" : u.role_key === "GESTOR_CONTA" ? "Gestor de conta" : u.role_key === "GESTOR_REGIONAL" ? "Gestor regional" : u.role_key === "CLIENTE_PF" ? "Cliente" : u.role_key === "COLABORADOR" ? "Colaborador" : u.role_key}</td>
                   <td className="px-4 py-3 text-xs text-slate-600">
                     <div>{u.company?.trade_name ?? u.company?.legal_name ?? "—"}</div>
                     <div className="text-slate-400">{u.unit?.name ?? "—"}</div>
@@ -805,7 +805,7 @@ function EditUserModal({
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
   const [cpf, setCpf] = useState(user.cpf ?? "");
-  const [roleKey, setRoleKey] = useState<"GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
+  const [roleKey, setRoleKey] = useState<"SUPER_ADMIN" | "GESTOR_CONTA" | "GESTOR_REGIONAL" | "CLIENTE_PF" | "COLABORADOR">(
     user.role_key,
   );
   const [companyId, setCompanyId] = useState(user.company_id ?? "");
@@ -971,7 +971,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [unitId, setUnitId] = useState("");
   const [password, setPassword] = useState(() => generatePassword());
   const [isUnitManager, setIsUnitManager] = useState(false);
-  const [clientMode, setClientMode] = useState<"novo" | "existente">("novo");
+  const [clientMode, setClientMode] = useState<"novo" | "existente">("existente");
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanyCnpj, setNewCompanyCnpj] = useState("");
   const [newUnitName, setNewUnitName] = useState("");
@@ -991,6 +991,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           cpf: cpf || undefined,
           role_key: roleKey,
           password,
+          create_company: roleKey !== "COLABORADOR" && roleKey !== "SUPER_ADMIN" && clientMode === "novo",
           ...(roleKey === "COLABORADOR"
             ? {}
             : clientMode === "existente"
@@ -1069,12 +1070,12 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
         className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-slate-900">Novo Acesso</h3>
+        <h3 className="text-lg font-bold text-slate-900">Novo acesso vinculado</h3>
         <p className="mt-1 text-xs text-slate-500">
-          Crie o login do cliente. A empresa e a unidade podem ser criadas automaticamente.
+          Informe apenas nome, e-mail e senha. CPF e vínculo com empresa são opcionais; o perfil CEO mantém acesso administrativo.
         </p>
 
-        {roleKey !== "COLABORADOR" && <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+        {roleKey !== "COLABORADOR" && roleKey !== "SUPER_ADMIN" && <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
           <label className="inline-flex items-start gap-2 text-xs font-semibold text-slate-800">
             <input
               type="radio"
@@ -1124,14 +1125,15 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
               onChange={(e) => setRoleKey(e.target.value as any)}
               className={inputCls}
             >
-              <option value="CLIENTE_PF">CLIENTE_PF</option>
-              <option value="COLABORADOR">COLABORADOR</option>
-              <option value="GESTOR_CONTA">GESTOR_CONTA</option>
-              <option value="GESTOR_REGIONAL">GESTOR_REGIONAL</option>
+              <option value="CLIENTE_PF">Cliente</option>
+              <option value="SUPER_ADMIN">CEO — acesso administrativo total</option>
+              <option value="COLABORADOR">Colaborador (vinculado ao RH)</option>
+              <option value="GESTOR_CONTA">Gestor de conta</option>
+              <option value="GESTOR_REGIONAL">Gestor regional</option>
             </select>
           </Field>
 
-          {roleKey !== "COLABORADOR" && clientMode === "existente" && (
+          {roleKey !== "COLABORADOR" && roleKey !== "SUPER_ADMIN" && clientMode === "existente" && (
             <>
               <Field label="Empresa">
                 <select
@@ -1175,7 +1177,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </>
           )}
 
-          {roleKey !== "COLABORADOR" && clientMode === "novo" && (
+          {roleKey !== "COLABORADOR" && roleKey !== "SUPER_ADMIN" && clientMode === "novo" && (
             <>
               <Field label="Nome da Empresa/Cliente *">
                 <input
