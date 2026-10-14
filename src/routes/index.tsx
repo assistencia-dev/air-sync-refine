@@ -36,6 +36,11 @@ function Index() {
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isIosDevice, setIsIosDevice] = useState(false);
   useEffect(() => {
+    // No celular, abrir direto no portal de acesso; a landing page continua no desktop.
+    if (window.matchMedia("(max-width: 767px)").matches && window.location.pathname === "/") {
+      window.location.replace("/login");
+      return;
+    }
     const ua = window.navigator.userAgent;
     setIsIosDevice(/iPad|iPhone|iPod/.test(ua) && !(window as Window & { MSStream?: unknown }).MSStream);
     const onPrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event); };
