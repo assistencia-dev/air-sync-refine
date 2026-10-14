@@ -63,7 +63,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
   const [viewing, setViewing] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [permanentDelete, setPermanentDelete] = useState<Employee | null>(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState(\"\");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
   const [accessFilter, setAccessFilter] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
