@@ -272,13 +272,17 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
       "Aguardando cliente",
       "Concluída",
     ]);
+    // Uma OS já concluída nunca pode voltar a um status anterior por autosave
+    // atrasado ou por um snapshot antigo do dispositivo do colaborador.
+    const currentIsCompleted = ["Concluída", "concluida", "concluído", "concluido"].includes(String(currentOrder?.status ?? "").trim().toLowerCase());
+    const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status);
 
     return {
       ...currentOrder,
       ...mergeAppendOnlyCollaboratorObservations(currentOrder, incomingOrder),
       // O colaborador só pode atualizar a execução da própria OS.
       // Dados administrativos/originais (inclusive valor) permanecem intactos.
-      status: allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status,
+      status: safeStatus,
       diagnostico: incomingOrder.diagnostico ?? currentOrder.diagnostico ?? "",
       trabalhoExecutado: incomingOrder.trabalhoExecutado ?? currentOrder.trabalhoExecutado ?? "",
       fotoAntes: incomingOrder.fotoAntes ?? currentOrder.fotoAntes ?? null,
@@ -640,6 +644,12 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) continue;
 
           const submittedStatus = String(incomingOrder?.status ?? "").trim();
+          // Bloqueia regressão: um autosave antigo do técnico não pode reabrir
+          // uma OS que já está concluída na tabela operacional canônica.
+          if (
+            ["concluida", "concluído", "concluido"].includes(String(canonicalOrder.status ?? "").trim().toLowerCase()) &&
+            submittedStatus !== "Concluída"
+          ) continue;
           const allowedStatuses: Record<string, string> = {
             "Em Atendimento": "em_atendimento",
             "Aguardando peça": "aguardando_peca",
