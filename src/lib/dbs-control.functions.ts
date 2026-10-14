@@ -216,6 +216,9 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
   const currentOrders = current.ordens as any[];
   const incomingOrders = incoming.ordens as any[];
   const incomingById = new Map(incomingOrders.map((order) => [String(order?.id), order]));
+  const incomingByProtocol = new Map(incomingOrders
+    .filter((order) => String(order?.protocolo ?? "").trim())
+    .map((order) => [String(order.protocolo).trim(), order]));
 
   const isMine = (order: any) =>
     String(order?.employeeId ?? "") === employeeId ||
@@ -223,7 +226,10 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
 
   const mergedOrders = currentOrders.map((currentOrder) => {
     if (!isMine(currentOrder)) return currentOrder;
-    const incomingOrder = incomingById.get(String(currentOrder?.id));
+    // O protocolo também reconcilia OS legadas com IDs diferentes no snapshot.
+    const incomingOrder =
+      incomingById.get(String(currentOrder?.id)) ??
+      incomingByProtocol.get(String(currentOrder?.protocolo ?? "").trim());
     if (!incomingOrder) return currentOrder;
 
     const oldParts = Array.isArray(currentOrder?.pecasUsadas) ? currentOrder.pecasUsadas : [];
@@ -600,12 +606,69 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       if (currentError) throw new Error(currentError.message);
       if (!current?.state) throw new Error("O DBS CONTROL ainda não possui uma base operacional compartilhada.");
 
+      const currentState = current.state as Record<string, unknown>;
       stateToSave = mergeCollaboratorOrderState(
-        current.state as Record<string, unknown>,
+        currentState,
         data.state,
         employee.id,
         employee.login_email,
       );
+
+      // Persiste execução/conclusão também na tabela operacional canônica.
+      // Apenas OS atribuídas a este funcionário podem ser atualizadas; dados
+      // administrativos e financeiros não são enviados neste UPDATE.
+      const incomingForEmployee = filterCollaboratorState(data.state, employee.id, employee.login_email).ordens as any[];
+      if (incomingForEmployee.length) {
+        const { data: assignedOrders, error: assignedError } = await supabaseAdmin
+          .from("dbs_control_work_orders")
+          .select("id,protocol,assigned_employee_id,status")
+          .eq("assigned_employee_id", employee.id);
+        if (assignedError) throw new Error(assignedError.message);
+
+        const currentOrders = normalizeState(currentState).ordens as any[];
+        for (const incomingOrder of incomingForEmployee) {
+          const currentOrder = currentOrders.find((order) =>
+            String(order?.id ?? "") === String(incomingOrder?.id ?? "") ||
+            (String(order?.protocolo ?? "").trim() &&
+              String(order?.protocolo ?? "").trim() === String(incomingOrder?.protocolo ?? "").trim())
+          );
+          const canonicalOrder = (assignedOrders ?? []).find((order: any) =>
+            String(order.id) === String(currentOrder?.id ?? incomingOrder?.id ?? "") ||
+            (String(order.protocol ?? "").trim() &&
+              String(order.protocol ?? "").trim() === String(currentOrder?.protocolo ?? incomingOrder?.protocolo ?? "").trim())
+          );
+          if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) continue;
+
+          const submittedStatus = String(incomingOrder?.status ?? "").trim();
+          const allowedStatuses: Record<string, string> = {
+            "Em Atendimento": "em_atendimento",
+            "Aguardando peça": "aguardando_peca",
+            "Aguardando cliente": "aguardando_cliente",
+            "Concluída": "concluida",
+          };
+          const dbStatus = allowedStatuses[submittedStatus];
+          if (!dbStatus) continue;
+
+          const update: Record<string, unknown> = {
+            status: dbStatus,
+            technical_opinion: String(incomingOrder?.diagnostico ?? currentOrder?.diagnostico ?? ""),
+            observation: String(incomingOrder?.observacao ?? currentOrder?.observacao ?? ""),
+            updated_at: new Date().toISOString(),
+          };
+          if (submittedStatus === "Concluída") {
+            update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
+            if (incomingOrder?.assinatura != null) update.signature_data = incomingOrder.assinatura;
+            if (incomingOrder?.signature_name != null) update.signature_name = incomingOrder.signature_name;
+          }
+          const { error: updateError } = await supabaseAdmin
+            .from("dbs_control_work_orders")
+            .update(update)
+            .eq("id", canonicalOrder.id)
+            .eq("assigned_employee_id", employee.id);
+          if (updateError) throw new Error(updateError.message);
+        }
+      }
+
       ownerUserId = current.owner_user_id ?? user.id;
     }
 
