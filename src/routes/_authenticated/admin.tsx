@@ -30,6 +30,7 @@ import {
   listCompaniesUnits,
   createClientUser,
   updateClientUser,
+  permanentlyRemoveUserAccess,
 } from "@/lib/admin.functions";
 import { HrWorkspace } from "@/components/HrWorkspace";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -544,6 +545,19 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [err, setErr] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<any | null>(null);
+  const [deleteUser, setDeleteUser] = useState<any | null>(null);
+  const [deleteText, setDeleteText] = useState("");
+
+  const deleteMut = useMutation({
+    mutationFn: (user_id: string) => permanentlyRemoveUserAccess({ data: { user_id, confirmation: "EXCLUIR PERMANENTEMENTE" } }),
+    onSuccess: () => {
+      setDeleteUser(null);
+      setDeleteText("");
+      setErr(null);
+      qc.invalidateQueries({ queryKey: ["all-users"] });
+    },
+    onError: (e) => setErr(e instanceof Error ? e.message : "Falha ao remover acesso."),
+  });
 
   const mut = useMutation({
     mutationFn: (v: { user_id: string; status: "ativo" | "bloqueado" }) =>
@@ -662,6 +676,15 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                             <Pencil className="h-3.5 w-3.5" /> Editar
                           </button>
                         )}
+                        {u.role_key !== "SUPER_ADMIN" && (
+                          <button
+                            type="button"
+                            onClick={() => { setDeleteUser(u); setDeleteText(""); setErr(null); }}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50"
+                          >
+                            Remover definitivamente
+                          </button>
+                        )}
                         {blocked ? (
                           <button
                             onClick={() =>
@@ -754,6 +777,23 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                     ? "Confirmar exclusão do acesso"
                     : "Confirmar reativação"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteUser && isSuperAdmin && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" onClick={() => !deleteMut.isPending && setDeleteUser(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">Remover acesso permanentemente</h3>
+            <p className="mt-3 text-sm text-slate-600">O login será removido e os dados pessoais do perfil serão ocultados. O registro histórico necessário para preservar vínculos de OS e auditoria será mantido. Essa ação não pode ser desfeita.</p>
+            <p className="mt-4 text-sm text-slate-700">Usuário: <strong>{deleteUser.full_name ?? deleteUser.email ?? "—"}</strong></p>
+            <label className="mt-4 block text-xs font-semibold text-slate-700">Digite EXCLUIR para confirmar</label>
+            <input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100" placeholder="EXCLUIR" />
+            {err && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{err}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setDeleteUser(null)} disabled={deleteMut.isPending} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</button>
+              <button onClick={() => deleteMut.mutate(deleteUser.id)} disabled={deleteText !== "EXCLUIR" || deleteMut.isPending} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{deleteMut.isPending ? "Removendo..." : "Remover acesso"}</button>
             </div>
           </div>
         </div>
