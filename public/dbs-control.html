@@ -1913,6 +1913,12 @@
         body .os-row-actions { justify-content:flex-start; min-width:180px; }
       }
     </style>
+    <style id="dbs-pmoc-result-style">
+      body .pmoc-result-card { display:grid; gap:7px; padding:13px; border:1px solid #cfe0f0; border-left:4px solid #2476b8; border-radius:12px; background:#f5faff; }
+      body .pmoc-result-card label { color:#173b60; font-size:12px; font-weight:800; }
+      body .pmoc-result-card select { width:100%; min-height:42px; border:1px solid #b8cde0; border-radius:9px; padding:9px 10px; background:#fff; color:#17324f; font-size:13px; }
+      body .pmoc-result-card small { color:#5d7185; font-size:11px; line-height:1.5; }
+    </style>
 </head>
 <body>
 
@@ -4159,6 +4165,15 @@
             }
         }
 
+        function atualizarResultadoPMOC(osId, resultado) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os || !tipoPermiteChecklist(os.tipo)) return;
+            os.pmocResultado = resultado === 'retorno' ? 'retorno' : 'concluido';
+            os.pmocPrecisaRetorno = os.pmocResultado === 'retorno';
+            os.pmocResultadoAtualizadoEm = new Date().toISOString();
+            saveState();
+        }
+
         function marcarChecklistOS(osId, index, checked) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             if (!os || !tipoPermiteChecklist(os.tipo)) return;
@@ -4616,6 +4631,15 @@
                               <label class="employee-observation-field">Observação complementar do técnico <span class="employee-observation-optional">Opcional · acrescentada ao histórico</span>
                                 <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas."></textarea>
                               </label>
+                              ${tipoPermiteChecklist(o.tipo) ? `
+                                <section class="pmoc-result-card">
+                                  <label for="pmoc-resultado-${o.id}">Resultado desta preventiva / PMOC</label>
+                                  <select id="pmoc-resultado-${o.id}" onchange="atualizarResultadoPMOC('${o.id}',this.value)">
+                                    <option value="concluido" ${(o.pmocResultado || 'concluido') === 'concluido' ? 'selected' : ''}>✓ Preventiva concluída — contar no controle mensal</option>
+                                    <option value="retorno" ${o.pmocResultado === 'retorno' ? 'selected' : ''}>↻ Precisa retornar — NÃO contar como PMOC concluído</option>
+                                  </select>
+                                  <small>Se encontrar uma corretiva ou pendência, marque “Precisa retornar”. A OS fica registrada, mas o PMOC só conta como concluído após o retorno ser resolvido.</small>
+                                </section>` : ''}
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
                               <div class="employee-photo-grid">
                                 <label>Foto antes<input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
