@@ -1928,6 +1928,23 @@
         #dbs-control .os-actions-menu > summary { min-height:42px; }
       }
     </style>
+    <style id="dbs-os-bulk-actions">
+      #dbs-control .os-bulk-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+      #dbs-control .os-selected-count { color:#47627e; font-size:12px; font-weight:800; padding:0 6px; white-space:nowrap; }
+      #dbs-control .os-row-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:5px; }
+      #dbs-control .os-row-action { min-height:32px; padding:5px 9px; border:1px solid #d5e1ed; border-radius:8px; background:#fff; color:#204565; font-size:11px; font-weight:750; cursor:pointer; }
+      #dbs-control .os-row-action:hover { background:#eef7ff; border-color:#a8c8e4; }
+      #dbs-control .os-row-action-danger { color:#b4232e; border-color:#f1c8cb; }
+      #dbs-control .os-row-action-danger:hover { background:#fff1f1; }
+      #dbs-control .os-actions-cell { min-width:190px; }
+      #dbs-control .os-bulk-toolbar .btn-danger { background:#c83d46; color:#fff; border-color:#c83d46; }
+      @media(max-width:760px) {
+        #dbs-control .os-bulk-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+        #dbs-control .os-selected-count { grid-column:1/-1; padding:4px 0; }
+        #dbs-control .os-bulk-toolbar button { width:100%; min-height:40px; white-space:normal; }
+        #dbs-control .os-row-actions { justify-content:flex-start; min-width:180px; }
+      }
+    </style>
 </head>
 <body>
 
@@ -2153,9 +2170,12 @@
                         <input type="date" id="os-filter-to" aria-label="Data final" title="Data final" onchange="aplicarFiltrosOS()">
                         <button type="button" class="btn btn-secondary btn-sm" onclick="limparFiltrosOS()">Limpar filtros</button>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn btn-success btn-sm" onclick="concluirSelecionadasLote()">Concluir Selecionadas</button>
-                        <button class="btn btn-secondary btn-sm" onclick="exportarSelecionadasPDF()">Exportar Selecionadas (PDF / ZIP)</button>
+                    <div class="os-bulk-toolbar" aria-label="Ações em lote">
+                        <span class="os-selected-count" id="os-selected-count">0 selecionadas</span>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="alternarArquivoSelecionadas()">Arquivar / restaurar selecionadas</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="excluirSelecionadasOS()">Excluir selecionadas</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="concluirSelecionadasLote()">Concluir selecionadas</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="exportarSelecionadasPDF()">Exportar PDF / ZIP</button>
                     </div>
                 </div>
                 <table id="os-table">
@@ -3420,8 +3440,39 @@
             }
         }
 
+        function obterOSSelecionadas() {
+            return Array.from(document.querySelectorAll('.chk-os-item:checked'))
+                .map(chk => (ERP_STATE.ordens || []).find(o => String(o.id) === String(chk.value)))
+                .filter(o => o && !o.excluidaEm);
+        }
+        function atualizarSelecaoOS() {
+            const count = document.getElementById('os-selected-count');
+            const checked = document.querySelectorAll('#os-table-body .chk-os-item:checked').length;
+            if (count) count.textContent = checked + (checked === 1 ? ' selecionada' : ' selecionadas');
+            const master = document.getElementById('chk-select-all');
+            const visible = Array.from(document.querySelectorAll('#os-table-body .chk-os-item')).filter(chk => !chk.disabled && chk.closest('tr')?.style.display !== 'none');
+            if (master) { master.checked = visible.length > 0 && visible.every(chk => chk.checked); master.indeterminate = visible.some(chk => chk.checked) && !master.checked; }
+        }
         function toggleSelectAllOS(master) {
-            document.querySelectorAll('.chk-os-item').forEach(c => c.checked = master.checked);
+            document.querySelectorAll('#os-table-body .chk-os-item').forEach(chk => { if (!chk.disabled && chk.closest('tr')?.style.display !== 'none') chk.checked = master.checked; });
+            atualizarSelecaoOS();
+        }
+        function alternarArquivoSelecionadas() {
+            const list = obterOSSelecionadas();
+            if (!list.length) { alert('Selecione uma ou mais OS.'); return; }
+            const restore = list.every(o => Boolean(o.arquivadaEm));
+            if (!confirm('Deseja ' + (restore ? 'restaurar ' : 'arquivar ') + list.length + ' OS selecionada(s)?')) return;
+            const now = new Date().toISOString();
+            list.forEach(os => { if (restore) { delete os.arquivadaEm; os.restauradaEm = now; } else { os.arquivadaEm = now; } });
+            saveState(); renderizarTudo();
+        }
+        function excluirSelecionadasOS() {
+            const list = obterOSSelecionadas();
+            if (!list.length) { alert('Selecione uma ou mais OS para excluir da operação.'); return; }
+            if (!confirm('Excluir ' + list.length + ' OS selecionada(s) das listas operacionais? O histórico será preservado para rastreabilidade.')) return;
+            const now = new Date().toISOString();
+            list.forEach(os => { os.excluidaEm = now; os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador'; os.statusAntesExclusao = os.status || ''; });
+            saveState(); renderizarTudo();
         }
 
         function normalizarDataFiltroOS(value) {
@@ -3645,7 +3696,7 @@
                 const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.localAtendimento,cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome].join(' ').replace(/"/g,'&quot;');
                 return `
                     <tr data-status="${o.status}" data-archived="${archived ? 'true' : 'false'}" data-date="${normalizarDataFiltroOS(o.data)}" data-search="${escDbsControl(searchText)}">
-                        <td><input type="checkbox" class="chk-os-item" value="${o.id}" ${archived ? 'disabled' : ''}></td>
+                        <td><input type="checkbox" class="chk-os-item" value="${o.id}" onchange="atualizarSelecaoOS()" ${archived ? 'disabled' : ''}></td>
                         <td><strong>${o.id}</strong>${archived ? '<small style="display:block;color:#64748b">Arquivada</small>' : ''}</td>
                         <td>${o.data || '—'}</td>
                         <td>${cli.nome || '-'}</td>
@@ -3655,15 +3706,11 @@
                         <td>R$ ${Number(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                         <td><span class="badge ${badgeClass}">${o.status || 'Em Atendimento'}</span></td>
                         <td class="os-actions-cell">
-                            <details class="os-actions-menu">
-                                <summary aria-label="Ações da ordem de serviço">Ações <span aria-hidden="true">⋯</span></summary>
-                                <div class="os-actions-popover">
-                                    <button type="button" class="os-action-item" onclick="baixarPDFIndividual('${o.id}');this.closest('details').open=false;"><span class="os-action-icon">↧</span><span>Baixar PDF</span></button>
-                                    <button type="button" class="os-action-item" onclick="alternarArquivoOS('${o.id}');this.closest('details').open=false;"><span class="os-action-icon">${archived ? '↶' : '▣'}</span><span>${archived ? 'Restaurar OS' : 'Arquivar OS'}</span></button>
-                                    <div class="os-action-divider"></div>
-                                    <button type="button" class="os-action-item os-action-danger" onclick="excluirOSComSeguranca('${o.id}');this.closest('details').open=false;"><span class="os-action-icon">⌫</span><span>Excluir da operação</span></button>
-                                </div>
-                            </details>
+                            <div class="os-row-actions">
+                                <button type="button" class="os-row-action" title="Baixar PDF" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
+                                <button type="button" class="os-row-action" onclick="alternarArquivoOS('${o.id}')">${archived ? 'Restaurar' : 'Arquivar'}</button>
+                                <button type="button" class="os-row-action os-row-action-danger" onclick="excluirOSComSeguranca('${o.id}')">Excluir</button>
+                            </div>
                         </td>
                     </tr>
                 `;
