@@ -277,20 +277,28 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     const currentIsCompleted = ["Concluída", "concluida", "concluído", "concluido"].includes(String(currentOrder?.status ?? "").trim().toLowerCase());
     const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status);
 
+    const preserveCompletedValue = (field: string, fallback: unknown) => {
+      const existing = currentOrder?.[field];
+      if (currentIsCompleted && existing !== null && existing !== undefined && String(existing).trim() !== "") return existing;
+      const submitted = incomingOrder?.[field];
+      return submitted !== null && submitted !== undefined && String(submitted).trim() !== "" ? submitted : fallback;
+    };
+
     return {
       ...currentOrder,
       ...mergeAppendOnlyCollaboratorObservations(currentOrder, incomingOrder),
       // O colaborador só pode atualizar a execução da própria OS.
       // Dados administrativos/originais (inclusive valor) permanecem intactos.
+      // Em OS concluída, conteúdo já preenchido não pode ser apagado por autosave antigo.
       status: safeStatus,
-      diagnostico: incomingOrder.diagnostico ?? currentOrder.diagnostico ?? "",
-      trabalhoExecutado: incomingOrder.trabalhoExecutado ?? currentOrder.trabalhoExecutado ?? "",
-      fotoAntes: incomingOrder.fotoAntes ?? currentOrder.fotoAntes ?? null,
-      fotoDepois: incomingOrder.fotoDepois ?? currentOrder.fotoDepois ?? null,
-      assinatura: incomingOrder.assinatura ?? currentOrder.assinatura ?? null,
-      assinaturaEm: incomingOrder.assinaturaEm ?? currentOrder.assinaturaEm ?? null,
-      concluidoEm: incomingOrder.concluidoEm ?? currentOrder.concluidoEm ?? null,
-      concluidoPorEmployeeId: incomingOrder.concluidoPorEmployeeId ?? currentOrder.concluidoPorEmployeeId ?? null,
+      diagnostico: preserveCompletedValue("diagnostico", currentOrder.diagnostico ?? ""),
+      trabalhoExecutado: preserveCompletedValue("trabalhoExecutado", currentOrder.trabalhoExecutado ?? ""),
+      fotoAntes: preserveCompletedValue("fotoAntes", currentOrder.fotoAntes ?? null),
+      fotoDepois: preserveCompletedValue("fotoDepois", currentOrder.fotoDepois ?? null),
+      assinatura: preserveCompletedValue("assinatura", currentOrder.assinatura ?? null),
+      assinaturaEm: preserveCompletedValue("assinaturaEm", currentOrder.assinaturaEm ?? null),
+      concluidoEm: preserveCompletedValue("concluidoEm", currentOrder.concluidoEm ?? null),
+      concluidoPorEmployeeId: preserveCompletedValue("concluidoPorEmployeeId", currentOrder.concluidoPorEmployeeId ?? null),
       pecasUsadas: newParts,
     };
   });
@@ -625,7 +633,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
-          .select("id,protocol,assigned_employee_id,status")
+          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name")
           .eq("assigned_employee_id", employee.id);
         if (assignedError) throw new Error(assignedError.message);
 
