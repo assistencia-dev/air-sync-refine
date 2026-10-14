@@ -4409,6 +4409,22 @@
                           <details class="employee-execution">
                             <summary>Executar atendimento <span>›</span></summary>
                             <div class="employee-execution-body">
+                              <details class="employee-register-equipment" style="margin:0 0 14px;padding:12px;border:1px solid #cbdced;border-radius:12px;background:#f7fbff;">
+                                <summary style="font-weight:800;color:#12436c;cursor:pointer;">＋ Cadastrar equipamento para este cliente</summary>
+                                <p style="font-size:12px;color:#52677d;margin:8px 0 10px;">O cadastro ficará vinculado a ${escHtml(cli.nome || "este cliente")} e a esta OS. Preencha os dados disponíveis; os campos são flexíveis.</p>
+                                <div class="employee-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+                                  <label>Tipo de equipamento<input id="pwa-eq-tipo-${o.id}" type="text" maxlength="120" placeholder="Ex.: Split, cassete, chiller"></label>
+                                  <label>Modelo<input id="pwa-eq-modelo-${o.id}" type="text" maxlength="160" placeholder="Modelo do fabricante"></label>
+                                  <label>Tipo de gás refrigerante<input id="pwa-eq-gas-${o.id}" type="text" maxlength="80" placeholder="Ex.: R-410A, R-32, R-22"></label>
+                                  <label>Capacidade (BTU/h)<input id="pwa-eq-btu-${o.id}" type="text" maxlength="80" placeholder="Ex.: 12.000 BTU/h"></label>
+                                  <label>Ambiente / setor<input id="pwa-eq-ambiente-${o.id}" type="text" maxlength="160" placeholder="Ex.: sala, loja, CPD"></label>
+                                  <label>Marca / fabricante<input id="pwa-eq-marca-${o.id}" type="text" maxlength="120" placeholder="Fabricante (opcional)"></label>
+                                  <label>Número de série<input id="pwa-eq-serie-${o.id}" type="text" maxlength="120" placeholder="Série (opcional)"></label>
+                                  <label>TAG / patrimônio<input id="pwa-eq-tag-${o.id}" type="text" maxlength="100" placeholder="Identificador (opcional)"></label>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="cadastrarEquipamentoNaOS('${o.id}')">Salvar equipamento e vincular à OS</button>
+                                <div id="pwa-eq-feedback-${o.id}" role="status" style="font-size:12px;margin-top:8px;"></div>
+                              </details>
                               <label>Peça / insumo</label>
                               <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
                               <div class="employee-fields employee-fields-single">
