@@ -2820,6 +2820,38 @@
             }
         }
 
+        // Conclusão de OS só é confirmada ao técnico depois da confirmação da nuvem.
+        async function saveStateAndConfirmCloud() {
+            if (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_CLOUD_HYDRATING || window.parent === window) {
+                throw new Error('A conexão com a nuvem não está pronta. A OS não foi confirmada; verifique a conexão e tente novamente.');
+            }
+            saveState();
+            const state = getPersistableState();
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            return await new Promise((resolve, reject) => {
+                let settled = false;
+                const finish = (error, value) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', onMessage);
+                    if (error) reject(error); else resolve(value);
+                };
+                const onMessage = event => {
+                    if (event.source !== window.parent) return;
+                    const msg = event.data || {};
+                    if (msg.type !== 'DBS_CONTROL_SAVE_ACK' || msg.requestId !== requestId) return;
+                    if (msg.ok) finish(null, msg);
+                    else finish(new Error(msg.error || 'A nuvem recusou a gravação da OS.'));
+                };
+                const timeout = setTimeout(() => finish(new Error('A nuvem não confirmou a gravação em 15 segundos. A OS permanece pendente de confirmação; atualize a conexão antes de tentar novamente.')), 15000);
+                window.addEventListener('message', onMessage);
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state, requestId }, '*');
+            });
+        }
+
         function loadState() {
             const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
             if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
@@ -5066,9 +5098,9 @@
                 os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
                 os.status = "Concluída";
 
-                saveState();
+                await saveStateAndConfirmCloud();
                 renderizarTudo();
-                alert(`OS ${osId} finalizada com sucesso. Diagnóstico, execução, observações, evidências e assinatura foram salvos.`);
+                alert(`OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
