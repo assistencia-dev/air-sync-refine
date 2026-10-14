@@ -1917,6 +1917,7 @@
       body .pmoc-month-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:14px 0}
       body .pmoc-month-toolbar label{font-size:12px;font-weight:800;color:#244361}
       body .pmoc-month-toolbar input{min-height:39px;max-width:100%;border:1px solid #c5d5e4;border-radius:9px;padding:8px 10px;background:#fff;color:#183651}
+      body .pmoc-month-toolbar select{min-height:39px;max-width:100%;border:1px solid #c5d5e4;border-radius:9px;padding:8px 10px;background:#fff;color:#183651}
       body .pmoc-month-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}
       body .pmoc-month-metric{border:1px solid #d8e5ef;border-radius:10px;padding:12px;background:#f7fbff}
       body .pmoc-month-metric strong{display:block;font-size:22px;color:#174b7a}
@@ -2620,6 +2621,8 @@
                     <label for="pmoc-mes">Competência</label>
                     <input id="pmoc-mes" type="month" onchange="renderizarControlePMOC()">
                     <input id="pmoc-busca" type="search" placeholder="Buscar cliente por nome ou CNPJ" oninput="renderizarControlePMOC()" aria-label="Buscar cliente">
+                    <label for="pmoc-filtro-status">Status</label>
+                    <select id="pmoc-filtro-status" onchange="renderizarControlePMOC()" aria-label="Filtrar clientes por status"><option value="todos">Todos os status</option><option value="Concluído">Concluídos</option><option value="Pendente">Pendentes</option><option value="Precisa retornar">Precisa retornar</option><option value="Fora do mês">Retirados do mês</option></select>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="selecionarTodosPMOC(true)">Incluir todos</button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="selecionarTodosPMOC(false)">Retirar todos</button>
                     <button type="button" class="btn btn-primary btn-sm" onclick="exportarControlePMOC()">Exportar CSV</button>
@@ -4274,6 +4277,7 @@
             if (!month.value) month.value = obterCompetenciaPMOC();
             const competencia = month.value;
             const search = String(document.getElementById('pmoc-busca')?.value || '').trim().toLocaleLowerCase('pt-BR');
+            const filtroStatus = String(document.getElementById('pmoc-filtro-status')?.value || 'todos');
             const clientes = (ERP_STATE.clientes || []).filter(c => !search || [c.nome,c.cnpj,c.endereco].some(v => String(v || '').toLocaleLowerCase('pt-BR').includes(search)));
             const tbody = document.getElementById('pmoc-table-body');
             const metricas = { included:0, done:0, pending:0, returns:0, excluded:0 };
@@ -4292,7 +4296,7 @@
                     + '<td><span class="pmoc-status '+d.classe+'">'+escDbsControl(d.status)+'</span></td>'
                     + '<td>'+escDbsControl(osLabels.join(', ') || '—')+'</td>'
                     + '<td>'+(d.retornos.length ? escDbsControl(d.retornos.map(o => '#'+o.id).join(', ')) : '—')+'</td></tr>';
-            }).join('');
+            }).filter((row, index) => filtroStatus === 'todos' || dadosMensaisPMOC(clientes[index], competencia).status === filtroStatus).join('');
             if (tbody) tbody.innerHTML = rows || '<tr><td colspan="5">Nenhum cliente encontrado. Confira os filtros e o cadastro de clientes.</td></tr>';
             const box = document.getElementById('pmoc-metricas');
             if (box) box.innerHTML = [
