@@ -3614,7 +3614,7 @@
                 const hay = [o.id, cli, tec, eq.tag, o.tipo, o.desc, o.status].join(' ').toLowerCase();
                 return (!tecId || String(o.tecnicoId) === String(tecId))
                     && (!cliId || String(o.clienteId) === String(cliId))
-                    && (status === 'TODOS' || (status === 'TODOS' || (isOSConcluida(o) ? isOSConcluida(status) : String(o.status) === status)))
+                    && (status === 'TODOS' || (isOSConcluida(status) ? isOSConcluida(o) : String(o.status) === status))
                     && (!search || hay.includes(search));
             });
 
