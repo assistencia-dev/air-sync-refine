@@ -1828,6 +1828,73 @@
 }
 </style>
 
+
+    <style id="dbs-control-global-organization">
+      /* DBS CONTROL: hierarquia visual consistente e responsividade sem alterar o motor de dados. */
+      body { color:#17324f; }
+      body .data-card,
+      body .os-premium-shell,
+      body .employee-order {
+        min-width:0;
+        border-radius:14px;
+      }
+      body .data-header {
+        display:flex; align-items:center; justify-content:space-between;
+        flex-wrap:wrap; gap:12px; padding:16px 18px;
+      }
+      body .filter-bar,
+      body .history-filter-grid {
+        display:flex; align-items:center; flex-wrap:wrap; gap:9px;
+      }
+      body .filter-bar input,
+      body .filter-bar select,
+      body .history-filter-grid input,
+      body .history-filter-grid select {
+        min-height:40px; max-width:100%; border-radius:9px;
+      }
+      body .btn {
+        min-height:36px; border-radius:9px; font-weight:700;
+        transition:background-color .15s ease, box-shadow .15s ease;
+      }
+      body .btn:focus-visible,
+      body input:focus-visible,
+      body select:focus-visible,
+      body textarea:focus-visible {
+        outline:3px solid rgba(42,145,230,.28); outline-offset:2px;
+      }
+      body .day-table-wrap,
+      body .table-responsive,
+      body .data-card:has(> table),
+      body #tab-ordens .data-card {
+        min-width:0;
+      }
+      body table { border-collapse:separate; border-spacing:0; }
+      body table th { white-space:nowrap; }
+      body table td { vertical-align:middle; }
+      body #tab-ordens #os-table { min-width:1040px; }
+      body #tab-ordens .data-card { overflow-x:auto; }
+      body .employee-os-tabs .btn[aria-selected="true"] {
+        box-shadow:0 2px 8px rgba(15,70,120,.12);
+      }
+      body .employee-order { overflow-wrap:anywhere; }
+      body .employee-order-top,
+      body .employee-toolbar { gap:12px; }
+      body .employee-fields input,
+      body .employee-fields select,
+      body .employee-fields textarea { width:100%; min-width:0; }
+      @media (max-width: 760px) {
+        body .data-header { align-items:stretch; padding:13px; }
+        body .filter-bar { width:100%; align-items:stretch; }
+        body .filter-bar input,
+        body .filter-bar select,
+        body .filter-bar button { flex:1 1 100%; width:100% !important; }
+        body .history-filter-grid > * { flex:1 1 100%; min-width:0; }
+        body .employee-toolbar { align-items:flex-start; flex-wrap:wrap; }
+        body .employee-os-tabs .btn { flex:1 1 100%; justify-content:center; }
+        body .os-premium-row { grid-template-columns:minmax(0,1fr) !important; }
+        body .employee-photo-grid { grid-template-columns:minmax(0,1fr) !important; }
+      }
+    </style>
 </head>
 <body>
 
