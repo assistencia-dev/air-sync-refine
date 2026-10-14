@@ -277,20 +277,28 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     const currentIsCompleted = ["Concluída", "concluida", "concluído", "concluido"].includes(String(currentOrder?.status ?? "").trim().toLowerCase());
     const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status);
 
+    const preserveCompletedValue = (field: string, fallback: unknown) => {
+      const existing = currentOrder?.[field];
+      if (currentIsCompleted && existing !== null && existing !== undefined && String(existing).trim() !== "") return existing;
+      const submitted = incomingOrder?.[field];
+      return submitted !== null && submitted !== undefined && String(submitted).trim() !== "" ? submitted : fallback;
+    };
+
     return {
       ...currentOrder,
       ...mergeAppendOnlyCollaboratorObservations(currentOrder, incomingOrder),
       // O colaborador só pode atualizar a execução da própria OS.
       // Dados administrativos/originais (inclusive valor) permanecem intactos.
+      // Em OS concluída, conteúdo já preenchido não pode ser apagado por autosave antigo.
       status: safeStatus,
-      diagnostico: incomingOrder.diagnostico ?? currentOrder.diagnostico ?? "",
-      trabalhoExecutado: incomingOrder.trabalhoExecutado ?? currentOrder.trabalhoExecutado ?? "",
-      fotoAntes: incomingOrder.fotoAntes ?? currentOrder.fotoAntes ?? null,
-      fotoDepois: incomingOrder.fotoDepois ?? currentOrder.fotoDepois ?? null,
-      assinatura: incomingOrder.assinatura ?? currentOrder.assinatura ?? null,
-      assinaturaEm: incomingOrder.assinaturaEm ?? currentOrder.assinaturaEm ?? null,
-      concluidoEm: incomingOrder.concluidoEm ?? currentOrder.concluidoEm ?? null,
-      concluidoPorEmployeeId: incomingOrder.concluidoPorEmployeeId ?? currentOrder.concluidoPorEmployeeId ?? null,
+      diagnostico: preserveCompletedValue("diagnostico", currentOrder.diagnostico ?? ""),
+      trabalhoExecutado: preserveCompletedValue("trabalhoExecutado", currentOrder.trabalhoExecutado ?? ""),
+      fotoAntes: preserveCompletedValue("fotoAntes", currentOrder.fotoAntes ?? null),
+      fotoDepois: preserveCompletedValue("fotoDepois", currentOrder.fotoDepois ?? null),
+      assinatura: preserveCompletedValue("assinatura", currentOrder.assinatura ?? null),
+      assinaturaEm: preserveCompletedValue("assinaturaEm", currentOrder.assinaturaEm ?? null),
+      concluidoEm: preserveCompletedValue("concluidoEm", currentOrder.concluidoEm ?? null),
+      concluidoPorEmployeeId: preserveCompletedValue("concluidoPorEmployeeId", currentOrder.concluidoPorEmployeeId ?? null),
       pecasUsadas: newParts,
     };
   });
@@ -625,7 +633,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
-          .select("id,protocol,assigned_employee_id,status")
+          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name")
           .eq("assigned_employee_id", employee.id);
         if (assignedError) throw new Error(assignedError.message);
 
@@ -644,12 +652,6 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) continue;
 
           const submittedStatus = String(incomingOrder?.status ?? "").trim();
-          // Bloqueia regressão: um autosave antigo do técnico não pode reabrir
-          // uma OS que já está concluída na tabela operacional canônica.
-          if (
-            ["concluida", "concluído", "concluido"].includes(String(canonicalOrder.status ?? "").trim().toLowerCase()) &&
-            submittedStatus !== "Concluída"
-          ) continue;
           const allowedStatuses: Record<string, string> = {
             "Em Atendimento": "em_atendimento",
             "Aguardando peça": "aguardando_peca",
@@ -659,23 +661,72 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const dbStatus = allowedStatuses[submittedStatus];
           if (!dbStatus) continue;
 
+          const completedStatuses = new Set(["concluida", "concluído", "concluido"]);
+          const wasCompleted = completedStatuses.has(String(canonicalOrder.status ?? "").trim().toLowerCase());
+          const isStatusTransition = String(canonicalOrder.status ?? "").trim().toLowerCase() !== dbStatus.toLowerCase();
+
+          // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
+          // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
+          // Se o registro canônico ainda não tiver um campo de conclusão, só preenchemos
+          // o campo ausente com conteúdo válido recebido do técnico.
+          if (wasCompleted && submittedStatus !== "Concluída") continue;
+
+          const incomingDiagnosis = String(incomingOrder?.diagnostico ?? currentOrder?.diagnostico ?? "").trim();
+          const incomingObservation = String(incomingOrder?.observacao ?? currentOrder?.observacao ?? "").trim();
+          const incomingSignature = String(incomingOrder?.assinatura ?? "").trim();
+          const incomingSignatureName = String(incomingOrder?.signature_name ?? "").trim();
           const update: Record<string, unknown> = {
-            status: dbStatus,
-            technical_opinion: String(incomingOrder?.diagnostico ?? currentOrder?.diagnostico ?? ""),
-            observation: String(incomingOrder?.observacao ?? currentOrder?.observacao ?? ""),
             updated_at: new Date().toISOString(),
           };
-          if (submittedStatus === "Concluída") {
-            update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
-            if (incomingOrder?.assinatura != null) update.signature_data = incomingOrder.assinatura;
-            if (incomingOrder?.signature_name != null) update.signature_name = incomingOrder.signature_name;
+
+          if (!wasCompleted) {
+            update.status = dbStatus;
+            update.technical_opinion = incomingDiagnosis;
+            update.observation = incomingObservation;
+          } else {
+            if (!String(canonicalOrder.technical_opinion ?? "").trim() && incomingDiagnosis) update.technical_opinion = incomingDiagnosis;
+            if (!String(canonicalOrder.observation ?? "").trim() && incomingObservation) update.observation = incomingObservation;
           }
+
+          if (submittedStatus === "Concluída") {
+            if (!wasCompleted || !canonicalOrder.completed_at) {
+              update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
+            }
+            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim())) {
+              update.signature_data = incomingSignature;
+            }
+            if (incomingSignatureName && (!wasCompleted || !String(canonicalOrder.signature_name ?? "").trim())) {
+              update.signature_name = incomingSignatureName;
+            }
+          }
+
           const { error: updateError } = await supabaseAdmin
             .from("dbs_control_work_orders")
             .update(update)
             .eq("id", canonicalOrder.id)
             .eq("assigned_employee_id", employee.id);
           if (updateError) throw new Error(updateError.message);
+
+          // Histórico append-only de cada transição real de status para auditoria.
+          // Falha ao registrar o evento é reportada; nunca é ocultada como sucesso.
+          if (isStatusTransition && !wasCompleted) {
+            const { error: eventError } = await supabaseAdmin
+              .from("dbs_control_work_order_events")
+              .insert({
+                work_order_id: canonicalOrder.id,
+                actor_user_id: user.id,
+                event_type: "status_changed",
+                old_status: String(canonicalOrder.status ?? ""),
+                new_status: dbStatus,
+                details: {
+                  protocol: String(canonicalOrder.protocol ?? incomingOrder?.protocolo ?? ""),
+                  source: "collaborator_save",
+                  employee_id: employee.id,
+                  recorded_at: new Date().toISOString(),
+                },
+              });
+            if (eventError) throw new Error(`A OS foi salva, mas o histórico de auditoria não foi registrado: ${eventError.message}`);
+          }
         }
       }
 

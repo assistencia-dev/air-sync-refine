@@ -86,6 +86,11 @@ assert.match(theme, /employee-observation-field/, "O tema deve contemplar a áre
 assert.match(html, /employee-observation-field/, "A execução deve oferecer campo complementar separado para observações técnicas.");
 assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
+assert.match(cloudFunctions, /const preserveCompletedValue = \(field: string, fallback: unknown\)/, "OS concluída deve preservar campos preenchidos contra autosaves antigos.");
+assert.match(cloudFunctions, /const wasCompleted = completedStatuses\.has/, "O salvamento canônico deve detectar OS já concluídas.");
+assert.match(cloudFunctions, /!String\(canonicalOrder\.signature_data \?\? ""\)\.trim\(\)/, "Assinatura já gravada de OS concluída não pode ser substituída.");
+assert.match(cloudFunctions, /from\("dbs_control_work_order_events"\)[\s\S]*?event_type: "status_changed"/, "Transições de status devem ser registradas no histórico de auditoria.");
+assert.match(cloudFunctions, /technical_opinion,observation,completed_at,signature_data,signature_name/, "A proteção deve ler os campos canônicos antes de decidir se pode preenchê-los.");
 assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
 assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
