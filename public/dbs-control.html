@@ -3192,7 +3192,7 @@
             const technicians = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
             const norm = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
             const statusOf = order => norm(order.status);
-            const completed = order => /conclu[ií]d/.test(statusOf(order));
+            const completed = order => isOSConcluida(order);
             const cancelled = order => /cancelad/.test(statusOf(order));
             const openOrders = orders.filter(order => !completed(order) && !cancelled(order));
             const waiting = openOrders.filter(order => /aguardando/.test(statusOf(order)));
@@ -3531,7 +3531,7 @@
                 const searchable = (row.getAttribute('data-search') || row.innerText || '').toLocaleLowerCase('pt-BR');
                 const matchSearch = !search || searchable.includes(search);
                 const matchStatus = statusFilter === 'Arquivadas' ? archived :
-                    statusFilter === 'ATIVAS' ? (!archived && !/concluída|cancelad/i.test(status)) :
+                    statusFilter === 'ATIVAS' ? (!archived && !isOSConcluida(status) && !/cancelad/i.test(status.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) :
                     statusFilter === 'TODOS' ? !archived : (!archived && status === statusFilter);
                 const matchFrom = !from || (date && date >= from);
                 const matchTo = !to || (date && date <= to);
@@ -4754,12 +4754,12 @@
 
             const employeeOsTab = window.__DBS_EMPLOYEE_OS_TAB__ || 'abertas';
             const minhasOSVisiveis = minhasOS.filter(o => employeeOsTab === 'concluidas'
-                ? /concluída/i.test(String(o.status || ''))
-                : !/concluída/i.test(String(o.status || '')));
+                ? isOSConcluida(o)
+                : !isOSConcluida(o));
 
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
-                if (s === 'Concluída') return ['Concluída','employee-status-done'];
+                if (isOSConcluida(s)) return ['Concluída','employee-status-done'];
                 if (/aguardando peça/i.test(s)) return ['Aguardando peça','employee-status-wait'];
                 if (/aguardando cliente/i.test(s)) return ['Aguardando cliente','employee-status-wait'];
                 if (/cancelad/i.test(s)) return ['Cancelada','employee-status-cancelled'];
@@ -4780,8 +4780,8 @@
               <div class="employee-progress-grid" aria-label="Resumo de produtividade">
                 <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
                 <div class="employee-progress-card"><span>Aguardando</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Dependem de retorno ou insumo</small></div>
-                <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length}</strong><small>Ordens finalizadas</small></div>
-                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
+                <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(isOSConcluida).length}</strong><small>Ordens finalizadas</small></div>
+                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(isOSConcluida).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
               </div>
 
               <div class="employee-toolbar">
@@ -4789,8 +4789,8 @@
                 <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
               </div>
               <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
-                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !/concluída/i.test(String(o.status || ''))).length})</span></button>
-                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !isOSConcluida(o)).length})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${minhasOS.filter(isOSConcluida).length})</span></button>
               </div>
 
               <div class="employee-orders">
