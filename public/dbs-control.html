@@ -4459,6 +4459,43 @@
         }
 
 
+        // Cadastro rápido de equipamento pelo técnico, diretamente na OS em atendimento.
+        function cadastrarEquipamentoNaOS(osId) {
+            const os = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : []).find(item => String(item.id) === String(osId));
+            const feedback = document.getElementById('pwa-eq-feedback-' + osId);
+            const setFeedback = (message, error) => { if (feedback) { feedback.textContent = message; feedback.style.color = error ? '#b91c1c' : '#047857'; } };
+            if (!os) { setFeedback('Não foi possível localizar esta OS. Atualize a tela e tente novamente.', true); return; }
+            const clienteId = String(os.clienteId ?? os.cliente_id ?? '');
+            const cliente = (Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : []).find(item => String(item.id) === clienteId);
+            if (!clienteId || !cliente) { setFeedback('A OS não tem um cliente válido vinculado. Nenhum cadastro foi criado.', true); return; }
+            const read = key => String(document.getElementById('pwa-eq-' + key + '-' + osId)?.value || '').trim();
+            const tipo=read('tipo'), modelo=read('modelo'), gas=read('gas'), capacidade=read('btu'), ambiente=read('ambiente'), marca=read('marca'), serie=read('serie'), tag=read('tag');
+            if (![tipo,modelo,gas,capacidade,ambiente,marca,serie,tag].some(Boolean)) { setFeedback('Preencha ao menos uma informação do equipamento para cadastrar.', true); return; }
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
+            if (tag && (ERP_STATE.equipamentos || []).some(item => String(item.clienteId ?? item.cliente_id ?? '') === clienteId && norm(item.tag) === norm(tag))) {
+                setFeedback('Já existe um equipamento com essa TAG para este cliente. Confira antes de cadastrar.', true); return;
+            }
+            const equipmentId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'eq-' + Date.now() + '-' + Math.random().toString(36).slice(2,10);
+            const equipamento = { id:equipmentId, clienteId, tag, tipo, marca, modelo, serie, capacidade, gas, tipoGas:gas, ambiente, origemCadastro:'tecnico_os', ordemServicoId:String(os.id), cadastradoEm:new Date().toISOString() };
+            if (!Array.isArray(ERP_STATE.equipamentos)) ERP_STATE.equipamentos = [];
+            ERP_STATE.equipamentos.push(equipamento);
+            if (!os.equipamentoId) os.equipamentoId = equipmentId;
+            const linkedIds = Array.isArray(os.equipamentoIds) ? os.equipamentoIds.map(String) : [];
+            if (!linkedIds.includes(equipmentId)) linkedIds.push(equipmentId);
+            os.equipamentoIds = linkedIds;
+            os.equipamentoCadastradoNaOS = true;
+            os.equipamentoAtualizadoEm = equipamento.cadastradoEm;
+            try {
+                saveState();
+                setFeedback('Equipamento cadastrado e vinculado ao cliente desta OS. Aguarde a sincronização antes de sair.', false);
+                const details = feedback?.closest('details'); if (details) details.open = false;
+                renderizarPWAScreen();
+            } catch (error) {
+                console.error('Falha ao salvar equipamento cadastrado na OS:', error);
+                setFeedback('Não foi possível salvar agora. Verifique a sincronização e tente novamente.', true);
+            }
+        }
+
         function initCanvas(id) {
             const canvas = document.getElementById(id);
             if (!canvas) return;
