@@ -3324,6 +3324,12 @@
             document.querySelectorAll('.chk-os-item').forEach(c => c.checked = master.checked);
         }
 
+        function normalizarDataFiltroOS(value) {
+            const raw = String(value || '').trim();
+            if (/^\\d{4}-\\d{2}-\\d{2}/.test(raw)) return raw.slice(0,10);
+            const br = raw.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
+            return br ? br[3] + '-' + br[2] + '-' + br[1] : '';
+        }
         function aplicarFiltrosOS() {
             const search = String(document.getElementById('os-search-input')?.value || '').trim().toLocaleLowerCase('pt-BR');
             const statusFilter = document.getElementById('os-filter-status')?.value || 'ATIVAS';
@@ -3337,7 +3343,7 @@
                 const searchable = (row.getAttribute('data-search') || row.innerText || '').toLocaleLowerCase('pt-BR');
                 const matchSearch = !search || searchable.includes(search);
                 const matchStatus = statusFilter === 'Arquivadas' ? archived :
-                    statusFilter === 'ATIVAS' ? (!archived && /em atendimento|aguardando/i.test(status)) :
+                    statusFilter === 'ATIVAS' ? (!archived && !/concluída|cancelad/i.test(status)) :
                     statusFilter === 'TODOS' ? !archived : (!archived && status === statusFilter);
                 const matchFrom = !from || (date && date >= from);
                 const matchTo = !to || (date && date <= to);
@@ -3365,7 +3371,7 @@
         function excluirOSComSeguranca(osId) {
             const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
             if (!os || os.excluidaEm) return;
-            if (!confirm('Excluir esta OS da operação? O registro será retirado das listas, mas ficará preservado no histórico de auditoria e poderá ser recuperado por administrador.')) return;
+            if (!confirm('Excluir esta OS da operação? O registro será retirado das listas operacionais, mas permanecerá preservado no histórico interno para evitar perda de rastreabilidade.')) return;
             os.excluidaEm = new Date().toISOString();
             os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador';
             os.statusAntesExclusao = os.status || '';
@@ -3538,7 +3544,7 @@
                 const archived = Boolean(o.arquivadaEm);
                 const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.localAtendimento,cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome].join(' ').replace(/"/g,'&quot;');
                 return `
-                    <tr data-status="${o.status}" data-archived="${archived ? 'true' : 'false'}" data-date="${String(o.data || '').slice(0,10)}" data-search="${searchText}">
+                    <tr data-status="${o.status}" data-archived="${archived ? 'true' : 'false'}" data-date="${normalizarDataFiltroOS(o.data)}" data-search="${escDbsControl(searchText)}">
                         <td><input type="checkbox" class="chk-os-item" value="${o.id}" ${archived ? 'disabled' : ''}></td>
                         <td><strong>${o.id}</strong>${archived ? '<small style="display:block;color:#64748b">Arquivada</small>' : ''}</td>
                         <td>${o.data || '—'}</td>
@@ -3563,7 +3569,7 @@
                 if (dashboardBody) dashboardBody.innerHTML = rowsHtml;
             } else if (activeTabId === 'tab-ordens') {
                 const ordersBody = document.getElementById('os-table-body');
-                if (ordersBody) ordersBody.innerHTML = rowsHtml;
+                if (ordersBody) { ordersBody.innerHTML = rowsHtml; aplicarFiltrosOS(); }
             }
         }
 
