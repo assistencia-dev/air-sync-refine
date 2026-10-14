@@ -491,11 +491,11 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
     const { data, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, created_at, updated_at, is_active, registry_employee_id")
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, created_at, updated_at, is_active, registry_employee_id, benefit_configured, benefit_type")
       .order("full_name");
     if (error) throw new Error(error.message);
     const registry = (data ?? []).filter((employee: any) =>
-      (employee.registry_employee_id === employee.id || !employee.registry_employee_id) &&
+      (employee.registry_employee_id === employee.id || (!employee.registry_employee_id && !employee.benefit_configured)) &&
       !Boolean(employee.registration_data && (employee.registration_data as any).__deleted_at)
     );
     const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
