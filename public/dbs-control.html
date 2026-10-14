@@ -1831,68 +1831,68 @@
 
     <style id="dbs-control-global-organization">
       /* DBS CONTROL: hierarquia visual consistente e responsividade sem alterar o motor de dados. */
-      #dbs-control, body:has(#dbs-control) { color:#17324f; }
-      #dbs-control .data-card,
-      #dbs-control .os-premium-shell,
-      #dbs-control .employee-order {
+      body, body:has(body) { color:#17324f; }
+      body .data-card,
+      body .os-premium-shell,
+      body .employee-order {
         min-width:0;
         border-radius:14px;
       }
-      #dbs-control .data-header {
+      body .data-header {
         display:flex; align-items:center; justify-content:space-between;
         flex-wrap:wrap; gap:12px; padding:16px 18px;
       }
-      #dbs-control .filter-bar,
-      #dbs-control .history-filter-grid {
+      body .filter-bar,
+      body .history-filter-grid {
         display:flex; align-items:center; flex-wrap:wrap; gap:9px;
       }
-      #dbs-control .filter-bar input,
-      #dbs-control .filter-bar select,
-      #dbs-control .history-filter-grid input,
-      #dbs-control .history-filter-grid select {
+      body .filter-bar input,
+      body .filter-bar select,
+      body .history-filter-grid input,
+      body .history-filter-grid select {
         min-height:40px; max-width:100%; border-radius:9px;
       }
-      #dbs-control .btn {
+      body .btn {
         min-height:36px; border-radius:9px; font-weight:700;
         transition:background-color .15s ease, box-shadow .15s ease;
       }
-      #dbs-control .btn:focus-visible,
-      #dbs-control input:focus-visible,
-      #dbs-control select:focus-visible,
-      #dbs-control textarea:focus-visible {
+      body .btn:focus-visible,
+      body input:focus-visible,
+      body select:focus-visible,
+      body textarea:focus-visible {
         outline:3px solid rgba(42,145,230,.28); outline-offset:2px;
       }
-      #dbs-control .day-table-wrap,
-      #dbs-control .table-responsive,
-      #dbs-control .data-card:has(> table),
-      #dbs-control #tab-ordens .data-card {
+      body .day-table-wrap,
+      body .table-responsive,
+      body .data-card:has(> table),
+      body #tab-ordens .data-card {
         min-width:0;
       }
-      #dbs-control table { border-collapse:separate; border-spacing:0; }
-      #dbs-control table th { white-space:nowrap; }
-      #dbs-control table td { vertical-align:middle; }
-      #dbs-control #tab-ordens #os-table { min-width:1040px; }
-      #dbs-control #tab-ordens .data-card { overflow-x:auto; }
-      #dbs-control .employee-os-tabs .btn[aria-selected="true"] {
+      body table { border-collapse:separate; border-spacing:0; }
+      body table th { white-space:nowrap; }
+      body table td { vertical-align:middle; }
+      body #tab-ordens #os-table { min-width:1040px; }
+      body #tab-ordens .data-card { overflow-x:auto; }
+      body .employee-os-tabs .btn[aria-selected="true"] {
         box-shadow:0 2px 8px rgba(15,70,120,.12);
       }
-      #dbs-control .employee-order { overflow-wrap:anywhere; }
-      #dbs-control .employee-order-top,
-      #dbs-control .employee-toolbar { gap:12px; }
-      #dbs-control .employee-fields input,
-      #dbs-control .employee-fields select,
-      #dbs-control .employee-fields textarea { width:100%; min-width:0; }
+      body .employee-order { overflow-wrap:anywhere; }
+      body .employee-order-top,
+      body .employee-toolbar { gap:12px; }
+      body .employee-fields input,
+      body .employee-fields select,
+      body .employee-fields textarea { width:100%; min-width:0; }
       @media (max-width: 760px) {
-        #dbs-control .data-header { align-items:stretch; padding:13px; }
-        #dbs-control .filter-bar { width:100%; align-items:stretch; }
-        #dbs-control .filter-bar input,
-        #dbs-control .filter-bar select,
-        #dbs-control .filter-bar button { flex:1 1 100%; width:100% !important; }
-        #dbs-control .history-filter-grid > * { flex:1 1 100%; min-width:0; }
-        #dbs-control .employee-toolbar { align-items:flex-start; flex-wrap:wrap; }
-        #dbs-control .employee-os-tabs .btn { flex:1 1 100%; justify-content:center; }
-        #dbs-control .os-premium-row { grid-template-columns:minmax(0,1fr) !important; }
-        #dbs-control .employee-photo-grid { grid-template-columns:minmax(0,1fr) !important; }
+        body .data-header { align-items:stretch; padding:13px; }
+        body .filter-bar { width:100%; align-items:stretch; }
+        body .filter-bar input,
+        body .filter-bar select,
+        body .filter-bar button { flex:1 1 100%; width:100% !important; }
+        body .history-filter-grid > * { flex:1 1 100%; min-width:0; }
+        body .employee-toolbar { align-items:flex-start; flex-wrap:wrap; }
+        body .employee-os-tabs .btn { flex:1 1 100%; justify-content:center; }
+        body .os-premium-row { grid-template-columns:minmax(0,1fr) !important; }
+        body .employee-photo-grid { grid-template-columns:minmax(0,1fr) !important; }
       }
     </style>
 </head>
