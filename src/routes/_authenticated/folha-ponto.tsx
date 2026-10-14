@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/auth.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
 import { hasMyDbsControlAccess } from "@/lib/rh.functions";
@@ -15,6 +17,13 @@ export const Route = createFileRoute("/_authenticated/folha-ponto")({
 
 function FolhaPontoPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  }
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
   const access = useQuery({ queryKey: ["my-ponto-access"], queryFn: () => hasMyPontoAccess(), retry: false });
   const controlAccess = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: false });
@@ -36,11 +45,13 @@ function FolhaPontoPage() {
                 <p className="mt-1 text-sm font-black text-slate-900">{profile.data?.full_name ?? profile.data?.username ?? "Colaborador"}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end"><div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
               <button type="button" className="rounded-lg bg-white px-4 py-2 text-xs font-black text-slate-900 shadow-sm">Folha de Ponto</button>
               {controlAccess.data?.enabled && (
                 <button type="button" onClick={() => navigate({ to: "/dbs-control", replace: true })} className="rounded-lg px-4 py-2 text-xs font-black text-slate-600 transition hover:bg-white hover:text-slate-900">Minhas OS</button>
               )}
+              </div>
+              <button type="button" onClick={signOut} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-800"><LogOut className="h-4 w-4" /> Sair</button>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-[11px] font-bold text-slate-400 sm:px-6">
