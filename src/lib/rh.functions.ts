@@ -494,7 +494,10 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
       .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, created_at, updated_at, is_active, registry_employee_id")
       .order("full_name");
     if (error) throw new Error(error.message);
-    const registry = (data ?? []).filter((employee: any) => employee.registry_employee_id === employee.id || !employee.registry_employee_id);
+    const registry = (data ?? []).filter((employee: any) =>
+      (employee.registry_employee_id === employee.id || !employee.registry_employee_id) &&
+      !Boolean(employee.registration_data && (employee.registration_data as any).__deleted_at)
+    );
     const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
     const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
@@ -913,6 +916,37 @@ export const getRhEmployeeFichaUrl = createServerFn({ method: "POST" })
     if (!signed.data?.signedUrl)
       throw new Error(signed.error?.message ?? "Não foi possível gerar o download.");
     return { url: signed.data.signedUrl, file_name: employee.ficha_file_name };
+  });
+
+export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; confirmation: string }) => {
+    if (!input?.id || input.confirmation !== "EXCLUIR CADASTRO") throw new Error("Confirmação de exclusão inválida.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, is_active, registration_data, registry_employee_id")
+      .eq("id", data.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    if (employee.registry_employee_id && employee.registry_employee_id !== employee.id) {
+      throw new Error("Este registro é um vínculo auxiliar de benefício. Exclua-o pela área do benefício para preservar o cadastro mestre.");
+    }
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? employee.registration_data as Record<string, unknown> : {};
+    const nextRegistration = { ...registration, __deleted_at: new Date().toISOString(), __deleted_by: actor.id };
+    const { error: updateError } = await supabaseAdmin.from("rh_employees").update({
+      is_active: false, ponto_access_enabled: false, dbs_control_access_enabled: false,
+      ponto_portal_user_id: null, registration_data: nextRegistration,
+    }).eq("id", employee.id);
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: employee.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_EXCLUIDO_DA_LISTA",
+      details: { full_name: employee.full_name, preserved_as_history: true },
+    });
+    return { ok: true };
   });
 
 export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
