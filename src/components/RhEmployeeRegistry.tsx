@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown, FileSpreadsheet } from "lucide-react";
 import {
-  deactivateRhEmployeeRecord,\n  permanentlyRemoveRhEmployeeRecord,
+  deactivateRhEmployeeRecord,
+  removeRhEmployeeFromRegistry,
   reactivateRhEmployeeRecord,
   getRhEmployeeFichaUrl,
   listRhEmployeeRegistry,
@@ -60,7 +61,9 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
   const [formOpen, setFormOpen] = useState(false);
   const [accessing, setAccessing] = useState<Employee | null>(null);
   const [viewing, setViewing] = useState<Employee | null>(null);
-  const [error, setError] = useState<string | null>(null);\n  const [permanentDelete, setPermanentDelete] = useState<Employee | null>(null);\n  const [deleteConfirmation, setDeleteConfirmation] = useState(\"\");
+  const [error, setError] = useState<string | null>(null);
+  const [permanentDelete, setPermanentDelete] = useState<Employee | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState(\"\");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
   const [accessFilter, setAccessFilter] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
@@ -207,7 +210,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
                   <button type="button" onClick={() => { setPermanentDelete(null); setDeleteConfirmation(""); }} className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-bold text-slate-200">Cancelar</button>
                   <button type="button" disabled={deleteConfirmation !== "EXCLUIR CADASTRO"} onClick={async () => {
                     try {
-                      await permanentlyRemoveRhEmployeeRecord({ data: { id: permanentDelete.id, confirmation: "EXCLUIR CADASTRO" } });
+                      await removeRhEmployeeFromRegistry({ data: { id: permanentDelete.id, confirmation: "EXCLUIR CADASTRO" } });
                       setPermanentDelete(null); setDeleteConfirmation(""); setError(null); refresh();
                     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível excluir o cadastro."); }
                   }} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white disabled:opacity-40">Excluir cadastro</button>
