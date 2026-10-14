@@ -2126,9 +2126,15 @@
                             </div>
                         </div>
 
-                        <div class="form-group os-premium-description">
-                            <label for="os-desc">O que precisa ser feito?</label>
-                            <textarea id="os-desc" rows="4" required placeholder="Descreva o problema ou a orientação para o técnico..."></textarea>
+                        <div class="os-premium-row os-premium-row-service">
+                            <div class="form-group os-premium-description">
+                                <label for="os-orientacao-tecnico">Orientação interna para o técnico <span style="font-weight:500;color:#71829a;text-transform:none">(não aparece no PDF)</span></label>
+                                <textarea id="os-orientacao-tecnico" rows="3" placeholder="Acesso ao local, cuidados, contato, procedimento ou instruções adicionais. Campo opcional."></textarea>
+                            </div>
+                            <div class="form-group os-premium-description">
+                                <label for="os-desc">Relato do problema <span style="font-weight:500;color:#71829a;text-transform:none">(aparece no PDF)</span></label>
+                                <textarea id="os-desc" rows="3" placeholder="Descreva o defeito informado pelo cliente ou o motivo do atendimento. Campo opcional."></textarea>
+                            </div>
                         </div>
                     </div>
 
@@ -4212,7 +4218,8 @@
                 tipo: document.getElementById('os-select-tipo').value,
                 valor: srv ? srv.valor : 0.00,
                 status: "Em Atendimento",
-                desc: document.getElementById('os-desc').value,
+                desc: String(document.getElementById('os-desc')?.value || '').trim(),
+                orientacaoTecnico: String(document.getElementById('os-orientacao-tecnico')?.value || '').trim(),
                 pecasUsadas: [],
                 checklist: tipoPermiteChecklist(document.getElementById('os-select-tipo').value)
                     ? obterChecklistPadrao(document.getElementById('os-select-tipo').value).map((titulo, index) => ({
@@ -4421,28 +4428,31 @@
 
             function getPos(e) {
                 const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
             }
-
-            canvas.onmousedown = canvas.ontouchstart = function(e) {
+            // Pointer Events keep the stroke directly under the finger/stylus on mobile,
+            // including when the browser uses a high-DPI canvas backing store.
+            canvas.style.touchAction = 'none';
+            canvas.style.cursor = 'crosshair';
+            canvas.onpointerdown = function(e) {
+                e.preventDefault();
                 isDrawing = true;
+                try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 const p = getPos(e);
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
             };
-
-            canvas.onmousemove = canvas.ontouchmove = function(e) {
+            canvas.onpointermove = function(e) {
                 if (!isDrawing) return;
+                e.preventDefault();
                 const p = getPos(e);
                 ctx.lineTo(p.x, p.y);
                 ctx.stroke();
             };
-
-            canvas.onmouseup = canvas.ontouchend = function() {
-                isDrawing = false;
-            };
+            const stopDrawing = () => { isDrawing = false; };
+            canvas.onpointerup = stopDrawing;
+            canvas.onpointercancel = stopDrawing;
+            canvas.onlostpointercapture = stopDrawing;
         }
 
         function limparCanvas(osId) {
@@ -5235,6 +5245,25 @@
     #os-client-search, #os-equipment-search { min-height:48px !important; font-size:16px !important; }
     #os-equipment-options { max-height:42vh; }
   }
+        /* Assinatura mobile: área ampla e traço alinhado ao ponto de contato. */
+        canvas.sig-canvas {
+            display:block;
+            width:100%;
+            height:190px;
+            min-height:190px;
+            border:1px solid #b8cce0;
+            border-radius:12px;
+            background:linear-gradient(#fff,#fbfdff);
+            box-shadow:inset 0 1px 3px rgba(15,47,87,.05);
+            touch-action:none;
+            -webkit-user-select:none;
+            user-select:none;
+        }
+        .employee-execution-body > label { margin-top:8px; }
+        @media(max-width:640px) {
+            canvas.sig-canvas { height:210px; min-height:210px; }
+            #tab-nova-os .os-premium-row-service { grid-template-columns:1fr; }
+        }
 </style>
 <script id="dbs-mobile-selector-fix-script">
 (function(){
