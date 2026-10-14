@@ -5715,7 +5715,7 @@
 <!-- Mobile selector reliability: full client search + touch-safe equipment selection. -->
 <style id="dbs-mobile-selector-fix">
   #dbs-client-options-mobile {
-    position: absolute; inset-inline: 0; top: calc(100% + 5px); z-index: 10050;
+    position: fixed; left: 0; top: 0; width: min(420px, calc(100vw - 24px)); z-index: 100500;
     max-height: min(52vh, 360px); overflow-y: auto; overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch; background: #fff; border: 1px solid #cbd8e8;
     border-radius: 12px; box-shadow: 0 14px 36px rgba(12, 39, 69, .2); padding: 5px;
@@ -5727,7 +5727,8 @@
     font: inherit; cursor: pointer; touch-action: manipulation; white-space: normal;
   }
   #dbs-client-options-mobile .dbs-client-option:active,
-  #dbs-client-options-mobile .dbs-client-option:focus { background: #edf6ff; outline: 2px solid #8dbde9; }\n  #dbs-client-options-mobile .dbs-client-results-count { position:sticky; top:0; z-index:1; padding:9px 12px; background:#f4f8fc; border-bottom:1px solid #dbe6f1; color:#536a82; font-size:12px; }
+  #dbs-client-options-mobile .dbs-client-option:focus { background: #edf6ff; outline: 2px solid #8dbde9; }
+  #dbs-client-options-mobile .dbs-client-results-count { position:sticky; top:0; z-index:1; padding:9px 12px; background:#f4f8fc; border-bottom:1px solid #dbe6f1; color:#536a82; font-size:12px; }
   #dbs-client-options-mobile .dbs-client-option strong { display:block; font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
   #dbs-client-options-mobile .dbs-client-option small { display:block; margin-top:3px; color:#627891; font-size:12px; overflow-wrap:anywhere; }
   #dbs-client-options-mobile .dbs-client-empty { padding:14px 12px; color:#627891; font-size:13px; }
@@ -5799,6 +5800,21 @@
       group.appendChild(panel);
     }
     function close(){ panel.hidden = true; input.setAttribute('aria-expanded','false'); }
+    function positionPanel(){
+      if (panel.hidden || !input.isConnected) return;
+      const rect = input.getBoundingClientRect();
+      const gap = 5;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const maxHeight = Math.min(360, Math.floor(viewportHeight * 0.46));
+      const below = viewportHeight - rect.bottom - gap;
+      const above = rect.top - gap;
+      const openAbove = below < Math.min(180, maxHeight) && above > below;
+      const height = Math.min(maxHeight, Math.max(120, (openAbove ? above : below) - 8));
+      panel.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - Math.min(rect.width, window.innerWidth - 24) - 12)) + 'px';
+      panel.style.width = Math.min(rect.width, window.innerWidth - 24) + 'px';
+      panel.style.maxHeight = Math.max(100, height) + 'px';
+      panel.style.top = (openAbove ? Math.max(8, rect.top - Math.min(maxHeight, panel.scrollHeight || maxHeight) - gap) : rect.bottom + gap) + 'px';
+    }
     function draw(){
       const term = normalize(input.value);
       const compact = term.replace(/[^a-z0-9]/g, '');
@@ -5833,6 +5849,7 @@
         ).join('') : '<div class="dbs-client-empty">Nenhum cliente encontrado. Tente parte do nome, CNPJ/CPF, telefone ou e-mail.</div>');
       panel.hidden = false;
       input.setAttribute('aria-expanded','true');
+      positionPanel();
     }
     function escapeClient(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function clearDependentData(){
@@ -5858,6 +5875,8 @@
     });
     input.addEventListener('focus', draw);
     input.addEventListener('click', draw);
+    window.addEventListener('resize', positionPanel, {passive:true});
+    window.addEventListener('scroll', positionPanel, {passive:true, capture:true});
     input.addEventListener('input', function(){
       const current = clients().find(c => String(c.id) === String(select.value || ''));
       if (!current || normalize(label(current)) !== normalize(input.value)) {
