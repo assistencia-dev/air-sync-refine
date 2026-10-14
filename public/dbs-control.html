@@ -794,6 +794,17 @@
         }
 
 
+        .dbs-client-picker{position:relative;width:100%}
+        .dbs-client-picker #os-client-search{width:100%;min-width:0}
+        .dbs-client-options{position:absolute;z-index:1200;top:calc(100% + 7px);left:0;right:0;max-height:320px;overflow:auto;background:#fff;border:1px solid #c9d8eb;border-radius:14px;box-shadow:0 18px 44px rgba(13,43,82,.2);padding:6px}
+        .dbs-client-options[hidden]{display:none!important}
+        .dbs-client-option{display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;text-align:left;border:0;border-radius:9px;background:transparent;padding:11px 12px;color:#15345a;cursor:pointer;font:inherit}
+        .dbs-client-option span{font-weight:650;min-width:0;overflow-wrap:anywhere}
+        .dbs-client-option small{color:#60758f;white-space:nowrap;font-size:12px}
+        .dbs-client-option:hover,.dbs-client-option.is-active{background:#eaf3ff;color:#0c57a5}
+        .dbs-client-empty{padding:16px 12px;color:#61738a;font-size:13px}
+        @media(max-width:640px){.dbs-client-options{max-height:45vh}.dbs-client-option{align-items:flex-start;flex-direction:column;gap:3px}}
+
         /* DBS CONTROL · NOVA OS PREMIUM
            Refinamento visual + rolagem dedicada. Sem alterar IDs, eventos, regras ou dados. */
         #tab-nova-os {
@@ -2212,14 +2223,20 @@
                         <div class="os-premium-row os-premium-row-location">
                             <div class="form-group os-premium-field os-premium-client">
                                 <label for="os-client-search">Cliente</label>
-                                <input id="os-client-search"
-                                       type="text"
-                                       list="os-client-options"
-                                       autocomplete="off"
-                                       placeholder="Digite o nome ou CNPJ..." required
-                                       oninput="sincronizarClienteOSPorBusca()"
-                                       onchange="sincronizarClienteOSPorBusca()">
-                                <datalist id="os-client-options"></datalist>
+                                <div class="dbs-client-picker" id="dbs-client-picker">
+                                    <input id="os-client-search"
+                                           type="text"
+                                           autocomplete="off"
+                                           placeholder="Digite o nome ou CNPJ do cliente..."
+                                           onfocus="abrirSeletorClientesOS()"
+                                           oninput="filtrarClientesOS()"
+                                           onkeydown="navegarSeletorClientesOS(event)"
+                                           aria-autocomplete="list"
+                                           aria-controls="os-client-options"
+                                           aria-expanded="false"
+                                           required>
+                                    <div id="os-client-options" class="dbs-client-options" role="listbox" hidden></div>
+                                </div>
                                 <select id="os-select-cliente" onchange="atualizarEquipamentosDoClienteOS()" aria-hidden="true" tabindex="-1"></select>
                             </div>
 
@@ -5065,6 +5082,73 @@
         }
         function renderizarCompras() { document.getElementById('comp-table-body').innerHTML = ERP_STATE.compras.map(c => `<tr><td><strong>${c.fornecedor}</strong></td><td>${c.item}</td><td>${c.qtd}</td><td>R$ ${Number(c.valor||0).toFixed(2)}</td><td><span class="badge badge-andamento">${c.status}</span></td></tr>`).join(''); }
 
+
+        let DBS_CLIENTE_OS_INDICE = -1;
+        function normalizarBuscaClienteOS(v) {
+            return String(v || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
+        }
+        function clientesDisponiveisParaOS() {
+            return (Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : []).map(c => ({
+                cliente:c,
+                nome:String(c.nome || c.nomeFantasia || c.razaoSocial || 'Cliente sem nome'),
+                cnpj:String(c.cnpj || '').trim()
+            }));
+        }
+        function abrirSeletorClientesOS() {
+            const box=document.getElementById('os-client-options');
+            if(!box)return;
+            filtrarClientesOS();
+            const input=document.getElementById('os-client-search');
+            if(input) input.setAttribute('aria-expanded','true');
+        }
+        function fecharSeletorClientesOS() {
+            const box=document.getElementById('os-client-options');
+            const input=document.getElementById('os-client-search');
+            if(box)box.hidden=true;
+            if(input)input.setAttribute('aria-expanded','false');
+            DBS_CLIENTE_OS_INDICE=-1;
+        }
+        function filtrarClientesOS() {
+            const input=document.getElementById('os-client-search');
+            const box=document.getElementById('os-client-options');
+            if(!input||!box)return;
+            const q=normalizarBuscaClienteOS(input.value);
+            const rows=clientesDisponiveisParaOS().filter(x=>!q||normalizarBuscaClienteOS(x.nome+' '+x.cnpj).includes(q)).slice(0,100);
+            box.innerHTML=rows.length?rows.map(({cliente,nome,cnpj})=>{
+                const id=escDbsControl(cliente.id);
+                const label=escDbsControl(nome);
+                const doc=escDbsControl(cnpj);
+                return '<button type="button" class="dbs-client-option" role="option" data-client-id="'+id+'" onmousedown="event.preventDefault()" onclick="selecionarClienteOSBusca(this.dataset.clientId)"><span>'+label+'</span>'+(doc?'<small>'+doc+'</small>':'')+'</button>';
+            }).join(''):'<div class="dbs-client-empty">Nenhum cliente encontrado. Confira o nome ou CNPJ.</div>';
+            box.hidden=false;
+            input.setAttribute('aria-expanded','true');
+            DBS_CLIENTE_OS_INDICE=-1;
+        }
+        function selecionarClienteOSBusca(id) {
+            const select=document.getElementById('os-select-cliente');
+            const input=document.getElementById('os-client-search');
+            const item=clientesDisponiveisParaOS().find(x=>String(x.cliente.id)===String(id));
+            if(!select||!input||!item)return;
+            select.value=String(id);
+            input.value=item.nome+(item.cnpj?' — '+item.cnpj:'');
+            atualizarEquipamentosDoClienteOS();
+            fecharSeletorClientesOS();
+            const equip=document.getElementById('os-equipment-search');
+            if(equip)equip.focus();
+        }
+        function navegarSeletorClientesOS(event) {
+            const box=document.getElementById('os-client-options');
+            if(!box||box.hidden)return;
+            const items=Array.from(box.querySelectorAll('.dbs-client-option'));
+            if(event.key==='Escape'){fecharSeletorClientesOS();return;}
+            if(event.key==='ArrowDown'){event.preventDefault();DBS_CLIENTE_OS_INDICE=Math.min(items.length-1,DBS_CLIENTE_OS_INDICE+1);}
+            else if(event.key==='ArrowUp'){event.preventDefault();DBS_CLIENTE_OS_INDICE=Math.max(0,DBS_CLIENTE_OS_INDICE-1);}
+            else if(event.key==='Enter'&&items.length){event.preventDefault();const active=items[Math.max(0,DBS_CLIENTE_OS_INDICE)];if(active)selecionarClienteOSBusca(active.dataset.clientId);return;}
+            else return;
+            items.forEach((el,i)=>{el.classList.toggle('is-active',i===DBS_CLIENTE_OS_INDICE);});
+            if(items[DBS_CLIENTE_OS_INDICE])items[DBS_CLIENTE_OS_INDICE].scrollIntoView({block:'nearest'});
+        }
+        document.addEventListener('click',function(event){const picker=document.getElementById('dbs-client-picker');if(picker&&!picker.contains(event.target))fecharSeletorClientesOS();});
 
         function sincronizarClienteOSPorBusca() {
             const input = document.getElementById('os-client-search');
