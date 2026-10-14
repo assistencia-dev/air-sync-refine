@@ -2747,7 +2747,7 @@
             const raw = (osOuStatus && typeof osOuStatus === 'object')
                 ? (osOuStatus.status ?? osOuStatus.situacao ?? osOuStatus.statusOS ?? '')
                 : (osOuStatus ?? '');
-            const status = String(raw).trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR');
+            const status = String(raw).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
             return /^(concluida|concluido|finalizada|finalizado|encerrada|encerrado|fechada|fechado)$/.test(status);
         }
 
