@@ -272,6 +272,30 @@
     section('Observações do técnico', 14); observationBox(technicianObservations);
     const checks = list(o.checklist).filter(x => x.concluido && present(x.titulo || x.descricao));
     if (checks.length) { section('Checklist técnico realizado'); table(['Item conferido', 'Registro'], checks.map(x => ['✓ ' + (x.titulo || x.descricao) + (x.observacao ? '\n' + x.observacao : ''), date(x.concluidoEm)]), [133, 47]); }
+    const technicalChecklist = o.checklistTecnico && typeof o.checklistTecnico === 'object' ? o.checklistTecnico : {};
+    const technicalCheckRows = [];
+    Object.entries(technicalChecklist).forEach(([group, items]) => {
+      if (!items || typeof items !== 'object') return;
+      Object.entries(items).forEach(([label, checked]) => {
+        if (checked === true) technicalCheckRows.push([group, '✓ ' + label]);
+      });
+    });
+    if (technicalCheckRows.length) {
+      section('Checklist técnico do atendimento');
+      table(['Grupo', 'Item verificado'], technicalCheckRows, [55, 125]);
+    }
+    const operational = o.parametrosOperacionais && typeof o.parametrosOperacionais === 'object' ? o.parametrosOperacionais : {};
+    const operationalLabels = [
+      ['tensao', 'Tensão (V)'], ['corrente', 'Corrente (A)'], ['pressaoBaixa', 'Pressão baixa'],
+      ['pressaoAlta', 'Pressão alta'], ['temperaturaInsuflamento', 'Temperatura de insuflamento (°C)'],
+      ['temperaturaRetorno', 'Temperatura de retorno (°C)'], ['capacidade', 'Capacidade']
+    ];
+    const operationalRows = operationalLabels.filter(([key]) => present(operational[key])).map(([key, label]) => [label, clean(operational[key])]);
+    if (operationalRows.length) {
+      section('Parâmetros operacionais');
+      table(['Parâmetro', 'Medição registrada'], operationalRows, [90, 90]);
+      if (present(operational.preenchidoEm)) block('Preenchido/atualizado em', date(operational.preenchidoEm));
+    }
     const parts = [...list(o.pecasUsadas), ...list(o.materiais), ...list(o.servicosUsados)];
     if (parts.length) {
       section('Materiais, peças e serviços aplicados');
