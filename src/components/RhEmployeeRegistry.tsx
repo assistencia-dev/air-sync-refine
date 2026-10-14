@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, KeyRound, Pencil, Plus, Trash2, Upload, UsersRound, Eye, BriefcaseBusiness, CalendarDays, FileStack, UserRound, FileDown, FileSpreadsheet } from "lucide-react";
 import {
-  deactivateRhEmployeeRecord,
+  deactivateRhEmployeeRecord,\n  permanentlyRemoveRhEmployeeRecord,
   reactivateRhEmployeeRecord,
   getRhEmployeeFichaUrl,
   listRhEmployeeRegistry,
@@ -60,7 +60,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
   const [formOpen, setFormOpen] = useState(false);
   const [accessing, setAccessing] = useState<Employee | null>(null);
   const [viewing, setViewing] = useState<Employee | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);\n  const [permanentDelete, setPermanentDelete] = useState<Employee | null>(null);\n  const [deleteConfirmation, setDeleteConfirmation] = useState(\"\");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
   const [accessFilter, setAccessFilter] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
@@ -189,11 +189,32 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
                       );
                     }
                   }}
+                  onPermanentDelete={() => setPermanentDelete(employee)}
                   onUploaded={refresh}
                 />
               ))}
             </tbody>
           </table>
+          {permanentDelete && (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => { setPermanentDelete(null); setDeleteConfirmation(""); }}>
+              <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-black text-white">Excluir cadastro da lista</h3>
+                <p className="mt-2 text-sm text-slate-300">O cadastro de <strong>{permanentDelete.full_name}</strong> deixará de aparecer no RH e perderá os vínculos de acesso ao Ponto/DBS Control. O histórico de folha, ponto e auditoria será preservado.</p>
+                <label className="mt-4 block text-xs font-bold text-slate-300">Digite EXCLUIR CADASTRO para confirmar</label>
+                <input value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white" placeholder="EXCLUIR CADASTRO" />
+                {error && <p className="mt-3 rounded-lg bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => { setPermanentDelete(null); setDeleteConfirmation(""); }} className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-bold text-slate-200">Cancelar</button>
+                  <button type="button" disabled={deleteConfirmation !== "EXCLUIR CADASTRO"} onClick={async () => {
+                    try {
+                      await permanentlyRemoveRhEmployeeRecord({ data: { id: permanentDelete.id, confirmation: "EXCLUIR CADASTRO" } });
+                      setPermanentDelete(null); setDeleteConfirmation(""); setError(null); refresh();
+                    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível excluir o cadastro."); }
+                  }} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-black text-white disabled:opacity-40">Excluir cadastro</button>
+                </div>
+              </div>
+            </div>
+          )}
           {!employees.isLoading && employeeList.length > 0 && !filteredEmployees.length && (
             <div className="p-10 text-center"><UsersRound className="mx-auto h-8 w-8 text-slate-600" /><p className="mt-2 text-sm font-bold text-slate-400">Nenhum funcionário encontrado</p><p className="mt-1 text-xs text-slate-400">Ajuste a busca ou os filtros para localizar o cadastro.</p></div>
           )}
@@ -244,6 +265,7 @@ function EmployeeRow({
   onAccess,
   onView,
   onDelete,
+  onPermanentDelete,
   onUploaded,
 }: {
   employee: Employee;
@@ -251,6 +273,7 @@ function EmployeeRow({
   onAccess: () => void;
   onView: () => void;
   onDelete: () => void;
+  onPermanentDelete: () => void;
   onUploaded: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -349,7 +372,10 @@ function EmployeeRow({
         <button onClick={onEdit} className="mr-2 text-sky-300">
           <Pencil className="inline h-4 w-4" />
         </button>
-        <button onClick={onDelete} className="text-red-300">
+        <button onClick={onDelete} title={employee.is_active ? "Inativar funcionário" : "Reativar funcionário"} className="mr-2 text-red-300">
+          <Trash2 className="inline h-4 w-4" />
+        </button>
+        <button onClick={onPermanentDelete} title="Excluir cadastro da lista" className="text-rose-400 hover:text-rose-200">
           <Trash2 className="inline h-4 w-4" />
         </button>
       </td>
