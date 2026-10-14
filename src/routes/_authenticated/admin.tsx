@@ -339,8 +339,61 @@ function TicketsPanel() {
           {actionErr}
         </div>
       )}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="space-y-3 px-4 pb-4 md:hidden">
+        {tickets.data?.filter((t: any) =>
+          ticketView === "closed"
+            ? t.status === "concluido" || t.status === "cancelado"
+            : t.status !== "concluido" && t.status !== "cancelado",
+        ).map((t: any) => {
+          const closed = t.status === "concluido" || t.status === "cancelado";
+          return (
+            <article key={t.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Protocolo</p>
+                  <h3 className="break-words text-sm font-extrabold text-slate-900">{t.protocol_number}</h3>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${closed ? t.status === "cancelado" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
+                  {STATUS_LABELS[t.status] ?? t.status}
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-xs">
+                <p><span className="font-bold text-slate-500">Tipo: </span><span className="text-slate-800">{t.occurrence_type || "—"}</span></p>
+                <div>
+                  <p className="font-bold text-slate-500">Descrição do problema</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words leading-5 text-slate-700">{t.description || "Sem descrição"}</p>
+                </div>
+                <p><span className="font-bold text-slate-500">Unidade: </span><span className="text-slate-800">{t.unit?.name ?? "—"}</span></p>
+                <p><span className="font-bold text-slate-500">Aberto por: </span><span className="text-slate-800">{t.users?.full_name ?? t.users?.username ?? "—"}</span></p>
+                <p><span className="font-bold text-slate-500">Aberto em: </span><span className="text-slate-600">{new Date(t.created_at).toLocaleString("pt-BR")}</span></p>
+              </div>
+              <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Status do chamado</label>
+                <select value={t.status} disabled={closed} onChange={(e) => mut.mutate({ id: t.id, status: e.target.value })}
+                  className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:opacity-70">
+                  {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+              </div>
+              <div className="mt-3">
+                <TicketAttachments ticketId={t.id} canUpload />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                {t.status === "aberto" && <button disabled={busy} onClick={() => assume.mutate(t.id)} className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Assumir chamado</button>}
+                {(t.status === "em_atendimento" || t.status === "aguardando_peca" || t.status === "atribuido" || t.status === "em_rota") &&
+                  <button disabled={busy} onClick={() => complete.mutate({ id: t.id, asset_id: t.asset_id ?? null })} className="min-h-11 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Concluir chamado</button>}
+                {!closed && <button disabled={busy} onClick={() => { setCancelReason(""); setActionErr(null); setCancelTarget({ id: t.id, protocol: t.protocol_number }); }}
+                  className="min-h-11 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-700 disabled:opacity-50">Cancelar chamado</button>}
+                {closed && <p className="py-2 text-center text-xs text-slate-500">Chamado encerrado</p>}
+              </div>
+            </article>
+          );
+        })}
+        {tickets.isLoading && <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Carregando chamados…</p>}
+        {!tickets.isLoading && (tickets.data?.filter((t: any) => ticketView === "closed" ? t.status === "concluido" || t.status === "cancelado" : t.status !== "concluido" && t.status !== "cancelado").length ?? 0) === 0 &&
+          <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Nenhum chamado nesta aba.</p>}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[1100px] text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-600">
             <tr>
               <th className="text-left px-4 py-3">Protocolo</th>
