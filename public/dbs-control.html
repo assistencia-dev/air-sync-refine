@@ -4489,7 +4489,6 @@
                 saveState();
                 setFeedback('Equipamento cadastrado e vinculado ao cliente desta OS. Aguarde a sincronização antes de sair.', false);
                 const details = feedback?.closest('details'); if (details) details.open = false;
-                renderizarPWAScreen();
             } catch (error) {
                 console.error('Falha ao salvar equipamento cadastrado na OS:', error);
                 setFeedback('Não foi possível salvar agora. Verifique a sincronização e tente novamente.', true);
