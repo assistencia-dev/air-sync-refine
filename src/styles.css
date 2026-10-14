@@ -322,3 +322,13 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
     margin-top: 24px !important;
   }
 }
+
+
+/* Ajustes de navegação mobile: evita menus fora da grade e rolagem horizontal da página. */
+@media (max-width: 767px) {
+  nav, [role="tablist"] { min-width: 0; max-width: 100%; }
+  header .flex.items-center.justify-between { min-width: 0; gap: 10px; }
+  header button, header a { flex-shrink: 0; }
+  main { overflow-wrap: anywhere; }
+  table { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+}
