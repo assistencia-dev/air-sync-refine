@@ -5727,7 +5727,7 @@
     font: inherit; cursor: pointer; touch-action: manipulation; white-space: normal;
   }
   #dbs-client-options-mobile .dbs-client-option:active,
-  #dbs-client-options-mobile .dbs-client-option:focus { background: #edf6ff; outline: 2px solid #8dbde9; }
+  #dbs-client-options-mobile .dbs-client-option:focus { background: #edf6ff; outline: 2px solid #8dbde9; }\n  #dbs-client-options-mobile .dbs-client-results-count { position:sticky; top:0; z-index:1; padding:9px 12px; background:#f4f8fc; border-bottom:1px solid #dbe6f1; color:#536a82; font-size:12px; }
   #dbs-client-options-mobile .dbs-client-option strong { display:block; font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
   #dbs-client-options-mobile .dbs-client-option small { display:block; margin-top:3px; color:#627891; font-size:12px; overflow-wrap:anywhere; }
   #dbs-client-options-mobile .dbs-client-empty { padding:14px 12px; color:#627891; font-size:13px; }
@@ -5801,13 +5801,36 @@
     function close(){ panel.hidden = true; input.setAttribute('aria-expanded','false'); }
     function draw(){
       const term = normalize(input.value);
-      const list = clients().filter(c => !term || normalize([clientName(c),clientCnpj(c),c.razaoSocial,c.nomeFantasia,c.email,c.telefone].filter(Boolean).join(' ')).includes(term));
-      panel.innerHTML = list.length ? list.map(c =>
-        '<button type="button" class="dbs-client-option" role="option" data-client-id="' +
-        String(c.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') +
-        '"><strong>' + escapeClient(clientName(c)) + '</strong>' +
-        (clientCnpj(c) ? '<small>' + escapeClient(clientCnpj(c)) + '</small>' : '') + '</button>'
-      ).join('') : '<div class="dbs-client-empty">Nenhum cliente encontrado. Confira o nome ou CNPJ.</div>';
+      const compact = term.replace(/[^a-z0-9]/g, '');
+      const tokens = term.split(/\\s+/).filter(Boolean);
+      const all = clients().map(c => {
+        const name = normalize(clientName(c));
+        const cnpj = normalize(clientCnpj(c));
+        const fields = normalize([clientName(c),clientCnpj(c),c.razaoSocial,c.nomeFantasia,c.email,c.telefone,c.endereco,c.codigo].filter(Boolean).join(' '));
+        const compactCnpj = cnpj.replace(/[^a-z0-9]/g, '');
+        const matches = !term || tokens.every(token => fields.includes(token)) || (compact.length >= 3 && compactCnpj.includes(compact));
+        let score = 0;
+        if (term && name === term) score += 100;
+        if (term && name.startsWith(term)) score += 50;
+        if (compact.length >= 3 && compactCnpj.startsWith(compact)) score += 40;
+        if (term && cnpj.includes(term)) score += 30;
+        return {c, matches, score, name};
+      });
+      const list = all.filter(item => item.matches)
+        .sort((a,b) => b.score - a.score || a.name.localeCompare(b.name, 'pt-BR'))
+        .slice(0, 100).map(item => item.c);
+      const count = all.filter(item => item.matches).length;
+      panel.innerHTML = '<div class="dbs-client-results-count">' +
+        (term ? count + ' cliente(s) encontrado(s)' : 'Digite nome, CNPJ, telefone ou e-mail para localizar') +
+        (count > 100 ? ' — mostrando os 100 primeiros' : '') + '</div>' +
+        (list.length ? list.map(c =>
+          '<button type="button" class="dbs-client-option" role="option" data-client-id="' +
+          String(c.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') +
+          '"><strong>' + escapeClient(clientName(c)) + '</strong>' +
+          (clientCnpj(c) ? '<small>CNPJ/CPF: ' + escapeClient(clientCnpj(c)) + '</small>' : '') +
+          (c.razaoSocial && normalize(c.razaoSocial) !== normalize(clientName(c)) ? '<small>Razão social: ' + escapeClient(c.razaoSocial) + '</small>' : '') +
+          '</button>'
+        ).join('') : '<div class="dbs-client-empty">Nenhum cliente encontrado. Tente parte do nome, CNPJ/CPF, telefone ou e-mail.</div>');
       panel.hidden = false;
       input.setAttribute('aria-expanded','true');
     }
