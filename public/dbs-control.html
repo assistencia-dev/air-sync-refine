@@ -4341,6 +4341,63 @@
             atualizarResumoChecklistDOM(osId);
         }
 
+        const DBS_CHECKLIST_TECNICO = {
+            "EVAPORADORA": ["Limpeza de filtro de ar","Limpeza de serpentina","Limpeza de turbina","Verificação de drenagem","Higienização completa","Verificação de ruídos/vibração"],
+            "CONDENSADORA": ["Limpeza de serpentina","Verificação de ventilador","Verificação de fixação","Limpeza geral","Verificação de obstruções"],
+            "AVALIAÇÃO ELÉTRICA": ["Verificação de tensão","Aperto de conexões","Inspeção de fiação","Verificação de disjuntor","Contator / relé","Placa eletrônica"],
+            "SISTEMA FRIGORÍGENO": ["Verificação de pressão","Vazamento de gás","Isolamento térmico","Linha de sucção","Linha de líquido"]
+        };
+        const DBS_PARAMETROS_OPERACIONAIS = [
+            ["tensao","Tensão (V)"],["corrente","Corrente (A)"],["pressaoBaixa","Pressão baixa"],["pressaoAlta","Pressão alta"],
+            ["temperaturaInsuflamento","Temperatura de insuflamento (°C)"],["temperaturaRetorno","Temperatura de retorno (°C)"],["capacidade","Capacidade"]
+        ];
+
+        function salvarChecklistTecnicoOS(osId, grupo, item, checked) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os) return;
+            if (!os.checklistTecnico || typeof os.checklistTecnico !== 'object') os.checklistTecnico = {};
+            if (!os.checklistTecnico[grupo] || typeof os.checklistTecnico[grupo] !== 'object') os.checklistTecnico[grupo] = {};
+            os.checklistTecnico[grupo][item] = Boolean(checked);
+            os.checklistTecnicoAtualizadoEm = new Date().toISOString();
+            saveState();
+            const badge = document.getElementById('dbs-checklist-tecnico-count-' + osId);
+            if (badge) {
+                const all = Object.values(DBS_CHECKLIST_TECNICO).flat();
+                const done = all.filter(label => Object.values(os.checklistTecnico || {}).some(groupValues => groupValues && groupValues[label] === true)).length;
+                badge.textContent = done + ' itens conferidos';
+            }
+        }
+
+        function salvarParametroOperacionalOS(osId, campo, valor) {
+            const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
+            if (!os) return;
+            if (!os.parametrosOperacionais || typeof os.parametrosOperacionais !== 'object') os.parametrosOperacionais = {};
+            os.parametrosOperacionais[campo] = String(valor ?? '').trim();
+            os.parametrosOperacionais.preenchidoEm = new Date().toISOString();
+            os.parametrosOperacionaisAtualizadoEm = os.parametrosOperacionais.preenchidoEm;
+            saveState();
+            const stamp = document.getElementById('dbs-parametros-stamp-' + osId);
+            if (stamp) stamp.textContent = 'Última atualização: ' + new Date(os.parametrosOperacionais.preenchidoEm).toLocaleString('pt-BR');
+        }
+
+        function renderizarChecklistTecnicoOS(os) {
+            const data = os.checklistTecnico && typeof os.checklistTecnico === 'object' ? os.checklistTecnico : {};
+            const total = Object.values(DBS_CHECKLIST_TECNICO).flat().length;
+            const done = Object.values(DBS_CHECKLIST_TECNICO).flat().filter(label => Object.values(data).some(groupValues => groupValues && groupValues[label] === true)).length;
+            const groups = Object.entries(DBS_CHECKLIST_TECNICO).map(([group, labels]) => '<div class="field-check-card"><strong class="field-check-title">' + escDbsControl(group) + '</strong><div class="field-checklist">' + labels.map(label => {
+                const checked = Boolean(data[group] && data[group][label]);
+                return '<label class="field-check-item"><input type="checkbox" ' + (checked ? 'checked ' : '') + 'onchange="salvarChecklistTecnicoOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',\'' + group.replace(/'/g,"\\'") + '\',\'' + label.replace(/'/g,"\\'") + '\',this.checked)"><span>' + escDbsControl(label) + '</span></label>';
+            }).join('') + '</div></div>').join('');
+            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Checklist técnico do atendimento</span><small>Disponível para PMOC, preventiva e corretiva. Marque somente o que foi verificado ou executado.</small></div><span class="field-check-badge ' + (done ? 'done' : 'pending') + '" id="dbs-checklist-tecnico-count-' + escDbsControl(os.id) + '">' + done + ' itens conferidos</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">' + groups + '</div></section>';
+        }
+
+        function renderizarParametrosOperacionaisOS(os) {
+            const p = os.parametrosOperacionais && typeof os.parametrosOperacionais === 'object' ? os.parametrosOperacionais : {};
+            const stamp = p.preenchidoEm ? 'Última atualização: ' + new Date(p.preenchidoEm).toLocaleString('pt-BR') : 'Ainda não preenchido';
+            const fields = DBS_PARAMETROS_OPERACIONAIS.map(([key, label]) => '<label>' + escDbsControl(label) + '<input type="text" inputmode="decimal" maxlength="80" value="' + escDbsControl(p[key] || '') + '" placeholder="Informar medição" onchange="salvarParametroOperacionalOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',\'' + key + '\',this.value)"></label>').join('');
+            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Parâmetros operacionais</span><small>Preencha as medições realizadas no equipamento.</small></div></div><div class="employee-fields" style="margin-top:10px">' + fields + '</div><small id="dbs-parametros-stamp-' + escDbsControl(os.id) + '" class="field-check-note" style="display:block;margin-top:9px">' + escDbsControl(stamp) + '</small></section>';
+        }
+
         function renderizarChecklistExecucao(os) {
             if (!tipoPermiteChecklist(os?.tipo)) return '';
             const checklist = garantirChecklistOS(os);
@@ -4794,6 +4851,8 @@
                                   </select>
                                   <small>Se encontrar uma corretiva ou pendência, marque “Precisa retornar”. A OS fica registrada, mas o PMOC só conta como concluído após o retorno ser resolvido.</small>
                                 </section>` : ''}
+                              <div style="margin-top:2px;">${renderizarChecklistTecnicoOS(o)}</div>
+                              <div style="margin-top:2px;">${renderizarParametrosOperacionaisOS(o)}</div>
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
                               <div class="employee-photo-grid">
                                 <label>Foto antes<input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
