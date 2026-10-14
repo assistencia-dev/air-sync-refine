@@ -318,7 +318,7 @@ export const createClientUser = createServerFn({ method: "POST" })
     });
 
     return { ok: true, email: data.email };
-  }
+  });
 
 /** Permanently removes a user's login and access profile. Historical records/audit are retained where referenced. */
 export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
@@ -344,4 +344,3 @@ export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
     await supabaseAdmin.from("audit_log").insert({ actor_user_id: me.id, target_user_id: target.id, action: "permanently_removed_user_access", metadata_json: { previous_role: target.role_key, at: new Date().toISOString() } });
     return { ok: true };
   });
-);
