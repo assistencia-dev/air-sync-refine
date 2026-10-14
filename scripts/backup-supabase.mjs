@@ -26,6 +26,22 @@ const tables = [
   "audit_log",
   "rh_employees",
   "rh_topups",
+  // DBS Control: preserve OS, cadastro, vínculos, anexos e integração FieldControl.
+  "dbs_control_clients",
+  "dbs_control_sites",
+  "dbs_control_equipment",
+  "dbs_control_service_catalog",
+  "dbs_control_parts",
+  "dbs_control_work_orders",
+  "dbs_control_work_order_equipment",
+  "dbs_control_work_order_parts",
+  "dbs_control_work_order_services",
+  "dbs_control_work_order_events",
+  "dbs_control_work_order_attachments",
+  "dbs_control_snapshots",
+  "dbs_control_integrations",
+  "dbs_control_external_refs",
+  "dbs_control_sync_runs",
 ];
 
 async function request(path, options = {}) {
