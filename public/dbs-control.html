@@ -2742,6 +2742,15 @@
             }));
         }
 
+        // Reconhece variações legadas do status de conclusão sem alterar os dados originais.
+        function isOSConcluida(osOuStatus) {
+            const raw = (osOuStatus && typeof osOuStatus === 'object')
+                ? (osOuStatus.status ?? osOuStatus.situacao ?? osOuStatus.statusOS ?? '')
+                : (osOuStatus ?? '');
+            const status = String(raw).trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR');
+            return /^(concluida|concluido|finalizada|finalizado|encerrada|encerrado|fechada|fechado)$/.test(status);
+        }
+
         function adicionarHistoricoOS(os, tipo, evento, detalhe) {
             if (!os) return;
             if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
@@ -3605,19 +3614,19 @@
                 const hay = [o.id, cli, tec, eq.tag, o.tipo, o.desc, o.status].join(' ').toLowerCase();
                 return (!tecId || String(o.tecnicoId) === String(tecId))
                     && (!cliId || String(o.clienteId) === String(cliId))
-                    && (status === 'TODOS' || String(o.status) === status)
+                    && (status === 'TODOS' || (status === 'TODOS' || (isOSConcluida(o) ? isOSConcluida(status) : String(o.status) === status)))
                     && (!search || hay.includes(search));
             });
 
-            const completed = filtered.filter(o => o.status === 'Concluída').length;
-            const inProgress = filtered.filter(o => o.status !== 'Concluída').length;
+            const completed = filtered.filter(o => isOSConcluida(o)).length;
+            const inProgress = filtered.filter(o => !isOSConcluida(o)).length;
             const withExecution = filtered.filter(o => String(o.diagnostico || '').trim() && String(o.trabalhoExecutado || '').trim()).length;
-            const missingSignature = filtered.filter(o => o.status === 'Concluída' && !String(o.assinatura || '').trim()).length;
+            const missingSignature = filtered.filter(o => isOSConcluida(o) && !String(o.assinatura || '').trim()).length;
             kpis.innerHTML = [
                 ['Programadas', filtered.length],
                 ['Em atendimento', inProgress],
                 ['Concluídas', completed],
-                ['Pendências de conferência', missingSignature + filtered.filter(o => o.status !== 'Concluída' && (!String(o.diagnostico || '').trim() || !String(o.trabalhoExecutado || '').trim() || (Array.isArray(o.checklist) && o.checklist.length && !checklistConcluido(o)))).length]
+                ['Pendências de conferência', missingSignature + filtered.filter(o => !isOSConcluida(o) && (!String(o.diagnostico || '').trim() || !String(o.trabalhoExecutado || '').trim() || (Array.isArray(o.checklist) && o.checklist.length && !checklistConcluido(o)))).length]
             ].map(([label,value]) => `<div class="day-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
 
             if (!filtered.length) {
@@ -3636,9 +3645,9 @@
                 const checklistDone = Array.isArray(o.checklist) ? o.checklist.filter(i => i.concluido).length : 0;
                 const checklistOk = !checklistTotal || checklistDone === checklistTotal;
                 const complete = hasDiag && hasWork && hasSig;
-                const statusClass = o.status === 'Concluída' ? 'ok' : (/aguardando/i.test(o.status || '') ? 'wait' : 'pending');
+                const statusClass = isOSConcluida(o) ? 'ok' : (/aguardando/i.test(o.status || '') ? 'wait' : 'pending');
                 const checkHtml = `<div class="day-check"><b>${hasDiag ? '✓' : '○'} Diagnóstico</b> · <b>${hasWork ? '✓' : '○'} Execução</b> · <b>${hasSig ? '✓' : '○'} Assinatura</b><br><span>${hasEvidence ? '✓ Evidência fotográfica registrada' : '○ Sem foto de evidência'}</span><br><span>${checklistTotal ? (checklistOk ? '✓ Checklist conferido' : '○ Checklist ' + checklistDone + '/' + checklistTotal) : '○ Checklist não configurado'}</span></div>`;
-                const conclusion = o.status === 'Concluída'
+                const conclusion = isOSConcluida(o)
                     ? `<span class="day-status ${complete ? 'ok' : 'missing'}">${complete ? 'Conferida' : 'Concluída com pendência'}</span>`
                     : '<span class="day-status pending">Em aberto</span>';
                 return `<tr>
@@ -3718,7 +3727,7 @@
                 const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                 const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                 const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId || o.employeeId)) || {};
-                const isConcluido = o.status === "Concluída";
+                const isConcluido = isOSConcluida(o);
                 const badgeClass = isConcluido ? "badge-concluido" : "badge-andamento";
                 const archived = Boolean(o.arquivadaEm);
                 const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.localAtendimento,cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome].join(' ').replace(/"/g,'&quot;');
@@ -4264,7 +4273,7 @@
                 && dataOSParaISO(o.data).slice(0,7) === competencia
                 && !o.excluidaEm && !o.arquivadaEm);
             const retornos = ordens.filter(o => o.pmocResultado === 'retorno' || o.pmocPrecisaRetorno);
-            const concluidas = ordens.filter(o => o.status === 'Concluída' && o.pmocResultado !== 'retorno' && !o.pmocPrecisaRetorno);
+            const concluidas = ordens.filter(o => isOSConcluida(o) && o.pmocResultado !== 'retorno' && !o.pmocPrecisaRetorno);
             if (!clienteIncluidoPMOC(cliente.id, competencia)) return { status:'Fora do mês', classe:'pending', ordens, retornos, concluidas };
             if (retornos.length) return { status:'Precisa retornar', classe:'return', ordens, retornos, concluidas };
             if (concluidas.length) return { status:'Concluído', classe:'done', ordens, retornos, concluidas };
@@ -4789,7 +4798,7 @@
                     const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
-                    const isConcluido = o.status === 'Concluída';
+                    const isConcluido = isOSConcluida(o);
                     return `
                       <article class="employee-order">
                         <div class="employee-order-top">
@@ -4868,7 +4877,7 @@
               </div>
             `;
 
-            minhasOSVisiveis.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
+            minhasOSVisiveis.forEach(o => { if (!isOSConcluida(o)) setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
         }
 
 
@@ -5197,7 +5206,7 @@
             const ordensOperacionais = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
                 .filter(o => !o.arquivadaEm && !o.excluidaEm);
             document.getElementById('dash-os-andamento').innerText = ordensOperacionais.filter(o => o.status === "Em Atendimento").length;
-            document.getElementById('dash-os-concluidas').innerText = ordensOperacionais.filter(o => o.status === "Concluída").length;
+            document.getElementById('dash-os-concluidas').innerText = ordensOperacionais.filter(o => isOSConcluida(o)).length;
         }
         // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
         (function bootDbsControlEmployeeMode(){
