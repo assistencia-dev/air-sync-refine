@@ -3121,7 +3121,9 @@
             const grid = document.getElementById('ops-overview-grid');
             const foot = document.getElementById('ops-overview-foot');
             if (!grid || typeof ERP_STATE !== 'object' || !ERP_STATE) return;
-            const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
+            // Indicadores operacionais ignoram OS arquivadas ou retiradas da operação.
+            const orders = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
+                .filter(order => !order.arquivadaEm && !order.excluidaEm);
             const clients = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
             const equipment = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
             const technicians = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
@@ -4955,8 +4957,11 @@
         function atualizarMetricas() {
             document.getElementById('dash-client-count').innerText = ERP_STATE.clientes.length;
             document.getElementById('dash-equip-count').innerText = ERP_STATE.equipamentos.length;
-            document.getElementById('dash-os-andamento').innerText = ERP_STATE.ordens.filter(o => o.status === "Em Atendimento").length;
-            document.getElementById('dash-os-concluidas').innerText = ERP_STATE.ordens.filter(o => o.status === "Concluída").length;
+            // Arquivadas/excluídas ficam fora dos KPIs do dashboard; os registros são preservados no histórico.
+            const ordensOperacionais = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
+                .filter(o => !o.arquivadaEm && !o.excluidaEm);
+            document.getElementById('dash-os-andamento').innerText = ordensOperacionais.filter(o => o.status === "Em Atendimento").length;
+            document.getElementById('dash-os-concluidas').innerText = ordensOperacionais.filter(o => o.status === "Concluída").length;
         }
         // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
         (function bootDbsControlEmployeeMode(){
