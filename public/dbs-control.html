@@ -4216,7 +4216,7 @@
 
         function obterCompetenciaPMOC() {
             const input = document.getElementById('pmoc-mes');
-            if (input && /^\\d{4}-\\d{2}$/.test(input.value)) return input.value;
+            if (input && /^\d{4}-\d{2}$/.test(input.value)) return input.value;
             const now = new Date();
             return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
         }
@@ -4307,8 +4307,8 @@
                 const d = dadosMensaisPMOC(c, competencia);
                 return [competencia,c.nome || '',c.cnpj || '',d.status !== 'Fora do mês' ? 'Sim' : 'Não',d.status,d.ordens.map(o => o.id).join('; '),d.retornos.map(o => o.id).join('; ')];
             });
-            const csv = [headers,...rows].map(row => row.map(v => '"'+String(v ?? '').replace(/"/g,'""')+'"').join(';')).join('\\r\\n');
-            const blob = new Blob(['\\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+            const csv = [headers,...rows].map(row => row.map(v => '"'+String(v ?? '').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+            const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = 'controle-pmoc-'+competencia+'.csv';
