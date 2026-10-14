@@ -2040,13 +2040,18 @@
         <div id="tab-ordens" class="tab-view">
             <div class="data-card">
                 <div class="data-header">
-                    <div class="filter-bar">
-                        <input type="text" id="os-search-input" onkeyup="aplicarFiltrosOS()" placeholder="Buscar por cliente, TAG, técnico ou OS..." style="width:240px;">
+                    <div class="filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                        <input type="search" id="os-search-input" oninput="aplicarFiltrosOS()" placeholder="Buscar OS, cliente, TAG, modelo, técnico..." style="flex:1;min-width:230px;">
                         <select id="os-filter-status" onchange="aplicarFiltrosOS()">
-                            <option value="TODOS">Todos os Status</option>
+                            <option value="ATIVAS">OS ativas (padrão)</option>
+                            <option value="TODOS">Todas as não arquivadas</option>
                             <option value="Em Atendimento">Em Atendimento</option>
                             <option value="Concluída">Concluída</option>
+                            <option value="Arquivadas">Arquivadas</option>
                         </select>
+                        <input type="date" id="os-filter-from" aria-label="Data inicial" title="Data inicial" onchange="aplicarFiltrosOS()">
+                        <input type="date" id="os-filter-to" aria-label="Data final" title="Data final" onchange="aplicarFiltrosOS()">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="limparFiltrosOS()">Limpar filtros</button>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-success btn-sm" onclick="concluirSelecionadasLote()">Concluir Selecionadas</button>
@@ -3319,20 +3324,58 @@
             document.querySelectorAll('.chk-os-item').forEach(c => c.checked = master.checked);
         }
 
+        function normalizarDataFiltroOS(value) {
+            const raw = String(value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0,10);
+            const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            return br ? br[3] + '-' + br[2] + '-' + br[1] : '';
+        }
         function aplicarFiltrosOS() {
-            const search = document.getElementById('os-search-input').value.toLowerCase();
-            const statusFilter = document.getElementById('os-filter-status').value;
-
-            const tr = document.getElementById("os-table").getElementsByTagName("tr");
-            for (let i = 1; i < tr.length; i++) {
-                const text = tr[i].innerText.toLowerCase();
-                const statusCell = tr[i].getAttribute('data-status');
-
-                const matchSearch = text.includes(search);
-                const matchStatus = (statusFilter === "TODOS" || statusCell === statusFilter);
-
-                tr[i].style.display = (matchSearch && matchStatus) ? "" : "none";
+            const search = String(document.getElementById('os-search-input')?.value || '').trim().toLocaleLowerCase('pt-BR');
+            const statusFilter = document.getElementById('os-filter-status')?.value || 'ATIVAS';
+            const from = document.getElementById('os-filter-from')?.value || '';
+            const to = document.getElementById('os-filter-to')?.value || '';
+            const rows = document.querySelectorAll('#os-table-body tr');
+            rows.forEach(row => {
+                const status = row.getAttribute('data-status') || '';
+                const archived = row.getAttribute('data-archived') === 'true';
+                const date = row.getAttribute('data-date') || '';
+                const searchable = (row.getAttribute('data-search') || row.innerText || '').toLocaleLowerCase('pt-BR');
+                const matchSearch = !search || searchable.includes(search);
+                const matchStatus = statusFilter === 'Arquivadas' ? archived :
+                    statusFilter === 'ATIVAS' ? (!archived && !/concluída|cancelad/i.test(status)) :
+                    statusFilter === 'TODOS' ? !archived : (!archived && status === statusFilter);
+                const matchFrom = !from || (date && date >= from);
+                const matchTo = !to || (date && date <= to);
+                row.style.display = matchSearch && matchStatus && matchFrom && matchTo ? '' : 'none';
+            });
+        }
+        function limparFiltrosOS() {
+            ['os-search-input','os-filter-from','os-filter-to'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+            const status=document.getElementById('os-filter-status'); if(status) status.value='ATIVAS';
+            aplicarFiltrosOS();
+        }
+        function alternarArquivoOS(osId) {
+            const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
+            if (!os || os.excluidaEm) return;
+            if (os.arquivadaEm) {
+                if (!confirm('Restaurar esta OS para a lista operacional?')) return;
+                delete os.arquivadaEm;
+                os.restauradaEm = new Date().toISOString();
+            } else {
+                if (!confirm('Arquivar esta OS? Ela sairá da lista ativa, mas continuará no histórico e poderá ser restaurada.')) return;
+                os.arquivadaEm = new Date().toISOString();
             }
+            saveState(); renderizarTudo(); aplicarFiltrosOS();
+        }
+        function excluirOSComSeguranca(osId) {
+            const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
+            if (!os || os.excluidaEm) return;
+            if (!confirm('Excluir esta OS da operação? O registro será retirado das listas operacionais, mas permanecerá preservado no histórico interno para evitar perda de rastreabilidade.')) return;
+            os.excluidaEm = new Date().toISOString();
+            os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador';
+            os.statusAntesExclusao = os.status || '';
+            saveState(); renderizarTudo();
         }
 
 
@@ -3491,28 +3534,30 @@
         function renderizarOrdens() {
             const activeTabId = document.querySelector('.tab-view.active')?.id || 'tab-dashboard';
             const dashboardMode = activeTabId === 'tab-dashboard';
-            const sourceOrders = dashboardMode ? ERP_STATE.ordens.slice(0, 8) : ERP_STATE.ordens;
+            const sourceOrders = dashboardMode ? ERP_STATE.ordens.filter(o => !o.arquivadaEm && !o.excluidaEm).slice(0, 8) : ERP_STATE.ordens.filter(o => !o.excluidaEm);
             const rowsHtml = sourceOrders.map(o => {
                 const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                 const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
-                const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId)) || {};
-
+                const tec = ERP_STATE.tecnicos.find(t => String(t.id) === String(o.tecnicoId || o.employeeId)) || {};
                 const isConcluido = o.status === "Concluída";
                 const badgeClass = isConcluido ? "badge-concluido" : "badge-andamento";
-
+                const archived = Boolean(o.arquivadaEm);
+                const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.localAtendimento,cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome].join(' ').replace(/"/g,'&quot;');
                 return `
-                    <tr data-status="${o.status}">
-                        <td><input type="checkbox" class="chk-os-item" value="${o.id}"></td>
-                        <td><strong>${o.id}</strong></td>
-                        <td>${o.data}</td>
+                    <tr data-status="${o.status}" data-archived="${archived ? 'true' : 'false'}" data-date="${normalizarDataFiltroOS(o.data)}" data-search="${escDbsControl(searchText)}">
+                        <td><input type="checkbox" class="chk-os-item" value="${o.id}" ${archived ? 'disabled' : ''}></td>
+                        <td><strong>${o.id}</strong>${archived ? '<small style="display:block;color:#64748b">Arquivada</small>' : ''}</td>
+                        <td>${o.data || '—'}</td>
                         <td>${cli.nome || '-'}</td>
-                        <td><span class="badge badge-tag">${eq.tag || 'S/N'}</span> ${eq.tipo || ''}</td>
-                        <td>${tec.nome || '-'}</td>
-                        <td><span class="badge badge-pmoc">${o.tipo}</span></td>
-                        <td>R$ ${Number(o.valor||0).toFixed(2)}</td>
-                        <td><span class="badge ${badgeClass}">${o.status}</span></td>
-                        <td style="text-align:right;">
+                        <td><span class="badge badge-tag">${eq.tag || 'S/N'}</span> ${eq.tipo || ''} ${eq.modelo || ''}</td>
+                        <td>${tec.nome || o.tecnicoNome || '-'}</td>
+                        <td><span class="badge badge-pmoc">${o.tipo || 'Serviço'}</span></td>
+                        <td>R$ ${Number(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                        <td><span class="badge ${badgeClass}">${o.status || 'Em Atendimento'}</span></td>
+                        <td style="text-align:right;white-space:nowrap;display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap;">
                             <button class="btn btn-secondary btn-sm" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
+                            <button class="btn btn-secondary btn-sm" onclick="alternarArquivoOS('${o.id}')">${archived ? 'Restaurar' : 'Arquivar'}</button>
+                            <button class="btn btn-danger btn-sm" onclick="excluirOSComSeguranca('${o.id}')">Excluir</button>
                         </td>
                     </tr>
                 `;
@@ -3524,7 +3569,7 @@
                 if (dashboardBody) dashboardBody.innerHTML = rowsHtml;
             } else if (activeTabId === 'tab-ordens') {
                 const ordersBody = document.getElementById('os-table-body');
-                if (ordersBody) ordersBody.innerHTML = rowsHtml;
+                if (ordersBody) { ordersBody.innerHTML = rowsHtml; aplicarFiltrosOS(); }
             }
         }
 
@@ -4348,7 +4393,12 @@
                     (tec.email && norm(assigned.email) === norm(tec.email)) ||
                     (tec.nome && norm(assigned.nome) === norm(tec.nome)))) return true;
                 return false;
-            });
+            }).filter(o => !o.excluidaEm && !o.arquivadaEm);
+
+            const employeeOsTab = window.__DBS_EMPLOYEE_OS_TAB__ || 'abertas';
+            const minhasOSVisiveis = minhasOS.filter(o => employeeOsTab === 'concluidas'
+                ? /concluída/i.test(String(o.status || ''))
+                : !/concluída/i.test(String(o.status || '')));
 
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
@@ -4378,12 +4428,16 @@
               </div>
 
               <div class="employee-toolbar">
-                <div><strong>Minhas ordens de serviço</strong><span>${minhasOS.length ? 'Acompanhe o andamento e registre cada atendimento' : 'Nenhum chamado atribuído no momento'}</span></div>
+                <div><strong>Minhas ordens de serviço</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Ordens que ainda precisam de acompanhamento'}</span></div>
                 <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
+              </div>
+              <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
+                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !/concluída/i.test(String(o.status || ''))).length})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length})</span></button>
               </div>
 
               <div class="employee-orders">
-                ${minhasOS.length ? minhasOS.map(o => {
+                ${minhasOSVisiveis.length ? minhasOSVisiveis.map(o => {
                     const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
@@ -4451,11 +4505,11 @@
                           </details>
                         `}
                       </article>`;
-                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>Nenhum chamado atribuído</h3><p>Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.</p></div>'}
+                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>' + (employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída' : 'Nenhuma OS em andamento') + '</h3><p>' + (employeeOsTab === 'concluidas' ? 'As ordens finalizadas aparecerão aqui para consulta.' : 'Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.') + '</p></div>'}
               </div>
             `;
 
-            minhasOS.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
+            minhasOSVisiveis.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
         }
 
 
