@@ -178,7 +178,7 @@ function AdminPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-2 border-b border-slate-200 px-4 pt-6 lg:hidden">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 border-b border-slate-200 px-4 pt-4 pb-2 lg:hidden">
         <TabBtn
           active={tab === "tickets"}
           onClick={() => setTab("tickets")}
