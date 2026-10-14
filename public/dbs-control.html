@@ -1796,6 +1796,39 @@
         @media(max-width:760px) { .ops-overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); padding:0 12px 12px; gap:8px; } .ops-overview-head { padding:12px 12px 10px; } .ops-kpi { padding:10px; gap:8px; } .ops-kpi-icon { width:30px; height:30px; flex-basis:30px; } .ops-kpi-number { font-size:20px; } }
         @media(max-width:420px) { .ops-overview-grid { grid-template-columns:1fr; } }
 </style>
+
+/* DBS CONTROL · OS workspace refinement: reduce visual noise, improve selection clarity. */
+<style id="dbs-os-workspace-refinement">
+#tab-nova-os .form-group { min-width:0; margin-bottom:16px; }
+#tab-nova-os .form-group > label { display:flex; align-items:center; gap:6px; margin-bottom:7px; color:#17365c; font-size:12px; font-weight:800; letter-spacing:.01em; }
+#tab-nova-os input:not([type=checkbox]):not([type=radio]), #tab-nova-os select, #tab-nova-os textarea {
+ width:100%; max-width:100%; min-height:43px; border:1px solid #cbd8e7; border-radius:10px;
+ background:#fff; color:#17324f; padding:10px 12px; font:inherit; font-size:13px; box-sizing:border-box;
+ transition:border-color .15s,box-shadow .15s;
+}
+#tab-nova-os textarea { min-height:96px; resize:vertical; line-height:1.55; }
+#tab-nova-os input:focus, #tab-nova-os select:focus, #tab-nova-os textarea:focus {
+ outline:none; border-color:#2676ce; box-shadow:0 0 0 3px rgba(38,118,206,.12);
+}
+#tab-nova-os .dbs-equipment-option { width:100%; display:flex; align-items:flex-start; gap:10px; padding:12px; border:0; border-bottom:1px solid #e8eef5; background:#fff; text-align:left; color:#17324f; cursor:pointer; }
+#tab-nova-os .dbs-equipment-option:hover, #tab-nova-os .dbs-equipment-option:focus-visible { background:#f0f7ff; outline:2px solid #b8d8fa; outline-offset:-2px; }
+#tab-nova-os .dbs-equipment-option.is-selected { background:#eaf4ff; }
+#tab-nova-os .dbs-equipment-option-title { display:block; font-size:13px; font-weight:800; line-height:1.4; }
+#tab-nova-os .dbs-equipment-option-meta { display:block; margin-top:3px; color:#64748b; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+#tab-nova-os .dbs-equipment-selected-chip { display:flex; flex-direction:column; gap:3px; margin:5px 5px 0 0; padding:8px 10px; border:1px solid #b8d8fa; border-radius:9px; background:#f0f7ff; color:#17324f; }
+#tab-nova-os .dbs-equipment-selected-chip strong { font-size:12px; }
+#tab-nova-os .dbs-equipment-selected-chip small { font-size:10px; color:#526b86; line-height:1.4; }
+#tab-nova-os .dbs-equipment-empty { padding:14px; color:#64748b; font-size:12px; text-align:center; }
+#tab-nova-os .os-premium-row-service { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+#tab-nova-os .os-premium-row-service .form-group { margin-bottom:4px; }
+@media(max-width:700px) {
+ #tab-nova-os { padding:16px 12px 28px !important; }
+ #tab-nova-os .os-premium-row-service { grid-template-columns:minmax(0,1fr); gap:8px; }
+ #tab-nova-os input:not([type=checkbox]):not([type=radio]), #tab-nova-os select { min-height:46px; }
+ #tab-nova-os .dbs-equipment-option { padding:13px 10px; }
+}
+</style>
+
 </head>
 <body>
 
