@@ -949,6 +949,40 @@ export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST"
     return { ok: true };
   });
 
+export const removeRhEmployeeFromRegistry = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string; confirmation: string }) => {
+    if (!input?.id || input.confirmation !== "EXCLUIR CADASTRO") throw new Error("Confirmação de exclusão inválida.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, registration_data, registry_employee_id")
+      .eq("id", data.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    if (employee.registry_employee_id && employee.registry_employee_id !== employee.id) {
+      throw new Error("Este registro é auxiliar de benefício. Remova-o pela área do benefício.");
+    }
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? employee.registration_data as Record<string, unknown> : {};
+    const { error: updateError } = await supabaseAdmin.from("rh_employees").update({
+      is_active: false,
+      ponto_access_enabled: false,
+      dbs_control_access_enabled: false,
+      ponto_portal_user_id: null,
+      registration_data: { ...registration, __deleted_at: new Date().toISOString(), __deleted_by: actor.id },
+    }).eq("id", employee.id);
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: employee.id, actor_user_id: actor.id,
+      action: "CADASTRO_FUNCIONARIO_REMOVIDO_DA_LISTA",
+      details: { full_name: employee.full_name, history_preserved: true },
+    });
+    return { ok: true };
+  });
+
 export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => {
