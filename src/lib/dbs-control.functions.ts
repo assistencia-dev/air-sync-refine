@@ -220,9 +220,13 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     .filter((order) => String(order?.protocolo ?? "").trim())
     .map((order) => [String(order.protocolo).trim(), order]));
 
+  const isMine = (order: any) =>
+    String(order?.employeeId ?? "") === employeeId ||
+    technicianIds.has(String(order?.tecnicoId));
+
   const mergedOrders = currentOrders.map((currentOrder) => {
-    // incoming.ordens já foi filtrado no servidor para o funcionário autenticado.
-    // O protocolo também permite reconciliar OS legadas com IDs diferentes no snapshot.
+    if (!isMine(currentOrder)) return currentOrder;
+    // O protocolo também reconcilia OS legadas com IDs diferentes no snapshot.
     const incomingOrder =
       incomingById.get(String(currentOrder?.id)) ??
       incomingByProtocol.get(String(currentOrder?.protocolo ?? "").trim());
