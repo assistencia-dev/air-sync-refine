@@ -319,3 +319,29 @@ export const createClientUser = createServerFn({ method: "POST" })
 
     return { ok: true, email: data.email };
   });
+
+/** Permanently removes a user's login and access profile. Historical records/audit are retained where referenced. */
+export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { user_id: string; confirmation: string }) => {
+    if (!input?.user_id || input.confirmation !== "EXCLUIR PERMANENTEMENTE")
+      throw new Error("Confirmação de exclusão inválida.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const { data: me } = await context.supabase.from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
+    if (!me || me.role_key !== "SUPER_ADMIN") throw new Error("Somente SUPER_ADMIN pode excluir acessos permanentemente.");
+    if (me.id === data.user_id) throw new Error("Não é permitido excluir o próprio acesso.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: target, error: targetErr } = await supabaseAdmin.from("users").select("id, auth_id, full_name, email, role_key").eq("id", data.user_id).maybeSingle();
+    if (targetErr || !target) throw new Error("Usuário não encontrado.");
+    if (target.role_key === "SUPER_ADMIN") throw new Error("Por segurança, a conta SUPER_ADMIN não pode ser removida por esta tela.");
+    if (!target.auth_id) throw new Error("Este perfil já não possui um login vinculado.");
+    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(target.auth_id);
+    if (authErr) throw new Error("Não foi possível remover o login: " + authErr.message);
+    // Keep the profile row as a tombstone so OS, tickets, and audit foreign keys remain intact.
+    const { error: profileErr } = await supabaseAdmin.from("users").update({ status: "bloqueado" }).eq("id", target.id);
+    if (profileErr) throw new Error("Login removido, mas o perfil histórico precisa de revisão administrativa: " + profileErr.message);
+    await supabaseAdmin.from("audit_log").insert({ actor_user_id: me.id, target_user_id: target.id, action: "permanently_removed_user_access", metadata_json: { previous_role: target.role_key, at: new Date().toISOString() } });
+    return { ok: true };
+  });
