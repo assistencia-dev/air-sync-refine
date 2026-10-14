@@ -207,6 +207,34 @@
     };
   }
   function pdf(id) {
+    if (window.DbsControlQuotePdf && typeof window.DbsControlQuotePdf.generate === "function") {
+      var quoteToExport = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
+      if (!quoteToExport) return;
+      var acceptedSnapshot = quoteToExport.aceiteWeb && quoteToExport.aceiteWeb.snapshot;
+      var hasAcceptedSnapshot = acceptedSnapshot && typeof acceptedSnapshot === "object";
+      var quoteData = hasAcceptedSnapshot
+        ? Object.assign({}, quoteToExport, acceptedSnapshot, { aceiteWeb: quoteToExport.aceiteWeb, status: quoteToExport.status })
+        : quoteToExport;
+      var sourceItems = hasAcceptedSnapshot && Array.isArray(acceptedSnapshot.itens) && acceptedSnapshot.itens.length
+        ? acceptedSnapshot.itens
+        : quoteItems(quoteToExport);
+      var exportItems = sourceItems.map(function (item) {
+        var savedTotal = item.total != null && item.total !== "" && Number.isFinite(Number(item.total));
+        var lineTotal = savedTotal
+          ? Number(item.total)
+          : convertedLine(num(item.quantidade || 1), item.unidade || "UN", num(item.valorUnitario), item.unidadePreco || item.unidade || "UN");
+        return Object.assign({}, item, { total: lineTotal });
+      });
+      window.DbsControlQuotePdf.generate(quoteData, exportItems, ERP_STATE)
+        .then(function (doc) {
+          doc.save(String(quoteToExport.id || "proposta").replace(/[^a-z0-9_-]/gi, "_") + ".pdf");
+        })
+        .catch(function (error) {
+          console.error("Exportação da proposta:", error);
+          alert(error instanceof Error ? error.message : "Não foi possível gerar o PDF da proposta.");
+        });
+      return;
+    }
     var q = (ERP_STATE.orcamentos || []).find(function (x) { return String(x.id) === String(id); }); if (!q) return;
     var C = clients().find(function (x) { return String(x.id) === String(q.clienteId); }) || {};
     var items = quoteItems(q);

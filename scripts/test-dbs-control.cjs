@@ -32,6 +32,7 @@ const firstPartyScripts = [
   "public/dbs-control-import.js",
   "public/dbs-control-orcamentos-v2.js",
   "public/dbs-control-orcamentos-flex.js",
+  "public/dbs-control-orcamentos-pdf.js",
   "public/dbs-control-pdf.js",
   "public/dbs-control-observations.js",
 ];
@@ -135,7 +136,10 @@ assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional de
 
 
 const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "utf8");
+const quotePdf = fs.readFileSync("public/dbs-control-orcamentos-pdf.js", "utf8");
 assert.match(html, /dbs-control-orcamentos-flex\.js\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
+assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261014-pdf-standard-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
+assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261014-pdf-standard-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
 assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma lista de itens.");
 assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
@@ -172,6 +176,18 @@ assert.match(quoteBuilder, /"M³":1000/, "Um metro cúbico deve equivaler a 1.00
 assert.match(quoteBuilder, /"ML":"volume","L":"volume","GAL":"volume"/, "Mililitros, litros, galões e metros cúbicos devem compartilhar dimensão de volume.");
 assert.match(quoteBuilder, /var lineTotal = Number\.isFinite\(Number\(it\.total\)\)/, "O PDF deve usar o total já convertido salvo no item.");
 assert.match(quoteBuilder, /String\(it\.unidadePreco \|\| it\.unidade \|\| "UN"\)/, "O PDF deve mostrar a unidade-base do preço.");
+assert.match(quoteBuilder, /window\.DbsControlQuotePdf\.generate/, "A exportação deve delegar ao renderer comercial padronizado.");
+assert.match(quoteBuilder, /aceiteWeb && quoteToExport\.aceiteWeb\.snapshot/, "Uma proposta aceita deve exportar o snapshot imutável aprovado.");
+assert.match(quoteBuilder, /acceptedSnapshot\.itens/, "As linhas do PDF aceito devem vir do snapshot, não de alterações posteriores.");
+assert.match(quotePdf, /function drawHeader\(firstPage\)/, "O orçamento deve usar cabeçalho próprio e repetido em cada página.");
+assert.match(quotePdf, /function drawIssuer\(\)/, "O PDF deve preservar razão social, CNPJ e canais oficiais do emissor.");
+assert.match(quotePdf, /subtotalProducts[\s\S]*?subtotalServices[\s\S]*?TOTAL DA PROPOSTA/, "O resumo comercial deve manter produtos, serviços e total da proposta.");
+assert.match(quotePdf, /Página " \+ page \+ " de " \+ totalPages/, "O orçamento deve mostrar paginação completa.");
+assert.match(quotePdf, /doc\.line\(margin, 285, pageWidth - margin, 285\)/, "O rodapé comercial deve alinhar com o padrão da OS.");
+assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o hash do conteúdo congelado no aceite web.");
+assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
+assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
+assert.match(route, /v=20261014-pdf-standard-1/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
 
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
