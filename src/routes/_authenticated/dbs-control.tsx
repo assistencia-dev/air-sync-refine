@@ -87,6 +87,7 @@ function DbsControlPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
+  const pendingSaveRequestIdsRef = useRef<string[]>([]);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -366,21 +367,41 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_SAVE") {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
         pendingStateRef.current = msg.state;
-        if (!cloudReadyRef.current) return;
+        if (requestId) pendingSaveRequestIdsRef.current.push(requestId);
+        if (!cloudReadyRef.current) {
+          if (requestId) {
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_SAVE_ACK", requestId, ok: false,
+              error: "A base compartilhada ainda não está pronta. A conclusão não foi confirmada na nuvem.",
+            }, "*");
+            pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => id !== requestId);
+          }
+          return;
+        }
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
           saveTimerRef.current = null;
           const state = pendingStateRef.current;
+          const requestIds = [...pendingSaveRequestIdsRef.current];
+          pendingSaveRequestIdsRef.current = [];
           if (!state) return;
           try {
             const saved = await saveDbsControlCloudState({ data: { state } });
             cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
             if (pendingStateRef.current === state) pendingStateRef.current = null;
             setCloudError(null);
+            requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: true, updated_at: saved.updated_at ?? null,
+            }, "*"));
           } catch (err) {
             console.error("DBS Control cloud save:", err);
-            setCloudError(err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.");
+            const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
+            setCloudError(message);
+            requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
+            }, "*"));
           }
         }, 450);
       }
