@@ -4387,7 +4387,12 @@
                     (tec.email && norm(assigned.email) === norm(tec.email)) ||
                     (tec.nome && norm(assigned.nome) === norm(tec.nome)))) return true;
                 return false;
-            });
+            }).filter(o => !o.excluidaEm && !o.arquivadaEm);
+
+            const employeeOsTab = window.__DBS_EMPLOYEE_OS_TAB__ || 'abertas';
+            const minhasOSVisiveis = minhasOS.filter(o => employeeOsTab === 'concluidas'
+                ? /concluída/i.test(String(o.status || ''))
+                : !/concluída/i.test(String(o.status || '')));
 
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
@@ -4417,12 +4422,16 @@
               </div>
 
               <div class="employee-toolbar">
-                <div><strong>Minhas ordens de serviço</strong><span>${minhasOS.length ? 'Acompanhe o andamento e registre cada atendimento' : 'Nenhum chamado atribuído no momento'}</span></div>
+                <div><strong>Minhas ordens de serviço</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Ordens que ainda precisam de acompanhamento'}</span></div>
                 <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
+              </div>
+              <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
+                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !/concluída/i.test(String(o.status || ''))).length})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${minhasOS.filter(o => /concluída/i.test(String(o.status || ''))).length})</span></button>
               </div>
 
               <div class="employee-orders">
-                ${minhasOS.length ? minhasOS.map(o => {
+                ${minhasOSVisiveis.length ? minhasOSVisiveis.map(o => {
                     const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
@@ -4490,11 +4499,11 @@
                           </details>
                         `}
                       </article>`;
-                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>Nenhum chamado atribuído</h3><p>Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.</p></div>'}
+                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>' + (employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída' : 'Nenhuma OS em andamento') + '</h3><p>' + (employeeOsTab === 'concluidas' ? 'As ordens finalizadas aparecerão aqui para consulta.' : 'Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.') + '</p></div>'}
               </div>
             `;
 
-            minhasOS.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
+            minhasOSVisiveis.forEach(o => { if (o.status !== 'Concluída') setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
         }
 
 
