@@ -4362,8 +4362,7 @@
             saveState();
             const badge = document.getElementById('dbs-checklist-tecnico-count-' + osId);
             if (badge) {
-                const all = Object.values(DBS_CHECKLIST_TECNICO).flat();
-                const done = all.filter(label => Object.values(os.checklistTecnico || {}).some(groupValues => groupValues && groupValues[label] === true)).length;
+                const done = Object.entries(DBS_CHECKLIST_TECNICO).reduce((sum, [group, labels]) => sum + labels.filter(label => Boolean(os.checklistTecnico && os.checklistTecnico[group] && os.checklistTecnico[group][label] === true)).length, 0);
                 badge.textContent = done + ' itens conferidos';
             }
         }
@@ -4383,7 +4382,7 @@
         function renderizarChecklistTecnicoOS(os) {
             const data = os.checklistTecnico && typeof os.checklistTecnico === 'object' ? os.checklistTecnico : {};
             const total = Object.values(DBS_CHECKLIST_TECNICO).flat().length;
-            const done = Object.values(DBS_CHECKLIST_TECNICO).flat().filter(label => Object.values(data).some(groupValues => groupValues && groupValues[label] === true)).length;
+            const done = Object.entries(DBS_CHECKLIST_TECNICO).reduce((sum, [group, labels]) => sum + labels.filter(label => Boolean(data[group] && data[group][label] === true)).length, 0);
             const groups = Object.entries(DBS_CHECKLIST_TECNICO).map(([group, labels]) => '<div class="field-check-card"><strong class="field-check-title">' + escDbsControl(group) + '</strong><div class="field-checklist">' + labels.map(label => {
                 const checked = Boolean(data[group] && data[group][label]);
                 return '<label class="field-check-item"><input type="checkbox" ' + (checked ? 'checked ' : '') + 'onchange="salvarChecklistTecnicoOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',\'' + group.replace(/'/g,"\\'") + '\',\'' + label.replace(/'/g,"\\'") + '\',this.checked)"><span>' + escDbsControl(label) + '</span></label>';
