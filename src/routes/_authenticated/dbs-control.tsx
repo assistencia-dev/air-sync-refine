@@ -34,7 +34,10 @@ function mergeDbsControlStates(
 ) {
   if (!localState) return cloudState;
 
-  const merged: Record<string, unknown> = { ...cloudState, ...localState };
+  // The shared cloud snapshot is authoritative for fields already populated.
+  // Local-only records are retained, and local non-empty fields may fill cloud blanks,
+  // but an old phone/browser snapshot must never overwrite newer cloud values.
+  const merged: Record<string, unknown> = { ...localState, ...cloudState };
   const arrayKeys = new Set([
     ...Object.keys(cloudState).filter((key) => Array.isArray(cloudState[key])),
     ...Object.keys(localState).filter((key) => Array.isArray(localState[key])),
@@ -53,6 +56,9 @@ function mergeDbsControlStates(
     return "value:" + JSON.stringify(item);
   };
 
+  const hasValue = (value: unknown) =>
+    value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "");
+
   for (const key of arrayKeys) {
     const cloudRows = Array.isArray(cloudState[key]) ? cloudState[key] as unknown[] : [];
     const localRows = Array.isArray(localState[key]) ? localState[key] as unknown[] : [];
@@ -62,15 +68,15 @@ function mergeDbsControlStates(
     for (const row of localRows) {
       const id = identity(row);
       const existing = rows.get(id);
-      if (existing && existing && row && typeof existing === "object" && typeof row === "object" && !Array.isArray(existing) && !Array.isArray(row)) {
-        const combined: Record<string, unknown> = { ...(existing as Record<string, unknown>) };
-        for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
-          if (value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "")) {
-            combined[field] = value;
-          }
+      if (existing !== undefined && row && typeof existing === "object" && typeof row === "object" && !Array.isArray(existing) && !Array.isArray(row)) {
+        const localRecord = row as Record<string, unknown>;
+        const cloudRecord = existing as Record<string, unknown>;
+        const combined: Record<string, unknown> = { ...localRecord };
+        for (const [field, value] of Object.entries(cloudRecord)) {
+          if (hasValue(value) || !hasValue(combined[field])) combined[field] = value;
         }
         rows.set(id, combined);
-      } else if (!existing) {
+      } else if (existing === undefined) {
         rows.set(id, row);
       }
     }
