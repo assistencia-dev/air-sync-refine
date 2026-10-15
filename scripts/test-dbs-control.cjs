@@ -65,8 +65,7 @@ assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(can
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
-assert.match(route, /Nunca grave automaticamente um snapshot local no estado compartilhado durante a inicialização/, "A inicialização não deve ressuscitar OS antigas ao gravar automaticamente o snapshot local.");
-assert.match(route, /const merged: Record<string, unknown> = \{ \.\.\.localState, \.\.\.cloudState \}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
+assert.match(route, /postMessage\(\s*\{ type: "DBS_CONTROL_CLOUD_STATE", state: cloudState \}/, "Quando existe snapshot compartilhado, a inicialização deve entregar a nuvem sem mesclar/gravar o snapshot local.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
 assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
