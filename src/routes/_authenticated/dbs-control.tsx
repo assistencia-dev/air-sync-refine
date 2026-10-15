@@ -86,6 +86,9 @@ function DbsControlPage() {
   const access = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: false });
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Serialize writes from this browser so an earlier slow request cannot finish
+  // after a newer request and overwrite the latest snapshot.
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
   const pendingSaveRequestIdsRef = useRef<string[]>([]);
   const cloudReadyRef = useRef(false);
@@ -387,22 +390,25 @@ function DbsControlPage() {
           const requestIds = [...pendingSaveRequestIdsRef.current];
           pendingSaveRequestIdsRef.current = [];
           if (!state) return;
-          try {
-            const saved = await saveDbsControlCloudState({ data: { state } });
-            cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
-            if (pendingStateRef.current === state) pendingStateRef.current = null;
-            setCloudError(null);
-            requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
-              type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: true, updated_at: saved.updated_at ?? null,
-            }, "*"));
-          } catch (err) {
-            console.error("DBS Control cloud save:", err);
-            const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
-            setCloudError(message);
-            requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
-              type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
-            }, "*"));
-          }
+          const persist = async () => {
+            try {
+              const saved = await saveDbsControlCloudState({ data: { state } });
+              cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+              if (pendingStateRef.current === state) pendingStateRef.current = null;
+              setCloudError(null);
+              requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: true, updated_at: saved.updated_at ?? null,
+              }, "*"));
+            } catch (err) {
+              console.error("DBS Control cloud save:", err);
+              const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
+              setCloudError(message);
+              requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
+              }, "*"));
+            }
+          };
+          saveQueueRef.current = saveQueueRef.current.then(persist, persist);
         }, 450);
       }
     };
@@ -455,8 +461,8 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261014-pdf-standard-1`
-    : "/dbs-control.html?v=20261014-pdf-standard-1";
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261015-mobile-sync-1`
+    : "/dbs-control.html?v=20261015-mobile-sync-1";
 
   return (
     <main className="min-h-screen bg-[#f4f8fc]">
