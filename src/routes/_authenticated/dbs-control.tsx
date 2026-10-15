@@ -75,6 +75,34 @@ function mergeDbsControlStates(
         for (const [field, value] of Object.entries(cloudRecord)) {
           if (hasValue(value) || !hasValue(combined[field])) combined[field] = value;
         }
+
+        // Uma resposta de nuvem atrasada não pode reabrir uma OS que o próprio
+        // dispositivo já marcou como concluída. A nuvem continua prevalecendo
+        // quando ela também confirma a conclusão ou possui dados mais recentes.
+        if (key === "ordens") {
+          const isCompleted = (value: unknown) =>
+            ["concluída", "concluida", "concluído", "concluido"].includes(
+              String(value ?? "").trim().toLocaleLowerCase("pt-BR"),
+            );
+          if (isCompleted(localRecord.status) && !isCompleted(cloudRecord.status)) {
+            combined.status = localRecord.status;
+            for (const field of [
+              "diagnostico",
+              "trabalhoExecutado",
+              "observacao",
+              "observacaoTecnico",
+              "observacaoComplementarTecnico",
+              "assinatura",
+              "assinaturaEm",
+              "concluidoEm",
+              "concluidoPorEmployeeId",
+              "fotoAntes",
+              "fotoDepois",
+            ]) {
+              if (hasValue(localRecord[field])) combined[field] = localRecord[field];
+            }
+          }
+        }
         rows.set(id, combined);
       } else if (existing === undefined) {
         rows.set(id, row);
