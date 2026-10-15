@@ -65,7 +65,7 @@ assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(can
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
-assert.match(route, /function mergeDbsControlStates\s*\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
+assert.match(route, /Nunca grave automaticamente um snapshot local no estado compartilhado durante a inicialização/, "A inicialização não deve ressuscitar OS antigas ao gravar automaticamente o snapshot local.");
 assert.match(route, /const merged: Record<string, unknown> = \{ \.\.\.localState, \.\.\.cloudState \}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
@@ -87,7 +87,7 @@ assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sinc
 assert.match(route, /setTimeout\(async \(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
-assert.match(route, /v=20261015-mobile-sync-1/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
+assert.match(route, /v=20261015-mobile-sync-2/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
 assert.match(ux, /DOMContentLoaded/, "A camada UX precisa ter inicialização compatível com carregamento tardio.");
 assert.match(html, /dbs-control-theme\.css/, "O tema visual do DBS Control precisa estar carregado.");
 assert.doesNotMatch(ux, /quick-flow\{display:none!important\}/, "O guia de fluxo do dashboard não deve ser ocultado.");
@@ -203,7 +203,7 @@ assert.match(quotePdf, /doc\.line\(margin, 285, pageWidth - margin, 285\)/, "O r
 assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o hash do conteúdo congelado no aceite web.");
 assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
 assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
-assert.match(route, /v=20261015-mobile-sync-1/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
+assert.match(route, /v=20261015-mobile-sync-2/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
 
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
