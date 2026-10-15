@@ -66,6 +66,8 @@ assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A con
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /function mergeDbsControlStates\s*\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
 assert.match(route, /const merged: Record<string, unknown> = \{ \.\.\.localState, \.\.\.cloudState \}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
+assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
+assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
 assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
 assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
 assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
