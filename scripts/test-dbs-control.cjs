@@ -62,8 +62,8 @@ assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hi
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /function mergeDbsControlStates\s*\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
-assert.match(route, /const merged: Record<string, unknown> = \\{ \.\.\.localState, \.\.\.cloudState \\}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
-assert.match(route, /if \\(hasValue\\(value\\) \\|\\| !hasValue\\(combined\\[field\\]\\)\\) combined\\[field\\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
+assert.match(route, /const merged: Record<string, unknown> = \{ \.\.\.localState, \.\.\.cloudState \}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
+assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
 assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
 assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
 assert.match(html, /function verificarRecuperacaoLocalDBS\s*\(/, "A central de cadastros deve expor recuperação de cópias locais.");
