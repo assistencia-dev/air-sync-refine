@@ -222,19 +222,14 @@ function DbsControlPage() {
             : null;
 
           if (cloudState) {
-            // A nuvem pode estar incompleta após uma falha de sincronização.
-            // Unimos registros por identidade e preservamos campos locais não vazios,
-            // em vez de substituir silenciosamente uma base local mais completa.
-            const mergedState = mergeDbsControlStates(cloudState, localState);
-            const needsMergeSave = JSON.stringify(mergedState) !== JSON.stringify(cloudState);
-            const finalState = needsMergeSave
-              ? (await saveDbsControlCloudState({ data: { state: mergedState } })).state
-              : cloudState;
-
+            // Nunca grave automaticamente um snapshot local no estado compartilhado durante
+            // a inicialização: um navegador antigo pode ressuscitar OS excluídas/antigas ou
+            // reverter a execução. A cópia local permanece no dispositivo para recuperação
+            // explícita; a base compartilhada é a autoridade de leitura quando já existe.
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: finalState },
+              { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
               "*",
             );
           } else if (localState) {
