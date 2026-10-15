@@ -583,7 +583,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     );
     return {
       ...merged,
-      status: canonicalCompleted ? "Concluída" : (snapshotCompleted && !canonical.completedAt ? merged.status : canonical.status),
+      status: canonicalCompleted ? "Concluída" : (snapshotCompleted ? merged.status : canonical.status),
       scheduledAt: canonical.scheduledAt ?? merged.scheduledAt ?? null,
       startedAt: canonical.startedAt ?? merged.startedAt ?? null,
       completedAt: canonical.completedAt ?? merged.completedAt ?? null,
