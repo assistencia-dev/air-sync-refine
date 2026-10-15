@@ -546,13 +546,41 @@ async function hydrateDbsControlStateFromCanonicalDb(
   const sites = mergeArray(Array.isArray((current as any).sites) ? (current as any).sites : [], canonicalSites);
   const locais = mergeArray(Array.isArray((current as any).locais) ? (current as any).locais : [], canonicalSites);
 
+  // O snapshot conserva campos legados, mas não pode apagar uma conclusão já
+  // registrada no banco operacional. O status canônico concluído sempre prevalece.
+  const mergedOrders = mergeArray(current.ordens as unknown[], canonicalOrders).map((merged: any) => {
+    const canonical = canonicalOrders.find((order: any) =>
+      String(order.id) === String(merged?.id) ||
+      (String(order.protocolo ?? "").trim() &&
+        String(order.protocolo ?? "").trim() === String(merged?.protocolo ?? "").trim())
+    ) as any;
+    if (!canonical) return merged;
+    const canonicalCompleted = String(canonical.status ?? "").trim() === "Concluída";
+    const snapshotCompleted = ["concluída", "concluida", "concluído", "concluido"].includes(
+      String(merged?.status ?? "").trim().toLocaleLowerCase("pt-BR")
+    );
+    return {
+      ...merged,
+      status: canonicalCompleted ? "Concluída" : (snapshotCompleted && !canonical.completedAt ? merged.status : canonical.status),
+      scheduledAt: canonical.scheduledAt ?? merged.scheduledAt ?? null,
+      startedAt: canonical.startedAt ?? merged.startedAt ?? null,
+      completedAt: canonical.completedAt ?? merged.completedAt ?? null,
+      concluidoEm: canonical.completedAt ?? merged.concluidoEm ?? merged.completedAt ?? null,
+      diagnostico: canonical.diagnostico || merged.diagnostico || "",
+      observacao: canonical.observacao || merged.observacao || "",
+      assinatura: canonical.assinatura || merged.assinatura || null,
+      signature_name: canonical.signature_name || merged.signature_name || null,
+      valor: canonical.valor ?? merged.valor,
+    };
+  });
+
   return {
     ...current,
     clientes: mergeArray(current.clientes as unknown[], canonicalClients),
     equipamentos: mergeArray(current.equipamentos as unknown[], canonicalEquipment),
     servicos: mergeArray(current.servicos as unknown[], canonicalServices),
     tecnicos: mergeArray(current.tecnicos as unknown[], canonicalTechnicians),
-    ordens: mergeArray(current.ordens as unknown[], canonicalOrders),
+    ordens: mergedOrders,
     sites,
     locais,
   };
