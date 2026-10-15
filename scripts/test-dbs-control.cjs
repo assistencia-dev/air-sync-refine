@@ -146,8 +146,8 @@ assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional de
 const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "utf8");
 const quotePdf = fs.readFileSync("public/dbs-control-orcamentos-pdf.js", "utf8");
 assert.match(html, /dbs-control-orcamentos-flex\.js\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
-assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261014-pdf-standard-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
-assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261014-pdf-standard-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
+assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261015-mobile-sync-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
+assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261015-mobile-sync-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
 assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma lista de itens.");
 assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
@@ -195,7 +195,7 @@ assert.match(quotePdf, /doc\.line\(margin, 285, pageWidth - margin, 285\)/, "O r
 assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o hash do conteúdo congelado no aceite web.");
 assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
 assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
-assert.match(route, /v=20261014-pdf-standard-1/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
+assert.match(route, /v=20261015-mobile-sync-1/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
 
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
