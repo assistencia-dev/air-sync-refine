@@ -146,8 +146,8 @@ assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional de
 const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "utf8");
 const quotePdf = fs.readFileSync("public/dbs-control-orcamentos-pdf.js", "utf8");
 assert.match(html, /dbs-control-orcamentos-flex\.js\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
-assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261015-mobile-sync-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
-assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261015-mobile-sync-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
+assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261014-pdf-standard-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
+assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261014-pdf-standard-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
 assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma lista de itens.");
 assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
