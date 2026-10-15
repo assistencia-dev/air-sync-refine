@@ -316,9 +316,14 @@ function dbsValue(value: unknown) {
 
 function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<string, unknown> | undefined) {
   if (!current) return { ...canonical };
-  const merged: Record<string, unknown> = { ...canonical };
-  for (const [key, value] of Object.entries(current)) {
+  // A tabela operacional é a fonte de verdade para campos que ela armazena.
+  // O snapshot legado só pode completar campos canônicos vazios; nunca pode
+  // substituir status, conclusão, assinatura ou observação já gravados no banco.
+  const merged: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(canonical)) {
     if (value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "")) {
+      merged[key] = value;
+    } else if (!(key in merged) || merged[key] === null || merged[key] === undefined || (typeof merged[key] === "string" && (merged[key] as string).trim() === "")) {
       merged[key] = value;
     }
   }
