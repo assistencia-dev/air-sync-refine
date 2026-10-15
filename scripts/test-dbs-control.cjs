@@ -59,9 +59,17 @@ assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexiste
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
+assert.match(cloudFunctions, /const merged: Record<string, unknown> = \{ \.\.\.current \};[\s\S]*?for \(const \[key, value\] of Object\.entries\(canonical\)\)/, "Campos canônicos preenchidos no banco devem prevalecer sobre snapshots legados.");
+assert.match(cloudFunctions, /preserveCompletedWorkOrderStatus: true/, "A hidratação das OS deve proteger uma conclusão já registrada no snapshot contra status canônico desatualizado.");
+assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(canonical\?\.status\)/, "Um status canônico antigo não pode reabrir uma OS concluída no snapshot.");
+assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /function mergeDbsControlStates\s*\(/, "A inicialização deve unir estado local e nuvem sem descartar registros.");
+assert.match(route, /const merged: Record<string, unknown> = \{ \.\.\.localState, \.\.\.cloudState \}/, "Os campos preenchidos na nuvem devem prevalecer sobre snapshots locais antigos.");
+assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
+assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
+assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
 assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
 assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
 assert.match(html, /function verificarRecuperacaoLocalDBS\s*\(/, "A central de cadastros deve expor recuperação de cópias locais.");

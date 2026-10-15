@@ -316,9 +316,14 @@ function dbsValue(value: unknown) {
 
 function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<string, unknown> | undefined) {
   if (!current) return { ...canonical };
-  const merged: Record<string, unknown> = { ...canonical };
-  for (const [key, value] of Object.entries(current)) {
+  // A tabela operacional é a fonte de verdade para campos que ela armazena.
+  // O snapshot legado só pode completar campos canônicos vazios; nunca pode
+  // substituir status, conclusão, assinatura ou observação já gravados no banco.
+  const merged: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(canonical)) {
     if (value !== null && value !== undefined && !(typeof value === "string" && value.trim() === "")) {
+      merged[key] = value;
+    } else if (!(key in merged) || merged[key] === null || merged[key] === undefined || (typeof merged[key] === "string" && (merged[key] as string).trim() === "")) {
       merged[key] = value;
     }
   }
@@ -387,12 +392,29 @@ async function hydrateDbsControlStateFromCanonicalDb(
 
   const current = normalizeState(state);
   const byId = (items: unknown[]) => new Map(items.map((item: any) => [String(item?.id ?? ""), item]).filter(([id]) => id));
-  const mergeArray = (currentItems: unknown[], incomingItems: unknown[]) => {
+  const mergeArray = (
+    currentItems: unknown[],
+    incomingItems: unknown[],
+    options: { preserveCompletedWorkOrderStatus?: boolean } = {},
+  ) => {
     const incomingById = byId(incomingItems);
-    const result = (currentItems as any[]).map((item) => mergeDbsRecord(
-      incomingById.get(String(item?.id ?? "")) ?? {},
-      item,
-    ));
+    const result = (currentItems as any[]).map((item) => {
+      const canonical = incomingById.get(String(item?.id ?? "")) ?? {};
+      const merged = mergeDbsRecord(canonical, item);
+      if (options.preserveCompletedWorkOrderStatus) {
+        const isCompleted = (value: unknown) =>
+          ["concluída", "concluida", "concluído", "concluido"].includes(
+            String(value ?? "").trim().toLocaleLowerCase("pt-BR"),
+          );
+        // Uma conclusão já presente no snapshot não pode ser rebaixada por uma
+        // linha canônica ainda desatualizada. Se o banco também confirma conclusão,
+        // o status canônico continua prevalecendo.
+        if (isCompleted(item?.status) && !isCompleted(canonical?.status)) {
+          merged.status = item.status;
+        }
+      }
+      return merged;
+    });
     const currentIds = new Set(result.map((item) => String(item?.id ?? "")));
     for (const item of incomingItems as any[]) {
       const id = String(item?.id ?? "");
@@ -548,7 +570,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
 
   // O snapshot conserva campos legados, mas não pode apagar uma conclusão já
   // registrada no banco operacional. O status canônico concluído sempre prevalece.
-  const mergedOrders = mergeArray(current.ordens as unknown[], canonicalOrders).map((merged: any) => {
+  const mergedOrders = mergeArray(current.ordens as unknown[], canonicalOrders, { preserveCompletedWorkOrderStatus: true }).map((merged: any) => {
     const canonical = canonicalOrders.find((order: any) =>
       String(order.id) === String(merged?.id) ||
       (String(order.protocolo ?? "").trim() &&
@@ -561,7 +583,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     );
     return {
       ...merged,
-      status: canonicalCompleted ? "Concluída" : (snapshotCompleted && !canonical.completedAt ? merged.status : canonical.status),
+      status: canonicalCompleted ? "Concluída" : (snapshotCompleted ? merged.status : canonical.status),
       scheduledAt: canonical.scheduledAt ?? merged.scheduledAt ?? null,
       startedAt: canonical.startedAt ?? merged.startedAt ?? null,
       completedAt: canonical.completedAt ?? merged.completedAt ?? null,
