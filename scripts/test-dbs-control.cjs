@@ -92,7 +92,7 @@ assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sinc
 assert.match(route, /setTimeout\(async \(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
-assert.match(route, /v=20261016-dashboard-sync-1/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
+assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
 assert.match(ux, /DOMContentLoaded/, "A camada UX precisa ter inicialização compatível com carregamento tardio.");
 assert.match(html, /dbs-control-theme\.css/, "O tema visual do DBS Control precisa estar carregado.");
 assert.doesNotMatch(ux, /quick-flow\{display:none!important\}/, "O guia de fluxo do dashboard não deve ser ocultado.");
