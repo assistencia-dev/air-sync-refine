@@ -213,3 +213,13 @@ assert.match(osTheme, /#tab-ordens #os-table thead th/, "A lista de OS deve ter 
 assert.match(osTheme, /@media \(max-width: 760px\)/, "A tela de OS deve se adaptar a telas menores.");
 assert.match(html, /id="os-table-body"/, "A padronização deve manter o mesmo corpo de tabela ligado aos dados existentes.");
 assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a ação de exportar PDF.");
+
+
+const retentionMigration = fs.readFileSync("supabase/migrations/20261016100000_dbs_control_os_document_retention.sql", "utf8");
+assert.match(retentionMigration, /create table if not exists public\.dbs_control_work_order_revisions/, "Cada versão da OS deve ter trilha histórica própria.");
+assert.match(retentionMigration, /before insert or update or delete on public\.dbs_control_work_orders/, "A proteção documental deve atuar no banco, não só no frontend.");
+assert.match(retentionMigration, /Exclusão física de Ordem de Serviço bloqueada/, "A OS não pode ser apagada fisicamente.");
+assert.match(retentionMigration, /OS concluída protegida: não é permitido reabrir/, "Uma OS concluída não pode ser reaberta por autosave.");
+assert.match(retentionMigration, /signature_data/, "A proteção deve abranger assinatura do cliente.");
+assert.match(retentionMigration, /technical_opinion/, "A proteção deve abranger o laudo técnico.");
+assert.match(retentionMigration, /before_data, after_data/, "A trilha deve preservar versões anterior e posterior.");
