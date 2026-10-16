@@ -81,8 +81,9 @@ begin
         'concluidoEm','completedAt','diagnostico','laudo','observacao'
       ]
       loop
-        if nullif(trim(coalesce(v_order->>v_latest_key,'')), '') is null
-           and nullif(trim(coalesce(v_latest->>v_latest_key,'')), '') is not null then
+        -- Para documentos concluídos, o valor já persistido prevalece inclusive
+        -- quando um cliente atrasado envia um valor antigo não vazio.
+        if nullif(trim(coalesce(v_latest->>v_latest_key,'')), '') is not null then
           v_order := v_order || jsonb_build_object(v_latest_key, v_latest->v_latest_key);
         end if;
       end loop;
