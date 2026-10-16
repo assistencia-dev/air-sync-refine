@@ -655,6 +655,53 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     let stateToSave = data.state;
     let ownerUserId = scope.ownerUserId;
 
+    // Reconcile complete snapshots against the latest shared snapshot before an
+    // administrative save, preventing delayed autosaves from dropping existing OS.
+    if (user.role_key !== "COLABORADOR") {
+      const { data: latestSnapshot, error: latestError } = await supabaseAdmin
+        .from("dbs_control_snapshots")
+        .select("state, owner_user_id, company_id")
+        .eq("scope_key", scope.scopeKey)
+        .maybeSingle();
+      if (latestError) throw new Error(latestError.message);
+      if (latestSnapshot?.state && typeof latestSnapshot.state === "object") {
+        const latestState = normalizeState(latestSnapshot.state as Record<string, unknown>);
+        const incomingState = normalizeState(data.state);
+        const latestOrders = latestState.ordens as any[];
+        const incomingOrders = incomingState.ordens as any[];
+        const orderKey = (order: any) => {
+          const id = String(order?.id ?? "").trim();
+          const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+          return id ? "id:" + id : protocol ? "protocol:" + protocol : "";
+        };
+        const isCompleted = (order: any) => ["concluida", "concluída", "concluido", "concluído"].includes(String(order?.status ?? "").trim().toLocaleLowerCase("pt-BR"));
+        const latestByKey = new Map(latestOrders.map((order) => [orderKey(order), order]).filter(([key]) => Boolean(key)));
+        const incomingKeys = new Set(incomingOrders.map(orderKey).filter(Boolean));
+        const reconciledOrders = incomingOrders.map((incoming) => {
+          const key = orderKey(incoming);
+          const latest = key ? latestByKey.get(key) : undefined;
+          if (!latest || !isCompleted(latest)) return incoming;
+          // Keep the canonical completed document fields if a stale autosave sends blanks.
+          return {
+            ...incoming,
+            status: latest.status,
+            assinatura: incoming.assinatura || latest.assinatura,
+            assinaturaCliente: incoming.assinaturaCliente || latest.assinaturaCliente,
+            signature_data: incoming.signature_data || latest.signature_data,
+            signature_name: incoming.signature_name || latest.signature_name,
+            concluidoEm: incoming.concluidoEm || latest.concluidoEm,
+            completedAt: incoming.completedAt || latest.completedAt,
+            diagnostico: incoming.diagnostico || latest.diagnostico,
+            laudo: incoming.laudo || latest.laudo,
+            observacao: incoming.observacao || latest.observacao,
+          };
+        });
+        const missingLatestOrders = latestOrders.filter((order) => { const key = orderKey(order); return key && !incomingKeys.has(key); });
+        stateToSave = { ...incomingState, ordens: [...reconciledOrders, ...missingLatestOrders] };
+        ownerUserId = latestSnapshot.owner_user_id ?? ownerUserId;
+      }
+    }
+
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");

@@ -213,3 +213,10 @@ assert.match(osTheme, /#tab-ordens #os-table thead th/, "A lista de OS deve ter 
 assert.match(osTheme, /@media \(max-width: 760px\)/, "A tela de OS deve se adaptar a telas menores.");
 assert.match(html, /id="os-table-body"/, "A padronização deve manter o mesmo corpo de tabela ligado aos dados existentes.");
 assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a ação de exportar PDF.");
+
+
+const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
+assert.match(persistence, /Reconcile complete snapshots against the latest shared snapshot/, "Admin saves must reconcile against the latest shared snapshot.");
+assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
+assert.match(persistence, /isCompleted\(latest\)/, "A delayed snapshot must protect already completed OS.");
+assert.match(persistence, /signature_data: incoming\.signature_data \|\| latest\.signature_data/, "A delayed snapshot must not clear a completed OS signature.");
