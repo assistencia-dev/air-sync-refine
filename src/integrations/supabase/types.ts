@@ -1943,6 +1943,7 @@ export type Database = {
           discount_cents: number
           employee_id: string
           fgts_base_cents: number
+          fgts_amount_cents: number
           gross_cents: number
           id: string
           inss_base_cents: number
@@ -1956,6 +1957,7 @@ export type Database = {
           discount_cents?: number
           employee_id: string
           fgts_base_cents?: number
+          fgts_amount_cents?: number
           gross_cents?: number
           id?: string
           inss_base_cents?: number
@@ -1969,6 +1971,7 @@ export type Database = {
           discount_cents?: number
           employee_id?: string
           fgts_base_cents?: number
+          fgts_amount_cents?: number
           gross_cents?: number
           id?: string
           inss_base_cents?: number

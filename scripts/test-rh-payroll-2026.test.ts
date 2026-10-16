@@ -1,0 +1,76 @@
+import { describe, expect, test } from "bun:test";
+import { assertPayrollZeroHasJustification, calculatePayrollBases2026, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "../src/utils/rhPayroll2026";
+
+describe("Motor fiscal da folha — tabelas 2026", () => {
+  test("aplica incidências fiscais individualmente por rubrica", () => {
+    const bases = calculatePayrollBases2026(300000, [
+      { description: "Hora extra", amount_cents: 50000, incidences: { inss: true, irrf: true, fgts: true } },
+      { description: "Ajuda de custo", amount_cents: 20000, incidences: { inss: false, irrf: false, fgts: false } },
+      { description: "Parcela tributável sem FGTS", amount_cents: 10000, incidences: { inss: true, irrf: true, fgts: false } },
+    ]);
+    expect(bases).toEqual({ salaryCents: 300000, proventosCents: 80000, grossCents: 380000, inssBaseCents: 360000, irrfTaxableCents: 360000, fgtsBaseCents: 350000 });
+  });
+
+  test("bloqueia proventos antigos sem incidências explícitas", () => {
+    expect(() => calculatePayrollBases2026(300000, [], 50000)).toThrow(/incidências fiscais cadastradas/);
+  });
+
+  test("rejeita rubrica sem incidências e evita duplicidade de proventos", () => {
+    expect(() => calculatePayrollBases2026(300000, [{ amount_cents: 1000, incidences: {} as any }])).toThrow(/definir explicitamente/);
+    expect(() => calculatePayrollBases2026(300000, [{ amount_cents: 1000, incidences: { inss: true, irrf: true, fgts: true } }], 50000)).toThrow(/simultaneamente/);
+  });
+
+  test("INSS progressivo no salário mínimo de 2026", () => {
+    expect(payrollInss2026(162100)).toBe(12158);
+  });
+
+  test("INSS calcula as faixas fatiadas e respeita o teto", () => {
+    expect(payrollInss2026(500000)).toBe(50152);
+    expect(payrollInss2026(847555)).toBe(98810);
+    expect(payrollInss2026(900000)).toBe(98810);
+  });
+
+  test("IRRF aplica dependente, dedução mais vantajosa e redução de 2026", () => {
+    const inss = payrollInss2026(650000);
+    expect(inss).toBe(71152);
+    expect(payrollIrrf2026(650000, inss, 1)).toEqual({
+      taxCents: 51778,
+      baseCents: 559889,
+    });
+  });
+
+  test("IRRF fica zerado para rendimento de R$ 4.000 após redução legal de 2026", () => {
+    const inss = payrollInss2026(400000);
+    expect(payrollIrrf2026(400000, inss, 0).taxCents).toBe(0);
+  });
+
+  test("motor mensal só aceita CLT e aprendizagem; bloqueia vínculos sem regra homologada", () => {
+    expect(supportsMonthlyPayroll2026("CLT")).toBe(true);
+    expect(supportsMonthlyPayroll2026(undefined)).toBe(false);
+    expect(supportsMonthlyPayroll2026("")).toBe(false);
+    expect(supportsMonthlyPayroll2026("JOVEM APRENDIZ")).toBe(true);
+    expect(supportsMonthlyPayroll2026("ESTÁGIO")).toBe(false);
+    expect(supportsMonthlyPayroll2026("PJ")).toBe(false);
+    expect(supportsMonthlyPayroll2026("INTERMITENTE")).toBe(false);
+  });
+
+  test("FGTS é encargo patronal de 8% ou 2% para aprendiz, independentemente da grafia", () => {
+    expect(payrollFgts2026(162100, "CLT")).toEqual({ baseCents: 162100, amountCents: 12968, rate: 0.08 });
+    expect(payrollFgts2026(162100, "JOVEM_APRENDIZ")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(162100, "Jovem Aprendiz")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(162100, "jovem-aprendiz")).toEqual({ baseCents: 162100, amountCents: 3242, rate: 0.02 });
+    expect(payrollFgts2026(Number.NaN, "CLT")).toEqual({ baseCents: 0, amountCents: 0, rate: 0.08 });
+  });
+
+  test("valida CPF estrutural e dígitos verificadores", () => {
+    expect(isValidCpf("529.982.247-25")).toBe(true);
+    expect(isValidCpf("111.111.111-11")).toBe(false);
+    expect(isValidCpf("")).toBe(false);
+  });
+
+  test("bloqueia folha zerada ativa sem justificativa e permite afastamento justificado", () => {
+    expect(() => assertPayrollZeroHasJustification(0, true, "")).toThrow();
+    expect(() => assertPayrollZeroHasJustification(0, true, "Licença maternidade")).not.toThrow();
+    expect(() => assertPayrollZeroHasJustification(0, false, "")).not.toThrow();
+  });
+});

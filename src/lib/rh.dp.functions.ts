@@ -1,3 +1,4 @@
+import { assertPayrollZeroHasJustification, calculatePayrollBases2026, isValidCpf, payrollFgts2026, payrollInss2026, payrollIrrf2026, supportsMonthlyPayroll2026 } from "@/utils/rhPayroll2026";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -40,36 +41,119 @@ export const calculateRhPayroll=createServerFn({method:"POST"}).middleware([requ
   if(pe)throw new Error(pe.message); if(!period)throw new Error("Competência não encontrada.");
   if(period.status==="fechada")throw new Error("Folha fechada não pode ser recalculada.");
   const competence=String(period.competence).slice(0,7);
-  if(competence!=="2026-01"&&competence<"2026-01")throw new Error("O motor fiscal parametrizado desta versão está homologado para competências a partir de 01/2026.");
+  if(!/^2026-(0[1-9]|1[0-2])$/.test(competence))throw new Error("O motor fiscal desta versão está homologado somente para competências de 01/2026 a 12/2026. Não calcule outros anos com tabelas de 2026.");
   const {data:employees,error:ee}=await supabaseAdmin.from("rh_employees").select("id,full_name,registration_data").eq("is_active",true);
   if(ee)throw new Error(ee.message);
   const ids=(employees??[]).map((e:any)=>e.id);
   const [{data:contracts,error:ce},{data:dependents,error:de},{data:advances,error:ae}]=await Promise.all([
-    ids.length?supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents,contract_type").in("employee_id",ids).eq("is_current",true):Promise.resolve({data:[],error:null}),
+    ids.length?supabaseAdmin.from("rh_employee_contracts").select("employee_id,salary_cents,contract_type,weekly_hours").in("employee_id",ids).eq("is_current",true):Promise.resolve({data:[],error:null}),
     ids.length?supabaseAdmin.from("rh_employee_dependents").select("employee_id,id").in("employee_id",ids).eq("is_active",true).eq("is_ir_dependent",true):Promise.resolve({data:[],error:null}),
     ids.length?supabaseAdmin.from("rh_employee_advances").select("id,employee_id,amount_cents,description").in("employee_id",ids).eq("competence",competence+"-01").eq("authorized",true).in("status",["programado","descontado"]):Promise.resolve({data:[],error:null})
   ]);
   if(ce)throw new Error(ce.message);if(de)throw new Error(de.message);if(ae)throw new Error(ae.message);
   const advancesByEmployee=new Map<string,any[]>();
   for(const a of advances??[]) advancesByEmployee.set(a.employee_id,[...(advancesByEmployee.get(a.employee_id)??[]),a]);
-  const cmap=new Map((contracts??[]).map((x:any)=>[x.employee_id,{salary:Number(x.salary_cents??0),type:x.contract_type??"CLT"}]));
+  const contractsByEmployee=new Map<string,any[]>();
+  for(const row of contracts??[]) contractsByEmployee.set(row.employee_id,[...(contractsByEmployee.get(row.employee_id)??[]),row]);
+  const duplicateContract=(contracts??[]).find((row:any)=>(contractsByEmployee.get(row.employee_id)??[]).length>1);
+  if(duplicateContract) throw new Error("BLOQUEIO FOLHA 2026: há mais de um vínculo atual para o mesmo funcionário. Revise os múltiplos vínculos antes de calcular; esta situação ainda não está homologada.");
+  const cmap=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,{salary:x.salary_cents==null?null:Number(x.salary_cents),type:x.contract_type,weeklyHours:x.weekly_hours==null?null:Number(x.weekly_hours)}] as [string,any]));
   const depMap=new Map<string,number>();for(const d of dependents??[])depMap.set(d.employee_id,(depMap.get(d.employee_id)??0)+1);
-  const calcInss=(gross:number)=>{const bands=[[162100,0.075],[290284,0.09],[435427,0.12],[847555,0.14]];let base=Math.min(gross,847555);let prev=0;let total=0;for(const [limit,rate] of bands){const slice=Math.max(0,Math.min(base,limit)-prev);total+=slice*rate;prev=limit;if(base<=limit)break;}return Math.round(total);};
-  const calcIrrf=(gross:number,inss:number,deps:number)=>{const legalBase=Math.max(0,gross-inss-deps*18959);const simplifiedBase=Math.max(0,gross-60720);const base=Math.min(legalBase,simplifiedBase);let tax=0;if(base>466468)tax=base*0.275-90873;else if(base>375105)tax=base*0.225-67549;else if(base>282665)tax=base*0.15-39416;else if(base>242880)tax=base*0.075-18216;tax=Math.max(0,Math.round(tax));let reduction=0;if(gross<=500000)reduction=Math.min(tax,31289);else if(gross<=735000)reduction=Math.min(tax,Math.max(0,Math.round(97862-0.133145*gross)));return Math.max(0,tax-reduction);};
-  const runs=(employees??[]).map((e:any)=>{const contract=cmap.get(e.id);const gross=contract?.salary||moneyToCents(e.registration_data?.salary);const inss=calcInss(gross);const irrf=calcIrrf(gross,inss,depMap.get(e.id)??0);const fgts=contract?.type==="APRENDIZ"?Math.round(gross*.02):Math.round(gross*.08);const baseNet=Math.max(0,gross-inss-irrf);const valeDiscount=(advancesByEmployee.get(e.id)??[]).reduce((n:number,a:any)=>n+Number(a.amount_cents??0),0);if(valeDiscount>baseNet)throw new Error("Os vales/descontos programados para "+e.full_name+" superam o líquido disponível. Ajuste os vales antes de calcular a folha.");return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(gross,847555),irrf_base_cents:Math.max(0,gross-inss-(depMap.get(e.id)??0)*18959),fgts_base_cents:fgts,status:"calculada",_inss:inss,_irrf:irrf,_fgts:fgts,_vale:valeDiscount};});
+  const runs=(employees??[]).map((e:any)=>{
+    const registration=e.registration_data??{};
+    const contract=cmap.get(e.id);
+    if(!contract) throw new Error("BLOQUEIO FOLHA 2026: "+String(e.full_name??e.id)+" não possui vínculo atual cadastrado. Cadastre e confira o contrato antes de calcular; o sistema não presumirá CLT.");
+    const salaryBase=Number(contract.salary??moneyToCents(registration.salary));
+    const legacyProventos=Number(registration.proventos_cents??moneyToCents(registration.proventos??0));
+    const configuredRubrics=Array.isArray(registration.rubricas_folha)?registration.rubricas_folha:[];
+    if(salaryBase<0||legacyProventos<0) throw new Error("BLOQUEIO FOLHA 2026: salário base e proventos não podem ser negativos para "+String(e.full_name??e.id)+".");
+    let bases;
+    try { bases=calculatePayrollBases2026(salaryBase,configuredRubrics,legacyProventos); }
+    catch (error) { throw new Error("BLOQUEIO FOLHA 2026 para "+String(e.full_name??e.id)+": "+(error instanceof Error?error.message:"revise as rubricas e incidências.")); }
+    const proventos=bases.proventosCents;
+    const gross=bases.grossCents;
+    const contractType = String(contract.type ?? "").trim();
+    if(!contractType) throw new Error("BLOQUEIO FOLHA 2026: tipo de contrato ausente para "+String(e.full_name??e.id)+".");
+    if (!supportsMonthlyPayroll2026(contractType)) {
+      throw new Error("BLOQUEIO FOLHA 2026: vínculo " + contractType + " de " + String(e.full_name ?? e.id) + " não está coberto pelo motor mensal homologado. Não calculamos esse contrato como CLT; valide as regras específicas antes de continuar.");
+    }
+    const cpf=String(registration.cpf??registration.CPF??"").replace(/\D/g,"");
+    const name=String(e.full_name??"").trim();
+    if(!isValidCpf(cpf)) throw new Error("BLOQUEIO FOLHA 2026: CPF ausente ou inválido para "+(name||e.id)+". Corrija o cadastro antes de emitir a folha.");
+    const employeeAlerts:string[]=[];
+    if(name.split(/\s+/).filter(Boolean).length<2||/\d/.test(name)) employeeAlerts.push("Nome incompleto ou contém números; revisar cadastro.");
+    const leaveReason=String(registration.motivo_afastamento??registration.leave_reason??registration.afastamento_motivo??"").trim();
+    try { assertPayrollZeroHasJustification(gross,true,leaveReason); } catch { throw new Error("BLOQUEIO FOLHA 2026: funcionário ativo "+name+" está com folha zerada sem motivo de afastamento cadastrado."); }
+    const monthlyHours=Number(registration.work_hours_monthly??(contract?.weeklyHours?contract.weeklyHours*5:220));
+    const categoryFloor=Number(registration.piso_categoria_cents??registration.category_floor_cents??162100);
+    if(gross>0&&monthlyHours>0&&gross/monthlyHours<categoryFloor/220) employeeAlerts.push("Remuneração horária abaixo do salário mínimo/piso proporcional cadastrado; revisar jornada e convenção coletiva.");
+    const inss=payrollInss2026(bases.inssBaseCents);
+    const irrf=payrollIrrf2026(bases.irrfTaxableCents,inss,depMap.get(e.id)??0);
+    const fgtsResult=payrollFgts2026(bases.fgtsBaseCents,contract?.type);
+    const fgtsRate=fgtsResult.rate, fgtsBase=fgtsResult.baseCents, fgts=fgtsResult.amountCents;
+    const baseNet=Math.max(0,gross-inss-irrf.taxCents);
+    const employeeAdvances=advancesByEmployee.get(e.id)??[];
+    const valeDiscount=employeeAdvances.reduce((n:number,a:any)=>n+Number(a.amount_cents??0),0);
+    if(valeDiscount>baseNet) throw new Error("Os vales/descontos programados para "+name+" superam o líquido disponível. Ajuste os vales antes de calcular a folha.");
+    return {period_id:period.id,employee_id:e.id,gross_cents:gross,discount_cents:inss+irrf.taxCents+valeDiscount,net_cents:Math.max(0,baseNet-valeDiscount),inss_base_cents:Math.min(bases.inssBaseCents,847555),irrf_base_cents:irrf.baseCents,fgts_base_cents:fgtsBase,fgts_amount_cents:fgts,status:employeeAlerts.length?"com_alerta":"calculada",_alerts:employeeAlerts,_salary:salaryBase,_proventos:proventos,_inss:inss,_irrf:irrf.taxCents,_fgts:fgts,_fgtsRate:fgtsRate,_vale:valeDiscount,_cpf:cpf,_name:name,_leaveReason:leaveReason};
+  });
   for(const run of runs){
-    const clean={period_id:run.period_id,employee_id:run.employee_id,gross_cents:run.gross_cents,discount_cents:run.discount_cents,net_cents:run.net_cents,inss_base_cents:run.inss_base_cents,irrf_base_cents:run.irrf_base_cents,fgts_base_cents:run.fgts_base_cents,status:run.status};
+    const clean={period_id:run.period_id,employee_id:run.employee_id,gross_cents:run.gross_cents,discount_cents:run.discount_cents,net_cents:run.net_cents,inss_base_cents:run.inss_base_cents,irrf_base_cents:run.irrf_base_cents,fgts_base_cents:run.fgts_base_cents,fgts_amount_cents:run.fgts_amount_cents,status:run.status};
     const {data:saved,error:re}=await supabaseAdmin.from("rh_payroll_runs").upsert(clean,{onConflict:"period_id,employee_id"}).select("*").single();if(re)throw new Error(re.message);
-    const items=[["provento","SALARIO","Salário base",run.gross_cents],["desconto","INSS","INSS empregado",run._inss],["desconto","IRRF","IRRF",run._irrf],["desconto","VALE","Vales / adiantamentos autorizados",run._vale],["encargo","FGTS","FGTS patronal",run._fgts]];
-    for(const [item_type,code,description,amount_cents] of items){const payload={item_type,description,quantity:1,rate:item_type==="encargo"?(run._fgts===Math.round(run.gross_cents*.02)?2:8):100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id,employee_advances:(item_type==="desconto"&&code==="VALE"?(advancesByEmployee.get(run.employee_id)??[]).map((a:any)=>({id:a.id,amount_cents:a.amount_cents,description:a.description})):[])}};const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code",code as string).limit(1);if(xe)throw new Error(xe.message);if(existing?.[0]){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").update(payload as any).eq("id",existing[0].id);if(ie)throw new Error(ie.message);}else{const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,code,...payload} as any);if(ie)throw new Error(ie.message);}}
+    const items=[["provento","SALARIO","Salário base",run._salary],["provento","PROVENTOS","Proventos e adicionais",run._proventos],["desconto","INSS","INSS empregado",run._inss],["desconto","IRRF","IRRF",run._irrf],["desconto","VALE","Vales / adiantamentos autorizados",run._vale],["encargo","FGTS","FGTS patronal",run._fgts]];
+    for(const [item_type,code,description,amount_cents] of items){const payload={item_type,description,quantity:1,rate:item_type==="encargo"?run._fgtsRate*100:100,amount_cents,reference:{source:"motor_folha_2026",run_id:saved.id,employee_advances:(item_type==="desconto"&&code==="VALE"?(advancesByEmployee.get(run.employee_id)??[]).map((a:any)=>({id:a.id,amount_cents:a.amount_cents,description:a.description})):[]),alerts:run._alerts}};const {data:existing,error:xe}=await supabaseAdmin.from("rh_payroll_items").select("id").eq("period_id",period.id).eq("employee_id",run.employee_id).eq("code",code as string).limit(1);if(xe)throw new Error(xe.message);if(existing?.[0]){const {error:ie}=await supabaseAdmin.from("rh_payroll_items").update(payload as any).eq("id",existing[0].id);if(ie)throw new Error(ie.message);}else{const {error:ie}=await supabaseAdmin.from("rh_payroll_items").insert({period_id:period.id,employee_id:run.employee_id,code,...payload} as any);if(ie)throw new Error(ie.message);}}
   }
   const {data:updated,error:ue}=await supabaseAdmin.from("rh_payroll_periods").update({status:"calculada",updated_at:new Date().toISOString()}).eq("id",period.id).select("*").single();if(ue)throw new Error(ue.message);
-  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026",rules:["INSS","IRRF","FGTS"]}});
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_CALCULADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:{employees:runs.length,competence,motor:"2026.1",rules:["INSS progressivo por faixas e base por incidência de rubrica","IRRF 2026 com redução legal e rendimentos tributáveis por rubrica","FGTS patronal separado dos descontos e base por incidência de rubrica","CPF validado","folha ativa zerada bloqueada sem afastamento"],alertCount:runs.reduce((n:number,r:any)=>n+r._alerts.length,0)}});
   return {period:updated,employees:runs.length};
 });
-export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:period,error}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).neq("status","fechada").select("*").maybeSingle();if(error)throw new Error(error.message);if(!period)throw new Error("Folha não encontrada ou já fechada.");const {data:advancesToClose,error:ae}=await supabaseAdmin.from("rh_employee_advances").select("id").eq("competence",String(period.competence).slice(0,7)+"-01").eq("authorized",true).eq("status","programado");if(ae)throw new Error(ae.message);if((advancesToClose??[]).length){const advanceIds=(advancesToClose??[]).map((x:any)=>x.id);const {error:ue}=await supabaseAdmin.from("rh_employee_advances").update({status:"descontado",updated_at:new Date().toISOString()}).in("id",advanceIds);if(ue)throw new Error(ue.message);}await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});return period;});
+export const closeRhPayrollPeriod=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{period_id:string})=>{if(!input?.period_id)throw new Error("Competência inválida.");return input;}).handler(async({context,data})=>{
+  const actor=await requireRhOperator(context);
+  const {data:currentPeriod,error:periodError}=await supabaseAdmin.from("rh_payroll_periods").select("*").eq("id",data.period_id).maybeSingle();
+  if(periodError)throw new Error(periodError.message);
+  if(!currentPeriod)throw new Error("Competência não encontrada.");
+  if(currentPeriod.status==="fechada")throw new Error("Esta competência já está fechada.");
+  if(currentPeriod.status!=="calculada")throw new Error("Calcule e confira a folha antes de fechá-la.");
+  const {data:runs,error:runsError}=await supabaseAdmin.from("rh_payroll_runs").select("employee_id").eq("period_id",currentPeriod.id);
+  if(runsError)throw new Error(runsError.message);
+  if(!runs?.length)throw new Error("Não é possível fechar uma folha sem funcionários calculados.");
+  const employeeIds=[...new Set(runs.map((run:any)=>String(run.employee_id)).filter(Boolean))];
+  const competence=String(currentPeriod.competence).slice(0,7)+"-01";
+  const {data:advancesToClose,error:advancesError}=await supabaseAdmin.from("rh_employee_advances").select("id").eq("competence",competence).eq("authorized",true).eq("status","programado").in("employee_id",employeeIds);
+  if(advancesError)throw new Error(advancesError.message);
+  if((advancesToClose??[]).length){
+    const advanceIds=(advancesToClose??[]).map((x:any)=>x.id);
+    const {error:updateAdvancesError}=await supabaseAdmin.from("rh_employee_advances").update({status:"descontado",updated_at:new Date().toISOString()}).in("id",advanceIds);
+    if(updateAdvancesError)throw new Error(updateAdvancesError.message);
+  }
+  const {data:period,error:closeError}=await supabaseAdmin.from("rh_payroll_periods").update({status:"fechada",closed_at:new Date().toISOString(),approved_at:new Date().toISOString(),approved_by:actor.id,updated_at:new Date().toISOString()}).eq("id",data.period_id).eq("status","calculada").select("*").maybeSingle();
+  if(closeError)throw new Error(closeError.message);
+  if(!period)throw new Error("A folha mudou de estado durante o fechamento. Atualize a tela e confira os vales antes de tentar novamente.");
+  await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"FOLHA_FECHADA",entity_type:"rh_payroll_periods",entity_id:period.id,after_data:period});
+  return period;
+});
 
-export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{await requireRhOperator(context);const {data,error}=await supabaseAdmin.from("rh_payroll_periods").select("*,rh_payroll_runs(*)").order("competence",{ascending:false});if(error)throw new Error(error.message);return data??[];});
+export const listRhPayroll=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{
+  await requireRhOperator(context);
+  const {data:periods,error}=await supabaseAdmin.from("rh_payroll_periods").select("*,rh_payroll_runs(*)").order("competence",{ascending:false});
+  if(error)throw new Error(error.message);
+  const allPeriods=periods??[];
+  const periodIds=allPeriods.map((p:any)=>p.id);
+  const employeeIds=[...new Set(allPeriods.flatMap((p:any)=>(p.rh_payroll_runs??[]).map((r:any)=>r.employee_id)))];
+  if(!periodIds.length||!employeeIds.length)return allPeriods;
+  const [{data:items,error:itemsError},{data:contracts,error:contractsError}]=await Promise.all([
+    supabaseAdmin.from("rh_payroll_items").select("*").in("period_id",periodIds),
+    supabaseAdmin.from("rh_employee_contracts").select("employee_id,contract_type,salary_cents").in("employee_id",employeeIds).eq("is_current",true)
+  ]);
+  if(itemsError)throw new Error(itemsError.message);
+  if(contractsError)throw new Error(contractsError.message);
+  const contractByEmployee=new Map<string,any>((contracts??[]).map((x:any)=>[x.employee_id,x] as [string,any]));
+  return allPeriods.map((period:any)=>({...period,rh_payroll_runs:(period.rh_payroll_runs??[]).map((run:any)=>{
+    const runItems=(items??[]).filter((item:any)=>item.period_id===period.id&&item.employee_id===run.employee_id);
+    const amount=(code:string)=>Number(runItems.find((item:any)=>item.code===code)?.amount_cents??0);
+    return {...run,contract_type:contractByEmployee.get(run.employee_id)?.contract_type??"CLT",salary_base_cents:amount("SALARIO"),proventos_cents:amount("PROVENTOS"),inss_amount_cents:amount("INSS"),irrf_amount_cents:amount("IRRF"),other_discounts_cents:amount("VALE"),fgts_amount_cents:Number(run.fgts_amount_cents??amount("FGTS")),payroll_items:runItems};
+  })}));
+});
 
 export const createRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;start_date:string;end_date:string;days:number;vacation_period_id?:string;notes?:string})=>{if(!input?.employee_id||!input.start_date||!input.end_date||!input.days)throw new Error("Preencha funcionário, período e dias.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").insert({...data,status:"solicitada"}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"FERIAS_SOLICITADAS",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
 export const updateRhVacationRequest=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id:string;status:"aprovada"|"reprovada"|"cancelada";notes?:string})=>{if(!input?.id)throw new Error("Solicitação inválida.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload:any={status:data.status,notes:data.notes??null};if(data.status==="aprovada"){payload.approved_at=new Date().toISOString();payload.approved_by=actor.id;}const {data:row,error}=await supabaseAdmin.from("rh_vacation_requests").update(payload).eq("id",data.id).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:row.employee_id,action:"FERIAS_STATUS_ALTERADO",entity_type:"rh_vacation_requests",entity_id:row.id,after_data:row});return row;});
@@ -96,3 +180,57 @@ export const saveRhDepartment=createServerFn({method:"POST"}).middleware([requir
 export const saveRhPosition=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id?:string;name:string;code?:string;cbo?:string})=>{if(!input?.name?.trim())throw new Error("Informe o nome do cargo.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload={name:data.name.trim(),code:data.code?.trim()||null,cbo:data.cbo?.trim()||null,is_active:true,updated_at:new Date().toISOString()};const q=data.id?supabaseAdmin.from("rh_positions").update(payload).eq("id",data.id):supabaseAdmin.from("rh_positions").insert(payload);const {data:row,error}=await q.select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"CARGO_SALVO",entity_type:"rh_positions",entity_id:row.id,after_data:row});return row;});
 export const saveRhWorkSchedule=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{id?:string;name:string;weekly_hours?:number;break_minutes?:number;tolerance_minutes?:number})=>{if(!input?.name?.trim())throw new Error("Informe o nome da jornada.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const payload={name:data.name.trim(),weekly_hours:data.weekly_hours??44,break_minutes:data.break_minutes??60,tolerance_minutes:data.tolerance_minutes??5,is_active:true,updated_at:new Date().toISOString()};const q=data.id?supabaseAdmin.from("rh_work_schedules").update(payload).eq("id",data.id):supabaseAdmin.from("rh_work_schedules").insert(payload);const {data:row,error}=await q.select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,action:"JORNADA_SALVA",entity_type:"rh_work_schedules",entity_id:row.id,after_data:row});return row;});
 export const createRhDependent=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((input:{employee_id:string;full_name:string;cpf?:string;birth_date?:string;relationship?:string;is_ir_dependent?:boolean;is_health_dependent?:boolean})=>{if(!input?.employee_id||!input.full_name?.trim())throw new Error("Funcionário e nome do dependente são obrigatórios.");return input;}).handler(async({context,data})=>{const actor=await requireRhOperator(context);const {data:row,error}=await supabaseAdmin.from("rh_employee_dependents").insert({...data,full_name:data.full_name.trim()}).select("*").single();if(error)throw new Error(error.message);await supabaseAdmin.from("rh_audit_log").insert({actor_user_id:actor.id,employee_id:data.employee_id,action:"DEPENDENTE_CRIADO",entity_type:"rh_employee_dependents",entity_id:row.id,after_data:row});return row;});
+
+
+export type RhPayrollRubricInput2026 = {
+  description: string;
+  amount_cents: number;
+  incidences: { inss: boolean; irrf: boolean; fgts: boolean };
+};
+
+export const saveRhPayrollRubrics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { employee_id: string; rubrics: RhPayrollRubricInput2026[] }) => {
+    if (!input?.employee_id || !Array.isArray(input.rubrics)) throw new Error("Cadastro de rubricas inválido.");
+    for (const rubric of input.rubrics) {
+      if (!rubric.description?.trim()) throw new Error("Informe a descrição de cada rubrica.");
+      if (!Number.isSafeInteger(rubric.amount_cents) || rubric.amount_cents < 0) throw new Error("Informe um valor válido em cada rubrica.");
+      if (!rubric.incidences || typeof rubric.incidences.inss !== "boolean" || typeof rubric.incidences.irrf !== "boolean" || typeof rubric.incidences.fgts !== "boolean") {
+        throw new Error("Defina explicitamente as incidências de INSS, IRRF e FGTS em cada rubrica.");
+      }
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireRhOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees").select("id, registration_data, full_name")
+      .eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Funcionário não encontrado.");
+    const registration = { ...((employee.registration_data ?? {}) as Record<string, unknown>) };
+    const legacy = Number(registration.proventos_cents ?? moneyToCents(registration.proventos ?? 0));
+    const rubricTotal = data.rubrics.reduce((sum, rubric) => sum + rubric.amount_cents, 0);
+    if (legacy > 0 && data.rubrics.length && rubricTotal !== legacy) {
+      throw new Error("Para migrar os proventos antigos sem alterar a remuneração, a soma das novas rubricas precisa ser exatamente " + (legacy / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + ".");
+    }
+    if (legacy > 0 && data.rubrics.length) {
+      registration.proventos_cents = 0;
+      registration.proventos = "0,00";
+    }
+    registration.rubricas_folha = data.rubrics.map((rubric) => ({
+      description: rubric.description.trim(),
+      amount_cents: rubric.amount_cents,
+      incidences: { ...rubric.incidences },
+    }));
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from("rh_employees").update({ registration_data: registration, updated_at: new Date().toISOString() })
+      .eq("id", data.employee_id).select("id, full_name, registration_data").single();
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("rh_audit_log").insert({
+      actor_user_id: actor.id, employee_id: data.employee_id, action: "RUBRICAS_FOLHA_ATUALIZADAS",
+      entity_type: "rh_employees", entity_id: data.employee_id,
+      after_data: { employee_name: employee.full_name, rubrics: registration.rubricas_folha },
+    });
+    return updated;
+  });

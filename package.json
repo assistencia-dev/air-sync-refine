@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:dbs-control": "node scripts/test-dbs-control.cjs"
+    "test:dbs-control": "node scripts/test-dbs-control.cjs",
+    "test:rh-payroll-2026": "bun test scripts/test-rh-payroll-2026.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

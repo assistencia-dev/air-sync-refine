@@ -16,3 +16,4 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - run: bun run test:rh-payroll-2026
