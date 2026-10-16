@@ -138,8 +138,8 @@ begin
 end;
 $$;
 
-revoke all on function public.dbs_control_save_snapshot_safe(jsonb) from public, anon;
-grant execute on function public.dbs_control_save_snapshot_safe(jsonb) to authenticated;
+revoke all on function public.dbs_control_save_snapshot_safe(jsonb) from public, anon, authenticated;
+grant execute on function public.dbs_control_save_snapshot_safe(jsonb) to service_role;
 
 comment on function public.dbs_control_save_snapshot_safe(jsonb) is
   'Atomic DBS Control snapshot persistence; serializes same-scope writes and preserves missing/completed work orders.';
