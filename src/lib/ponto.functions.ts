@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { isValidIsoDate } from "@/lib/ponto-date-validation";
+import { minutesFromTime } from "@/lib/ponto-time-calculation";
 
 const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
@@ -101,7 +103,7 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
 });
 
 export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
-  if (!TYPES.includes(input.punch_type) || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Marcação inválida.");
+    if (!input?.employee_id || !isValidIsoDate(input.work_date)) throw new Error("Funcionário ou data inválidos.");
   if (input.latitude != null && (input.latitude < -90 || input.latitude > 90)) throw new Error("Latitude inválida.");
   if (input.longitude != null && (input.longitude < -180 || input.longitude > 180)) throw new Error("Longitude inválida.");
   return input;
@@ -130,13 +132,6 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   return record;
 });
 
-
-function minutesFromTime(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const match = value.match(/(?:T| )([01]\d|2[0-3]):([0-5]\d)/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
 
 function durationBetween(start: string | null | undefined, end: string | null | undefined): number {
   const a = minutesFromTime(start);
@@ -197,7 +192,7 @@ export type RhPontoDayStatus = (typeof RH_PONTO_DAY_STATUSES)[number];
 export const listRhPontoDayManagement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.start_date) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
+    if (!isValidIsoDate(input.start_date) || !isValidIsoDate(input.end_date)) throw new Error("Período inválido.");
     if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
     return input;
   })
@@ -221,7 +216,7 @@ export const setRhPontoDayManagement = createServerFn({ method: "POST" })
     status: RhPontoDayStatus;
     note?: string | null;
   }) => {
-    if (!input?.employee_id || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.work_date)) throw new Error("Funcionário ou data inválidos.");
+    if (!input?.employee_id || !isValidIsoDate(input.work_date)) throw new Error("Funcionário ou data inválidos.");
     if (!RH_PONTO_DAY_STATUSES.includes(input.status)) throw new Error("Situação do dia inválida.");
     return { ...input, note: input.note?.trim() || null };
   })
@@ -248,7 +243,7 @@ export const setRhPontoDayManagement = createServerFn({ method: "POST" })
   });
 
 export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
+    if (!isValidIsoDate(input.start_date) || !isValidIsoDate(input.end_date)) throw new Error("Período inválido.");
   if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
   return input;
 }).handler(async ({ context, data }) => {
