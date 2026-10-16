@@ -35,6 +35,10 @@ begin
     raise exception 'state deve ser um objeto JSON' using errcode = '22023';
   end if;
 
+  -- Serializa também a primeira gravação, quando ainda não existe linha para bloquear.
+  -- A chave inclui o escopo para não bloquear empresas/usuários diferentes entre si.
+  perform pg_advisory_xact_lock(hashtextextended(v_scope_key, 0));
+
   -- A linha é bloqueada até o commit; gravações do mesmo escopo são serializadas.
   select s.state into v_current_state
   from public.dbs_control_snapshots s
