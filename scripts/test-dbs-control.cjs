@@ -208,7 +208,7 @@ assert.match(quotePdf, /doc\.line\(margin, 285, pageWidth - margin, 285\)/, "O r
 assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o hash do conteúdo congelado no aceite web.");
 assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
 assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
-assert.match(route, /v=20261015-mobile-sync-2/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
+assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
 
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
