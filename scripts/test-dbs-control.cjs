@@ -58,6 +58,12 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
+const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
+assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe", \{ p_payload: payload \}\)/, "O snapshot deve ser salvo pela função SQL atômica.");
+assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
+assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
+assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
+assert.match(atomicSnapshotMigration, /grant execute on function public\.dbs_control_save_snapshot_safe\(jsonb\) to service_role/i, "O RPC de snapshot deve ser restrito ao service_role.");
 assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
 assert.match(cloudFunctions, /const merged: Record<string, unknown> = \{ \.\.\.current \};[\s\S]*?for \(const \[key, value\] of Object\.entries\(canonical\)\)/, "Campos canônicos preenchidos no banco devem prevalecer sobre snapshots legados.");
 assert.match(cloudFunctions, /preserveCompletedWorkOrderStatus: true/, "A hidratação das OS deve proteger uma conclusão já registrada no snapshot contra status canônico desatualizado.");

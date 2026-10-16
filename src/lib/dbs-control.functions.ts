@@ -840,10 +840,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       updated_at: new Date().toISOString(),
     };
 
+    // A função SQL bloqueia a linha do escopo e reconcilia OS dentro da mesma
+    // transação. Isso evita que duas sessões sobrescrevam o snapshot uma da outra.
     const { data: saved, error } = await supabaseAdmin
-      .from("dbs_control_snapshots")
-      .upsert(payload, { onConflict: "scope_key" })
-      .select("state, state_version, updated_at")
+      .rpc("dbs_control_save_snapshot_safe", { p_payload: payload })
       .single();
 
     if (error) throw new Error(error.message);
