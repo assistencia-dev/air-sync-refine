@@ -595,7 +595,4 @@ body:not(.dbs-control-employee-mode) > aside .brand-title {
     line-height: 1.45 !important;
   }
 
-  body > main > header .btn[onclick^="resetarDadosPadrao"] {
-    display: none !important;
-  }
 }
