@@ -235,6 +235,13 @@ function DbsControlPage() {
               { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
               "*",
             );
+            // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_SYNC_STATUS",
+              status: "synced",
+              pendingCount: 0,
+              updated_at: cloud?.updated_at ?? null,
+            }, "*");
           } else {
             // Nunca promova cache de navegador para a base compartilhada automaticamente.
             // Sem snapshot na nuvem, falha em modo seguro e preserva a cópia local apenas para recuperação.
@@ -248,7 +255,14 @@ function DbsControlPage() {
           setCloudError(null);
         } catch (err) {
           console.error("DBS Control cloud load:", err);
-          setCloudError(err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.");
+          const message = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
+          setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_STATUS",
+            status: "error",
+            pendingCount: 0,
+            error: message,
+          }, "*");
         }
         return;
       }
