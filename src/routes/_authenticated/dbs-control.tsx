@@ -235,19 +235,14 @@ function DbsControlPage() {
               { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
               "*",
             );
-          } else if (localState) {
-            if (!access.data?.administrative) {
-              throw new Error("A base compartilhada ainda não foi criada pela administração. Os dados locais foram preservados.");
-            }
-            const saved = await saveDbsControlCloudState({ data: { state: localState } });
-            cloudReadyRef.current = true;
-            cloudUpdatedAtRef.current = saved.updated_at ?? null;
-            iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: saved.state },
-              "*",
-            );
           } else {
-            throw new Error("O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.");
+            // Nunca promova cache de navegador para a base compartilhada automaticamente.
+            // Sem snapshot na nuvem, falha em modo seguro e preserva a cópia local apenas para recuperação.
+            throw new Error(
+              localState
+                ? "A base compartilhada não retornou um snapshot. O cache local foi preservado e não será enviado automaticamente para evitar sobrescrever dados mais recentes."
+                : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
+            );
           }
 
           setCloudError(null);
@@ -512,7 +507,7 @@ function DbsControlPage() {
         refreshInFlight = false;
       }
     };
-    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 10000);
+    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 3000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
@@ -551,7 +546,7 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261016-dashboard-sync-1`
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261017-cloud-authoritative-mobile-cards-1`
     : "/dbs-control.html?v=20261016-dashboard-sync-1";
 
   return (
