@@ -113,7 +113,7 @@ assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
 assert.match(observations, /Nenhuma observação registrada\./, "O detalhe administrativo deve exibir um estado vazio explícito.");
 
-const appendHelper = cloudFunctions.match(/function mergeAppendOnlyCollaboratorObservations\(currentOrder: any, incomingOrder: any\) \{[\s\S]*?\n\}\n(?=\nfunction mergeCollaboratorOrderState)/)?.[0];
+const appendHelper = cloudFunctions.match(/function mergeAppendOnlyCollaboratorObservations\(currentOrder: any, incomingOrder: any\) \{[\s\S]*?\n\}\n(?=\nfunction normalizeDbsStatus)/)?.[0];
 assert.ok(appendHelper, "A função isolada de merge append-only deve existir.");
 const helperForTest = appendHelper
   .replace("currentOrder: any", "currentOrder")
