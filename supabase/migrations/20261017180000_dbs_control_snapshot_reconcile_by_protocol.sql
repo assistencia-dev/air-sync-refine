@@ -58,9 +58,11 @@ begin
   for v_order in select value from jsonb_array_elements(v_incoming_orders)
   loop
     v_order_id := nullif(btrim(coalesce(v_order->>'id', '')), '');
-    v_protocol := lower(nullif(btrim(coalesce(
-      v_order->>'protocolo', v_order->>'protocol', v_order->>'numero', ''
-    )), ''));
+    v_protocol := lower(coalesce(
+      nullif(btrim(v_order->>'protocolo'), ''),
+      nullif(btrim(v_order->>'protocol'), ''),
+      nullif(btrim(v_order->>'numero'), '')
+    ));
 
     -- Deduplicate repeated payload entries by either ID or protocol.
     v_seen_duplicate :=
@@ -83,9 +85,11 @@ begin
     if v_latest is null and v_protocol is not null then
       select latest.value into v_latest
       from jsonb_array_elements(v_latest_orders) latest(value)
-      where lower(nullif(btrim(coalesce(
-        latest.value->>'protocolo', latest.value->>'protocol', latest.value->>'numero', ''
-      )), '')) = v_protocol
+      where lower(coalesce(
+        nullif(btrim(latest.value->>'protocolo'), ''),
+        nullif(btrim(latest.value->>'protocol'), ''),
+        nullif(btrim(latest.value->>'numero'), '')
+      )) = v_protocol
       limit 1;
     end if;
 
@@ -133,9 +137,11 @@ begin
     end if;
     -- Track the canonical ID/protocol too, in case incoming legacy identity differs.
     v_latest_id := nullif(btrim(coalesce(v_latest->>'id', '')), '');
-    v_latest_protocol := lower(nullif(btrim(coalesce(
-      v_latest->>'protocolo', v_latest->>'protocol', v_latest->>'numero', ''
-    )), ''));
+    v_latest_protocol := lower(coalesce(
+      nullif(btrim(v_latest->>'protocolo'), ''),
+      nullif(btrim(v_latest->>'protocol'), ''),
+      nullif(btrim(v_latest->>'numero'), '')
+    ));
     if v_latest_id is not null and not (v_latest_id = any(v_seen_ids)) then
       v_seen_ids := array_append(v_seen_ids, v_latest_id);
     end if;
@@ -148,9 +154,11 @@ begin
   for v_order in select value from jsonb_array_elements(v_latest_orders)
   loop
     v_latest_id := nullif(btrim(coalesce(v_order->>'id', '')), '');
-    v_latest_protocol := lower(nullif(btrim(coalesce(
-      v_order->>'protocolo', v_order->>'protocol', v_order->>'numero', ''
-    )), ''));
+    v_latest_protocol := lower(coalesce(
+      nullif(btrim(v_order->>'protocolo'), ''),
+      nullif(btrim(v_order->>'protocol'), ''),
+      nullif(btrim(v_order->>'numero'), '')
+    ));
     if (v_latest_id is not null and v_latest_id = any(v_seen_ids))
        or (v_latest_protocol is not null and v_latest_protocol = any(v_seen_protocols)) then
       continue;
