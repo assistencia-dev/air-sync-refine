@@ -2378,6 +2378,10 @@ function showToast(msg) {
             `;
         });
 
+        if (!STATE.passivos.length) {
+            dashProg.innerHTML = '<div class="visual-empty-state" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px dashed var(--border);border-radius:9px;color:var(--text-muted);font-size:12px;"><i class="fa-regular fa-folder-open" aria-hidden="true" style="color:#94a3b8;"></i><span>Nenhum acordo cadastrado ainda.</span></div>';
+        }
+
         // Radar de Saídas: consolida somente dados já existentes no Treasury.
         // Não cria lançamentos, não altera status e não modifica nenhuma fonte operacional.
         const hoje = new Date();
