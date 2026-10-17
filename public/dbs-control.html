@@ -3789,6 +3789,7 @@
             if (dashboardMode) {
                 const dashboardBody = document.getElementById('dash-table-body');
                 if (dashboardBody) dashboardBody.innerHTML = rowsHtml;
+                if (dashboardBody && !rowsHtml) dashboardBody.innerHTML = '<tr><td colspan="9" style="padding:22px 16px;text-align:center;color:#718096;font-size:12px;"><i class="fa-regular fa-clipboard" aria-hidden="true" style="margin-right:7px;color:#9aabba;"></i>Nenhuma OS emitida ainda.</td></tr>';
             } else if (activeTabId === 'tab-ordens') {
                 const ordersBody = document.getElementById('os-table-body');
                 if (ordersBody) { ordersBody.innerHTML = rowsHtml; aplicarFiltrosOS(); }
