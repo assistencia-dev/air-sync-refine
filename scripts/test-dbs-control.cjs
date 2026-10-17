@@ -89,7 +89,7 @@ assert.match(html, /dbs-control-employee-mode[^]*?String\(tabId\s*\|\|\s*['"]{0,
 assert.match(html, /data-employee-visible=["']true["']/, "A área do colaborador precisa ter item de navegação explícito.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_SAVE["']/, "A rota deve receber eventos de salvamento do iframe.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sincronizar o estado inicial do iframe.");
-assert.match(route, /setTimeout\((?:async )?\(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
+assert.match(route, /const persist = async \(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
