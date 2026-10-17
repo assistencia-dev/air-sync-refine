@@ -700,14 +700,19 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
             (protocol ? latestByProtocol.get(protocol) : undefined);
           let reconciled = incoming;
           if (latest && isCompleted(latest)) {
+            const protectedValues: Record<string, unknown> = {};
+            for (const field of protectedCompletedFields) {
+              const value = latest[field];
+              if (value !== null && value !== undefined && String(value).trim() !== "") {
+                protectedValues[field] = value;
+              }
+            }
             reconciled = {
               ...incoming,
               id: latest.id ?? incoming.id,
-              protocolo: latest.protocolo ?? incoming.protocolo,
+              protocolo: latest.protocolo || latest.protocol || latest.numero || incoming.protocolo,
               status: latest.status,
-              ...Object.fromEntries(protectedCompletedFields
-                .filter((field) => latest[field] !== null && latest[field] !== undefined && String(latest[field]).trim() !== "")
-                .map((field) => [field, latest[field]])),
+              ...protectedValues,
             };
           }
           if (id) seenIds.add(id);
