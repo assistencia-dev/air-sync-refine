@@ -220,7 +220,7 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
   const currentOrders = current.ordens as any[];
   const incomingOrders = incoming.ordens as any[];
   const incomingById = new Map(incomingOrders.map((order) => [String(order?.id), order]));
-  const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+  const protocolKey = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
   const incomingByProtocol = new Map(incomingOrders
     .filter((order) => protocolKey(order))
     .map((order) => [protocolKey(order), order]));
@@ -675,7 +675,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const latestOrders = latestState.ordens as any[];
         const incomingOrders = incomingState.ordens as any[];
         const orderId = (order: any) => String(order?.id ?? "").trim();
-        const orderProtocol = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+        const orderProtocol = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
         const isCompleted = (order: any) => normalizeDbsStatus(order?.status) === "concluida";
         const latestById = new Map(latestOrders.map((order) => [orderId(order), order]).filter(([id]) => Boolean(id)));
         const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
@@ -754,7 +754,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       // Apenas OS atribuídas a este funcionário podem ser atualizadas; dados
       // administrativos e financeiros não são enviados neste UPDATE.
       const incomingForEmployee = filterCollaboratorState(data.state, employee.id, employee.login_email).ordens as any[];
-      const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+      const protocolKey = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
