@@ -42,6 +42,10 @@
   --border: oklch(0.92 0.01 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.15 0.02 250);
+  --state-warning: #f59e0b;
+  --state-success: #0f9f8f;
+  --state-danger: #dc2626;
+  --surface-dark: #0b2745;
 }
 
 @layer base {
@@ -332,3 +336,10 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
   main { overflow-wrap: anywhere; }
   table { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 }
+
+
+/* Semantic state utilities for new interface elements. */
+.visual-state-warning { color: var(--state-warning); }
+.visual-state-success { color: var(--state-success); }
+.visual-state-danger { color: var(--state-danger); }
+.visual-surface-dark { background-color: var(--surface-dark); color: #fff; }
