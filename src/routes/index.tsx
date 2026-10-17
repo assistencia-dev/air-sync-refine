@@ -4,8 +4,10 @@ import {
   ChevronDown,
   CheckCircle2,
   Gavel,
-  Heart,
   Beaker,
+  Gauge,
+  FileText,
+  Wind,
   Award,
   Phone,
   Mail,
@@ -286,7 +288,7 @@ function Index() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { icon: Award, title: "Preservação Patrimonial", desc: "Redução drástica na taxa de quebra de compressores e chillers, protegendo o investimento em maquinário da sua empresa." },
-              { icon: Heart, title: "Eficiência Térmica Avançada", desc: "Calibração milimétrica de sistemas que diminui o desperdício de energia e otimiza os custos operacionais (OPEX) em até 30%." },
+              { icon: Gauge, title: "Eficiência Térmica Avançada", desc: "Calibração milimétrica de sistemas que diminui o desperdício de energia e otimiza os custos operacionais (OPEX) em até 30%." },
               { icon: Beaker, title: "Reputação e Conformidade Integral", desc: "Seus colaboradores, clientes e o jurídico da sua empresa totalmente seguros sob a tutela de engenheiros seniores (CREA/CFT) e das diretrizes da ANVISA." },
             ].map((item, idx) => {
               const Icon = item.icon;
@@ -313,8 +315,8 @@ function Index() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             {[
               { icon: Gavel, title: "Lei Federal nº 13.589/2018", desc: "Tornou obrigatória a manutenção programada e a elaboração do PMOC para todos os edifícios de uso público e coletivo climatizados." },
-              { icon: Heart, title: "Portaria MS nº 3.523/1998", desc: "Estabelece os parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade e integridade da saúde dos ocupantes." },
-              { icon: Beaker, title: "Resolução RE nº 9/2003 ANVISA", desc: "Estabelece os padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂, poeira e taxa mínima de renovação de ar." },
+              { icon: ShieldCheck, title: "Portaria MS nº 3.523/1998", desc: "Estabelece os parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade e integridade da saúde dos ocupantes." },
+              { icon: Wind, title: "Resolução RE nº 9/2003 ANVISA", desc: "Estabelece os padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂, poeira e taxa mínima de renovação de ar." },
             ].map((item, idx) => {
               const Icon = item.icon;
               return (
