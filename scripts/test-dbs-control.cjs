@@ -59,7 +59,7 @@ assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexiste
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
-const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017180000_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
+const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe", \{ p_payload: payload \}\)/, "O snapshot deve ser salvo pela função SQL atômica.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
