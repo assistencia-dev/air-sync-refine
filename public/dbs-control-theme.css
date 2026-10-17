@@ -469,3 +469,130 @@ body:not(.dbs-control-employee-mode) > aside .brand-title {
   #tab-ordens .data-header > div:last-child { width: 100%; }
   #tab-ordens .data-header > div:last-child .btn { flex: 1 1 160px; min-height: 38px; }
 }
+
+
+/* Mobile-first refinements: compact dashboard, touch targets and safe areas. */
+@media (max-width: 640px) {
+  body {
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body > main {
+    min-width: 0 !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body > main > header {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    gap: 10px !important;
+    align-items: flex-start !important;
+  }
+
+  body > main > header .page-title {
+    min-width: 0 !important;
+  }
+
+  body > main > header .page-title h1 {
+    font-size: 17px !important;
+    line-height: 1.25 !important;
+  }
+
+  body > main > header > div:last-child {
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+  }
+
+  /* Navigation becomes a vertically scrollable compact panel, never a horizontal strip. */
+  body:not(.dbs-control-employee-mode) > aside {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 34dvh !important;
+    overflow: hidden !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.12) !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+  }
+
+  body:not(.dbs-control-employee-mode) > aside .nav-menu {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    max-height: 24dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 8px 10px 12px !important;
+  }
+
+  body:not(.dbs-control-employee-mode) > aside .nav-item {
+    min-height: 44px !important;
+    height: auto !important;
+    padding: 10px 12px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    border-radius: 8px !important;
+    line-height: 1.25 !important;
+  }
+
+  body:not(.dbs-control-employee-mode) > aside .nav-section {
+    grid-column: 1 / -1 !important;
+    padding: 8px 8px 3px !important;
+  }
+
+  #tab-dashboard {
+    gap: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  #tab-dashboard .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-bottom: 0 !important;
+  }
+
+  #tab-dashboard .metric-card {
+    min-width: 0 !important;
+    min-height: 76px !important;
+  }
+
+  #tab-dashboard .quick-start-card {
+    margin-top: 0 !important;
+  }
+
+  #tab-dashboard .quick-start-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  #tab-dashboard .quick-start-action {
+    min-width: 0 !important;
+    width: 100% !important;
+    min-height: 64px !important;
+    padding: 10px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  #tab-dashboard .quick-flow {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    white-space: normal !important;
+  }
+
+  #tab-dashboard .quick-flow-label {
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    line-height: 1.45 !important;
+  }
+
+}

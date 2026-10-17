@@ -1967,7 +1967,45 @@ function showToast(msg) {
         const pctGeral=totalContratos>0?(totalPago/totalContratos*100).toFixed(1):'0.0';
         const win=window.open('','_blank','width=950,height=700');
         if(!win){alert('O navegador bloqueou a janela de impressão. Permita pop-ups para gerar o PDF.');return;}
-        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}</style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: ${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ ${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ ${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ ${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ ${formatMoney(totalContratos)}</td><td>R$ ${formatMoney(totalPago)}</td><td>R$ ${formatMoney(totalSaldo)}</td><td>${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>`);
+        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}
+        /* Mobile safe-area and compact Treasury cards; existing sidebar drawer behavior retained. */
+        @media (max-width: 640px) {
+            body {
+                min-height: 100dvh;
+                height: auto !important;
+                padding-top: env(safe-area-inset-top, 0px);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                overflow-x: hidden !important;
+            }
+            .sidebar {
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                max-height: 100dvh;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+            }
+            .nav-item {
+                min-height: 44px;
+                padding-top: 12px !important;
+                padding-bottom: 12px !important;
+            }
+            .main-wrapper,
+            .content-area {
+                min-width: 0;
+                width: 100%;
+                padding-left: max(12px, env(safe-area-inset-left, 0px));
+                padding-right: max(12px, env(safe-area-inset-right, 0px));
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            }
+            .kpi-grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+                gap: 10px !important;
+            }
+            .kpi-card {
+                min-width: 0;
+                width: 100%;
+            }
+        }
+</style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: ${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ ${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ ${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ ${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ ${formatMoney(totalContratos)}</td><td>R$ ${formatMoney(totalPago)}</td><td>R$ ${formatMoney(totalSaldo)}</td><td>${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>`);
         win.document.close();
         logAuditoria('EXPORTAÇÃO_PDF','Acordos',`Gerou relatório PDF de passivos. ${periodo}`);
     }
