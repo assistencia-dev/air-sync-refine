@@ -547,7 +547,7 @@ function DbsControlPage() {
   const employeeMode = !access.data.administrative;
   const src = employeeMode
     ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261017-cloud-authoritative-mobile-cards-1`
-    : "/dbs-control.html?v=20261016-dashboard-sync-1";
+    : "/dbs-control.html?v=20261017-cloud-authoritative-mobile-cards-1";
 
   return (
     <main className="min-h-screen bg-[#f4f8fc]">
