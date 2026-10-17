@@ -119,12 +119,12 @@ function Index() {
               href={wa(defaultMsg)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap min-w-max text-white px-4 py-2.5 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition"
               style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
             >
               <Phone className="w-4 h-4" /> Solicitar Orçamento
             </a>
-            <button type="button" onClick={handleInstallApp} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm shadow-sm transition hover:-translate-y-0.5" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }} aria-label="Baixar ou instalar o aplicativo DBS AIR"><Download className="w-4 h-4" /> Baixe o App</button>
+            <button type="button" onClick={handleInstallApp} className="inline-flex items-center justify-center gap-2 whitespace-nowrap min-w-max px-4 py-2.5 rounded-lg font-bold text-sm shadow-sm transition hover:-translate-y-0.5" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }} aria-label="Baixar ou instalar o aplicativo DBS AIR"><Download className="w-4 h-4" /> Baixe o App</button>
           </nav>
 
           {/* Mobile menu button */}
@@ -147,12 +147,12 @@ function Index() {
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
               <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Portal do Cliente</a>
-<button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
+<button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap px-4 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
               <a
                 href={wa(defaultMsg)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 text-white px-5 py-3 rounded-lg font-semibold text-sm"
+                className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap text-white px-4 py-3 rounded-lg font-semibold text-sm"
                 style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
               >
                 <Phone className="w-4 h-4" /> Solicitar Orçamento
@@ -200,14 +200,14 @@ function Index() {
                   href={wa(defaultMsg)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5 shadow-lg"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap min-w-max text-white px-5 py-3.5 rounded-lg font-semibold text-sm shadow-lg transition transform hover:-translate-y-0.5"
                   style={{ background: "#0F9F8F" }}
                 >
                   <Calendar className="w-5 h-5" /> Agendar Avaliação Técnica
                 </a>
                 <a
                   href="#modalidades"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap min-w-max px-5 py-3.5 rounded-lg font-semibold text-sm transition transform hover:-translate-y-0.5"
                   style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)" }}
                 >
                   <List className="w-5 h-5" /> Conhecer Modalidades
