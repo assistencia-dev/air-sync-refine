@@ -205,7 +205,7 @@ function mergeAppendOnlyCollaboratorObservations(currentOrder: any, incomingOrde
 }
 
 function normalizeDbsStatus(value: unknown): string {
-  return String(value ?? "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
