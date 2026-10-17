@@ -204,6 +204,10 @@ function mergeAppendOnlyCollaboratorObservations(currentOrder: any, incomingOrde
   return merged;
 }
 
+function normalizeDbsStatus(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+}
+
 function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const current = normalizeState(currentState);
   const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
@@ -267,15 +271,15 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
 
     const incomingStatus = String(incomingOrder.status ?? "").trim();
     const allowedEmployeeStatuses = new Set([
-      "Em Atendimento",
-      "Aguardando peça",
-      "Aguardando cliente",
-      "Concluída",
-    ]);
+      "em atendimento",
+      "aguardando peca",
+      "aguardando cliente",
+      "concluida",
+    ].map(normalizeDbsStatus));
     // Uma OS já concluída nunca pode voltar a um status anterior por autosave
     // atrasado ou por um snapshot antigo do dispositivo do colaborador.
-    const currentIsCompleted = ["Concluída", "concluida", "concluído", "concluido"].includes(String(currentOrder?.status ?? "").trim().toLowerCase());
-    const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(incomingStatus) ? incomingStatus : currentOrder.status);
+    const currentIsCompleted = normalizeDbsStatus(currentOrder?.status) === "concluida";
+    const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(normalizeDbsStatus(incomingStatus)) ? incomingStatus : currentOrder.status);
 
     const preserveCompletedValue = (field: string, fallback: unknown) => {
       const existing = currentOrder?.[field];
@@ -735,7 +739,11 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         if (assignedError) throw new Error(assignedError.message);
 
         const currentOrders = normalizeState(currentState).ordens as any[];
+        const ignoradas: Array<{ protocolo: string; motivo: string }> = [];
         for (const incomingOrder of incomingForEmployee) {
+          const submittedStatus = String(incomingOrder?.status ?? "").trim();
+          const submittedCompleted = normalizeDbsStatus(submittedStatus) === "concluida";
+          const protocolo = String(incomingOrder?.protocolo ?? incomingOrder?.protocol ?? incomingOrder?.numero ?? incomingOrder?.id ?? "sem protocolo").trim();
           const currentOrder = currentOrders.find((order) =>
             String(order?.id ?? "") === String(incomingOrder?.id ?? "") ||
             (String(order?.protocolo ?? "").trim() &&
@@ -746,27 +754,30 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
             (String(order.protocol ?? "").trim() &&
               String(order.protocol ?? "").trim() === String(currentOrder?.protocolo ?? incomingOrder?.protocolo ?? "").trim())
           );
-          if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) continue;
-
-          const submittedStatus = String(incomingOrder?.status ?? "").trim();
+          if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) {
+            if (submittedCompleted) ignoradas.push({ protocolo, motivo: "OS não localizada na base operacional ou não atribuída a este técnico." });
+            continue;
+          }
           const allowedStatuses: Record<string, string> = {
-            "Em Atendimento": "em_atendimento",
-            "Aguardando peça": "aguardando_peca",
-            "Aguardando cliente": "aguardando_cliente",
-            "Concluída": "concluida",
+            "em atendimento": "em_atendimento",
+            "aguardando peca": "aguardando_peca",
+            "aguardando cliente": "aguardando_cliente",
+            "concluida": "concluida",
           };
-          const dbStatus = allowedStatuses[submittedStatus];
-          if (!dbStatus) continue;
+          const dbStatus = allowedStatuses[normalizeDbsStatus(submittedStatus)];
+          if (!dbStatus) {
+            if (submittedCompleted) ignoradas.push({ protocolo, motivo: "O status enviado não foi reconhecido como válido para gravação." });
+            continue;
+          }
 
-          const completedStatuses = new Set(["concluida", "concluído", "concluido"]);
-          const wasCompleted = completedStatuses.has(String(canonicalOrder.status ?? "").trim().toLowerCase());
-          const isStatusTransition = String(canonicalOrder.status ?? "").trim().toLowerCase() !== dbStatus.toLowerCase();
+          const wasCompleted = normalizeDbsStatus(canonicalOrder.status) === "concluida";
+          const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
 
           // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
           // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
           // Se o registro canônico ainda não tiver um campo de conclusão, só preenchemos
           // o campo ausente com conteúdo válido recebido do técnico.
-          if (wasCompleted && submittedStatus !== "Concluída") continue;
+          if (wasCompleted && !submittedCompleted) continue;
 
           const incomingDiagnosis = String(incomingOrder?.diagnostico ?? currentOrder?.diagnostico ?? "").trim();
           const incomingObservation = String(incomingOrder?.observacao ?? currentOrder?.observacao ?? "").trim();
@@ -785,7 +796,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
             if (!String(canonicalOrder.observation ?? "").trim() && incomingObservation) update.observation = incomingObservation;
           }
 
-          if (submittedStatus === "Concluída") {
+          if (submittedCompleted) {
             if (!wasCompleted || !canonicalOrder.completed_at) {
               update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
             }
@@ -824,6 +835,9 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
               });
             if (eventError) throw new Error(`A OS foi salva, mas o histórico de auditoria não foi registrado: ${eventError.message}`);
           }
+        }
+        if (ignoradas.length) {
+          throw new Error("Não foi possível confirmar a conclusão de uma ou mais OS: " + ignoradas.map((item) => `${item.protocolo} — ${item.motivo}`).join("; "));
         }
       }
 
