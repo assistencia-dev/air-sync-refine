@@ -6,7 +6,6 @@ import {
   Gavel,
   Beaker,
   Gauge,
-  FileText,
   Wind,
   Award,
   Phone,
