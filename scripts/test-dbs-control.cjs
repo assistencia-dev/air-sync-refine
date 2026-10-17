@@ -104,7 +104,7 @@ assert.match(html, /employee-observation-field/, "A execução deve oferecer cam
 assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
 assert.match(cloudFunctions, /const preserveCompletedValue = \(field: string, fallback: unknown\)/, "OS concluída deve preservar campos preenchidos contra autosaves antigos.");
-assert.match(cloudFunctions, /const wasCompleted = completedStatuses\.has/, "O salvamento canônico deve detectar OS já concluídas.");
+assert.match(cloudFunctions, /const wasCompleted = normalizeDbsStatus\(canonicalOrder\.status\) === ["']concluida["']/, "The canonical save must detect work orders already completed.");
 assert.match(cloudFunctions, /!String\(canonicalOrder\.signature_data \?\? ""\)\.trim\(\)/, "Assinatura já gravada de OS concluída não pode ser substituída.");
 assert.match(cloudFunctions, /from\("dbs_control_work_order_events"\)[\s\S]*?event_type: "status_changed"/, "Transições de status devem ser registradas no histórico de auditoria.");
 assert.match(cloudFunctions, /technical_opinion,observation,completed_at,signature_data,signature_name/, "A proteção deve ler os campos canônicos antes de decidir se pode preenchê-los.");
