@@ -6087,7 +6087,7 @@
       if (!headers.length) return;
       table.classList.add("dbs-mobile-cards");
       var headerLabels = headers.map(function (th, index) {
-        var label = (th.innerText || th.textContent || "").replace(/\\s+/g, " ").trim();
+        var label = (th.innerText || th.textContent || "").replace(/\s+/g, " ").trim();
         return label || ("Campo " + (index + 1));
       });
       table.querySelectorAll("tbody tr, tr").forEach(function (row) {
