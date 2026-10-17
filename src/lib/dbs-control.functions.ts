@@ -220,9 +220,10 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
   const currentOrders = current.ordens as any[];
   const incomingOrders = incoming.ordens as any[];
   const incomingById = new Map(incomingOrders.map((order) => [String(order?.id), order]));
+  const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
   const incomingByProtocol = new Map(incomingOrders
-    .filter((order) => String(order?.protocolo ?? "").trim())
-    .map((order) => [String(order.protocolo).trim(), order]));
+    .filter((order) => protocolKey(order))
+    .map((order) => [protocolKey(order), order]));
 
   const isMine = (order: any) =>
     String(order?.employeeId ?? "") === employeeId ||
@@ -233,7 +234,7 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     // O protocolo também reconcilia OS legadas com IDs diferentes no snapshot.
     const incomingOrder =
       incomingById.get(String(currentOrder?.id)) ??
-      incomingByProtocol.get(String(currentOrder?.protocolo ?? "").trim());
+      incomingByProtocol.get(protocolKey(currentOrder));
     if (!incomingOrder) return currentOrder;
 
     const oldParts = Array.isArray(currentOrder?.pecasUsadas) ? currentOrder.pecasUsadas : [];
@@ -766,15 +767,15 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const submittedStatus = String(incomingOrder?.status ?? "").trim();
           const submittedCompleted = normalizeDbsStatus(submittedStatus) === "concluida";
           const protocolo = String(incomingOrder?.protocolo ?? incomingOrder?.protocol ?? incomingOrder?.numero ?? incomingOrder?.id ?? "sem protocolo").trim();
+          const incomingProtocol = protocolKey(incomingOrder);
           const currentOrder = currentOrders.find((order) =>
             String(order?.id ?? "") === String(incomingOrder?.id ?? "") ||
-            (String(order?.protocolo ?? "").trim() &&
-              String(order?.protocolo ?? "").trim() === String(incomingOrder?.protocolo ?? "").trim())
+            (incomingProtocol && protocolKey(order) === incomingProtocol)
           );
+          const canonicalProtocol = protocolKey(currentOrder ?? incomingOrder);
           const canonicalOrder = (assignedOrders ?? []).find((order: any) =>
             String(order.id) === String(currentOrder?.id ?? incomingOrder?.id ?? "") ||
-            (String(order.protocol ?? "").trim() &&
-              String(order.protocol ?? "").trim() === String(currentOrder?.protocolo ?? incomingOrder?.protocolo ?? "").trim())
+            (canonicalProtocol && String(order.protocol ?? "").trim().toLocaleLowerCase("pt-BR") === canonicalProtocol)
           );
           if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) {
             if (submittedCompleted) ignoradas.push({ protocolo, motivo: "OS não localizada na base operacional ou não atribuída a este técnico." });
