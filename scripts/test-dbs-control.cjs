@@ -59,6 +59,7 @@ assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexiste
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
+const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017180000_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe", \{ p_payload: payload \}\)/, "O snapshot deve ser salvo pela função SQL atômica.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
@@ -224,5 +225,10 @@ assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a aç
 const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 assert.match(persistence, /Reconcile complete snapshots against the latest shared snapshot/, "Admin saves must reconcile against the latest shared snapshot.");
 assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
-assert.match(persistence, /isCompleted\(latest\)/, "A delayed snapshot must protect already completed OS.");
-assert.match(persistence, /signature_data: incoming\.signature_data \|\| latest\.signature_data/, "A delayed snapshot must not clear a completed OS signature.");
+assert.match(persistence, /latestById[\s\S]*latestByProtocol/, "Admin reconciliation must match work orders by ID first and protocol second.");
+assert.match(persistence, /protectedCompletedFields[\s\S]*tecnicoId[\s\S]*signature_data[\s\S]*diagnostico/, "Completed OS must protect technician, signature, and diagnostic fields.");
+assert.match(persistence, /incomingByProtocol\.get\(protocolKey\(currentOrder\)\)/, "Collaborator reconciliation must accept protocol aliases when IDs differ.");
+assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest\.value->>'protocolo'/, "SQL reconciliation must fall back from ID to protocol.");
+assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
+assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
+assert.match(protocolReconciliationMigration, /not \(v_latest_id = any\(v_seen_ids\)\)/, "SQL must retain OS omitted by delayed snapshots without creating protocol duplicates.");
