@@ -673,34 +673,56 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const incomingState = normalizeState(data.state);
         const latestOrders = latestState.ordens as any[];
         const incomingOrders = incomingState.ordens as any[];
-        const orderKey = (order: any) => {
-          const id = String(order?.id ?? "").trim();
-          const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
-          return id ? "id:" + id : protocol ? "protocol:" + protocol : "";
-        };
-        const isCompleted = (order: any) => ["concluida", "concluída", "concluido", "concluído"].includes(String(order?.status ?? "").trim().toLocaleLowerCase("pt-BR"));
-        const latestByKey = new Map(latestOrders.map((order) => [orderKey(order), order]).filter(([key]) => Boolean(key)));
-        const incomingKeys = new Set(incomingOrders.map(orderKey).filter(Boolean));
-        const reconciledOrders = incomingOrders.map((incoming) => {
-          const key = orderKey(incoming);
-          const latest = key ? latestByKey.get(key) : undefined;
-          if (!latest || !isCompleted(latest)) return incoming;
-          // Keep the canonical completed document fields if a stale autosave sends blanks.
-          return {
-            ...incoming,
-            status: latest.status,
-            assinatura: incoming.assinatura || latest.assinatura,
-            assinaturaCliente: incoming.assinaturaCliente || latest.assinaturaCliente,
-            signature_data: incoming.signature_data || latest.signature_data,
-            signature_name: incoming.signature_name || latest.signature_name,
-            concluidoEm: incoming.concluidoEm || latest.concluidoEm,
-            completedAt: incoming.completedAt || latest.completedAt,
-            diagnostico: incoming.diagnostico || latest.diagnostico,
-            laudo: incoming.laudo || latest.laudo,
-            observacao: incoming.observacao || latest.observacao,
-          };
+        const orderId = (order: any) => String(order?.id ?? "").trim();
+        const orderProtocol = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+        const isCompleted = (order: any) => normalizeDbsStatus(order?.status) === "concluida";
+        const latestById = new Map(latestOrders.map((order) => [orderId(order), order]).filter(([id]) => Boolean(id)));
+        const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
+        const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
+        const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
+        const seenIds = new Set<string>();
+        const seenProtocols = new Set<string>();
+        const protectedCompletedFields = [
+          "tecnicoId", "employeeId", "assignedEmployeeId", "concluidoPorEmployeeId",
+          "assinatura", "assinaturaCliente", "signature_data", "signature_name",
+          "assinaturaEm", "concluidoEm", "completedAt", "completed_at",
+          "diagnostico", "laudo", "technical_opinion", "trabalhoExecutado",
+          "observacao", "observation", "observacaoTecnico", "observacaoComplementarTecnico",
+          "fotoAntes", "fotoDepois",
+        ];
+        const reconciledOrders = incomingOrders.flatMap((incoming) => {
+          const id = orderId(incoming);
+          const protocol = orderProtocol(incoming);
+          // One business protocol is one OS even if legacy clients generated different IDs.
+          if ((id && seenIds.has(id)) || (protocol && seenProtocols.has(protocol))) return [];
+          const latest = (id ? latestById.get(id) : undefined) ??
+            (protocol ? latestByProtocol.get(protocol) : undefined);
+          let reconciled = incoming;
+          if (latest && isCompleted(latest)) {
+            reconciled = {
+              ...incoming,
+              id: latest.id ?? incoming.id,
+              protocolo: latest.protocolo ?? incoming.protocolo,
+              status: latest.status,
+              ...Object.fromEntries(protectedCompletedFields
+                .filter((field) => latest[field] !== null && latest[field] !== undefined && String(latest[field]).trim() !== "")
+                .map((field) => [field, latest[field]])),
+            };
+          }
+          if (id) seenIds.add(id);
+          if (protocol) seenProtocols.add(protocol);
+          const canonicalId = orderId(latest);
+          const canonicalProtocol = orderProtocol(latest);
+          if (canonicalId) seenIds.add(canonicalId);
+          if (canonicalProtocol) seenProtocols.add(canonicalProtocol);
+          return [reconciled];
         });
-        const missingLatestOrders = latestOrders.filter((order) => { const key = orderKey(order); return key && !incomingKeys.has(key); });
+        const missingLatestOrders = latestOrders.filter((order) => {
+          const id = orderId(order);
+          const protocol = orderProtocol(order);
+          return !((id && (incomingIds.has(id) || seenIds.has(id))) ||
+            (protocol && (incomingProtocols.has(protocol) || seenProtocols.has(protocol))));
+        });
         stateToSave = { ...incomingState, ordens: [...reconciledOrders, ...missingLatestOrders] };
         ownerUserId = latestSnapshot.owner_user_id ?? ownerUserId;
       }
