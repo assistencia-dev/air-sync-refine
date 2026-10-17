@@ -1939,6 +1939,52 @@
       body .pmoc-result-card select { width:100%; min-height:42px; border:1px solid #b8cde0; border-radius:9px; padding:9px 10px; background:#fff; color:#17324f; font-size:13px; }
       body .pmoc-result-card small { color:#5d7185; font-size:11px; line-height:1.5; }
     </style>
+<style id="dbs-mobile-card-parity">
+  :root { --dbs-blue:#1769d1; --dbs-navy:#12345a; --dbs-border:#dbe6f1; }
+  button, .btn, input, select, textarea { touch-action: manipulation; }
+  @media (max-width: 640px) {
+    body { height:100dvh; min-height:100dvh; font-size:14px; }
+    body > aside { width:100%; }
+    header { padding:12px 14px; gap:10px; align-items:flex-start; }
+    .page-title h1 { font-size:19px; line-height:1.25; }
+    .tab-view { padding:12px 10px calc(24px + env(safe-area-inset-bottom)); }
+    .metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .metric-card { padding:12px; border-radius:12px; min-width:0; }
+    .metric-title { font-size:9px; line-height:1.35; }
+    .metric-value { font-size:clamp(20px,6vw,27px); overflow-wrap:anywhere; }
+    .data-card { border-radius:14px; margin-bottom:14px; }
+    .data-header { padding:12px; align-items:stretch; }
+    .data-header h3 { font-size:12px; }
+    .filter-bar { width:100%; align-items:stretch; }
+    .filter-bar input,.filter-bar select { min-height:44px; max-width:100%; flex:1 1 100%; font-size:16px; }
+    .btn { min-height:42px; justify-content:center; white-space:normal; }
+    .btn-sm { min-height:40px; font-size:12px; }
+    .form-grid { grid-template-columns:minmax(0,1fr); gap:12px; }
+    .form-group input,.form-group select,.form-group textarea { min-height:44px; font-size:16px; }
+    .table-scroll { width:100%; overflow:visible!important; border:0!important; }
+    table.dbs-mobile-cards { display:block; width:100%; border-collapse:separate; border-spacing:0; }
+    table.dbs-mobile-cards thead { display:none; }
+    table.dbs-mobile-cards tbody { display:grid; gap:10px; width:100%; }
+    table.dbs-mobile-cards tr { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; padding:9px 12px; border:1px solid var(--dbs-border); border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(18,52,90,.055); }
+    table.dbs-mobile-cards tr:hover { background:#fff; }
+    table.dbs-mobile-cards td { display:grid; grid-template-columns:minmax(94px,36%) minmax(0,1fr); align-items:start; gap:10px; min-width:0; padding:9px 0; border-bottom:1px solid #edf2f7; overflow-wrap:anywhere; font-size:12px; line-height:1.45; }
+    table.dbs-mobile-cards td:last-child { border-bottom:0; }
+    table.dbs-mobile-cards td::before { content:attr(data-label); color:#61758d; font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; line-height:1.45; }
+    table.dbs-mobile-cards td input[type="checkbox"] { width:20px; height:20px; }
+    table.dbs-mobile-cards td .btn { width:100%; max-width:100%; }
+    table.dbs-mobile-cards td button { max-width:100%; overflow-wrap:anywhere; }
+    table.dbs-mobile-cards td img { max-width:100%; height:auto; }
+    .day-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .kanban-board { grid-template-columns:minmax(0,1fr); }
+    .employee-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .employee-order-top { gap:8px; }
+    .employee-order h3 { overflow-wrap:anywhere; }
+  }
+  @media (max-width: 380px) {
+    .metrics-grid,.day-kpi-grid { grid-template-columns:minmax(0,1fr); }
+    table.dbs-mobile-cards td { grid-template-columns:minmax(78px,34%) minmax(0,1fr); gap:7px; }
+  }
+</style>
 </head>
 <body>
 
@@ -2864,6 +2910,9 @@
         }
 
         function loadState() {
+            // Dentro do app integrado, o snapshot da nuvem é a única fonte de leitura inicial.
+            // O localStorage continua como cópia de recuperação, mas não pode pintar a tela com dados antigos.
+            if (window.parent !== window) return JSON.parse(JSON.stringify(INITIAL_STATE));
             const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
             if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
             try {
@@ -6028,5 +6077,45 @@
 })();
 </script>
 
+<script id="dbs-mobile-table-card-renderer">
+(function () {
+  "use strict";
+  function labelTables(root) {
+    (root || document).querySelectorAll("table").forEach(function (table) {
+      var headers = Array.from(table.querySelectorAll("thead tr:last-child th"));
+      if (!headers.length) headers = Array.from(table.querySelectorAll("tr:first-child th"));
+      if (!headers.length) return;
+      table.classList.add("dbs-mobile-cards");
+      var headerLabels = headers.map(function (th, index) {
+        var label = (th.innerText || th.textContent || "").replace(/\s+/g, " ").trim();
+        return label || ("Campo " + (index + 1));
+      });
+      table.querySelectorAll("tbody tr, tr").forEach(function (row) {
+        if (row.querySelectorAll("th").length && !row.querySelectorAll("td").length) return;
+        Array.from(row.querySelectorAll(":scope > td")).forEach(function (cell, index) {
+          if (!cell.hasAttribute("data-label")) cell.setAttribute("data-label", headerLabels[index] || ("Informação " + (index + 1)));
+        });
+      });
+    });
+  }
+  function start() {
+    labelTables(document);
+    var observer = new MutationObserver(function (records) {
+      records.forEach(function (record) {
+        record.addedNodes.forEach(function (node) {
+          if (node.nodeType === 1) {
+            if (node.matches && node.matches("table")) labelTables(node.parentNode || document);
+            else if (node.querySelectorAll) labelTables(node);
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", function () { labelTables(document); }, { passive: true });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
+})();
+</script>
 </body>
 </html>
