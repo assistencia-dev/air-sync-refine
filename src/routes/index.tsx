@@ -65,7 +65,7 @@ function Index() {
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
       {/* ============ TOP UTILITY BAR ============ */}
       <div style={{ background: "#0F172A" }} className="text-white text-xs">
-        <div className="container max-w-7xl mx-auto px-4 h-8 flex items-center justify-between">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between">
           <div className="hidden sm:flex items-center gap-5">
             <span className="flex items-center gap-1.5" style={{ color: "#93C5FD" }}>
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -92,7 +92,7 @@ function Index() {
 
       {/* ============ MAIN HEADER (LOGO EM DESTAQUE) ============ */}
       <header className="sticky top-0 w-full bg-white z-50 shadow-md" style={{ borderBottom: "3px solid #1E3A8A" }}>
-        <div className="container max-w-7xl mx-auto px-4 flex items-center justify-between h-[88px] md:h-[96px]">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-[88px] md:h-[96px]">
           {/* Logo XL */}
           <a href="#top" className="flex items-center gap-4 group">
             <BrandLogo
@@ -141,7 +141,7 @@ function Index() {
         {/* Mobile Menu */}
         {menuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
-            <div className="container max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+            <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3">
               <a href="#solucoes" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Soluções</a>
               <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
@@ -183,7 +183,7 @@ function Index() {
             backgroundSize: "48px 48px",
           }}
         />
-        <div className="container max-w-7xl mx-auto px-4 relative">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.25em] mb-5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ color: "#93C5FD", background: "rgba(147,197,253,0.1)", border: "1px solid rgba(147,197,253,0.3)" }}>
@@ -260,7 +260,7 @@ function Index() {
 
       {/* ============ METRICS ============ */}
       <section className="py-12 md:py-16" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-3 gap-4 md:gap-8">
             {[
               { n: "15+", l: "ANOS DE ATUAÇÃO" },
@@ -279,7 +279,7 @@ function Index() {
 
       {/* ============ VALUE PROPOSITION ============ */}
       <section id="solucoes" className="py-20 md:py-28 bg-white">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>A Diferença entre Manutenção Comum e Ativo Estratégico</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Três pilares que sustentam nossa atuação no mercado corporativo.</p>
 
@@ -306,7 +306,7 @@ function Index() {
 
       {/* ============ COMPLIANCE ============ */}
       <section id="pmoc" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Conformidade Regulatória e Responsabilidade Técnica</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Fundação legal robusta para a operação segura e auditável de sistemas de climatização em ambientes corporativos.</p>
 
@@ -383,7 +383,7 @@ function Index() {
 
       {/* ============ SERVICES ============ */}
       <section id="modalidades" className="py-20 md:py-28 bg-white">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Modalidades de Atendimento</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Escolha a estrutura que melhor se adequa às necessidades operacionais da sua empresa.</p>
 
@@ -478,7 +478,7 @@ function Index() {
 
       {/* ============ FAQ ============ */}
       <section id="faq" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Perguntas Frequentes</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Informações técnicas e operacionais sobre nossos serviços.</p>
 
@@ -510,7 +510,7 @@ function Index() {
 
       {/* ============ FINAL CTA ============ */}
       <section className="py-20 md:py-28 bg-white text-center" style={{ borderTop: "1px solid #E2E8F0" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ color: "#0F172A" }}>Pronto para otimizar sua climatização?</h2>
           <p className="text-lg mb-8 max-w-2xl mx-auto" style={{ color: "#666" }}>
             Agende uma avaliação técnica com nossos engenheiros. Sem compromisso.
@@ -529,7 +529,7 @@ function Index() {
 
       {/* ============ FOOTER ============ */}
       <footer style={{ background: "#0F172A" }} className="text-white py-14">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div>
               <BrandLogo
