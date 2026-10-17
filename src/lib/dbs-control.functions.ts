@@ -754,6 +754,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       // Apenas OS atribuídas a este funcionário podem ser atualizadas; dados
       // administrativos e financeiros não são enviados neste UPDATE.
       const incomingForEmployee = filterCollaboratorState(data.state, employee.id, employee.login_email).ordens as any[];
+      const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
