@@ -125,6 +125,9 @@ function DbsControlPage() {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
   const pendingSaveRequestIdsRef = useRef<string[]>([]);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptRef = useRef(0);
+  const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -398,6 +401,11 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_RETRY_SAVE") {
+        retryPendingSaveRef.current?.(true);
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_SAVE") {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
         pendingStateRef.current = msg.state;
@@ -413,18 +421,27 @@ function DbsControlPage() {
           return;
         }
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(async () => {
+        saveTimerRef.current = setTimeout(() => {
           saveTimerRef.current = null;
-          const state = pendingStateRef.current;
-          const requestIds = [...pendingSaveRequestIdsRef.current];
-          pendingSaveRequestIdsRef.current = [];
-          if (!state) return;
           const persist = async () => {
+            const state = pendingStateRef.current;
+            if (!state) return;
+            const requestIds = [...pendingSaveRequestIdsRef.current];
             try {
               const saved = await saveDbsControlCloudState({ data: { state } });
               cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
-              if (pendingStateRef.current === state) pendingStateRef.current = null;
+              if (pendingStateRef.current === state) {
+                pendingStateRef.current = null;
+                pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
+              }
+              retryAttemptRef.current = 0;
+              if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+              retryTimerRef.current = null;
               setCloudError(null);
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_STATUS", status: pendingStateRef.current ? "pending" : "synced",
+                pendingCount: pendingStateRef.current ? 1 : 0, updated_at: saved.updated_at ?? null,
+              }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: true, updated_at: saved.updated_at ?? null,
               }, "*"));
@@ -432,12 +449,30 @@ function DbsControlPage() {
               console.error("DBS Control cloud save:", err);
               const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
               setCloudError(message);
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: pendingStateRef.current ? 1 : 0, error: message,
+              }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
               }, "*"));
+              if (retryAttemptRef.current < 3 && pendingStateRef.current) {
+                const delays = [5000, 15000, 45000];
+                const delay = delays[retryAttemptRef.current++];
+                if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = setTimeout(() => {
+                  retryTimerRef.current = null;
+                  retryPendingSaveRef.current?.();
+                }, delay);
+              }
             }
           };
-          saveQueueRef.current = saveQueueRef.current.then(persist, persist);
+          retryPendingSaveRef.current = (manual = false) => {
+            if (manual && retryTimerRef.current) clearTimeout(retryTimerRef.current);
+            if (manual) retryAttemptRef.current = 0;
+            retryTimerRef.current = null;
+            saveQueueRef.current = saveQueueRef.current.then(persist, persist);
+          };
+          retryPendingSaveRef.current();
         }, 450);
       }
     };
@@ -449,14 +484,19 @@ function DbsControlPage() {
     let refreshInFlight = false;
     let refreshGeneration = 0;
     const refreshLatestCloudState = async () => {
-      if (!cloudReadyRef.current || pendingStateRef.current || saveTimerRef.current || refreshInFlight) return;
+      if (!cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
         const latest = await getDbsControlCloudState();
         // Nunca deixa uma resposta antiga sobrescrever uma leitura mais recente ou uma edição local.
         if (generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
-        if (pendingStateRef.current || saveTimerRef.current) return;
+        if (pendingStateRef.current || saveTimerRef.current) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1,
+          }, "*");
+          return;
+        }
         if (latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
           iframeRef.current?.contentWindow?.postMessage(
@@ -476,14 +516,18 @@ function DbsControlPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
+    const handleOnline = () => retryPendingSaveRef.current?.(true);
+    window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleVisibilityChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("message", handler);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleVisibilityChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
