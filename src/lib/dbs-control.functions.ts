@@ -736,6 +736,84 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     };
   });
 
+
+const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
+  const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
+  const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
+  for (const order of orders) {
+    const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+    const orderId = String(order?.id ?? "").trim();
+    const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+    if (!protocol || !isUuid(clientId)) continue;
+    let query = supabaseAdmin.from("dbs_control_work_orders")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+      .eq("protocol", protocol);
+    if (isUuid(orderId)) {
+      const byId = await supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .eq("id", orderId).maybeSingle();
+      if (byId.error) throw new Error("Falha ao ler OS relacional " + protocol + ": " + byId.error.message);
+      if (byId.data) query = supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .eq("id", orderId);
+    }
+    const { data: existing, error: lookupError } = await query.maybeSingle();
+    if (lookupError) throw new Error("Falha ao localizar OS " + protocol + ": " + lookupError.message);
+    const normalizedStatus = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
+    const status = normalizedStatus === "concluido" ? "concluida"
+      : normalizedStatus === "em_atendimento" || normalizedStatus === "andamento" ? "em_atendimento"
+      : normalizedStatus === "aguardando_peca" ? "aguardando_peca"
+      : normalizedStatus === "aguardando_cliente" ? "aguardando_cliente"
+      : normalizedStatus === "cancelada" ? "cancelada"
+      : normalizedStatus || "aberta";
+    const assignedId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
+    const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
+    const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
+    const fields: Record<string, unknown> = {
+      protocol, protocolo: protocol, client_id: clientId,
+      site_id: isUuid(siteId) ? siteId : null,
+      assigned_employee_id: isUuid(assignedId) ? assignedId : null,
+      created_by_user_id: userId,
+      type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
+      priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
+      status,
+      scheduled_at: order?.scheduledAt ?? order?.scheduled_at ?? null,
+      started_at: order?.startedAt ?? order?.started_at ?? null,
+      completed_at: completed(status) ? (order?.concluidoEm ?? order?.completedAt ?? order?.completed_at ?? new Date().toISOString()) : null,
+      description: String(order?.desc ?? order?.description ?? ""),
+      technical_opinion: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+      diagnostico: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+      observation: String(order?.observacao ?? order?.observation ?? ""),
+      servico_executado: String(order?.trabalhoExecutado ?? order?.servicoExecutado ?? order?.observacao ?? order?.observation ?? ""),
+      signature_name: String(order?.signature_name ?? order?.signatureName ?? ""),
+      signature_path: signaturePath || null, assinatura_path: signaturePath || null,
+      signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
+      total_cents: Math.round(Number(order?.valor ?? order?.total ?? 0) * 100),
+      updated_at: new Date().toISOString(),
+    };
+    if (!existing) {
+      if (!isUuid(orderId)) continue;
+      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert({ id: orderId, ...fields });
+      if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
+      continue;
+    }
+    if (completed(existing.status)) continue;
+    const expectedVersion = Number(order?.version);
+    const currentVersion = Number(existing.version || 1);
+    if (Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion) {
+      throw new Error("A OS " + protocol + " foi alterada em outro dispositivo. Atualize os dados antes de salvar.");
+    }
+    for (const key of ["protocol","protocolo","client_id","site_id","assigned_employee_id","created_by_user_id","total_cents","type","priority","scheduled_at","started_at"]) delete fields[key];
+    const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
+      .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
+      .select("id,version").maybeSingle();
+    if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
+    if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
+  }
+}
+
 export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { state: Record<string, unknown> }) => {
@@ -750,6 +828,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
     let stateToSave = data.state;
     let ownerUserId = scope.ownerUserId;
+    let adminOrdersToSync: any[] = [];
 
     // Reconcile complete snapshots against the latest shared snapshot before an
     // administrative save, preventing delayed autosaves from dropping existing OS.
@@ -772,6 +851,14 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
         const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
+        const changedFields = ["status", "employeeId", "assignedEmployeeId", "tecnicoId", "clienteId", "client_id", "siteId", "localId", "diagnostico", "technical_opinion", "trabalhoExecutado", "servicoExecutado", "observacao", "observation", "prioridade", "tipo", "scheduledAt", "scheduled_at", "assinaturaStoragePath", "assinatura", "signature_name", "concluidoEm", "completedAt"];
+        adminOrdersToSync = incomingOrders.filter((incoming) => {
+          const id = orderId(incoming);
+          const protocol = orderProtocol(incoming);
+          const latest = (id ? latestById.get(id) : undefined) ?? (protocol ? latestByProtocol.get(protocol) : undefined);
+          if (!latest) return true;
+          return changedFields.some((field) => JSON.stringify((incoming as any)?.[field] ?? null) !== JSON.stringify((latest as any)?.[field] ?? null));
+        });
         const seenIds = new Set<string>();
         const seenProtocols = new Set<string>();
         const protectedCompletedFields = [
@@ -980,6 +1067,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       }
 
       ownerUserId = current.owner_user_id ?? user.id;
+    }
+
+    if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
+      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id);
     }
 
     const payload = {
