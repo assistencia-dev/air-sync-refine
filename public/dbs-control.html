@@ -4985,7 +4985,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? ['cliente_cnpj','cliente_nome','tag','tipo','marca','modelo','serie','capacidade','ambiente']
                 : ['nome','cnpj','endereco','contato'];
             const csv = headers.join(';') + '\n' + headers.map(h => h).join(';') + '\n';
-            const blob = new Blob(['\\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
+            const blob = new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = 'modelo_importacao_' + tipo + '.csv';
@@ -5614,10 +5614,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const normalizarStatusKpi = value => String(value ?? '')
                 .trim()
                 .normalize('NFD')
-                .replace(/[\\u0300-\\u036f]/g, '')
+                .replace(/[\u0300-\u036f]/g, '')
                 .toLocaleLowerCase('pt-BR')
                 .replace(/[_-]+/g, ' ')
-                .replace(/\\s+/g, ' ');
+                .replace(/\s+/g, ' ');
             const statusKpi = order => normalizarStatusKpi(order.status ?? order.situacao ?? order.statusOS);
             // Arquivadas, excluídas e canceladas não entram nos indicadores da operação ativa.
             const ordensOperacionais = ordens.filter(order =>
@@ -6205,7 +6205,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 <script id="dbs-mobile-selector-fix-script">
 (function(){
   function normalize(value) {
-    return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
   }
   function clients() {
     const state = (typeof ERP_STATE !== 'undefined' && ERP_STATE) || window.ERP_STATE || null;
@@ -6255,7 +6255,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     function draw(){
       const term = normalize(input.value);
       const compact = term.replace(/[^a-z0-9]/g, '');
-      const tokens = term.split(/\\s+/).filter(Boolean);
+      const tokens = term.split(/\s+/).filter(Boolean);
       const all = clients().map(c => {
         const name = normalize(clientName(c));
         const cnpj = normalize(clientCnpj(c));
