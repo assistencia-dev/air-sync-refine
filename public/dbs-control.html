@@ -2828,59 +2828,33 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             osHistorico: []
         };
 
-        // O mobile integrado deve iniciar a partir do snapshot autoritativo da nuvem.
-        // Caches antigos são preservados como backup de recuperação, mas não são reidratados.
-        (function invalidateLegacyEmbeddedCaches() {
-            if (window.parent === window || !window.matchMedia('(max-width: 800px)').matches) return;
+        // Recuperação segura: nunca apagar caches locais/IndexedDB automaticamente.
+        // O cache local integrado é lido apenas como fallback de visualização; não é enviado à nuvem.
+        (function preserveLegacyEmbeddedCaches() {
             try {
+                if (window.parent === window) return;
                 const raw = localStorage.getItem('DBS_AIR_ERP_STATE');
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    const version = Number(parsed?.version || 1);
-                    if (version < DBS_CONTROL_STATE_VERSION) {
-                        const backupKey = 'DBS_AIR_ERP_STATE_PREVIOUS';
-                        const sourceData = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
-                        const countRecords = (value) => value && typeof value === 'object'
-                            ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
-                            : 0;
-                        let previousCount = -1;
-                        try {
-                            const previousRaw = localStorage.getItem(backupKey);
-                            if (previousRaw) {
-                                const previous = JSON.parse(previousRaw);
-                                previousCount = countRecords(previous?.data && typeof previous.data === 'object' ? previous.data : previous);
-                            }
-                        } catch (_) {}
-                        if (countRecords(sourceData) >= previousCount) {
-                            localStorage.setItem(backupKey, JSON.stringify({
-                                version,
-                                data: sourceData,
-                                backedUpAt: new Date().toISOString(),
-                                reason: 'Cache legado preservado antes da leitura autoritativa da nuvem'
-                            }));
-                        }
-                        if (localStorage.getItem(backupKey)) localStorage.removeItem('DBS_AIR_ERP_STATE');
-                    }
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                const sourceData = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+                const countRecords = value => value && typeof value === 'object'
+                    ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                    : 0;
+                if (countRecords(sourceData) > 0 && !localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS')) {
+                    // Só cria backup quando ainda não existe; nunca remove nem reduz caches.
+                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                        version: Number(parsed?.version || 1),
+                        data: sourceData,
+                        backedUpAt: new Date().toISOString(),
+                        reason: 'Backup de recuperação antes da leitura da nuvem'
+                    }));
                 }
             } catch (error) {
-                console.warn('Cache legado preservado; não foi possível invalidá-lo automaticamente.', error);
-            }
-            try {
-                if (window.indexedDB && typeof indexedDB.databases === 'function') {
-                    indexedDB.databases().then((databases) => {
-                        databases.forEach((database) => {
-                            const name = String(database.name || '');
-                            if (/dbs[-_ ]?(control|air[-_ ]?erp)/i.test(name)) {
-                                indexedDB.deleteDatabase(name);
-                            }
-                        });
-                    }).catch((error) => console.warn('Não foi possível verificar caches IndexedDB antigos:', error));
-                }
-            } catch (error) {
-                console.warn('IndexedDB legado mantido por segurança:', error);
+                console.warn('Caches locais preservados; não foi possível criar backup adicional.', error);
             }
         })();
 
+        let DBS_CONTROL_LOCAL_RECOVERY_MODE = window.parent !== window;
         let ERP_STATE = loadState();
         let DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
         if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
@@ -3020,6 +2994,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
         function saveState() {
+            // Em recuperação local, os dados são exibidos em modo somente leitura:
+            // nenhuma gravação local ou na nuvem é permitida até validar a nuvem.
+            if (DBS_CONTROL_LOCAL_RECOVERY_MODE && window.parent !== window) return;
             registrarHistoricoOS();
             const persistableState = getPersistableState();
             // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
@@ -3078,9 +3055,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function loadState() {
-            // Dentro do app integrado, o snapshot da nuvem é a única fonte de leitura inicial.
-            // O localStorage continua como cópia de recuperação, mas não pode pintar a tela com dados antigos.
-            if (window.parent !== window) return JSON.parse(JSON.stringify(INITIAL_STATE));
+            // Lê cache local também no iframe para recuperação somente leitura.
+            // A autorização para gravar só é liberada após confirmação de snapshot válido da nuvem.
             const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
             if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
             try {
@@ -3111,20 +3087,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     }
                     // Não substitui um backup maior por um estado local menor.
                     if (countRecords(source) >= previousCount) {
+                        if (window.parent === window) {
                         localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
                             version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
                         }));
+                        localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                            version: DBS_CONTROL_STATE_VERSION, data: migrated
+                        }));
                     }
-                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                        version: DBS_CONTROL_STATE_VERSION, data: migrated
-                    }));
                 } catch (_) {}
                 return migrated;
             } catch (error) {
                 // Nunca apaga silenciosamente um cache que não conseguiu ser lido.
                 // Mantemos uma cópia bruta para diagnóstico e iniciamos uma sessão vazia.
                 try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
+                    if (window.parent === window) localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
                         raw: saved,
                         backedUpAt: new Date().toISOString(),
                         reason: String(error?.message || error || 'JSON inválido')
@@ -3182,6 +3159,19 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     }
                 }
                 if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' ? 'inline-flex' : 'none';
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_LOCAL_RECOVERY') {
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
+                DBS_CONTROL_CLOUD_READY = false;
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Recuperação local · somente leitura';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                renderizarTudo();
                 return;
             }
             if (msg.type === 'DBS_CONTROL_DB_AUDIT_RESULT') {
@@ -3254,6 +3244,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 }
 
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
