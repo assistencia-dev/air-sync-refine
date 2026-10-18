@@ -6160,7 +6160,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 <script id="dbs-mobile-selector-fix-script">
 (function(){
   function normalize(value) {
-    return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
   }
   function clients() {
     const state = (typeof ERP_STATE !== 'undefined' && ERP_STATE) || window.ERP_STATE || null;
