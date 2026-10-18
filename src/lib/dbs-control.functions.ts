@@ -613,6 +613,93 @@ async function hydrateDbsControlStateFromCanonicalDb(
   };
 }
 
+
+const DBS_CONTROL_ATTACHMENT_BUCKET = "dbs-control-os";
+const DBS_CONTROL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const DBS_CONTROL_ATTACHMENT_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+};
+
+function stripStoredAttachmentPayloads(state: Record<string, unknown>) {
+  const next = normalizeState(state);
+  next.ordens = (next.ordens as any[]).map((order) => {
+    const copy = { ...order };
+    if (copy.assinaturaStoragePath) copy.assinatura = null;
+    if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
+    if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+    return copy;
+  });
+  return next;
+}
+
+async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
+  const next = normalizeState(state);
+  next.ordens = await Promise.all((next.ordens as any[]).map(async (order) => {
+    const copy = { ...order };
+    const fields = [["assinaturaStoragePath", "assinatura"], ["fotoAntesStoragePath", "fotoAntes"], ["fotoDepoisStoragePath", "fotoDepois"]] as const;
+    for (const [pathField, valueField] of fields) {
+      const path = String(copy[pathField] ?? "").trim();
+      if (!path) continue;
+      const { data, error } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
+      if (!error && data?.signedUrl) copy[valueField] = data.signedUrl;
+    }
+    return copy;
+  }));
+  return next;
+}
+
+export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    orderId: string; attachmentType: "foto_antes" | "foto_depois" | "assinatura";
+    fileName: string; contentType: string; dataBase64: string; requestId: string;
+  }) => {
+    if (!input?.orderId || !input?.dataBase64 || !input?.requestId) throw new Error("OS, arquivo e identificador da solicitação são obrigatórios.");
+    if (!["foto_antes", "foto_depois", "assinatura"].includes(input.attachmentType)) throw new Error("Tipo de anexo inválido.");
+    if (!DBS_CONTROL_ATTACHMENT_TYPES[input.contentType]) throw new Error("Formato inválido. Use JPEG, PNG ou WebP.");
+    if (input.dataBase64.length > Math.ceil(DBS_CONTROL_ATTACHMENT_MAX_BYTES * 4 / 3) + 32) throw new Error("O arquivo excede o limite de 10 MB.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const scope = await resolveDbsControlScope(user);
+    const { data: snapshot, error: snapshotError } = await supabaseAdmin.from("dbs_control_snapshots")
+      .select("state").eq("scope_key", scope.scopeKey).maybeSingle();
+    if (snapshotError) throw new Error(snapshotError.message);
+    const state = snapshot?.state as Record<string, unknown> | null;
+    const orders = Array.isArray(state?.ordens) ? state.ordens as any[] : [];
+    const order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
+      String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
+    if (!order) throw new Error("OS não encontrada na base compartilhada.");
+    if (user.role_key === "COLABORADOR") {
+      const employee = await getCollaboratorEmployee(user.id);
+      if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+      const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? "") === String(employee.id);
+      const techs = Array.isArray(state?.tecnicos) ? state!.tecnicos as any[] : [];
+      const technicianMatches = techs.some((item) => String(item?.id ?? "") === String(order?.tecnicoId ?? "") &&
+        (String(item?.employeeId ?? "") === String(employee.id) ||
+         String(item?.email ?? "").trim().toLowerCase() === String(employee.login_email ?? "").trim().toLowerCase()));
+      if (!assigned && !technicianMatches) throw new Error("Você não tem permissão para anexar arquivos a esta OS.");
+    }
+    const raw = data.dataBase64.replace(/^data:[^;]+;base64,/, "");
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(raw), (character) => character.charCodeAt(0)); }
+    catch { throw new Error("O conteúdo do arquivo está inválido."); }
+    if (!bytes.byteLength || bytes.byteLength > DBS_CONTROL_ATTACHMENT_MAX_BYTES) throw new Error("O arquivo está vazio ou excede o limite de 10 MB.");
+    const extension = DBS_CONTROL_ATTACHMENT_TYPES[data.contentType];
+    const path = `${data.orderId.replace(/[^a-zA-Z0-9_-]/g, "_")}/${data.attachmentType}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET)
+      .upload(path, bytes, { contentType: data.contentType, cacheControl: "3600", upsert: false });
+    if (uploadError) throw new Error(`Falha no upload do anexo: ${uploadError.message}`);
+    const { data: signed, error: signedError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
+    if (signedError || !signed?.signedUrl) {
+      await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
+      throw new Error("O arquivo foi enviado, mas não foi possível preparar a leitura segura.");
+    }
+    return { storagePath: path, signedUrl: signed.signedUrl, fileName: data.fileName.slice(0, 180),
+      contentType: data.contentType, attachmentType: data.attachmentType };
+  });
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -628,10 +715,11 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!data) return null;
 
-    const hydratedState = await hydrateDbsControlStateFromCanonicalDb(
+    const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
       data.state as Record<string, unknown>,
       user.company_id,
     );
+    const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
     const hydrated = { ...data, state: hydratedState };
 
     if (user.role_key !== "COLABORADOR") return hydrated;
@@ -651,7 +739,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     if (!input?.state || typeof input.state !== "object" || Array.isArray(input.state)) {
       throw new Error("Estado do DBS CONTROL inválido.");
     }
-    return { state: normalizeState(input.state) };
+    return { state: stripStoredAttachmentPayloads(input.state) };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
