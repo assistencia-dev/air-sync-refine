@@ -839,7 +839,6 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     if (canonicalId) clientPayload.id = canonicalId;
     const inserted = await supabaseAdmin.from("dbs_control_clients").insert(clientPayload).select("id").single();
     if (inserted.error || !inserted.data) {
-      // Uma gravação concorrente pode ter criado o mesmo cliente; reutilize-o sem duplicar.
       if (cnpj) {
         const retry = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
         if (!retry.error && retry.data) {
@@ -861,15 +860,15 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     if (!rawClientId) throw new Error("Não foi possível despachar a OS " + protocol + ": cliente não vinculado.");
     const clientId = await resolveCanonicalClient(rawClientId, protocol);
     let query = supabaseAdmin.from("dbs_control_work_orders")
-      .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
       .eq("protocol", protocol).limit(1);
     if (isUuid(orderId)) {
       const byId = await supabaseAdmin.from("dbs_control_work_orders")
-        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
         .eq("id", orderId).maybeSingle();
       if (byId.error) throw new Error("Falha ao ler OS relacional " + protocol + ": " + byId.error.message);
       if (byId.data) query = supabaseAdmin.from("dbs_control_work_orders")
-        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
         .eq("id", orderId);
     }
     const { data: existing, error: lookupError } = await query.maybeSingle();
@@ -912,8 +911,10 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       updated_at: new Date().toISOString(),
     };
     if (!existing) {
-      if (!isUuid(orderId)) continue;
-      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert({ id: orderId, ...fields });
+      // IDs legados que não são UUID usam o UUID gerado pelo banco; o protocolo
+      // permanece como identidade estável para futuras reconciliações.
+      const insertPayload = isUuid(orderId) ? { id: orderId, ...fields } : fields;
+      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload);
       if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
       continue;
     }
@@ -921,10 +922,6 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     const expectedVersion = Number(order?.version);
     const currentVersion = Number(existing.version || 1);
     const staleVersion = Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion;
-
-    // O despacho não é descartado por uma revisão antiga do snapshot. A linha
-    // relacional recém-lida é a base canônica; atribuição/status recebidos podem
-    // avançar, enquanto evidências existentes nunca são apagadas por payload vazio.
     if (staleVersion) {
       const preserveWhenIncomingEmpty: Array<[string, string]> = [
         ["technical_opinion", "technical_opinion"], ["diagnostico", "diagnostico"],
@@ -947,9 +944,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       };
       const currentStatus = String(existing.status ?? "").trim().toLocaleLowerCase("pt-BR");
       const incomingStatus = String(fields.status ?? "").trim().toLocaleLowerCase("pt-BR");
-      if ((statusRank[currentStatus] ?? 0) > (statusRank[incomingStatus] ?? 0)) {
-        fields.status = existing.status;
-      }
+      if ((statusRank[currentStatus] ?? 0) > (statusRank[incomingStatus] ?? 0)) fields.status = existing.status;
       if (!fields.started_at && existing.started_at) fields.started_at = existing.started_at;
       if (!fields.completed_at && existing.completed_at) fields.completed_at = existing.completed_at;
     }
@@ -1498,3 +1493,67 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
               technicianName: technicianName(finalTechnicianId),
               type: String(order?.tipo ?? order?.tipoOS ?? "Não informado"),
               startedAt: cycleStart === null ? null : new Date(cycleStart).toISOString(),
+              completedAt: new Date(event.timestamp).toISOString(),
+              activeMinutes,
+              elapsedMinutes,
+              reason,
+            };
+            if (reason) excluded.push(record);
+            else completed.push(record);
+          }
+          cycleStart = null;
+          activeStart = null;
+          cycleTechnicianId = null;
+          technicianChanged = false;
+          activeMilliseconds = 0;
+        }
+      }
+    }
+
+    const completedEventOrderIds = new Set<string>();
+    for (const [orderId, events] of eventsByOrder) {
+      if (events.some((event) => event.nextStatus === "Concluída")) completedEventOrderIds.add(orderId);
+    }
+    const legacyOrders = orders.filter((order) =>
+      String(order?.status ?? "") === "Concluída" && !completedEventOrderIds.has(String(order?.id ?? ""))
+    );
+    const metricMap = new Map<string, any>();
+    for (const record of completed) {
+      const key = `${record.technicianId}::${record.type}`;
+      const item = metricMap.get(key) ?? {
+        technicianId: String(record.technicianId),
+        metricKey: key,
+        technicianName: record.technicianName,
+        type: record.type,
+        completedCount: 0,
+        activeMinutesTotal: 0,
+        elapsedMinutesTotal: 0,
+      };
+      item.completedCount += 1;
+      item.activeMinutesTotal += record.activeMinutes;
+      item.elapsedMinutesTotal += Number(record.elapsedMinutes ?? 0);
+      metricMap.set(key, item);
+    }
+    const metrics = [...metricMap.values()]
+      .map((item) => ({
+        ...item,
+        averageActiveMinutes: Math.round(item.activeMinutesTotal / item.completedCount),
+        averageElapsedMinutes: Math.round(item.elapsedMinutesTotal / item.completedCount),
+      }))
+      .sort((a, b) => b.completedCount - a.completedCount || a.technicianName.localeCompare(b.technicianName, "pt-BR"));
+
+    return {
+      updatedAt: snapshot.updated_at ?? null,
+      totalTracked: completed.length,
+      totalExcluded: excluded.length,
+      legacyUnmeasuredCount: legacyOrders.length,
+      metrics,
+      completed: completed.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 200),
+      excluded: excluded.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 100),
+      legacySamples: legacyOrders.slice(0, 20).map((order) => ({
+        orderId: String(order?.id ?? ""),
+        protocol: String(order?.protocolo ?? order?.numero ?? order?.id ?? "OS sem protocolo"),
+        technicianName: technicianName(order?.employeeId ?? order?.tecnicoId),
+      })),
+    };
+  });
