@@ -1710,6 +1710,34 @@
   .dbs-equipment-options{max-height:260px}
 }
 
+ 
+        /* Fases 2–4: identidade DBS AIR consistente e interação touch no mobile. */
+        :root { --color-primary:#0756a6; --color-primary-dark:#063f7a; --dbs-blue:#0756a6; --dbs-blue-dark:#063f7a; }
+        button, .btn, input[type="button"], input[type="submit"], select { touch-action:manipulation; }
+        button, .btn, input[type="button"], input[type="submit"] { min-height:40px; }
+        input, select, textarea { max-width:100%; }
+        .dbs-mobile-cards td { color:#12233b; }
+        .dbs-mobile-cards td::before { color:#0756a6; }
+        .dbs-mobile-cards tr { border-color:#d8e6f5; box-shadow:0 5px 18px rgba(7,86,166,.07); }
+        .dbs-mobile-cards tr:has(td [data-status="atrasada"]),
+        .dbs-mobile-cards tr:has(td .status-atrasada),
+        .dbs-mobile-cards tr:has(td .badge-danger) { border-left:4px solid #b42318; }
+        @media(max-width:800px) {
+          body { height:100dvh; min-height:100dvh; overflow:hidden; }
+          main { min-width:0; width:100%; }
+          .content, .main-content, .tab-content, .table-scroll { min-width:0; max-width:100%; }
+          .dbs-mobile-cards td { grid-template-columns:minmax(86px,34%) minmax(0,1fr); }
+          .dbs-mobile-cards td button, .dbs-mobile-cards td .btn { min-height:44px; }
+          .dbs-mobile-cards td input, .dbs-mobile-cards td select { min-height:42px; width:100%; }
+          .dbs-mobile-cards td img { object-fit:contain; }
+          .dbs-mobile-cards td:has(input[type="checkbox"]) { align-items:center; }
+        }
+        @media(max-width:520px) {
+          .dbs-mobile-cards tbody { gap:12px; }
+          .dbs-mobile-cards tr { padding:10px 12px; border-radius:14px; }
+          .dbs-mobile-cards td { gap:8px; padding:10px 0; font-size:13px; }
+          button, .btn { min-height:44px; }
+        }
 </style>
 
     <link rel="stylesheet" href="/dbs-control-theme.css?v=20261013-os-visual-1">
@@ -2701,7 +2729,7 @@
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
         // posteriormente no ambiente real.
-        const DBS_CONTROL_STATE_VERSION = 2;
+        const DBS_CONTROL_STATE_VERSION = 3;
         const INITIAL_STATE = {
             tecnicos: [],
             clientes: [],
@@ -2712,6 +2740,47 @@
             ordens: [],
             osHistorico: []
         };
+
+        // O mobile integrado deve iniciar a partir do snapshot autoritativo da nuvem.
+        // Caches antigos são preservados como backup de recuperação, mas não são reidratados.
+        (function invalidateLegacyEmbeddedCaches() {
+            if (window.parent === window || !window.matchMedia('(max-width: 800px)').matches) return;
+            try {
+                const raw = localStorage.getItem('DBS_AIR_ERP_STATE');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    const version = Number(parsed?.version || 1);
+                    if (version < DBS_CONTROL_STATE_VERSION) {
+                        const backupKey = 'DBS_AIR_ERP_STATE_PREVIOUS';
+                        if (!localStorage.getItem(backupKey)) {
+                            localStorage.setItem(backupKey, JSON.stringify({
+                                version,
+                                data: parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed,
+                                backedUpAt: new Date().toISOString(),
+                                reason: 'Cache legado preservado antes da leitura autoritativa da nuvem'
+                            }));
+                        }
+                        localStorage.removeItem('DBS_AIR_ERP_STATE');
+                    }
+                }
+            } catch (error) {
+                console.warn('Cache legado preservado; não foi possível invalidá-lo automaticamente.', error);
+            }
+            try {
+                if (window.indexedDB && typeof indexedDB.databases === 'function') {
+                    indexedDB.databases().then((databases) => {
+                        databases.forEach((database) => {
+                            const name = String(database.name || '');
+                            if (/dbs[-_ ]?(control|air[-_ ]?erp)/i.test(name)) {
+                                indexedDB.deleteDatabase(name);
+                            }
+                        });
+                    }).catch((error) => console.warn('Não foi possível verificar caches IndexedDB antigos:', error));
+                }
+            } catch (error) {
+                console.warn('IndexedDB legado mantido por segurança:', error);
+            }
+        })();
 
         let ERP_STATE = loadState();
         let DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
