@@ -360,11 +360,9 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
   main [class*="rounded"], main [class*="card"] { min-width: 0; }
   main h1 { font-size: clamp(1.35rem, 5vw, 1.9rem); line-height: 1.2; }
   main h2 { font-size: clamp(1.15rem, 4.3vw, 1.55rem); line-height: 1.25; }
-  /* Finance/operations data tables: preserve every field, reorganize rows into readable cards. */
-  main table thead { display: none; }
-  main table tbody { width: 100%; }
-  main table tbody tr { min-width: 0; }
-  main table tbody td { min-width: 0; overflow-wrap: break-word; }
+  /* Preserve every table header and field; use contained horizontal scrolling where a true card renderer is unavailable. */
+  main table thead, main table tbody { width: 100%; }
+  main table tr, main table th, main table td { min-width: 0; overflow-wrap: break-word; }
 }
 @media (max-width: 420px) {
   main .grid { grid-template-columns: minmax(0, 1fr) !important; }
