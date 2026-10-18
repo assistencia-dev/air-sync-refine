@@ -39,7 +39,9 @@ select
   c.id,
   case when coalesce(o.item->>'siteId',o.item->>'localId','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
        then coalesce(o.item->>'siteId',o.item->>'localId')::uuid else null end,
-  case when coalesce(o.item->>'employeeId',o.item->>'assignedEmployeeId',o.item->>'tecnicoId','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
+  (select e.id from public.rh_employees e
+   where e.id::text = coalesce(o.item->>'employeeId', o.item->>'assignedEmployeeId', o.item->>'tecnicoId')
+   limit 1),
   s.updated_by,
   coalesce(nullif(o.item->>'tipo',''),'corretiva'),
   coalesce(nullif(o.item->>'prioridade',''),'normal'),
@@ -51,9 +53,12 @@ select
     when lower(trim(coalesce(o.item->>'status',''))) in ('cancelada','cancelado') then 'cancelada'
     else 'aberta'
   end,
-  case when coalesce(o.item->>'scheduledAt',o.item->>'scheduled_at','') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then coalesce(o.item->>'scheduledAt',o.item->>'scheduled_at')::timestamptz else null end,
-  case when coalesce(o.item->>'startedAt',o.item->>'started_at','') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then coalesce(o.item->>'startedAt',o.item->>'started_at')::timestamptz else null end,
-  case when coalesce(o.item->>'concluidoEm',o.item->>'completedAt',o.item->>'completed_at','') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then coalesce(o.item->>'concluidoEm',o.item->>'completedAt',o.item->>'completed_at')::timestamptz else null end,
+  case when coalesce(o.item->>'scheduledAt', o.item->>'scheduled_at', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+       then coalesce(o.item->>'scheduledAt', o.item->>'scheduled_at')::timestamptz else null end,
+  case when coalesce(o.item->>'startedAt', o.item->>'started_at', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+       then coalesce(o.item->>'startedAt', o.item->>'started_at')::timestamptz else null end,
+  case when coalesce(o.item->>'concluidoEm', o.item->>'completedAt', o.item->>'completed_at', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+       then coalesce(o.item->>'concluidoEm', o.item->>'completedAt', o.item->>'completed_at')::timestamptz else null end,
   coalesce(o.item->>'desc',o.item->>'description',''),
   coalesce(o.item->>'diagnostico',o.item->>'technical_opinion',''),
   coalesce(o.item->>'diagnostico',o.item->>'technical_opinion',''),
@@ -68,7 +73,10 @@ from public.dbs_control_snapshots s
 cross join lateral jsonb_array_elements(case when jsonb_typeof(s.state->'ordens')='array' then s.state->'ordens' else '[]'::jsonb end) o(item)
 join public.dbs_control_clients c on c.id::text = coalesce(o.item->>'clienteId',o.item->>'client_id','')
 where coalesce(nullif(btrim(o.item->>'protocolo'),''),nullif(btrim(o.item->>'protocol'),'')) is not null
-  and not exists (select 1 from public.dbs_control_work_orders w where w.protocol = coalesce(nullif(btrim(o.item->>'protocolo'),''),nullif(btrim(o.item->>'protocol'),'')))
+  and not exists (
+    select 1 from public.dbs_control_work_orders w
+    where w.protocol = coalesce(nullif(btrim(o.item->>'protocolo'), ''), nullif(btrim(o.item->>'protocol'), ''))
+  )
 on conflict do nothing;
 
 create or replace function public.dbs_control_guard_work_order_write()
