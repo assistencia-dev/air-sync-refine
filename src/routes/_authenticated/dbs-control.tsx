@@ -142,6 +142,7 @@ function DbsControlPage() {
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
   const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
+  const employeeModeRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -260,7 +261,9 @@ function DbsControlPage() {
           const localHasData = dbsControlStateHasData(localState);
           const cloudHasData = dbsControlStateHasData(cloudState);
           localRecoveryStateRef.current = localState;
-          const cloudIsIncomplete = localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
+          // A sessão de colaborador recebe deliberadamente um subconjunto da base (somente OS e cadastros vinculados).
+          // Comparar esse subconjunto com o cache local completo gera falso alarme de perda e bloqueia a sincronização.
+          const cloudIsIncomplete = !employeeModeRef.current && localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
           if (cloudState && !cloudIsIncomplete) {
             // Nunca grave automaticamente um snapshot local no estado compartilhado durante
             // a inicialização. Se a nuvem vier vazia enquanto há dados locais, trate como
@@ -544,7 +547,8 @@ function DbsControlPage() {
       try {
         const latest = await getDbsControlCloudState();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
-        if (dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latest.state as Record<string, unknown>)) {
+        // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
+        if (!employeeModeRef.current && dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latest.state as Record<string, unknown>)) {
           cloudReadyRef.current = false;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
           const message = "A nuvem retornou menos registros que a cópia local. Salvamento bloqueado para proteger os dados; é necessária reconciliação administrativa.";
@@ -650,9 +654,10 @@ function DbsControlPage() {
 
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
+  employeeModeRef.current = employeeMode;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261018-snapshot-guard-mobile-3`
-    : "/dbs-control.html?v=20261018-snapshot-guard-mobile-3";
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261018-collaborator-sync-guard-fix-1`
+    : "/dbs-control.html?v=20261018-collaborator-sync-guard-fix-1";
 
   return (
     <main className="min-h-screen bg-[#f4f8fc]">
