@@ -778,6 +778,9 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
     const orderId = String(order?.id ?? "").trim();
     const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
     if (!protocol || !isUuid(clientId)) continue;
+    const clientCheck = await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", clientId).maybeSingle();
+    if (clientCheck.error) throw new Error("Falha ao validar o cliente da OS " + protocol + ": " + clientCheck.error.message);
+    if (!clientCheck.data) continue; // cadastro legado ainda não foi migrado; mantém o snapshot compatível
     let query = supabaseAdmin.from("dbs_control_work_orders")
       .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
       .eq("protocol", protocol).limit(1);
@@ -841,7 +844,13 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
     if (Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion) {
       throw new Error("A OS " + protocol + " foi alterada em outro dispositivo. Atualize os dados antes de salvar.");
     }
-    for (const key of ["protocol","protocolo","client_id","site_id","assigned_employee_id","created_by_user_id","total_cents","type","priority","scheduled_at","started_at"]) delete fields[key];
+    for (const key of ["protocol","protocolo","created_by_user_id"]) delete fields[key];
+    if (!signaturePath && !String(order?.assinatura ?? order?.signature_data ?? "").trim()) {
+      delete fields.signature_data;
+      delete fields.signature_path;
+      delete fields.assinatura_path;
+      delete fields.signature_name;
+    }
     const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
       .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
       .select("id,version").maybeSingle();
