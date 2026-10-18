@@ -28,6 +28,17 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
 }
 
+const DBS_CONTROL_PROTECTED_ARRAYS = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
+
+function dbsControlStateIsSmallerThan(localState: Record<string, unknown> | null | undefined, cloudState: Record<string, unknown> | null | undefined) {
+  if (!localState || !cloudState) return Boolean(localState && dbsControlStateHasData(localState));
+  return DBS_CONTROL_PROTECTED_ARRAYS.some((key) => {
+    const localCount = Array.isArray(localState[key]) ? (localState[key] as unknown[]).length : 0;
+    const cloudCount = Array.isArray(cloudState[key]) ? (cloudState[key] as unknown[]).length : 0;
+    return localCount > cloudCount;
+  });
+}
+
 function mergeDbsControlStates(
   cloudState: Record<string, unknown>,
   localState: Record<string, unknown> | null,
@@ -130,6 +141,7 @@ function DbsControlPage() {
   const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
+  const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -247,7 +259,9 @@ function DbsControlPage() {
 
           const localHasData = dbsControlStateHasData(localState);
           const cloudHasData = dbsControlStateHasData(cloudState);
-          if (cloudState && !(localHasData && !cloudHasData)) {
+          localRecoveryStateRef.current = localState;
+          const cloudIsIncomplete = localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
+          if (cloudState && !cloudIsIncomplete) {
             // Nunca grave automaticamente um snapshot local no estado compartilhado durante
             // a inicialização. Se a nuvem vier vazia enquanto há dados locais, trate como
             // falha de validação e mantenha a cópia local em modo somente leitura.
@@ -268,8 +282,8 @@ function DbsControlPage() {
             // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
             throw new Error(
-              localHasData && !cloudHasData
-                ? "A nuvem retornou vazia enquanto há dados locais. Exibindo a cópia local em somente leitura; nenhuma gravação foi feita."
+              cloudIsIncomplete
+                ? "A nuvem retornou menos registros que a cópia local em uma ou mais áreas. Dados locais preservados em somente leitura; gravações bloqueadas para evitar perda."
                 : localState
                   ? "A base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura."
                   : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
@@ -442,8 +456,6 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_SAVE") {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
-        pendingStateRef.current = msg.state;
-        if (requestId) pendingSaveRequestIdsRef.current.push(requestId);
         if (!cloudReadyRef.current) {
           if (requestId) {
             iframeRef.current?.contentWindow?.postMessage({
@@ -454,6 +466,8 @@ function DbsControlPage() {
           }
           return;
         }
+        pendingStateRef.current = msg.state;
+        if (requestId) pendingSaveRequestIdsRef.current.push(requestId);
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
           saveTimerRef.current = null;
@@ -526,6 +540,14 @@ function DbsControlPage() {
       try {
         const latest = await getDbsControlCloudState();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        if (dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latest.state as Record<string, unknown>)) {
+          cloudReadyRef.current = false;
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
+          const message = "A nuvem retornou menos registros que a cópia local. Salvamento bloqueado para proteger os dados; é necessária reconciliação administrativa.";
+          setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: 0, error: message }, "*");
+          return;
+        }
         // A falha na leitura inicial não pode bloquear todas as tentativas seguintes.
         // A primeira leitura válida também libera a fila de gravação do iframe.
         cloudReadyRef.current = true;
