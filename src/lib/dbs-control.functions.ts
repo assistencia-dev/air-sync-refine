@@ -963,6 +963,39 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
   }
 }
 
+function ensurePersistedSnapshotWrite(result: { data?: any; error?: any; }, operation: string) {
+  if (result?.error) throw new Error(result.error.message || `Falha ao salvar o snapshot do DBS CONTROL (${operation}).`);
+  const data = result?.data;
+  if (!data || typeof data !== "object" || !data.state || typeof data.state !== "object" || Array.isArray(data.state)) {
+    throw new Error(`A gravação do snapshot (${operation}) não foi confirmada pelo banco.`);
+  }
+  const stateVersion = Number(data.state_version ?? 0);
+  const updatedAt = String(data.updated_at ?? "").trim();
+  if (!Number.isFinite(stateVersion) || stateVersion <= 0 || !updatedAt) {
+    throw new Error(`A gravação do snapshot (${operation}) não confirmou versão e data válidas do banco.`);
+  }
+  return data;
+}
+
+async function recordDbsControlSyncAttempt(input: {
+  scopeKey: string; companyId?: string | null; ownerUserId?: string | null; userId: string;
+  action: string; status: "success" | "error" | "retry";
+  payload?: Record<string, unknown> | null; result?: Record<string, unknown> | null; errorMessage?: string | null;
+}) {
+  try {
+    const { error } = await supabaseAdmin.from("dbs_control_snapshot_save_audit").insert({
+      scope_key: input.scopeKey, company_id: input.companyId ?? null,
+      owner_user_id: input.ownerUserId ?? null, user_id: input.userId,
+      action: input.action, status: input.status, payload: input.payload ?? {},
+      result: input.result ?? {}, error_message: input.errorMessage ?? null,
+      created_at: new Date().toISOString(),
+    });
+    if (error) console.error("DBS CONTROL: falha ao gravar auditoria de sincronização.", error.message);
+  } catch (error) {
+    console.error("DBS CONTROL: falha ao gravar auditoria de sincronização.", error);
+  }
+}
+
 export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { state: Record<string, unknown>; baseUpdatedAt?: string | null }) => {
@@ -1314,6 +1347,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
       .single();
     if (saveResult.error && /base_updated_at|conflito|concurrent|serialization|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
+      await recordDbsControlSyncAttempt({
+        scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+        action: "snapshot_save", status: "retry", payload: { reason: saveResult.error.message },
+      });
       const { data: latestSnapshot, error: latestError } = await supabaseAdmin
         .from("dbs_control_snapshots")
         .select("state, updated_at, owner_user_id, company_id")
@@ -1336,9 +1373,22 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         .single();
     }
 
-    const saved = saveResult.data;
-    const error = saveResult.error;
-    if (error) throw new Error(error.message);
+    let saved: any;
+    try {
+      saved = ensurePersistedSnapshotWrite(saveResult, "saveDbsControlCloudState");
+    } catch (error) {
+      await recordDbsControlSyncAttempt({
+        scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+        action: "snapshot_save", status: "error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    await recordDbsControlSyncAttempt({
+      scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+      action: "snapshot_save", status: "success",
+      result: { state_version: saved.state_version, updated_at: saved.updated_at },
+    });
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
@@ -1371,7 +1421,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       fetchAllDbsControlWorkOrders(),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
-      supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
+      supabaseAdmin.from("dbs_control_snapshot_save_audit").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
       supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
     ]);
     const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
