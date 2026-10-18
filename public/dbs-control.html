@@ -2056,6 +2056,8 @@
   }
 </style>
 
+
+<style id="dbs-os-lifecycle-actions">.os-lifecycle-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.os-lifecycle-actions button{min-height:34px;border:0;border-radius:8px;padding:7px 10px;background:#124c83;color:#fff;font-size:11px;font-weight:800;cursor:pointer}.os-lifecycle-actions button[data-next="Cancelada"]{background:#eef2f7;color:#34465a;border:1px solid #d7e1eb}.os-lifecycle-actions button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:700px){.os-lifecycle-actions{display:grid;grid-template-columns:1fr}.os-lifecycle-actions button{width:100%;min-height:42px}}</style>
 </head>
 <body>
 
@@ -3977,6 +3979,29 @@
             document.body.appendChild(modal);
         }
 
+        async function transicionarStatusOS(orderId, nextStatus) {
+            const order = (ERP_STATE.ordens || []).find(item => String(item.id) === String(orderId));
+            if (!order) { alert('OS não encontrada na base carregada. Atualize a tela e tente novamente.'); return; }
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const current = norm(order.status || 'Pendente');
+            const next = norm(nextStatus);
+            const allowed = (current === 'pendente' && ['em atendimento','cancelada'].includes(next))
+                || (['em atendimento','andamento','aberta','aguardando peca','aguardando cliente'].includes(current) && ['concluida','cancelada'].includes(next));
+            if (!allowed) { alert('Transição de status não permitida. Atualize a OS antes de tentar novamente.'); return; }
+            if (next === 'concluida' && !confirm('Confirmar a conclusão desta OS? Confira relatório técnico e assinatura antes de concluir.')) return;
+            if (next === 'cancelada' && !confirm('Confirmar o cancelamento desta OS?')) return;
+            const previous = { status: order.status, completedAt: order.completedAt, concluidoEm: order.concluidoEm, lockedAt: order.lockedAt, startedAt: order.startedAt };
+            order.status = nextStatus;
+            if (next === 'em atendimento') order.startedAt = order.startedAt || new Date().toISOString();
+            if (next === 'concluida') { order.completedAt = new Date().toISOString(); order.concluidoEm = order.completedAt; order.lockedAt = order.lockedAt || order.completedAt; }
+            try { await saveStateAndConfirmCloud(); renderizarTudo(); }
+            catch (error) {
+                Object.assign(order, previous);
+                alert('A alteração não foi confirmada pela nuvem. A OS foi restaurada ao estado anterior. ' + (error && error.message ? error.message : ''));
+                renderizarTudo();
+            }
+        }
+
         function renderizarOrdens() {
             const activeTabId = document.querySelector('.tab-view.active')?.id || 'tab-dashboard';
             const dashboardMode = activeTabId === 'tab-dashboard';
@@ -4006,7 +4031,10 @@
                                 <button type="button" class="os-row-action" onclick="alternarArquivoOS('${o.id}')">${archived ? 'Restaurar' : 'Arquivar'}</button>
                                 <button type="button" class="os-row-action os-row-action-danger" onclick="excluirOSComSeguranca('${o.id}')">Excluir</button>
                             </div>
-                        </td>
+                            <div class="os-lifecycle-actions" aria-label="Ciclo de vida da OS">
+                                ${!isConcluido && !['Cancelada','Cancelado'].includes(String(o.status||'').trim()) && !archived ? (['Pendente','Aguardando peça','Aguardando cliente'].includes(String(o.status||'').trim()) ? '<button type="button" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Em Atendimento\')">Iniciar atendimento</button>' : '') + '<button type="button" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Concluída\')">Concluir OS</button><button type="button" data-next="Cancelada" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Cancelada\')">Cancelar OS</button>' : '<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#52708d">${isConcluido ? 'OS concluída · edição bloqueada' : 'OS cancelada'}</span>'}
+                            </div>
+</td>
                     </tr>
                 `;
             }).join('');

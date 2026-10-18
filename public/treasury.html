@@ -472,6 +472,11 @@ td strong{font-weight:650;}
 }
 </style>
 
+
+<!-- DBS TREASURY: mobile financial card overflow protection -->
+<style id="dbs-treasury-finance-card-hardening">
+@media(max-width:700px){table:not(.dre-table):not([data-mobile-cards="off"]) tbody tr{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important;min-width:0!important;margin:0 0 12px!important;padding:10px 12px!important;border:1px solid #d9e5f1!important;border-radius:14px!important;background:#fff!important;box-shadow:0 4px 14px rgba(15,55,92,.06)!important;box-sizing:border-box!important}table:not(.dre-table):not([data-mobile-cards="off"]) tbody td{display:grid!important;grid-template-columns:minmax(88px,36%) minmax(0,1fr)!important;align-items:start!important;gap:8px!important;width:auto!important;min-width:0!important;max-width:100%!important;padding:8px 0!important;border:0!important;border-bottom:1px solid #edf2f7!important;white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important;line-height:1.4!important;box-sizing:border-box!important}table:not(.dre-table):not([data-mobile-cards="off"]) tbody td:last-child{border-bottom:0!important}table:not(.dre-table):not([data-mobile-cards="off"]) tbody td::before{min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;color:#52708d!important;font-size:10px!important;font-weight:800!important;line-height:1.35!important;letter-spacing:.025em!important}table:not(.dre-table):not([data-mobile-cards="off"]) tbody td :is(button,a,input,select){max-width:100%!important}table:not(.dre-table):not([data-mobile-cards="off"]) tbody td :is(.amount,.value,.money,.currency,[class*="valor"],[class*="amount"]){display:inline-block!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;font-variant-numeric:tabular-nums}.panel,.panel-body,.table-container,.table-responsive{min-width:0!important;max-width:100%!important}.panel{overflow:hidden}}
+</style>
 </head>
 <body>
 
