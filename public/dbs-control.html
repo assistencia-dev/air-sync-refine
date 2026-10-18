@@ -2860,6 +2860,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
         let DBS_CONTROL_CLOUD_READY = false;
         let DBS_CONTROL_CLOUD_HYDRATING = false;
+        // Dashboard só exibe números depois da primeira hidratação autoritativa.
+        let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
 
 
         function criarSnapshotHistoricoOS(ordens) {
@@ -3159,6 +3161,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (event.source !== window.parent) return;
             const msg = event.data || {};
             if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
+                if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
+                else if (msg.status === 'synced') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
+                atualizarMetricas();
                 const indicator = document.getElementById('dbs-sync-indicator');
                 const retry = document.getElementById('dbs-sync-retry');
                 if (indicator) {
@@ -3185,6 +3190,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
             if (msg.type === 'DBS_CONTROL_LOCAL_RECOVERY') {
+                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
+                atualizarMetricas();
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
                 DBS_CONTROL_CLOUD_READY = false;
                 const indicator = document.getElementById('dbs-sync-indicator');
@@ -3291,6 +3298,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 }
 
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
+                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
@@ -5607,6 +5615,24 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function atualizarMetricas() {
+            // Enquanto a primeira leitura compartilhada não termina, nunca apresentar zeros/cache como se fossem dados atuais.
+            const metricIds = ['dash-client-count', 'dash-equip-count', 'dash-os-andamento', 'dash-os-concluidas'];
+            const metricValues = metricIds.map(id => document.getElementById(id));
+            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'loading') {
+                if (!document.getElementById('dbs-dashboard-loading-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'dbs-dashboard-loading-style';
+                    style.textContent = '.dbs-metric-loading{color:transparent!important;position:relative;min-width:2.5rem;min-height:1.25em;border-radius:6px;background:linear-gradient(90deg,#e8eef5 25%,#f5f8fb 38%,#e8eef5 62%);background-size:400% 100%;animation:dbsMetricShimmer 1.4s ease infinite}.dbs-metric-unavailable{font-size:13px!important;color:#64748b!important}@keyframes dbsMetricShimmer{0%{background-position:100% 0}100%{background-position:0 0}}@media(prefers-reduced-motion:reduce){.dbs-metric-loading{animation:none}}';
+                    document.head.appendChild(style);
+                }
+                metricValues.forEach(el => { if (el) { el.classList.add('dbs-metric-loading'); el.classList.remove('dbs-metric-unavailable'); el.textContent = ' '; el.setAttribute('aria-label', 'Carregando dados'); } });
+                return;
+            }
+            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error') {
+                metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading'); el.classList.add('dbs-metric-unavailable'); el.textContent = '—'; el.setAttribute('aria-label', 'Dados indisponíveis: falha de sincronização'); } });
+                return;
+            }
+            metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading', 'dbs-metric-unavailable'); el.removeAttribute('aria-label'); } });
             // Os KPIs usam somente o estado central carregado e normalizam variações de status.
             const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
             const equipamentos = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
