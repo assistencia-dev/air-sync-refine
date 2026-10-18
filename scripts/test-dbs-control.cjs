@@ -232,3 +232,8 @@ assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
 assert.match(protocolReconciliationMigration, /not \(v_latest_id = any\(v_seen_ids\)\)/, "SQL must retain OS omitted by delayed snapshots without creating protocol duplicates.");
+
+const statusSource = persistence.match(/function normalizeDbsStatus\\(value: unknown\\): string \\{[\\s\\S]*?\\n\\}/);
+assert.ok(statusSource, "normalizeDbsStatus must remain available for behavior testing.");
+const normalizeStatus = vm.runInNewContext("(" + statusSource[0].replace("value: unknown", "value") + ")");
+assert.equal(normalizeStatus("Concluída"), "concluida", "Accented completed status must normalize without losing the accent letter.");
