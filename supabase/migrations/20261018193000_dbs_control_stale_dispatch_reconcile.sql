@@ -54,7 +54,7 @@ $old$;
     if v_latest is not null
        and lower(btrim(coalesce(v_latest->>'status', ''))) in
          ('concluida','concluída','concluido','concluído') then
-$ new$;
+$new$;
 begin
   select pg_get_functiondef(p.oid) into v_definition
   from pg_proc p
