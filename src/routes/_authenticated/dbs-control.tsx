@@ -139,28 +139,25 @@ function mergeOnlyChangedWorkOrders(
   const baseOrders = Array.isArray(baseline.ordens) ? baseline.ordens as any[] : [];
   const submittedOrders = Array.isArray(submitted.ordens) ? submitted.ordens as any[] : [];
   const latestOrders = Array.isArray(latest.ordens) ? [...latest.ordens as any[]] : [];
-  const keyOf = (order: any) => String(order?.id ?? "").trim() ||
-    String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
-  const baseByKey = new Map<string, any>(baseOrders.map(order => [keyOf(order), order] as [string, any]).filter(([key]) => Boolean(key)));
-  const submittedByKey = new Map<string, any>(submittedOrders.map(order => [keyOf(order), order] as [string, any]).filter(([key]) => Boolean(key)));
-  const latestIndexByKey = new Map<string, number>(latestOrders.map((order, index) => [keyOf(order), index] as [string, number]).filter(([key]) => Boolean(key)));
+  const idOf = (order: any) => String(order?.id ?? "").trim();
+  const protocolOf = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+  const matches = (left: any, right: any) =>
+    (idOf(left) && idOf(left) === idOf(right)) ||
+    (protocolOf(left) && protocolOf(left) === protocolOf(right));
   // A remoção de uma OS não é mesclada automaticamente; exige revisão humana.
-  if (baseOrders.some(order => !submittedByKey.has(keyOf(order)))) return null;
+  if (baseOrders.some(order => !submittedOrders.some(candidate => matches(order, candidate)))) return null;
   const isCompleted = (value: unknown) => /^(conclu[ií]d[ao])$/.test(String(value ?? "").trim().toLocaleLowerCase("pt-BR"));
   let changedOrders = 0;
   for (const incoming of submittedOrders) {
-    const key = keyOf(incoming);
-    if (!key) return null;
-    const base = baseByKey.get(key);
+    const base = baseOrders.find(order => matches(order, incoming));
+    const latestIndex = latestOrders.findIndex(order => matches(order, incoming));
     if (!base) {
-      if (latestIndexByKey.has(key)) return null;
-      latestIndexByKey.set(key, latestOrders.length);
+      if (latestIndex >= 0) return null;
       latestOrders.push(incoming);
       changedOrders += 1;
       continue;
     }
-    const latestIndex = latestIndexByKey.get(key);
-    if (latestIndex === undefined) return null;
+    if (latestIndex < 0) return null;
     const current = latestOrders[latestIndex];
     const fields = new Set([...Object.keys(base), ...Object.keys(incoming)]);
     const patch: Record<string, unknown> = { ...current };
