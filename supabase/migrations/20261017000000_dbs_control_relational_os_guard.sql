@@ -20,7 +20,7 @@ where protocolo is null
    or version is null
    or version < 1;
 
-create unique index if not exists uq_dbs_control_work_orders_protocol
+create index if not exists idx_dbs_control_work_orders_protocol
   on public.dbs_control_work_orders (protocol);
 create index if not exists idx_dbs_control_work_orders_status_updated
   on public.dbs_control_work_orders (status, updated_at desc);
@@ -183,6 +183,31 @@ with check (
       )
   )
 );
+
+-- Ativa eventos para as fontes relacionais e mantém a tabela de snapshot legada
+-- em Realtime durante a transição compatível.
+do $
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'dbs_control_snapshots',
+    'dbs_control_work_orders',
+    'dbs_control_work_order_events',
+    'dbs_control_work_order_attachments'
+  ] loop
+    if to_regclass('public.' || table_name) is not null
+      and not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = table_name
+      ) then
+      execute format('alter publication supabase_realtime add table public.%I', table_name);
+    end if;
+  end loop;
+end
+$;
 
 commit;
 
@@ -521,6 +546,10 @@ cross join lateral jsonb_array_elements(
 join public.dbs_control_clients c
   on c.id::text = coalesce(o.item->>'clienteId', o.item->>'client_id','')
 where coalesce(nullif(btrim(o.item->>'protocolo'),''), nullif(btrim(o.item->>'protocol'),'')) is not null
+  and not exists (
+    select 1 from public.dbs_control_work_orders existing
+    where existing.protocol = coalesce(nullif(btrim(o.item->>'protocolo'),''), nullif(btrim(o.item->>'protocol'),''))
+  )
 on conflict do nothing;
 
 create or replace function public.dbs_control_guard_work_order_write()
