@@ -795,17 +795,71 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
 const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
+async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = []) {
   const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
   const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
+  const clientIdCache = new Map<string, string>();
+  const resolveCanonicalClient = async (rawClientId: string, protocol: string): Promise<string> => {
+    const cacheKey = rawClientId.trim();
+    if (clientIdCache.has(cacheKey)) return clientIdCache.get(cacheKey)!;
+    const source = snapshotClients.find((client) => String(client?.id ?? "").trim() === cacheKey);
+    let canonicalId = isUuid(cacheKey) ? cacheKey : "";
+    if (canonicalId) {
+      const existing = await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", canonicalId).maybeSingle();
+      if (existing.error) throw new Error("Falha ao validar o cliente da OS " + protocol + ": " + existing.error.message);
+      if (existing.data) {
+        clientIdCache.set(cacheKey, String(existing.data.id));
+        return String(existing.data.id);
+      }
+    }
+
+    const cnpj = String(source?.cnpj ?? source?.CNPJ ?? "").replace(/\\D/g, "");
+    if (cnpj) {
+      const byCnpj = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
+      if (byCnpj.error) throw new Error("Falha ao localizar cliente por CNPJ na OS " + protocol + ": " + byCnpj.error.message);
+      if (byCnpj.data) {
+        clientIdCache.set(cacheKey, String(byCnpj.data.id));
+        return String(byCnpj.data.id);
+      }
+    }
+    const legalName = String(source?.razaoSocial ?? source?.razao_social ?? source?.legal_name ?? source?.nome ?? source?.name ?? "").trim();
+    const tradeName = String(source?.nomeFantasia ?? source?.nome_fantasia ?? source?.trade_name ?? source?.nome ?? source?.name ?? "").trim();
+    if (!source || !legalName) {
+      throw new Error("Não foi possível despachar a OS " + protocol + ": o cliente vinculado não existe na base relacional e não há cadastro completo no snapshot. Nenhum dado foi descartado.");
+    }
+    const clientPayload: Record<string, unknown> = {
+      legal_name: legalName,
+      trade_name: tradeName || legalName,
+      cnpj: cnpj || null,
+      phone: String(source?.telefone ?? source?.phone ?? source?.contato ?? "").trim() || null,
+      email: String(source?.email ?? "").trim() || null,
+      notes: String(source?.observacoes ?? source?.notes ?? "").trim() || null,
+      status: String(source?.status ?? "ativo").toLowerCase() === "inativo" ? "inativo" : "ativo",
+    };
+    if (canonicalId) clientPayload.id = canonicalId;
+    const inserted = await supabaseAdmin.from("dbs_control_clients").insert(clientPayload).select("id").single();
+    if (inserted.error || !inserted.data) {
+      // Uma gravação concorrente pode ter criado o mesmo cliente; reutilize-o sem duplicar.
+      if (cnpj) {
+        const retry = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
+        if (!retry.error && retry.data) {
+          clientIdCache.set(cacheKey, String(retry.data.id));
+          return String(retry.data.id);
+        }
+      }
+      throw new Error("Não foi possível preparar o cadastro relacional do cliente da OS " + protocol + ": " + (inserted.error?.message ?? "cliente não retornado"));
+    }
+    clientIdCache.set(cacheKey, String(inserted.data.id));
+    return String(inserted.data.id);
+  };
+
   for (const order of orders) {
     const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
     const orderId = String(order?.id ?? "").trim();
-    const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
-    if (!protocol || !isUuid(clientId)) continue;
-    const clientCheck = await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", clientId).maybeSingle();
-    if (clientCheck.error) throw new Error("Falha ao validar o cliente da OS " + protocol + ": " + clientCheck.error.message);
-    if (!clientCheck.data) continue; // cadastro legado ainda não foi migrado; mantém o snapshot compatível
+    const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+    if (!protocol) throw new Error("Não foi possível despachar uma OS sem protocolo. Corrija o cadastro antes de continuar.");
+    if (!rawClientId) throw new Error("Não foi possível despachar a OS " + protocol + ": cliente não vinculado.");
+    const clientId = await resolveCanonicalClient(rawClientId, protocol);
     let query = supabaseAdmin.from("dbs_control_work_orders")
       .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
       .eq("protocol", protocol).limit(1);
@@ -1179,7 +1233,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     }
 
     if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
-      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id);
+      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : []);
     }
 
     const payload = {
@@ -1498,13 +1552,3 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
       totalTracked: completed.length,
       totalExcluded: excluded.length,
       legacyUnmeasuredCount: legacyOrders.length,
-      metrics,
-      completed: completed.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 200),
-      excluded: excluded.sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt)).slice(0, 100),
-      legacySamples: legacyOrders.slice(0, 20).map((order) => ({
-        orderId: String(order?.id ?? ""),
-        protocol: String(order?.protocolo ?? order?.numero ?? order?.id ?? "OS sem protocolo"),
-        technicianName: technicianName(order?.employeeId ?? order?.tecnicoId),
-      })),
-    };
-  });
