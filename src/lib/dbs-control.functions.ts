@@ -711,7 +711,7 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     if (!canonicalOrder) {
       const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
       if (protocol) {
-        const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("protocol", protocol).maybeSingle();
+        const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("protocol", protocol).limit(1).maybeSingle();
         if (found.error) throw new Error("O arquivo foi enviado, mas a OS relacional não pôde ser verificada: " + found.error.message);
         canonicalOrder = found.data;
       }
@@ -780,7 +780,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
     if (!protocol || !isUuid(clientId)) continue;
     let query = supabaseAdmin.from("dbs_control_work_orders")
       .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
-      .eq("protocol", protocol);
+      .eq("protocol", protocol).limit(1);
     if (isUuid(orderId)) {
       const byId = await supabaseAdmin.from("dbs_control_work_orders")
         .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
@@ -821,7 +821,12 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
       signature_name: String(order?.signature_name ?? order?.signatureName ?? ""),
       signature_path: signaturePath || null, assinatura_path: signaturePath || null,
       signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
-      total_cents: Math.round(Number(order?.valor ?? order?.total ?? 0) * 100),
+      total_cents: Math.round((() => {
+        const raw = String(order?.valor ?? order?.total ?? 0).trim();
+        const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? amount * 100 : 0;
+      })()),
       updated_at: new Date().toISOString(),
     };
     if (!existing) {
