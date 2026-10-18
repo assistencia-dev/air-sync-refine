@@ -285,15 +285,19 @@ function DbsControlPage() {
               cloudIsIncomplete
                 ? "A nuvem retornou menos registros que a cópia local em uma ou mais áreas. Dados locais preservados em somente leitura; gravações bloqueadas para evitar perda."
                 : localState
-                  ? "A base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura."
-                  : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
+                  ? "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: a base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura; nenhuma gravação será enviada."
+                  : "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: o DBS CONTROL não conseguiu estabelecer conexão com a base compartilhada.",
             );
           }
 
           setCloudError(null);
         } catch (err) {
           console.error("DBS Control cloud load:", err);
-          const message = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
+          const rawMessage = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
+          const connectionFailure = /missing supabase environment|failed to fetch|network|fetch failed|timeout|timed out|connection|invalid api key|jwt|unauthorized|not found/i.test(rawMessage);
+          const message = connectionFailure
+            ? `AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e SUPABASE_URL/segredo do servidor). Detalhe: ${rawMessage}`
+            : rawMessage;
           setCloudError(message);
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
           iframeRef.current?.contentWindow?.postMessage({
