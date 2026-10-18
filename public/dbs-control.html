@@ -3189,7 +3189,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 DBS_CONTROL_CLOUD_READY = false;
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
-                    indicator.textContent = 'Recuperação local · somente leitura';
+                    indicator.textContent = 'AMBIENTE DESCONECTADO · CACHE PRESERVADO · SOMENTE LEITURA';
+                    indicator.title = 'Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente publicado. Os dados locais não serão apagados nem enviados até validar a base compartilhada.';
                     indicator.style.color = '#92400e';
                     indicator.style.background = '#fffbeb';
                     indicator.style.borderColor = '#fde68a';
