@@ -39,8 +39,9 @@ select distinct on (
   coalesce(nullif(btrim(o.item->>'protocolo'),''), nullif(btrim(o.item->>'protocol'),'')),
   coalesce(nullif(btrim(o.item->>'protocolo'),''), nullif(btrim(o.item->>'protocol'),'')),
   c.id,
-  case when coalesce(o.item->>'siteId',o.item->>'localId','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-       then coalesce(o.item->>'siteId',o.item->>'localId')::uuid else null end,
+  (select site.id from public.dbs_control_sites site
+   where site.id::text = coalesce(o.item->>'siteId', o.item->>'localId')
+   limit 1),
   (select e.id from public.rh_employees e
    where e.id::text = coalesce(o.item->>'employeeId', o.item->>'assignedEmployeeId', o.item->>'tecnicoId')
    limit 1),
