@@ -566,7 +566,13 @@ function DbsControlPage() {
         });
     };
     subscribeToSnapshot();
-    // Fallback para eventos perdidos ou períodos sem conectividade.
+    // Não depender do evento SUBSCRIBED para a primeira reconciliação:
+    // após 3 s, faz leitura autoritativa direta se o handshake Realtime ainda
+    // não tiver estabilizado. A leitura não grava nem sobrescreve dados locais.
+    const realtimeInitialFallbackTimer = setTimeout(() => {
+      if (!disposed && cloudReadyRef.current) void refreshLatestCloudState(true);
+    }, 3000);
+    // Fallback periódico para eventos perdidos ou períodos sem conectividade.
     const refreshTimer = setInterval(() => { void refreshLatestCloudState(true); }, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
@@ -585,6 +591,7 @@ function DbsControlPage() {
       window.removeEventListener("focus", handleVisibilityChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);
+      clearTimeout(realtimeInitialFallbackTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
