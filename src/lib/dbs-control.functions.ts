@@ -983,7 +983,7 @@ async function recordDbsControlSyncAttempt(input: {
   payload?: Record<string, unknown> | null; result?: Record<string, unknown> | null; errorMessage?: string | null;
 }) {
   try {
-    const { error } = await supabaseAdmin.from("dbs_control_sync_runs").insert({
+    const { error } = await supabaseAdmin.from("dbs_control_snapshot_save_audit").insert({
       scope_key: input.scopeKey, company_id: input.companyId ?? null,
       owner_user_id: input.ownerUserId ?? null, user_id: input.userId,
       action: input.action, status: input.status, payload: input.payload ?? {},
@@ -1421,7 +1421,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       fetchAllDbsControlWorkOrders(),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
-      supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
+      supabaseAdmin.from("dbs_control_snapshot_save_audit").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
       supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
     ]);
     const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
