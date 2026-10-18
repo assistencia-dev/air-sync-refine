@@ -544,6 +544,9 @@ function DbsControlPage() {
         .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_snapshots" }, () => {
           void refreshLatestCloudState();
         })
+        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_work_orders" }, () => {
+          void refreshLatestCloudState();
+        })
         .subscribe((status) => {
           if (disposed) return;
           if (status === "SUBSCRIBED") {
