@@ -3057,7 +3057,31 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         function loadState() {
             // Lê cache local também no iframe para recuperação somente leitura.
             // A autorização para gravar só é liberada após confirmação de snapshot válido da nuvem.
-            const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
+            // Escolhe a cópia local com mais registros entre principal e backups, sem alterar nenhum.
+            let saved = null;
+            let bestCount = 0;
+            for (const key of [
+                'DBS_AIR_ERP_STATE',
+                'DBS_AIR_ERP_STATE_PREVIOUS',
+                'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION',
+                'DBS_AIR_ERP_STATE_CORRUPTED_BACKUP'
+            ]) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) continue;
+                    const parsedCandidate = JSON.parse(raw);
+                    const candidateData = parsedCandidate?.data && typeof parsedCandidate.data === 'object'
+                        ? parsedCandidate.data
+                        : parsedCandidate;
+                    const count = candidateData && typeof candidateData === 'object'
+                        ? Object.values(candidateData).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                        : 0;
+                    if (count > bestCount) {
+                        bestCount = count;
+                        saved = raw;
+                    }
+                } catch (_) {}
+            }
             if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
             try {
                 const parsed = JSON.parse(saved);
@@ -3086,8 +3110,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         } catch (_) {}
                     }
                     // Não substitui um backup maior por um estado local menor.
-                    if (countRecords(source) >= previousCount) {
-                        if (window.parent === window) {
+                    if (window.parent === window && countRecords(source) >= previousCount) {
                         localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
                             version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
                         }));
