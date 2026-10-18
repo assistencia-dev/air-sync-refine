@@ -332,7 +332,7 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
   table { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 }
 
-/* Mobile layout hardening — keeps content readable without changing module behavior. */
+/* Mobile-first design guardrails shared by all React modules. */
 html, body, #root { min-width: 0; max-width: 100%; }
 body { overflow-x: clip; }
 #root, #root > *, main, main > *, section, article, form, fieldset { min-width: 0; }
@@ -347,20 +347,26 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
   body { font-size: 14px; }
   main { width: 100%; min-width: 0; }
   header, header > div, nav, [role="tablist"] { min-width: 0; max-width: 100%; }
-  header .flex, nav .flex, [role="tablist"] { flex-wrap: wrap; }
+  /* Keep dense navigation on one scrollable row instead of squeezing every tab. */
+  nav, [role="tablist"] { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 8px; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  nav > *, [role="tablist"] > * { flex: 0 0 auto; }
   header h1, header h2, header p { min-width: 0; }
-  main .grid { min-width: 0; }
-  main .grid > *, main .flex > * { min-width: 0; }
+  main .grid, main .grid > *, main .flex > * { min-width: 0; }
   main .flex { flex-wrap: wrap; }
   main input, main select, main textarea { width: 100%; min-width: 0; }
-  main button { white-space: normal; overflow-wrap: normal; }
+  main button { white-space: normal; overflow-wrap: normal; min-height: 44px; }
   main table { display: block; width: 100%; max-width: 100%; overflow-x: auto; }
   main [class*="overflow-x-auto"] { max-width: 100%; overscroll-behavior-x: contain; }
   main [class*="rounded"], main [class*="card"] { min-width: 0; }
   main h1 { font-size: clamp(1.35rem, 5vw, 1.9rem); line-height: 1.2; }
   main h2 { font-size: clamp(1.15rem, 4.3vw, 1.55rem); line-height: 1.25; }
+  /* Finance/operations data tables: preserve every field, reorganize rows into readable cards. */
+  main table thead { display: none; }
+  main table tbody { width: 100%; }
+  main table tbody tr { min-width: 0; }
+  main table tbody td { min-width: 0; overflow-wrap: break-word; }
 }
-@media (max-width: 380px) {
+@media (max-width: 420px) {
   main .grid { grid-template-columns: minmax(0, 1fr) !important; }
   main .flex > button, main .flex > a { max-width: 100%; }
   main [class*="px-"] { padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); }
