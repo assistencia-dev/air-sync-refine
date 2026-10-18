@@ -1,5 +1,6 @@
 -- Safe DBS CONTROL sync audit log.
--- Append-only: application code inserts audit events and never updates/deletes history.
+-- This table is append-only and never deletes historical entries; it is used to
+-- preserve a trace of saves, retries, and conflicts without deleting business data.
 create extension if not exists pgcrypto;
 
 create table if not exists public.dbs_control_sync_runs (
@@ -8,35 +9,29 @@ create table if not exists public.dbs_control_sync_runs (
   company_id uuid,
   owner_user_id uuid,
   user_id uuid,
+  mode text not null default 'snapshot_save',
   action text not null,
   status text not null check (status in ('success','error','retry')),
+  summary text,
   payload jsonb not null default '{}'::jsonb,
   result jsonb not null default '{}'::jsonb,
+  errors jsonb not null default '[]'::jsonb,
   error_message text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
   created_at timestamptz not null default now()
 );
 
-create index if not exists dbs_control_sync_runs_scope_key_idx on public.dbs_control_sync_runs (scope_key, created_at desc);
-create index if not exists dbs_control_sync_runs_user_idx on public.dbs_control_sync_runs (user_id, created_at desc);
+create index if not exists dbs_control_sync_runs_scope_key_idx on public.dbs_control_sync_runs (scope_key, started_at desc);
+create index if not exists dbs_control_sync_runs_user_idx on public.dbs_control_sync_runs (user_id, started_at desc);
 
 alter table public.dbs_control_sync_runs enable row level security;
 
-do $policy$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'dbs_control_sync_runs'
-      and policyname = 'dbs_control_sync_runs_service_role_all'
-  ) then
-    create policy dbs_control_sync_runs_service_role_all
-      on public.dbs_control_sync_runs
-      for all
-      using (auth.role() = 'service_role')
-      with check (auth.role() = 'service_role');
-  end if;
-end
-$policy$;
+create policy if not exists dbs_control_sync_runs_service_role_all
+  on public.dbs_control_sync_runs
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
 
 comment on table public.dbs_control_sync_runs is
   'Append-only DBS CONTROL save audit trail used to track snapshot writes, retries and conflicts without deleting business data.';
