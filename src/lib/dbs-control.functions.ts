@@ -757,7 +757,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       : {};
     const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
       snapshotState,
-      user.company_id,
+      scope.companyId,
     );
     const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
     const hasCanonicalRecords = [
