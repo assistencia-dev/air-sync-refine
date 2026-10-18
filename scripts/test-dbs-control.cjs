@@ -230,6 +230,7 @@ assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a aç
 const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 assert.match(persistence, /Reconcile complete snapshots against the latest shared snapshot/, "Admin saves must reconcile against the latest shared snapshot.");
 assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
+assert.match(persistence, /hydrateDbsControlStateFromCanonicalDb\(\s*snapshotState,\s*scope\.companyId,\s*\)/, "Collaborators without a direct company_id must hydrate canonical OS using the resolved administrative company scope.");
 assert.match(persistence, /latestById[\s\S]*latestByProtocol/, "Admin reconciliation must match work orders by ID first and protocol second.");
 assert.match(persistence, /protectedCompletedFields[\s\S]*tecnicoId[\s\S]*signature_data[\s\S]*diagnostico/, "Completed OS must protect technician, signature, and diagnostic fields.");
 assert.match(persistence, /incomingByProtocol\.get\(protocolKey\(currentOrder\)\)/, "Collaborator reconciliation must accept protocol aliases when IDs differ.");
