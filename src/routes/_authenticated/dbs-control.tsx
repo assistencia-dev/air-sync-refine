@@ -516,12 +516,15 @@ function DbsControlPage() {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     const refreshLatestCloudState = async (force = false) => {
-      if (disposed || !cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
+      if (disposed || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
         const latest = await getDbsControlCloudState();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        // A falha na leitura inicial não pode bloquear todas as tentativas seguintes.
+        // A primeira leitura válida também libera a fila de gravação do iframe.
+        cloudReadyRef.current = true;
         if (pendingStateRef.current || saveTimerRef.current) {
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
           return;
