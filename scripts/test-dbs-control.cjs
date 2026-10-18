@@ -62,6 +62,10 @@ const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016134
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 
 const syncAuditMigration = fs.readFileSync("supabase/migrations/20261018232000_dbs_control_snapshot_save_audit.sql", "utf8");
+const triggerHardeningMigration = fs.readFileSync("supabase/migrations/20261018233000_dbs_control_trigger_rpc_hardening.sql", "utf8");
+assert.match(triggerHardeningMigration, /revoke all on function public\.ensure_dbs_control_work_order_protocol_unique\(\) from public, anon, authenticated/i, "Função de trigger de protocolo não deve ser exposta como RPC.");
+assert.match(triggerHardeningMigration, /alter function public\.protect_dbs_control_fieldcontrol_integration\(\) set search_path = public/i, "Função SECURITY DEFINER deve ter search_path fixo.");
+
 assert.match(cloudFunctions, /function ensurePersistedSnapshotWrite\(/, "A gravação precisa validar a confirmação retornada pelo banco.");
 assert.match(cloudFunctions, /saved = ensurePersistedSnapshotWrite\(saveResult, "saveDbsControlCloudState"\)/, "O resultado final do RPC precisa passar pela validação rígida antes de retornar sucesso.");
 assert.match(cloudFunctions, /function recordDbsControlSyncAttempt\(/, "O fluxo precisa manter auditoria de saves, erros e retries.");
