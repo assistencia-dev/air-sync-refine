@@ -2016,48 +2016,43 @@
 
 <style id="dbs-mobile-systemwide-layout-hardening">
   *, *::before, *::after { box-sizing: border-box; }
-  html { width: 100%; max-width: 100%; overflow-x: clip; -webkit-text-size-adjust: 100%; }
-  body { max-width: 100%; overflow-x: clip; }
-  body, body * { min-width: 0; }
-  img, video, canvas, svg { max-width: 100%; }
-  input, select, textarea, button { max-width: 100%; }
-  input, select, textarea { min-width: 0; }
-  p, label, h1, h2, h3, h4, th, td, a, button, span {
-    overflow-wrap: break-word;
-    word-break: normal;
+  html { width:100%; max-width:100%; overflow-x:clip; -webkit-text-size-adjust:100%; }
+  body { width:100%; max-width:100%; overflow-x:clip; }
+  body, body * { min-width:0; }
+  img, video, canvas, svg { max-width:100%; }
+  input, select, textarea, button { max-width:100%; }
+  input, select, textarea { min-width:0; }
+  p, label, h1, h2, h3, h4, th, td, a, button, span { overflow-wrap:break-word; word-break:normal; }
+  aside, main, .content, .main-content, .tab-content, .data-header, .filter-bar,
+  .form-group, .card, .panel, .dashboard-grid, .grid, .toolbar, .section-header { min-width:0; max-width:100%; }
+  .table-scroll, .table-container, .table-responsive { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+  @media (max-width:800px) {
+    main, .content, .main-content, .tab-content { width:100%; min-width:0; max-width:100%; }
+    .data-header, .filter-bar, .toolbar { flex-wrap:wrap; }
+    .filter-bar input, .filter-bar select, .filter-bar button { min-width:0; }
+    .form-grid, .form-row, .dashboard-grid, .metrics-grid, .day-kpi-grid { grid-template-columns:minmax(0,1fr)!important; }
+    .form-group, .form-group > *, .card, .panel { min-width:0; max-width:100%; }
+    button, .btn { min-height:44px; white-space:normal; }
+    /* Data tables become individual cards; all columns remain present and labelled. */
+    table.dbs-mobile-cards { display:block; width:100%; max-width:100%; border-collapse:separate; }
+    table.dbs-mobile-cards thead { display:none; }
+    table.dbs-mobile-cards tbody { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; width:100%; }
+    table.dbs-mobile-cards tr { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; max-width:100%; padding:12px; border:1px solid var(--dbs-border,#dbe4ef); border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(18,52,90,.055); }
+    table.dbs-mobile-cards td { display:grid; grid-template-columns:minmax(88px,36%) minmax(0,1fr); align-items:start; gap:10px; width:100%; min-width:0; padding:9px 0; border-bottom:1px solid #edf2f7; overflow-wrap:break-word; font-size:13px; line-height:1.45; }
+    table.dbs-mobile-cards td:last-child { border-bottom:0; }
+    table.dbs-mobile-cards td::before { content:attr(data-label); color:#61758d; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.025em; line-height:1.4; overflow-wrap:break-word; }
+    table.dbs-mobile-cards td > * { min-width:0; max-width:100%; }
+    table.dbs-mobile-cards td .btn, table.dbs-mobile-cards td button { width:100%; min-height:44px; white-space:normal; }
+    table.dbs-mobile-cards td input, table.dbs-mobile-cards td select { width:100%; min-height:44px; font-size:16px; }
+    table.dbs-mobile-cards td img { max-width:100%; height:auto; object-fit:contain; }
+    .os-row-actions { min-width:0!important; flex-wrap:wrap; }
+    .employee-toolbar, .employee-os-tabs { flex-wrap:wrap; }
   }
-  aside, main, .content, .main-content, .tab-content, .data-header,
-  .filter-bar, .form-group, .card, .panel, .dashboard-grid, .grid,
-  .flex, .toolbar, .section-header { min-width: 0; max-width: 100%; }
-  .table-scroll, .table-container, .table-responsive {
-    width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain;
-  }
-  @media (max-width: 800px) {
-    body { width: 100%; }
-    main { width: 100%; min-width: 0; max-width: 100%; }
-    .content, .main-content, .tab-content { width: 100%; min-width: 0; max-width: 100%; }
-    .data-header, .filter-bar, .toolbar { flex-wrap: wrap; }
-    .filter-bar input, .filter-bar select, .filter-bar button { min-width: 0; }
-    .form-grid, .form-row, .dashboard-grid, .metrics-grid, .day-kpi-grid {
-      grid-template-columns: minmax(0, 1fr) !important;
-    }
-    .form-group, .form-group > *, .card, .panel { min-width: 0; max-width: 100%; }
-    table { max-width: 100%; }
-    button, .btn { white-space: normal; }
-    .dbs-mobile-cards { display: block; width: 100%; }
-    .dbs-mobile-cards tbody { min-width: 0; }
-    .dbs-mobile-cards tr { min-width: 0; max-width: 100%; }
-    .dbs-mobile-cards td { min-width: 0; overflow-wrap: break-word; }
-  }
-  @media (max-width: 420px) {
-    body { font-size: 13px; }
-    #app, #app-container, main { padding-left: 0; padding-right: 0; }
-    .dbs-mobile-cards td { grid-template-columns: minmax(0, 1fr) !important; }
-    .dbs-mobile-cards td::before { max-width: 100%; }
-    .os-bulk-toolbar { grid-template-columns: minmax(0, 1fr) !important; }
-    .employee-grid, .employee-progress-grid, .ops-overview-grid {
-      grid-template-columns: minmax(0, 1fr) !important;
-    }
+  @media (max-width:420px) {
+    body { font-size:13px; }
+    .dbs-mobile-cards td { grid-template-columns:minmax(0,1fr)!important; gap:5px; }
+    .dbs-mobile-cards td::before { max-width:100%; }
+    .os-bulk-toolbar, .employee-grid, .employee-progress-grid, .ops-overview-grid { grid-template-columns:minmax(0,1fr)!important; }
   }
 </style>
 
