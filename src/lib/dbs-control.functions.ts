@@ -866,8 +866,38 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
     if (completed(existing.status)) continue;
     const expectedVersion = Number(order?.version);
     const currentVersion = Number(existing.version || 1);
-    if (Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion) {
-      throw new Error("A OS " + protocol + " foi alterada em outro dispositivo. Atualize os dados antes de salvar.");
+    const staleVersion = Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion;
+
+    // O despacho não é descartado por uma revisão antiga do snapshot. A linha
+    // relacional recém-lida é a base canônica; atribuição/status recebidos podem
+    // avançar, enquanto evidências existentes nunca são apagadas por payload vazio.
+    if (staleVersion) {
+      const preserveWhenIncomingEmpty: Array<[string, string]> = [
+        ["technical_opinion", "technical_opinion"], ["diagnostico", "diagnostico"],
+        ["observation", "observation"], ["servico_executado", "servico_executado"],
+        ["signature_data", "signature_data"], ["signature_name", "signature_name"],
+        ["signature_path", "signature_path"], ["assinatura_path", "assinatura_path"],
+        ["started_at", "started_at"], ["completed_at", "completed_at"],
+      ];
+      for (const [target, source] of preserveWhenIncomingEmpty) {
+        const currentValue = (existing as Record<string, unknown>)[source];
+        const incomingValue = fields[target];
+        if (currentValue !== null && currentValue !== undefined && String(currentValue).trim() !== ""
+            && (incomingValue === null || incomingValue === undefined || String(incomingValue).trim() === "")) {
+          fields[target] = currentValue;
+        }
+      }
+      const statusRank: Record<string, number> = {
+        aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3,
+        "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5,
+      };
+      const currentStatus = String(existing.status ?? "").trim().toLocaleLowerCase("pt-BR");
+      const incomingStatus = String(fields.status ?? "").trim().toLocaleLowerCase("pt-BR");
+      if ((statusRank[currentStatus] ?? 0) > (statusRank[incomingStatus] ?? 0)) {
+        fields.status = existing.status;
+      }
+      if (!fields.started_at && existing.started_at) fields.started_at = existing.started_at;
+      if (!fields.completed_at && existing.completed_at) fields.completed_at = existing.completed_at;
     }
     for (const key of ["protocol","protocolo","created_by_user_id"]) delete fields[key];
     if (!signaturePath && !String(order?.assinatura ?? order?.signature_data ?? "").trim()) {
