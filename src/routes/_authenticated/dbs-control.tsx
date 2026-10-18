@@ -609,7 +609,11 @@ function DbsControlPage() {
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
               }, "*"));
-              if (retryAttemptRef.current < 3 && pendingStateRef.current) {
+              const requiresHumanReview =
+                message.includes("SNAPSHOT_VERSION_CONFLICT") ||
+                message.includes("SNAPSHOT_GUARD_CONFIRMATION_REQUIRED") ||
+                message.includes("A base compartilhada mudou em outro dispositivo");
+              if (!requiresHumanReview && retryAttemptRef.current < 3 && pendingStateRef.current) {
                 const delays = [5000, 15000, 45000];
                 const delay = delays[retryAttemptRef.current++];
                 if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
