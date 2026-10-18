@@ -1243,11 +1243,89 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     };
 
     // A função SQL bloqueia a linha do escopo e reconcilia OS dentro da mesma
-    // transação. Isso evita que duas sessões sobrescrevam o snapshot uma da outra.
-    const { data: saved, error } = await supabaseAdmin
+    // transação. Em conflito de base_updated_at, relê a nuvem e tenta uma única
+    // reconciliação adicional, sem mudar o escopo da empresa nem descartar anexos.
+    const mergeRetryState = (
+      latestInput: Record<string, unknown>,
+      pendingInput: Record<string, unknown>,
+    ): Record<string, unknown> => {
+      const latest = normalizeState(latestInput);
+      const pending = normalizeState(pendingInput);
+      const latestOrders = Array.isArray(latest.ordens) ? latest.ordens as any[] : [];
+      const pendingOrders = Array.isArray(pending.ordens) ? pending.ordens as any[] : [];
+      const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+      const identity = (order: any) => String(order?.id ?? "").trim() || protocolKey(order);
+      const rank: Record<string, number> = { aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3, "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5 };
+      const protectedFields = ["assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"];
+      const latestByIdentity = new Map(latestOrders.map(order => [identity(order), order]).filter(([key]) => Boolean(key)));
+      const mergedOrders = pendingOrders.map((incoming) => {
+        const key = identity(incoming);
+        const current = key ? latestByIdentity.get(key) : undefined;
+        if (!current) return incoming;
+        const merged: Record<string, unknown> = { ...current, ...incoming };
+        const currentStatus = String(current.status ?? "").trim().toLocaleLowerCase("pt-BR");
+        const incomingStatus = String(incoming.status ?? "").trim().toLocaleLowerCase("pt-BR");
+        if ((rank[currentStatus] ?? 0) > (rank[incomingStatus] ?? 0)) merged.status = current.status;
+        for (const field of protectedFields) {
+          const oldValue = current[field];
+          const newValue = incoming[field];
+          if (Array.isArray(oldValue) || Array.isArray(newValue)) {
+            const combined = [...(Array.isArray(oldValue) ? oldValue : []), ...(Array.isArray(newValue) ? newValue : [])];
+            const seen = new Set<string>();
+            merged[field] = combined.filter(item => {
+              const itemKey = typeof item === "string" ? item : JSON.stringify(item);
+              if (seen.has(itemKey)) return false;
+              seen.add(itemKey);
+              return true;
+            });
+          } else if ((newValue === null || newValue === undefined || String(newValue).trim() === "") && oldValue !== null && oldValue !== undefined && String(oldValue).trim() !== "") {
+            merged[field] = oldValue;
+          }
+        }
+        if (normalizeDbsStatus(current.status) === "concluida") {
+          merged.status = current.status;
+          for (const field of ["completedAt", "concluidoEm", "completed_at", "assinaturaEm", "assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"]) {
+            if (current[field] !== null && current[field] !== undefined && String(current[field]).trim() !== "") merged[field] = current[field];
+          }
+        }
+        return merged;
+      });
+      const pendingIdentities = new Set(mergedOrders.map(identity).filter(Boolean));
+      const missingLatest = latestOrders.filter(order => {
+        const key = identity(order);
+        return key && !pendingIdentities.has(key);
+      });
+      return { ...latest, ...pending, ordens: [...mergedOrders, ...missingLatest] };
+    };
+
+    let saveResult = await supabaseAdmin
       .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
       .single();
+    if (saveResult.error && /base_updated_at|conflito|concurrent|serialization|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
+      const { data: latestSnapshot, error: latestError } = await supabaseAdmin
+        .from("dbs_control_snapshots")
+        .select("state, updated_at, owner_user_id, company_id")
+        .eq("scope_key", scope.scopeKey)
+        .maybeSingle();
+      if (latestError) throw new Error("Conflito de salvamento; não foi possível recarregar a versão mais recente: " + latestError.message);
+      if (!latestSnapshot?.state || !latestSnapshot.updated_at) {
+        throw new Error("Conflito de salvamento; a versão mais recente da base não pôde ser confirmada. Nenhum sucesso foi informado.");
+      }
+      const retryPayload = {
+        ...payload,
+        owner_user_id: latestSnapshot.owner_user_id ?? payload.owner_user_id,
+        company_id: scope.companyId,
+        state: mergeRetryState(latestSnapshot.state as Record<string, unknown>, stateToSave),
+        base_updated_at: latestSnapshot.updated_at,
+        updated_at: new Date().toISOString(),
+      };
+      saveResult = await supabaseAdmin
+        .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: retryPayload })
+        .single();
+    }
 
+    const saved = saveResult.data;
+    const error = saveResult.error;
     if (error) throw new Error(error.message);
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
