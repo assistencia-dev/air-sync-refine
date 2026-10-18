@@ -39,6 +39,7 @@ const tables = [
   "dbs_control_work_order_events",
   "dbs_control_work_order_attachments",
   "dbs_control_snapshots",
+  "dbs_control_snapshot_history",
   "dbs_control_integrations",
   "dbs_control_external_refs",
   "dbs_control_sync_runs",
@@ -55,13 +56,28 @@ async function request(path, options = {}) {
 }
 
 async function ensureBucket() {
+  let existing;
   try {
+    existing = await request(`/storage/v1/bucket/${encodeURIComponent(bucket)}`);
+  } catch (error) {
+    if (!String(error.message).includes("(404)")) throw error;
     await request("/storage/v1/bucket", {
       method: "POST",
       body: JSON.stringify({ id: bucket, name: bucket, public: false }),
     });
-  } catch (error) {
-    if (!String(error.message).includes("already exists")) throw error;
+    existing = await request(`/storage/v1/bucket/${encodeURIComponent(bucket)}`);
+  }
+
+  // Existing buckets are not assumed private: force private mode and verify it.
+  if (existing?.public !== false) {
+    await request(`/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
+      method: "PUT",
+      body: JSON.stringify({ public: false }),
+    });
+  }
+  const verified = await request(`/storage/v1/bucket/${encodeURIComponent(bucket)}`);
+  if (verified?.public !== false) {
+    throw new Error(`O bucket de backup "${bucket}" não está privado; backup cancelado.`);
   }
 }
 
