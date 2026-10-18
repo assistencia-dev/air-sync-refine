@@ -886,11 +886,16 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
 
 export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { state: Record<string, unknown> }) => {
+  .inputValidator((input: { state: Record<string, unknown>; expectedUpdatedAt?: string | null; expectedStateVersion?: number | null; allowDestructiveSnapshot?: boolean }) => {
     if (!input?.state || typeof input.state !== "object" || Array.isArray(input.state)) {
       throw new Error("Estado do DBS CONTROL inválido.");
     }
-    return { state: stripStoredAttachmentPayloads(input.state) };
+    return {
+      state: stripStoredAttachmentPayloads(input.state),
+      expectedUpdatedAt: input.expectedUpdatedAt ?? null,
+      expectedStateVersion: input.expectedStateVersion ?? null,
+      allowDestructiveSnapshot: input.allowDestructiveSnapshot === true,
+    };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
@@ -1149,6 +1154,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       owner_user_id: ownerUserId,
       state: stateToSave,
       state_version: 2,
+      expected_state_version: data.expectedStateVersion,
+      expected_updated_at: data.expectedUpdatedAt,
+      allow_destructive_snapshot: data.allowDestructiveSnapshot && user.role_key !== "COLABORADOR" &&
+        ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(user.role_key),
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     };
