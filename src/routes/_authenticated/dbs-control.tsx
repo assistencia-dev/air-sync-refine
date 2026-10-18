@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase } from "@/lib/dbs-control.functions";
+import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -136,6 +136,27 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_UPLOAD_ATTACHMENT") {
+        try {
+          const attachment = await uploadDbsControlOsAttachment({ data: {
+            orderId: String(msg.orderId || ""),
+            attachmentType: msg.attachmentType,
+            fileName: String(msg.fileName || "evidencia"),
+            contentType: String(msg.contentType || ""),
+            dataBase64: String(msg.dataBase64 || ""),
+            requestId: String(msg.requestId || ""),
+          } });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: true, attachment,
+          }, window.location.origin);
+        } catch (error) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: false,
+            error: error instanceof Error ? error.message : "Falha no upload do anexo.",
+          }, window.location.origin);
+        }
+        return;
+      }
 
       if (msg.type === "DBS_CONTROL_DB_AUDIT") {
         try {
@@ -488,54 +509,81 @@ function DbsControlPage() {
 
     window.addEventListener("message", handler);
 
-    // Sincronização multi-dispositivo: uma única leitura por vez, atualização imediata
-    // quando o usuário retorna ao app e descarte de respostas antigas/fora de ordem.
+    // Supabase Realtime: eventos no snapshot, reconexão automática e fallback de 30 s.
     let refreshInFlight = false;
     let refreshGeneration = 0;
+    let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     const refreshLatestCloudState = async () => {
-      if (!cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
+      if (disposed || !cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
         const latest = await getDbsControlCloudState();
-        // Nunca deixa uma resposta antiga sobrescrever uma leitura mais recente ou uma edição local.
-        if (generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
         if (pendingStateRef.current || saveTimerRef.current) {
-          iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1,
-          }, "*");
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
           return;
         }
         if (latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
-          iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_CONTROL_CLOUD_STATE", state: latest.state },
-            "*",
-          );
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
         }
         setCloudError(null);
       } catch (err) {
-        console.error("DBS Control automatic refresh:", err);
+        console.error("DBS Control Realtime recovery:", err);
         setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
       } finally {
         refreshInFlight = false;
       }
     };
-    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 3000);
+    const subscribeToSnapshot = () => {
+      if (disposed) return;
+      realtimeChannel = supabase.channel("dbs-control-snapshot-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_snapshots" }, () => {
+          void refreshLatestCloudState();
+        })
+        .subscribe((status) => {
+          if (disposed) return;
+          if (status === "SUBSCRIBED") {
+            void refreshLatestCloudState();
+            setCloudError(null);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setCloudError("Realtime desconectado. Recuperação automática em andamento.");
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (disposed) return;
+              const previous = realtimeChannel;
+              realtimeChannel = null;
+              if (previous) void supabase.removeChannel(previous);
+              subscribeToSnapshot();
+            }, 3000);
+          }
+        });
+    };
+    subscribeToSnapshot();
+    // Fallback para eventos perdidos ou períodos sem conectividade.
+    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
-    const handleOnline = () => retryPendingSaveRef.current?.(true);
+    const handleOnline = () => {
+      retryPendingSaveRef.current?.(true);
+      void refreshLatestCloudState();
+    };
     window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleVisibilityChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
+      disposed = true;
       window.removeEventListener("message", handler);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleVisibilityChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };

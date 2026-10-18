@@ -5145,6 +5145,34 @@
             });
         }
 
+        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName) {
+            if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.reject(new Error('Arquivo de evidência inválido.'));
+            const comma = dataUrl.indexOf(',');
+            if (comma < 0) return Promise.reject(new Error('Conteúdo do arquivo inválido.'));
+            const contentType = (dataUrl.slice(5, dataUrl.indexOf(';')) || '').toLowerCase();
+            const dataBase64 = dataUrl.slice(comma + 1);
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : 'upload-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            return new Promise((resolve, reject) => {
+                let settled = false;
+                const finish = (error, value) => {
+                    if (settled) return;
+                    settled = true; clearTimeout(timeout); window.removeEventListener('message', onMessage);
+                    if (error) reject(error); else resolve(value);
+                };
+                const onMessage = event => {
+                    if (event.source !== window.parent) return;
+                    const msg = event.data || {};
+                    if (msg.type !== 'DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT' || msg.requestId !== requestId) return;
+                    if (!msg.ok || !msg.attachment) { finish(new Error(msg.error || 'Não foi possível enviar o anexo para a nuvem.')); return; }
+                    finish(null, msg.attachment);
+                };
+                const timeout = setTimeout(() => finish(new Error('O upload não foi confirmado em 30 segundos. A OS não foi concluída.')), 30000);
+                window.addEventListener('message', onMessage);
+                window.parent.postMessage({ type: 'DBS_CONTROL_UPLOAD_ATTACHMENT', requestId, orderId: String(osId),
+                    attachmentType, fileName: String(fileName || attachmentType), contentType, dataBase64 }, window.location.origin);
+            });
+        }
+
         async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
@@ -5175,6 +5203,15 @@
                     beforeFile ? readExecutionPhoto(beforeFile) : Promise.resolve(os.fotoAntes || null),
                     afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
                 ]);
+                // A OS só é concluída depois de confirmar cada upload necessário.
+                const uploadJobs = [];
+                if (beforeFile && fotoAntes) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_antes', fotoAntes, beforeFile.name)
+                    .then(result => ({ field: 'fotoAntes', pathField: 'fotoAntesStoragePath', result })));
+                if (afterFile && fotoDepois) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_depois', fotoDepois, afterFile.name)
+                    .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result })));
+                uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
+                    .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result })));
+                const uploadedAttachments = await Promise.all(uploadJobs);
 
                 const observationText = String(observationInput?.value || '').trim();
                 if (observationText) {
@@ -5195,6 +5232,10 @@
                 os.fotoAntes = fotoAntes;
                 os.fotoDepois = fotoDepois;
                 os.assinatura = signature;
+                uploadedAttachments.forEach(item => {
+                    os[item.pathField] = item.result.storagePath;
+                    os[item.field] = item.result.signedUrl;
+                });
                 os.assinaturaEm = new Date().toISOString();
                 os.concluidoEm = new Date().toISOString();
                 os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
