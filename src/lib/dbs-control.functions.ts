@@ -83,7 +83,6 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
 function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const current = normalizeState(currentState);
   const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
-  const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
   const currentTechs = (current.tecnicos as any[]).filter((tech) => employeeMatchesReference(tech, employeeId, loginEmail));
   const technicianIds = new Set(currentTechs.map((tech) => String(
     tech?.id ?? tech?.employeeId ?? tech?.assignedEmployeeId ?? tech?.assigned_employee_id ?? tech?.tecnicoId ?? tech?.tecnico_id ?? ""
@@ -180,3 +179,56 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
 }
 
 export { filterCollaboratorState, mergeCollaboratorOrderState, employeeMatchesReference };
+
+function ensurePersistedSnapshotWrite(result: { data?: any; error?: any; }, operation: string) {
+  const error = result?.error;
+  if (error) throw new Error(error.message || `Falha ao salvar o snapshot do DBS CONTROL (${operation}).`);
+  const data = result?.data;
+  if (!data || typeof data !== "object") {
+    throw new Error(`A gravação do snapshot (${operation}) não foi confirmada pelo banco.`);
+  }
+  if (!data.state || typeof data.state !== "object" || Array.isArray(data.state)) {
+    throw new Error(`A gravação do snapshot (${operation}) retornou estado inválido.`);
+  }
+  const stateVersion = Number(data.state_version ?? 0);
+  const updatedAt = String(data.updated_at ?? "").trim();
+  if (!Number.isFinite(stateVersion) || stateVersion <= 0) {
+    throw new Error(`A gravação do snapshot (${operation}) não confirmou state_version válido.`);
+  }
+  if (!updatedAt) {
+    throw new Error(`A gravação do snapshot (${operation}) não confirmou updated_at válido.`);
+  }
+  return data;
+}
+
+async function recordDbsControlSyncAttempt(input: {
+  scopeKey: string;
+  companyId?: string | null;
+  ownerUserId?: string | null;
+  userId: string;
+  action: string;
+  status: "success" | "error" | "retry";
+  payload?: Record<string, unknown> | null;
+  result?: Record<string, unknown> | null;
+  errorMessage?: string | null;
+}) {
+  try {
+    await supabaseAdmin.from("dbs_control_sync_runs").insert({
+      scope_key: input.scopeKey,
+      company_id: input.companyId ?? null,
+      owner_user_id: input.ownerUserId ?? null,
+      user_id: input.userId,
+      action: input.action,
+      status: input.status,
+      payload: input.payload ?? {},
+      result: input.result ?? {},
+      error_message: input.errorMessage ?? null,
+      created_at: new Date().toISOString(),
+    });
+  } catch {
+    // Não bloquear o fluxo principal por falha de auditoria; a gravação principal já
+    // foi validada em nível de persistência e a auditoria sem tabela não deve ocultar dados.
+  }
+}
+
+export { filterCollaboratorState, mergeCollaboratorOrderState, employeeMatchesReference, ensurePersistedSnapshotWrite, recordDbsControlSyncAttempt };
