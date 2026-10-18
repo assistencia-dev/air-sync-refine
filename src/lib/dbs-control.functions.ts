@@ -813,7 +813,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       }
     }
 
-    const cnpj = String(source?.cnpj ?? source?.CNPJ ?? "").replace(/\\D/g, "");
+    const cnpj = String(source?.cnpj ?? source?.CNPJ ?? "").replace(/\D/g, "");
     if (cnpj) {
       const byCnpj = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
       if (byCnpj.error) throw new Error("Falha ao localizar cliente por CNPJ na OS " + protocol + ": " + byCnpj.error.message);
@@ -1498,57 +1498,3 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
               technicianName: technicianName(finalTechnicianId),
               type: String(order?.tipo ?? order?.tipoOS ?? "Não informado"),
               startedAt: cycleStart === null ? null : new Date(cycleStart).toISOString(),
-              completedAt: new Date(event.timestamp).toISOString(),
-              activeMinutes,
-              elapsedMinutes,
-              reason,
-            };
-            if (reason) excluded.push(record);
-            else completed.push(record);
-          }
-          cycleStart = null;
-          activeStart = null;
-          cycleTechnicianId = null;
-          technicianChanged = false;
-          activeMilliseconds = 0;
-        }
-      }
-    }
-
-    const completedEventOrderIds = new Set<string>();
-    for (const [orderId, events] of eventsByOrder) {
-      if (events.some((event) => event.nextStatus === "Concluída")) completedEventOrderIds.add(orderId);
-    }
-    const legacyOrders = orders.filter((order) =>
-      String(order?.status ?? "") === "Concluída" && !completedEventOrderIds.has(String(order?.id ?? ""))
-    );
-    const metricMap = new Map<string, any>();
-    for (const record of completed) {
-      const key = `${record.technicianId}::${record.type}`;
-      const item = metricMap.get(key) ?? {
-        technicianId: String(record.technicianId),
-        metricKey: key,
-        technicianName: record.technicianName,
-        type: record.type,
-        completedCount: 0,
-        activeMinutesTotal: 0,
-        elapsedMinutesTotal: 0,
-      };
-      item.completedCount += 1;
-      item.activeMinutesTotal += record.activeMinutes;
-      item.elapsedMinutesTotal += Number(record.elapsedMinutes ?? 0);
-      metricMap.set(key, item);
-    }
-    const metrics = [...metricMap.values()]
-      .map((item) => ({
-        ...item,
-        averageActiveMinutes: Math.round(item.activeMinutesTotal / item.completedCount),
-        averageElapsedMinutes: Math.round(item.elapsedMinutesTotal / item.completedCount),
-      }))
-      .sort((a, b) => b.completedCount - a.completedCount || a.technicianName.localeCompare(b.technicianName, "pt-BR"));
-
-    return {
-      updatedAt: snapshot.updated_at ?? null,
-      totalTracked: completed.length,
-      totalExcluded: excluded.length,
-      legacyUnmeasuredCount: legacyOrders.length,
