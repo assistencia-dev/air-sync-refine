@@ -1054,9 +1054,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
           const submittedVersion = Number(incomingOrder?.version);
           const canonicalVersion = Number(canonicalOrder.version || 1);
-          if (Number.isFinite(submittedVersion) && submittedVersion > 0 && submittedVersion !== canonicalVersion) {
-            throw new Error("A OS " + protocolo + " foi alterada em outro dispositivo (versão " + canonicalVersion + "). Atualize a tela antes de salvar.");
-          }
+          // A versão local pode estar atrasada quando o despacho/atendimento foi
+          // atualizado noutro dispositivo. Reconciliamos contra a versão canônica
+          // recém-lida, preservando os relatórios existentes em vez de rejeitar a OS.
+          const staleVersion = Number.isFinite(submittedVersion) && submittedVersion > 0 && submittedVersion !== canonicalVersion;
 
           // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
           // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
@@ -1074,10 +1075,15 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
           if (!wasCompleted) {
             update.status = dbStatus;
-            update.technical_opinion = incomingDiagnosis;
-            update.diagnostico = incomingDiagnosis;
-            update.observation = incomingObservation;
-            update.servico_executado = String(incomingOrder?.trabalhoExecutado ?? incomingOrder?.servicoExecutado ?? incomingObservation).trim();
+            update.technical_opinion = staleVersion && String(canonicalOrder.technical_opinion ?? "").trim()
+              ? canonicalOrder.technical_opinion : incomingDiagnosis;
+            update.diagnostico = staleVersion && String(canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion ?? "").trim()
+              ? (canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion) : incomingDiagnosis;
+            update.observation = staleVersion && String(canonicalOrder.observation ?? "").trim()
+              ? canonicalOrder.observation : incomingObservation;
+            const incomingWork = String(incomingOrder?.trabalhoExecutado ?? incomingOrder?.servicoExecutado ?? incomingObservation).trim();
+            update.servico_executado = staleVersion && String(canonicalOrder.servico_executado ?? "").trim()
+              ? canonicalOrder.servico_executado : incomingWork;
           }
 
           if (submittedCompleted) {
@@ -1104,13 +1110,13 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
             .eq("id", canonicalOrder.id)
             .eq("assigned_employee_id", employee.id);
           if (Number.isFinite(submittedVersion) && submittedVersion > 0) {
-            updateQuery = updateQuery.eq("version", submittedVersion);
+            updateQuery = updateQuery.eq("version", canonicalVersion);
           } else {
             updateQuery = updateQuery.eq("version", canonicalVersion);
           }
           const { data: updatedOrder, error: updateError } = await updateQuery.select("id,version").maybeSingle();
           if (updateError) throw new Error(updateError.message);
-          if (!updatedOrder) throw new Error("A OS " + protocolo + " mudou durante o salvamento. Atualize a tela e tente novamente.");
+          if (!updatedOrder) throw new Error("Conflito de versão: a OS " + protocolo + " mudou durante o salvamento. Recarregue a versão mais recente e despache novamente.");
           incomingOrder.version = Number(updatedOrder.version || canonicalVersion + 1);
 
           // Histórico append-only de cada transição real de status para auditoria.
