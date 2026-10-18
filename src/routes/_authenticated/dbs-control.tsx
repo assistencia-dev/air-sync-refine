@@ -234,7 +234,7 @@ function DbsControlPage() {
             orcamentos: Array.isArray(currentState.orcamentos) ? currentState.orcamentos : [],
             osHistorico: Array.isArray(currentState.osHistorico) ? currentState.osHistorico : [],
           };
-          const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+          const saved = await saveDbsControlCloudState({ data: { state: mergedState, baseUpdatedAt: currentCloud?.updated_at ?? null } });
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
         } catch (err) {
           console.error("DBS Control master refresh:", err);
@@ -421,7 +421,7 @@ function DbsControlPage() {
                 ordens: mergeById(base.ordens, importedState.ordens),
                 osHistorico: Array.isArray(base.osHistorico) ? base.osHistorico : [],
               };
-              const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+              const saved = await saveDbsControlCloudState({ data: { state: mergedState, baseUpdatedAt: currentCloud?.updated_at ?? null } });
               iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
               result.summary = { ...result.summary, visible_in_dbs_control: true };
             }
@@ -476,7 +476,7 @@ function DbsControlPage() {
             if (!state) return;
             const requestIds = [...pendingSaveRequestIdsRef.current];
             try {
-              const saved = await saveDbsControlCloudState({ data: { state } });
+              const saved = await saveDbsControlCloudState({ data: { state, baseUpdatedAt: cloudUpdatedAtRef.current } });
               cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
               if (pendingStateRef.current === state) {
                 pendingStateRef.current = null;
