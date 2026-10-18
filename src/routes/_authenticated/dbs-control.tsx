@@ -125,6 +125,63 @@ function mergeDbsControlStates(
   return merged;
 }
 
+function mergeOnlyChangedWorkOrders(
+  baseline: Record<string, unknown> | null,
+  submitted: Record<string, unknown>,
+  latest: Record<string, unknown>,
+): Record<string, unknown> | null {
+  if (!baseline) return null;
+  const arrayKeys = ["clientes", "equipamentos", "tecnicos", "pecas", "servicos", "compras"];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  for (const key of arrayKeys) {
+    if (!same(baseline[key], submitted[key])) return null;
+  }
+  const baseOrders = Array.isArray(baseline.ordens) ? baseline.ordens as any[] : [];
+  const submittedOrders = Array.isArray(submitted.ordens) ? submitted.ordens as any[] : [];
+  const latestOrders = Array.isArray(latest.ordens) ? [...latest.ordens as any[]] : [];
+  const keyOf = (order: any) => String(order?.id ?? "").trim() ||
+    String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+  const baseByKey = new Map(baseOrders.map(order => [keyOf(order), order]).filter(([key]) => Boolean(key)));
+  const submittedByKey = new Map(submittedOrders.map(order => [keyOf(order), order]).filter(([key]) => Boolean(key)));
+  const latestIndexByKey = new Map(latestOrders.map((order, index) => [keyOf(order), index]).filter(([key]) => Boolean(key)));
+  // A remoção de uma OS não é mesclada automaticamente; exige revisão humana.
+  if (baseOrders.some(order => !submittedByKey.has(keyOf(order)))) return null;
+  const isCompleted = (value: unknown) => /^(conclu[ií]d[ao])$/.test(String(value ?? "").trim().toLocaleLowerCase("pt-BR"));
+  let changedOrders = 0;
+  for (const incoming of submittedOrders) {
+    const key = keyOf(incoming);
+    if (!key) return null;
+    const base = baseByKey.get(key);
+    if (!base) {
+      if (latestIndexByKey.has(key)) return null;
+      latestIndexByKey.set(key, latestOrders.length);
+      latestOrders.push(incoming);
+      changedOrders += 1;
+      continue;
+    }
+    const latestIndex = latestIndexByKey.get(key);
+    if (latestIndex === undefined) return null;
+    const current = latestOrders[latestIndex];
+    const fields = new Set([...Object.keys(base), ...Object.keys(incoming)]);
+    const patch: Record<string, unknown> = { ...current };
+    let changed = false;
+    for (const field of fields) {
+      if (same(base[field], incoming[field])) continue;
+      // A same-field concurrent edit is ambiguous: do not choose a winner silently.
+      if (!same(base[field], current[field]) && !same(incoming[field], current[field])) return null;
+      if (field === "status" && isCompleted(current.status) && !isCompleted(incoming.status)) return null;
+      patch[field] = incoming[field];
+      changed = true;
+    }
+    if (changed) {
+      latestOrders[latestIndex] = patch;
+      changedOrders += 1;
+    }
+  }
+  if (!changedOrders) return null;
+  return { ...latest, ordens: latestOrders };
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -141,6 +198,8 @@ function DbsControlPage() {
   const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
+  const cloudStateVersionRef = useRef<number | null>(null);
+  const cloudStateRef = useRef<Record<string, unknown> | null>(null);
   const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
@@ -234,7 +293,15 @@ function DbsControlPage() {
             orcamentos: Array.isArray(currentState.orcamentos) ? currentState.orcamentos : [],
             osHistorico: Array.isArray(currentState.osHistorico) ? currentState.osHistorico : [],
           };
-          const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+          const currentCloud = await getDbsControlCloudState();
+          const saved = await saveDbsControlCloudState({ data: {
+            state: mergedState,
+            expectedUpdatedAt: currentCloud?.updated_at ?? null,
+            expectedStateVersion: currentCloud?.state_version ?? null,
+          } });
+          cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+          cloudStateVersionRef.current = saved.state_version ?? cloudStateVersionRef.current;
+          cloudStateRef.current = saved.state as Record<string, unknown>;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
         } catch (err) {
           console.error("DBS Control master refresh:", err);
@@ -267,6 +334,8 @@ function DbsControlPage() {
             // falha de validação e mantenha a cópia local em modo somente leitura.
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
+            cloudStateVersionRef.current = cloud?.state_version ?? null;
+            cloudStateRef.current = cloudState;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
               "*",
@@ -476,8 +545,45 @@ function DbsControlPage() {
             if (!state) return;
             const requestIds = [...pendingSaveRequestIdsRef.current];
             try {
-              const saved = await saveDbsControlCloudState({ data: { state } });
+              let saved: Awaited<ReturnType<typeof saveDbsControlCloudState>>;
+              try {
+                saved = await saveDbsControlCloudState({ data: {
+                  state,
+                  expectedUpdatedAt: cloudUpdatedAtRef.current,
+                  expectedStateVersion: cloudStateVersionRef.current,
+                } });
+              } catch (saveError) {
+                const errorMessage = saveError instanceof Error ? saveError.message : String(saveError);
+                if (errorMessage.includes("SNAPSHOT_VERSION_CONFLICT")) {
+                  const latest = await getDbsControlCloudState();
+                  const latestState = latest?.state && typeof latest.state === "object"
+                    ? latest.state as Record<string, unknown> : null;
+                  const merged = latestState ? mergeOnlyChangedWorkOrders(cloudStateRef.current, state, latestState) : null;
+                  if (!latest || !latestState || !merged) {
+                    throw new Error("A base compartilhada mudou em outro dispositivo. Para evitar perda, não apliquei a gravação antiga nem substituí clientes/equipamentos/peças. Suas alterações permanecem pendentes; atualize a tela e revise a OS antes de tentar novamente.");
+                  }
+                  saved = await saveDbsControlCloudState({ data: {
+                    state: merged,
+                    expectedUpdatedAt: latest.updated_at ?? null,
+                    expectedStateVersion: latest.state_version ?? null,
+                  } });
+                  iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
+                } else if (errorMessage.includes("SNAPSHOT_GUARD_CONFIRMATION_REQUIRED") &&
+                  access.data?.administrative === true &&
+                  window.confirm("ATENÇÃO: este salvamento reduziria drasticamente clientes, equipamentos, técnicos ou peças. Confirma explicitamente esta alteração administrativa? Essa ação pode remover dados do painel.")) {
+                  saved = await saveDbsControlCloudState({ data: {
+                    state,
+                    expectedUpdatedAt: cloudUpdatedAtRef.current,
+                    expectedStateVersion: cloudStateVersionRef.current,
+                    allowDestructiveSnapshot: true,
+                  } });
+                } else {
+                  throw saveError;
+                }
+              }
               cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+              cloudStateVersionRef.current = saved.state_version ?? cloudStateVersionRef.current;
+              cloudStateRef.current = saved.state as Record<string, unknown>;
               if (pendingStateRef.current === state) {
                 pendingStateRef.current = null;
                 pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
@@ -557,6 +663,8 @@ function DbsControlPage() {
         }
         if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
+          cloudStateVersionRef.current = latest.state_version ?? cloudStateVersionRef.current;
+          cloudStateRef.current = latest.state as Record<string, unknown>;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
         }
         setCloudError(null);
