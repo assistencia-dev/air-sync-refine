@@ -3982,7 +3982,7 @@
         async function transicionarStatusOS(orderId, nextStatus) {
             const order = (ERP_STATE.ordens || []).find(item => String(item.id) === String(orderId));
             if (!order) { alert('OS não encontrada na base carregada. Atualize a tela e tente novamente.'); return; }
-            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const current = norm(order.status || 'Pendente');
             const next = norm(nextStatus);
             const allowed = (current === 'pendente' && ['em atendimento','cancelada'].includes(next))
