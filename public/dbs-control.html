@@ -2752,15 +2752,27 @@
                     const version = Number(parsed?.version || 1);
                     if (version < DBS_CONTROL_STATE_VERSION) {
                         const backupKey = 'DBS_AIR_ERP_STATE_PREVIOUS';
-                        if (!localStorage.getItem(backupKey)) {
+                        const sourceData = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+                        const countRecords = (value) => value && typeof value === 'object'
+                            ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                            : 0;
+                        let previousCount = -1;
+                        try {
+                            const previousRaw = localStorage.getItem(backupKey);
+                            if (previousRaw) {
+                                const previous = JSON.parse(previousRaw);
+                                previousCount = countRecords(previous?.data && typeof previous.data === 'object' ? previous.data : previous);
+                            }
+                        } catch (_) {}
+                        if (countRecords(sourceData) >= previousCount) {
                             localStorage.setItem(backupKey, JSON.stringify({
                                 version,
-                                data: parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed,
+                                data: sourceData,
                                 backedUpAt: new Date().toISOString(),
                                 reason: 'Cache legado preservado antes da leitura autoritativa da nuvem'
                             }));
                         }
-                        localStorage.removeItem('DBS_AIR_ERP_STATE');
+                        if (localStorage.getItem(backupKey)) localStorage.removeItem('DBS_AIR_ERP_STATE');
                     }
                 }
             } catch (error) {
