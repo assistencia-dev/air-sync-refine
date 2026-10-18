@@ -747,14 +747,39 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    if (!data) return null;
 
+    // O snapshot é uma camada de cache, não a única fonte de leitura.
+    // Se estiver ausente, consultar as tabelas operacionais sem gravar nem
+    // recriar snapshot automaticamente. Só declarar fallback válido se houver
+    // registros canônicos; isso evita substituir cache local por estado vazio.
+    const snapshotState = data?.state && typeof data.state === "object" && !Array.isArray(data.state)
+      ? data.state as Record<string, unknown>
+      : {};
     const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
-      data.state as Record<string, unknown>,
+      snapshotState,
       user.company_id,
     );
     const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
-    const hydrated = { ...data, state: hydratedState };
+    const hasCanonicalRecords = [
+      hydratedState.clientes,
+      hydratedState.equipamentos,
+      hydratedState.tecnicos,
+      hydratedState.ordens,
+      hydratedState.sites,
+      hydratedState.locais,
+      hydratedState.servicos,
+    ].some((items) => Array.isArray(items) && items.length > 0);
+
+    if (!data && !hasCanonicalRecords) return null;
+
+    const hydrated = data
+      ? { ...data, state: hydratedState }
+      : {
+          state: hydratedState,
+          state_version: 1,
+          updated_at: new Date().toISOString(),
+          fallback_source: "canonical_tables",
+        };
 
     if (user.role_key !== "COLABORADOR") return hydrated;
 
@@ -762,7 +787,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
 
     return {
-      ...data,
+      ...hydrated,
       state: filterCollaboratorState(hydratedState, employee.id, employee.login_email),
     };
   });
