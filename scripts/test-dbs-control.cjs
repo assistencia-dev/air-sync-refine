@@ -254,3 +254,8 @@ assert.match(versionHistoryMigration, /limit 30/i, "O histórico deve reter some
 assert.match(lib, /expected_updated_at: data\.expectedUpdatedAt/, "O cliente deve enviar a revisão esperada para a gravação.");
 assert.match(route, /mergeOnlyChangedWorkOrders/, "Conflitos só podem reaplicar alterações de OS quando a mesclagem for segura.");
 assert.match(route, /allowDestructiveSnapshot: true/, "A redução destrutiva exige confirmação explícita administrativa.");
+
+assert.match(html, /Pendente de envio · não confirmado/, "Falha ao confirmar uma OS deve aparecer como pendente de envio, não como sucesso.");
+assert.match(html, /id="dbs-sync-retry"/, "A tela deve manter o botão manual de tentar novamente quando houver falha.");
+assert.match(route, /requiresHumanReview/, "Conflitos e reduções destrutivas não devem ser reenviados automaticamente sem revisão humana.");
+assert.match(html, /await saveStateAndConfirmCloud\(\)/, "A conclusão de OS só deve ser confirmada após resposta do servidor.");
