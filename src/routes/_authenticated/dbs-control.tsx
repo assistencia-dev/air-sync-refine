@@ -290,7 +290,6 @@ function DbsControlPage() {
             orcamentos: Array.isArray(currentState.orcamentos) ? currentState.orcamentos : [],
             osHistorico: Array.isArray(currentState.osHistorico) ? currentState.osHistorico : [],
           };
-          const currentCloud = await getDbsControlCloudState();
           const saved = await saveDbsControlCloudState({ data: {
             state: mergedState,
             expectedUpdatedAt: currentCloud?.updated_at ?? null,
