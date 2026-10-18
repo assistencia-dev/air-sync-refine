@@ -886,11 +886,14 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
 
 export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { state: Record<string, unknown> }) => {
+  .inputValidator((input: { state: Record<string, unknown>; baseUpdatedAt?: string | null }) => {
     if (!input?.state || typeof input.state !== "object" || Array.isArray(input.state)) {
       throw new Error("Estado do DBS CONTROL inválido.");
     }
-    return { state: stripStoredAttachmentPayloads(input.state) };
+    return {
+      state: stripStoredAttachmentPayloads(input.state),
+      baseUpdatedAt: input.baseUpdatedAt ?? null,
+    };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
@@ -1151,12 +1154,13 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       state_version: 2,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
+      base_updated_at: data.baseUpdatedAt,
     };
 
     // A função SQL bloqueia a linha do escopo e reconcilia OS dentro da mesma
     // transação. Isso evita que duas sessões sobrescrevam o snapshot uma da outra.
     const { data: saved, error } = await supabaseAdmin
-      .rpc("dbs_control_save_snapshot_safe", { p_payload: payload })
+      .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
       .single();
 
     if (error) throw new Error(error.message);
