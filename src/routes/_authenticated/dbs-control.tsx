@@ -141,9 +141,9 @@ function mergeOnlyChangedWorkOrders(
   const latestOrders = Array.isArray(latest.ordens) ? [...latest.ordens as any[]] : [];
   const keyOf = (order: any) => String(order?.id ?? "").trim() ||
     String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
-  const baseByKey = new Map(baseOrders.map(order => [keyOf(order), order]).filter(([key]) => Boolean(key)));
-  const submittedByKey = new Map(submittedOrders.map(order => [keyOf(order), order]).filter(([key]) => Boolean(key)));
-  const latestIndexByKey = new Map(latestOrders.map((order, index) => [keyOf(order), index]).filter(([key]) => Boolean(key)));
+  const baseByKey = new Map<string, any>(baseOrders.map(order => [keyOf(order), order] as [string, any]).filter(([key]) => Boolean(key)));
+  const submittedByKey = new Map<string, any>(submittedOrders.map(order => [keyOf(order), order] as [string, any]).filter(([key]) => Boolean(key)));
+  const latestIndexByKey = new Map<string, number>(latestOrders.map((order, index) => [keyOf(order), index] as [string, number]).filter(([key]) => Boolean(key)));
   // A remoção de uma OS não é mesclada automaticamente; exige revisão humana.
   if (baseOrders.some(order => !submittedByKey.has(keyOf(order)))) return null;
   const isCompleted = (value: unknown) => /^(conclu[ií]d[ao])$/.test(String(value ?? "").trim().toLocaleLowerCase("pt-BR"));
