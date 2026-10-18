@@ -515,7 +515,7 @@ function DbsControlPage() {
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-    const refreshLatestCloudState = async () => {
+    const refreshLatestCloudState = async (force = false) => {
       if (disposed || !cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
@@ -526,7 +526,7 @@ function DbsControlPage() {
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
           return;
         }
-        if (latest.updated_at !== cloudUpdatedAtRef.current) {
+        if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
         }
@@ -543,6 +543,9 @@ function DbsControlPage() {
       realtimeChannel = supabase.channel("dbs-control-snapshot-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_snapshots" }, () => {
           void refreshLatestCloudState();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_work_orders" }, () => {
+          void refreshLatestCloudState(true);
         })
         .subscribe((status) => {
           if (disposed) return;
@@ -564,7 +567,7 @@ function DbsControlPage() {
     };
     subscribeToSnapshot();
     // Fallback para eventos perdidos ou períodos sem conectividade.
-    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 30000);
+    const refreshTimer = setInterval(() => { void refreshLatestCloudState(true); }, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
