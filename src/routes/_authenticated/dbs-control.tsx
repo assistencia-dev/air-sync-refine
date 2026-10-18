@@ -245,11 +245,12 @@ function DbsControlPage() {
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
 
-          if (cloudState) {
+          const localHasData = dbsControlStateHasData(localState);
+          const cloudHasData = dbsControlStateHasData(cloudState);
+          if (cloudState && !(localHasData && !cloudHasData)) {
             // Nunca grave automaticamente um snapshot local no estado compartilhado durante
-            // a inicialização: um navegador antigo pode ressuscitar OS excluídas/antigas ou
-            // reverter a execução. A cópia local permanece no dispositivo para recuperação
-            // explícita; a base compartilhada é a autoridade de leitura quando já existe.
+            // a inicialização. Se a nuvem vier vazia enquanto há dados locais, trate como
+            // falha de validação e mantenha a cópia local em modo somente leitura.
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
@@ -264,12 +265,14 @@ function DbsControlPage() {
               updated_at: cloud?.updated_at ?? null,
             }, "*");
           } else {
-            // Nunca promova cache de navegador para a base compartilhada automaticamente.
-            // Sem snapshot na nuvem, falha em modo seguro e preserva a cópia local apenas para recuperação.
+            // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
             throw new Error(
-              localState
-                ? "A base compartilhada não retornou um snapshot. O cache local foi preservado e não será enviado automaticamente para evitar sobrescrever dados mais recentes."
-                : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
+              localHasData && !cloudHasData
+                ? "A nuvem retornou vazia enquanto há dados locais. Exibindo a cópia local em somente leitura; nenhuma gravação foi feita."
+                : localState
+                  ? "A base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura."
+                  : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
             );
           }
 
@@ -278,6 +281,7 @@ function DbsControlPage() {
           console.error("DBS Control cloud load:", err);
           const message = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
           setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_SYNC_STATUS",
             status: "error",
