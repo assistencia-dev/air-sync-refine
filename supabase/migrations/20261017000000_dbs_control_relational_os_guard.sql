@@ -31,7 +31,9 @@ insert into public.dbs_control_work_orders
    type, priority, status, scheduled_at, started_at, completed_at, description,
    technical_opinion, diagnostico, observation, servico_executado, signature_name,
    signature_data, signature_path, assinatura_path, created_at, updated_at, version)
-select
+select distinct on (
+  coalesce(nullif(btrim(o.item->>'protocolo'), ''), nullif(btrim(o.item->>'protocol'), ''))
+)
   case when coalesce(o.item->>'id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
        then (o.item->>'id')::uuid else gen_random_uuid() end,
   coalesce(nullif(btrim(o.item->>'protocolo'),''), nullif(btrim(o.item->>'protocol'),'')),
@@ -77,6 +79,7 @@ where coalesce(nullif(btrim(o.item->>'protocolo'),''),nullif(btrim(o.item->>'pro
     select 1 from public.dbs_control_work_orders w
     where w.protocol = coalesce(nullif(btrim(o.item->>'protocolo'), ''), nullif(btrim(o.item->>'protocol'), ''))
   )
+order by coalesce(nullif(btrim(o.item->>'protocolo'), ''), nullif(btrim(o.item->>'protocol'), '')), s.updated_at desc
 on conflict do nothing;
 
 create or replace function public.dbs_control_guard_work_order_write()
