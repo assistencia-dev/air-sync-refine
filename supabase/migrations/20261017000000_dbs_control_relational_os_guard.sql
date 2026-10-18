@@ -104,7 +104,7 @@ begin
   old_done := lower(trim(coalesce(old.status,''))) in ('concluida','concluída','concluido','concluído','completed','complete');
   new_done := lower(trim(coalesce(new.status,''))) in ('concluida','concluída','concluido','concluído','completed','complete');
 
-  if new.version is distinct from old.version and new.version is distinct from old.version + 1 then
+  if new.version is distinct from old.version then
     raise exception 'DBS_OS_STALE_VERSION: OS alterada em outro dispositivo; atualize antes de salvar.' using errcode = '40001';
   end if;
   if old_done and not new_done then
