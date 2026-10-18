@@ -251,7 +251,7 @@ assert.match(versionHistoryMigration, /create table if not exists public\.dbs_co
 assert.match(versionHistoryMigration, /enable row level security/i, "O histórico deve ter RLS ativada.");
 assert.match(versionHistoryMigration, /revoke all on table public\.dbs_control_snapshot_history from public, anon, authenticated/i, "O histórico não deve ser acessível por anon/authenticated.");
 assert.match(versionHistoryMigration, /limit 30/i, "O histórico deve reter somente as 30 versões mais recentes por escopo.");
-assert.match(lib, /expected_updated_at: data\.expectedUpdatedAt/, "O cliente deve enviar a revisão esperada para a gravação.");
+assert.match(persistence, /expected_updated_at: data\.expectedUpdatedAt/, "O cliente deve enviar a revisão esperada para a gravação.");
 assert.match(route, /mergeOnlyChangedWorkOrders/, "Conflitos só podem reaplicar alterações de OS quando a mesclagem for segura.");
 assert.match(route, /allowDestructiveSnapshot: true/, "A redução destrutiva exige confirmação explícita administrativa.");
 
