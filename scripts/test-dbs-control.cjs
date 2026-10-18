@@ -60,6 +60,16 @@ assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexiste
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016134345_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
+
+const syncAuditMigration = fs.readFileSync("supabase/migrations/20261018232000_dbs_control_snapshot_save_audit.sql", "utf8");
+assert.match(cloudFunctions, /function ensurePersistedSnapshotWrite\(/, "A gravação precisa validar a confirmação retornada pelo banco.");
+assert.match(cloudFunctions, /saved = ensurePersistedSnapshotWrite\(saveResult, "saveDbsControlCloudState"\)/, "O resultado final do RPC precisa passar pela validação rígida antes de retornar sucesso.");
+assert.match(cloudFunctions, /function recordDbsControlSyncAttempt\(/, "O fluxo precisa manter auditoria de saves, erros e retries.");
+assert.match(cloudFunctions, /status: "retry"/, "Conflitos com retentativa devem deixar evento de auditoria.");
+assert.match(syncAuditMigration, /create table if not exists public\.dbs_control_snapshot_save_audit/, "A tabela de auditoria isolada precisa existir.");
+assert.match(syncAuditMigration, /status text not null check \(status in \('success','error','retry'\)\)/, "A auditoria deve diferenciar sucesso, erro e retry.");
+assert.doesNotMatch(syncAuditMigration, /create policy if not exists/i, "A migration não deve usar sintaxe CREATE POLICY IF NOT EXISTS incompatível.");
+
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
