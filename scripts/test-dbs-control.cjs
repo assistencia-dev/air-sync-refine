@@ -242,3 +242,15 @@ assert.match(dashboardUx, /\["dash-client-count","Clientes Base",clients\.length
 assert.match(dashboardUx, /\["dash-equip-count","Equipamentos Mapeados",equipment\.length\]/, "O dashboard deve contar equipamentos do parque, não OS em atendimento.");
 assert.match(dashboardUx, /\["dash-os-andamento","OS em Atendimento",active\]/, "O KPI de atendimento deve contar OS ativas.");
 assert.match(dashboardUx, /\["dash-os-concluidas","OS Concluídas",done\]/, "O KPI de concluídas deve contar OS concluídas.");
+
+const versionHistoryMigration = fs.readFileSync("supabase/migrations/20261018190000_dbs_control_snapshot_version_history.sql", "utf8");
+assert.match(versionHistoryMigration, /SNAPSHOT_VERSION_CONFLICT/, "Snapshots devem rejeitar gravações baseadas em uma versão antiga.");
+assert.match(versionHistoryMigration, /expected_updated_at/, "O RPC deve comparar a revisão que o cliente recebeu.");
+assert.match(versionHistoryMigration, /SNAPSHOT_GUARD_CONFIRMATION_REQUIRED/, "Cadastros críticos devem exigir confirmação para redução destrutiva.");
+assert.match(versionHistoryMigration, /create table if not exists public\.dbs_control_snapshot_history/, "O histórico de snapshots deve ser criado pela migration.");
+assert.match(versionHistoryMigration, /enable row level security/i, "O histórico deve ter RLS ativada.");
+assert.match(versionHistoryMigration, /revoke all on table public\.dbs_control_snapshot_history from public, anon, authenticated/i, "O histórico não deve ser acessível por anon/authenticated.");
+assert.match(versionHistoryMigration, /limit 30/i, "O histórico deve reter somente as 30 versões mais recentes por escopo.");
+assert.match(lib, /expected_updated_at: data\.expectedUpdatedAt/, "O cliente deve enviar a revisão esperada para a gravação.");
+assert.match(route, /mergeOnlyChangedWorkOrders/, "Conflitos só podem reaplicar alterações de OS quando a mesclagem for segura.");
+assert.match(route, /allowDestructiveSnapshot: true/, "A redução destrutiva exige confirmação explícita administrativa.");
