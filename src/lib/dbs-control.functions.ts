@@ -562,10 +562,13 @@ async function hydrateDbsControlStateFromCanonicalDb(
       completedAt: row.completed_at || null,
       sla: row.sla_deadline || null,
       desc: row.description || "",
-      diagnostico: row.technical_opinion || "",
-      observacao: row.observation || "",
+      diagnostico: row.diagnostico || row.technical_opinion || "",
+      observacao: row.servico_executado || row.observation || "",
+      trabalhoExecutado: row.servico_executado || row.observation || "",
       signature_name: row.signature_name || null,
-      assinatura: row.signature_data || null,
+      assinaturaStoragePath: row.assinatura_path || row.signature_path || null,
+      assinatura: row.assinatura_path || row.signature_path ? null : (row.signature_data || null),
+      version: Number(row.version || 1),
       valor: Number(row.total_cents || 0) / 100,
     };
   });
@@ -851,7 +854,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
-          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name")
+          .select("id,protocol,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
           .eq("assigned_employee_id", employee.id);
         if (assignedError) throw new Error(assignedError.message);
 
@@ -889,6 +892,11 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
           const wasCompleted = normalizeDbsStatus(canonicalOrder.status) === "concluida";
           const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
+          const submittedVersion = Number(incomingOrder?.version);
+          const canonicalVersion = Number(canonicalOrder.version || 1);
+          if (Number.isFinite(submittedVersion) && submittedVersion > 0 && submittedVersion !== canonicalVersion) {
+            throw new Error("A OS " + protocolo + " foi alterada em outro dispositivo (versão " + canonicalVersion + "). Atualize a tela antes de salvar.");
+          }
 
           // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
           // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
@@ -907,30 +915,43 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           if (!wasCompleted) {
             update.status = dbStatus;
             update.technical_opinion = incomingDiagnosis;
+            update.diagnostico = incomingDiagnosis;
             update.observation = incomingObservation;
-          } else {
-            if (!String(canonicalOrder.technical_opinion ?? "").trim() && incomingDiagnosis) update.technical_opinion = incomingDiagnosis;
-            if (!String(canonicalOrder.observation ?? "").trim() && incomingObservation) update.observation = incomingObservation;
+            update.servico_executado = String(incomingOrder?.trabalhoExecutado ?? incomingOrder?.servicoExecutado ?? incomingObservation).trim();
           }
 
           if (submittedCompleted) {
             if (!wasCompleted || !canonicalOrder.completed_at) {
               update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
             }
-            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim())) {
+            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim()) && !incomingOrder?.assinaturaStoragePath) {
               update.signature_data = incomingSignature;
+            }
+            const signaturePath = String(incomingOrder?.assinaturaStoragePath ?? "").trim();
+            if (signaturePath && (!wasCompleted || !String(canonicalOrder.assinatura_path ?? canonicalOrder.signature_path ?? "").trim())) {
+              update.assinatura_path = signaturePath;
+              update.signature_path = signaturePath;
+              update.signature_data = null;
             }
             if (incomingSignatureName && (!wasCompleted || !String(canonicalOrder.signature_name ?? "").trim())) {
               update.signature_name = incomingSignatureName;
             }
           }
 
-          const { error: updateError } = await supabaseAdmin
+          let updateQuery = supabaseAdmin
             .from("dbs_control_work_orders")
             .update(update)
             .eq("id", canonicalOrder.id)
             .eq("assigned_employee_id", employee.id);
+          if (Number.isFinite(submittedVersion) && submittedVersion > 0) {
+            updateQuery = updateQuery.eq("version", submittedVersion);
+          } else {
+            updateQuery = updateQuery.eq("version", canonicalVersion);
+          }
+          const { data: updatedOrder, error: updateError } = await updateQuery.select("id,version").maybeSingle();
           if (updateError) throw new Error(updateError.message);
+          if (!updatedOrder) throw new Error("A OS " + protocolo + " mudou durante o salvamento. Atualize a tela e tente novamente.");
+          incomingOrder.version = Number(updatedOrder.version || canonicalVersion + 1);
 
           // Histórico append-only de cada transição real de status para auditoria.
           // Falha ao registrar o evento é reportada; nunca é ocultada como sucesso.
