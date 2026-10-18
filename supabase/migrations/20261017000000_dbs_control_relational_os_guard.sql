@@ -7,6 +7,7 @@ alter table public.dbs_control_work_orders
   add column if not exists diagnostico text,
   add column if not exists servico_executado text,
   add column if not exists assinatura_path text,
+  add column if not exists signature_path text,
   add column if not exists version bigint not null default 1;
 
 update public.dbs_control_work_orders
