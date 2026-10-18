@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, 'feat/**']
+    branches: [main, 'feat/**', 'staging/**']
 
 jobs:
   build:
@@ -15,4 +15,9 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: bun run build
+      - name: TypeScript typecheck
+        run: bunx tsc --noEmit
+      - name: DBS Control regression checks
+        run: bun run test:dbs-control
+      - name: Production build
+        run: bun run build
