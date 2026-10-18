@@ -1,0 +1,34 @@
+name: DBS Control real browser smoke test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 11 * * 1-5"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/dbs-control-browser.yml"
+      - "scripts/dbs-control-browser-smoke.cjs"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Open published DBS Control and detect browser errors
+        env:
+          DBS_CONTROL_URL: https://air-sync-refine.lovable.app/dbs-control
+        run: node scripts/dbs-control-browser-smoke.cjs
