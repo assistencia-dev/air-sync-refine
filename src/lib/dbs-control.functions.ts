@@ -1257,10 +1257,22 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       const identity = (order: any) => String(order?.id ?? "").trim() || protocolKey(order);
       const rank: Record<string, number> = { aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3, "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5 };
       const protectedFields = ["assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"];
-      const latestByIdentity = new Map(latestOrders.map(order => [identity(order), order]).filter(([key]) => Boolean(key)));
+      const latestById = new Map<string, any>(
+        latestOrders
+          .map((order): [string, any] => [String(order?.id ?? "").trim(), order])
+          .filter(([key]) => Boolean(key)),
+      );
+      const latestByProtocol = new Map<string, any>(
+        latestOrders
+          .map((order): [string, any] => [protocolKey(order), order])
+          .filter(([key]) => Boolean(key)),
+      );
       const mergedOrders = pendingOrders.map((incoming) => {
+        const id = String(incoming?.id ?? "").trim();
+        const protocol = protocolKey(incoming);
         const key = identity(incoming);
-        const current = key ? latestByIdentity.get(key) : undefined;
+        const current = (id ? latestById.get(id) : undefined) ??
+          (protocol ? latestByProtocol.get(protocol) : undefined);
         if (!current) return incoming;
         const merged: Record<string, unknown> = { ...current, ...incoming };
         const currentStatus = String(current.status ?? "").trim().toLocaleLowerCase("pt-BR");
@@ -1290,10 +1302,12 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         }
         return merged;
       });
-      const pendingIdentities = new Set(mergedOrders.map(identity).filter(Boolean));
+      const pendingIds = new Set(mergedOrders.map(order => String(order?.id ?? "").trim()).filter(Boolean));
+      const pendingProtocols = new Set(mergedOrders.map(protocolKey).filter(Boolean));
       const missingLatest = latestOrders.filter(order => {
-        const key = identity(order);
-        return key && !pendingIdentities.has(key);
+        const id = String(order?.id ?? "").trim();
+        const protocol = protocolKey(order);
+        return !((id && pendingIds.has(id)) || (protocol && pendingProtocols.has(protocol)));
       });
       return { ...latest, ...pending, ordens: [...mergedOrders, ...missingLatest] };
     };
