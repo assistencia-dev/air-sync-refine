@@ -57,7 +57,9 @@ assert.match(cloudFunctions, /throw new Error\(`A gravação do snapshot \(\$\{o
 assert.match(cloudFunctions, /recordDbsControlSyncAttempt\(/, "Qualquer tentativa de save precisa gerar um registro de auditoria sem sobrescrever dados.");
 assert.match(syncAuditMigration, /create table if not exists public\.dbs_control_sync_runs/, "Tabela de auditoria de sincronização deve existir e ser append-only.");
 assert.match(syncAuditMigration, /status text not null check \(status in \('success','error','retry'\)\)/, "Tabela de auditoria precisa separar sucesso, erro e retry.");
-assert.match(cloudFunctions, /throw new Error\(error\.message \|\| `Falha ao salvar o snapshot do DBS CONTROL \(\$\{operation\}\)\.`\)/, "Erros de persistência não podem ser ignorados.");
+assert.match(cloudFunctions, /throw new Error\(result\?\.error\.message \|\| `Falha ao salvar o snapshot do DBS CONTROL \(\$\{operation\}\)\.`\)/, "Erros de persistência não podem ser ignorados.");
+assert.match(cloudFunctions, /saved = ensurePersistedSnapshotWrite\(saveResult, "saveDbsControlCloudState"\)/, "O resultado final do RPC precisa passar pela validação rígida antes de retornar sucesso.");
+assert.match(cloudFunctions, /status: "retry"/, "Conflitos com retentativa devem deixar evento de auditoria.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
