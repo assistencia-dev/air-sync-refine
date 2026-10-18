@@ -5607,13 +5607,34 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function atualizarMetricas() {
-            document.getElementById('dash-client-count').innerText = ERP_STATE.clientes.length;
-            document.getElementById('dash-equip-count').innerText = ERP_STATE.equipamentos.length;
-            // Arquivadas/excluídas ficam fora dos KPIs do dashboard; os registros são preservados no histórico.
-            const ordensOperacionais = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
-                .filter(o => !o.arquivadaEm && !o.excluidaEm);
-            document.getElementById('dash-os-andamento').innerText = ordensOperacionais.filter(o => o.status === "Em Atendimento").length;
-            document.getElementById('dash-os-concluidas').innerText = ordensOperacionais.filter(o => isOSConcluida(o)).length;
+            // Os KPIs usam somente o estado central carregado e normalizam variações de status.
+            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+            const equipamentos = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
+            const ordens = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
+            const normalizarStatusKpi = value => String(value ?? '')
+                .trim()
+                .normalize('NFD')
+                .replace(/[\\u0300-\\u036f]/g, '')
+                .toLocaleLowerCase('pt-BR')
+                .replace(/[_-]+/g, ' ')
+                .replace(/\\s+/g, ' ');
+            const statusKpi = order => normalizarStatusKpi(order.status ?? order.situacao ?? order.statusOS);
+            // Arquivadas, excluídas e canceladas não entram nos indicadores da operação ativa.
+            const ordensOperacionais = ordens.filter(order =>
+                !order.arquivadaEm &&
+                !order.excluidaEm &&
+                !order.deletedAt &&
+                !order.deleted_at &&
+                !/^(arquivad[ao]|excluid[ao]|deletad[ao]|cancelad[ao])$/.test(statusKpi(order))
+            );
+            const emAtendimento = ordensOperacionais.filter(order =>
+                /^(em atendimento|em execucao|em andamento|em atendimento tecnico)$/.test(statusKpi(order))
+            ).length;
+            const concluidas = ordensOperacionais.filter(order => isOSConcluida(order)).length;
+            document.getElementById('dash-client-count').innerText = clientes.length.toLocaleString('pt-BR');
+            document.getElementById('dash-equip-count').innerText = equipamentos.length.toLocaleString('pt-BR');
+            document.getElementById('dash-os-andamento').innerText = emAtendimento.toLocaleString('pt-BR');
+            document.getElementById('dash-os-concluidas').innerText = concluidas.toLocaleString('pt-BR');
         }
         // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
         (function bootDbsControlEmployeeMode(){
