@@ -699,6 +699,37 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
       await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
       throw new Error("O arquivo foi enviado, mas não foi possível preparar a leitura segura.");
     }
+    // Registra o anexo na tabela relacional quando a OS já tem chave canônica.
+    // OS legadas continuam compatíveis: a referência também é persistida no snapshot.
+    let canonicalOrder: { id: string } | null = null;
+    const orderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.orderId);
+    if (orderUuid) {
+      const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("id", data.orderId).maybeSingle();
+      if (found.error) throw new Error("O arquivo foi enviado, mas a OS relacional não pôde ser verificada: " + found.error.message);
+      canonicalOrder = found.data;
+    }
+    if (!canonicalOrder) {
+      const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+      if (protocol) {
+        const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("protocol", protocol).maybeSingle();
+        if (found.error) throw new Error("O arquivo foi enviado, mas a OS relacional não pôde ser verificada: " + found.error.message);
+        canonicalOrder = found.data;
+      }
+    }
+    if (canonicalOrder) {
+      const { error: attachmentError } = await supabaseAdmin.from("dbs_control_work_order_attachments").insert({
+        work_order_id: canonicalOrder.id,
+        uploaded_by_user_id: user.id,
+        storage_path: path,
+        file_name: data.fileName.slice(0, 180),
+        file_type: data.contentType,
+        attachment_type: data.attachmentType,
+      });
+      if (attachmentError) {
+        await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
+        throw new Error("Falha ao registrar o anexo da OS: " + attachmentError.message);
+      }
+    }
     return { storagePath: path, signedUrl: signed.signedUrl, fileName: data.fileName.slice(0, 180),
       contentType: data.contentType, attachmentType: data.attachmentType };
   });
