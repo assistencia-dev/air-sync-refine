@@ -3234,6 +3234,35 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
+
+            // Proteção contra snapshot remoto vazio: não substitui uma cópia local recuperável
+            // por um estado vazio/incompleto, nem permite que ela seja enviada à nuvem.
+            const countStateRecords = (value) => value && typeof value === 'object'
+                ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                : 0;
+            const localRecoveryState = getPersistableState();
+            const localRecoveryCount = countStateRecords(localRecoveryState);
+            const incomingCloudCount = countStateRecords(msg.state);
+            if (localRecoveryCount > 0 && incomingCloudCount === 0) {
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
+                DBS_CONTROL_CLOUD_READY = false;
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Recuperação local — nuvem sem dados';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                const warning = document.getElementById('dbs-sync-retry');
+                if (warning) {
+                    warning.style.display = 'inline-flex';
+                    warning.textContent = 'Dados locais preservados';
+                    warning.title = 'A nuvem retornou um snapshot vazio. Os dados locais estão protegidos em modo somente leitura.';
+                }
+                renderizarTudo();
+                return;
+            }
+
             if (DBS_CONTROL_HAS_PENDING_SAVE) {
                 const sendFirst = confirm('Existem alterações locais ainda não enviadas. Deseja enviar essas alterações primeiro? A versão da nuvem não será aplicada agora.');
                 if (sendFirst) {
