@@ -1254,7 +1254,6 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       const latestOrders = Array.isArray(latest.ordens) ? latest.ordens as any[] : [];
       const pendingOrders = Array.isArray(pending.ordens) ? pending.ordens as any[] : [];
       const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
-      const identity = (order: any) => String(order?.id ?? "").trim() || protocolKey(order);
       const rank: Record<string, number> = { aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3, "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5 };
       const protectedFields = ["assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"];
       const latestById = new Map<string, any>(
@@ -1270,7 +1269,6 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       const mergedOrders = pendingOrders.map((incoming) => {
         const id = String(incoming?.id ?? "").trim();
         const protocol = protocolKey(incoming);
-        const key = identity(incoming);
         const current = (id ? latestById.get(id) : undefined) ??
           (protocol ? latestByProtocol.get(protocol) : undefined);
         if (!current) return incoming;
