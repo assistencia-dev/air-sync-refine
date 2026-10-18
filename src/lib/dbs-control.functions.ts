@@ -208,6 +208,11 @@ function normalizeDbsStatus(value: unknown): string {
   return String(value ?? "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+function isDbsCompleted(value: unknown): boolean {
+  const status = normalizeDbsStatus(value);
+  return status === "concluida" || status === "concluido";
+}
+
 function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const current = normalizeState(currentState);
   const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
@@ -279,7 +284,7 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     ].map(normalizeDbsStatus));
     // Uma OS já concluída nunca pode voltar a um status anterior por autosave
     // atrasado ou por um snapshot antigo do dispositivo do colaborador.
-    const currentIsCompleted = normalizeDbsStatus(currentOrder?.status) === "concluida";
+    const currentIsCompleted = isDbsCompleted(currentOrder?.status);
     const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(normalizeDbsStatus(incomingStatus)) ? incomingStatus : currentOrder.status);
 
     const preserveCompletedValue = (field: string, fallback: unknown) => {
@@ -797,7 +802,7 @@ const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-
 
 async function syncAdminOrdersToCanonical(orders: any[], userId: string) {
   const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
-  const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
+  const completed = (value: unknown) => isDbsCompleted(value);
   for (const order of orders) {
     const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
     const orderId = String(order?.id ?? "").trim();
@@ -916,7 +921,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const incomingOrders = incomingState.ordens as any[];
         const orderId = (order: any) => String(order?.id ?? "").trim();
         const orderProtocol = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
-        const isCompleted = (order: any) => normalizeDbsStatus(order?.status) === "concluida";
+        const isCompleted = (order: any) => isDbsCompleted(order?.status);
         const latestById = new Map(latestOrders.map((order) => [orderId(order), order]).filter(([id]) => Boolean(id)));
         const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
@@ -1019,7 +1024,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const ignoradas: Array<{ protocolo: string; motivo: string }> = [];
         for (const incomingOrder of incomingForEmployee) {
           const submittedStatus = String(incomingOrder?.status ?? "").trim();
-          const submittedCompleted = normalizeDbsStatus(submittedStatus) === "concluida";
+          const submittedCompleted = isDbsCompleted(submittedStatus);
           const protocolo = String(incomingOrder?.protocolo ?? incomingOrder?.protocol ?? incomingOrder?.numero ?? incomingOrder?.id ?? "sem protocolo").trim();
           const incomingProtocol = protocolKey(incomingOrder);
           const currentOrder = currentOrders.find((order) =>
@@ -1047,7 +1052,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
             continue;
           }
 
-          const wasCompleted = normalizeDbsStatus(canonicalOrder.status) === "concluida";
+          const wasCompleted = isDbsCompleted(canonicalOrder.status);
           const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
           const submittedVersion = Number(incomingOrder?.version);
           const canonicalVersion = Number(canonicalOrder.version || 1);
