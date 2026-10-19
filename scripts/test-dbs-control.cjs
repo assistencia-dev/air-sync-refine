@@ -78,7 +78,7 @@ assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A con
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /const reconciledInitialState = mergeDbsControlStates\(cloudState, localState\)/, "A inicialização deve reconciliar registros locais exclusivos com a nuvem sem gravar automaticamente.");
 assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicialização deve detectar quando a nuvem tem menos registros que a cópia local.");
-assert.match(route, /const cloudIsIncomplete = false/, "Diferença de contagem não pode bloquear globalmente a emissão; a reconciliação preserva registros locais exclusivos.");
+assert.match(route, /const cloudIsIncomplete = !cloudState && localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)/, "Somente a ausência do snapshot compartilhado deve acionar recuperação local; diferença de contagem não pode bloquear a emissão.");
 assert.match(route, /const reconciledLatestState = mergeDbsControlStates\([\s\S]*?localRecoveryStateRef\.current[\s\S]*?\)/, "O Realtime deve reconciliar registros locais exclusivos sem bloquear a fila de gravação.");
 assert.match(route, /if \(!cloudReadyRef\.current\) \{[\s\S]*?return;\s*\}\s*pendingStateRef\.current = msg\.state/, "Uma gravação bloqueada não pode entrar na fila de salvamento.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
