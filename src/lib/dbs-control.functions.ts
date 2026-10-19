@@ -1436,9 +1436,29 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       return { ...latest, ...pending, ordens: [...mergedOrders, ...missingLatest] };
     };
 
-    let saveResult = await supabaseAdmin
-      .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
-      .single();
+    const saveSnapshotWithCompatibleRpc = async (savePayload: typeof payload) => {
+      let result = await supabaseAdmin
+        .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: savePayload })
+        .single();
+
+      // Alguns ambientes Lovable ainda têm a função segura legada, mas não
+      // receberam a migração safe_v2. Nesse caso, use a função existente para
+      // não bloquear toda emissão/conclusão de OS; não faça fallback em erros
+      // de concorrência, autorização ou validação.
+      const missingV2 = Boolean(result.error && (
+        /PGRST202|42883|could not find the function|function .*dbs_control_save_snapshot_safe_v2.* does not exist|schema cache/i
+          .test(result.error.message)
+      ));
+      if (missingV2) {
+        console.error("[DBS CONTROL] safe_v2 ainda não existe neste banco; usando temporariamente dbs_control_save_snapshot_safe. A migração safe_v2 continua necessária.");
+        result = await supabaseAdmin
+          .rpc("dbs_control_save_snapshot_safe", { p_payload: savePayload })
+          .single();
+      }
+      return result;
+    };
+
+    let saveResult = await saveSnapshotWithCompatibleRpc(payload);
     if (saveResult.error && /DBS_SNAPSHOT_STALE_VERSION|stale version|base_updated_at|base compartilhada|conflito|concurrent|serialization|40001|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
       const { data: latestSnapshot, error: latestError } = await supabaseAdmin
         .from("dbs_control_snapshots")
@@ -1457,9 +1477,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         base_updated_at: latestSnapshot.updated_at,
         updated_at: new Date().toISOString(),
       };
-      saveResult = await supabaseAdmin
-        .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: retryPayload })
-        .single();
+      saveResult = await saveSnapshotWithCompatibleRpc(retryPayload);
     }
 
     const saved = saveResult.data;
