@@ -977,6 +977,33 @@ function ensurePersistedSnapshotWrite(result: { data?: any; error?: any; }, oper
   return data;
 }
 
+function safeJson(value: unknown): any {
+  if (typeof value === "string") { try { return JSON.parse(value); } catch { return value; } }
+  return value ?? {};
+}
+function normalizeAuditRow(row: any) {
+  return { id: row?.id ?? null, action: row?.action ?? row?.mode ?? "snapshot_save",
+    status: row?.status ?? null, created_at: row?.created_at ?? row?.started_at ?? row?.finished_at ?? null,
+    payload: safeJson(row?.payload ?? row?.summary ?? {}), result: safeJson(row?.result ?? row?.summary ?? {}),
+    error_message: row?.error_message ?? row?.errors ?? null };
+}
+async function readDbsControlAuditRows(limit = 10) {
+  const auditResult = await supabaseAdmin.from("dbs_control_snapshot_save_audit")
+    .select("id,action,status,created_at,payload,result,error_message").order("created_at", { ascending: false }).limit(limit);
+  if (!auditResult.error) return (auditResult.data ?? []).map(normalizeAuditRow);
+  const legacyResult = await supabaseAdmin.from("dbs_control_sync_runs")
+    .select("id,provider,mode,status,started_at,finished_at,summary,errors").order("started_at", { ascending: false }).limit(limit);
+  if (legacyResult.error) {
+    console.error("DBS CONTROL: falha ao consultar auditoria nova e legado.", auditResult.error.message, legacyResult.error.message);
+    return [];
+  }
+  return (legacyResult.data ?? []).map((row: any) => ({
+    ...normalizeAuditRow(row), action: row?.mode ?? "sync_run",
+    created_at: row?.started_at ?? row?.finished_at ?? null,
+    error_message: Array.isArray(row?.errors) ? row.errors.join("; ") : (row?.errors ? String(row.errors) : null),
+  }));
+}
+
 async function recordDbsControlSyncAttempt(input: {
   scopeKey: string; companyId?: string | null; ownerUserId?: string | null; userId: string;
   action: string; status: "success" | "error" | "retry";
@@ -1424,13 +1451,13 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_snapshot_save_audit").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
       supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
     ]);
-    const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
+    const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,snapshotsResult];
     const firstError = results.find((r) => r.error)?.error;
     if (firstError) throw new Error(firstError.message);
 
     const clients=clientsResult.data??[], sites=sitesResult.data??[], equipment=equipmentResult.data??[];
     const services=servicesResult.data??[], employees=employeesResult.data??[], orders=ordersResult.data??[];
-    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=syncRunsResult.data??[];
+    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[];
     const snapshots=snapshotsResult.data??[];
     const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
     const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
@@ -1502,7 +1529,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const counts={clients:clients.length,sites:sites.length,equipment:equipment.length,services:services.length,employees:employees.length,fieldControlEmployees:fcEmployees.length,orders:orders.length,orderEquipmentLinks:orderEquipment.length,externalRefs:refs.length};
     const critical=issues.filter((x:any)=>x.severity==="critical").length;
     const warnings=issues.filter((x:any)=>x.severity==="warning").length;
-    return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:syncRuns[0]??null,snapshotCounts,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
+    return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:(await readDbsControlAuditRows(10))[0]??null,snapshotCounts,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
   });
 
 
