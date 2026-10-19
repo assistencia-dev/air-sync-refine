@@ -125,33 +125,39 @@ async function getCollaboratorEmployee(userId: string) {
 function filterCollaboratorState(state: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const normalized = normalizeState(state);
   const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
+  const employeeKeys = (value: any) => [
+    value?.employeeId, value?.assignedEmployeeId, value?.assigned_employee_id, value?.employee_id,
+  ].map((item) => String(item ?? "").trim()).filter(Boolean);
   const technicians = (normalized.tecnicos as any[]).filter((tech) =>
-    String(tech?.employeeId ?? "") === employeeId ||
+    employeeKeys(tech).includes(employeeId) ||
+    String(tech?.employee_id ?? "") === employeeId ||
     (normalizedEmail && String(tech?.email ?? "").trim().toLowerCase() === normalizedEmail)
   );
-  const technicianIds = new Set(technicians.map((tech) => String(tech.id)));
+  const technicianIds = new Set(technicians.flatMap((tech) => [
+    tech?.id, tech?.tecnicoId, tech?.technicianId, tech?.technician_id,
+  ]).map((value) => String(value ?? "").trim()).filter(Boolean));
 
-  // employeeId é a referência canônica. tecnicoId continua sendo aceito para
-  // preservar OS antigas que ainda não receberam o vínculo central do RH.
+  // RH employee ID is canonical. Accept legacy and snake_case assignment aliases
+  // so an OS issued by administration is not hidden from its assigned collaborator.
   const orders = (normalized.ordens as any[])
     .filter((order) =>
-      String(order?.employeeId ?? "") === employeeId ||
-      technicianIds.has(String(order?.tecnicoId))
+      employeeKeys(order).includes(employeeId) ||
+      technicianIds.has(String(order?.tecnicoId ?? "").trim()) ||
+      technicianIds.has(String(order?.technicianId ?? "").trim()) ||
+      technicianIds.has(String(order?.technician_id ?? "").trim())
     )
-    .map((order) => (
-      String(order?.employeeId ?? "") === employeeId
-        ? order
-        : { ...order, employeeId }
-    ));
-  const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
+    .map((order) => ({ ...order, employeeId }));
+
+  const clientIds = new Set(orders.map((order) => String(order?.clienteId ?? order?.client_id ?? "")).filter(Boolean));
   const equipmentIds = new Set<string>();
   for (const order of orders) {
     if (order?.equipamentoId != null) equipmentIds.add(String(order.equipamentoId));
+    if (order?.equipment_id != null) equipmentIds.add(String(order.equipment_id));
     for (const equipmentId of Array.isArray(order?.equipamentosIds) ? order.equipamentosIds : []) {
       if (equipmentId != null) equipmentIds.add(String(equipmentId));
     }
   }
-  const serviceIds = new Set(orders.map((order) => String(order?.servicoId)).filter(Boolean));
+  const serviceIds = new Set(orders.map((order) => String(order?.servicoId ?? order?.service_id ?? "")).filter(Boolean));
 
   const partsUsed = new Set<string>();
   for (const order of orders) {
@@ -165,7 +171,9 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
     tecnicos: technicians,
     ordens: orders,
     clientes: (normalized.clientes as any[]).filter((item) => clientIds.has(String(item?.id))),
-    equipamentos: (normalized.equipamentos as any[]).filter((item) => equipmentIds.has(String(item?.id))),
+    equipamentos: (normalized.equipamentos as any[]).filter((item) =>
+      equipmentIds.has(String(item?.id)) || clientIds.has(String(item?.clienteId ?? item?.client_id))
+    ),
     servicos: (normalized.servicos as any[]).filter((item) => serviceIds.has(String(item?.id))),
     pecas: (normalized.pecas as any[]).filter((item) => partsUsed.has(String(item?.id))),
     compras: [],
