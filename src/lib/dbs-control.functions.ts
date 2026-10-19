@@ -27,35 +27,85 @@ async function requireDbsControlUser(context: { userId: string }) {
 }
 
 async function resolveDbsControlScope(user: DbsControlUser) {
-  if (user.company_id) return { scopeKey: `company:${user.company_id}`, ownerUserId: user.id, companyId: user.company_id };
-  if (user.role_key !== "COLABORADOR") return { scopeKey: `user:${user.id}`, ownerUserId: user.id, companyId: null as string | null };
+  // Administradores mantêm o escopo determinístico da empresa/usuário.
+  if (user.role_key !== "COLABORADOR") {
+    return user.company_id
+      ? { scopeKey: `company:${user.company_id}`, ownerUserId: user.id, companyId: user.company_id }
+      : { scopeKey: `user:${user.id}`, ownerUserId: user.id, companyId: null as string | null };
+  }
+
+  // Para colaborador, não presumir que o escopo é company:<id>: versões
+  // anteriores criavam a base administrativa como user:<admin-id>. Localizar
+  // o snapshot real evita o erro "base compartilhada não foi criada" mesmo
+  // quando o funcionário já tem company_id preenchido no RH.
+  const { data: admins, error: adminError } = await supabaseAdmin
+    .from("users")
+    .select("id, company_id, role_key, status")
+    .eq("status", "ativo")
+    .in("role_key", ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"]);
+  if (adminError) throw new Error(adminError.message);
+
+  const adminIds = (admins ?? []).map((admin: any) => String(admin.id));
+  const { data: snapshots, error: snapshotError } = adminIds.length
+    ? await supabaseAdmin
+        .from("dbs_control_snapshots")
+        .select("scope_key, owner_user_id, company_id, updated_at")
+        .in("owner_user_id", adminIds)
+        .order("updated_at", { ascending: false })
+    : { data: [], error: null };
+  if (snapshotError) throw new Error(snapshotError.message);
+
+  const candidates = (snapshots ?? []).filter((row: any) => {
+    const owner: any = (admins ?? []).find((admin: any) => String(admin.id) === String(row.owner_user_id));
+    const snapshotCompany = String(row.company_id ?? owner?.company_id ?? "");
+    return user.company_id
+      ? snapshotCompany === String(user.company_id)
+      : true;
+  });
+
+  const creatorCandidate = candidates.find((row: any) => String(row.owner_user_id) === String(user.created_by));
+  if (creatorCandidate) {
+    const owner: any = (admins ?? []).find((admin: any) => String(admin.id) === String(creatorCandidate.owner_user_id));
+    return {
+      scopeKey: String(creatorCandidate.scope_key),
+      ownerUserId: String(creatorCandidate.owner_user_id),
+      companyId: (creatorCandidate.company_id ?? owner?.company_id ?? user.company_id ?? null) as string | null,
+    };
+  }
+
+  if (candidates.length === 1) {
+    const row: any = candidates[0];
+    const owner: any = (admins ?? []).find((admin: any) => String(admin.id) === String(row.owner_user_id));
+    return {
+      scopeKey: String(row.scope_key),
+      ownerUserId: String(row.owner_user_id),
+      companyId: (row.company_id ?? owner?.company_id ?? user.company_id ?? null) as string | null,
+    };
+  }
+  if (candidates.length > 1) {
+    throw new Error("Há mais de uma base administrativa possível para este colaborador. Vincule-o à empresa correta no RH.");
+  }
+
+  // Sem snapshot existente, devolver o escopo esperado para que a leitura
+  // retorne vazio e a gravação possa informar explicitamente que a base ainda
+  // não foi criada; não criar uma base paralela em nome do colaborador.
+  if (user.company_id) {
+    return { scopeKey: `company:${user.company_id}`, ownerUserId: user.created_by ?? user.id, companyId: user.company_id };
+  }
   if (user.created_by) {
-    const { data: creator, error } = await supabaseAdmin.from("users").select("id, company_id, role_key, status").eq("id", user.created_by).maybeSingle();
-    if (error) throw new Error(error.message);
+    const { data: creator, error: creatorError } = await supabaseAdmin
+      .from("users")
+      .select("id, company_id, role_key, status")
+      .eq("id", user.created_by)
+      .maybeSingle();
+    if (creatorError) throw new Error(creatorError.message);
     if (creator && creator.status === "ativo" && ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"].includes(creator.role_key)) {
       return creator.company_id
         ? { scopeKey: `company:${creator.company_id}`, ownerUserId: creator.id, companyId: creator.company_id as string }
         : { scopeKey: `user:${creator.id}`, ownerUserId: creator.id, companyId: null as string | null };
     }
   }
-  const { data: admins, error: adminError } = await supabaseAdmin.from("users").select("id, company_id, role_key").eq("status", "ativo").in("role_key", ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"]);
-  if (adminError) throw new Error(adminError.message);
-  const ids = (admins ?? []).map((a: any) => String(a.id));
-  const { data: snapshots, error: snapshotError } = ids.length
-    ? await supabaseAdmin.from("dbs_control_snapshots").select("scope_key, owner_user_id, company_id, updated_at").in("owner_user_id", ids).order("updated_at", { ascending: false })
-    : { data: [], error: null };
-  if (snapshotError) throw new Error(snapshotError.message);
-  const candidates = (snapshots ?? []).filter((row: any) => {
-    const owner: any = (admins ?? []).find((a: any) => String(a.id) === String(row.owner_user_id));
-    return !user.company_id || String(row.company_id ?? owner?.company_id ?? "") === String(user.company_id);
-  });
-  if (candidates.length === 1) {
-    const row: any = candidates[0];
-    const owner: any = (admins ?? []).find((a: any) => String(a.id) === String(row.owner_user_id));
-    return { scopeKey: String(row.scope_key), ownerUserId: String(row.owner_user_id), companyId: (row.company_id ?? owner?.company_id ?? null) as string | null };
-  }
-  if (candidates.length > 1) throw new Error("Há mais de uma base administrativa possível. Vincule o colaborador à empresa correta no RH.");
-  throw new Error("A base compartilhada ainda não foi criada pela administração. Os dados locais foram preservados.");
+  throw new Error("Não foi possível localizar a base administrativa compartilhada. Confirme o vínculo do colaborador com a empresa no RH.");
 }
 
 function normalizeState(state: Record<string, unknown>) {
