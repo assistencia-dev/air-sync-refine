@@ -1430,7 +1430,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
 
     const clients=clientsResult.data??[], sites=sitesResult.data??[], equipment=equipmentResult.data??[];
     const services=servicesResult.data??[], employees=employeesResult.data??[], orders=ordersResult.data??[];
-    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=syncRunsResult.data??[];
+    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=(syncRunsResult.data??[]).map((row:any)=>({ ...row, mode: row.action, started_at: row.created_at, finished_at: row.created_at, summary: row.result, errors: row.error_message ? [{ message: row.error_message }] : [] }));
     const snapshots=snapshotsResult.data??[];
     const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
     const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
