@@ -385,7 +385,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     supabaseAdmin.from("dbs_control_service_catalog")
       .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
     supabaseAdmin.from("rh_employees")
-      .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at"),
+      .select("id,full_name,is_active,registration_data,updated_at"),
     fetchAllDbsControlWorkOrders(),
     supabaseAdmin.from("dbs_control_work_order_equipment")
       .select("work_order_id,equipment_id"),
@@ -517,8 +517,8 @@ async function hydrateDbsControlStateFromCanonicalDb(
         fone: registration.phone || registration.telefone || "",
         telefone: registration.phone || registration.telefone || "",
         posicao: registration.position || registration.cargo || "Técnico",
-        sourceSystem: row.source_system || "",
-        fieldControlId: row.source_key || "",
+        sourceSystem: row.source_system || registration.source_system || "",
+        fieldControlId: row.source_key || registration.source_key || registration.fieldControlId || "",
       };
     });
 
