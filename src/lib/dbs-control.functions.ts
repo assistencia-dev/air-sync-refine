@@ -1300,12 +1300,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
     if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
       try {
-        await syncAdminOrdersToCanonical(
-          adminOrdersToSync,
-          user.id,
-          Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [],
-          Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : [],
-        );
+        await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [], Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : []);
       } catch (canonicalError) {
         canonicalSyncWarning = canonicalError instanceof Error ? canonicalError.message : "Falha ao atualizar a tabela relacional das OS.";
         console.error("[DBS CONTROL] Despacho relacional falhou; a emissão será preservada no snapshot compartilhado:", canonicalSyncWarning);
