@@ -349,7 +349,7 @@ async function fetchAllDbsControlWorkOrders() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("dbs_control_work_orders")
-      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,observation,signature_name,signature_data,total_cents,created_at,updated_at")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,signature_path,assinatura_path,total_cents,version,created_at,updated_at")
       .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
