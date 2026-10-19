@@ -259,13 +259,12 @@ function DbsControlPage() {
             : null;
 
           const localHasData = dbsControlStateHasData(localState);
-          const cloudHasData = dbsControlStateHasData(cloudState);
           localRecoveryStateRef.current = localState;
           // O cache local pode conter OS/cadastros ainda não consolidados no snapshot.
           // Não bloqueie toda a operação apenas por diferença de contagem: reconciliamos
           // por identidade, a nuvem prevalece nos campos preenchidos e registros locais
           // exclusivos ficam preservados para a próxima gravação explícita do usuário.
-          const cloudIsIncomplete = false;
+          const cloudIsIncomplete = !cloudState && localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
           if (cloudState) {
             const reconciledInitialState = mergeDbsControlStates(cloudState, localState);
             localRecoveryStateRef.current = reconciledInitialState;
