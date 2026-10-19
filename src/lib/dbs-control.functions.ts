@@ -763,10 +763,22 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     const snapshotState = data?.state && typeof data.state === "object" && !Array.isArray(data.state)
       ? data.state as Record<string, unknown>
       : {};
-    const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
-      snapshotState,
-      scope.companyId,
-    );
+    let canonicalHydratedState: Record<string, unknown>;
+    let canonicalHydrationWarning: string | null = null;
+    try {
+      canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
+        snapshotState,
+        scope.companyId,
+      );
+    } catch (error) {
+      // A leitura do snapshot compartilhado não deve ser derrubada por uma
+      // tabela relacional ausente/desatualizada. O snapshot continua sendo a
+      // fonte compatível para emissão/entrega até a reconciliação canônica.
+      if (!data) throw error;
+      canonicalHydratedState = normalizeState(snapshotState);
+      canonicalHydrationWarning = error instanceof Error ? error.message : "Falha ao consultar as tabelas relacionais.";
+      console.error("[DBS CONTROL] Hidratação relacional indisponível; usando snapshot compartilhado:", canonicalHydrationWarning);
+    }
     const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
     const hasCanonicalRecords = [
       hydratedState.clientes,
@@ -781,7 +793,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (!data && !hasCanonicalRecords) return null;
 
     const hydrated = data
-      ? { ...data, state: hydratedState }
+      ? { ...data, state: hydratedState, ...(canonicalHydrationWarning ? { canonical_hydration_warning: canonicalHydrationWarning } : {}) }
       : {
           state: hydratedState,
           state_version: 1,
@@ -800,6 +812,34 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     };
   });
 
+
+
+function normalizeDbsControlOrderAssignments(stateInput: Record<string, unknown>) {
+  const state = normalizeState(stateInput);
+  const technicians = state.tecnicos as any[];
+  const orders = (state.ordens as any[]).map((order) => {
+    const technicianRef = String(order?.tecnicoId ?? order?.technicianId ?? order?.technician_id ?? "").trim();
+    const existingEmployeeId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? order?.employee_id ?? "").trim();
+    const technician = technicians.find((item) => {
+      const ids = [item?.id, item?.tecnicoId, item?.technicianId, item?.technician_id]
+        .map((value) => String(value ?? "").trim()).filter(Boolean);
+      return technicianRef ? ids.includes(technicianRef) : false;
+    });
+    const mappedEmployeeId = String(technician?.employeeId ?? technician?.employee_id ?? "").trim();
+    const employeeId = DBS_CONTROL_UUID_RE.test(mappedEmployeeId)
+      ? mappedEmployeeId
+      : (DBS_CONTROL_UUID_RE.test(existingEmployeeId) ? existingEmployeeId : "");
+    if (!employeeId) return order;
+    return {
+      ...order,
+      employeeId,
+      assignedEmployeeId: employeeId,
+      assigned_employee_id: employeeId,
+      ...(technicianRef ? { tecnicoId: technicianRef } : {}),
+    };
+  });
+  return { ...state, ordens: orders };
+}
 
 const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
