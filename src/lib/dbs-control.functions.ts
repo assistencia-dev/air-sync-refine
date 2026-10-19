@@ -1115,10 +1115,17 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
         const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
         const changedFields = ["status", "employeeId", "assignedEmployeeId", "tecnicoId", "clienteId", "client_id", "siteId", "localId", "diagnostico", "technical_opinion", "trabalhoExecutado", "servicoExecutado", "observacao", "observation", "prioridade", "tipo", "scheduledAt", "scheduled_at", "assinaturaStoragePath", "assinatura", "signature_name", "concluidoEm", "completedAt"];
+        // Uma falha no despacho relacional não pode ser esquecida só porque o
+        // snapshot foi salvo. A marca é persistida por OS e força nova tentativa
+        // no próximo autosave, mesmo quando os campos de negócio não mudaram.
+        const pendingSyncKeys = new Set(latestOrders
+          .filter((order) => order?._canonicalSyncPending === true)
+          .flatMap((order) => [orderId(order), orderProtocol(order)].filter(Boolean)));
         adminOrdersToSync = incomingOrders.filter((incoming) => {
           const id = orderId(incoming);
           const protocol = orderProtocol(incoming);
           const latest = (id ? latestById.get(id) : undefined) ?? (protocol ? latestByProtocol.get(protocol) : undefined);
+          if ((id && pendingSyncKeys.has(id)) || (protocol && pendingSyncKeys.has(protocol))) return true;
           if (!latest) return true;
           return changedFields.some((field) => JSON.stringify((incoming as any)?.[field] ?? null) !== JSON.stringify((latest as any)?.[field] ?? null));
         });
@@ -1349,11 +1356,47 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     stateToSave = normalizeDbsControlOrderAssignments(stateToSave);
 
     if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
+      const syncKeys = new Set(adminOrdersToSync.flatMap((order) => [
+        String(order?.id ?? "").trim(),
+        String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR"),
+      ]).filter(Boolean));
       try {
         await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [], Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : []);
+        // Só limpar a marca depois que todas as OS tentadas forem confirmadas
+        // na tabela relacional. A função é idempotente para os protocolos existentes.
+        const savedState = normalizeState(stateToSave);
+        stateToSave = {
+          ...savedState,
+          ordens: (savedState.ordens as any[]).map((order) => {
+            const keys = [
+              String(order?.id ?? "").trim(),
+              String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR"),
+            ].filter(Boolean);
+            if (!keys.some((key) => syncKeys.has(key))) return order;
+            const { _canonicalSyncPending: _pending, ...cleanOrder } = order;
+            return cleanOrder;
+          }),
+        };
       } catch (canonicalError) {
         canonicalSyncWarning = canonicalError instanceof Error ? canonicalError.message : "Falha ao atualizar a tabela relacional das OS.";
-        console.error("[DBS CONTROL] Despacho relacional falhou; a emissão será preservada no snapshot compartilhado:", canonicalSyncWarning);
+        // Persistir a fila pendente no próprio snapshot: no próximo autosave a
+        // OS será despachada novamente, mesmo que seus campos permaneçam iguais.
+        const failedKeys = new Set(adminOrdersToSync.flatMap((order) => [
+          String(order?.id ?? "").trim(),
+          String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR"),
+        ]).filter(Boolean));
+        const failedState = normalizeState(stateToSave);
+        stateToSave = {
+          ...failedState,
+          ordens: (failedState.ordens as any[]).map((order) => {
+            const keys = [
+              String(order?.id ?? "").trim(),
+              String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR"),
+            ].filter(Boolean);
+            return keys.some((key) => failedKeys.has(key)) ? { ...order, _canonicalSyncPending: true } : order;
+          }),
+        };
+        console.error("[DBS CONTROL] Despacho relacional falhou; OS marcada para retentativa persistente:", canonicalSyncWarning);
       }
     }
 
