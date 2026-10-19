@@ -732,6 +732,12 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     const order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
       String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
     if (!order) throw new Error("OS não encontrada na base compartilhada.");
+    // Na primeira emissão, ainda não existe snapshot anterior para comparar.
+    // Nesse caso, todas as OS recebidas precisam entrar no primeiro despacho canônico.
+    if (user.role_key !== "COLABORADOR" && !hadLatestAdminSnapshot) {
+      adminOrdersToSync = normalizeState(data.state).ordens as any[];
+    }
+
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
@@ -1092,6 +1098,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     let ownerUserId = scope.ownerUserId;
     let adminOrdersToSync: any[] = [];
     let canonicalSyncWarning: string | null = null;
+    let hadLatestAdminSnapshot = false;
 
     // Reconcile complete snapshots against the latest shared snapshot before an
     // administrative save, preventing delayed autosaves from dropping existing OS.
@@ -1103,6 +1110,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         .maybeSingle();
       if (latestError) throw new Error(latestError.message);
       if (latestSnapshot?.state && typeof latestSnapshot.state === "object") {
+        hadLatestAdminSnapshot = true;
         const latestState = normalizeState(latestSnapshot.state as Record<string, unknown>);
         const incomingState = normalizeState(data.state);
         const latestOrders = latestState.ordens as any[];
