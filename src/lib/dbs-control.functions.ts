@@ -1041,6 +1041,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     let stateToSave = data.state;
     let ownerUserId = scope.ownerUserId;
     let adminOrdersToSync: any[] = [];
+    let canonicalSyncWarning: string | null = null;
 
     // Reconcile complete snapshots against the latest shared snapshot before an
     // administrative save, preventing delayed autosaves from dropping existing OS.
@@ -1151,6 +1152,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       const incomingForEmployee = filterCollaboratorState(data.state, employee.id, employee.login_email).ordens as any[];
       const protocolKey = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
       if (incomingForEmployee.length) {
+        try {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
           .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name,diagnostico,servico_executado,signature_path,assinatura_path,version")
@@ -1282,13 +1284,32 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         if (ignoradas.length) {
           throw new Error("Não foi possível confirmar a conclusão de uma ou mais OS: " + ignoradas.map((item) => `${item.protocolo} — ${item.motivo}`).join("; "));
         }
+        } catch (canonicalError) {
+          canonicalSyncWarning = canonicalError instanceof Error ? canonicalError.message : "Falha ao atualizar a tabela relacional das OS.";
+          console.error("[DBS CONTROL] Atualização relacional da OS falhou; a gravação do snapshot compartilhado continuará:", canonicalSyncWarning);
+        }
       }
 
       ownerUserId = current.owner_user_id ?? user.id;
     }
 
+    // Grava o vínculo RH resolvido no próprio snapshot compartilhado. Assim o
+    // colaborador pode receber a OS mesmo quando a tabela relacional estiver
+    // atrasada ou indisponível.
+    stateToSave = normalizeDbsControlOrderAssignments(stateToSave);
+
     if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
-      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [], Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : []);
+      try {
+        await syncAdminOrdersToCanonical(
+          adminOrdersToSync,
+          user.id,
+          Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [],
+          Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : [],
+        );
+      } catch (canonicalError) {
+        canonicalSyncWarning = canonicalError instanceof Error ? canonicalError.message : "Falha ao atualizar a tabela relacional das OS.";
+        console.error("[DBS CONTROL] Despacho relacional falhou; a emissão será preservada no snapshot compartilhado:", canonicalSyncWarning);
+      }
     }
 
     const payload = {
@@ -1405,9 +1426,13 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       return {
         ...saved,
         state: filterCollaboratorState(saved.state as Record<string, unknown>, employee.id, employee.login_email),
+        ...(canonicalSyncWarning ? { canonical_sync_warning: canonicalSyncWarning } : {}),
       };
     }
-    return saved;
+    return {
+      ...saved,
+      ...(canonicalSyncWarning ? { canonical_sync_warning: canonicalSyncWarning } : {}),
+    };
   });
 
 
