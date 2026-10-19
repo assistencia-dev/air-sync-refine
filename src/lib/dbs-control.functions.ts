@@ -897,9 +897,10 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     });
     // O vínculo RH (employeeId) é a chave canônica. Se o formulário enviar apenas
     // o ID legado do técnico, resolve-o pelo cadastro de técnicos antes do despacho.
-    const assignedId = DBS_CONTROL_UUID_RE.test(explicitEmployeeId)
-      ? explicitEmployeeId
-      : String(matchedTechnician?.employeeId ?? matchedTechnician?.employee_id ?? "").trim();
+    const mappedEmployeeId = String(matchedTechnician?.employeeId ?? matchedTechnician?.employee_id ?? "").trim();
+    const assignedId = DBS_CONTROL_UUID_RE.test(mappedEmployeeId)
+      ? mappedEmployeeId
+      : (DBS_CONTROL_UUID_RE.test(explicitEmployeeId) ? explicitEmployeeId : "");
     const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
     const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
     const fields: Record<string, unknown> = {
