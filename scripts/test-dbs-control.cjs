@@ -76,10 +76,10 @@ assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(can
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
-assert.match(route, /postMessage\(\s*\{ type: "DBS_CONTROL_CLOUD_STATE", state: cloudState \}/, "Quando existe snapshot compartilhado, a inicialização deve entregar a nuvem sem mesclar/gravar o snapshot local.");
+assert.match(route, /const reconciledInitialState = mergeDbsControlStates\(cloudState, localState\)/, "A inicialização deve reconciliar registros locais exclusivos com a nuvem sem gravar automaticamente.");
 assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicialização deve detectar quando a nuvem tem menos registros que a cópia local.");
-assert.match(route, /const cloudIsIncomplete = !employeeModeRef\.current && localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)/, "O guard de recuperação não deve comparar a base filtrada do colaborador com o cache completo.");
-assert.match(route, /if \(!employeeModeRef\.current && dbsControlStateIsSmallerThan\(localRecoveryStateRef\.current, latest\.state as Record<string, unknown>\)\)/, "O Realtime não deve gerar falso alarme para o snapshot filtrado do colaborador.");
+assert.match(route, /const cloudIsIncomplete = false/, "Diferença de contagem não pode bloquear globalmente a emissão; a reconciliação preserva registros locais exclusivos.");
+assert.match(route, /const reconciledLatestState = mergeDbsControlStates\([\s\S]*?localRecoveryStateRef\.current[\s\S]*?\)/, "O Realtime deve reconciliar registros locais exclusivos sem bloquear a fila de gravação.");
 assert.match(route, /if \(!cloudReadyRef\.current\) \{[\s\S]*?return;\s*\}\s*pendingStateRef\.current = msg\.state/, "Uma gravação bloqueada não pode entrar na fila de salvamento.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
