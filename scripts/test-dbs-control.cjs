@@ -66,6 +66,10 @@ assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(
 assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
 assert.match(atomicSnapshotMigration, /grant execute on function public\.dbs_control_save_snapshot_safe\(jsonb\) to service_role/i, "O RPC de snapshot deve ser restrito ao service_role.");
 assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
+assert.match(cloudFunctions, /async function syncAdminOrdersToCanonical\(orders: any\[\], userId: string, snapshotClients: any\[\] = \[\], snapshotTechnicians: any\[\] = \[\]\)/, "O despacho administrativo deve receber os técnicos do snapshot para resolver o vínculo RH.");
+assert.match(cloudFunctions, /const mappedEmployeeId = String\(matchedTechnician\?\.employeeId \?\? matchedTechnician\?\.employee_id \?\? ""\)/, "O despacho deve resolver o ID canônico do funcionário RH pelo cadastro do técnico.");
+assert.match(cloudFunctions, /await syncAdminOrdersToCanonical\(adminOrdersToSync,[\s\S]*?\.tecnicos\) \? \(stateToSave as any\)\.tecnicos : \[\]\)/, "A gravação administrativa deve passar os técnicos para o despacho canônico da OS.");
+
 assert.match(cloudFunctions, /const merged: Record<string, unknown> = \{ \.\.\.current \};[\s\S]*?for \(const \[key, value\] of Object\.entries\(canonical\)\)/, "Campos canônicos preenchidos no banco devem prevalecer sobre snapshots legados.");
 assert.match(cloudFunctions, /preserveCompletedWorkOrderStatus: true/, "A hidratação das OS deve proteger uma conclusão já registrada no snapshot contra status canônico desatualizado.");
 assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(canonical\?\.status\)/, "Um status canônico antigo não pode reabrir uma OS concluída no snapshot.");
