@@ -814,6 +814,8 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
 
 
+const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function normalizeDbsControlOrderAssignments(stateInput: Record<string, unknown>) {
   const state = normalizeState(stateInput);
   const technicians = state.tecnicos as any[];
@@ -840,8 +842,6 @@ function normalizeDbsControlOrderAssignments(stateInput: Record<string, unknown>
   });
   return { ...state, ordens: orders };
 }
-
-const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = [], snapshotTechnicians: any[] = []) {
   const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
