@@ -803,7 +803,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
 const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = []) {
+async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = [], snapshotTechnicians: any[] = []) {
   const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
   const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
   const clientIdCache = new Map<string, string>();
@@ -888,7 +888,18 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       : normalizedStatus === "aguardando_cliente" ? "aguardando_cliente"
       : normalizedStatus === "cancelada" ? "cancelada"
       : normalizedStatus || "aberta";
-    const assignedId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
+    const explicitEmployeeId = String(order?.employeeId ?? order?.assigned_employee_id ?? order?.assignedEmployeeId ?? "").trim();
+    const technicianReference = String(order?.tecnicoId ?? order?.technicianId ?? order?.technician_id ?? explicitEmployeeId).trim();
+    const matchedTechnician = snapshotTechnicians.find((technician: any) => {
+      const refs = [technician?.id, technician?.tecnicoId, technician?.technicianId, technician?.technician_id]
+        .map((value) => String(value ?? "").trim()).filter(Boolean);
+      return refs.includes(technicianReference) || refs.includes(String(order?.tecnicoId ?? "").trim());
+    });
+    // O vínculo RH (employeeId) é a chave canônica. Se o formulário enviar apenas
+    // o ID legado do técnico, resolve-o pelo cadastro de técnicos antes do despacho.
+    const assignedId = DBS_CONTROL_UUID_RE.test(explicitEmployeeId)
+      ? explicitEmployeeId
+      : String(matchedTechnician?.employeeId ?? matchedTechnician?.employee_id ?? "").trim();
     const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
     const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
     const fields: Record<string, unknown> = {
@@ -1236,7 +1247,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     }
 
     if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
-      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : []);
+      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : [], Array.isArray((stateToSave as any).tecnicos) ? (stateToSave as any).tecnicos : []);
     }
 
     const payload = {
