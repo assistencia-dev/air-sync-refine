@@ -1321,7 +1321,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     let saveResult = await supabaseAdmin
       .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
       .single();
-    if (saveResult.error && /base_updated_at|conflito|concurrent|serialization|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
+    if (saveResult.error && /DBS_SNAPSHOT_STALE_VERSION|stale version|base_updated_at|base compartilhada|conflito|concurrent|serialization|40001|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
       const { data: latestSnapshot, error: latestError } = await supabaseAdmin
         .from("dbs_control_snapshots")
         .select("state, updated_at, owner_user_id, company_id")
