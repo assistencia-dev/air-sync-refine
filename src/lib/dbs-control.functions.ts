@@ -494,7 +494,7 @@ async function fetchAllDbsControlWorkOrders() {
 
 async function hydrateDbsControlStateFromCanonicalDb(
   state: Record<string, unknown>,
-  companyId: string | null,
+  _companyId: string | null,
 ) {
   // Usado somente quando o snapshot não existe; nunca mesclar duas fontes quando há snapshot.
   const [
