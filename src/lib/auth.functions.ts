@@ -50,35 +50,46 @@ export const resolveLogin = createServerFn({ method: "POST" })
       return { email: found.email };
     }
 
-    // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
+    // Bootstrap SUPER_ADMIN idempotently. Prefer repairing the profile for an
+    // existing Auth account; only creating a brand-new privileged credential
+    // requires the server-only recovery secret.
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
-      // Never provision a privileged account with a password embedded in source code.
-      // Configure DBS_BOOTSTRAP_ADMIN_PASSWORD as a server-only secret for recovery.
-      if (!BOOTSTRAP_PASSWORD || BOOTSTRAP_PASSWORD.length < 16) {
-        throw new Error("A recuperação do administrador está desabilitada até que a senha temporária segura seja configurada no servidor.");
+      const { data: listed, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listError) {
+        console.error("[auth] Falha ao consultar usuários Auth:", listError);
+        throw new Error("Não foi possível verificar a conta administrativa existente.");
       }
-      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email: BOOTSTRAP_EMAIL,
-        password: BOOTSTRAP_PASSWORD,
-        email_confirm: true,
-        user_metadata: { username: BOOTSTRAP_USERNAME },
-      });
-      if (createErr && !/already/i.test(createErr.message)) {
-        console.error("[auth] Falha ao inicializar administrador:", createErr);
-        throw new Error("Falha ao inicializar o administrador. Verifique os logs seguros do servidor.");
+      let authUser = listed.users.find((user) => user.email?.toLowerCase() === BOOTSTRAP_EMAIL.toLowerCase()) ?? null;
+
+      if (!authUser) {
+        // Never provision a privileged account with a password embedded in source code.
+        // Configure DBS_BOOTSTRAP_ADMIN_PASSWORD as a server-only secret for first-time recovery.
+        if (!BOOTSTRAP_PASSWORD || BOOTSTRAP_PASSWORD.length < 16) {
+          throw new Error("A conta administrativa ainda não existe no Auth. Configure DBS_BOOTSTRAP_ADMIN_PASSWORD como segredo do servidor para concluir a recuperação segura.");
+        }
+        const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+          email: BOOTSTRAP_EMAIL,
+          password: BOOTSTRAP_PASSWORD,
+          email_confirm: true,
+          user_metadata: { username: BOOTSTRAP_USERNAME },
+        });
+        if (createErr) {
+          console.error("[auth] Falha ao inicializar administrador:", createErr);
+          throw new Error("Falha ao inicializar o administrador. Verifique os logs seguros do servidor.");
+        }
+        authUser = created.user;
       }
-      let authId = created?.user?.id ?? null;
-      if (!authId) {
-        const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-        authId = list.users.find((u) => u.email === BOOTSTRAP_EMAIL)?.id ?? null;
-      }
-      if (!authId) throw new Error("Não foi possível provisionar o administrador.");
+
+      if (!authUser?.id) throw new Error("Não foi possível localizar a conta de autenticação do administrador.");
 
       const { error: profileError } = await supabaseAdmin.from("users").upsert(
-        { auth_id: authId, username: BOOTSTRAP_USERNAME, email: BOOTSTRAP_EMAIL, full_name: "Super Administrador DBS Air", role_key: "SUPER_ADMIN", status: "ativo" },
+        { auth_id: authUser.id, username: BOOTSTRAP_USERNAME, email: BOOTSTRAP_EMAIL, full_name: "Super Administrador DBS Air", role_key: "SUPER_ADMIN", status: "ativo" },
         { onConflict: "auth_id" },
       );
-      if (profileError) throw new Error("O usuário de autenticação existe, mas não foi possível gravar o perfil administrativo na tabela users. Verifique o schema do Supabase.");
+      if (profileError) {
+        console.error("[auth] Falha ao reparar perfil administrativo:", profileError);
+        throw new Error("A conta Auth existe, mas o perfil SUPER_ADMIN não pôde ser recuperado. Verifique o schema da tabela users.");
+      }
       return { email: BOOTSTRAP_EMAIL };
     }
 
