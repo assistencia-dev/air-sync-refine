@@ -80,6 +80,8 @@ assert.match(cloudFunctions, /\.in\("owner_user_id", companyAdminIds\)[\s\S]*?ne
 assert.doesNotMatch(cloudFunctions, /from\("dbs_control_work_orders"\)\s*\.update\(update\)/, "A conclusão do colaborador não deve gravar uma cópia concorrente da OS.");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "A emissão e conclusão devem persistir pelo RPC atômico do snapshot.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "O histórico técnico deve ser preservado na fonte única.");
+assert.match(cloudFunctions, /\.update\(\{ \.\.\.fields, version: currentVersion \}\)[\s\S]*?order\.version = Number\(updated\.version \|\| currentVersion \+ 1\)/, "A projeção deve enviar a versão atual e aceitar o incremento atômico do trigger do banco.");
+assert.match(route, /projectionRetryInFlightRef/, "A retentativa automática precisa ser serializada para não competir com o salvamento normal.");
 assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
 assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
