@@ -1284,9 +1284,30 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       }
     }
 
-    // Primeira gravação: preparar a projeção relacional de todas as OS recebidas.
+    // Primeira gravação do snapshot: a tabela relacional pode já conter OS
+    // legadas. Projetar somente protocolos ainda ausentes evita regravar milhares
+    // de atendimentos existentes ao recuperar um escopo sem snapshot.
     if (user.role_key !== "COLABORADOR" && !hadLatestAdminSnapshot) {
-      for (const order of (normalizeState(stateToSave).ordens as any[])) registerProjectionOrder(order);
+      const { data: canonicalOrders, error: canonicalOrdersError } = await fetchAllDbsControlWorkOrders();
+      const canonicalKeys = new Set<string>();
+      if (!canonicalOrdersError) {
+        for (const order of canonicalOrders ?? []) {
+          const id = String((order as any)?.id ?? "").trim();
+          const protocol = String((order as any)?.protocol ?? (order as any)?.protocolo ?? "").trim().toLocaleLowerCase("pt-BR");
+          if (id) canonicalKeys.add("id:" + id);
+          if (protocol) canonicalKeys.add("protocol:" + protocol);
+        }
+      } else {
+        // Não bloquear a gravação do snapshot por falha de leitura da projeção;
+        // as OS serão marcadas como pendentes e o erro aparecerá no status.
+        console.error("[DBS CONTROL] Não foi possível inventariar a projeção antes do primeiro snapshot:", canonicalOrdersError.message);
+      }
+      for (const order of (normalizeState(stateToSave).ordens as any[])) {
+        const keys = projectionKeysForOrder(order);
+        if (canonicalOrdersError || !keys.some((key) => canonicalKeys.has(key))) {
+          registerProjectionOrder(order);
+        }
+      }
     }
 
     if (user.role_key === "COLABORADOR") {
