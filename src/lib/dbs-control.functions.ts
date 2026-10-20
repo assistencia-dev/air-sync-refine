@@ -494,11 +494,264 @@ async function fetchAllDbsControlWorkOrders() {
 
 async function hydrateDbsControlStateFromCanonicalDb(
   state: Record<string, unknown>,
-  _companyId: string | null,
+  companyId: string | null,
 ) {
-  // Fonte única de OS: snapshot compartilhado. Não mesclar com dbs_control_work_orders,
-  // pois a escrita em dois modelos já causou divergência entre emissão e atendimento.
-  return normalizeState(state);
+  // Usado somente quando o snapshot não existe; nunca mesclar duas fontes quando há snapshot.
+  const [
+    clientsResult,
+    sitesResult,
+    equipmentResult,
+    servicesResult,
+    employeesResult,
+    ordersResult,
+    orderEquipmentResult,
+  ] = await Promise.all([
+    supabaseAdmin.from("dbs_control_clients")
+      .select("id,legal_name,trade_name,cnpj,phone,email,notes,status,updated_at"),
+    supabaseAdmin.from("dbs_control_sites")
+      .select("id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at"),
+    supabaseAdmin.from("dbs_control_equipment")
+      .select("id,client_id,site_id,tag_code,equipment_type,brand,model,serial_number,capacity,environment,installation_date,status,technical_notes,updated_at"),
+    supabaseAdmin.from("dbs_control_service_catalog")
+      .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
+    supabaseAdmin.from("rh_employees")
+      .select("id,full_name,is_active,registration_data,updated_at"),
+    fetchAllDbsControlWorkOrders(),
+    supabaseAdmin.from("dbs_control_work_order_equipment")
+      .select("work_order_id,equipment_id"),
+  ]);
+
+  const results = [
+    clientsResult,
+    sitesResult,
+    equipmentResult,
+    servicesResult,
+    employeesResult,
+    ordersResult,
+    orderEquipmentResult,
+  ];
+  const firstError = results.find((result) => result.error)?.error;
+  if (firstError) throw new Error(firstError.message);
+
+  const current = normalizeState(state);
+  const byId = (items: unknown[]) => new Map(items.map((item: any) => [String(item?.id ?? ""), item]).filter(([id]) => id));
+  const mergeArray = (
+    currentItems: unknown[],
+    incomingItems: unknown[],
+    options: { preserveCompletedWorkOrderStatus?: boolean } = {},
+  ) => {
+    const incomingById = byId(incomingItems);
+    const result = (currentItems as any[]).map((item) => {
+      const canonical = incomingById.get(String(item?.id ?? "")) ?? {};
+      const merged = mergeDbsRecord(canonical, item);
+      if (options.preserveCompletedWorkOrderStatus) {
+        const isCompleted = (value: unknown) =>
+          ["concluída", "concluida", "concluído", "concluido"].includes(
+            String(value ?? "").trim().toLocaleLowerCase("pt-BR"),
+          );
+        // Uma conclusão já presente no snapshot não pode ser rebaixada por uma
+        // linha canônica ainda desatualizada. Se o banco também confirma conclusão,
+        // o status canônico continua prevalecendo.
+        if (isCompleted(item?.status) && !isCompleted(canonical?.status)) {
+          merged.status = item.status;
+        }
+      }
+      return merged;
+    });
+    const currentIds = new Set(result.map((item) => String(item?.id ?? "")));
+    for (const item of incomingItems as any[]) {
+      const id = String(item?.id ?? "");
+      if (id && !currentIds.has(id)) result.push(item);
+    }
+    return result;
+  };
+
+  const canonicalClients = (clientsResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    nome: row.trade_name || row.legal_name || "Cliente sem nome",
+    razaoSocial: row.legal_name || row.trade_name || "",
+    nomeFantasia: row.trade_name || "",
+    cnpj: row.cnpj || "",
+    contato: row.phone || row.email || "",
+    telefone: row.phone || "",
+    email: row.email || "",
+    status: row.status || "ativo",
+    observacoes: row.notes || "",
+  }));
+
+  const canonicalSites = (sitesResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    clienteId: String(row.client_id),
+    nome: row.name || "Local",
+    endereco: row.address_json && typeof row.address_json === "object"
+      ? [
+          row.address_json.logradouro,
+          row.address_json.numero,
+          row.address_json.complemento,
+          row.address_json.bairro,
+          row.address_json.cidade,
+          row.address_json.uf,
+          row.address_json.cep,
+        ].filter(Boolean).join(", ")
+      : String(row.address_json || ""),
+    contato: row.contact_name || "",
+    telefone: row.contact_phone || "",
+    email: row.contact_email || "",
+    observacoes: row.notes || "",
+    status: row.status || "ativo",
+  }));
+
+  const canonicalEquipment = (equipmentResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    clienteId: String(row.client_id),
+    siteId: row.site_id ? String(row.site_id) : null,
+    localId: row.site_id ? String(row.site_id) : null,
+    tag: row.tag_code || "",
+    patrimonio: row.tag_code || "",
+    codigo: row.tag_code || "",
+    tipo: row.equipment_type || "",
+    nome: row.equipment_type || row.model || "Equipamento",
+    descricao: row.technical_notes || "",
+    marca: row.brand || "",
+    fabricante: row.brand || "",
+    modelo: row.model || "",
+    serie: row.serial_number || "",
+    numeroSerie: row.serial_number || "",
+    capacidade: row.capacity || "",
+    ambiente: row.environment || "",
+    localizacao: row.environment || "",
+    dataInstalacao: row.installation_date || "",
+    status: row.status || "ativo",
+    observacoes: row.technical_notes || "",
+  }));
+
+  const canonicalServices = (servicesResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    nome: row.name || "Serviço",
+    descricao: row.description || "",
+    valor: Number(row.table_value_cents || 0) / 100,
+    valorTabela: Number(row.table_value_cents || 0) / 100,
+    horasEstimadas: row.estimated_hours ?? null,
+    status: row.status || "ativo",
+  }));
+
+  const canonicalTechnicians = (employeesResult.data ?? [])
+    .filter((row: any) => row.is_active !== false)
+    .map((row: any) => {
+      const registration = row.registration_data && typeof row.registration_data === "object" ? row.registration_data : {};
+      return {
+        id: String(row.id),
+        employeeId: String(row.id),
+        nome: row.full_name || "Colaborador",
+        email: String(registration.email || "").trim().toLowerCase(),
+        fone: registration.phone || registration.telefone || "",
+        telefone: registration.phone || registration.telefone || "",
+        posicao: registration.position || registration.cargo || "Técnico",
+        sourceSystem: row.source_system || registration.source_system || "",
+        fieldControlId: row.source_key || registration.source_key || registration.fieldControlId || "",
+      };
+    });
+
+  const statusMap: Record<string, string> = {
+    aberta: "Em Atendimento",
+    em_atendimento: "Em Atendimento",
+    andamento: "Em Atendimento",
+    concluida: "Concluída",
+    concluída: "Concluída",
+    concluido: "Concluída",
+    concluído: "Concluída",
+    cancelada: "Cancelada",
+    cancelado: "Cancelada",
+    aguardando_peca: "Aguardando peça",
+    aguardando_cliente: "Aguardando cliente",
+  };
+
+  const equipmentLinks = new Map<string, string[]>();
+  for (const link of orderEquipmentResult.data ?? []) {
+    const orderId = String((link as any).work_order_id);
+    const equipmentId = String((link as any).equipment_id);
+    const list = equipmentLinks.get(orderId) ?? [];
+    if (!list.includes(equipmentId)) list.push(equipmentId);
+    equipmentLinks.set(orderId, list);
+  }
+
+  const canonicalOrders = (ordersResult.data ?? []).map((row: any) => {
+    const equipmentIds = equipmentLinks.get(String(row.id)) ?? [];
+    const assignedEmployeeId = row.assigned_employee_id ? String(row.assigned_employee_id) : null;
+    const mappedStatus = statusMap[String(row.status || "").trim().toLowerCase()] || row.status || "Em Atendimento";
+    return {
+      id: String(row.id),
+      protocolo: row.protocol || "",
+      data: row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "",
+      dataCriacao: row.created_at || "",
+      clienteId: String(row.client_id),
+      siteId: row.site_id ? String(row.site_id) : null,
+      localId: row.site_id ? String(row.site_id) : null,
+      equipamentoId: equipmentIds[0] || null,
+      equipamentosIds: equipmentIds,
+      tecnicoId: assignedEmployeeId,
+      employeeId: assignedEmployeeId,
+      servicoId: row.service_id ? String(row.service_id) : null,
+      tipo: row.type || "corretiva",
+      prioridade: row.priority || "normal",
+      status: mappedStatus,
+      scheduledAt: row.scheduled_at || null,
+      startedAt: row.started_at || null,
+      completedAt: row.completed_at || null,
+      sla: row.sla_deadline || null,
+      desc: row.description || "",
+      diagnostico: row.diagnostico || row.technical_opinion || "",
+      observacao: row.servico_executado || row.observation || "",
+      trabalhoExecutado: row.servico_executado || row.observation || "",
+      signature_name: row.signature_name || null,
+      assinaturaStoragePath: row.assinatura_path || row.signature_path || null,
+      assinatura: row.assinatura_path || row.signature_path ? null : (row.signature_data || null),
+      version: Number(row.version || 1),
+      valor: Number(row.total_cents || 0) / 100,
+    };
+  });
+
+  const sites = mergeArray(Array.isArray((current as any).sites) ? (current as any).sites : [], canonicalSites);
+  const locais = mergeArray(Array.isArray((current as any).locais) ? (current as any).locais : [], canonicalSites);
+
+  // O snapshot conserva campos legados, mas não pode apagar uma conclusão já
+  // registrada no banco operacional. O status canônico concluído sempre prevalece.
+  const mergedOrders = mergeArray(current.ordens as unknown[], canonicalOrders, { preserveCompletedWorkOrderStatus: true }).map((merged: any) => {
+    const canonical = canonicalOrders.find((order: any) =>
+      String(order.id) === String(merged?.id) ||
+      (String(order.protocolo ?? "").trim() &&
+        String(order.protocolo ?? "").trim() === String(merged?.protocolo ?? "").trim())
+    ) as any;
+    if (!canonical) return merged;
+    const canonicalCompleted = String(canonical.status ?? "").trim() === "Concluída";
+    const snapshotCompleted = ["concluída", "concluida", "concluído", "concluido"].includes(
+      String(merged?.status ?? "").trim().toLocaleLowerCase("pt-BR")
+    );
+    return {
+      ...merged,
+      status: canonicalCompleted ? "Concluída" : (snapshotCompleted ? merged.status : canonical.status),
+      scheduledAt: canonical.scheduledAt ?? merged.scheduledAt ?? null,
+      startedAt: canonical.startedAt ?? merged.startedAt ?? null,
+      completedAt: canonical.completedAt ?? merged.completedAt ?? null,
+      concluidoEm: canonical.completedAt ?? merged.concluidoEm ?? merged.completedAt ?? null,
+      diagnostico: canonical.diagnostico || merged.diagnostico || "",
+      observacao: canonical.observacao || merged.observacao || "",
+      assinatura: canonical.assinatura || merged.assinatura || null,
+      signature_name: canonical.signature_name || merged.signature_name || null,
+      valor: canonical.valor ?? merged.valor,
+    };
+  });
+
+  return {
+    ...current,
+    clientes: mergeArray(current.clientes as unknown[], canonicalClients),
+    equipamentos: mergeArray(current.equipamentos as unknown[], canonicalEquipment),
+    servicos: mergeArray(current.servicos as unknown[], canonicalServices),
+    tecnicos: mergeArray(current.tecnicos as unknown[], canonicalTechnicians),
+    ordens: mergedOrders,
+    sites,
+    locais,
+  };
 }
 
 const DBS_CONTROL_ATTACHMENT_BUCKET = "dbs-control-os";
@@ -632,30 +885,16 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
     if (error) throw new Error(error.message);
 
-    // O snapshot é uma camada de cache, não a única fonte de leitura.
-    // Se estiver ausente, consultar as tabelas operacionais sem gravar nem
-    // recriar snapshot automaticamente. Só declarar fallback válido se houver
-    // registros canônicos; isso evita substituir cache local por estado vazio.
+    // Regra de leitura: snapshot existente é a fonte autoritativa. As tabelas
+    // relacionais só servem para recuperar uma instalação/escopo legado sem
+    // snapshot; nunca mesclamos duas versões concorrentes no fluxo normal.
     const snapshotState = data?.state && typeof data.state === "object" && !Array.isArray(data.state)
       ? data.state as Record<string, unknown>
       : {};
-    let canonicalHydratedState: Record<string, unknown>;
-    let canonicalHydrationWarning: string | null = null;
-    try {
-      canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
-        snapshotState,
-        scope.companyId,
-      );
-    } catch (error) {
-      // A leitura do snapshot compartilhado não deve ser derrubada por uma
-      // tabela relacional ausente/desatualizada. O snapshot continua sendo a
-      // fonte compatível para emissão/entrega até a reconciliação canônica.
-      if (!data) throw error;
-      canonicalHydratedState = normalizeState(snapshotState);
-      canonicalHydrationWarning = error instanceof Error ? error.message : "Falha ao consultar as tabelas relacionais.";
-      console.error("[DBS CONTROL] Hidratação relacional indisponível; usando snapshot compartilhado:", canonicalHydrationWarning);
-    }
-    const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
+    const recoveredState = data
+      ? normalizeState(snapshotState)
+      : await hydrateDbsControlStateFromCanonicalDb({}, scope.companyId);
+    const hydratedState = await hydrateStoredAttachmentUrls(recoveredState);
     const hasCanonicalRecords = [
       hydratedState.clientes,
       hydratedState.equipamentos,
@@ -669,7 +908,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (!data && !hasCanonicalRecords) return null;
 
     const hydrated = data
-      ? { ...data, state: hydratedState, ...(canonicalHydrationWarning ? { canonical_hydration_warning: canonicalHydrationWarning } : {}) }
+      ? { ...data, state: hydratedState }
       : {
           state: hydratedState,
           state_version: 1,
@@ -687,7 +926,6 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       state: filterCollaboratorState(hydratedState, employee.id, employee.login_email),
     };
   });
-
 
 
 const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
