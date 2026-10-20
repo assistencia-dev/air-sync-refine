@@ -17,18 +17,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install --no-audit --no-fund --legacy-peer-deps
       - name: DBS Control regression tests
-        run: pnpm test:dbs-control
+        run: npm run test:dbs-control
       - name: Production build
-        run: pnpm build
+        run: npm run build
