@@ -137,7 +137,7 @@ function AdminPage() {
           </button>
           {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
             <button
-              onClick={() => navigate({ to: "/treasury" })}
+              onClick={() => navigate({ to: "/financeiro" })}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition text-white/65 hover:bg-white/10 hover:text-white`}
             >
               <Landmark className="h-4 w-4" /> Financeiro
@@ -211,7 +211,7 @@ function AdminPage() {
         {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
           <TabBtn
             active={false}
-            onClick={() => navigate({ to: "/treasury" })}
+            onClick={() => navigate({ to: "/financeiro" })}
             icon={<Landmark className="w-3.5 h-3.5" />}
             label="Financeiro"
           />
