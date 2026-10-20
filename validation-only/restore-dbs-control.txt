@@ -1,0 +1,1 @@
+Temporary validation marker for GitHub Actions build of recovery/restore-saved-lovable-functionality. This file is not part of the recovery PR and must not be merged.
