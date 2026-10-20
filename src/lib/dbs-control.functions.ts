@@ -59,16 +59,51 @@ async function resolveDbsControlScope(user: DbsControlUser) {
       };
     }
 
-    // Prioridade 2: snapshot da empresa criado por outro administrador.
+    // Prioridade 2: procurar também scopes legados de outro administrador
+    // da mesma empresa. Snapshots antigos podem ter company_id nulo na linha,
+    // mas o proprietário já está vinculado à empresa no cadastro users.
     if (user.company_id) {
-      const { data: companySnapshots, error: companyError } = await supabaseAdmin
+      const { data: companyAdmins, error: companyAdminsError } = await supabaseAdmin
+        .from("users")
+        .select("id, company_id, role_key, status")
+        .eq("status", "ativo")
+        .eq("company_id", user.company_id)
+        .in("role_key", ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"]);
+      if (companyAdminsError) throw new Error(companyAdminsError.message);
+
+      const companyAdminIds = (companyAdmins ?? []).map((admin: any) => String(admin.id));
+      const { data: ownedByCompanyAdmins, error: companySnapshotsError } = companyAdminIds.length
+        ? await supabaseAdmin
+            .from("dbs_control_snapshots")
+            .select("scope_key, owner_user_id, company_id, updated_at, state")
+            .in("owner_user_id", companyAdminIds)
+            .order("updated_at", { ascending: false })
+        : { data: [], error: null };
+      if (companySnapshotsError) throw new Error(companySnapshotsError.message);
+
+      const matchingCompanySnapshots = (ownedByCompanyAdmins ?? []).filter((row: any) => {
+        const owner = (companyAdmins ?? []).find((admin: any) => String(admin.id) === String(row.owner_user_id));
+        return String(row.company_id ?? owner?.company_id ?? "") === String(user.company_id);
+      });
+      if (matchingCompanySnapshots.length) {
+        const existing = newestPopulated(matchingCompanySnapshots as any[]);
+        return {
+          scopeKey: String(existing.scope_key),
+          ownerUserId: String(existing.owner_user_id ?? user.id),
+          companyId: (existing.company_id ?? user.company_id ?? null) as string | null,
+        };
+      }
+
+      // Compatibilidade com snapshots da empresa cujo owner_user_id foi
+      // removido ou migrado, mas cuja company_id permaneceu preenchida.
+      const { data: directCompanySnapshots, error: directCompanyError } = await supabaseAdmin
         .from("dbs_control_snapshots")
         .select("scope_key, owner_user_id, company_id, updated_at, state")
         .eq("company_id", user.company_id)
         .order("updated_at", { ascending: false });
-      if (companyError) throw new Error(companyError.message);
-      if ((companySnapshots ?? []).length) {
-        const existing = newestPopulated(companySnapshots as any[]);
+      if (directCompanyError) throw new Error(directCompanyError.message);
+      if ((directCompanySnapshots ?? []).length) {
+        const existing = newestPopulated(directCompanySnapshots as any[]);
         return {
           scopeKey: String(existing.scope_key),
           ownerUserId: String(existing.owner_user_id ?? user.id),
