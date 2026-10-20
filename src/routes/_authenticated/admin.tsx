@@ -72,7 +72,8 @@ function AdminPage() {
     if (
       profile.data &&
       profile.data.role_key !== "SUPER_ADMIN" &&
-      profile.data.role_key !== "ADMIN_OPERACIONAL"
+      profile.data.role_key !== "ADMIN_OPERACIONAL" &&
+      !NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "")
     ) {
       navigate({ to: "/portal", replace: true });
     }
