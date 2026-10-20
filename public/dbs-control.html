@@ -1939,6 +1939,43 @@
       body .pmoc-result-card select { width:100%; min-height:42px; border:1px solid #b8cde0; border-radius:9px; padding:9px 10px; background:#fff; color:#17324f; font-size:13px; }
       body .pmoc-result-card small { color:#5d7185; font-size:11px; line-height:1.5; }
     </style>
+
+<style id="dbs-recovery-responsive-guardrails">
+:root{--dbs-blue:#0756a6;--dbs-blue-dark:#063f7a}
+button,.btn,input[type="button"],input[type="submit"],select{touch-action:manipulation}
+input,select,textarea{max-width:100%}
+@media(max-width:760px){
+ html,body{width:100%;max-width:100%;min-width:0}
+ body{min-width:0!important;overflow-x:hidden!important}
+ body>main{box-sizing:border-box;width:100%!important;max-width:100%!important;min-width:0!important;margin-left:0!important}
+ body>main>header{box-sizing:border-box;min-width:0!important;width:100%!important;max-width:100%!important;padding:10px 12px!important;gap:8px!important;flex-wrap:wrap!important}
+ body>main>header>*{min-width:0;max-width:100%}
+ .page-title{min-width:0;flex:1 1 130px}
+ .page-title h1{font-size:16px!important;overflow-wrap:anywhere}
+ .tab-view{width:100%!important;max-width:100%!important;min-width:0!important;padding:12px!important;overflow-x:hidden!important}
+ .metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+ .metric-card{min-width:0!important;padding:10px!important}
+ .metric-value{font-size:clamp(18px,5vw,22px)!important;overflow-wrap:anywhere}
+ .form-grid{grid-template-columns:minmax(0,1fr)!important}
+ .form-group,.form-group input,.form-group select,.form-group textarea,.filter-bar input,.filter-bar select,input,select,textarea{min-width:0;max-width:100%;font-size:16px}
+ .form-group input,.form-group select,.form-group textarea,input,select,button,.btn,.filter-bar input,.filter-bar select{min-height:44px}
+ .filter-bar{width:100%;align-items:stretch!important;flex-wrap:wrap}
+ .data-header{align-items:stretch!important;padding:10px!important;flex-wrap:wrap}
+ .data-header>*,.data-header .filter-bar{min-width:0;max-width:100%}
+ .data-card{width:100%;max-width:100%}
+ .kanban-board{grid-template-columns:minmax(0,1fr)!important}
+ .table-scroll,.table-container,.table-responsive{max-width:100%!important;overflow-x:auto!important}
+ .os-row-actions{min-width:0!important;flex-wrap:wrap}
+ .employee-toolbar,.employee-os-tabs{flex-wrap:wrap}
+ .os-lifecycle-actions{display:grid;grid-template-columns:1fr;gap:6px}
+ .os-lifecycle-actions button{width:100%;min-height:42px}
+}
+@media(max-width:420px){
+ .metrics-grid,.day-kpi-grid{grid-template-columns:minmax(0,1fr)!important}
+ .dbs-mobile-cards td{grid-template-columns:minmax(0,38%) minmax(0,1fr)!important;gap:7px!important}
+}
+</style>
+
 </head>
 <body>
 
