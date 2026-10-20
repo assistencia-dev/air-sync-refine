@@ -50,6 +50,7 @@ const STATUSES = [
   "concluido",
   "cancelado",
 ];
+// Keep page access aligned with the native-admin checks used by the navigation and Treasury route.
 const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 
 const STATUS_LABELS: Record<string, string> = {
