@@ -27,11 +27,11 @@ async function getTreasuryClientCloudState() {
   if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id, company_id, role_key, status, username")
+    .select("id, company_id, role_key, status")
     .eq("auth_id", auth.user.id)
     .maybeSingle();
   if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN" && user.role_key !== "ADMIN_OPERACIONAL" && !["DBS123", "DBSASSISTENCIA123"].includes(user.username ?? "")) {
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
     throw new Error("Acesso ao Financeiro não autorizado.");
   }
   const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
@@ -49,11 +49,11 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
   if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id, company_id, role_key, status, username")
+    .select("id, company_id, role_key, status")
     .eq("auth_id", auth.user.id)
     .maybeSingle();
   if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN" && user.role_key !== "ADMIN_OPERACIONAL" && !["DBS123", "DBSASSISTENCIA123"].includes(user.username ?? "")) {
+  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
     throw new Error("Acesso ao Financeiro não autorizado.");
   }
   const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
@@ -102,10 +102,10 @@ function TreasuryPage() {
       }
       const { data: user, error } = await supabase
         .from("users")
-        .select("role_key, status, username")
+        .select("role_key, status")
         .eq("auth_id", auth.user.id)
         .maybeSingle();
-      if (error || !user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN" && user.role_key !== "ADMIN_OPERACIONAL" && !["DBS123", "DBSASSISTENCIA123"].includes(user.username ?? "")) {
+      if (error || !user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
         if (!cancelled) navigate({ to: "/portal", replace: true });
         return;
       }

@@ -1710,34 +1710,6 @@
   .dbs-equipment-options{max-height:260px}
 }
 
- 
-        /* Fases 2–4: identidade DBS AIR consistente e interação touch no mobile. */
-        :root { --color-primary:#0756a6; --color-primary-dark:#063f7a; --dbs-blue:#0756a6; --dbs-blue-dark:#063f7a; }
-        button, .btn, input[type="button"], input[type="submit"], select { touch-action:manipulation; }
-        button, .btn, input[type="button"], input[type="submit"] { min-height:40px; }
-        input, select, textarea { max-width:100%; }
-        .dbs-mobile-cards td { color:#12233b; }
-        .dbs-mobile-cards td::before { color:#0756a6; }
-        .dbs-mobile-cards tr { border-color:#d8e6f5; box-shadow:0 5px 18px rgba(7,86,166,.07); }
-        .dbs-mobile-cards tr:has(td [data-status="atrasada"]),
-        .dbs-mobile-cards tr:has(td .status-atrasada),
-        .dbs-mobile-cards tr:has(td .badge-danger) { border-left:4px solid #b42318; }
-        @media(max-width:800px) {
-          body { height:100dvh; min-height:100dvh; overflow:hidden; }
-          main { min-width:0; width:100%; }
-          .content, .main-content, .tab-content, .table-scroll { min-width:0; max-width:100%; }
-          .dbs-mobile-cards td { grid-template-columns:minmax(86px,34%) minmax(0,1fr); }
-          .dbs-mobile-cards td button, .dbs-mobile-cards td .btn { min-height:44px; }
-          .dbs-mobile-cards td input, .dbs-mobile-cards td select { min-height:42px; width:100%; }
-          .dbs-mobile-cards td img { object-fit:contain; }
-          .dbs-mobile-cards td:has(input[type="checkbox"]) { align-items:center; }
-        }
-        @media(max-width:520px) {
-          .dbs-mobile-cards tbody { gap:12px; }
-          .dbs-mobile-cards tr { padding:10px 12px; border-radius:14px; }
-          .dbs-mobile-cards td { gap:8px; padding:10px 0; font-size:13px; }
-          button, .btn { min-height:44px; }
-        }
 </style>
 
     <link rel="stylesheet" href="/dbs-control-theme.css?v=20261013-os-visual-1">
@@ -1967,139 +1939,6 @@
       body .pmoc-result-card select { width:100%; min-height:42px; border:1px solid #b8cde0; border-radius:9px; padding:9px 10px; background:#fff; color:#17324f; font-size:13px; }
       body .pmoc-result-card small { color:#5d7185; font-size:11px; line-height:1.5; }
     </style>
-<style id="dbs-mobile-card-parity">
-  :root { --dbs-blue:#1769d1; --dbs-navy:#12345a; --dbs-border:#dbe6f1; }
-  button, .btn, input, select, textarea { touch-action: manipulation; }
-  @media (max-width: 640px) {
-    body { height:100dvh; min-height:100dvh; font-size:14px; }
-    body > aside { width:100%; }
-    header { padding:12px 14px; gap:10px; align-items:flex-start; }
-    .page-title h1 { font-size:19px; line-height:1.25; }
-    .tab-view { padding:12px 10px calc(24px + env(safe-area-inset-bottom)); }
-    .metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .metric-card { padding:12px; border-radius:12px; min-width:0; }
-    .metric-title { font-size:9px; line-height:1.35; }
-    .metric-value { font-size:clamp(20px,6vw,27px); overflow-wrap:anywhere; }
-    .data-card { border-radius:14px; margin-bottom:14px; }
-    .data-header { padding:12px; align-items:stretch; }
-    .data-header h3 { font-size:12px; }
-    .filter-bar { width:100%; align-items:stretch; }
-    .filter-bar input,.filter-bar select { min-height:44px; max-width:100%; flex:1 1 100%; font-size:16px; }
-    .btn { min-height:42px; justify-content:center; white-space:normal; }
-    .btn-sm { min-height:40px; font-size:12px; }
-    .form-grid { grid-template-columns:minmax(0,1fr); gap:12px; }
-    .form-group input,.form-group select,.form-group textarea { min-height:44px; font-size:16px; }
-    .table-scroll { width:100%; overflow:visible!important; border:0!important; }
-    table.dbs-mobile-cards { display:block; width:100%; border-collapse:separate; border-spacing:0; }
-    table.dbs-mobile-cards thead { display:none; }
-    table.dbs-mobile-cards tbody { display:grid; gap:10px; width:100%; }
-    table.dbs-mobile-cards tr { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; padding:9px 12px; border:1px solid var(--dbs-border); border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(18,52,90,.055); }
-    table.dbs-mobile-cards tr:hover { background:#fff; }
-    table.dbs-mobile-cards td { display:grid; grid-template-columns:minmax(94px,36%) minmax(0,1fr); align-items:start; gap:10px; min-width:0; padding:9px 0; border-bottom:1px solid #edf2f7; overflow-wrap:anywhere; font-size:12px; line-height:1.45; }
-    table.dbs-mobile-cards td:last-child { border-bottom:0; }
-    table.dbs-mobile-cards td::before { content:attr(data-label); color:#61758d; font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; line-height:1.45; }
-    table.dbs-mobile-cards td input[type="checkbox"] { width:20px; height:20px; }
-    table.dbs-mobile-cards td .btn { width:100%; max-width:100%; }
-    table.dbs-mobile-cards td button { max-width:100%; overflow-wrap:anywhere; }
-    table.dbs-mobile-cards td img { max-width:100%; height:auto; }
-    .day-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .kanban-board { grid-template-columns:minmax(0,1fr); }
-    .employee-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .employee-order-top { gap:8px; }
-    .employee-order h3 { overflow-wrap:anywhere; }
-  }
-  @media (max-width: 380px) {
-    .metrics-grid,.day-kpi-grid { grid-template-columns:minmax(0,1fr); }
-    table.dbs-mobile-cards td { grid-template-columns:minmax(78px,34%) minmax(0,1fr); gap:7px; }
-  }
-</style>
-
-<style id="dbs-mobile-systemwide-layout-hardening">
-  *, *::before, *::after { box-sizing: border-box; }
-  html { width:100%; max-width:100%; overflow-x:clip; -webkit-text-size-adjust:100%; }
-  body { width:100%; max-width:100%; overflow-x:clip; }
-  body, body * { min-width:0; }
-  img, video, canvas, svg { max-width:100%; }
-  input, select, textarea, button { max-width:100%; }
-  input, select, textarea { min-width:0; }
-  p, label, h1, h2, h3, h4, th, td, a, button, span { overflow-wrap:break-word; word-break:normal; }
-  aside, main, .content, .main-content, .tab-content, .data-header, .filter-bar,
-  .form-group, .card, .panel, .dashboard-grid, .grid, .toolbar, .section-header { min-width:0; max-width:100%; }
-  .table-scroll, .table-container, .table-responsive { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
-  @media (max-width:800px) {
-    main, .content, .main-content, .tab-content { width:100%; min-width:0; max-width:100%; }
-    .data-header, .filter-bar, .toolbar { flex-wrap:wrap; }
-    .filter-bar input, .filter-bar select, .filter-bar button { min-width:0; }
-    .form-grid, .form-row, .dashboard-grid, .metrics-grid, .day-kpi-grid { grid-template-columns:minmax(0,1fr)!important; }
-    .form-group, .form-group > *, .card, .panel { min-width:0; max-width:100%; }
-    button, .btn { min-height:44px; white-space:normal; }
-    /* Data tables become individual cards; all columns remain present and labelled. */
-    table.dbs-mobile-cards { display:block; width:100%; max-width:100%; border-collapse:separate; }
-    table.dbs-mobile-cards thead { display:none; }
-    table.dbs-mobile-cards tbody { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; width:100%; }
-    table.dbs-mobile-cards tr { display:grid; grid-template-columns:minmax(0,1fr); width:100%; min-width:0; max-width:100%; padding:12px; border:1px solid var(--dbs-border,#dbe4ef); border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(18,52,90,.055); }
-    table.dbs-mobile-cards td { display:grid; grid-template-columns:minmax(88px,36%) minmax(0,1fr); align-items:start; gap:10px; width:100%; min-width:0; padding:9px 0; border-bottom:1px solid #edf2f7; overflow-wrap:break-word; font-size:13px; line-height:1.45; }
-    table.dbs-mobile-cards td:last-child { border-bottom:0; }
-    table.dbs-mobile-cards td::before { content:attr(data-label); color:#61758d; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.025em; line-height:1.4; overflow-wrap:break-word; }
-    table.dbs-mobile-cards td > * { min-width:0; max-width:100%; }
-    table.dbs-mobile-cards td .btn, table.dbs-mobile-cards td button { width:100%; min-height:44px; white-space:normal; }
-    table.dbs-mobile-cards td input, table.dbs-mobile-cards td select { width:100%; min-height:44px; font-size:16px; }
-    table.dbs-mobile-cards td img { max-width:100%; height:auto; object-fit:contain; }
-    .os-row-actions { min-width:0!important; flex-wrap:wrap; }
-    .employee-toolbar, .employee-os-tabs { flex-wrap:wrap; }
-  }
-  @media (max-width:420px) {
-    body { font-size:13px; }
-    .dbs-mobile-cards td { grid-template-columns:minmax(0,1fr)!important; gap:5px; }
-    .dbs-mobile-cards td::before { max-width:100%; }
-    .os-bulk-toolbar, .employee-grid, .employee-progress-grid, .ops-overview-grid { grid-template-columns:minmax(0,1fr)!important; }
-  }
-</style>
-
-
-<style id="dbs-os-lifecycle-actions">.os-lifecycle-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.os-lifecycle-actions button{min-height:34px;border:0;border-radius:8px;padding:7px 10px;background:#124c83;color:#fff;font-size:11px;font-weight:800;cursor:pointer}.os-lifecycle-actions button[data-next="Cancelada"]{background:#eef2f7;color:#34465a;border:1px solid #d7e1eb}.os-lifecycle-actions button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:700px){.os-lifecycle-actions{display:grid;grid-template-columns:1fr}.os-lifecycle-actions button{width:100%;min-height:42px}}</style>
-
-<style id="dbs-mobile-hardening-20261018">
-html,body{width:100%;max-width:100%}
-@media(max-width:760px){
-body{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:100dvh!important;overflow:hidden!important}
-body>aside,body.dbs-control-employee-mode aside{position:fixed!important;z-index:10050!important;inset:0 auto 0 0!important;width:min(86vw,320px)!important;max-width:calc(100vw - 52px)!important;height:100dvh!important;transform:translateX(-105%);transition:transform .22s ease;overflow-y:auto!important;box-shadow:0 0 0 100vmax transparent}
-body.dbs-mobile-menu-open>aside{transform:translateX(0)!important;box-shadow:0 0 0 100vmax rgba(15,23,42,.48)!important}
-body>main,body.dbs-control-employee-mode main{width:100%!important;max-width:100%!important;min-width:0!important;margin-left:0!important;height:100dvh!important;overflow:hidden!important}
-body>main>header,body>main header{min-width:0!important;width:100%!important;max-width:100%!important;padding:10px 12px!important;gap:8px!important;flex-wrap:wrap!important}
-body>main>header>*,body>main header>*{min-width:0;max-width:100%}.page-title{min-width:0;flex:1 1 130px}.page-title h1{font-size:16px!important;overflow-wrap:anywhere}
-.tab-view{width:100%!important;max-width:100%!important;min-width:0!important;padding:12px!important;overflow-x:hidden!important}
-.metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.metric-card{min-width:0!important;padding:10px!important}.metric-value{font-size:clamp(18px,5vw,22px)!important;overflow-wrap:anywhere}
-.form-grid{grid-template-columns:minmax(0,1fr)!important}.form-group,.form-group input,.form-group select,.form-group textarea,.filter-bar input,.filter-bar select,input,select,textarea{min-width:0;max-width:100%;font-size:16px!important}
-.form-group input,.form-group select,.form-group textarea,input,select,button,.btn,.filter-bar input,.filter-bar select{min-height:44px}textarea{min-height:88px}
-.filter-bar{width:100%;align-items:stretch!important}.filter-bar>*{flex:1 1 140px}.data-header{align-items:stretch!important;padding:10px!important}.data-header>*,.data-header .filter-bar{min-width:0;max-width:100%}
-.data-card{width:100%;max-width:100%}.kanban-board{grid-template-columns:minmax(0,1fr)!important}.pwa-wrapper{width:100%!important;max-width:100%!important}
-table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-width:100%!important}
-.dbs-mobile-menu-toggle{display:inline-flex!important;flex:0 0 44px;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:23px;line-height:1;cursor:pointer}
-}
-@media(min-width:761px){.dbs-mobile-menu-toggle{display:none!important}}
-</style>
-
-<style id="dbs-mobile-final-polish-20261018">
-@media(max-width:760px){
-  html,body{width:100vw!important;max-width:100%!important;min-width:0!important}
-  body>main{box-sizing:border-box!important;width:100vw!important;max-width:100vw!important}
-  body>main>header{box-sizing:border-box!important}
-  body>main>header .dbs-mobile-menu-toggle{order:-2;position:relative;z-index:10051;flex:0 0 44px!important}
-  body.dbs-mobile-menu-open{overflow:hidden!important}
-  body.dbs-mobile-menu-open:after{content:"";position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:10040;pointer-events:none}
-  body>aside{z-index:10050!important}
-  button,.btn,a.nav-item,[role=button],input[type=button],input[type=submit]{min-height:44px}
-  .nav-item{min-height:44px!important;display:flex;align-items:center}
-  .data-card,.metric-card,.tab-view,.data-header,.form-group{box-sizing:border-box;max-width:100%;min-width:0}
-  .dbs-mobile-cards tbody tr{box-sizing:border-box;max-width:100%}
-  .dbs-mobile-cards td{min-width:0;overflow-wrap:anywhere}
-}
-@media(max-width:420px){
-  body>main>header{padding-left:max(10px,env(safe-area-inset-left))!important;padding-right:max(10px,env(safe-area-inset-right))!important}
-  .dbs-mobile-cards td{grid-template-columns:minmax(0,38%) minmax(0,1fr)!important;gap:7px!important}
-}
-</style>
 </head>
 <body>
 
@@ -2816,7 +2655,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
         // posteriormente no ambiente real.
-        const DBS_CONTROL_STATE_VERSION = 3;
+        const DBS_CONTROL_STATE_VERSION = 2;
         const INITIAL_STATE = {
             tecnicos: [],
             clientes: [],
@@ -2828,40 +2667,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             osHistorico: []
         };
 
-        // Recuperação segura: nunca apagar caches locais/IndexedDB automaticamente.
-        // O cache local integrado é lido apenas como fallback de visualização; não é enviado à nuvem.
-        (function preserveLegacyEmbeddedCaches() {
-            try {
-                if (window.parent === window) return;
-                const raw = localStorage.getItem('DBS_AIR_ERP_STATE');
-                if (!raw) return;
-                const parsed = JSON.parse(raw);
-                const sourceData = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
-                const countRecords = value => value && typeof value === 'object'
-                    ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
-                    : 0;
-                if (countRecords(sourceData) > 0 && !localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS')) {
-                    // Só cria backup quando ainda não existe; nunca remove nem reduz caches.
-                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
-                        version: Number(parsed?.version || 1),
-                        data: sourceData,
-                        backedUpAt: new Date().toISOString(),
-                        reason: 'Backup de recuperação antes da leitura da nuvem'
-                    }));
-                }
-            } catch (error) {
-                console.warn('Caches locais preservados; não foi possível criar backup adicional.', error);
-            }
-        })();
-
-        let DBS_CONTROL_LOCAL_RECOVERY_MODE = window.parent !== window;
         let ERP_STATE = loadState();
         let DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
         if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
         let DBS_CONTROL_CLOUD_READY = false;
         let DBS_CONTROL_CLOUD_HYDRATING = false;
-        // Dashboard só exibe números depois da primeira hidratação autoritativa.
-        let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
 
 
         function criarSnapshotHistoricoOS(ordens) {
@@ -2996,9 +2806,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
         function saveState() {
-            // Em recuperação local, os dados são exibidos em modo somente leitura:
-            // nenhuma gravação local ou na nuvem é permitida até validar a nuvem.
-            if (DBS_CONTROL_LOCAL_RECOVERY_MODE && window.parent !== window) return;
             registrarHistoricoOS();
             const persistableState = getPersistableState();
             // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
@@ -3057,33 +2864,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function loadState() {
-            // Lê cache local também no iframe para recuperação somente leitura.
-            // A autorização para gravar só é liberada após confirmação de snapshot válido da nuvem.
-            // Escolhe a cópia local com mais registros entre principal e backups, sem alterar nenhum.
-            let saved = null;
-            let bestCount = 0;
-            for (const key of [
-                'DBS_AIR_ERP_STATE',
-                'DBS_AIR_ERP_STATE_PREVIOUS',
-                'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION',
-                'DBS_AIR_ERP_STATE_CORRUPTED_BACKUP'
-            ]) {
-                try {
-                    const raw = localStorage.getItem(key);
-                    if (!raw) continue;
-                    const parsedCandidate = JSON.parse(raw);
-                    const candidateData = parsedCandidate?.data && typeof parsedCandidate.data === 'object'
-                        ? parsedCandidate.data
-                        : parsedCandidate;
-                    const count = candidateData && typeof candidateData === 'object'
-                        ? Object.values(candidateData).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
-                        : 0;
-                    if (count > bestCount) {
-                        bestCount = count;
-                        saved = raw;
-                    }
-                } catch (_) {}
-            }
+            const saved = localStorage.getItem('DBS_AIR_ERP_STATE');
             if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
             try {
                 const parsed = JSON.parse(saved);
@@ -3112,21 +2893,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         } catch (_) {}
                     }
                     // Não substitui um backup maior por um estado local menor.
-                    if (window.parent === window && countRecords(source) >= previousCount) {
+                    if (countRecords(source) >= previousCount) {
                         localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
                             version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
                         }));
-                        localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                            version: DBS_CONTROL_STATE_VERSION, data: migrated
-                        }));
                     }
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION, data: migrated
+                    }));
                 } catch (_) {}
                 return migrated;
             } catch (error) {
                 // Nunca apaga silenciosamente um cache que não conseguiu ser lido.
                 // Mantemos uma cópia bruta para diagnóstico e iniciamos uma sessão vazia.
                 try {
-                    if (window.parent === window) localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
+                    localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
                         raw: saved,
                         backedUpAt: new Date().toISOString(),
                         reason: String(error?.message || error || 'JSON inválido')
@@ -3161,9 +2942,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (event.source !== window.parent) return;
             const msg = event.data || {};
             if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
-                if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
-                else if (msg.status === 'synced') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
-                atualizarMetricas();
                 const indicator = document.getElementById('dbs-sync-indicator');
                 const retry = document.getElementById('dbs-sync-retry');
                 if (indicator) {
@@ -3187,22 +2965,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     }
                 }
                 if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' ? 'inline-flex' : 'none';
-                return;
-            }
-            if (msg.type === 'DBS_CONTROL_LOCAL_RECOVERY') {
-                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
-                atualizarMetricas();
-                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
-                DBS_CONTROL_CLOUD_READY = false;
-                const indicator = document.getElementById('dbs-sync-indicator');
-                if (indicator) {
-                    indicator.textContent = 'AMBIENTE DESCONECTADO · CACHE PRESERVADO · SOMENTE LEITURA';
-                    indicator.title = 'Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente publicado. Os dados locais não serão apagados nem enviados até validar a base compartilhada.';
-                    indicator.style.color = '#92400e';
-                    indicator.style.background = '#fffbeb';
-                    indicator.style.borderColor = '#fde68a';
-                }
-                renderizarTudo();
                 return;
             }
             if (msg.type === 'DBS_CONTROL_DB_AUDIT_RESULT') {
@@ -3242,32 +3004,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
-
-            // Proteção contra snapshot remoto vazio: não substitui uma cópia local recuperável
-            // por um estado vazio/incompleto, nem permite que ela seja enviada à nuvem.
-            const countStateRecords = (value) => value && typeof value === 'object'
-                ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
-                : 0;
-            const localRecoveryState = getPersistableState();
-            const localRecoveryCount = countStateRecords(localRecoveryState);
-            const incomingCloudCount = countStateRecords(msg.state);
-            // A base enviada ao colaborador é filtrada pelo servidor. Não comparar a quantidade
-            // de registros com o cache completo deste navegador, pois isso bloqueia a hidratação legítima.
-            const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            if (!collaboratorSession && localRecoveryCount > 0 && incomingCloudCount < localRecoveryCount) {
-                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
-                DBS_CONTROL_CLOUD_READY = false;
-                const indicator = document.getElementById('dbs-sync-indicator');
-                if (indicator) {
-                    indicator.textContent = 'Recuperação local — nuvem sem dados';
-                    indicator.style.color = '#92400e';
-                    indicator.style.background = '#fffbeb';
-                    indicator.style.borderColor = '#fde68a';
-                }
-                renderizarTudo();
-                return;
-            }
-
             if (DBS_CONTROL_HAS_PENDING_SAVE) {
                 const sendFirst = confirm('Existem alterações locais ainda não enviadas. Deseja enviar essas alterações primeiro? A versão da nuvem não será aplicada agora.');
                 if (sendFirst) {
@@ -3301,8 +3037,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 }
 
                 ERP_STATE = JSON.parse(JSON.stringify(msg.state));
-                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
-                DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
@@ -4070,29 +3804,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             document.body.appendChild(modal);
         }
 
-        async function transicionarStatusOS(orderId, nextStatus) {
-            const order = (ERP_STATE.ordens || []).find(item => String(item.id) === String(orderId));
-            if (!order) { alert('OS não encontrada na base carregada. Atualize a tela e tente novamente.'); return; }
-            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const current = norm(order.status || 'Pendente');
-            const next = norm(nextStatus);
-            const allowed = (current === 'pendente' && ['em atendimento','cancelada'].includes(next))
-                || (['em atendimento','andamento','aberta','aguardando peca','aguardando cliente'].includes(current) && ['concluida','cancelada'].includes(next));
-            if (!allowed) { alert('Transição de status não permitida. Atualize a OS antes de tentar novamente.'); return; }
-            if (next === 'concluida' && !confirm('Confirmar a conclusão desta OS? Confira relatório técnico e assinatura antes de concluir.')) return;
-            if (next === 'cancelada' && !confirm('Confirmar o cancelamento desta OS?')) return;
-            const previous = { status: order.status, completedAt: order.completedAt, concluidoEm: order.concluidoEm, lockedAt: order.lockedAt, startedAt: order.startedAt };
-            order.status = nextStatus;
-            if (next === 'em atendimento') order.startedAt = order.startedAt || new Date().toISOString();
-            if (next === 'concluida') { order.completedAt = new Date().toISOString(); order.concluidoEm = order.completedAt; order.lockedAt = order.lockedAt || order.completedAt; }
-            try { await saveStateAndConfirmCloud(); renderizarTudo(); }
-            catch (error) {
-                Object.assign(order, previous);
-                alert('A alteração não foi confirmada pela nuvem. A OS foi restaurada ao estado anterior. ' + (error && error.message ? error.message : ''));
-                renderizarTudo();
-            }
-        }
-
         function renderizarOrdens() {
             const activeTabId = document.querySelector('.tab-view.active')?.id || 'tab-dashboard';
             const dashboardMode = activeTabId === 'tab-dashboard';
@@ -4122,10 +3833,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <button type="button" class="os-row-action" onclick="alternarArquivoOS('${o.id}')">${archived ? 'Restaurar' : 'Arquivar'}</button>
                                 <button type="button" class="os-row-action os-row-action-danger" onclick="excluirOSComSeguranca('${o.id}')">Excluir</button>
                             </div>
-                            <div class="os-lifecycle-actions" aria-label="Ciclo de vida da OS">
-                                ${!isConcluido && !['Cancelada','Cancelado'].includes(String(o.status||'').trim()) && !archived ? (['Pendente','Aguardando peça','Aguardando cliente'].includes(String(o.status||'').trim()) ? '<button type="button" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Em Atendimento\')">Iniciar atendimento</button>' : '') + '<button type="button" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Concluída\')">Concluir OS</button><button type="button" data-next="Cancelada" onclick="transicionarStatusOS(\''+String(o.id)+'\',\'Cancelada\')">Cancelar OS</button>' : `<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#52708d">${isConcluido ? 'OS concluída · edição bloqueada' : 'OS cancelada'}</span>`}
-                            </div>
-</td>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -4996,7 +4704,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? ['cliente_cnpj','cliente_nome','tag','tipo','marca','modelo','serie','capacidade','ambiente']
                 : ['nome','cnpj','endereco','contato'];
             const csv = headers.join(';') + '\n' + headers.map(h => h).join(';') + '\n';
-            const blob = new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
+            const blob = new Blob(['\\ufeff' + csv], { type:'text/csv;charset=utf-8;' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = 'modelo_importacao_' + tipo + '.csv';
@@ -5388,34 +5096,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
-        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName) {
-            if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.reject(new Error('Arquivo de evidência inválido.'));
-            const comma = dataUrl.indexOf(',');
-            if (comma < 0) return Promise.reject(new Error('Conteúdo do arquivo inválido.'));
-            const contentType = (dataUrl.slice(5, dataUrl.indexOf(';')) || '').toLowerCase();
-            const dataBase64 = dataUrl.slice(comma + 1);
-            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : 'upload-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-            return new Promise((resolve, reject) => {
-                let settled = false;
-                const finish = (error, value) => {
-                    if (settled) return;
-                    settled = true; clearTimeout(timeout); window.removeEventListener('message', onMessage);
-                    if (error) reject(error); else resolve(value);
-                };
-                const onMessage = event => {
-                    if (event.source !== window.parent) return;
-                    const msg = event.data || {};
-                    if (msg.type !== 'DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT' || msg.requestId !== requestId) return;
-                    if (!msg.ok || !msg.attachment) { finish(new Error(msg.error || 'Não foi possível enviar o anexo para a nuvem.')); return; }
-                    finish(null, msg.attachment);
-                };
-                const timeout = setTimeout(() => finish(new Error('O upload não foi confirmado em 30 segundos. A OS não foi concluída.')), 30000);
-                window.addEventListener('message', onMessage);
-                window.parent.postMessage({ type: 'DBS_CONTROL_UPLOAD_ATTACHMENT', requestId, orderId: String(osId),
-                    attachmentType, fileName: String(fileName || attachmentType), contentType, dataBase64 }, window.location.origin);
-            });
-        }
-
         async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
@@ -5446,15 +5126,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     beforeFile ? readExecutionPhoto(beforeFile) : Promise.resolve(os.fotoAntes || null),
                     afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
                 ]);
-                // A OS só é concluída depois de confirmar cada upload necessário.
-                const uploadJobs = [];
-                if (beforeFile && fotoAntes) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_antes', fotoAntes, beforeFile.name)
-                    .then(result => ({ field: 'fotoAntes', pathField: 'fotoAntesStoragePath', result })));
-                if (afterFile && fotoDepois) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_depois', fotoDepois, afterFile.name)
-                    .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result })));
-                uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
-                    .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result })));
-                const uploadedAttachments = await Promise.all(uploadJobs);
 
                 const observationText = String(observationInput?.value || '').trim();
                 if (observationText) {
@@ -5475,10 +5146,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 os.fotoAntes = fotoAntes;
                 os.fotoDepois = fotoDepois;
                 os.assinatura = signature;
-                uploadedAttachments.forEach(item => {
-                    os[item.pathField] = item.result.storagePath;
-                    os[item.field] = item.result.signedUrl;
-                });
                 os.assinaturaEm = new Date().toISOString();
                 os.concluidoEm = new Date().toISOString();
                 os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
@@ -5618,52 +5285,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function atualizarMetricas() {
-            // Enquanto a primeira leitura compartilhada não termina, nunca apresentar zeros/cache como se fossem dados atuais.
-            const metricIds = ['dash-client-count', 'dash-equip-count', 'dash-os-andamento', 'dash-os-concluidas'];
-            const metricValues = metricIds.map(id => document.getElementById(id));
-            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'loading') {
-                if (!document.getElementById('dbs-dashboard-loading-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'dbs-dashboard-loading-style';
-                    style.textContent = '.dbs-metric-loading{color:transparent!important;position:relative;min-width:2.5rem;min-height:1.25em;border-radius:6px;background:linear-gradient(90deg,#e8eef5 25%,#f5f8fb 38%,#e8eef5 62%);background-size:400% 100%;animation:dbsMetricShimmer 1.4s ease infinite}.dbs-metric-unavailable{font-size:13px!important;color:#64748b!important}@keyframes dbsMetricShimmer{0%{background-position:100% 0}100%{background-position:0 0}}@media(prefers-reduced-motion:reduce){.dbs-metric-loading{animation:none}}';
-                    document.head.appendChild(style);
-                }
-                metricValues.forEach(el => { if (el) { el.classList.add('dbs-metric-loading'); el.classList.remove('dbs-metric-unavailable'); el.textContent = ' '; el.setAttribute('aria-label', 'Carregando dados'); } });
-                return;
-            }
-            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error') {
-                metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading'); el.classList.add('dbs-metric-unavailable'); el.textContent = '—'; el.setAttribute('aria-label', 'Dados indisponíveis: falha de sincronização'); } });
-                return;
-            }
-            metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading', 'dbs-metric-unavailable'); el.removeAttribute('aria-label'); } });
-            // Os KPIs usam somente o estado central carregado e normalizam variações de status.
-            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
-            const equipamentos = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
-            const ordens = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
-            const normalizarStatusKpi = value => String(value ?? '')
-                .trim()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .toLocaleLowerCase('pt-BR')
-                .replace(/[_-]+/g, ' ')
-                .replace(/\s+/g, ' ');
-            const statusKpi = order => normalizarStatusKpi(order.status ?? order.situacao ?? order.statusOS);
-            // Arquivadas, excluídas e canceladas não entram nos indicadores da operação ativa.
-            const ordensOperacionais = ordens.filter(order =>
-                !order.arquivadaEm &&
-                !order.excluidaEm &&
-                !order.deletedAt &&
-                !order.deleted_at &&
-                !/^(arquivad[ao]|excluid[ao]|deletad[ao]|cancelad[ao])$/.test(statusKpi(order))
-            );
-            const emAtendimento = ordensOperacionais.filter(order =>
-                /^(em atendimento|em execucao|em andamento|em atendimento tecnico)$/.test(statusKpi(order))
-            ).length;
-            const concluidas = ordensOperacionais.filter(order => isOSConcluida(order)).length;
-            document.getElementById('dash-client-count').innerText = clientes.length.toLocaleString('pt-BR');
-            document.getElementById('dash-equip-count').innerText = equipamentos.length.toLocaleString('pt-BR');
-            document.getElementById('dash-os-andamento').innerText = emAtendimento.toLocaleString('pt-BR');
-            document.getElementById('dash-os-concluidas').innerText = concluidas.toLocaleString('pt-BR');
+            document.getElementById('dash-client-count').innerText = ERP_STATE.clientes.length;
+            document.getElementById('dash-equip-count').innerText = ERP_STATE.equipamentos.length;
+            // Arquivadas/excluídas ficam fora dos KPIs do dashboard; os registros são preservados no histórico.
+            const ordensOperacionais = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
+                .filter(o => !o.arquivadaEm && !o.excluidaEm);
+            document.getElementById('dash-os-andamento').innerText = ordensOperacionais.filter(o => o.status === "Em Atendimento").length;
+            document.getElementById('dash-os-concluidas').innerText = ordensOperacionais.filter(o => isOSConcluida(o)).length;
         }
         // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
         (function bootDbsControlEmployeeMode(){
@@ -6234,7 +5862,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 <script id="dbs-mobile-selector-fix-script">
 (function(){
   function normalize(value) {
-    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+    return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
   }
   function clients() {
     const state = (typeof ERP_STATE !== 'undefined' && ERP_STATE) || window.ERP_STATE || null;
@@ -6284,7 +5912,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     function draw(){
       const term = normalize(input.value);
       const compact = term.replace(/[^a-z0-9]/g, '');
-      const tokens = term.split(/\s+/).filter(Boolean);
+      const tokens = term.split(/\\s+/).filter(Boolean);
       const all = clients().map(c => {
         const name = normalize(clientName(c));
         const cnpj = normalize(clientCnpj(c));
@@ -6400,63 +6028,5 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 })();
 </script>
 
-<script id="dbs-mobile-table-card-renderer">
-(function () {
-  "use strict";
-  function labelTables(root) {
-    (root || document).querySelectorAll("table").forEach(function (table) {
-      var headers = Array.from(table.querySelectorAll("thead tr:last-child th"));
-      if (!headers.length) headers = Array.from(table.querySelectorAll("tr:first-child th"));
-      if (!headers.length) return;
-      table.classList.add("dbs-mobile-cards");
-      var headerLabels = headers.map(function (th, index) {
-        var label = (th.innerText || th.textContent || "").replace(/\s+/g, " ").trim();
-        return label || ("Campo " + (index + 1));
-      });
-      table.querySelectorAll("tbody tr, tr").forEach(function (row) {
-        if (row.querySelectorAll("th").length && !row.querySelectorAll("td").length) return;
-        Array.from(row.querySelectorAll(":scope > td")).forEach(function (cell, index) {
-          if (!cell.hasAttribute("data-label")) cell.setAttribute("data-label", headerLabels[index] || ("Informação " + (index + 1)));
-        });
-      });
-    });
-  }
-  function start() {
-    labelTables(document);
-    var observer = new MutationObserver(function (records) {
-      records.forEach(function (record) {
-        record.addedNodes.forEach(function (node) {
-          if (node.nodeType === 1) {
-            if (node.matches && node.matches("table")) labelTables(node.parentNode || document);
-            else if (node.querySelectorAll) labelTables(node);
-          }
-        });
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("resize", function () { labelTables(document); }, { passive: true });
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
-  else start();
-})();
-</script>
-
-<script id="dbs-mobile-menu-controller-20261018">
-(function(){function install(){if(window.__dbsMobileMenuInstalled)return;var aside=document.querySelector('body > aside'),main=document.querySelector('body > main');if(!aside||!main)return;var header=main.querySelector(':scope > header')||main.querySelector('header');if(!header)return;window.__dbsMobileMenuInstalled=true;var b=document.createElement('button');b.type='button';b.className='dbs-mobile-menu-toggle';b.setAttribute('aria-label','Abrir menu');b.setAttribute('aria-expanded','false');b.textContent='☰';function close(){document.body.classList.remove('dbs-mobile-menu-open');b.setAttribute('aria-expanded','false');b.setAttribute('aria-label','Abrir menu');b.textContent='☰'}b.addEventListener('click',function(){var open=document.body.classList.toggle('dbs-mobile-menu-open');b.setAttribute('aria-expanded',String(open));b.setAttribute('aria-label',open?'Fechar menu':'Abrir menu');b.textContent=open?'×':'☰'});header.insertBefore(b,header.firstChild);aside.addEventListener('click',function(e){if(e.target.closest('.nav-item,button,a,[role="button"]')&&matchMedia('(max-width:760px)').matches)close()});document.addEventListener('keydown',function(e){if(e.key==='Escape')close()});window.addEventListener('resize',function(){if(!matchMedia('(max-width:760px)').matches)close()},{passive:true})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install()})();
-</script>
-
-<script id="dbs-mobile-menu-backdrop-20261018">
-(function(){
- function init(){
-  if(window.__dbsMobileBackdropInstalled)return;
-  var aside=document.querySelector('body > aside');
-  if(!aside)return;
-  window.__dbsMobileBackdropInstalled=true;
-  function close(){document.body.classList.remove('dbs-mobile-menu-open');var b=document.querySelector('.dbs-mobile-menu-toggle');if(b){b.setAttribute('aria-expanded','false');b.setAttribute('aria-label','Abrir menu');b.textContent='☰';}}
-  document.addEventListener('click',function(e){if(!matchMedia('(max-width:760px)').matches)return;if(document.body.classList.contains('dbs-mobile-menu-open')&&!aside.contains(e.target)&&!e.target.closest('.dbs-mobile-menu-toggle'))close();});
- }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
-})();
-</script>
 </body>
 </html>

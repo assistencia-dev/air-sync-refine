@@ -50,7 +50,6 @@ const STATUSES = [
   "concluido",
   "cancelado",
 ];
-// Keep page access aligned with the native-admin checks used by the navigation and Treasury route.
 const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 
 const STATUS_LABELS: Record<string, string> = {
@@ -73,8 +72,7 @@ function AdminPage() {
     if (
       profile.data &&
       profile.data.role_key !== "SUPER_ADMIN" &&
-      profile.data.role_key !== "ADMIN_OPERACIONAL" &&
-      !NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "")
+      profile.data.role_key !== "ADMIN_OPERACIONAL"
     ) {
       navigate({ to: "/portal", replace: true });
     }
@@ -137,7 +135,7 @@ function AdminPage() {
           </button>
           {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
             <button
-              onClick={() => navigate({ to: "/financeiro" })}
+              onClick={() => navigate({ to: "/treasury" })}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition text-white/65 hover:bg-white/10 hover:text-white`}
             >
               <Landmark className="h-4 w-4" /> Financeiro
@@ -211,7 +209,7 @@ function AdminPage() {
         {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
           <TabBtn
             active={false}
-            onClick={() => navigate({ to: "/financeiro" })}
+            onClick={() => navigate({ to: "/treasury" })}
             icon={<Landmark className="w-3.5 h-3.5" />}
             label="Financeiro"
           />

@@ -161,30 +161,15 @@ function RootComponent() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     let disposed = false;
     let refreshing = false;
-    let updateInFlight = false;
     let registration: ServiceWorkerRegistration | undefined;
-    const reloadGuardKey = "dbs-air-sw-controllerchange-reload";
-    const reloadGuardWindowMs = 30_000;
 
-    // Prevent controllerchange loops from repeatedly reloading the entire app.
+    // Apply a newly installed worker to the open PWA instead of leaving its old UI running.
     const onControllerChange = () => {
       if (refreshing || disposed) return;
-      try {
-        const lastReload = Number(window.sessionStorage.getItem(reloadGuardKey) || "0");
-        if (lastReload > 0 && Date.now() - lastReload < reloadGuardWindowMs) {
-          console.warn("DBS AIR: service worker reload suppressed to prevent a refresh loop");
-          return;
-        }
-        window.sessionStorage.setItem(reloadGuardKey, String(Date.now()));
-      } catch {
-        // Continue safely when storage is blocked; the in-memory guard still applies.
-      }
       refreshing = true;
       window.location.reload();
     };
     const updateWorker = async () => {
-      if (updateInFlight || disposed) return;
-      updateInFlight = true;
       try {
         registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
         if (disposed) return;
@@ -192,8 +177,6 @@ function RootComponent() {
         await registration.update();
       } catch (error) {
         console.warn("DBS AIR: service worker update check unavailable", error);
-      } finally {
-        updateInFlight = false;
       }
     };
     const onVisibilityChange = () => {
