@@ -27,8 +27,58 @@ async function requireDbsControlUser(context: { userId: string }) {
 }
 
 async function resolveDbsControlScope(user: DbsControlUser) {
-  // Administradores mantêm o escopo determinístico da empresa/usuário.
+  // Nunca mude um administrador para um scope novo se a base operacional
+  // já existe em um scope legado. Isso evita abrir um snapshot vazio e
+  // bloquear emissão/entrega após alterações no company_id do usuário.
+  const scoreSnapshot = (row: any) => {
+    const state = row?.state && typeof row.state === "object" ? row.state : {};
+    return ["ordens", "clientes", "equipamentos", "tecnicos", "servicos", "pecas", "compras"]
+      .reduce((total, key) => total + (Array.isArray(state[key]) ? state[key].length : 0), 0);
+  };
+  const newestPopulated = (rows: any[]) => [...rows].sort((a, b) =>
+    scoreSnapshot(b) - scoreSnapshot(a) ||
+    String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? ""))
+  )[0];
+
   if (user.role_key !== "COLABORADOR") {
+    const { data: ownedSnapshots, error: ownedError } = await supabaseAdmin
+      .from("dbs_control_snapshots")
+      .select("scope_key, owner_user_id, company_id, updated_at, state")
+      .eq("owner_user_id", user.id)
+      .order("updated_at", { ascending: false });
+    if (ownedError) throw new Error(ownedError.message);
+
+    // Prioridade 1: snapshot já pertencente a este administrador, inclusive
+    // user:<id> legado. Escolha o mais populado para não trocar por um vazio.
+    if ((ownedSnapshots ?? []).length) {
+      const existing = newestPopulated(ownedSnapshots as any[]);
+      return {
+        scopeKey: String(existing.scope_key),
+        ownerUserId: String(existing.owner_user_id ?? user.id),
+        companyId: (existing.company_id ?? user.company_id ?? null) as string | null,
+      };
+    }
+
+    // Prioridade 2: snapshot da empresa criado por outro administrador.
+    if (user.company_id) {
+      const { data: companySnapshots, error: companyError } = await supabaseAdmin
+        .from("dbs_control_snapshots")
+        .select("scope_key, owner_user_id, company_id, updated_at, state")
+        .eq("company_id", user.company_id)
+        .order("updated_at", { ascending: false });
+      if (companyError) throw new Error(companyError.message);
+      if ((companySnapshots ?? []).length) {
+        const existing = newestPopulated(companySnapshots as any[]);
+        return {
+          scopeKey: String(existing.scope_key),
+          ownerUserId: String(existing.owner_user_id ?? user.id),
+          companyId: (existing.company_id ?? user.company_id ?? null) as string | null,
+        };
+      }
+    }
+
+    // Nenhuma base preexistente encontrada: usar o escopo padrão somente
+    // para uma instalação realmente nova.
     return user.company_id
       ? { scopeKey: `company:${user.company_id}`, ownerUserId: user.id, companyId: user.company_id }
       : { scopeKey: `user:${user.id}`, ownerUserId: user.id, companyId: null as string | null };
@@ -86,9 +136,6 @@ async function resolveDbsControlScope(user: DbsControlUser) {
     throw new Error("Há mais de uma base administrativa possível para este colaborador. Vincule-o à empresa correta no RH.");
   }
 
-  // Sem snapshot existente, devolver o escopo esperado para que a leitura
-  // retorne vazio e a gravação possa informar explicitamente que a base ainda
-  // não foi criada; não criar uma base paralela em nome do colaborador.
   if (user.company_id) {
     return { scopeKey: `company:${user.company_id}`, ownerUserId: user.created_by ?? user.id, companyId: user.company_id };
   }
@@ -107,7 +154,6 @@ async function resolveDbsControlScope(user: DbsControlUser) {
   }
   throw new Error("Não foi possível localizar a base administrativa compartilhada. Confirme o vínculo do colaborador com a empresa no RH.");
 }
-
 function normalizeState(state: Record<string, unknown>) {
   return {
     ...state,
