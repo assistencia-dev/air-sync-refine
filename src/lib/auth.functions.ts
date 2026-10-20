@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
-const BOOTSTRAP_PASSWORD = "123456DBS";
+const BOOTSTRAP_PASSWORD = process.env.DBS_BOOTSTRAP_ADMIN_PASSWORD;
 
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
@@ -38,7 +38,8 @@ export const resolveLogin = createServerFn({ method: "POST" })
     } else {
       query = query.ilike("username", raw);
     }
-    const { data: found } = await query.maybeSingle();
+    const { data: found, error: lookupError } = await query.maybeSingle();
+    if (lookupError) throw new Error("Não foi possível consultar o cadastro de acesso no Supabase. Verifique a conexão e as permissões do banco.");
 
     if (found?.email) {
       if (found.status && found.status !== "ativo") {
@@ -49,6 +50,7 @@ export const resolveLogin = createServerFn({ method: "POST" })
 
     // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
+      if (!BOOTSTRAP_PASSWORD) throw new Error("Inicialização do administrador indisponível: configure DBS_BOOTSTRAP_ADMIN_PASSWORD no ambiente do servidor.");
       const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: BOOTSTRAP_EMAIL,
         password: BOOTSTRAP_PASSWORD,
@@ -65,16 +67,11 @@ export const resolveLogin = createServerFn({ method: "POST" })
       }
       if (!authId) throw new Error("Não foi possível provisionar o administrador.");
 
-      await supabaseAdmin.from("users").upsert(
-        {
-          auth_id: authId,
-          username: BOOTSTRAP_USERNAME,
-          email: BOOTSTRAP_EMAIL,
-          full_name: "Super Administrador DBS Air",
-          role_key: "SUPER_ADMIN",
-        },
+      const { error: profileError } = await supabaseAdmin.from("users").upsert(
+        { auth_id: authId, username: BOOTSTRAP_USERNAME, email: BOOTSTRAP_EMAIL, full_name: "Super Administrador DBS Air", role_key: "SUPER_ADMIN", status: "ativo" },
         { onConflict: "auth_id" },
       );
+      if (profileError) throw new Error("O usuário de autenticação existe, mas não foi possível gravar o perfil administrativo na tabela users. Verifique o schema do Supabase.");
       return { email: BOOTSTRAP_EMAIL };
     }
 
