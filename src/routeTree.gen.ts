@@ -18,10 +18,6 @@ import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
-import { Route as AuthenticatedChamadosRouteImport } from './routes/_authenticated/chamados'
-import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
-import { Route as AuthenticatedRhRouteImport } from './routes/_authenticated/rh'
-import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedFinanceiroAcessoRouteImport } from './routes/_authenticated/financeiro-acesso'
 import { Route as AuthenticatedFinanceiroAcompanhamentoRouteImport } from './routes/_authenticated/financeiro-acompanhamento'
 import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
@@ -70,26 +66,6 @@ const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
   path: '/treasury',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedFinanceiroAcessoRoute =const AuthenticatedChamadosRoute = AuthenticatedChamadosRouteImport.update({
-  id: '/chamados',
-  path: '/chamados',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedRhRoute = AuthenticatedRhRouteImport.update({
-  id: '/rh',
-  path: '/rh',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedFinanceiroAcessoRoute = AuthenticatedFinanceiroAcessoRouteImport.update({
   id: '/financeiro-acesso',
   path: '/financeiro-acesso',
@@ -116,23 +92,26 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
   '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
-  '/chamados': typeof AuthenticatedChamadosRoute
-  '/users': typeof AuthenticatedUsersRoute
-  '/rh': typeof AuthenticatedRhRoute
-  '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
+  '/passage': typeof AuthenticatedPassageRoute
+  '/portal': typeof AuthenticatedPortalRoute
+  '/treasury': typeof AuthenticatedTreasuryRoute
+  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
-  '/_authenticated/chamados': typeof AuthenticatedChamadosRoute
-  '/_authenticated/users': typeof AuthenticatedUsersRoute
-  '/_authenticated/rh': typeof AuthenticatedRhRoute
-  '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
   '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
@@ -140,16 +119,13 @@ export interface FileRoutesById {
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
+  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/login'
-    | '/chamados'
-    | '/users'
-    | '/rh'
-    | '/financeiro'
     | '/admin'
     | '/dbs-control'
     | '/folha-ponto'
@@ -170,20 +146,12 @@ export interface FileRouteTypes {
     | '/portal'
     | '/treasury'
     | '/admin/rh-dashboard'
-    | '/chamados'
-    | '/users'
-    | '/rh'
-    | '/financeiro'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/admin'
-    | '/_authenticated/chamados'
-    | '/_authenticated/users'
-    | '/_authenticated/rh'
-    | '/_authenticated/financeiro'
     | '/_authenticated/dbs-control'
     | '/_authenticated/folha-ponto'
     | '/_authenticated/passage'
@@ -264,34 +232,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/chamados': {
-      id: '/_authenticated/chamados'
-      path: '/chamados'
-      fullPath: '/chamados'
-      preLoaderRoute: typeof AuthenticatedChamadosRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/users': {
-      id: '/_authenticated/users'
-      path: '/users'
-      fullPath: '/users'
-      preLoaderRoute: typeof AuthenticatedUsersRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/rh': {
-      id: '/_authenticated/rh'
-      path: '/rh'
-      fullPath: '/rh'
-      preLoaderRoute: typeof AuthenticatedRhRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/financeiro': {
-      id: '/_authenticated/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/financeiro-acesso': {
       id: '/_authenticated/financeiro-acesso'
       path: '/financeiro-acesso'
@@ -323,11 +263,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
-  AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
-  AuthenticatedChamadosRoute: typeof AuthenticatedChamadosRoute
-  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
-  AuthenticatedRhRoute: typeof AuthenticatedRhRoute
-  AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedFinanceiroAcessoRoute: typeof AuthenticatedFinanceiroAcessoRoute
   AuthenticatedFinanceiroAcompanhamentoRoute: typeof AuthenticatedFinanceiroAcompanhamentoRoute
 }
@@ -339,11 +274,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
-  AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
-  AuthenticatedChamadosRoute: AuthenticatedChamadosRoute,
-  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
-  AuthenticatedRhRoute: AuthenticatedRhRoute,
-  AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedFinanceiroAcessoRoute: AuthenticatedFinanceiroAcessoRoute,
   AuthenticatedFinanceiroAcompanhamentoRoute: AuthenticatedFinanceiroAcompanhamentoRoute,
 }

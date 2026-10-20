@@ -474,36 +474,6 @@ export type Database = {
           },
         ]
       }
-      dbs_control_snapshot_history: {
-        Row: {
-          archived_at: string
-          archived_by: string | null
-          id: number
-          scope_key: string
-          source_updated_at: string
-          state: Json
-          state_version: number
-        }
-        Insert: {
-          archived_at?: string
-          archived_by?: string | null
-          id?: never
-          scope_key: string
-          source_updated_at: string
-          state: Json
-          state_version?: number
-        }
-        Update: {
-          archived_at?: string
-          archived_by?: string | null
-          id?: never
-          scope_key?: string
-          source_updated_at?: string
-          state?: Json
-          state_version?: number
-        }
-        Relationships: []
-      }
       dbs_control_snapshots: {
         Row: {
           company_id: string | null
@@ -832,26 +802,21 @@ export type Database = {
       dbs_control_work_orders: {
         Row: {
           assigned_employee_id: string | null
-          assinatura_path: string | null
           client_id: string
           completed_at: string | null
           created_at: string
           created_by_user_id: string | null
           description: string | null
-          diagnostico: string | null
           id: string
           latitude: number | null
           longitude: number | null
           observation: string | null
           priority: string
           protocol: string
-          protocolo: string | null
           scheduled_at: string | null
           service_id: string | null
-          servico_executado: string | null
           signature_data: string | null
           signature_name: string | null
-          signature_path: string | null
           site_id: string | null
           sla_deadline: string | null
           started_at: string | null
@@ -860,30 +825,24 @@ export type Database = {
           total_cents: number
           type: string
           updated_at: string
-          version: number
         }
         Insert: {
           assigned_employee_id?: string | null
-          assinatura_path?: string | null
           client_id: string
           completed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
           description?: string | null
-          diagnostico?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
           priority?: string
           protocol: string
-          protocolo?: string | null
           scheduled_at?: string | null
           service_id?: string | null
-          servico_executado?: string | null
           signature_data?: string | null
           signature_name?: string | null
-          signature_path?: string | null
           site_id?: string | null
           sla_deadline?: string | null
           started_at?: string | null
@@ -892,30 +851,24 @@ export type Database = {
           total_cents?: number
           type?: string
           updated_at?: string
-          version?: number
         }
         Update: {
           assigned_employee_id?: string | null
-          assinatura_path?: string | null
           client_id?: string
           completed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
           description?: string | null
-          diagnostico?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
           priority?: string
           protocol?: string
-          protocolo?: string | null
           scheduled_at?: string | null
           service_id?: string | null
-          servico_executado?: string | null
           signature_data?: string | null
           signature_name?: string | null
-          signature_path?: string | null
           site_id?: string | null
           sla_deadline?: string | null
           started_at?: string | null
@@ -924,7 +877,6 @@ export type Database = {
           total_cents?: number
           type?: string
           updated_at?: string
-          version?: number
         }
         Relationships: [
           {
@@ -963,21 +915,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      project: {
-        Row: {
-          created_at: string
-          id: number
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-        }
-        Update: {
-          created_at?: string
-          id?: number
-        }
-        Relationships: []
       }
       rh_admission_processes: {
         Row: {
@@ -1279,7 +1216,6 @@ export type Database = {
           employee_id: string
           id: string
           notes: string | null
-          source_request_id: string | null
           status: string
           updated_at: string
         }
@@ -1294,7 +1230,6 @@ export type Database = {
           employee_id: string
           id?: string
           notes?: string | null
-          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1309,7 +1244,6 @@ export type Database = {
           employee_id?: string
           id?: string
           notes?: string | null
-          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1326,13 +1260,6 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rh_employee_advances_source_request_id_fkey"
-            columns: ["source_request_id"]
-            isOneToOne: false
-            referencedRelation: "rh_employee_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1751,7 +1678,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rh_employees_registry_employee_fk"
+            foreignKeyName: "rh_employees_registry_employee_id_fkey"
             columns: ["registry_employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
@@ -2978,52 +2905,6 @@ export type Database = {
           },
         ]
       }
-      treasury_viewer_access: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          enabled: boolean
-          owner_user_id: string
-          viewer_user_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          enabled?: boolean
-          owner_user_id: string
-          viewer_user_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          enabled?: boolean
-          owner_user_id?: string
-          viewer_user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "treasury_viewer_access_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "treasury_viewer_access_owner_user_id_fkey"
-            columns: ["owner_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "treasury_viewer_access_viewer_user_id_fkey"
-            columns: ["viewer_user_id"]
-            isOneToOne: true
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       units: {
         Row: {
           address_json: Json | null
@@ -3134,22 +3015,8 @@ export type Database = {
         Returns: Database["public"]["Enums"]["role_key"]
       }
       current_unit_id: { Args: never; Returns: string }
-      dbs_control_save_snapshot_safe: {
-        Args: { p_payload: Json }
-        Returns: {
-          state: Json
-          state_version: number
-          updated_at: string
-        }[]
-      }
-      dbs_control_save_snapshot_safe_v2: {
-        Args: { p_payload: Json }
-        Returns: {
-          state: Json
-          state_version: number
-          updated_at: string
-        }[]
-      }
+      dbs_my_employee_ids: { Args: never; Returns: string[] }
+      dbs_my_work_order_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
       usuario_esta_ativo: { Args: never; Returns: boolean }
     }
@@ -3161,7 +3028,6 @@ export type Database = {
         | "GESTOR_REGIONAL"
         | "CLIENTE_PF"
         | "COLABORADOR"
-        | "FINANCEIRO_LEITURA"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3296,7 +3162,6 @@ export const Constants = {
         "GESTOR_REGIONAL",
         "CLIENTE_PF",
         "COLABORADOR",
-        "FINANCEIRO_LEITURA",
       ],
     },
   },

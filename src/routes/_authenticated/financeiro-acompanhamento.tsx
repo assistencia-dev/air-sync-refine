@@ -30,36 +30,16 @@ function TreasuryViewerPage() {
     finally { setLoading(false); }
   }
   useEffect(() => {
-    let cancelled = false;
-    const validateSession = async () => {
-      try {
-        const { data: auth, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
-        if (cancelled) return;
-        if (!auth.user) {
-          navigate({ to: "/login", replace: true });
-          return;
-        }
-        const { data: profile, error: profileError } = await supabase
-          .from("users")
-          .select("role_key,status")
-          .eq("auth_id", auth.user.id)
-          .maybeSingle();
-        if (profileError) throw profileError;
-        if (cancelled) return;
-        if (profile?.status !== "ativo" || !["FINANCEIRO_LEITURA", "SUPER_ADMIN"].includes(profile?.role_key || "")) {
-          navigate({ to: "/portal", replace: true });
-          return;
-        }
-        void load();
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Não foi possível validar a sessão financeira.");
-        setLoading(false);
-      }
-    };
-    void validateSession();
-    return () => { cancelled = true; };
+    let cancelled=false;
+    supabase.auth.getUser().then(async ({data:auth}) => {
+      if(cancelled) return;
+      if(!auth.user) { navigate({to:"/login",replace:true}); return; }
+      const {data:profile} = await supabase.from("users").select("role_key,status").eq("auth_id",auth.user.id).maybeSingle();
+      if(cancelled) return;
+      if(profile?.status !== "ativo" || !["FINANCEIRO_LEITURA","SUPER_ADMIN"].includes(profile?.role_key || "")) { navigate({to:"/portal",replace:true}); return; }
+      void load();
+    });
+    return () => { cancelled=true; };
   }, [navigate]);
   const visibleDues = useMemo(() => (data?.dues || []).filter(x => {
     const matchesSearch = `${x.fornecedor} ${x.descricao} ${x.status}`.toLowerCase().includes(search.toLowerCase());
