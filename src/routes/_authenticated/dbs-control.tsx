@@ -134,6 +134,7 @@ function DbsControlPage() {
   // Serialize writes from this browser so an earlier slow request cannot finish
   // after a newer request and overwrite the latest snapshot.
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const projectionRetryInFlightRef = useRef(false);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
   const pendingSaveRequestIdsRef = useRef<string[]>([]);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,7 +266,9 @@ function DbsControlPage() {
             Array.isArray(state?.ordens)
               ? (state!.ordens as any[]).filter((order) => order?._canonicalSyncPending === true).length
               : 0;
-          if (cloudState && !employeeModeRef.current && pendingProjectionCount(cloudState) > 0) {
+          if (cloudState && !employeeModeRef.current && !projectionRetryInFlightRef.current &&
+              pendingProjectionCount(cloudState) > 0) {
+            projectionRetryInFlightRef.current = true;
             try {
               const retried = await saveDbsControlCloudState({
                 data: { state: cloudState, baseUpdatedAt: cloudUpdatedAt },
@@ -278,6 +281,8 @@ function DbsControlPage() {
               if (retryWarning) setCloudError(retryWarning);
             } catch (retryError) {
               setCloudError(retryError instanceof Error ? retryError.message : "Há OS aguardando retentativa de despacho.");
+            } finally {
+              projectionRetryInFlightRef.current = false;
             }
           }
 
@@ -602,7 +607,8 @@ function DbsControlPage() {
         // Retenta a projeção de OS pendentes com backoff natural do ciclo de
         // atualização (Realtime/30 s). A gravação do snapshot continua autoritativa.
         if (!employeeModeRef.current && !pendingStateRef.current && !saveTimerRef.current &&
-            pendingProjectionCount(authoritativeState) > 0) {
+            !projectionRetryInFlightRef.current && pendingProjectionCount(authoritativeState) > 0) {
+          projectionRetryInFlightRef.current = true;
           try {
             const retried = await saveDbsControlCloudState({
               data: { state: authoritativeState, baseUpdatedAt: authoritativeUpdatedAt },
@@ -615,6 +621,8 @@ function DbsControlPage() {
             if (retryWarning) setCloudError(retryWarning);
           } catch (retryError) {
             setCloudError(retryError instanceof Error ? retryError.message : "Há OS aguardando retentativa de despacho.");
+          } finally {
+            projectionRetryInFlightRef.current = false;
           }
         }
 
