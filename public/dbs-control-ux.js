@@ -735,12 +735,12 @@
 
   function updateDashboardKpis(){
     const st=state();if(!st)return;
-    const clients=Array.isArray(st.clientes)?st.clientes:[];
-    const equipment=Array.isArray(st.equipamentos)?st.equipamentos:[];
     const orders=Array.isArray(st.ordens)?st.ordens:[];
-    const active=orders.filter(o=>isActive(o.status)&&!isDone(o.status)&&!isCancelled(o.status)).length;
-    const done=orders.filter(o=>isDone(o.status)&&!isCancelled(o.status)).length;
-    [["dash-client-count","Clientes Base",clients.length],["dash-equip-count","Equipamentos Mapeados",equipment.length],["dash-os-andamento","OS em Atendimento",active],["dash-os-concluidas","OS Concluídas",done]].forEach(([id,label,value])=>{
+    const open=orders.filter(o=>!isDone(o.status)&&!isCancelled(o.status)).length;
+    const active=orders.filter(o=>isActive(o.status)).length;
+    const done=orders.filter(o=>isDone(o.status)).length;
+    const pending=orders.filter(o=>isPending(o.status)||!o.status).length;
+    [["dash-client-count","OS abertas",open],["dash-equip-count","Em atendimento",active],["dash-os-andamento","OS concluídas",done],["dash-os-concluidas","Pendentes",pending]].forEach(([id,label,value])=>{
       const card=document.getElementById(id)?.closest(".metric-card");if(!card)return;
       const title=card.querySelector(".metric-title"),valueEl=document.getElementById(id);
       if(title)title.textContent=label;if(valueEl)valueEl.textContent=String(value);

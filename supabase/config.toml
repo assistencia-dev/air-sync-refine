@@ -1,3 +1,1 @@
-# Supabase CLI configuration intentionally does not pin a project ID.
-# Select the correct DBS AIR production project with `supabase link --project-ref <PRODUCTION_PROJECT_REF>`
-# or provide the project ref through the deployment environment.
+project_id = "gdglototcrehvhkvcqsq"
