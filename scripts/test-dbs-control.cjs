@@ -66,7 +66,7 @@ assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(
 assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
 assert.match(atomicSnapshotMigration, /grant execute on function public\.dbs_control_save_snapshot_safe\(jsonb\) to service_role/i, "O RPC de snapshot deve ser restrito ao service_role.");
 assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A auditoria da base deve buscar todas as OS, não apenas o limite padrão do Supabase.");
-assert.match(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?return normalizeState\(state\)/, "O estado operacional deve vir exclusivamente do snapshot compartilhado.");
+assert.match(cloudFunctions, /const recoveredState = data\s*\?\s*normalizeState\(snapshotState\)\s*:\s*await hydrateDbsControlStateFromCanonicalDb\(\{\}, scope\.companyId\)/, "O snapshot é autoritativo; tabelas relacionais só são fallback quando o snapshot não existe.");
 assert.match(cloudFunctions, /async function syncAdminOrdersToCanonical\(/, "A projeção relacional de despacho deve existir como compatibilidade operacional.");
 assert.match(cloudFunctions, /_canonicalSyncPending: true/, "Uma OS cuja projeção falhe deve ficar marcada para retentativa.");
 assert.match(cloudFunctions, /latest\?\._canonicalSyncPending === true[\s\S]*?registerProjectionOrder\(reconciled\)/, "O marcador de despacho pendente deve sobreviver a salvamentos atrasados do navegador.");
@@ -76,7 +76,7 @@ assert.match(cloudFunctions, /canonical_sync_warning/, "Falhas de projeção pre
 assert.match(cloudFunctions, /já consta como concluída na projeção operacional[\s\S]*?A retentativa foi mantida/, "Uma OS concluída na projeção não pode ser silenciosamente rebaixada pelo snapshot.");
 assert.match(route, /dispatchWarning/, "A interface precisa mostrar quando a projeção de despacho ainda está pendente.");
 assert.doesNotMatch(route, /table: "dbs_control_work_orders"/, "A atualização em tempo real da UI deve observar a fonte compartilhada, não uma segunda fonte de leitura.");
-const snapshotHydrator = cloudFunctions.match(/async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?\n\}/)?.[0] ?? "";\nassert.ok(snapshotHydrator, "A função de leitura do snapshot precisa existir.");\nassert.doesNotMatch(snapshotHydrator, /dbs_control_work_orders/, "A projeção relacional não pode substituir o snapshot como fonte de leitura.");
+assert.match(cloudFunctions, /if \(!data && !hasCanonicalRecords\) return null/, "Uma base sem snapshot nem dados relacionais não deve fingir que há uma OS compartilhada.");
 assert.match(cloudFunctions, /\.eq\("owner_user_id", user\.id\)[\s\S]*?newestPopulated\(ownedSnapshots as any\[\]\)/, "O administrador deve reutilizar seu snapshot existente antes de criar outro escopo.");
 assert.match(cloudFunctions, /\.in\("owner_user_id", companyAdminIds\)[\s\S]*?newestPopulated\(matchingCompanySnapshots as any\[\]\)/, "O administrador deve reutilizar o snapshot legado de outro administrador da mesma empresa.");
 assert.doesNotMatch(cloudFunctions, /from\("dbs_control_work_orders"\)\s*\.update\(update\)/, "A conclusão do colaborador não deve gravar uma cópia concorrente da OS.");
