@@ -332,3 +332,35 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
   main { overflow-wrap: anywhere; }
   table { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 }
+
+
+/* DBS Air recovery: restore responsive guardrails removed from shared module styles. */
+html, body, #root { min-width: 0; max-width: 100%; }
+body { overflow-x: clip; }
+#root, #root > *, main, main > *, section, article, form, fieldset { min-width: 0; }
+img, video, canvas, svg { max-width: 100%; }
+input, select, textarea, button { max-width: 100%; }
+input, select, textarea { min-width: 0; }
+p, label, h1, h2, h3, h4, th, td, a, button, span { overflow-wrap: break-word; word-break: normal; }
+@media (max-width: 767px) {
+  body { font-size: 14px; }
+  main { width: 100%; min-width: 0; }
+  header, header > div, nav, [role="tablist"] { min-width: 0; max-width: 100%; }
+  header h1, header h2, header p { min-width: 0; }
+  main .grid, main .grid > *, main .flex > * { min-width: 0; }
+  main .flex { flex-wrap: wrap; }
+  main input, main select, main textarea { width: 100%; min-width: 0; }
+  main button { white-space: normal; overflow-wrap: normal; min-height: 44px; }
+  main table { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+  main [class*="overflow-x-auto"] { max-width: 100%; overscroll-behavior-x: contain; }
+  main [class*="rounded"], main [class*="card"] { min-width: 0; }
+  main h1 { font-size: clamp(1.35rem, 5vw, 1.9rem); line-height: 1.2; }
+  main h2 { font-size: clamp(1.15rem, 4.3vw, 1.55rem); line-height: 1.25; }
+  main table thead, main table tbody { width: 100%; }
+  main table tr, main table th, main table td { min-width: 0; overflow-wrap: break-word; }
+}
+@media (max-width: 420px) {
+  main .grid { grid-template-columns: minmax(0, 1fr) !important; }
+  main .flex > button, main .flex > a { max-width: 100%; }
+  main [class*="px-"] { padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); }
+}

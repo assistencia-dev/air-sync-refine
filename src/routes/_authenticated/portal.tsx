@@ -23,10 +23,11 @@ const OCCURRENCE_TYPES = [
 function PortalPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile(), retry: false });
   const tickets = useQuery({
     queryKey: ["my-tickets"],
     queryFn: () => listMyTickets(),
+    retry: false,
     enabled: !!profile.data,
   });
 

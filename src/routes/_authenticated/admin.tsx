@@ -66,7 +66,7 @@ function AdminPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [tab, setTab] = useState<"tickets" | "users" | "passage">("tickets");
-  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile(), retry: false });
 
   useEffect(() => {
     if (
@@ -252,7 +252,7 @@ function TabBtn({
 
 function TicketsPanel() {
   const qc = useQueryClient();
-  const tickets = useQuery({ queryKey: ["all-tickets"], queryFn: () => listAllTickets() });
+  const tickets = useQuery({ queryKey: ["all-tickets"], queryFn: () => listAllTickets(), retry: false });
   const [cancelTarget, setCancelTarget] = useState<{ id: string; protocol: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [actionErr, setActionErr] = useState<string | null>(null);
@@ -589,7 +589,7 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const navigate = useNavigate();
   const navigateToTreasuryAccess = () => navigate({ to: "/financeiro-acesso" });
   const qc = useQueryClient();
-  const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers() });
+  const users = useQuery({ queryKey: ["all-users"], queryFn: () => listAllUsers(), retry: false });
   const [confirm, setConfirm] = useState<{
     id: string;
     name: string;

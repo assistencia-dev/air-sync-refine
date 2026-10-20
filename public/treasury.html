@@ -1000,8 +1000,9 @@ td strong{font-weight:650;}
     const TREASURY_CLOUD_MIGRATION_BACKUP_KEY = 'DBS_TREASURY_CLOUD_MIGRATION_BACKUP';
     const TREASURY_VERSION = 5;
     let CLOUD_STATE_RECEIVED = false;
-    function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, "*"); } catch (e) {} }
+    function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, window.location.origin); } catch (e) {} }
     window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
