@@ -5,7 +5,7 @@ const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
 // TEMPORARY RECOVERY ONLY: remove this fallback after the first successful login
 // and move the credential to the server secret store / Supabase Auth administration.
-const BOOTSTRAP_PASSWORD = process.env.DBS_BOOTSTRAP_ADMIN_PASSWORD || "123456DBS";
+const BOOTSTRAP_PASSWORD = process.env.DBS_BOOTSTRAP_ADMIN_PASSWORD;
 
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
@@ -52,7 +52,11 @@ export const resolveLogin = createServerFn({ method: "POST" })
 
     // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
-      // Temporary fallback above keeps bootstrap available until the credential is migrated to server secrets.
+      // Never provision a privileged account with a password embedded in source code.
+      // Configure DBS_BOOTSTRAP_ADMIN_PASSWORD as a server-only secret for recovery.
+      if (!BOOTSTRAP_PASSWORD || BOOTSTRAP_PASSWORD.length < 16) {
+        throw new Error("A recuperação do administrador está desabilitada até que a senha temporária segura seja configurada no servidor.");
+      }
       const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: BOOTSTRAP_EMAIL,
         password: BOOTSTRAP_PASSWORD,
@@ -60,7 +64,8 @@ export const resolveLogin = createServerFn({ method: "POST" })
         user_metadata: { username: BOOTSTRAP_USERNAME },
       });
       if (createErr && !/already/i.test(createErr.message)) {
-        throw new Error("Falha ao inicializar administrador: " + createErr.message);
+        console.error("[auth] Falha ao inicializar administrador:", createErr);
+        throw new Error("Falha ao inicializar o administrador. Verifique os logs seguros do servidor.");
       }
       let authId = created?.user?.id ?? null;
       if (!authId) {
