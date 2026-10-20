@@ -983,6 +983,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           if (!latest || incoming?._canonicalSyncPending === true ||
               projectionFields.some((field) => JSON.stringify(incoming?.[field] ?? null) !== JSON.stringify(latest?.[field] ?? null))) {
             registerProjectionOrder(incoming);
+            // O RPC pode restaurar o ID/protocolo canônico de uma OS legada.
+            // Guardar as duas identidades garante que a OS salva ainda seja
+            // localizada para a projeção e para a limpeza do marcador pendente.
+            if (latest) registerProjectionOrder(latest);
           }
         }
         const seenIds = new Set<string>();
