@@ -26,11 +26,12 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   async ({ next }) => {
+    // Prefer canonical publishable-key variables over potentially stale legacy ANON_KEY values.
     const SUPABASE_ANON_KEY =
-      process.env.SUPABASE_ANON_KEY ||
       process.env.SUPABASE_PUBLISHABLE_KEY ||
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY
 
     if (!SUPABASE_ANON_KEY) {
       throw new Error('Missing Supabase public key. Configure the public key for the canonical DBS project.')
