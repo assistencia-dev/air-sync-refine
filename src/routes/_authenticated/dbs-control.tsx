@@ -116,7 +116,7 @@ function mergeDbsControlStates(
 
 function DbsControlPage() {
   const navigate = useNavigate();
-  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
+  const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile(), retry: false });
   const access = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: false });
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,6 +131,7 @@ function DbsControlPage() {
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [dispatchWarning, setDispatchWarning] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -429,6 +430,10 @@ function DbsControlPage() {
             const requestIds = [...pendingSaveRequestIdsRef.current];
             try {
               const saved = await saveDbsControlCloudState({ data: { state } });
+              const projectionWarning = typeof (saved as any).canonical_sync_warning === "string"
+                ? String((saved as any).canonical_sync_warning)
+                : null;
+              setDispatchWarning(projectionWarning);
               cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
               if (pendingStateRef.current === state) {
                 pendingStateRef.current = null;
@@ -444,6 +449,7 @@ function DbsControlPage() {
               }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: true, updated_at: saved.updated_at ?? null,
+                ...(projectionWarning ? { canonical_sync_warning: projectionWarning } : {}),
               }, "*"));
             } catch (err) {
               console.error("DBS Control cloud save:", err);
@@ -569,6 +575,13 @@ function DbsControlPage() {
           ← Voltar ao menu principal
         </button>
       </div>
+      {dispatchWarning && (
+        <section role="status" aria-live="polite" className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <p className="text-sm font-bold text-amber-900">OS salva; projeção de despacho pendente</p>
+          <p className="mt-1 break-words text-xs leading-5 text-amber-900">{dispatchWarning}</p>
+          <p className="mt-2 text-[11px] text-amber-800">O snapshot compartilhado foi confirmado. A projeção será retentada; não recrie nem exclua a OS.</p>
+        </section>
+      )}
       {cloudError && (
         <section role="alert" aria-live="polite" className="mx-4 mt-3 rounded-xl border border-rose-200 bg-white p-4 shadow-sm">
           <p className="text-sm font-bold text-rose-700">A sincronização automática do DBS CONTROL encontrou uma falha</p>
