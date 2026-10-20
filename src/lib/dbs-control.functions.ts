@@ -732,12 +732,6 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     const order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
       String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
     if (!order) throw new Error("OS não encontrada na base compartilhada.");
-    // Na primeira emissão, ainda não existe snapshot anterior para comparar.
-    // Nesse caso, todas as OS recebidas precisam entrar no primeiro despacho canônico.
-    if (user.role_key !== "COLABORADOR" && !hadLatestAdminSnapshot) {
-      adminOrdersToSync = normalizeState(data.state).ordens as any[];
-    }
-
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
@@ -1356,6 +1350,13 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       }
 
       ownerUserId = current.owner_user_id ?? user.id;
+    }
+
+    // Na primeira emissão, ainda não existe snapshot anterior para comparar.
+    // Despachar todas as OS recebidas garante que a primeira OS também seja
+    // gravada na tabela operacional canônica e apareça no login do colaborador.
+    if (user.role_key !== "COLABORADOR" && !hadLatestAdminSnapshot) {
+      adminOrdersToSync = normalizeState(stateToSave).ordens as any[];
     }
 
     // Grava o vínculo RH resolvido no próprio snapshot compartilhado. Assim o
