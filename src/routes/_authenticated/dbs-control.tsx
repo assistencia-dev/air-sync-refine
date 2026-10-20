@@ -251,12 +251,35 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_READY") {
         try {
           const cloud = await getDbsControlCloudState();
-          const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
+          let cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
+          let cloudUpdatedAt = cloud?.updated_at ?? null;
           const localState = msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
+
+          // Retentativa automática de OS cujo despacho relacional ficou pendente.
+          // O snapshot já foi confirmado; este retry não recria nem substitui a base.
+          const pendingProjectionCount = (state: Record<string, unknown> | null) =>
+            Array.isArray(state?.ordens)
+              ? (state!.ordens as any[]).filter((order) => order?._canonicalSyncPending === true).length
+              : 0;
+          if (cloudState && !employeeModeRef.current && pendingProjectionCount(cloudState) > 0) {
+            try {
+              const retried = await saveDbsControlCloudState({
+                data: { state: cloudState, baseUpdatedAt: cloudUpdatedAt },
+              });
+              if (retried?.state && typeof retried.state === "object") {
+                cloudState = retried.state as Record<string, unknown>;
+                cloudUpdatedAt = retried.updated_at ?? cloudUpdatedAt;
+              }
+              const retryWarning = String((retried as any)?.canonical_sync_warning ?? "").trim();
+              if (retryWarning) setCloudError(retryWarning);
+            } catch (retryError) {
+              setCloudError(retryError instanceof Error ? retryError.message : "Há OS aguardando retentativa de despacho.");
+            }
+          }
 
           const localHasData = dbsControlStateHasData(localState);
           localRecoveryStateRef.current = localState;
@@ -269,18 +292,31 @@ function DbsControlPage() {
             const reconciledInitialState = mergeDbsControlStates(cloudState, localState);
             localRecoveryStateRef.current = reconciledInitialState;
             cloudReadyRef.current = true;
-            cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
+            cloudUpdatedAtRef.current = cloudUpdatedAt;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: reconciledInitialState },
               "*",
             );
-            // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
-            iframeRef.current?.contentWindow?.postMessage({
-              type: "DBS_CONTROL_SYNC_STATUS",
-              status: "synced",
-              pendingCount: 0,
-              updated_at: cloud?.updated_at ?? null,
-            }, "*");
+            const pendingCount = pendingProjectionCount(reconciledInitialState);
+            if (pendingCount > 0) {
+              const pendingMessage = `${pendingCount} OS aguardam confirmação do despacho operacional. A emissão foi preservada e a retentativa será refeita automaticamente.`;
+              setCloudError(pendingMessage);
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_STATUS",
+                status: "error",
+                pendingCount,
+                updated_at: cloudUpdatedAt,
+                error: pendingMessage,
+              }, "*");
+            } else {
+              setCloudError(null);
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_STATUS",
+                status: "synced",
+                pendingCount: 0,
+                updated_at: cloudUpdatedAt,
+              }, "*");
+            }
           } else {
             // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
@@ -293,7 +329,6 @@ function DbsControlPage() {
             );
           }
 
-          setCloudError(null);
         } catch (err) {
           console.error("DBS Control cloud load:", err);
           const rawMessage = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
