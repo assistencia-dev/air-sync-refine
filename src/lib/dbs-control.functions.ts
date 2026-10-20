@@ -893,10 +893,11 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       delete fields.signature_name;
     }
     const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
-      .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
+      .update({ ...fields, version: currentVersion + 1 }).eq("id", existing.id).eq("version", currentVersion)
       .select("id,version").maybeSingle();
     if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
     if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
+    order.version = Number(updated.version || currentVersion + 1);
   }
 }
 
