@@ -71,6 +71,9 @@ assert.match(cloudFunctions, /async function syncAdminOrdersToCanonical\(/, "A p
 assert.match(cloudFunctions, /_canonicalSyncPending: true/, "Uma OS cuja projeção falhe deve ficar marcada para retentativa.");
 assert.match(cloudFunctions, /const saved = saveResult\.data;[\s\S]*?await syncAdminOrdersToCanonical\(/, "A projeção deve acontecer somente depois de confirmar a gravação do snapshot.");
 assert.match(cloudFunctions, /canonical_sync_warning/, "Falhas de projeção precisam voltar explicitamente para a interface.");
+assert.match(cloudFunctions, /já consta como concluída na projeção operacional[\s\S]*?A retentativa foi mantida/, "Uma OS concluída na projeção não pode ser silenciosamente rebaixada pelo snapshot.");
+assert.match(route, /dispatchWarning/, "A interface precisa mostrar quando a projeção de despacho ainda está pendente.");
+assert.doesNotMatch(route, /table: "dbs_control_work_orders"/, "A atualização em tempo real da UI deve observar a fonte compartilhada, não uma segunda fonte de leitura.");
 const snapshotHydrator = cloudFunctions.match(/async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?\n\}/)?.[0] ?? "";\nassert.ok(snapshotHydrator, "A função de leitura do snapshot precisa existir.");\nassert.doesNotMatch(snapshotHydrator, /dbs_control_work_orders/, "A projeção relacional não pode substituir o snapshot como fonte de leitura.");
 assert.match(cloudFunctions, /\.eq\("owner_user_id", user\.id\)[\s\S]*?newestPopulated\(ownedSnapshots as any\[\]\)/, "O administrador deve reutilizar seu snapshot existente antes de criar outro escopo.");
 assert.match(cloudFunctions, /\.in\("owner_user_id", companyAdminIds\)[\s\S]*?newestPopulated\(matchingCompanySnapshots as any\[\]\)/, "O administrador deve reutilizar o snapshot legado de outro administrador da mesma empresa.");
