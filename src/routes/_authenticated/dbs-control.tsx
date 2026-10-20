@@ -592,12 +592,38 @@ function DbsControlPage() {
       try {
         const latest = await getDbsControlCloudState();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        let authoritativeState = latest.state as Record<string, unknown>;
+        let authoritativeUpdatedAt = latest.updated_at;
+        const pendingProjectionCount = (state: Record<string, unknown>) =>
+          Array.isArray(state.ordens)
+            ? (state.ordens as any[]).filter((order) => order?._canonicalSyncPending === true).length
+            : 0;
+
+        // Retenta a projeção de OS pendentes com backoff natural do ciclo de
+        // atualização (Realtime/30 s). A gravação do snapshot continua autoritativa.
+        if (!employeeModeRef.current && !pendingStateRef.current && !saveTimerRef.current &&
+            pendingProjectionCount(authoritativeState) > 0) {
+          try {
+            const retried = await saveDbsControlCloudState({
+              data: { state: authoritativeState, baseUpdatedAt: authoritativeUpdatedAt },
+            });
+            if (retried?.state && typeof retried.state === "object") {
+              authoritativeState = retried.state as Record<string, unknown>;
+              authoritativeUpdatedAt = retried.updated_at ?? authoritativeUpdatedAt;
+            }
+            const retryWarning = String((retried as any)?.canonical_sync_warning ?? "").trim();
+            if (retryWarning) setCloudError(retryWarning);
+          } catch (retryError) {
+            setCloudError(retryError instanceof Error ? retryError.message : "Há OS aguardando retentativa de despacho.");
+          }
+        }
+
         // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
         // A diferença de contagem não prova perda: pode representar registros locais
         // ainda não enviados. Reconciliar por identidade evita bloquear novas emissões
         // e mantém os registros exclusivos até a próxima gravação explícita.
         const reconciledLatestState = mergeDbsControlStates(
-          latest.state as Record<string, unknown>,
+          authoritativeState,
           localRecoveryStateRef.current,
         );
         localRecoveryStateRef.current = reconciledLatestState;
@@ -606,11 +632,24 @@ function DbsControlPage() {
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
           return;
         }
-        if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
-          cloudUpdatedAtRef.current = latest.updated_at;
+        if (force || authoritativeUpdatedAt !== cloudUpdatedAtRef.current) {
+          cloudUpdatedAtRef.current = authoritativeUpdatedAt;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState }, "*");
         }
-        setCloudError(null);
+        const stillPending = pendingProjectionCount(reconciledLatestState);
+        if (stillPending > 0) {
+          const warning = `${stillPending} OS aguardam confirmação do despacho operacional; a retentativa automática continua ativa.`;
+          setCloudError(warning);
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_STATUS",
+            status: "error",
+            pendingCount: stillPending,
+            updated_at: authoritativeUpdatedAt,
+            error: warning,
+          }, "*");
+        } else {
+          setCloudError(null);
+        }
       } catch (err) {
         console.error("DBS Control Realtime recovery:", err);
         setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
