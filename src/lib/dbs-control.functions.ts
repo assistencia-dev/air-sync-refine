@@ -655,7 +655,6 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
     let stateToSave = data.state;
     let ownerUserId = scope.ownerUserId;
-    let hadLatestAdminSnapshot = false;
 
     // Reconcile complete snapshots against the latest shared snapshot before an
     // administrative save, preventing delayed autosaves from dropping existing OS.
@@ -667,7 +666,6 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         .maybeSingle();
       if (latestError) throw new Error(latestError.message);
       if (latestSnapshot?.state && typeof latestSnapshot.state === "object") {
-        hadLatestAdminSnapshot = true;
         const latestState = normalizeState(latestSnapshot.state as Record<string, unknown>);
         const incomingState = normalizeState(data.state);
         const latestOrders = latestState.ordens as any[];
@@ -679,7 +677,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
         const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
-          const seenIds = new Set<string>();
+        const seenIds = new Set<string>();
         const seenProtocols = new Set<string>();
         const protectedCompletedFields = [
           "tecnicoId", "employeeId", "assignedEmployeeId", "concluidoPorEmployeeId",
