@@ -67,7 +67,11 @@ assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A m
 assert.match(atomicSnapshotMigration, /grant execute on function public\.dbs_control_save_snapshot_safe\(jsonb\) to service_role/i, "O RPC de snapshot deve ser restrito ao service_role.");
 assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A auditoria da base deve buscar todas as OS, não apenas o limite padrão do Supabase.");
 assert.match(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?return normalizeState\(state\)/, "O estado operacional deve vir exclusivamente do snapshot compartilhado.");
-assert.doesNotMatch(cloudFunctions, /syncAdminOrdersToCanonical|adminOrdersToSync|canonicalSyncWarning/, "A emissão não deve manter uma segunda escrita relacional concorrente.");
+assert.match(cloudFunctions, /async function syncAdminOrdersToCanonical\(/, "A projeção relacional de despacho deve existir como compatibilidade operacional.");
+assert.match(cloudFunctions, /_canonicalSyncPending: true/, "Uma OS cuja projeção falhe deve ficar marcada para retentativa.");
+assert.match(cloudFunctions, /const saved = saveResult\.data;[\s\S]*?await syncAdminOrdersToCanonical\(/, "A projeção deve acontecer somente depois de confirmar a gravação do snapshot.");
+assert.match(cloudFunctions, /canonical_sync_warning/, "Falhas de projeção precisam voltar explicitamente para a interface.");
+assert.doesNotMatch(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?from\("dbs_control_work_orders"\)/, "A projeção relacional não pode substituir o snapshot como fonte de leitura.");
 assert.match(cloudFunctions, /\.eq\("owner_user_id", user\.id\)[\s\S]*?newestPopulated\(ownedSnapshots as any\[\]\)/, "O administrador deve reutilizar seu snapshot existente antes de criar outro escopo.");
 assert.match(cloudFunctions, /\.in\("owner_user_id", companyAdminIds\)[\s\S]*?newestPopulated\(matchingCompanySnapshots as any\[\]\)/, "O administrador deve reutilizar o snapshot legado de outro administrador da mesma empresa.");
 assert.doesNotMatch(cloudFunctions, /from\("dbs_control_work_orders"\)\s*\.update\(update\)/, "A conclusão do colaborador não deve gravar uma cópia concorrente da OS.");
