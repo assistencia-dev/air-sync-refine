@@ -819,10 +819,16 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       ? mappedEmployeeId
       : (DBS_CONTROL_UUID_RE.test(explicitEmployeeId) ? explicitEmployeeId : "");
     const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
+    let canonicalSiteId = "";
+    if (isUuid(siteId)) {
+      const siteResult = await supabaseAdmin.from("dbs_control_sites").select("id").eq("id", siteId).maybeSingle();
+      if (siteResult.error) throw new Error("Falha ao validar o local da OS " + protocol + ": " + siteResult.error.message);
+      canonicalSiteId = siteResult.data ? String(siteResult.data.id) : "";
+    }
     const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
     const fields: Record<string, unknown> = {
       protocol, protocolo: protocol, client_id: clientId,
-      site_id: isUuid(siteId) ? siteId : null,
+      site_id: canonicalSiteId || null,
       assigned_employee_id: isUuid(assignedId) ? assignedId : null,
       created_by_user_id: userId,
       type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
