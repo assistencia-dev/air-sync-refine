@@ -58,14 +58,14 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
-const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
+const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016134345_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
 assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
 assert.match(atomicSnapshotMigration, /grant execute on function public\.dbs_control_save_snapshot_safe\(jsonb\) to service_role/i, "O RPC de snapshot deve ser restrito ao service_role.");
-assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A hidratação precisa buscar todas as OS, não apenas o limite padrão do Supabase.");
+assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A auditoria da base deve buscar todas as OS, não apenas o limite padrão do Supabase.");
 assert.match(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?return normalizeState\(state\)/, "O estado operacional deve vir exclusivamente do snapshot compartilhado.");
 assert.doesNotMatch(cloudFunctions, /syncAdminOrdersToCanonical|adminOrdersToSync|canonicalSyncWarning/, "A emissão não deve manter uma segunda escrita relacional concorrente.");
 assert.doesNotMatch(cloudFunctions, /from\("dbs_control_work_orders"\)\s*\.update\(update\)/, "A conclusão do colaborador não deve gravar uma cópia concorrente da OS.");
