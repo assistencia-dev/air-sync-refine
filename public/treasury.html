@@ -1000,8 +1000,9 @@ td strong{font-weight:650;}
     const TREASURY_CLOUD_MIGRATION_BACKUP_KEY = 'DBS_TREASURY_CLOUD_MIGRATION_BACKUP';
     const TREASURY_VERSION = 5;
     let CLOUD_STATE_RECEIVED = false;
-    function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, "*"); } catch (e) {} }
+    function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, window.location.origin); } catch (e) {} }
     window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
@@ -1966,7 +1967,30 @@ function showToast(msg) {
         const pctGeral=totalContratos>0?(totalPago/totalContratos*100).toFixed(1):'0.0';
         const win=window.open('','_blank','width=950,height=700');
         if(!win){alert('O navegador bloqueou a janela de impressão. Permita pop-ups para gerar o PDF.');return;}
-        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}</style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: ${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ ${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ ${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ ${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ ${formatMoney(totalContratos)}</td><td>R$ ${formatMoney(totalPago)}</td><td>R$ ${formatMoney(totalSaldo)}</td><td>${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>`);
+        win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio_Passivos_DBS_Air</title><style>body{font-family:Arial,sans-serif;padding:25px;color:#1e293b;font-size:11px}.header{display:flex;justify-content:space-between;border-bottom:2px solid #0284c7;padding-bottom:12px}.logo{font-size:18px;font-weight:bold;color:#0284c7}.sub{color:#64748b;font-size:10px}.title{text-align:center;font-size:15px;font-weight:bold;margin:15px 0 4px;text-transform:uppercase}.period{text-align:center;color:#0369a1;font-weight:bold;margin-bottom:15px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;padding:8px;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2e8f0}.kpis{display:flex;gap:8px;margin:15px 0}.kpi{flex:1;background:#f8fafc;border:1px solid #cbd5e1;padding:10px;text-align:center}.kv{font-weight:bold;font-size:13px;margin-top:3px}.total{font-weight:bold;background:#f8fafc;border-top:2px solid #0284c7}@media print{@page{size:landscape;margin:1cm}body{padding:0}}
+        /* DBS visual alignment — CSS only */
+        :root { --brand-primary: #1769d1; }
+        .sidebar { background: linear-gradient(180deg, #0b2745 0%, #0d3154 100%) !important; }
+        .sidebar-footer { background: rgba(3, 21, 39, .42) !important; }
+        .nav-item.active {
+            background: rgba(66, 183, 223, .16) !important;
+            color: #b8efff !important;
+            border-right: 3px solid #42b7df !important;
+        }
+        .btn-primary { background: #1769d1 !important; color: #fff !important; }
+        .btn-primary:hover { background: #1259b4 !important; }
+        .btn-dark { background: #1769d1 !important; color: #fff !important; }
+        .btn-secondary[onclick="openModalReceber()"] {
+            color: #0b2745 !important;
+            border-color: #1769d1 !important;
+            background: #f5f9ff !important;
+        }
+        .btn-secondary[onclick="openModalReceber()"]:hover {
+            color: #0b2745 !important;
+            border-color: #42b7df !important;
+            background: #eaf5ff !important;
+        }
+    </style></head><body><div class="header"><div><div class="logo">DBS AIR REFRIGERAÇÃO LTDA</div><div class="sub">CNPJ: 13.352.707/0001-09</div></div><div class="sub"><strong>DBS TREASURY</strong><br>Emissão: ${new Date().toLocaleString('pt-BR')}</div></div><div class="title">Relatório Gerencial de Acordos e Passivos</div><div class="period">${periodo}</div><div class="kpis"><div class="kpi">Montante Total<br><div class="kv">R$ ${formatMoney(totalContratos)}</div></div><div class="kpi">Total Pago<br><div class="kv">R$ ${formatMoney(totalPago)}</div></div><div class="kpi">Saldo Devedor<br><div class="kv">R$ ${formatMoney(totalSaldo)}</div></div><div class="kpi">Amortização<br><div class="kv">${pctGeral}%</div></div></div><table><thead><tr><th>Credor</th><th>Parc. no filtro</th><th>Valor Parcela</th><th>Total Contrato</th><th>Total Pago</th><th>Saldo</th><th>% Pago</th><th>Próx. Venc.</th></tr></thead><tbody>${linhas}<tr class="total"><td>TOTALIZADORES</td><td>-</td><td>-</td><td>R$ ${formatMoney(totalContratos)}</td><td>R$ ${formatMoney(totalPago)}</td><td>R$ ${formatMoney(totalSaldo)}</td><td>${pctGeral}%</td><td>-</td></tr></tbody></table><script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}<\\/script></body></html>`);
         win.document.close();
         logAuditoria('EXPORTAÇÃO_PDF','Acordos',`Gerou relatório PDF de passivos. ${periodo}`);
     }
@@ -2353,6 +2377,10 @@ function showToast(msg) {
                 </div>
             `;
         });
+
+        if (!STATE.passivos.length) {
+            dashProg.innerHTML = '<div class="visual-empty-state" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px dashed var(--border);border-radius:9px;color:var(--text-muted);font-size:12px;"><i class="fa-regular fa-folder-open" aria-hidden="true" style="color:#94a3b8;"></i><span>Nenhum acordo cadastrado ainda.</span></div>';
+        }
 
         // Radar de Saídas: consolida somente dados já existentes no Treasury.
         // Não cria lançamentos, não altera status e não modifica nenhuma fonte operacional.

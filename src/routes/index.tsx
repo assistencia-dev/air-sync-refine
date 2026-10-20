@@ -4,8 +4,9 @@ import {
   ChevronDown,
   CheckCircle2,
   Gavel,
-  Heart,
   Beaker,
+  Gauge,
+  Wind,
   Award,
   Phone,
   Mail,
@@ -65,7 +66,7 @@ function Index() {
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
       {/* ============ TOP UTILITY BAR ============ */}
       <div style={{ background: "#0F172A" }} className="text-white text-xs">
-        <div className="container max-w-7xl mx-auto px-4 h-8 flex items-center justify-between">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between">
           <div className="hidden sm:flex items-center gap-5">
             <span className="flex items-center gap-1.5" style={{ color: "#93C5FD" }}>
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -92,7 +93,7 @@ function Index() {
 
       {/* ============ MAIN HEADER (LOGO EM DESTAQUE) ============ */}
       <header className="sticky top-0 w-full bg-white z-50 shadow-md" style={{ borderBottom: "3px solid #1E3A8A" }}>
-        <div className="container max-w-7xl mx-auto px-4 flex items-center justify-between h-[88px] md:h-[96px]">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-[88px] md:h-[96px]">
           {/* Logo XL */}
           <a href="#top" className="flex items-center gap-4 group">
             <BrandLogo
@@ -119,12 +120,12 @@ function Index() {
               href={wa(defaultMsg)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap min-w-max text-white px-4 py-2.5 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition"
               style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
             >
               <Phone className="w-4 h-4" /> Solicitar Orçamento
             </a>
-            <button type="button" onClick={handleInstallApp} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm shadow-sm transition hover:-translate-y-0.5" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }} aria-label="Baixar ou instalar o aplicativo DBS AIR"><Download className="w-4 h-4" /> Baixe o App</button>
+            <button type="button" onClick={handleInstallApp} className="inline-flex items-center justify-center gap-2 whitespace-nowrap min-w-max px-4 py-2.5 rounded-lg font-bold text-sm shadow-sm transition hover:-translate-y-0.5" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }} aria-label="Baixar ou instalar o aplicativo DBS AIR"><Download className="w-4 h-4" /> Baixe o App</button>
           </nav>
 
           {/* Mobile menu button */}
@@ -141,18 +142,18 @@ function Index() {
         {/* Mobile Menu */}
         {menuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
-            <div className="container max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
+            <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3">
               <a href="#solucoes" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Soluções</a>
               <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
               <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Portal do Cliente</a>
-<button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
+<button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap px-4 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
               <a
                 href={wa(defaultMsg)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 text-white px-5 py-3 rounded-lg font-semibold text-sm"
+                className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap text-white px-4 py-3 rounded-lg font-semibold text-sm"
                 style={{ background: "linear-gradient(135deg,#1E3A8A,#0284C7)" }}
               >
                 <Phone className="w-4 h-4" /> Solicitar Orçamento
@@ -183,7 +184,7 @@ function Index() {
             backgroundSize: "48px 48px",
           }}
         />
-        <div className="container max-w-7xl mx-auto px-4 relative">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.25em] mb-5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ color: "#93C5FD", background: "rgba(147,197,253,0.1)", border: "1px solid rgba(147,197,253,0.3)" }}>
@@ -200,14 +201,14 @@ function Index() {
                   href={wa(defaultMsg)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 text-white px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5 shadow-lg"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap min-w-max text-white px-5 py-3.5 rounded-lg font-semibold text-sm shadow-lg transition transform hover:-translate-y-0.5"
                   style={{ background: "#0F9F8F" }}
                 >
                   <Calendar className="w-5 h-5" /> Agendar Avaliação Técnica
                 </a>
                 <a
                   href="#modalidades"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold transition transform hover:-translate-y-0.5"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap min-w-max px-5 py-3.5 rounded-lg font-semibold text-sm transition transform hover:-translate-y-0.5"
                   style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)" }}
                 >
                   <List className="w-5 h-5" /> Conhecer Modalidades
@@ -260,7 +261,7 @@ function Index() {
 
       {/* ============ METRICS ============ */}
       <section className="py-12 md:py-16" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-3 gap-4 md:gap-8">
             {[
               { n: "15+", l: "ANOS DE ATUAÇÃO" },
@@ -279,14 +280,14 @@ function Index() {
 
       {/* ============ VALUE PROPOSITION ============ */}
       <section id="solucoes" className="py-20 md:py-28 bg-white">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>A Diferença entre Manutenção Comum e Ativo Estratégico</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Três pilares que sustentam nossa atuação no mercado corporativo.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { icon: Award, title: "Preservação Patrimonial", desc: "Redução drástica na taxa de quebra de compressores e chillers, protegendo o investimento em maquinário da sua empresa." },
-              { icon: Heart, title: "Eficiência Térmica Avançada", desc: "Calibração milimétrica de sistemas que diminui o desperdício de energia e otimiza os custos operacionais (OPEX) em até 30%." },
+              { icon: Gauge, title: "Eficiência Térmica Avançada", desc: "Calibração milimétrica de sistemas que diminui o desperdício de energia e otimiza os custos operacionais (OPEX) em até 30%." },
               { icon: Beaker, title: "Reputação e Conformidade Integral", desc: "Seus colaboradores, clientes e o jurídico da sua empresa totalmente seguros sob a tutela de engenheiros seniores (CREA/CFT) e das diretrizes da ANVISA." },
             ].map((item, idx) => {
               const Icon = item.icon;
@@ -306,15 +307,15 @@ function Index() {
 
       {/* ============ COMPLIANCE ============ */}
       <section id="pmoc" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Conformidade Regulatória e Responsabilidade Técnica</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Fundação legal robusta para a operação segura e auditável de sistemas de climatização em ambientes corporativos.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             {[
               { icon: Gavel, title: "Lei Federal nº 13.589/2018", desc: "Tornou obrigatória a manutenção programada e a elaboração do PMOC para todos os edifícios de uso público e coletivo climatizados." },
-              { icon: Heart, title: "Portaria MS nº 3.523/1998", desc: "Estabelece os parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade e integridade da saúde dos ocupantes." },
-              { icon: Beaker, title: "Resolução RE nº 9/2003 ANVISA", desc: "Estabelece os padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂, poeira e taxa mínima de renovação de ar." },
+              { icon: ShieldCheck, title: "Portaria MS nº 3.523/1998", desc: "Estabelece os parâmetros físicos de limpeza, desinfecção e periodicidade de manutenção para garantir a qualidade e integridade da saúde dos ocupantes." },
+              { icon: Wind, title: "Resolução RE nº 9/2003 ANVISA", desc: "Estabelece os padrões referenciais de qualidade do ar interior, incluindo limites de fungos, bactérias, CO₂, poeira e taxa mínima de renovação de ar." },
             ].map((item, idx) => {
               const Icon = item.icon;
               return (
@@ -383,7 +384,7 @@ function Index() {
 
       {/* ============ SERVICES ============ */}
       <section id="modalidades" className="py-20 md:py-28 bg-white">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Modalidades de Atendimento</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Escolha a estrutura que melhor se adequa às necessidades operacionais da sua empresa.</p>
 
@@ -478,7 +479,7 @@ function Index() {
 
       {/* ============ FAQ ============ */}
       <section id="faq" className="py-20 md:py-28" style={{ background: "#F8FAFC" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: "#0F172A" }}>Perguntas Frequentes</h2>
           <p className="text-lg mb-12" style={{ color: "#666" }}>Informações técnicas e operacionais sobre nossos serviços.</p>
 
@@ -510,7 +511,7 @@ function Index() {
 
       {/* ============ FINAL CTA ============ */}
       <section className="py-20 md:py-28 bg-white text-center" style={{ borderTop: "1px solid #E2E8F0" }}>
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ color: "#0F172A" }}>Pronto para otimizar sua climatização?</h2>
           <p className="text-lg mb-8 max-w-2xl mx-auto" style={{ color: "#666" }}>
             Agende uma avaliação técnica com nossos engenheiros. Sem compromisso.
@@ -529,7 +530,7 @@ function Index() {
 
       {/* ============ FOOTER ============ */}
       <footer style={{ background: "#0F172A" }} className="text-white py-14">
-        <div className="container max-w-7xl mx-auto px-4">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
             <div>
               <BrandLogo

@@ -469,3 +469,17 @@ body:not(.dbs-control-employee-mode) > aside .brand-title {
   #tab-ordens .data-header > div:last-child { width: 100%; }
   #tab-ordens .data-header > div:last-child .btn { flex: 1 1 160px; min-height: 38px; }
 }
+
+
+/* Ajuste de ritmo vertical no dashboard e respiro no fluxo operacional. */
+#tab-dashboard { gap: 12px !important; }
+#tab-dashboard .metrics-grid { margin-bottom: 0 !important; }
+#tab-dashboard .quick-start-card { margin-top: 0 !important; }
+#tab-dashboard .quick-flow {
+  padding: 14px 16px !important;
+  gap: 12px !important;
+}
+#tab-dashboard .quick-flow-label {
+  padding: 6px 10px !important;
+  line-height: 1.5 !important;
+}

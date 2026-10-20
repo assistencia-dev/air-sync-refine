@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getTreasuryCloudState, saveTreasuryCloudState } from "@/lib/treasury.functions";
+import type { Json, TablesInsert } from "@/integrations/supabase/types";
 import { BrandLogo } from "@/components/BrandLogo";
 
 
@@ -17,8 +17,6 @@ export const Route = createFileRoute("/_authenticated/treasury")({
   }),
   component: TreasuryPage,
 });
-
-const NATIVE_ADMIN_USERNAMES = new Set(["DBS123", "DBSASSISTENCIA123"]);
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
@@ -63,14 +61,14 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
     scope_key: scopeKey,
     company_id: user.company_id ?? null,
     owner_user_id: user.id,
-    state,
-    state_version: Number((state as any)?._meta?.version) || 5,
+    state: state as unknown as Json,
+    state_version: Number((state as { _meta?: { version?: unknown } })._meta?.version) || 5,
     updated_by: user.id,
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabase
     .from("treasury_snapshots")
-    .upsert(payload as any, { onConflict: "scope_key" })
+    .upsert(payload as TablesInsert<"treasury_snapshots">, { onConflict: "scope_key" })
     .select("state, state_version, updated_at")
     .single();
   if (error) throw new Error(error.message);
@@ -102,7 +100,7 @@ function TreasuryPage() {
         if (!cancelled) navigate({ to: "/login", replace: true });
         return;
       }
-      const { data: user, error } = await (supabase as any)
+      const { data: user, error } = await supabase
         .from("users")
         .select("role_key, status")
         .eq("auth_id", auth.user.id)
@@ -119,6 +117,7 @@ function TreasuryPage() {
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
       if (msg.type === "DBS_TREASURY_READY") {
@@ -139,7 +138,7 @@ function TreasuryPage() {
               cloudReadyRef.current = true;
               iframeRef.current?.contentWindow?.postMessage(
                 { type: "DBS_TREASURY_CLOUD_STATE", state: cloudState },
-                "*",
+                window.location.origin,
               );
             } else if (localState) {
               localState._meta = {
@@ -151,7 +150,7 @@ function TreasuryPage() {
               cloudReadyRef.current = true;
               iframeRef.current?.contentWindow?.postMessage(
                 { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
-                "*",
+                window.location.origin,
               );
             }
           } else if (localState) {
@@ -164,7 +163,7 @@ function TreasuryPage() {
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
-              "*",
+              window.location.origin,
             );
           }
 

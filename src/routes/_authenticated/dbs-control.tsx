@@ -444,28 +444,45 @@ function DbsControlPage() {
 
     window.addEventListener("message", handler);
 
-    // Keep an already-open technician screen in sync with OS assignments made by
-    // administration on another device. Never hydrate over an unsaved local edit.
-    const refreshTimer = setInterval(async () => {
-      if (!cloudReadyRef.current || pendingStateRef.current || saveTimerRef.current) return;
+    // Sincronização multi-dispositivo: uma única leitura por vez, atualização imediata
+    // quando o usuário retorna ao app e descarte de respostas antigas/fora de ordem.
+    let refreshInFlight = false;
+    let refreshGeneration = 0;
+    const refreshLatestCloudState = async () => {
+      if (!cloudReadyRef.current || pendingStateRef.current || saveTimerRef.current || refreshInFlight) return;
+      refreshInFlight = true;
+      const generation = ++refreshGeneration;
       try {
         const latest = await getDbsControlCloudState();
-        if (!latest?.state || !latest.updated_at || latest.updated_at === cloudUpdatedAtRef.current) return;
+        // Nunca deixa uma resposta antiga sobrescrever uma leitura mais recente ou uma edição local.
+        if (generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
         if (pendingStateRef.current || saveTimerRef.current) return;
-        cloudUpdatedAtRef.current = latest.updated_at;
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: "DBS_CONTROL_CLOUD_STATE", state: latest.state },
-          "*",
-        );
+        if (latest.updated_at !== cloudUpdatedAtRef.current) {
+          cloudUpdatedAtRef.current = latest.updated_at;
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_CONTROL_CLOUD_STATE", state: latest.state },
+            "*",
+          );
+        }
         setCloudError(null);
       } catch (err) {
         console.error("DBS Control automatic refresh:", err);
         setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
+      } finally {
+        refreshInFlight = false;
       }
-    }, 15000);
+    };
+    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 10000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshLatestCloudState();
+    };
+    window.addEventListener("focus", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("message", handler);
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
@@ -490,8 +507,8 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261015-mobile-sync-2`
-    : "/dbs-control.html?v=20261015-mobile-sync-2";
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261016-dashboard-sync-1`
+    : "/dbs-control.html?v=20261016-dashboard-sync-1";
 
   return (
     <main className="min-h-screen bg-[#f4f8fc]">
