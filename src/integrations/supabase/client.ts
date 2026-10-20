@@ -34,11 +34,13 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 function createSupabaseClient() {
   // Keep the URL pinned to the one approved project; read only the public key
   // from build/deployment environment variables.
+  // Prefer the canonical publishable-key settings; legacy ANON_KEY variables
+  // may be stale in hosted build environments and must not override the active key.
   const SUPABASE_ANON_KEY =
-    import.meta.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY;
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    import.meta.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY;
 
   if (!SUPABASE_ANON_KEY) {
     const message =
