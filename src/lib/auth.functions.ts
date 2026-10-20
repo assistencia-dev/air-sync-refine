@@ -3,7 +3,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
-const BOOTSTRAP_PASSWORD = process.env.DBS_BOOTSTRAP_ADMIN_PASSWORD;
+// TEMPORARY RECOVERY ONLY: remove this fallback after the first successful login
+// and move the credential to the server secret store / Supabase Auth administration.
+const BOOTSTRAP_PASSWORD = process.env.DBS_BOOTSTRAP_ADMIN_PASSWORD || "123456DBS";
 
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
@@ -50,7 +52,7 @@ export const resolveLogin = createServerFn({ method: "POST" })
 
     // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
-      if (!BOOTSTRAP_PASSWORD) throw new Error("Inicialização do administrador indisponível: configure DBS_BOOTSTRAP_ADMIN_PASSWORD no ambiente do servidor.");
+      // Temporary fallback above keeps bootstrap available until the credential is migrated to server secrets.
       const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: BOOTSTRAP_EMAIL,
         password: BOOTSTRAP_PASSWORD,
