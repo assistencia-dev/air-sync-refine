@@ -170,6 +170,10 @@ export interface FileRouteTypes {
     | '/portal'
     | '/treasury'
     | '/admin/rh-dashboard'
+    | '/chamados'
+    | '/users'
+    | '/rh'
+    | '/financeiro'
   id:
     | '__root__'
     | '/'
@@ -186,10 +190,6 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/_authenticated/treasury'
     | '/admin/rh-dashboard'
-    | '/chamados'
-    | '/users'
-    | '/rh'
-    | '/financeiro'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -290,13 +290,6 @@ declare module '@tanstack/react-router' {
       path: '/financeiro'
       fullPath: '/financeiro'
       preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/financeiro-acesso': {
-      id: '/_authenticated/financeiro-acesso'
-      path: '/financeiro-acesso'
-      fullPath: '/financeiro-acesso'
-      preLoaderRoute: typeof AuthenticatedFinanceiroAcessoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro-acesso': {
