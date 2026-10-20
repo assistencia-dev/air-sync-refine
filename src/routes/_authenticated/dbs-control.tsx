@@ -492,25 +492,18 @@ function DbsControlPage() {
               retryAttemptRef.current = 0;
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
-              const canonicalWarning = typeof (saved as any).canonical_sync_warning === "string"
-                ? String((saved as any).canonical_sync_warning).trim()
-                : "";
-              // Snapshot saved does not mean relational OS dispatch succeeded. Surface
-              // that distinction to the embedded app instead of reporting a false green sync.
-              setCloudError(canonicalWarning || null);
+              setCloudError(null);
               iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SYNC_STATUS",
-                status: canonicalWarning ? "error" : (pendingStateRef.current ? "pending" : "synced"),
+                status: pendingStateRef.current ? "pending" : "synced",
                 pendingCount: pendingStateRef.current ? 1 : 0,
                 updated_at: saved.updated_at ?? null,
-                ...(canonicalWarning ? { error: "Snapshot compartilhado salvo, mas o despacho relacional das OS falhou: " + canonicalWarning } : {}),
               }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK",
                 requestId: id,
                 ok: true,
                 updated_at: saved.updated_at ?? null,
-                ...(canonicalWarning ? { warning: "Snapshot salvo; despacho relacional das OS falhou: " + canonicalWarning } : {}),
               }, "*"));
             } catch (err) {
               console.error("DBS Control cloud save:", err);
@@ -590,9 +583,6 @@ function DbsControlPage() {
       realtimeChannel = supabase.channel("dbs-control-snapshot-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_snapshots" }, () => {
           void refreshLatestCloudState();
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_work_orders" }, () => {
-          void refreshLatestCloudState(true);
         })
         .subscribe((status) => {
           if (disposed) return;
