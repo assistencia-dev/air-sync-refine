@@ -855,7 +855,12 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
       continue;
     }
-    if (completed(existing.status)) continue;
+    if (completed(existing.status)) {
+      if (!completed(status)) {
+        throw new Error("A OS " + protocol + " já consta como concluída na projeção operacional, mas o snapshot não confirma a conclusão. A retentativa foi mantida para proteger o documento.");
+      }
+      continue;
+    }
     const expectedVersion = Number(order?.version);
     const currentVersion = Number(existing.version || 1);
     const staleVersion = Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion;
