@@ -61,9 +61,7 @@ function LoginPage() {
       const normalizedIdentifier = identifier.trim();
       const email = normalizedIdentifier.includes("@")
         ? normalizedIdentifier
-        : normalizedIdentifier.toUpperCase() === "DBSASSISTENCIA123"
-          ? "dbsassistencia123@dbsair.internal"
-          : (await resolveLogin({ data: { identifier: normalizedIdentifier } })).email;
+        : (await resolveLogin({ data: { identifier: normalizedIdentifier } })).email;
 
       const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
       if (signErr) throw signErr;
