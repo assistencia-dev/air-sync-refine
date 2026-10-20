@@ -1003,6 +1003,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const latest = (id ? latestById.get(id) : undefined) ??
             (protocol ? latestByProtocol.get(protocol) : undefined);
           let reconciled = incoming;
+          if (latest?._canonicalSyncPending === true) {
+            reconciled = { ...reconciled, _canonicalSyncPending: true };
+            registerProjectionOrder(reconciled);
+          }
           if (latest && isCompleted(latest)) {
             const protectedValues: Record<string, unknown> = {};
             for (const field of protectedCompletedFields) {
