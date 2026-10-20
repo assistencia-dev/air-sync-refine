@@ -492,18 +492,23 @@ function DbsControlPage() {
               retryAttemptRef.current = 0;
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
-              setCloudError(null);
+              const dispatchWarning = typeof (saved as any).canonical_sync_warning === "string"
+                ? String((saved as any).canonical_sync_warning).trim()
+                : "";
+              setCloudError(dispatchWarning || null);
               iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SYNC_STATUS",
-                status: pendingStateRef.current ? "pending" : "synced",
+                status: dispatchWarning ? "error" : (pendingStateRef.current ? "pending" : "synced"),
                 pendingCount: pendingStateRef.current ? 1 : 0,
                 updated_at: saved.updated_at ?? null,
+                ...(dispatchWarning ? { error: "OS salva no snapshot, mas a projeção de despacho está pendente: " + dispatchWarning } : {}),
               }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK",
                 requestId: id,
                 ok: true,
                 updated_at: saved.updated_at ?? null,
+                ...(dispatchWarning ? { warning: "OS salva; despacho relacional pendente: " + dispatchWarning } : {}),
               }, "*"));
             } catch (err) {
               console.error("DBS Control cloud save:", err);
