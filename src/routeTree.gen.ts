@@ -120,30 +120,14 @@ export interface FileRoutesByFullPath {
   '/users': typeof AuthenticatedUsersRoute
   '/rh': typeof AuthenticatedRhRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
-  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/login': typeof LoginRoute
-  '/chamados': typeof AuthenticatedChamadosRoute
-  '/users': typeof AuthenticatedUsersRoute
-  '/rh': typeof AuthenticatedRhRoute
-  '/financeiro': typeof AuthenticatedFinanceiroRoute
-  '/admin': typeof AuthenticatedAdminRoute
-  '/dbs-control': typeof AuthenticatedDbsControlRoute
-  '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
-  '/passage': typeof AuthenticatedPassageRoute
-  '/portal': typeof AuthenticatedPortalRoute
-  '/treasury': typeof AuthenticatedTreasuryRoute
-  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/chamados': typeof AuthenticatedChamadosRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
@@ -155,13 +139,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
   '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
-  '/_authenticated/chamados': typeof AuthenticatedChamadosRoute
-  '/_authenticated/users': typeof AuthenticatedUsersRoute
-  '/_authenticated/rh': typeof AuthenticatedRhRoute
-  '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
-  '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
-  '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -286,7 +264,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/financeiro-acesso': {
     '/_authenticated/chamados': {
       id: '/_authenticated/chamados'
       path: '/chamados'
@@ -313,6 +290,13 @@ declare module '@tanstack/react-router' {
       path: '/financeiro'
       fullPath: '/financeiro'
       preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro-acesso': {
+      id: '/_authenticated/financeiro-acesso'
+      path: '/financeiro-acesso'
+      fullPath: '/financeiro-acesso'
+      preLoaderRoute: typeof AuthenticatedFinanceiroAcessoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro-acesso': {
