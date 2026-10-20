@@ -69,6 +69,8 @@ assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A au
 assert.match(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?return normalizeState\(state\)/, "O estado operacional deve vir exclusivamente do snapshot compartilhado.");
 assert.match(cloudFunctions, /async function syncAdminOrdersToCanonical\(/, "A projeção relacional de despacho deve existir como compatibilidade operacional.");
 assert.match(cloudFunctions, /_canonicalSyncPending: true/, "Uma OS cuja projeção falhe deve ficar marcada para retentativa.");
+assert.match(cloudFunctions, /latest\?\._canonicalSyncPending === true[\s\S]*?registerProjectionOrder\(reconciled\)/, "O marcador de despacho pendente deve sobreviver a salvamentos atrasados do navegador.");
+assert.match(cloudFunctions, /if \(latest\) registerProjectionOrder\(latest\)/, "A reconciliação deve preservar as identidades legadas por ID e protocolo.");
 assert.match(cloudFunctions, /const saved = saveResult\.data;[\s\S]*?await syncAdminOrdersToCanonical\(/, "A projeção deve acontecer somente depois de confirmar a gravação do snapshot.");
 assert.match(cloudFunctions, /canonical_sync_warning/, "Falhas de projeção precisam voltar explicitamente para a interface.");
 assert.match(cloudFunctions, /já consta como concluída na projeção operacional[\s\S]*?A retentativa foi mantida/, "Uma OS concluída na projeção não pode ser silenciosamente rebaixada pelo snapshot.");
