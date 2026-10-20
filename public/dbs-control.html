@@ -1983,8 +1983,10 @@
                 <h1 id="view-title">Painel Operacional</h1>
                 <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
             </div>
-            <div style="display:flex; gap:8px;">
-                <button class="btn btn-secondary btn-sm" onclick="resetarDadosPadrao()">Limpar dados locais</button>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
+                <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
+                <details class="dbs-secondary-menu" style="position:relative;"><summary class="btn btn-secondary btn-sm" style="min-height:36px;cursor:pointer;list-style:none;">Mais opções ▾</summary><div style="position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:190px;padding:8px;background:#fff;border:1px solid #dbe5ef;border-radius:10px;box-shadow:0 8px 24px rgba(16,42,67,.14);"><button class="btn btn-secondary btn-sm" style="min-height:44px;width:100%;white-space:normal;" onclick="resetarDadosPadrao()">Limpar dados locais</button></div></details>
                 <button class="btn btn-primary" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
             </div>
         </header>
@@ -2802,6 +2804,7 @@
             return snapshot;
         }
 
+        let DBS_CONTROL_HAS_PENDING_SAVE = false;
         function saveState() {
             registrarHistoricoOS();
             const persistableState = getPersistableState();
@@ -2816,7 +2819,15 @@
                 console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
             }
             if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
+                DBS_CONTROL_HAS_PENDING_SAVE = true;
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state: persistableState }, '*');
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Alterações não enviadas';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
             }
         }
 
@@ -2908,6 +2919,14 @@
         }
 
         function resetarDadosPadrao() {
+            const hasPending = DBS_CONTROL_HAS_PENDING_SAVE;
+            if (hasPending && !confirm('Há alterações locais que ainda podem não ter sido enviadas. Deseja tentar enviá-las antes de limpar o cache local?')) return;
+            if (hasPending) {
+                saveState();
+                window.parent.postMessage({ type: 'DBS_CONTROL_RETRY_SAVE' }, '*');
+                alert('Solicitamos o envio das alterações. O cache local não será limpo agora; confirme a sincronização antes de tentar novamente.');
+                return;
+            }
             if (window.parent !== window) {
                 alert("O DBS CONTROL está conectado à base compartilhada. O cache local não pode ser limpo por este botão, para evitar apagar dados da empresa.");
                 return;
@@ -2922,6 +2941,32 @@
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
+            if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
+                const indicator = document.getElementById('dbs-sync-indicator');
+                const retry = document.getElementById('dbs-sync-retry');
+                if (indicator) {
+                    if (msg.status === 'synced') {
+                        DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        const time = msg.updated_at ? new Date(msg.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                        indicator.textContent = 'Sincronizado' + (time ? ' às ' + time : '');
+                        indicator.style.color = '#0f766e';
+                        indicator.style.background = '#f0fdfa';
+                        indicator.style.borderColor = '#99f6e4';
+                    } else if (msg.status === 'pending') {
+                        indicator.textContent = String(msg.pendingCount || 1) + ' alterações não enviadas';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    } else {
+                        indicator.textContent = 'Erro de sincronização' + (msg.error ? ': ' + msg.error : '');
+                        indicator.style.color = '#b91c1c';
+                        indicator.style.background = '#fef2f2';
+                        indicator.style.borderColor = '#fecaca';
+                    }
+                }
+                if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' ? 'inline-flex' : 'none';
+                return;
+            }
             if (msg.type === 'DBS_CONTROL_DB_AUDIT_RESULT') {
                 if (msg.ok) renderizarResultadoAuditoriaBanco(msg.result);
                 else {
@@ -2959,6 +3004,14 @@
             }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
+            if (DBS_CONTROL_HAS_PENDING_SAVE) {
+                const sendFirst = confirm('Existem alterações locais ainda não enviadas. Deseja enviar essas alterações primeiro? A versão da nuvem não será aplicada agora.');
+                if (sendFirst) {
+                    saveState();
+                    window.parent.postMessage({ type: 'DBS_CONTROL_RETRY_SAVE' }, '*');
+                }
+                return;
+            }
 
             DBS_CONTROL_CLOUD_HYDRATING = true;
             try {
