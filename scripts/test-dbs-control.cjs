@@ -69,7 +69,7 @@ assert.match(cloudFunctions, /function fetchAllDbsControlWorkOrders\s*\(/, "A au
 assert.match(cloudFunctions, /async function hydrateDbsControlStateFromCanonicalDb\([\s\S]*?return normalizeState\(state\)/, "O estado operacional deve vir exclusivamente do snapshot compartilhado.");
 assert.doesNotMatch(cloudFunctions, /syncAdminOrdersToCanonical|adminOrdersToSync|canonicalSyncWarning/, "A emissão não deve manter uma segunda escrita relacional concorrente.");
 assert.match(cloudFunctions, /\.eq\("owner_user_id", user\.id\)[\s\S]*?newestPopulated\(ownedSnapshots as any\[\]\)/, "O administrador deve reutilizar seu snapshot existente antes de criar outro escopo.");
-assert.match(cloudFunctions, /\.eq\("company_id", user\.company_id\)[\s\S]*?newestPopulated\(companySnapshots as any\[\]\)/, "O administrador deve reutilizar o snapshot já existente da empresa.");
+assert.match(cloudFunctions, /\.in\("owner_user_id", companyAdminIds\)[\s\S]*?newestPopulated\(matchingCompanySnapshots as any\[\]\)/, "O administrador deve reutilizar o snapshot legado de outro administrador da mesma empresa.");
 assert.doesNotMatch(cloudFunctions, /from\("dbs_control_work_orders"\)\s*\.update\(update\)/, "A conclusão do colaborador não deve gravar uma cópia concorrente da OS.");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "A emissão e conclusão devem persistir pelo RPC atômico do snapshot.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "O histórico técnico deve ser preservado na fonte única.");
