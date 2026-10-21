@@ -607,7 +607,9 @@ function DbsControlPage() {
     // após 3 s, faz leitura autoritativa direta se o handshake Realtime ainda
     // não tiver estabilizado. A leitura não grava nem sobrescreve dados locais.
     const realtimeInitialFallbackTimer = setTimeout(() => {
-      if (!disposed && cloudReadyRef.current) void refreshLatestCloudState(true);
+      // Tentar a leitura mesmo quando a inicialização falhou; caso contrário, cloudReadyRef
+      // permanece false e o fallback nunca consegue recuperar a conexão sozinho.
+      if (!disposed) void refreshLatestCloudState(true);
     }, 3000);
     // Fallback periódico para eventos perdidos ou períodos sem conectividade.
     const refreshTimer = setInterval(() => { void refreshLatestCloudState(true); }, 30000);
