@@ -58,9 +58,23 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
-const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
+const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016134345_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
-assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe", \{ p_payload: payload \}\)/, "O snapshot deve ser salvo pela função SQL atômica.");
+
+const syncAuditMigration = fs.readFileSync("supabase/migrations/20261018232000_dbs_control_snapshot_save_audit.sql", "utf8");
+const triggerHardeningMigration = fs.readFileSync("supabase/migrations/20261018233000_dbs_control_trigger_rpc_hardening.sql", "utf8");
+assert.match(triggerHardeningMigration, /revoke all on function public\.ensure_dbs_control_work_order_protocol_unique\(\) from public, anon, authenticated/i, "Função de trigger de protocolo não deve ser exposta como RPC.");
+assert.match(triggerHardeningMigration, /alter function public\.protect_dbs_control_fieldcontrol_integration\(\) set search_path = public/i, "Função SECURITY DEFINER deve ter search_path fixo.");
+
+assert.match(cloudFunctions, /function ensurePersistedSnapshotWrite\(/, "A gravação precisa validar a confirmação retornada pelo banco.");
+assert.match(cloudFunctions, /saved = ensurePersistedSnapshotWrite\(saveResult, "saveDbsControlCloudState"\)/, "O resultado final do RPC precisa passar pela validação rígida antes de retornar sucesso.");
+assert.match(cloudFunctions, /function recordDbsControlSyncAttempt\(/, "O fluxo precisa manter auditoria de saves, erros e retries.");
+assert.match(cloudFunctions, /status: "retry"/, "Conflitos com retentativa devem deixar evento de auditoria.");
+assert.match(syncAuditMigration, /create table if not exists public\.dbs_control_snapshot_save_audit/, "A tabela de auditoria isolada precisa existir.");
+assert.match(syncAuditMigration, /status text not null check \(status in \('success','error','retry'\)\)/, "A auditoria deve diferenciar sucesso, erro e retry.");
+assert.doesNotMatch(syncAuditMigration, /create policy if not exists/i, "A migration não deve usar sintaxe CREATE POLICY IF NOT EXISTS incompatível.");
+
+assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
 assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
@@ -73,10 +87,15 @@ assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(sna
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /postMessage\(\s*\{ type: "DBS_CONTROL_CLOUD_STATE", state: cloudState \}/, "Quando existe snapshot compartilhado, a inicialização deve entregar a nuvem sem mesclar/gravar o snapshot local.");
+assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicialização deve detectar quando a nuvem tem menos registros que a cópia local.");
+assert.match(route, /const cloudIsIncomplete = !employeeModeRef\.current && localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)/, "O guard de recuperação não deve comparar a base filtrada do colaborador com o cache completo.");
+assert.match(route, /if \(!employeeModeRef\.current && dbsControlStateIsSmallerThan\(localRecoveryStateRef\.current, latest\.state as Record<string, unknown>\)\)/, "O Realtime não deve gerar falso alarme para o snapshot filtrado do colaborador.");
+assert.match(route, /if \(!cloudReadyRef\.current\) \{[\s\S]*?return;\s*\}\s*pendingStateRef\.current = msg\.state/, "Uma gravação bloqueada não pode entrar na fila de salvamento.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
 assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
 assert.match(html, /DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION/, "O estado local precisa ser copiado antes da hidratação da nuvem.");
+assert.match(html, /!collaboratorSession && localRecoveryCount > 0 && incomingCloudCount < localRecoveryCount/, "O modo colaborador deve permitir a hidratação de uma base filtrada.");
 assert.match(html, /Não substitui um backup maior por um estado local menor/, "Um backup local mais completo não deve ser sobrescrito por um estado menor.");
 assert.match(html, /function verificarRecuperacaoLocalDBS\s*\(/, "A central de cadastros deve expor recuperação de cópias locais.");
 assert.match(html, /DBS_AIR_ERP_STATE_PREVIOUS/, "O fluxo de recuperação deve procurar o backup local anterior.");
@@ -225,6 +244,7 @@ assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a aç
 const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 assert.match(persistence, /Reconcile complete snapshots against the latest shared snapshot/, "Admin saves must reconcile against the latest shared snapshot.");
 assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
+assert.match(persistence, /hydrateDbsControlStateFromCanonicalDb\(\s*snapshotState,\s*scope\.companyId,\s*\)/, "Collaborators without a direct company_id must hydrate canonical OS using the resolved administrative company scope.");
 assert.match(persistence, /latestById[\s\S]*latestByProtocol/, "Admin reconciliation must match work orders by ID first and protocol second.");
 assert.match(persistence, /protectedCompletedFields[\s\S]*tecnicoId[\s\S]*signature_data[\s\S]*diagnostico/, "Completed OS must protect technician, signature, and diagnostic fields.");
 assert.match(persistence, /incomingByProtocol\.get\(protocolKey\(currentOrder\)\)/, "Collaborator reconciliation must accept protocol aliases when IDs differ.");
@@ -232,3 +252,9 @@ assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
 assert.match(protocolReconciliationMigration, /not \(v_latest_id = any\(v_seen_ids\)\)/, "SQL must retain OS omitted by delayed snapshots without creating protocol duplicates.");
+
+const dashboardUx = fs.readFileSync("public/dbs-control-ux.js", "utf8");
+assert.match(dashboardUx, /\["dash-client-count","Clientes Base",clients\.length\]/, "O dashboard deve contar clientes do cadastro, não OS abertas.");
+assert.match(dashboardUx, /\["dash-equip-count","Equipamentos Mapeados",equipment\.length\]/, "O dashboard deve contar equipamentos do parque, não OS em atendimento.");
+assert.match(dashboardUx, /\["dash-os-andamento","OS em Atendimento",active\]/, "O KPI de atendimento deve contar OS ativas.");
+assert.match(dashboardUx, /\["dash-os-concluidas","OS Concluídas",done\]/, "O KPI de concluídas deve contar OS concluídas.");

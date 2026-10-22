@@ -562,10 +562,13 @@ async function hydrateDbsControlStateFromCanonicalDb(
       completedAt: row.completed_at || null,
       sla: row.sla_deadline || null,
       desc: row.description || "",
-      diagnostico: row.technical_opinion || "",
-      observacao: row.observation || "",
+      diagnostico: row.diagnostico || row.technical_opinion || "",
+      observacao: row.servico_executado || row.observation || "",
+      trabalhoExecutado: row.servico_executado || row.observation || "",
       signature_name: row.signature_name || null,
-      assinatura: row.signature_data || null,
+      assinaturaStoragePath: row.assinatura_path || row.signature_path || null,
+      assinatura: row.assinatura_path || row.signature_path ? null : (row.signature_data || null),
+      version: Number(row.version || 1),
       valor: Number(row.total_cents || 0) / 100,
     };
   });
@@ -613,6 +616,124 @@ async function hydrateDbsControlStateFromCanonicalDb(
   };
 }
 
+
+const DBS_CONTROL_ATTACHMENT_BUCKET = "dbs-control-os";
+const DBS_CONTROL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const DBS_CONTROL_ATTACHMENT_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+};
+
+function stripStoredAttachmentPayloads(state: Record<string, unknown>) {
+  const next = normalizeState(state);
+  next.ordens = (next.ordens as any[]).map((order) => {
+    const copy = { ...order };
+    if (copy.assinaturaStoragePath) copy.assinatura = null;
+    if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
+    if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+    return copy;
+  });
+  return next;
+}
+
+async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
+  const next = normalizeState(state);
+  next.ordens = await Promise.all((next.ordens as any[]).map(async (order) => {
+    const copy = { ...order };
+    const fields = [["assinaturaStoragePath", "assinatura"], ["fotoAntesStoragePath", "fotoAntes"], ["fotoDepoisStoragePath", "fotoDepois"]] as const;
+    for (const [pathField, valueField] of fields) {
+      const path = String(copy[pathField] ?? "").trim();
+      if (!path) continue;
+      const { data, error } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
+      if (!error && data?.signedUrl) copy[valueField] = data.signedUrl;
+    }
+    return copy;
+  }));
+  return next;
+}
+
+export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: {
+    orderId: string; attachmentType: "foto_antes" | "foto_depois" | "assinatura";
+    fileName: string; contentType: string; dataBase64: string; requestId: string;
+  }) => {
+    if (!input?.orderId || !input?.dataBase64 || !input?.requestId) throw new Error("OS, arquivo e identificador da solicitação são obrigatórios.");
+    if (!["foto_antes", "foto_depois", "assinatura"].includes(input.attachmentType)) throw new Error("Tipo de anexo inválido.");
+    if (!DBS_CONTROL_ATTACHMENT_TYPES[input.contentType]) throw new Error("Formato inválido. Use JPEG, PNG ou WebP.");
+    if (input.dataBase64.length > Math.ceil(DBS_CONTROL_ATTACHMENT_MAX_BYTES * 4 / 3) + 32) throw new Error("O arquivo excede o limite de 10 MB.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const scope = await resolveDbsControlScope(user);
+    const { data: snapshot, error: snapshotError } = await supabaseAdmin.from("dbs_control_snapshots")
+      .select("state").eq("scope_key", scope.scopeKey).maybeSingle();
+    if (snapshotError) throw new Error(snapshotError.message);
+    const state = snapshot?.state as Record<string, unknown> | null;
+    const orders = Array.isArray(state?.ordens) ? state.ordens as any[] : [];
+    const order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
+      String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
+    if (!order) throw new Error("OS não encontrada na base compartilhada.");
+    if (user.role_key === "COLABORADOR") {
+      const employee = await getCollaboratorEmployee(user.id);
+      if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+      const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? "") === String(employee.id);
+      const techs = Array.isArray(state?.tecnicos) ? state!.tecnicos as any[] : [];
+      const technicianMatches = techs.some((item) => String(item?.id ?? "") === String(order?.tecnicoId ?? "") &&
+        (String(item?.employeeId ?? "") === String(employee.id) ||
+         String(item?.email ?? "").trim().toLowerCase() === String(employee.login_email ?? "").trim().toLowerCase()));
+      if (!assigned && !technicianMatches) throw new Error("Você não tem permissão para anexar arquivos a esta OS.");
+    }
+    const raw = data.dataBase64.replace(/^data:[^;]+;base64,/, "");
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(raw), (character) => character.charCodeAt(0)); }
+    catch { throw new Error("O conteúdo do arquivo está inválido."); }
+    if (!bytes.byteLength || bytes.byteLength > DBS_CONTROL_ATTACHMENT_MAX_BYTES) throw new Error("O arquivo está vazio ou excede o limite de 10 MB.");
+    const extension = DBS_CONTROL_ATTACHMENT_TYPES[data.contentType];
+    const path = `${data.orderId.replace(/[^a-zA-Z0-9_-]/g, "_")}/${data.attachmentType}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET)
+      .upload(path, bytes, { contentType: data.contentType, cacheControl: "3600", upsert: false });
+    if (uploadError) throw new Error(`Falha no upload do anexo: ${uploadError.message}`);
+    const { data: signed, error: signedError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
+    if (signedError || !signed?.signedUrl) {
+      await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
+      throw new Error("O arquivo foi enviado, mas não foi possível preparar a leitura segura.");
+    }
+    // Registra o anexo na tabela relacional quando a OS já tem chave canônica.
+    // OS legadas continuam compatíveis: a referência também é persistida no snapshot.
+    let canonicalOrder: { id: string } | null = null;
+    const orderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.orderId);
+    if (orderUuid) {
+      const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("id", data.orderId).maybeSingle();
+      if (found.error) throw new Error("O arquivo foi enviado, mas a OS relacional não pôde ser verificada: " + found.error.message);
+      canonicalOrder = found.data;
+    }
+    if (!canonicalOrder) {
+      const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+      if (protocol) {
+        const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("protocol", protocol).limit(1).maybeSingle();
+        if (found.error) throw new Error("O arquivo foi enviado, mas a OS relacional não pôde ser verificada: " + found.error.message);
+        canonicalOrder = found.data;
+      }
+    }
+    if (canonicalOrder) {
+      const { error: attachmentError } = await supabaseAdmin.from("dbs_control_work_order_attachments").insert({
+        work_order_id: canonicalOrder.id,
+        uploaded_by_user_id: user.id,
+        storage_path: path,
+        file_name: data.fileName.slice(0, 180),
+        file_type: data.contentType,
+        attachment_type: data.attachmentType,
+      });
+      if (attachmentError) {
+        await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
+        throw new Error("Falha ao registrar o anexo da OS: " + attachmentError.message);
+      }
+    }
+    return { storagePath: path, signedUrl: signed.signedUrl, fileName: data.fileName.slice(0, 180),
+      contentType: data.contentType, attachmentType: data.attachmentType };
+  });
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -626,13 +747,39 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    if (!data) return null;
 
-    const hydratedState = await hydrateDbsControlStateFromCanonicalDb(
-      data.state as Record<string, unknown>,
-      user.company_id,
+    // O snapshot é uma camada de cache, não a única fonte de leitura.
+    // Se estiver ausente, consultar as tabelas operacionais sem gravar nem
+    // recriar snapshot automaticamente. Só declarar fallback válido se houver
+    // registros canônicos; isso evita substituir cache local por estado vazio.
+    const snapshotState = data?.state && typeof data.state === "object" && !Array.isArray(data.state)
+      ? data.state as Record<string, unknown>
+      : {};
+    const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
+      snapshotState,
+      scope.companyId,
     );
-    const hydrated = { ...data, state: hydratedState };
+    const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
+    const hasCanonicalRecords = [
+      hydratedState.clientes,
+      hydratedState.equipamentos,
+      hydratedState.tecnicos,
+      hydratedState.ordens,
+      hydratedState.sites,
+      hydratedState.locais,
+      hydratedState.servicos,
+    ].some((items) => Array.isArray(items) && items.length > 0);
+
+    if (!data && !hasCanonicalRecords) return null;
+
+    const hydrated = data
+      ? { ...data, state: hydratedState }
+      : {
+          state: hydratedState,
+          state_version: 1,
+          updated_at: new Date().toISOString(),
+          fallback_source: "canonical_tables",
+        };
 
     if (user.role_key !== "COLABORADOR") return hydrated;
 
@@ -640,18 +787,225 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
 
     return {
-      ...data,
+      ...hydrated,
       state: filterCollaboratorState(hydratedState, employee.id, employee.login_email),
     };
   });
 
+
+const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = []) {
+  const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
+  const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
+  const clientIdCache = new Map<string, string>();
+  const resolveCanonicalClient = async (rawClientId: string, protocol: string): Promise<string> => {
+    const cacheKey = rawClientId.trim();
+    if (clientIdCache.has(cacheKey)) return clientIdCache.get(cacheKey)!;
+    const source = snapshotClients.find((client) => String(client?.id ?? "").trim() === cacheKey);
+    let canonicalId = isUuid(cacheKey) ? cacheKey : "";
+    if (canonicalId) {
+      const existing = await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", canonicalId).maybeSingle();
+      if (existing.error) throw new Error("Falha ao validar o cliente da OS " + protocol + ": " + existing.error.message);
+      if (existing.data) {
+        clientIdCache.set(cacheKey, String(existing.data.id));
+        return String(existing.data.id);
+      }
+    }
+
+    const cnpj = String(source?.cnpj ?? source?.CNPJ ?? "").replace(/\D/g, "");
+    if (cnpj) {
+      const byCnpj = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
+      if (byCnpj.error) throw new Error("Falha ao localizar cliente por CNPJ na OS " + protocol + ": " + byCnpj.error.message);
+      if (byCnpj.data) {
+        clientIdCache.set(cacheKey, String(byCnpj.data.id));
+        return String(byCnpj.data.id);
+      }
+    }
+    const legalName = String(source?.razaoSocial ?? source?.razao_social ?? source?.legal_name ?? source?.nome ?? source?.name ?? "").trim();
+    const tradeName = String(source?.nomeFantasia ?? source?.nome_fantasia ?? source?.trade_name ?? source?.nome ?? source?.name ?? "").trim();
+    if (!source || !legalName) {
+      throw new Error("Não foi possível despachar a OS " + protocol + ": o cliente vinculado não existe na base relacional e não há cadastro completo no snapshot. Nenhum dado foi descartado.");
+    }
+    const clientPayload: Record<string, unknown> = {
+      legal_name: legalName,
+      trade_name: tradeName || legalName,
+      cnpj: cnpj || null,
+      phone: String(source?.telefone ?? source?.phone ?? source?.contato ?? "").trim() || null,
+      email: String(source?.email ?? "").trim() || null,
+      notes: String(source?.observacoes ?? source?.notes ?? "").trim() || null,
+      status: String(source?.status ?? "ativo").toLowerCase() === "inativo" ? "inativo" : "ativo",
+    };
+    if (canonicalId) clientPayload.id = canonicalId;
+    const inserted = await supabaseAdmin.from("dbs_control_clients").insert(clientPayload).select("id").single();
+    if (inserted.error || !inserted.data) {
+      if (cnpj) {
+        const retry = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
+        if (!retry.error && retry.data) {
+          clientIdCache.set(cacheKey, String(retry.data.id));
+          return String(retry.data.id);
+        }
+      }
+      throw new Error("Não foi possível preparar o cadastro relacional do cliente da OS " + protocol + ": " + (inserted.error?.message ?? "cliente não retornado"));
+    }
+    clientIdCache.set(cacheKey, String(inserted.data.id));
+    return String(inserted.data.id);
+  };
+
+  for (const order of orders) {
+    const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+    const orderId = String(order?.id ?? "").trim();
+    const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+    if (!protocol) throw new Error("Não foi possível despachar uma OS sem protocolo. Corrija o cadastro antes de continuar.");
+    if (!rawClientId) throw new Error("Não foi possível despachar a OS " + protocol + ": cliente não vinculado.");
+    const clientId = await resolveCanonicalClient(rawClientId, protocol);
+    let query = supabaseAdmin.from("dbs_control_work_orders")
+      .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+      .eq("protocol", protocol).limit(1);
+    if (isUuid(orderId)) {
+      const byId = await supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .eq("id", orderId).maybeSingle();
+      if (byId.error) throw new Error("Falha ao ler OS relacional " + protocol + ": " + byId.error.message);
+      if (byId.data) query = supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
+        .eq("id", orderId);
+    }
+    const { data: existing, error: lookupError } = await query.maybeSingle();
+    if (lookupError) throw new Error("Falha ao localizar OS " + protocol + ": " + lookupError.message);
+    const normalizedStatus = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
+    const status = normalizedStatus === "concluido" ? "concluida"
+      : normalizedStatus === "em_atendimento" || normalizedStatus === "andamento" ? "em_atendimento"
+      : normalizedStatus === "aguardando_peca" ? "aguardando_peca"
+      : normalizedStatus === "aguardando_cliente" ? "aguardando_cliente"
+      : normalizedStatus === "cancelada" ? "cancelada"
+      : normalizedStatus || "aberta";
+    const assignedId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
+    const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
+    const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
+    const fields: Record<string, unknown> = {
+      protocol, protocolo: protocol, client_id: clientId,
+      site_id: isUuid(siteId) ? siteId : null,
+      assigned_employee_id: isUuid(assignedId) ? assignedId : null,
+      created_by_user_id: userId,
+      type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
+      priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
+      status,
+      scheduled_at: order?.scheduledAt ?? order?.scheduled_at ?? null,
+      started_at: order?.startedAt ?? order?.started_at ?? null,
+      completed_at: completed(status) ? (order?.concluidoEm ?? order?.completedAt ?? order?.completed_at ?? new Date().toISOString()) : null,
+      description: String(order?.desc ?? order?.description ?? ""),
+      technical_opinion: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+      diagnostico: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+      observation: String(order?.observacao ?? order?.observation ?? ""),
+      servico_executado: String(order?.trabalhoExecutado ?? order?.servicoExecutado ?? order?.observacao ?? order?.observation ?? ""),
+      signature_name: String(order?.signature_name ?? order?.signatureName ?? ""),
+      signature_path: signaturePath || null, assinatura_path: signaturePath || null,
+      signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
+      total_cents: Math.round((() => {
+        const raw = String(order?.valor ?? order?.total ?? 0).trim();
+        const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? amount * 100 : 0;
+      })()),
+      updated_at: new Date().toISOString(),
+    };
+    if (!existing) {
+      // IDs legados que não são UUID usam o UUID gerado pelo banco; o protocolo
+      // permanece como identidade estável para futuras reconciliações.
+      const insertPayload = isUuid(orderId) ? { id: orderId, ...fields } : fields;
+      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload);
+      if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
+      continue;
+    }
+    if (completed(existing.status)) continue;
+    const expectedVersion = Number(order?.version);
+    const currentVersion = Number(existing.version || 1);
+    const staleVersion = Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion;
+    if (staleVersion) {
+      const preserveWhenIncomingEmpty: Array<[string, string]> = [
+        ["technical_opinion", "technical_opinion"], ["diagnostico", "diagnostico"],
+        ["observation", "observation"], ["servico_executado", "servico_executado"],
+        ["signature_data", "signature_data"], ["signature_name", "signature_name"],
+        ["signature_path", "signature_path"], ["assinatura_path", "assinatura_path"],
+        ["started_at", "started_at"], ["completed_at", "completed_at"],
+      ];
+      for (const [target, source] of preserveWhenIncomingEmpty) {
+        const currentValue = (existing as Record<string, unknown>)[source];
+        const incomingValue = fields[target];
+        if (currentValue !== null && currentValue !== undefined && String(currentValue).trim() !== ""
+            && (incomingValue === null || incomingValue === undefined || String(incomingValue).trim() === "")) {
+          fields[target] = currentValue;
+        }
+      }
+      const statusRank: Record<string, number> = {
+        aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3,
+        "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5,
+      };
+      const currentStatus = String(existing.status ?? "").trim().toLocaleLowerCase("pt-BR");
+      const incomingStatus = String(fields.status ?? "").trim().toLocaleLowerCase("pt-BR");
+      if ((statusRank[currentStatus] ?? 0) > (statusRank[incomingStatus] ?? 0)) fields.status = existing.status;
+      if (!fields.started_at && existing.started_at) fields.started_at = existing.started_at;
+      if (!fields.completed_at && existing.completed_at) fields.completed_at = existing.completed_at;
+    }
+    for (const key of ["protocol","protocolo","created_by_user_id"]) delete fields[key];
+    if (!signaturePath && !String(order?.assinatura ?? order?.signature_data ?? "").trim()) {
+      delete fields.signature_data;
+      delete fields.signature_path;
+      delete fields.assinatura_path;
+      delete fields.signature_name;
+    }
+    const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
+      .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
+      .select("id,version").maybeSingle();
+    if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
+    if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
+  }
+}
+
+function ensurePersistedSnapshotWrite(result: { data?: any; error?: any; }, operation: string) {
+  if (result?.error) throw new Error(result.error.message || `Falha ao salvar o snapshot do DBS CONTROL (${operation}).`);
+  const data = result?.data;
+  if (!data || typeof data !== "object" || !data.state || typeof data.state !== "object" || Array.isArray(data.state)) {
+    throw new Error(`A gravação do snapshot (${operation}) não foi confirmada pelo banco.`);
+  }
+  const stateVersion = Number(data.state_version ?? 0);
+  const updatedAt = String(data.updated_at ?? "").trim();
+  if (!Number.isFinite(stateVersion) || stateVersion <= 0 || !updatedAt) {
+    throw new Error(`A gravação do snapshot (${operation}) não confirmou versão e data válidas do banco.`);
+  }
+  return data;
+}
+
+async function recordDbsControlSyncAttempt(input: {
+  scopeKey: string; companyId?: string | null; ownerUserId?: string | null; userId: string;
+  action: string; status: "success" | "error" | "retry";
+  payload?: Record<string, unknown> | null; result?: Record<string, unknown> | null; errorMessage?: string | null;
+}) {
+  try {
+    const { error } = await supabaseAdmin.from("dbs_control_snapshot_save_audit").insert({
+      scope_key: input.scopeKey, company_id: input.companyId ?? null,
+      owner_user_id: input.ownerUserId ?? null, user_id: input.userId,
+      action: input.action, status: input.status, payload: input.payload ?? {},
+      result: input.result ?? {}, error_message: input.errorMessage ?? null,
+      created_at: new Date().toISOString(),
+    });
+    if (error) console.error("DBS CONTROL: falha ao gravar auditoria de sincronização.", error.message);
+  } catch (error) {
+    console.error("DBS CONTROL: falha ao gravar auditoria de sincronização.", error);
+  }
+}
+
 export const saveDbsControlCloudState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { state: Record<string, unknown> }) => {
+  .inputValidator((input: { state: Record<string, unknown>; baseUpdatedAt?: string | null }) => {
     if (!input?.state || typeof input.state !== "object" || Array.isArray(input.state)) {
       throw new Error("Estado do DBS CONTROL inválido.");
     }
-    return { state: normalizeState(input.state) };
+    return {
+      state: stripStoredAttachmentPayloads(input.state),
+      baseUpdatedAt: input.baseUpdatedAt ?? null,
+    };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
@@ -659,6 +1013,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
     let stateToSave = data.state;
     let ownerUserId = scope.ownerUserId;
+    let adminOrdersToSync: any[] = [];
 
     // Reconcile complete snapshots against the latest shared snapshot before an
     // administrative save, preventing delayed autosaves from dropping existing OS.
@@ -681,6 +1036,14 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
         const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
+        const changedFields = ["status", "employeeId", "assignedEmployeeId", "tecnicoId", "clienteId", "client_id", "siteId", "localId", "diagnostico", "technical_opinion", "trabalhoExecutado", "servicoExecutado", "observacao", "observation", "prioridade", "tipo", "scheduledAt", "scheduled_at", "assinaturaStoragePath", "assinatura", "signature_name", "concluidoEm", "completedAt"];
+        adminOrdersToSync = incomingOrders.filter((incoming) => {
+          const id = orderId(incoming);
+          const protocol = orderProtocol(incoming);
+          const latest = (id ? latestById.get(id) : undefined) ?? (protocol ? latestByProtocol.get(protocol) : undefined);
+          if (!latest) return true;
+          return changedFields.some((field) => JSON.stringify((incoming as any)?.[field] ?? null) !== JSON.stringify((latest as any)?.[field] ?? null));
+        });
         const seenIds = new Set<string>();
         const seenProtocols = new Set<string>();
         const protectedCompletedFields = [
@@ -763,7 +1126,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       if (incomingForEmployee.length) {
         const { data: assignedOrders, error: assignedError } = await supabaseAdmin
           .from("dbs_control_work_orders")
-          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name")
+          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name,diagnostico,servico_executado,signature_path,assinatura_path,version")
           .eq("assigned_employee_id", employee.id);
         if (assignedError) throw new Error(assignedError.message);
 
@@ -801,6 +1164,12 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
           const wasCompleted = normalizeDbsStatus(canonicalOrder.status) === "concluida";
           const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
+          const submittedVersion = Number(incomingOrder?.version);
+          const canonicalVersion = Number(canonicalOrder.version || 1);
+          // A versão local pode estar atrasada quando o despacho/atendimento foi
+          // atualizado noutro dispositivo. Reconciliamos contra a versão canônica
+          // recém-lida, preservando os relatórios existentes em vez de rejeitar a OS.
+          const staleVersion = Number.isFinite(submittedVersion) && submittedVersion > 0 && submittedVersion !== canonicalVersion;
 
           // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
           // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
@@ -818,31 +1187,49 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
 
           if (!wasCompleted) {
             update.status = dbStatus;
-            update.technical_opinion = incomingDiagnosis;
-            update.observation = incomingObservation;
-          } else {
-            if (!String(canonicalOrder.technical_opinion ?? "").trim() && incomingDiagnosis) update.technical_opinion = incomingDiagnosis;
-            if (!String(canonicalOrder.observation ?? "").trim() && incomingObservation) update.observation = incomingObservation;
+            update.technical_opinion = staleVersion && String(canonicalOrder.technical_opinion ?? "").trim()
+              ? canonicalOrder.technical_opinion : incomingDiagnosis;
+            update.diagnostico = staleVersion && String(canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion ?? "").trim()
+              ? (canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion) : incomingDiagnosis;
+            update.observation = staleVersion && String(canonicalOrder.observation ?? "").trim()
+              ? canonicalOrder.observation : incomingObservation;
+            const incomingWork = String(incomingOrder?.trabalhoExecutado ?? incomingOrder?.servicoExecutado ?? incomingObservation).trim();
+            update.servico_executado = staleVersion && String(canonicalOrder.servico_executado ?? "").trim()
+              ? canonicalOrder.servico_executado : incomingWork;
           }
 
           if (submittedCompleted) {
             if (!wasCompleted || !canonicalOrder.completed_at) {
               update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
             }
-            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim())) {
+            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim()) && !incomingOrder?.assinaturaStoragePath) {
               update.signature_data = incomingSignature;
+            }
+            const signaturePath = String(incomingOrder?.assinaturaStoragePath ?? "").trim();
+            if (signaturePath && (!wasCompleted || !String(canonicalOrder.assinatura_path ?? canonicalOrder.signature_path ?? "").trim())) {
+              update.assinatura_path = signaturePath;
+              update.signature_path = signaturePath;
+              update.signature_data = null;
             }
             if (incomingSignatureName && (!wasCompleted || !String(canonicalOrder.signature_name ?? "").trim())) {
               update.signature_name = incomingSignatureName;
             }
           }
 
-          const { error: updateError } = await supabaseAdmin
+          let updateQuery = supabaseAdmin
             .from("dbs_control_work_orders")
             .update(update)
             .eq("id", canonicalOrder.id)
             .eq("assigned_employee_id", employee.id);
+          if (Number.isFinite(submittedVersion) && submittedVersion > 0) {
+            updateQuery = updateQuery.eq("version", canonicalVersion);
+          } else {
+            updateQuery = updateQuery.eq("version", canonicalVersion);
+          }
+          const { data: updatedOrder, error: updateError } = await updateQuery.select("id,version").maybeSingle();
           if (updateError) throw new Error(updateError.message);
+          if (!updatedOrder) throw new Error("Conflito de versão: a OS " + protocolo + " mudou durante o salvamento. Recarregue a versão mais recente e despache novamente.");
+          incomingOrder.version = Number(updatedOrder.version || canonicalVersion + 1);
 
           // Histórico append-only de cada transição real de status para auditoria.
           // Falha ao registrar o evento é reportada; nunca é ocultada como sucesso.
@@ -873,6 +1260,10 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       ownerUserId = current.owner_user_id ?? user.id;
     }
 
+    if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
+      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : []);
+    }
+
     const payload = {
       scope_key: scope.scopeKey,
       company_id: scope.companyId,
@@ -881,15 +1272,123 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       state_version: 2,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
+      base_updated_at: data.baseUpdatedAt,
     };
 
     // A função SQL bloqueia a linha do escopo e reconcilia OS dentro da mesma
-    // transação. Isso evita que duas sessões sobrescrevam o snapshot uma da outra.
-    const { data: saved, error } = await supabaseAdmin
-      .rpc("dbs_control_save_snapshot_safe", { p_payload: payload })
-      .single();
+    // transação. Em conflito de base_updated_at, relê a nuvem e tenta uma única
+    // reconciliação adicional, sem mudar o escopo da empresa nem descartar anexos.
+    const mergeRetryState = (
+      latestInput: Record<string, unknown>,
+      pendingInput: Record<string, unknown>,
+    ): Record<string, unknown> => {
+      const latest = normalizeState(latestInput);
+      const pending = normalizeState(pendingInput);
+      const latestOrders = Array.isArray(latest.ordens) ? latest.ordens as any[] : [];
+      const pendingOrders = Array.isArray(pending.ordens) ? pending.ordens as any[] : [];
+      const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+      const rank: Record<string, number> = { aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3, "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5 };
+      const protectedFields = ["assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"];
+      const latestById = new Map<string, any>(
+        latestOrders
+          .map((order): [string, any] => [String(order?.id ?? "").trim(), order])
+          .filter(([key]) => Boolean(key)),
+      );
+      const latestByProtocol = new Map<string, any>(
+        latestOrders
+          .map((order): [string, any] => [protocolKey(order), order])
+          .filter(([key]) => Boolean(key)),
+      );
+      const mergedOrders = pendingOrders.map((incoming) => {
+        const id = String(incoming?.id ?? "").trim();
+        const protocol = protocolKey(incoming);
+        const current = (id ? latestById.get(id) : undefined) ??
+          (protocol ? latestByProtocol.get(protocol) : undefined);
+        if (!current) return incoming;
+        const merged: Record<string, unknown> = { ...current, ...incoming };
+        const currentStatus = String(current.status ?? "").trim().toLocaleLowerCase("pt-BR");
+        const incomingStatus = String(incoming.status ?? "").trim().toLocaleLowerCase("pt-BR");
+        if ((rank[currentStatus] ?? 0) > (rank[incomingStatus] ?? 0)) merged.status = current.status;
+        for (const field of protectedFields) {
+          const oldValue = current[field];
+          const newValue = incoming[field];
+          if (Array.isArray(oldValue) || Array.isArray(newValue)) {
+            const combined = [...(Array.isArray(oldValue) ? oldValue : []), ...(Array.isArray(newValue) ? newValue : [])];
+            const seen = new Set<string>();
+            merged[field] = combined.filter(item => {
+              const itemKey = typeof item === "string" ? item : JSON.stringify(item);
+              if (seen.has(itemKey)) return false;
+              seen.add(itemKey);
+              return true;
+            });
+          } else if ((newValue === null || newValue === undefined || String(newValue).trim() === "") && oldValue !== null && oldValue !== undefined && String(oldValue).trim() !== "") {
+            merged[field] = oldValue;
+          }
+        }
+        if (normalizeDbsStatus(current.status) === "concluida") {
+          merged.status = current.status;
+          for (const field of ["completedAt", "concluidoEm", "completed_at", "assinaturaEm", "assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"]) {
+            if (current[field] !== null && current[field] !== undefined && String(current[field]).trim() !== "") merged[field] = current[field];
+          }
+        }
+        return merged;
+      });
+      const pendingIds = new Set(mergedOrders.map(order => String(order?.id ?? "").trim()).filter(Boolean));
+      const pendingProtocols = new Set(mergedOrders.map(protocolKey).filter(Boolean));
+      const missingLatest = latestOrders.filter(order => {
+        const id = String(order?.id ?? "").trim();
+        const protocol = protocolKey(order);
+        return !((id && pendingIds.has(id)) || (protocol && pendingProtocols.has(protocol)));
+      });
+      return { ...latest, ...pending, ordens: [...mergedOrders, ...missingLatest] };
+    };
 
-    if (error) throw new Error(error.message);
+    let saveResult = await supabaseAdmin
+      .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
+      .single();
+    if (saveResult.error && /base_updated_at|conflito|concurrent|serialization|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
+      await recordDbsControlSyncAttempt({
+        scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+        action: "snapshot_save", status: "retry", payload: { reason: saveResult.error.message },
+      });
+      const { data: latestSnapshot, error: latestError } = await supabaseAdmin
+        .from("dbs_control_snapshots")
+        .select("state, updated_at, owner_user_id, company_id")
+        .eq("scope_key", scope.scopeKey)
+        .maybeSingle();
+      if (latestError) throw new Error("Conflito de salvamento; não foi possível recarregar a versão mais recente: " + latestError.message);
+      if (!latestSnapshot?.state || !latestSnapshot.updated_at) {
+        throw new Error("Conflito de salvamento; a versão mais recente da base não pôde ser confirmada. Nenhum sucesso foi informado.");
+      }
+      const retryPayload = {
+        ...payload,
+        owner_user_id: latestSnapshot.owner_user_id ?? payload.owner_user_id,
+        company_id: scope.companyId,
+        state: mergeRetryState(latestSnapshot.state as Record<string, unknown>, stateToSave),
+        base_updated_at: latestSnapshot.updated_at,
+        updated_at: new Date().toISOString(),
+      };
+      saveResult = await supabaseAdmin
+        .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: retryPayload })
+        .single();
+    }
+
+    let saved: any;
+    try {
+      saved = ensurePersistedSnapshotWrite(saveResult, "saveDbsControlCloudState");
+    } catch (error) {
+      await recordDbsControlSyncAttempt({
+        scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+        action: "snapshot_save", status: "error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    await recordDbsControlSyncAttempt({
+      scopeKey: scope.scopeKey, companyId: scope.companyId, ownerUserId, userId: user.id,
+      action: "snapshot_save", status: "success",
+      result: { state_version: saved.state_version, updated_at: saved.updated_at },
+    });
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
@@ -922,7 +1421,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       fetchAllDbsControlWorkOrders(),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
-      supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
+      supabaseAdmin.from("dbs_control_snapshot_save_audit").select("id,scope_key,company_id,owner_user_id,user_id,action,status,created_at,result,error_message").order("created_at",{ascending:false}).limit(10),
       supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
     ]);
     const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
@@ -931,7 +1430,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
 
     const clients=clientsResult.data??[], sites=sitesResult.data??[], equipment=equipmentResult.data??[];
     const services=servicesResult.data??[], employees=employeesResult.data??[], orders=ordersResult.data??[];
-    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=syncRunsResult.data??[];
+    const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=(syncRunsResult.data??[]).map((row:any)=>({ ...row, mode: row.action, started_at: row.created_at, finished_at: row.created_at, summary: row.result, errors: row.error_message ? [{ message: row.error_message }] : [] }));
     const snapshots=snapshotsResult.data??[];
     const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
     const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
