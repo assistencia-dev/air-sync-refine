@@ -293,6 +293,16 @@ for (const path of [
   assert.ok(fs.readFileSync(path, "utf8").includes('from "@/lib/admin-profile.functions";'), "A tela " + path + " deve usar a leitura de perfil confiável.");
 }
 console.log("Admin menu: perfil, RH, Financeiro e permissões verificados.");
+assert.match(adminManagement, /\.select\("id, role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "Todas as operações privilegiadas devem recusar administradores inativos.");
+assert.match(adminManagement, /\.select\("role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "A listagem de empresas/unidades também deve exigir um operador ativo.");
+assert.match(ticketFunctions, /async function requireStaff\(context: \{ userId: string \}\)[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "Ações de chamados devem verificar perfil ativo e papel pelo backend.");
+assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[\s\S]*?await requireStaff\(context\)/, "A mudança de status precisa ser autorizada também no servidor.");
+assert.match(ticketFunctions, /const allowed = \["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"\]/, "A API de status deve rejeitar status arbitrários.");
+assert.match(ticketFunctions, /\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?Este chamado já foi encerrado/, "Chamados encerrados não podem ser reabertos por uma chamada direta à API.");
+assert.match(ticketFunctions, /data\.status === "concluido" \|\| data\.status === "cancelado" \? new Date\(\)\.toISOString\(\) : null/, "Conclusão e cancelamento devem gravar a data de encerramento.");
+assert.doesNotMatch(authFunctions, /const BOOTSTRAP_PASSWORD = process\.env/, "O segredo de bootstrap não deve ser capturado no escopo superior do módulo.");
+assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const BOOTSTRAP_PASSWORD = process\.env\.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD/, "A variável de senha de bootstrap só pode ser lida dentro do handler servidor.");
+
 
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
