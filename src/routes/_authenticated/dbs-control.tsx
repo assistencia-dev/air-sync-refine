@@ -28,6 +28,11 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
 }
 
+function dbsControlStateHasAnyArrayData(state: Record<string, unknown> | null | undefined) {
+  if (!state) return false;
+  return Object.values(state).some((value) => Array.isArray(value) && value.length > 0);
+}
+
 const DBS_CONTROL_PROTECTED_ARRAYS = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
 
 function dbsControlStateIsSmallerThan(localState: Record<string, unknown> | null | undefined, cloudState: Record<string, unknown> | null | undefined) {
@@ -261,6 +266,30 @@ function DbsControlPage() {
           const localHasData = dbsControlStateHasData(localState);
           const cloudHasData = dbsControlStateHasData(cloudState);
           localRecoveryStateRef.current = localState;
+          // Se a base relacional e o snapshot estão realmente vazios, a administração
+          // pode iniciar uma base nova. Isso não autoriza importar um cache local com
+          // registros sem antes confirmar que a nuvem contém a mesma base.
+          if (!cloudState && !dbsControlStateHasAnyArrayData(localState) && !employeeModeRef.current) {
+            const initialState = localState ?? {
+              tecnicos: [], clientes: [], equipamentos: [], pecas: [],
+              servicos: [], compras: [], ordens: [],
+            };
+            cloudReadyRef.current = true;
+            cloudUpdatedAtRef.current = null;
+            localRecoveryStateRef.current = initialState;
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "DBS_CONTROL_CLOUD_STATE", state: initialState },
+              "*",
+            );
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_SYNC_STATUS",
+              status: "synced",
+              pendingCount: 0,
+              updated_at: null,
+            }, "*");
+            setCloudError(null);
+            return;
+          }
           // A sessão de colaborador recebe deliberadamente um subconjunto da base (somente OS e cadastros vinculados).
           // Comparar esse subconjunto com o cache local completo gera falso alarme de perda e bloqueia a sincronização.
           const cloudIsIncomplete = !employeeModeRef.current && localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
