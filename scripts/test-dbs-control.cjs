@@ -259,6 +259,9 @@ assert.ok(ticketFunctions.includes("users:users!tickets_created_by_user_id_fkey(
 assert.ok(ticketFunctions.includes("assumed:users!tickets_assumed_by_fkey("), "Os chamados devem carregar o responsável pela FK real.");
 assert.ok(ticketFunctions.includes("unit:units!tickets_unit_id_fkey("), "Os chamados devem carregar unidade pela FK real.");
 assert.match(ticketFunctions, /async function requireStaff\(context: \{ userId: string \}\)[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "Ações de chamados devem verificar perfil ativo e papel pelo backend.");
+assert.match(ticketFunctions, /export const createTicket = createServerFn[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, unit_id, status"\)[\s\S]*?me\.status !== "ativo"/, "Contas inativas não podem criar chamados com uma sessão antiga.");
+assert.match(ticketFunctions, /export const reopenTicket = createServerFn[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, status"\)[\s\S]*?me\.status !== "ativo"/, "Contas inativas não podem reabrir chamados.");
+
 assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[\s\S]*?await requireStaff\(context\)/, "A mudança de status precisa ser autorizada também no servidor.");
 assert.match(ticketFunctions, /export const completeTicket = createServerFn[\s\S]*?await requireStaff\(context\)[\s\S]*?\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?if \(!updated\)/, "A conclusão deve recusar chamados já encerrados.");
 assert.match(ticketFunctions, /export const cancelTicket = createServerFn[\s\S]*?await requireStaff\(context\)[\s\S]*?\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?if \(!updated\)/, "O cancelamento deve recusar chamados já encerrados.");
