@@ -316,6 +316,7 @@ assert.doesNotMatch(authHeader, /BOOTSTRAP_PASSWORD|DBS_SUPER_ADMIN_BOOTSTRAP_PA
 assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const BOOTSTRAP_PASSWORD = process\.env\.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD/, "A variável de senha de bootstrap só pode ser lida dentro do handler servidor.");
 
 
+const activeAccountRlsMigration = fs.readFileSync("supabase/migrations/20261022203516_active_account_rls_guards.sql", "utf8");
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 let parsedTreasuryInlineScripts = 0;
 const treasuryScriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
@@ -334,6 +335,15 @@ for (const match of treasuryHtml.matchAll(treasuryScriptTag)) {
   }
 }
 assert.ok(parsedTreasuryInlineScripts >= 2, "Os scripts de segurança e financeiro do Treasury devem ser validados.");
+
+assert.match(activeAccountRlsMigration, /CREATE OR REPLACE FUNCTION public\.current_role_key\(\)[\s\S]*?SET search_path TO pg_catalog[\s\S]*?u\.status = 'ativo'/, "O papel do usuário deve ficar indisponível para sessões desativadas e a função deve usar search_path restrito.");
+assert.match(activeAccountRlsMigration, /CREATE OR REPLACE FUNCTION public\.current_app_user_id\(\)[\s\S]*?u\.status = 'ativo'/, "Sessões desativadas não devem continuar identificando o usuário nas políticas.");
+assert.match(activeAccountRlsMigration, /CREATE OR REPLACE FUNCTION public\.is_admin\(\)[\s\S]*?public\.current_role_key\(\)/, "A verificação administrativa deve herdar o bloqueio de conta inativa.");
+assert.match(activeAccountRlsMigration, /CREATE POLICY rh_ponto_audit_admin_select[\s\S]*?public\.usuario_esta_ativo\(\)/, "A consulta de auditoria do ponto deve exigir conta ativa.");
+assert.match(activeAccountRlsMigration, /CREATE POLICY rh_ponto_records_admin_update[\s\S]*?public\.usuario_esta_ativo\(\)[\s\S]*?WITH CHECK \([\s\S]*?public\.usuario_esta_ativo\(\)/, "Atualizações do ponto devem validar USING e WITH CHECK.");
+assert.match(activeAccountRlsMigration, /CREATE POLICY users_self_select[\s\S]*?public\.usuario_esta_ativo\(\)[\s\S]*?OR public\.is_admin\(\)/, "A Data API não deve expor o próprio perfil de uma conta inativa.");
+console.log("RLS/Auth: políticas e helpers de conta ativa verificados.");
+
 
 const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
 assert.ok(authFunctions.includes("process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD"), "A senha de bootstrap do Superadministrador deve vir de um segredo privado do servidor.");
