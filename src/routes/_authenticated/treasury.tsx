@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Json, TablesInsert } from "@/integrations/supabase/types";
+import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { BrandLogo } from "@/components/BrandLogo";
 
 
@@ -73,7 +73,7 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>, expe
     // Optimistic concurrency: do not replace a snapshot changed by another browser/device.
     const { data, error } = await supabase
       .from("treasury_snapshots")
-      .update(payload as TablesInsert<"treasury_snapshots">)
+      .update(payload as TablesUpdate<"treasury_snapshots">)
       .eq("scope_key", scopeKey)
       .eq("updated_at", expectedUpdatedAt)
       .select("state, state_version, updated_at")
