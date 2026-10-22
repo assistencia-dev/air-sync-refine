@@ -263,3 +263,27 @@ assert.equal(authFunctions.includes("company:company_id("), false, "O perfil nã
 assert.equal(adminFunctions.includes("unit:unit_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
 assert.equal(adminFunctions.includes("company:company_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
 console.log("Admin/Auth: relações de perfil, usuários e chamados verificadas.");
+
+const adminProfile = fs.readFileSync("src/lib/admin-profile.functions.ts", "utf8");
+const adminRoute = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8");
+const adminManagement = fs.readFileSync("src/lib/admin.functions.ts", "utf8");
+assert.ok(adminProfile.includes('const { supabaseAdmin } = await import("@/integrations/supabase/client.server");'), "A navegação administrativa deve consultar o perfil pelo cliente servidor.");
+assert.ok(adminProfile.includes('.eq("auth_id", context.userId)'), "A consulta do perfil deve ficar restrita à identidade autenticada.");
+assert.ok(adminProfile.includes('data.role_key') === false, "O perfil deve devolver o papel do banco sem reclassificá-lo no frontend.");
+assert.ok(adminRoute.includes('import { getMyProfile } from "@/lib/admin-profile.functions";'), "O painel administrativo deve usar a leitura de perfil que não depende de RLS/joins.");
+assert.ok(adminRoute.includes('<WalletCards className="h-4 w-4" /> RH'), "O item RH deve continuar registrado no menu administrativo.");
+assert.ok(adminRoute.includes('<Landmark className="h-4 w-4" /> Financeiro'), "O item Financeiro deve continuar registrado no menu administrativo.");
+assert.equal((adminManagement.match(/const adminDb = \(await import\("@\/integrations\/supabase\/client\.server"\)\)\.supabaseAdmin;/g) || []).length, 6, "Todas as seis operações administrativas devem conferir o papel pelo backend autenticado.");
+assert.equal(adminManagement.includes("context.supabase"), false, "A autorização administrativa não deve depender de uma leitura RLS que oculta o próprio perfil.");
+for (const path of [
+  "src/routes/_authenticated/route.tsx",
+  "src/routes/_authenticated/passage.tsx",
+  "src/routes/_authenticated/folha-ponto.tsx",
+  "src/routes/_authenticated/portal.tsx",
+  "src/routes/_authenticated/dbs-control.tsx",
+  "src/components/TicketNotificationListener.tsx",
+  "src/components/RhPontoWorkspace.tsx",
+]) {
+  assert.ok(fs.readFileSync(path, "utf8").includes('from "@/lib/admin-profile.functions";'), "A tela " + path + " deve usar a leitura de perfil confiável.");
+}
+console.log("Admin menu: perfil, RH, Financeiro e permissões verificados.");
