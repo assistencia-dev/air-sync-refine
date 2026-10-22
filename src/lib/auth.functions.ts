@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
-const BOOTSTRAP_PASSWORD = "123456DBS";
+const BOOTSTRAP_PASSWORD = process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD;
 
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
@@ -47,8 +47,14 @@ export const resolveLogin = createServerFn({ method: "POST" })
       return { email: found.email };
     }
 
-    // Bootstrap SUPER_ADMIN idempotently on first attempt with the well-known username
+    // Bootstrap only when an operator has configured a private server-side password.
+    // Never ship a reusable administrator credential in source code.
     if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
+      if (!BOOTSTRAP_PASSWORD || BOOTSTRAP_PASSWORD.length < 12) {
+        throw new Error(
+          "A conta inicial não existe. Configure DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD no ambiente do servidor (mínimo de 12 caracteres) antes de usar a inicialização.",
+        );
+      }
       const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: BOOTSTRAP_EMAIL,
         password: BOOTSTRAP_PASSWORD,
@@ -81,18 +87,41 @@ export const resolveLogin = createServerFn({ method: "POST" })
     throw new Error("Usuário ou senha inválidos.");
   });
 
-/** Returns the current app-user profile row for the authenticated caller. */
+/** Backwards-compatible profile lookup. Related labels are optional and never gate the role. */
 export const getMyProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("users")
-      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status, unit:units!users_unit_id_fkey(name, cnpj, address_json), company:companies!users_company_id_fkey(legal_name, trade_name)")
+      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
+
     if (error) throw new Error(error.message);
-    if (data && data.status && data.status !== "ativo") {
+    if (!data) return null;
+    if (data.status && data.status !== "ativo") {
       throw new Error("Acesso suspenso. Entre em contato com a DBS Air.");
     }
-    return data;
+
+    let unit: { name: string; cnpj: string | null; address_json: unknown } | null = null;
+    let company: { legal_name: string; trade_name: string | null } | null = null;
+    if (data.unit_id) {
+      const result = await supabaseAdmin
+        .from("units")
+        .select("name, cnpj, address_json")
+        .eq("id", data.unit_id)
+        .maybeSingle();
+      if (!result.error) unit = result.data;
+    }
+    if (data.company_id) {
+      const result = await supabaseAdmin
+        .from("companies")
+        .select("legal_name, trade_name")
+        .eq("id", data.company_id)
+        .maybeSingle();
+      if (!result.error) company = result.data;
+    }
+
+    return { ...data, unit, company };
   });
