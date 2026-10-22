@@ -317,6 +317,7 @@ assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const 
 
 
 const activeAccountRlsMigration = fs.readFileSync("supabase/migrations/20261022203516_active_account_rls_guards.sql", "utf8");
+const privateRlsHelperMigration = fs.readFileSync("supabase/migrations/20261022203929_private_rls_helper_functions.sql", "utf8");
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 let parsedTreasuryInlineScripts = 0;
 const treasuryScriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
@@ -342,6 +343,12 @@ assert.match(activeAccountRlsMigration, /CREATE OR REPLACE FUNCTION public\.is_a
 assert.match(activeAccountRlsMigration, /CREATE POLICY rh_ponto_audit_admin_select[\s\S]*?public\.usuario_esta_ativo\(\)/, "A consulta de auditoria do ponto deve exigir conta ativa.");
 assert.match(activeAccountRlsMigration, /CREATE POLICY rh_ponto_records_admin_update[\s\S]*?public\.usuario_esta_ativo\(\)[\s\S]*?WITH CHECK \([\s\S]*?public\.usuario_esta_ativo\(\)/, "Atualizações do ponto devem validar USING e WITH CHECK.");
 assert.match(activeAccountRlsMigration, /CREATE POLICY users_self_select[\s\S]*?public\.usuario_esta_ativo\(\)[\s\S]*?OR public\.is_admin\(\)/, "A Data API não deve expor o próprio perfil de uma conta inativa.");
+assert.match(privateRlsHelperMigration, /CREATE SCHEMA IF NOT EXISTS private[\s\S]*?REVOKE ALL ON SCHEMA private FROM PUBLIC, anon[\s\S]*?GRANT USAGE ON SCHEMA private TO authenticated, service_role/, "O schema interno não deve ser exposto a usuários anônimos.");
+assert.match(privateRlsHelperMigration, /CREATE OR REPLACE FUNCTION private\.current_role_key_internal\(\)[\s\S]*?SECURITY DEFINER[\s\S]*?SET search_path TO pg_catalog[\s\S]*?u\.status = 'ativo'/, "A implementação privilegiada da consulta de papel deve ser privada, ter caminho de busca fixo e exigir conta ativa.");
+assert.match(privateRlsHelperMigration, /CREATE OR REPLACE FUNCTION public\.current_role_key\(\)[\s\S]*?SECURITY INVOKER[\s\S]*?SELECT private\.current_role_key_internal\(\)/, "O wrapper público de compatibilidade não deve ser SECURITY DEFINER.");
+assert.match(privateRlsHelperMigration, /REVOKE EXECUTE ON FUNCTION private\.is_admin_internal\(\) FROM PUBLIC, anon[\s\S]*?GRANT EXECUTE ON FUNCTION private\.is_admin_internal\(\) TO authenticated, service_role/, "A função interna de autorização deve ter execução restrita.");
+assert.match(privateRlsHelperMigration, /REVOKE EXECUTE ON FUNCTION public\.is_admin\(\) FROM PUBLIC, anon[\s\S]*?GRANT EXECUTE ON FUNCTION public\.is_admin\(\) TO authenticated, service_role/, "O wrapper de autorização pública deve estar disponível apenas para os papéis necessários.");
+
 console.log("RLS/Auth: políticas e helpers de conta ativa verificados.");
 
 
