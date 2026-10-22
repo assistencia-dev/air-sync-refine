@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { openRhPrint } from "@/lib/rh.exports";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, UserX, AlertTriangle, BriefcaseBusiness, ChevronRight, ClipboardCheck, Filter, History, Save, Search, XCircle, FileDown, FileSpreadsheet } from "lucide-react";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
