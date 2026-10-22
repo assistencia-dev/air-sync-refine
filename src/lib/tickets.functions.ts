@@ -28,17 +28,21 @@ export const listAllTickets = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
-async function requireStaff(context: { supabase: any; userId: string }) {
-  const { data: me, error } = await context.supabase
+async function requireStaff(context: { userId: string }) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: me, error } = await supabaseAdmin
     .from("users")
-    .select("id, role_key")
+    .select("id, role_key, status")
     .eq("auth_id", context.userId)
     .maybeSingle();
-  if (error || !me) throw new Error("Perfil não encontrado.");
-  if (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL") {
-    throw new Error("Apenas administradores podem alterar chamados.");
+
+  if (error || !me || me.status !== "ativo") {
+    throw new Error("Perfil administrativo não encontrado ou inativo.");
   }
-  return me as { id: string; role_key: string };
+  if (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL") {
+    throw new Error("Apenas administradores ativos podem alterar chamados.");
+  }
+  return me as { id: string; role_key: string; status: string };
 }
 
 /** Admin assume o chamado (somente se ainda estiver aberto). */
@@ -176,18 +180,28 @@ export const createTicket = createServerFn({ method: "POST" })
 export const updateTicketStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string; status: string }) => {
-    if (!input?.id || !input?.status) throw new Error("Dados inválidos.");
-    return input;
+    const allowed = ["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"];
+    if (!input?.id || !allowed.includes(input.status)) throw new Error("Dados ou status do chamado inválidos.");
+    return { id: input.id, status: input.status };
   })
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
+    await requireStaff(context);
+
+    // Closed/cancelled tickets are immutable; UI disabling is not an authorization boundary.
+    const { data: updated, error } = await context.supabase
       .from("tickets")
       .update({
         status: data.status,
-        closed_at: data.status === "concluido" ? new Date().toISOString() : null,
+        closed_at: data.status === "concluido" || data.status === "cancelado" ? new Date().toISOString() : null,
       })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .neq("status", "concluido")
+      .neq("status", "cancelado")
+      .select("id")
+      .maybeSingle();
+
     if (error) throw new Error(error.message);
+    if (!updated) throw new Error("Este chamado já foi encerrado ou não pode mais ser alterado.");
     return { ok: true };
   });
 
