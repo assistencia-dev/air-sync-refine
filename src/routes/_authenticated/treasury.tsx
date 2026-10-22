@@ -88,7 +88,9 @@ function TreasuryPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const cloudReadyRef = useRef(false);
+  const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
@@ -209,21 +211,37 @@ function TreasuryPage() {
             throw new Error("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados.");
           }
           setCloudError(null);
+          setLoading(false);
         } catch (err) {
           console.error("DBS Treasury cloud load:", err);
           setCloudError(err instanceof Error ? err.message : "Falha ao carregar o Financeiro.");
+          // Keep the iframe covered until shared state is hydrated; local-only edits
+          // could otherwise appear saved even while the cloud is unavailable.
+          setLoading(true);
         }
         return;
       }
       if (msg.type === "DBS_TREASURY_SAVE") {
-        pendingStateRef.current = msg.state;
+        if (!msg.state || typeof msg.state !== "object" || Array.isArray(msg.state)) return;
+        pendingStateRef.current = msg.state as Record<string, unknown>;
         if (!cloudReadyRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(async () => {
+        saveTimerRef.current = setTimeout(() => {
+          saveTimerRef.current = null;
           const state = pendingStateRef.current;
-          if (!state) return;
-          try { await saveTreasuryClientCloudState(state); setCloudError(null); }
-          catch (err) { console.error("DBS Treasury cloud save:", err); setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro."); }
+          if (!state || !cloudReadyRef.current) return;
+          const persist = async () => {
+            if (!cloudReadyRef.current) return;
+            try {
+              await saveTreasuryClientCloudState(state);
+              setCloudError(null);
+            } catch (err) {
+              console.error("DBS Treasury cloud save:", err);
+              setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro.");
+            }
+          };
+          // Preserve arrival order so an older slow request cannot overwrite a newer snapshot.
+          saveQueueRef.current = saveQueueRef.current.then(persist, persist);
         }, 450);
       }
     };
@@ -238,8 +256,28 @@ function TreasuryPage() {
         <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
       </header>
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100vh - 64px)" }}>
-        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50"><div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Carregando DBS TREASURY Enterprise Executive Suite…</p></div></div>}
-        <iframe ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} onLoad={() => setLoading(false)} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
+        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 p-5">
+          {cloudError ? (
+            <div role="alert" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-lg">
+              <Shield className="mx-auto h-9 w-9 text-slate-600" />
+              <h2 className="mt-3 text-base font-bold text-slate-900">Sincronização financeira não confirmada</h2>
+              <p className="mt-2 break-words text-sm leading-6 text-slate-600">{cloudError}</p>
+              <p className="mt-2 text-xs text-slate-500">O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem.</p>
+              <button onClick={() => {
+                cloudReadyRef.current = false;
+                pendingStateRef.current = null;
+                setCloudError(null);
+                setLoading(true);
+                setIframeReloadKey((key) => key + 1);
+              }} className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                Tentar sincronizar novamente
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Sincronizando DBS TREASURY com a nuvem…</p></div>
+          )}
+        </div>}
+        <iframe key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
     </div>
   );
