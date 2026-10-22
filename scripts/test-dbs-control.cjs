@@ -318,13 +318,13 @@ assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const 
 
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 let parsedTreasuryInlineScripts = 0;
-const treasuryScriptTag = /<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi;
+const treasuryScriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 for (const match of treasuryHtml.matchAll(treasuryScriptTag)) {
   const attrs = match[1] || "";
   const source = match[2] || "";
-  if (/\\bsrc\\s*=/.test(attrs) || !source.trim()) continue;
-  if (/\\btype\\s*=\\s*["']?(?:application\\/json|importmap)/i.test(attrs)) continue;
-  if (/\\btype\\s*=\\s*["']?module/i.test(attrs)) continue;
+  if (/\bsrc\s*=/.test(attrs) || !source.trim()) continue;
+  if (/\btype\s*=\s*["']?(?:application\/json|importmap)/i.test(attrs)) continue;
+  if (/\btype\s*=\s*["']?module/i.test(attrs)) continue;
   try {
     new vm.Script(source, { filename: "public/treasury.html:inline-script" + parsedTreasuryInlineScripts });
     parsedTreasuryInlineScripts += 1;
