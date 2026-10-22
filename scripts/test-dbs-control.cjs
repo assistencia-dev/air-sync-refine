@@ -300,7 +300,8 @@ assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[
 assert.match(ticketFunctions, /const allowed = \["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"\]/, "A API de status deve rejeitar status arbitrários.");
 assert.match(ticketFunctions, /\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?Este chamado já foi encerrado/, "Chamados encerrados não podem ser reabertos por uma chamada direta à API.");
 assert.match(ticketFunctions, /data\.status === "concluido" \|\| data\.status === "cancelado" \? new Date\(\)\.toISOString\(\) : null/, "Conclusão e cancelamento devem gravar a data de encerramento.");
-assert.doesNotMatch(authFunctions, /const BOOTSTRAP_PASSWORD = process\.env/, "O segredo de bootstrap não deve ser capturado no escopo superior do módulo.");
+const authHeader = authFunctions.slice(0, authFunctions.indexOf('.handler(async ({ data })'));
+assert.doesNotMatch(authHeader, /BOOTSTRAP_PASSWORD|DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD/, "O segredo de bootstrap não deve ser capturado no escopo superior do módulo.");
 assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const BOOTSTRAP_PASSWORD = process\.env\.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD/, "A variável de senha de bootstrap só pode ser lida dentro do handler servidor.");
 
 
