@@ -85,11 +85,16 @@ export const completeTicket = createServerFn({ method: "POST" })
     const me = await requireStaff(context);
 
     const now = new Date().toISOString();
-    const { error } = await context.supabase
+    const { data: updated, error } = await context.supabase
       .from("tickets")
       .update({ status: "concluido", closed_at: now })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .neq("status", "concluido")
+      .neq("status", "cancelado")
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!updated) throw new Error("Este chamado já foi encerrado ou cancelado.");
 
     await context.supabase.from("ticket_timeline").insert({
       ticket_id: data.id,
@@ -127,8 +132,13 @@ export const cancelTicket = createServerFn({ method: "POST" })
         cancel_reason: data.reason,
         closed_at: new Date().toISOString(),
       })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .neq("status", "concluido")
+      .neq("status", "cancelado")
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!updated) throw new Error("Este chamado já foi encerrado ou cancelado.");
 
     await context.supabase.from("ticket_timeline").insert({
       ticket_id: data.id,
