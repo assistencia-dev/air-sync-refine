@@ -278,6 +278,7 @@ console.log("Admin/Auth: relações de perfil, usuários e chamados verificadas.
 
 const adminProfile = fs.readFileSync("src/lib/admin-profile.functions.ts", "utf8");
 const adminRoute = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8");
+const passageRoute = fs.readFileSync("src/routes/_authenticated/passage.tsx", "utf8");
 const adminManagement = fs.readFileSync("src/lib/admin.functions.ts", "utf8");
 assert.ok(adminProfile.includes('const { supabaseAdmin } = await import("@/integrations/supabase/client.server");'), "A navegação administrativa deve consultar o perfil pelo cliente servidor.");
 assert.ok(adminProfile.includes('.eq("auth_id", context.userId)'), "A consulta do perfil deve ficar restrita à identidade autenticada.");
@@ -285,6 +286,7 @@ assert.ok(adminProfile.includes("return { ...data, unit, company };"), "O perfil
 assert.ok(adminRoute.includes('import { getMyProfile } from "@/lib/admin-profile.functions";'), "O painel administrativo deve usar a leitura de perfil que não depende de RLS/joins.");
 assert.ok(adminRoute.includes('<WalletCards className="h-4 w-4" /> RH'), "O item RH deve continuar registrado no menu administrativo.");
 assert.ok(adminRoute.includes('<Landmark className="h-4 w-4" /> Financeiro'), "O item Financeiro deve continuar registrado no menu administrativo.");
+assert.match(passageRoute, /profile\.data\.role_key === "SUPER_ADMIN"[\s\S]*?profile\.data\.role_key === "ADMIN_OPERACIONAL"/, "O RH direto deve aceitar os mesmos papéis administrativos do menu.");
 assert.equal((adminManagement.match(/const adminDb = \(await import\("@\/integrations\/supabase\/client\.server"\)\)\.supabaseAdmin;/g) || []).length, 6, "Todas as seis operações administrativas devem conferir o papel pelo backend autenticado.");
 assert.equal(adminManagement.includes("context.supabase"), false, "A autorização administrativa não deve depender de uma leitura RLS que oculta o próprio perfil.");
 for (const path of [
