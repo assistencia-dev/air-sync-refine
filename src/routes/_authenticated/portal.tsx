@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleDot, LogOut, PlusCircle, RefreshCw, Ticket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { createTicket, listMyTickets, reopenTicket } from "@/lib/tickets.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 import { TicketAttachments } from "@/components/TicketAttachments";
