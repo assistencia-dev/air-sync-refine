@@ -287,3 +287,23 @@ for (const path of [
   assert.ok(fs.readFileSync(path, "utf8").includes('from "@/lib/admin-profile.functions";'), "A tela " + path + " deve usar a leitura de perfil confiável.");
 }
 console.log("Admin menu: perfil, RH, Financeiro e permissões verificados.");
+
+const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
+const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
+assert.ok(authFunctions.includes("process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD"), "A senha de bootstrap do Superadministrador deve vir de um segredo privado do servidor.");
+assert.doesNotMatch(authFunctions, /123456DBS/, "A senha administrativa padrão não pode ficar gravada no código.");
+assert.match(authFunctions, /BOOTSTRAP_PASSWORD\.length < 12/, "O bootstrap deve exigir senha privada com pelo menos 12 caracteres.");
+assert.doesNotMatch(treasuryHtml, /123456DBS|SENHA_ADMIN_OPERACIONAL/, "O HTML financeiro não pode conter uma senha administrativa reutilizável.");
+assert.match(treasuryHtml, /id="dbs-treasury-auth-frame-guard"/, "O Financeiro deve verificar o contexto de iframe antes de inicializar os dados.");
+assert.match(treasuryHtml, /window\.__DBS_TREASURY_ALLOWED_FRAME__ !== true/, "A página Financeira aberta diretamente deve parar antes de ler e renderizar o estado.");
+assert.match(treasuryHtml, /window\.parent\.location\.pathname === "\/treasury"/, "O Financeiro embutido deve ser originado pela rota autenticada.");
+assert.match(treasuryHtml, /DBS_TREASURY_VERIFY_ADMIN_PASSWORD/, "As alterações retroativas devem solicitar verificação à sessão autenticada.");
+assert.match(treasuryHtml, /async function validarDatasRetroativas/, "As validações de datas devem aguardar a reautenticação sem aplicar alterações antes da resposta.");
+assert.match(treasuryHtml, /await verifyTreasuryAdminPasswordInParent\(senha\)/, "A senha real do administrador precisa ser validada no portal antes da edição retroativa.");
+assert.match(treasuryHtml, /async function alternarFechamentoPeriodo/, "Reabrir um mês financeiro deve aguardar a reautenticação do administrador.");
+assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261022-admin-reauth-1"/, "A atualização de segurança do Financeiro deve invalidar o cache do HTML.");
+assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautenticação deve ser conferida pelo Supabase Auth.");
+assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
+assert.match(treasuryRoute, /DBS_TREASURY_ADMIN_PASSWORD_RESULT/, "O portal deve devolver o resultado de reautenticação ao iframe esperado.");
+console.log("Financeiro/Auth: senha, reautenticação e bloqueio de acesso direto verificados.");
+
