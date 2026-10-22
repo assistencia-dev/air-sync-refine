@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script id="dbs-treasury-auth-frame-guard">
+      (function () {
+        let allowed = false;
+        try {
+          allowed = window.self !== window.top
+            && window.parent.location.origin === window.location.origin
+            && window.parent.location.pathname.replace(/\\/+$/, "") === "/treasury";
+        } catch {}
+        document.documentElement.style.visibility = "hidden";
+        window.__DBS_TREASURY_ALLOWED_FRAME__ = allowed;
+      })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DBS TREASURY - Enterprise Executive Suite</title>
@@ -1109,6 +1121,13 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
 <div id="toast-container"></div>
 
 <script>
+    if (window.__DBS_TREASURY_ALLOWED_FRAME__ !== true) {
+        document.body.innerHTML = '<main style="min-height:100vh;display:grid;place-items:center;padding:32px;background:#f4f7fb;font:16px system-ui;color:#0f172a"><section style="max-width:520px;background:#fff;border:1px solid #dbe3ef;border-radius:20px;padding:28px;box-shadow:0 16px 48px #0f172a12"><h1 style="font-size:22px;margin-bottom:12px">DBS TREASURY protegido</h1><p style="line-height:1.6;color:#475569">Este módulo só pode ser aberto pela rota autenticada do DBS Air. Entre no portal e acesse Financeiro pelo menu administrativo.</p><p style="margin-top:20px"><a href="/login" style="color:#1769D1;font-weight:700">Ir para o login</a></p></section></main>';
+        document.documentElement.style.visibility = "visible";
+        throw new Error("DBS TREASURY requires the authenticated /treasury route.");
+    }
+    document.documentElement.style.visibility = "visible";
+
     const TREASURY_STATE_KEY = 'DBS_TREASURY_STATE_V3';
     const TREASURY_PREVIOUS_KEY = 'DBS_TREASURY_PREVIOUS_SAFE';
     const TREASURY_SNAPSHOT_KEY = 'DBS_TREASURY_SNAPSHOT_BEFORE_V6';
@@ -1116,6 +1135,33 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     const TREASURY_VERSION = 5;
     let CLOUD_STATE_RECEIVED = false;
     function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, window.location.origin); } catch (e) {} }
+
+    let treasuryAdminAuthSequence = 0;
+    const treasuryAdminAuthRequests = new Map();
+    window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        const msg = event.data || {};
+        if (msg.type !== "DBS_TREASURY_ADMIN_PASSWORD_RESULT") return;
+        const finish = treasuryAdminAuthRequests.get(String(msg.requestId || ""));
+        if (finish) finish(msg.ok === true);
+    });
+
+    function verifyTreasuryAdminPasswordInParent(password) {
+        return new Promise((resolve) => {
+            const requestId = "treasury-admin-" + Date.now() + "-" + (++treasuryAdminAuthSequence);
+            let settled = false;
+            const finish = (ok) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                treasuryAdminAuthRequests.delete(requestId);
+                resolve(Boolean(ok));
+            };
+            const timeoutId = setTimeout(() => finish(false), 20000);
+            treasuryAdminAuthRequests.set(requestId, finish);
+            treasuryPost("DBS_TREASURY_VERIFY_ADMIN_PASSWORD", { requestId, password });
+        });
+    }
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
@@ -1301,25 +1347,53 @@ function showToast(msg) {
 
     // ===== Segurança operacional V13 =====
     const LIMITE_COMPROVANTE = 5000.00;
-    const SENHA_ADMIN_OPERACIONAL = '123456DBS';
+    // Retroactive edits are re-authorized against the current Supabase administrator session.
 
-    function validarDataRetroativa(dataLancamento) {
-        if (!dataLancamento) return true;
-        const periodo = String(dataLancamento).slice(0,7);
-        if (Array.isArray(STATE?._meta?.fechamentos) && STATE._meta.fechamentos.includes(periodo)) {
-            alert('Período financeiro fechado: ' + periodo + '. Reabra o mês em Gestão Financeira antes de alterar lançamentos.');
-            return false;
+    async function validarDatasRetroativas(...dataLancamentos) {
+        const datas = dataLancamentos.filter(Boolean).map(value => String(value));
+        if (!datas.length) return true;
+
+        const periodosFechados = Array.isArray(STATE?._meta?.fechamentos) ? STATE._meta.fechamentos : [];
+        for (const dataLancamento of datas) {
+            const periodo = dataLancamento.slice(0, 7);
+            if (periodosFechados.includes(periodo)) {
+                alert('Período financeiro fechado: ' + periodo + '. Reabra o mês em Gestão Financeira antes de alterar lançamentos.');
+                return false;
+            }
         }
+
         const hoje = new Date();
         const limite = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-        const alvo = String(dataLancamento).includes('T') ? new Date(dataLancamento) : new Date(String(dataLancamento) + 'T00:00:00');
-        if (Number.isNaN(alvo.getTime()) || alvo >= limite) return true;
-        const senha = prompt('Atenção: esta data pertence a um período anterior ao mês atual. Digite a senha do Administrador para prosseguir:');
-        if (senha !== SENHA_ADMIN_OPERACIONAL) {
-            alert('Operação cancelada. O período anterior está protegido contra alterações acidentais.');
+        const periodosRetroativos = [];
+        for (const dataLancamento of datas) {
+            const alvo = dataLancamento.includes('T')
+                ? new Date(dataLancamento)
+                : new Date(dataLancamento + 'T00:00:00');
+            if (Number.isNaN(alvo.getTime()) || alvo >= limite) continue;
+            const periodo = dataLancamento.slice(0, 7);
+            if (!periodosRetroativos.includes(periodo)) periodosRetroativos.push(periodo);
+        }
+        if (!periodosRetroativos.length) return true;
+
+        const senha = prompt(
+            'Atenção: esta alteração afeta período(s) anterior(es) ao mês atual: ' +
+            periodosRetroativos.join(', ') +
+            '. Digite a senha atual da conta SUPER_ADMIN para autorizar:'
+        );
+        if (!senha) {
+            alert('Operação cancelada. Nenhuma alteração retroativa foi aplicada.');
+            return false;
+        }
+        const autorizado = await verifyTreasuryAdminPasswordInParent(senha);
+        if (!autorizado) {
+            alert('Senha administrativa inválida, sessão expirada ou falha na verificação. Nenhuma alteração retroativa foi aplicada.');
             return false;
         }
         return true;
+    }
+
+    async function validarDataRetroativa(dataLancamento) {
+        return validarDatasRetroativas(dataLancamento);
     }
 
     function validarBaixaValorAlto(valor, anexoBase64) {
@@ -1376,7 +1450,7 @@ function showToast(msg) {
         }
     }
 
-    function salvarRecebimento(e) {
+    async function salvarRecebimento(e) {
         e.preventDefault();
         const id = document.getElementById('edit-rec-id').value;
         const cliente = document.getElementById('add-rec-cliente').value.trim();
@@ -1390,7 +1464,7 @@ function showToast(msg) {
             const item = STATE.recebimentos.find(x => x.id === id);
             if (!item) return;
             if (item.status === 'Recebido') { alert('Este recebimento já foi baixado. Desfaça a baixa antes de alterar dados financeiros.'); return; }
-            if (!validarDataRetroativa(data)) return;
+            if (!(await validarDataRetroativa(data))) return;
             registrarAlteracaoValor('Recebimentos', `Entrada de ${cliente}`, item.valor, valor);
             item.cliente = cliente; item.valor = valor; item.categoria = categoria; item.data = data; item.bancoId = bancoId;
             logAuditoria('EDIÇÃO', 'Recebimentos', `Entrada de ${cliente} alterada.`);
@@ -1403,7 +1477,7 @@ function showToast(msg) {
         save(); closeModals(); render();
     }
 
-    function salvarPagar(e) {
+    async function salvarPagar(e) {
         e.preventDefault();
         const id = document.getElementById('edit-pag-id').value;
         const fornecedor = document.getElementById('add-pag-fornecedor').value.trim();
@@ -1417,7 +1491,7 @@ function showToast(msg) {
             const item = STATE.contasPagar.find(x => x.id === id);
             if (!item) return;
             if (item.status === 'Pago') { alert('Esta conta já foi paga. Desfaça o pagamento antes de alterar dados financeiros.'); return; }
-            if (!validarDataRetroativa(item.vencimento) || !validarDataRetroativa(vencimento)) return;
+            if (!(await validarDatasRetroativas(item.vencimento, vencimento))) return;
             registrarAlteracaoValor('Contas a Pagar', `Conta de ${fornecedor}`, item.valor, valor);
             item.fornecedor = fornecedor; item.descricao = descricao; item.valor = valor; item.vencimento = vencimento; item.bancoId = bancoId;
             logAuditoria('EDIÇÃO', 'Contas a Pagar', `Conta de ${fornecedor} alterada.`);
@@ -1430,7 +1504,7 @@ function showToast(msg) {
         save(); closeModals(); render();
     }
 
-    function salvarPassivo(e) {
+    async function salvarPassivo(e) {
         e.preventDefault();
         const credor = document.getElementById('add-p-credor').value.trim();
         const doc = document.getElementById('add-p-doc').value.trim();
@@ -1441,7 +1515,7 @@ function showToast(msg) {
         const bancoId = document.getElementById('add-p-banco').value;
         if (!credor || !doc || !Number.isInteger(qtd) || qtd <= 0 || !Number.isFinite(val) || val <= 0 || !dataStr || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
 
-        if (!validarDataRetroativa(dataStr)) return;
+        if (!(await validarDataRetroativa(dataStr))) return;
         const base = new Date(dataStr + 'T00:00:00');
         const parcelas = [];
         const stamp = Date.now();
@@ -1523,7 +1597,7 @@ function showToast(msg) {
         save(); render(); showToast('Conta fixa excluída.');
     }
 
-    function salvarRecorrencia(e) {
+    async function salvarRecorrencia(e) {
         e.preventDefault();
         const servico = document.getElementById('add-r-nome').value.trim();
         const valor = parseFloat(document.getElementById('add-r-val').value);
@@ -1531,7 +1605,7 @@ function showToast(msg) {
         const proximoVencimento = document.getElementById('add-r-venc').value;
         const bancoId = document.getElementById('add-r-banco').value;
         if (!servico || !Number.isFinite(valor) || valor <= 0 || !proximoVencimento || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
-        if (!validarDataRetroativa(proximoVencimento)) return;
+        if (!(await validarDataRetroativa(proximoVencimento))) return;
 
         STATE.recorrencias.push({ id: `rec_${Date.now()}`, servico, valor, frequencia, proximoVencimento, bancoId, historico: [] });
         logAuditoria('CADASTRO', 'Recorrências', `Conta fixa adicionada: ${servico}`);
@@ -1902,11 +1976,11 @@ function showToast(msg) {
         populateBankSelect('add-pag-banco', getPreferredBankId(item, 'bancoId'));
     }
 
-    function excluirRecebimento(id) {
+    async function excluirRecebimento(id) {
         const item = STATE.recebimentos.find(x => x.id === id);
         if (!item) return;
         if ((STATE.movimentacoes||[]).some(m => m.origemId === id && m.origemTipo === 'recebimento') || item.status === 'Recebido') { alert('Este recebimento possui histórico financeiro. Não pode ser apagado; desfaça a baixa para corrigir.'); return; }
-        if (!validarDataRetroativa(item.data)) return;
+        if (!(await validarDataRetroativa(item.data))) return;
         if(!confirm('Confirma a exclusão deste recebimento?')) return;
         STATE.recebimentos = STATE.recebimentos.filter(x => x.id !== id);
         logAuditoria('EXCLUSÃO', 'Recebimentos', `Registro excluído ID: ${id}`);
@@ -1914,11 +1988,11 @@ function showToast(msg) {
         save(); render();
     }
 
-    function excluirContaPagar(id) {
+    async function excluirContaPagar(id) {
         const item = STATE.contasPagar.find(x => x.id === id);
         if (!item) return;
         if ((STATE.movimentacoes||[]).some(m => m.origemId === id && m.origemTipo === 'conta_pagar') || item.status === 'Pago') { alert('Esta conta possui histórico financeiro. Não pode ser apagada; desfaça o pagamento para corrigir.'); return; }
-        if (!validarDataRetroativa(item.vencimento)) return;
+        if (!(await validarDataRetroativa(item.vencimento))) return;
         if(!confirm('Confirma a exclusão desta conta a pagar?')) return;
         STATE.contasPagar = STATE.contasPagar.filter(x => x.id !== id);
         logAuditoria('EXCLUSÃO', 'Contas a Pagar', `Registro excluído ID: ${id}`);
@@ -2302,11 +2376,22 @@ function showToast(msg) {
         STATE._meta.centrosCusto.push({id:'cc_'+Date.now(),codigo,nome:nome.trim(),ativo:true});
         logAuditoria('CADASTRO','Centro de Custo','Centro criado: '+codigo+' - '+nome.trim()); render();
     }
-    function alternarFechamentoPeriodo(){
+    async function alternarFechamentoPeriodo(){
         const periodo=periodoAtualSelecionado(); if(!periodo)return;
         const arr=STATE._meta.fechamentos||[]; const idx=arr.indexOf(periodo);
-        if(idx>=0){ if(prompt('Digite a senha do Administrador para reabrir o período:')!==SENHA_ADMIN_OPERACIONAL)return; arr.splice(idx,1); logAuditoria('REABERTURA','Fechamento','Período reaberto: '+periodo); }
-        else { if(!confirm('Fechar o período '+periodo+'? Alterações retroativas serão bloqueadas.'))return; arr.push(periodo); logAuditoria('FECHAMENTO','Fechamento','Período fechado: '+periodo); }
+        if(idx>=0){
+            const senha=prompt('Digite a senha atual da conta SUPER_ADMIN para reabrir o período ' + periodo + ':');
+            if(!senha || !(await verifyTreasuryAdminPasswordInParent(senha))){
+                alert('Senha administrativa inválida, sessão expirada ou falha na verificação. O período continua fechado.');
+                return;
+            }
+            arr.splice(idx,1);
+            logAuditoria('REABERTURA','Fechamento','Período reaberto: '+periodo);
+        } else {
+            if(!confirm('Fechar o período '+periodo+'? Alterações retroativas serão bloqueadas.'))return;
+            arr.push(periodo);
+            logAuditoria('FECHAMENTO','Fechamento','Período fechado: '+periodo);
+        }
         save(); render();
     }
     function criarSnapshotSeguranca(){
