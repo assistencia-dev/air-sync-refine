@@ -258,6 +258,12 @@ assert.ok(adminFunctions.includes("company:companies!users_company_id_fkey("), "
 assert.ok(ticketFunctions.includes("users:users!tickets_created_by_user_id_fkey("), "Os chamados devem carregar o autor pela FK real.");
 assert.ok(ticketFunctions.includes("assumed:users!tickets_assumed_by_fkey("), "Os chamados devem carregar o responsável pela FK real.");
 assert.ok(ticketFunctions.includes("unit:units!tickets_unit_id_fkey("), "Os chamados devem carregar unidade pela FK real.");
+assert.match(ticketFunctions, /async function requireStaff\(context: \{ userId: string \}\)[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "Ações de chamados devem verificar perfil ativo e papel pelo backend.");
+assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[\s\S]*?await requireStaff\(context\)/, "A mudança de status precisa ser autorizada também no servidor.");
+assert.match(ticketFunctions, /const allowed = \["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"\]/, "A API de status deve rejeitar status arbitrários.");
+assert.match(ticketFunctions, /\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?Este chamado já foi encerrado/, "Chamados encerrados não podem ser reabertos por uma chamada direta à API.");
+assert.match(ticketFunctions, /data\.status === "concluido" \|\| data\.status === "cancelado" \? new Date\(\)\.toISOString\(\) : null/, "Conclusão e cancelamento devem gravar a data de encerramento.");
+
 assert.equal(authFunctions.includes("unit:unit_id("), false, "O perfil não pode tratar a coluna unit_id como tabela relacionada.");
 assert.equal(authFunctions.includes("company:company_id("), false, "O perfil não pode tratar a coluna company_id como tabela relacionada.");
 assert.equal(adminFunctions.includes("unit:unit_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
