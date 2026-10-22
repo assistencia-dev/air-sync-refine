@@ -21,7 +21,7 @@ export const listAllTickets = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("tickets")
       .select(
-        "id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, assumed_by, assumed_at, asset_id, unit_id, assigned_technician_id, created_by_user_id, users:created_by_user_id(full_name, username), assumed:assumed_by(full_name, username), unit:unit_id(name, cnpj)",
+        "id, protocol_number, occurrence_type, description, status, priority, sla_deadline, created_at, closed_at, cancel_reason, assumed_by, assumed_at, asset_id, unit_id, assigned_technician_id, created_by_user_id, users:users!tickets_created_by_user_id_fkey(full_name, username), assumed:users!tickets_assumed_by_fkey(full_name, username), unit:units!tickets_unit_id_fkey(name, cnpj)",
       )
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
