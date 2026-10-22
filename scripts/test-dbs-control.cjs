@@ -324,6 +324,13 @@ assert.match(treasuryHtml, /async function alternarFechamentoPeriodo/, "Reabrir 
 assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261022-admin-reauth-1"/, "A atualização de segurança do Financeiro deve invalidar o cache do HTML.");
 assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautenticação deve ser conferida pelo Supabase Auth.");
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
+assert.match(treasuryRoute, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "A gravação financeira deve serializar snapshots concorrentes.");
+assert.match(treasuryRoute, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Uma falha de gravação anterior não pode inverter a ordem dos snapshots seguintes.");
+assert.match(treasuryRoute, /setLoading\(false\);[\s\S]*?setCloudError\(null\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
+assert.match(treasuryRoute, /setIframeReloadKey\(\(key\) => key \+ 1\)/, "A falha de sincronização precisa permitir uma nova tentativa sem apagar snapshots.");
+assert.match(treasuryRoute, /O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem/, "Falha na sincronização deve bloquear edição local não persistida.");
+assert.doesNotMatch(treasuryRoute, /onLoad=\{\(\) => setLoading\(false\)\}/, "O evento load do iframe, sozinho, não pode indicar sincronização pronta.");
+
 assert.match(treasuryRoute, /DBS_TREASURY_ADMIN_PASSWORD_RESULT/, "O portal deve devolver o resultado de reautenticação ao iframe esperado.");
 console.log("Financeiro/Auth: senha, reautenticação e bloqueio de acesso direto verificados.");
 
