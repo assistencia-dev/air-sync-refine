@@ -87,7 +87,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("users")
-      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status, unit:unit_id(name, cnpj, address_json), company:company_id(legal_name, trade_name)")
+      .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status, unit:units!users_unit_id_fkey(name, cnpj, address_json), company:companies!users_company_id_fkey(legal_name, trade_name)")
       .eq("auth_id", context.userId)
       .maybeSingle();
     if (error) throw new Error(error.message);
