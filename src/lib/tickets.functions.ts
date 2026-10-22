@@ -245,7 +245,6 @@ export const reopenTicket = createServerFn({ method: "POST" })
       throw new Error("Somente chamados concluídos ou cancelados podem ser reabertos.");
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: updateErr } = await supabaseAdmin
       .from("tickets")
       .update({ status: "aberto", closed_at: null, cancel_reason: null })
