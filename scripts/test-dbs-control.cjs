@@ -261,6 +261,9 @@ assert.ok(ticketFunctions.includes("unit:units!tickets_unit_id_fkey("), "Os cham
 assert.match(ticketFunctions, /async function requireStaff\(context: \{ userId: string \}\)[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, role_key, status"\)[\s\S]*?me\.status !== "ativo"/, "Ações de chamados devem verificar perfil ativo e papel pelo backend.");
 assert.match(ticketFunctions, /export const createTicket = createServerFn[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, unit_id, status"\)[\s\S]*?me\.status !== "ativo"/, "Contas inativas não podem criar chamados com uma sessão antiga.");
 assert.match(ticketFunctions, /export const reopenTicket = createServerFn[\s\S]*?supabaseAdmin[\s\S]*?\.select\("id, status"\)[\s\S]*?me\.status !== "ativo"/, "Contas inativas não podem reabrir chamados.");
+const reopenTicketSource = ticketFunctions.slice(ticketFunctions.indexOf("export const reopenTicket = createServerFn"));
+assert.equal((reopenTicketSource.match(/const \{ supabaseAdmin \}/g) || []).length, 1, "A rotina de reabertura deve declarar o cliente administrativo uma única vez.");
+
 
 assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[\s\S]*?await requireStaff\(context\)/, "A mudança de status precisa ser autorizada também no servidor.");
 assert.match(ticketFunctions, /export const completeTicket = createServerFn[\s\S]*?await requireStaff\(context\)[\s\S]*?\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?if \(!updated\)/, "A conclusão deve recusar chamados já encerrados.");
