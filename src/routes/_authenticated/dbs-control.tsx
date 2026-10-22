@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
