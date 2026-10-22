@@ -18,7 +18,7 @@ export const listAllUsers = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("users")
       .select(
-        "id, auth_id, full_name, username, email, cpf, role_key, status, unit_id, company_id, is_unit_manager, unit:unit_id(name), company:company_id(legal_name, trade_name)",
+        "id, auth_id, full_name, username, email, cpf, role_key, status, unit_id, company_id, is_unit_manager, unit:units!users_unit_id_fkey(name), company:companies!users_company_id_fkey(legal_name, trade_name)",
       )
       .not("auth_id", "is", null)
       .order("created_at", { ascending: false });
