@@ -5,7 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listAllUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: me, error: meErr } = await context.supabase
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me, error: meErr } = await adminDb
       .from("users")
       .select("id, role_key")
       .eq("auth_id", context.userId)
@@ -36,7 +37,8 @@ export const setUserStatus = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ context, data }) => {
-    const { data: me } = await context.supabase
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me } = await adminDb
       .from("users")
       .select("id, role_key")
       .eq("auth_id", context.userId)
@@ -96,7 +98,8 @@ export const updateClientUser = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ context, data }) => {
-    const { data: me } = await context.supabase
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me } = await adminDb
       .from("users")
       .select("id, role_key")
       .eq("auth_id", context.userId)
@@ -164,7 +167,8 @@ export const updateClientUser = createServerFn({ method: "POST" })
 export const listCompaniesUnits = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: me } = await context.supabase
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me } = await adminDb
       .from("users")
       .select("role_key")
       .eq("auth_id", context.userId)
@@ -233,7 +237,8 @@ export const createClientUser = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ context, data }) => {
-    const { data: me } = await context.supabase
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me } = await adminDb
       .from("users")
       .select("id, role_key")
       .eq("auth_id", context.userId)
@@ -330,7 +335,8 @@ export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ context, data }) => {
-    const { data: me } = await context.supabase.from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
+    const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    const { data: me } = await adminDb.from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
     if (!me || me.role_key !== "SUPER_ADMIN") throw new Error("Somente SUPER_ADMIN pode excluir acessos permanentemente.");
     if (me.id === data.user_id) throw new Error("Não é permitido excluir o próprio acesso.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
