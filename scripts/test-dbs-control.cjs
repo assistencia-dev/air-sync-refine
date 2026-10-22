@@ -247,3 +247,19 @@ assert.match(dashboardUx, /\["dash-client-count","Clientes Base",clients\.length
 assert.match(dashboardUx, /\["dash-equip-count","Equipamentos Mapeados",equipment\.length\]/, "O dashboard deve contar equipamentos do parque, não OS em atendimento.");
 assert.match(dashboardUx, /\["dash-os-andamento","OS em Atendimento",active\]/, "O KPI de atendimento deve contar OS ativas.");
 assert.match(dashboardUx, /\["dash-os-concluidas","OS Concluídas",done\]/, "O KPI de concluídas deve contar OS concluídas.");
+
+const authFunctions = fs.readFileSync("src/lib/auth.functions.ts", "utf8");
+const adminFunctions = fs.readFileSync("src/lib/admin.functions.ts", "utf8");
+const ticketFunctions = fs.readFileSync("src/lib/tickets.functions.ts", "utf8");
+assert.ok(authFunctions.includes("unit:units!users_unit_id_fkey("), "O perfil deve carregar a unidade pela relação real users_unit_id_fkey.");
+assert.ok(authFunctions.includes("company:companies!users_company_id_fkey("), "O perfil deve carregar a empresa pela relação real users_company_id_fkey.");
+assert.ok(adminFunctions.includes("unit:units!users_unit_id_fkey("), "A lista de acessos deve usar a relação real de unidades.");
+assert.ok(adminFunctions.includes("company:companies!users_company_id_fkey("), "A lista de acessos deve usar a relação real de empresas.");
+assert.ok(ticketFunctions.includes("users:users!tickets_created_by_user_id_fkey("), "Os chamados devem carregar o autor pela FK real.");
+assert.ok(ticketFunctions.includes("assumed:users!tickets_assumed_by_fkey("), "Os chamados devem carregar o responsável pela FK real.");
+assert.ok(ticketFunctions.includes("unit:units!tickets_unit_id_fkey("), "Os chamados devem carregar unidade pela FK real.");
+assert.doesNotMatch(authFunctions, /unit:unit_id\\(/, "O perfil não pode tratar a coluna unit_id como tabela relacionada.");
+assert.doesNotMatch(authFunctions, /company:company_id\\(/, "O perfil não pode tratar a coluna company_id como tabela relacionada.");
+assert.doesNotMatch(adminFunctions, /unit:unit_id\\(/, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
+assert.doesNotMatch(adminFunctions, /company:company_id\\(/, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
+console.log("Admin/Auth: relações de perfil, usuários e chamados verificadas.");
