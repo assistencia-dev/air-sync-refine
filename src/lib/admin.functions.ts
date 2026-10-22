@@ -8,10 +8,10 @@ export const listAllUsers = createServerFn({ method: "GET" })
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: me, error: meErr } = await adminDb
       .from("users")
-      .select("id, role_key")
+      .select("id, role_key, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (meErr || !me) throw new Error("Perfil não encontrado.");
+    if (meErr || !me || me.status !== "ativo") throw new Error("Perfil administrativo não encontrado ou inativo.");
     if (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL") {
       throw new Error("Acesso negado.");
     }
@@ -40,10 +40,10 @@ export const setUserStatus = createServerFn({ method: "POST" })
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: me } = await adminDb
       .from("users")
-      .select("id, role_key")
+      .select("id, role_key, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (!me || me.role_key !== "SUPER_ADMIN") {
+    if (!me || me.status !== "ativo" || me.role_key !== "SUPER_ADMIN") {
       throw new Error("Somente SUPER_ADMIN pode alterar o status de usuários.");
     }
     if (me.id === data.user_id && data.status === "bloqueado") {
@@ -101,10 +101,10 @@ export const updateClientUser = createServerFn({ method: "POST" })
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: me } = await adminDb
       .from("users")
-      .select("id, role_key")
+      .select("id, role_key, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (!me || me.role_key !== "SUPER_ADMIN") {
+    if (!me || me.status !== "ativo" || me.role_key !== "SUPER_ADMIN") {
       throw new Error("Somente SUPER_ADMIN pode editar acessos.");
     }
     if (me.id === data.user_id)
@@ -170,10 +170,10 @@ export const listCompaniesUnits = createServerFn({ method: "GET" })
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: me } = await adminDb
       .from("users")
-      .select("role_key")
+      .select("role_key, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (!me || (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL")) {
+    if (!me || me.status !== "ativo" || (me.role_key !== "SUPER_ADMIN" && me.role_key !== "ADMIN_OPERACIONAL")) {
       throw new Error("Acesso negado.");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -240,10 +240,10 @@ export const createClientUser = createServerFn({ method: "POST" })
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: me } = await adminDb
       .from("users")
-      .select("id, role_key")
+      .select("id, role_key, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (!me || me.role_key !== "SUPER_ADMIN") {
+    if (!me || me.status !== "ativo" || me.role_key !== "SUPER_ADMIN") {
       throw new Error("Somente SUPER_ADMIN pode criar acessos.");
     }
 
@@ -336,8 +336,8 @@ export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const adminDb = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
-    const { data: me } = await adminDb.from("users").select("id, role_key").eq("auth_id", context.userId).maybeSingle();
-    if (!me || me.role_key !== "SUPER_ADMIN") throw new Error("Somente SUPER_ADMIN pode excluir acessos permanentemente.");
+    const { data: me } = await adminDb.from("users").select("id, role_key, status").eq("auth_id", context.userId).maybeSingle();
+    if (!me || me.status !== "ativo" || me.role_key !== "SUPER_ADMIN") throw new Error("Somente um SUPER_ADMIN ativo pode excluir acessos permanentemente.");
     if (me.id === data.user_id) throw new Error("Não é permitido excluir o próprio acesso.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: target, error: targetErr } = await supabaseAdmin.from("users").select("id, auth_id, full_name, email, role_key").eq("id", data.user_id).maybeSingle();
