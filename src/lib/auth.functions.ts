@@ -3,8 +3,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
-const BOOTSTRAP_PASSWORD = process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD;
-
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
 }
@@ -23,6 +21,7 @@ export const resolveLogin = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const BOOTSTRAP_PASSWORD = process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD;
     const raw = data.identifier;
     const digits = normalizeDigits(raw);
     const isEmail = raw.includes("@");
