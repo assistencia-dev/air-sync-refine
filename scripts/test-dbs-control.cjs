@@ -258,8 +258,8 @@ assert.ok(adminFunctions.includes("company:companies!users_company_id_fkey("), "
 assert.ok(ticketFunctions.includes("users:users!tickets_created_by_user_id_fkey("), "Os chamados devem carregar o autor pela FK real.");
 assert.ok(ticketFunctions.includes("assumed:users!tickets_assumed_by_fkey("), "Os chamados devem carregar o responsável pela FK real.");
 assert.ok(ticketFunctions.includes("unit:units!tickets_unit_id_fkey("), "Os chamados devem carregar unidade pela FK real.");
-assert.doesNotMatch(authFunctions, /unit:unit_id\\(/, "O perfil não pode tratar a coluna unit_id como tabela relacionada.");
-assert.doesNotMatch(authFunctions, /company:company_id\\(/, "O perfil não pode tratar a coluna company_id como tabela relacionada.");
-assert.doesNotMatch(adminFunctions, /unit:unit_id\\(/, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
-assert.doesNotMatch(adminFunctions, /company:company_id\\(/, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
+assert.equal(authFunctions.includes("unit:unit_id("), false, "O perfil não pode tratar a coluna unit_id como tabela relacionada.");
+assert.equal(authFunctions.includes("company:company_id("), false, "O perfil não pode tratar a coluna company_id como tabela relacionada.");
+assert.equal(adminFunctions.includes("unit:unit_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
+assert.equal(adminFunctions.includes("company:company_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
 console.log("Admin/Auth: relações de perfil, usuários e chamados verificadas.");
