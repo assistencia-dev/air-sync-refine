@@ -18,7 +18,10 @@ export function HrRoute() {
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
 
   useEffect(() => {
-    if (profile.data && !NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "")) {
+    if (!profile.data) return;
+    const isNativeOperator = NATIVE_ADMIN_USERNAMES.has(profile.data.username ?? "");
+    const hasAdministrativeRole = profile.data.role_key === "SUPER_ADMIN" || profile.data.role_key === "ADMIN_OPERACIONAL";
+    if (!isNativeOperator && !hasAdministrativeRole) {
       navigate({ to: "/portal", replace: true });
     }
   }, [profile.data, navigate]);
