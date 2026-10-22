@@ -44,7 +44,7 @@ async function getTreasuryClientCloudState() {
   return data ?? null;
 }
 
-async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
+async function saveTreasuryClientCloudState(state: Record<string, unknown>, expectedUpdatedAt: string | null = null) {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
   const { data: user, error: userError } = await supabase
@@ -57,6 +57,8 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
     throw new Error("Acesso ao Financeiro não autorizado.");
   }
   const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+  const previousTime = expectedUpdatedAt ? Date.parse(expectedUpdatedAt) : 0;
+  const nextUpdatedAt = new Date(Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0)).toISOString();
   const payload = {
     scope_key: scopeKey,
     company_id: user.company_id ?? null,
@@ -64,14 +66,37 @@ async function saveTreasuryClientCloudState(state: Record<string, unknown>) {
     state: state as unknown as Json,
     state_version: Number((state as { _meta?: { version?: unknown } })._meta?.version) || 5,
     updated_by: user.id,
-    updated_at: new Date().toISOString(),
+    updated_at: nextUpdatedAt,
   };
+
+  if (expectedUpdatedAt) {
+    // Optimistic concurrency: do not replace a snapshot changed by another browser/device.
+    const { data, error } = await supabase
+      .from("treasury_snapshots")
+      .update(payload as TablesInsert<"treasury_snapshots">)
+      .eq("scope_key", scopeKey)
+      .eq("updated_at", expectedUpdatedAt)
+      .select("state, state_version, updated_at")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) {
+      throw new Error("O Financeiro foi atualizado em outra sessão. Para não sobrescrever lançamentos, a gravação foi bloqueada. Tente sincronizar novamente e confira a cópia local de recuperação.");
+    }
+    return data;
+  }
+
+  // First snapshot: insert rather than upsert so a parallel first writer cannot silently win.
   const { data, error } = await supabase
     .from("treasury_snapshots")
-    .upsert(payload as TablesInsert<"treasury_snapshots">, { onConflict: "scope_key" })
+    .insert(payload as TablesInsert<"treasury_snapshots">)
     .select("state, state_version, updated_at")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Outro navegador inicializou o Financeiro ao mesmo tempo. A gravação foi bloqueada; sincronize antes de continuar.");
+    }
+    throw new Error(error.message);
+  }
   return data;
 }
 
@@ -89,6 +114,7 @@ function TreasuryPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingStateRef = useRef<Record<string, unknown> | null>(null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const cloudUpdatedAtRef = useRef<string | null>(null);
   const cloudReadyRef = useRef(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -169,6 +195,7 @@ function TreasuryPage() {
           const localState = msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
+          cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
 
           // A nuvem é a fonte compartilhada quando já existe um snapshot.
           // Se ainda não houver snapshot, preservamos o estado deste dispositivo
@@ -186,7 +213,8 @@ function TreasuryPage() {
                 version: 5,
                 cloudMigratedAt: new Date().toISOString(),
               };
-              const saved = await saveTreasuryClientCloudState(localState);
+              const saved = await saveTreasuryClientCloudState(localState, cloud?.updated_at ?? null);
+              cloudUpdatedAtRef.current = saved.updated_at ?? null;
               cloudReadyRef.current = true;
               iframeRef.current?.contentWindow?.postMessage(
                 { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
@@ -200,6 +228,7 @@ function TreasuryPage() {
               cloudMigratedAt: new Date().toISOString(),
             };
             const saved = await saveTreasuryClientCloudState(localState);
+            cloudUpdatedAtRef.current = saved.updated_at ?? null;
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
@@ -233,11 +262,14 @@ function TreasuryPage() {
           const persist = async () => {
             if (!cloudReadyRef.current) return;
             try {
-              await saveTreasuryClientCloudState(state);
+              const saved = await saveTreasuryClientCloudState(state, cloudUpdatedAtRef.current);
+              cloudUpdatedAtRef.current = saved.updated_at ?? null;
               setCloudError(null);
             } catch (err) {
               console.error("DBS Treasury cloud save:", err);
+              cloudReadyRef.current = false;
               setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro.");
+              setLoading(true);
             }
           };
           // Preserve arrival order so an older slow request cannot overwrite a newer snapshot.
@@ -265,7 +297,10 @@ function TreasuryPage() {
               <p className="mt-2 text-xs text-slate-500">O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem.</p>
               <button onClick={() => {
                 cloudReadyRef.current = false;
+                cloudUpdatedAtRef.current = null;
                 pendingStateRef.current = null;
+                if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+                saveTimerRef.current = null;
                 setCloudError(null);
                 setLoading(true);
                 setIframeReloadKey((key) => key + 1);
