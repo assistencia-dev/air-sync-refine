@@ -165,12 +165,13 @@ export const createTicket = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ context, data }) => {
-    const { data: me, error: meErr } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: me, error: meErr } = await supabaseAdmin
       .from("users")
-      .select("id, unit_id")
+      .select("id, unit_id, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (meErr || !me) throw new Error("Perfil de usuário não encontrado.");
+    if (meErr || !me || me.status !== "ativo") throw new Error("Perfil de usuário não encontrado ou inativo.");
 
     const { data: inserted, error } = await context.supabase
       .from("tickets")
@@ -223,12 +224,13 @@ export const reopenTicket = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ context, data }) => {
-    const { data: me, error: meErr } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: me, error: meErr } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select("id, status")
       .eq("auth_id", context.userId)
       .maybeSingle();
-    if (meErr || !me) throw new Error("Perfil de usuário não encontrado.");
+    if (meErr || !me || me.status !== "ativo") throw new Error("Perfil de usuário não encontrado ou inativo.");
 
     const { data: current, error: currentErr } = await context.supabase
       .from("tickets")
