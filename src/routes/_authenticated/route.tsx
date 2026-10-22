@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
