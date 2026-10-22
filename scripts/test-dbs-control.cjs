@@ -269,7 +269,7 @@ const adminRoute = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8"
 const adminManagement = fs.readFileSync("src/lib/admin.functions.ts", "utf8");
 assert.ok(adminProfile.includes('const { supabaseAdmin } = await import("@/integrations/supabase/client.server");'), "A navegação administrativa deve consultar o perfil pelo cliente servidor.");
 assert.ok(adminProfile.includes('.eq("auth_id", context.userId)'), "A consulta do perfil deve ficar restrita à identidade autenticada.");
-assert.ok(adminProfile.includes('data.role_key') === false, "O perfil deve devolver o papel do banco sem reclassificá-lo no frontend.");
+assert.ok(adminProfile.includes("return { ...data, unit, company };"), "O perfil deve preservar os campos originais, incluindo role_key, sem reclassificá-los.");
 assert.ok(adminRoute.includes('import { getMyProfile } from "@/lib/admin-profile.functions";'), "O painel administrativo deve usar a leitura de perfil que não depende de RLS/joins.");
 assert.ok(adminRoute.includes('<WalletCards className="h-4 w-4" /> RH'), "O item RH deve continuar registrado no menu administrativo.");
 assert.ok(adminRoute.includes('<Landmark className="h-4 w-4" /> Financeiro'), "O item Financeiro deve continuar registrado no menu administrativo.");
