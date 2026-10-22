@@ -7,7 +7,7 @@
         try {
           allowed = window.self !== window.top
             && window.parent.location.origin === window.location.origin
-            && window.parent.location.pathname.replace(/\\/+$/, "") === "/treasury";
+            && (window.parent.location.pathname === "/treasury" || window.parent.location.pathname === "/treasury/");
         } catch {}
         document.documentElement.style.visibility = "hidden";
         window.__DBS_TREASURY_ALLOWED_FRAME__ = allowed;
