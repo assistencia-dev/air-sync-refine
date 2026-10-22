@@ -334,7 +334,7 @@ assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautentica
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
 assert.match(treasuryRoute, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "A gravação financeira deve serializar snapshots concorrentes.");
 assert.match(treasuryRoute, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Uma falha de gravação anterior não pode inverter a ordem dos snapshots seguintes.");
-assert.match(treasuryRoute, /setLoading\(false\);[\s\S]*?setCloudError\(null\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
+assert.match(treasuryRoute, /if \(!cloudReadyRef\.current\) \{\s*throw new Error\("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados\."\);\s*\}\s*setCloudError\(null\);\s*setLoading\(false\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
 assert.match(treasuryRoute, /setIframeReloadKey\(\(key\) => key \+ 1\)/, "A falha de sincronização precisa permitir uma nova tentativa sem apagar snapshots.");
 assert.match(treasuryRoute, /O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem/, "Falha na sincronização deve bloquear edição local não persistida.");
 assert.doesNotMatch(treasuryRoute, /onLoad=\{\(\) => setLoading\(false\)\}/, "O evento load do iframe, sozinho, não pode indicar sincronização pronta.");
