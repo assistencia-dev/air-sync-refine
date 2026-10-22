@@ -334,6 +334,12 @@ assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautentica
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
 assert.match(treasuryRoute, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "A gravação financeira deve serializar snapshots concorrentes.");
 assert.match(treasuryRoute, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Uma falha de gravação anterior não pode inverter a ordem dos snapshots seguintes.");
+assert.match(treasuryRoute, /async function saveTreasuryClientCloudState\(state: Record<string, unknown>, expectedUpdatedAt: string \| null = null\)/, "O salvamento financeiro deve exigir a revisão esperada quando o snapshot já existe.");
+assert.match(treasuryRoute, /\.update\(payload as TablesUpdate<"treasury_snapshots">\)[\s\S]*?\.eq\("scope_key", scopeKey\)[\s\S]*?\.eq\("updated_at", expectedUpdatedAt\)[\s\S]*?if \(!data\)/, "Snapshots alterados por outro navegador devem rejeitar a gravação atrasada.");
+assert.match(treasuryRoute, /\.insert\(payload as TablesInsert<"treasury_snapshots">\)[\s\S]*?error\.code === "23505"/, "A inicialização concorrente do primeiro snapshot não pode sobrescrever uma sessão.");
+assert.match(treasuryRoute, /cloudUpdatedAtRef\.current = saved\.updated_at \?\? null/, "Cada gravação bem-sucedida deve atualizar a revisão usada pela próxima.");
+assert.match(treasuryRoute, /cloudReadyRef\.current = false;[\s\S]*?setLoading\(true\);/, "Conflito ou falha de sincronização deve bloquear o financeiro até nova tentativa.");
+
 assert.match(treasuryRoute, /if \(!cloudReadyRef\.current\) \{\s*throw new Error\("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados\."\);\s*\}\s*setCloudError\(null\);\s*setLoading\(false\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
 assert.match(treasuryRoute, /setIframeReloadKey\(\(key\) => key \+ 1\)/, "A falha de sincronização precisa permitir uma nova tentativa sem apagar snapshots.");
 assert.match(treasuryRoute, /O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem/, "Falha na sincronização deve bloquear edição local não persistida.");
