@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { hasMyPontoAccess } from "@/lib/ponto.functions";
 import { hasMyDbsControlAccess } from "@/lib/rh.functions";
 import { RhPontoEmployeePortal } from "@/components/RhPontoWorkspace";
