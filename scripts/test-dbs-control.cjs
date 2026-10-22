@@ -317,6 +317,24 @@ assert.match(authFunctions, /\.handler\(async \(\{ data \}\) => \{[\s\S]*?const 
 
 
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
+let parsedTreasuryInlineScripts = 0;
+const treasuryScriptTag = /<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi;
+for (const match of treasuryHtml.matchAll(treasuryScriptTag)) {
+  const attrs = match[1] || "";
+  const source = match[2] || "";
+  if (/\\bsrc\\s*=/.test(attrs) || !source.trim()) continue;
+  if (/\\btype\\s*=\\s*["']?(?:application\\/json|importmap)/i.test(attrs)) continue;
+  if (/\\btype\\s*=\\s*["']?module/i.test(attrs)) continue;
+  try {
+    new vm.Script(source, { filename: "public/treasury.html:inline-script" + parsedTreasuryInlineScripts });
+    parsedTreasuryInlineScripts += 1;
+  } catch (error) {
+    console.error("Falha de sintaxe no DBS TREASURY inline #" + parsedTreasuryInlineScripts + ": " + (error.stack || error.message));
+    process.exitCode = 1;
+  }
+}
+assert.ok(parsedTreasuryInlineScripts >= 2, "Os scripts de segurança e financeiro do Treasury devem ser validados.");
+
 const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
 assert.ok(authFunctions.includes("process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD"), "A senha de bootstrap do Superadministrador deve vir de um segredo privado do servidor.");
 assert.doesNotMatch(authFunctions, /123456DBS/, "A senha administrativa padrão não pode ficar gravada no código.");
