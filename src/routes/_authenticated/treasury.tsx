@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/treasury")({
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html?v=20260929-2";
+const TREASURY_URL = "/treasury.html?v=20261022-admin-reauth-1";
 
 async function getTreasuryClientCloudState() {
   const { data: auth, error: authError } = await supabase.auth.getUser();
@@ -120,6 +120,44 @@ function TreasuryPage() {
       if (event.origin !== window.location.origin) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_TREASURY_VERIFY_ADMIN_PASSWORD") {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
+        const password = typeof msg.password === "string" ? msg.password : "";
+        let ok = false;
+        try {
+          if (!requestId || !password || password.length > 128) {
+            throw new Error("Invalid administrative password verification request.");
+          }
+          const { data: auth, error: authError } = await supabase.auth.getUser();
+          if (authError || !auth.user?.email) {
+            throw new Error("Administrator session is missing.");
+          }
+          const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("role_key, status")
+            .eq("auth_id", auth.user.id)
+            .maybeSingle();
+          if (userError || !user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
+            throw new Error("Current session is not an active SUPER_ADMIN.");
+          }
+          // Supabase Auth validates the live account password; no reusable secret is stored in HTML.
+          const { data: verified, error: verifyError } = await supabase.auth.signInWithPassword({
+            email: auth.user.email,
+            password,
+          });
+          if (verifyError || verified.user?.id !== auth.user.id) {
+            throw new Error("Administrative re-authentication failed.");
+          }
+          ok = true;
+        } catch {
+          ok = false;
+        }
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "DBS_TREASURY_ADMIN_PASSWORD_RESULT", requestId, ok },
+          window.location.origin,
+        );
+        return;
+      }
       if (msg.type === "DBS_TREASURY_READY") {
         try {
           const cloud = await getTreasuryClientCloudState();
