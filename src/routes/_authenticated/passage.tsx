@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Shield } from "lucide-react";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { HrWorkspace } from "@/components/HrWorkspace";
 import { BrandLogo } from "@/components/BrandLogo";
 
