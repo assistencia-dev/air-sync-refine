@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase } from "@/lib/dbs-control.functions";
+import { getDbsControlCloudState, saveDbsControlCloudState, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -26,6 +26,17 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   if (!state) return false;
   const keys = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
+}
+
+const DBS_CONTROL_PROTECTED_ARRAYS = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
+
+function dbsControlStateIsSmallerThan(localState: Record<string, unknown> | null | undefined, cloudState: Record<string, unknown> | null | undefined) {
+  if (!localState || !cloudState) return Boolean(localState && dbsControlStateHasData(localState));
+  return DBS_CONTROL_PROTECTED_ARRAYS.some((key) => {
+    const localCount = Array.isArray(localState[key]) ? (localState[key] as unknown[]).length : 0;
+    const cloudCount = Array.isArray(cloudState[key]) ? (cloudState[key] as unknown[]).length : 0;
+    return localCount > cloudCount;
+  });
 }
 
 function mergeDbsControlStates(
@@ -114,6 +125,60 @@ function mergeDbsControlStates(
   return merged;
 }
 
+function mergeOnlyChangedWorkOrders(
+  baseline: Record<string, unknown> | null,
+  submitted: Record<string, unknown>,
+  latest: Record<string, unknown>,
+): Record<string, unknown> | null {
+  if (!baseline) return null;
+  const arrayKeys = ["clientes", "equipamentos", "tecnicos", "pecas", "servicos", "compras"];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  for (const key of arrayKeys) {
+    if (!same(baseline[key], submitted[key])) return null;
+  }
+  const baseOrders = Array.isArray(baseline.ordens) ? baseline.ordens as any[] : [];
+  const submittedOrders = Array.isArray(submitted.ordens) ? submitted.ordens as any[] : [];
+  const latestOrders = Array.isArray(latest.ordens) ? [...latest.ordens as any[]] : [];
+  const idOf = (order: any) => String(order?.id ?? "").trim();
+  const protocolOf = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+  const matches = (left: any, right: any) =>
+    (idOf(left) && idOf(left) === idOf(right)) ||
+    (protocolOf(left) && protocolOf(left) === protocolOf(right));
+  // A remoção de uma OS não é mesclada automaticamente; exige revisão humana.
+  if (baseOrders.some(order => !submittedOrders.some(candidate => matches(order, candidate)))) return null;
+  const isCompleted = (value: unknown) => /^(conclu[ií]d[ao])$/.test(String(value ?? "").trim().toLocaleLowerCase("pt-BR"));
+  let changedOrders = 0;
+  for (const incoming of submittedOrders) {
+    const base = baseOrders.find(order => matches(order, incoming));
+    const latestIndex = latestOrders.findIndex(order => matches(order, incoming));
+    if (!base) {
+      if (latestIndex >= 0) return null;
+      latestOrders.push(incoming);
+      changedOrders += 1;
+      continue;
+    }
+    if (latestIndex < 0) return null;
+    const current = latestOrders[latestIndex];
+    const fields = new Set([...Object.keys(base), ...Object.keys(incoming)]);
+    const patch: Record<string, unknown> = { ...current };
+    let changed = false;
+    for (const field of fields) {
+      if (same(base[field], incoming[field])) continue;
+      // A same-field concurrent edit is ambiguous: do not choose a winner silently.
+      if (!same(base[field], current[field]) && !same(incoming[field], current[field])) return null;
+      if (field === "status" && isCompleted(current.status) && !isCompleted(incoming.status)) return null;
+      patch[field] = incoming[field];
+      changed = true;
+    }
+    if (changed) {
+      latestOrders[latestIndex] = patch;
+      changedOrders += 1;
+    }
+  }
+  if (!changedOrders) return null;
+  return { ...latest, ordens: latestOrders };
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -130,12 +195,36 @@ function DbsControlPage() {
   const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
+  const cloudStateVersionRef = useRef<number | null>(null);
+  const cloudStateRef = useRef<Record<string, unknown> | null>(null);
+  const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_UPLOAD_ATTACHMENT") {
+        try {
+          const attachment = await uploadDbsControlOsAttachment({ data: {
+            orderId: String(msg.orderId || ""),
+            attachmentType: msg.attachmentType,
+            fileName: String(msg.fileName || "evidencia"),
+            contentType: String(msg.contentType || ""),
+            dataBase64: String(msg.dataBase64 || ""),
+            requestId: String(msg.requestId || ""),
+          } });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: true, attachment,
+          }, window.location.origin);
+        } catch (error) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: false,
+            error: error instanceof Error ? error.message : "Falha no upload do anexo.",
+          }, window.location.origin);
+        }
+        return;
+      }
 
       if (msg.type === "DBS_CONTROL_DB_AUDIT") {
         try {
@@ -201,7 +290,14 @@ function DbsControlPage() {
             orcamentos: Array.isArray(currentState.orcamentos) ? currentState.orcamentos : [],
             osHistorico: Array.isArray(currentState.osHistorico) ? currentState.osHistorico : [],
           };
-          const saved = await saveDbsControlCloudState({ data: { state: mergedState } });
+          const saved = await saveDbsControlCloudState({ data: {
+            state: mergedState,
+            expectedUpdatedAt: currentCloud?.updated_at ?? null,
+            expectedStateVersion: currentCloud?.state_version ?? null,
+          } });
+          cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+          cloudStateVersionRef.current = saved.state_version ?? cloudStateVersionRef.current;
+          cloudStateRef.current = saved.state as Record<string, unknown>;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
         } catch (err) {
           console.error("DBS Control master refresh:", err);
@@ -224,13 +320,18 @@ function DbsControlPage() {
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
 
-          if (cloudState) {
+          const localHasData = dbsControlStateHasData(localState);
+          const cloudHasData = dbsControlStateHasData(cloudState);
+          localRecoveryStateRef.current = localState;
+          const cloudIsIncomplete = localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
+          if (cloudState && !cloudIsIncomplete) {
             // Nunca grave automaticamente um snapshot local no estado compartilhado durante
-            // a inicialização: um navegador antigo pode ressuscitar OS excluídas/antigas ou
-            // reverter a execução. A cópia local permanece no dispositivo para recuperação
-            // explícita; a base compartilhada é a autoridade de leitura quando já existe.
+            // a inicialização. Se a nuvem vier vazia enquanto há dados locais, trate como
+            // falha de validação e mantenha a cópia local em modo somente leitura.
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
+            cloudStateVersionRef.current = cloud?.state_version ?? null;
+            cloudStateRef.current = cloudState;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
               "*",
@@ -243,12 +344,14 @@ function DbsControlPage() {
               updated_at: cloud?.updated_at ?? null,
             }, "*");
           } else {
-            // Nunca promova cache de navegador para a base compartilhada automaticamente.
-            // Sem snapshot na nuvem, falha em modo seguro e preserva a cópia local apenas para recuperação.
+            // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
+            iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
             throw new Error(
-              localState
-                ? "A base compartilhada não retornou um snapshot. O cache local foi preservado e não será enviado automaticamente para evitar sobrescrever dados mais recentes."
-                : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
+              cloudIsIncomplete
+                ? "A nuvem retornou menos registros que a cópia local em uma ou mais áreas. Dados locais preservados em somente leitura; gravações bloqueadas para evitar perda."
+                : localState
+                  ? "A base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura."
+                  : "O DBS CONTROL não conseguiu estabelecer uma fonte de dados compartilhada.",
             );
           }
 
@@ -257,6 +360,7 @@ function DbsControlPage() {
           console.error("DBS Control cloud load:", err);
           const message = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
           setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_SYNC_STATUS",
             status: "error",
@@ -417,8 +521,6 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_SAVE") {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
-        pendingStateRef.current = msg.state;
-        if (requestId) pendingSaveRequestIdsRef.current.push(requestId);
         if (!cloudReadyRef.current) {
           if (requestId) {
             iframeRef.current?.contentWindow?.postMessage({
@@ -429,6 +531,8 @@ function DbsControlPage() {
           }
           return;
         }
+        pendingStateRef.current = msg.state;
+        if (requestId) pendingSaveRequestIdsRef.current.push(requestId);
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
           saveTimerRef.current = null;
@@ -437,8 +541,45 @@ function DbsControlPage() {
             if (!state) return;
             const requestIds = [...pendingSaveRequestIdsRef.current];
             try {
-              const saved = await saveDbsControlCloudState({ data: { state } });
+              let saved: Awaited<ReturnType<typeof saveDbsControlCloudState>>;
+              try {
+                saved = await saveDbsControlCloudState({ data: {
+                  state,
+                  expectedUpdatedAt: cloudUpdatedAtRef.current,
+                  expectedStateVersion: cloudStateVersionRef.current,
+                } });
+              } catch (saveError) {
+                const errorMessage = saveError instanceof Error ? saveError.message : String(saveError);
+                if (errorMessage.includes("SNAPSHOT_VERSION_CONFLICT")) {
+                  const latest = await getDbsControlCloudState();
+                  const latestState = latest?.state && typeof latest.state === "object"
+                    ? latest.state as Record<string, unknown> : null;
+                  const merged = latestState ? mergeOnlyChangedWorkOrders(cloudStateRef.current, state, latestState) : null;
+                  if (!latest || !latestState || !merged) {
+                    throw new Error("A base compartilhada mudou em outro dispositivo. Para evitar perda, não apliquei a gravação antiga nem substituí clientes/equipamentos/peças. Suas alterações permanecem pendentes; atualize a tela e revise a OS antes de tentar novamente.");
+                  }
+                  saved = await saveDbsControlCloudState({ data: {
+                    state: merged,
+                    expectedUpdatedAt: latest.updated_at ?? null,
+                    expectedStateVersion: latest.state_version ?? null,
+                  } });
+                  iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: saved.state }, "*");
+                } else if (errorMessage.includes("SNAPSHOT_GUARD_CONFIRMATION_REQUIRED") &&
+                  access.data?.administrative === true &&
+                  window.confirm("ATENÇÃO: este salvamento reduziria drasticamente clientes, equipamentos, técnicos ou peças. Confirma explicitamente esta alteração administrativa? Essa ação pode remover dados do painel.")) {
+                  saved = await saveDbsControlCloudState({ data: {
+                    state,
+                    expectedUpdatedAt: cloudUpdatedAtRef.current,
+                    expectedStateVersion: cloudStateVersionRef.current,
+                    allowDestructiveSnapshot: true,
+                  } });
+                } else {
+                  throw saveError;
+                }
+              }
               cloudUpdatedAtRef.current = saved.updated_at ?? cloudUpdatedAtRef.current;
+              cloudStateVersionRef.current = saved.state_version ?? cloudStateVersionRef.current;
+              cloudStateRef.current = saved.state as Record<string, unknown>;
               if (pendingStateRef.current === state) {
                 pendingStateRef.current = null;
                 pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
@@ -464,7 +605,11 @@ function DbsControlPage() {
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
               }, "*"));
-              if (retryAttemptRef.current < 3 && pendingStateRef.current) {
+              const requiresHumanReview =
+                message.includes("SNAPSHOT_VERSION_CONFLICT") ||
+                message.includes("SNAPSHOT_GUARD_CONFIRMATION_REQUIRED") ||
+                message.includes("A base compartilhada mudou em outro dispositivo");
+              if (!requiresHumanReview && retryAttemptRef.current < 3 && pendingStateRef.current) {
                 const delays = [5000, 15000, 45000];
                 const delay = delays[retryAttemptRef.current++];
                 if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -488,54 +633,104 @@ function DbsControlPage() {
 
     window.addEventListener("message", handler);
 
-    // Sincronização multi-dispositivo: uma única leitura por vez, atualização imediata
-    // quando o usuário retorna ao app e descarte de respostas antigas/fora de ordem.
+    // Supabase Realtime: eventos no snapshot, reconexão automática e fallback de 30 s.
     let refreshInFlight = false;
     let refreshGeneration = 0;
-    const refreshLatestCloudState = async () => {
-      if (!cloudReadyRef.current || saveTimerRef.current || refreshInFlight) return;
+    let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    const refreshLatestCloudState = async (force = false) => {
+      if (disposed || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
         const latest = await getDbsControlCloudState();
-        // Nunca deixa uma resposta antiga sobrescrever uma leitura mais recente ou uma edição local.
-        if (generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
-        if (pendingStateRef.current || saveTimerRef.current) {
-          iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1,
-          }, "*");
+        if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        if (dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latest.state as Record<string, unknown>)) {
+          cloudReadyRef.current = false;
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
+          const message = "A nuvem retornou menos registros que a cópia local. Salvamento bloqueado para proteger os dados; é necessária reconciliação administrativa.";
+          setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: 0, error: message }, "*");
           return;
         }
-        if (latest.updated_at !== cloudUpdatedAtRef.current) {
+        // A falha na leitura inicial não pode bloquear todas as tentativas seguintes.
+        // A primeira leitura válida também libera a fila de gravação do iframe.
+        cloudReadyRef.current = true;
+        if (pendingStateRef.current || saveTimerRef.current) {
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
+          return;
+        }
+        if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
-          iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_CONTROL_CLOUD_STATE", state: latest.state },
-            "*",
-          );
+          cloudStateVersionRef.current = latest.state_version ?? cloudStateVersionRef.current;
+          cloudStateRef.current = latest.state as Record<string, unknown>;
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
         }
         setCloudError(null);
       } catch (err) {
-        console.error("DBS Control automatic refresh:", err);
+        console.error("DBS Control Realtime recovery:", err);
         setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
       } finally {
         refreshInFlight = false;
       }
     };
-    const refreshTimer = setInterval(() => { void refreshLatestCloudState(); }, 3000);
+    const subscribeToSnapshot = () => {
+      if (disposed) return;
+      realtimeChannel = supabase.channel("dbs-control-snapshot-realtime")
+        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_snapshots" }, () => {
+          void refreshLatestCloudState();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_work_orders" }, () => {
+          void refreshLatestCloudState(true);
+        })
+        .subscribe((status) => {
+          if (disposed) return;
+          if (status === "SUBSCRIBED") {
+            void refreshLatestCloudState();
+            setCloudError(null);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            setCloudError("Realtime desconectado. Recuperação automática em andamento.");
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (disposed) return;
+              const previous = realtimeChannel;
+              realtimeChannel = null;
+              if (previous) void supabase.removeChannel(previous);
+              subscribeToSnapshot();
+            }, 3000);
+          }
+        });
+    };
+    subscribeToSnapshot();
+    // Não depender do evento SUBSCRIBED para a primeira reconciliação:
+    // após 3 s, faz leitura autoritativa direta se o handshake Realtime ainda
+    // não tiver estabilizado. A leitura não grava nem sobrescreve dados locais.
+    const realtimeInitialFallbackTimer = setTimeout(() => {
+      if (!disposed && cloudReadyRef.current) void refreshLatestCloudState(true);
+    }, 3000);
+    // Fallback periódico para eventos perdidos ou períodos sem conectividade.
+    const refreshTimer = setInterval(() => { void refreshLatestCloudState(true); }, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
-    const handleOnline = () => retryPendingSaveRef.current?.(true);
+    const handleOnline = () => {
+      retryPendingSaveRef.current?.(true);
+      void refreshLatestCloudState();
+    };
     window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleVisibilityChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
+      disposed = true;
       window.removeEventListener("message", handler);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleVisibilityChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);
+      clearTimeout(realtimeInitialFallbackTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
@@ -560,8 +755,8 @@ function DbsControlPage() {
   const employeeName = access.data.employee?.full_name ?? profile.data?.full_name ?? "";
   const employeeMode = !access.data.administrative;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261017-cloud-authoritative-mobile-cards-1`
-    : "/dbs-control.html?v=20261017-cloud-authoritative-mobile-cards-1";
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261018-treasury-os-lifecycle-2`
+    : "/dbs-control.html?v=20261018-treasury-os-lifecycle-2";
 
   return (
     <main className="min-h-screen bg-[#f4f8fc]">

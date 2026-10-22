@@ -73,6 +73,10 @@ assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(sna
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(route, /postMessage\(\s*\{ type: "DBS_CONTROL_CLOUD_STATE", state: cloudState \}/, "Quando existe snapshot compartilhado, a inicialização deve entregar a nuvem sem mesclar/gravar o snapshot local.");
+assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicialização deve detectar quando a nuvem tem menos registros que a cópia local.");
+assert.match(route, /const cloudIsIncomplete = localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)/, "Um snapshot parcial não pode substituir uma cópia local mais completa.");
+assert.match(route, /if \(dbsControlStateIsSmallerThan\(localRecoveryStateRef\.current, latest\.state as Record<string, unknown>\)\)/, "O Realtime também deve bloquear snapshots incompletos após a inicialização.");
+assert.match(route, /if \(!cloudReadyRef\.current\) \{[\s\S]*?return;\s*\}\s*pendingStateRef\.current = msg\.state/, "Uma gravação bloqueada não pode entrar na fila de salvamento.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
 assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
@@ -232,3 +236,26 @@ assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
 assert.match(protocolReconciliationMigration, /not \(v_latest_id = any\(v_seen_ids\)\)/, "SQL must retain OS omitted by delayed snapshots without creating protocol duplicates.");
+
+const dashboardUx = fs.readFileSync("public/dbs-control-ux.js", "utf8");
+assert.match(dashboardUx, /\["dash-client-count","Clientes Base",clients\.length\]/, "O dashboard deve contar clientes do cadastro, não OS abertas.");
+assert.match(dashboardUx, /\["dash-equip-count","Equipamentos Mapeados",equipment\.length\]/, "O dashboard deve contar equipamentos do parque, não OS em atendimento.");
+assert.match(dashboardUx, /\["dash-os-andamento","OS em Atendimento",active\]/, "O KPI de atendimento deve contar OS ativas.");
+assert.match(dashboardUx, /\["dash-os-concluidas","OS Concluídas",done\]/, "O KPI de concluídas deve contar OS concluídas.");
+
+const versionHistoryMigration = fs.readFileSync("supabase/migrations/20261018190000_dbs_control_snapshot_version_history.sql", "utf8");
+assert.match(versionHistoryMigration, /SNAPSHOT_VERSION_CONFLICT/, "Snapshots devem rejeitar gravações baseadas em uma versão antiga.");
+assert.match(versionHistoryMigration, /expected_updated_at/, "O RPC deve comparar a revisão que o cliente recebeu.");
+assert.match(versionHistoryMigration, /SNAPSHOT_GUARD_CONFIRMATION_REQUIRED/, "Cadastros críticos devem exigir confirmação para redução destrutiva.");
+assert.match(versionHistoryMigration, /create table if not exists public\.dbs_control_snapshot_history/, "O histórico de snapshots deve ser criado pela migration.");
+assert.match(versionHistoryMigration, /enable row level security/i, "O histórico deve ter RLS ativada.");
+assert.match(versionHistoryMigration, /revoke all on table public\.dbs_control_snapshot_history from public, anon, authenticated/i, "O histórico não deve ser acessível por anon/authenticated.");
+assert.match(versionHistoryMigration, /limit 30/i, "O histórico deve reter somente as 30 versões mais recentes por escopo.");
+assert.match(persistence, /expected_updated_at: data\.expectedUpdatedAt/, "O cliente deve enviar a revisão esperada para a gravação.");
+assert.match(route, /mergeOnlyChangedWorkOrders/, "Conflitos só podem reaplicar alterações de OS quando a mesclagem for segura.");
+assert.match(route, /allowDestructiveSnapshot: true/, "A redução destrutiva exige confirmação explícita administrativa.");
+
+assert.match(html, /Pendente de envio · não confirmado/, "Falha ao confirmar uma OS deve aparecer como pendente de envio, não como sucesso.");
+assert.match(html, /id="dbs-sync-retry"/, "A tela deve manter o botão manual de tentar novamente quando houver falha.");
+assert.match(route, /requiresHumanReview/, "Conflitos e reduções destrutivas não devem ser reenviados automaticamente sem revisão humana.");
+assert.match(html, /await saveStateAndConfirmCloud\(\)/, "A conclusão de OS só deve ser confirmada após resposta do servidor.");
