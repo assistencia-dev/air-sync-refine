@@ -16,7 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyProfile } from "@/lib/auth.functions";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import {
   listAllTickets,
   updateTicketStatus,
