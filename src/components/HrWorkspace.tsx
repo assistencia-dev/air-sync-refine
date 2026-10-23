@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   IdCard, Utensils, WalletCards, Clock3, ShieldCheck, Calculator, Activity,
@@ -21,6 +22,7 @@ type HrSection = "resumo" | "custos" | "financeiro" | "ponto" | "passagem" | "al
 const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
 export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
+  const navigate = useNavigate();
   const [section, setSection] = useState<HrSection>("resumo");
 
   const registry = useQuery({ queryKey: ["rh-workspace-registry"], queryFn: () => listRhEmployeeRegistry() });
@@ -83,9 +85,16 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
                 <span className="text-slate-400"> As funções existentes permanecem disponíveis dentro de cada área.</span>
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <MiniHeaderStat label="Funcionários" value={summary.employees} />
-              <MiniHeaderStat label="Acessos de ponto" value={summary.ponto} />
+            <div className="flex flex-wrap items-center gap-3">
+              {embedded && (
+                <button type="button" onClick={() => navigate({ to: "/admin" })} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300">
+                  <ChevronRight className="h-4 w-4 rotate-180" /> Voltar ao painel principal
+                </button>
+              )}
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <MiniHeaderStat label="Funcionários" value={summary.employees} />
+                <MiniHeaderStat label="Acessos de ponto" value={summary.ponto} />
+              </div>
             </div>
           </div>
         </div>
