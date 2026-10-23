@@ -58,6 +58,7 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
+const fieldControl = fs.readFileSync("src/lib/fieldcontrol.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
@@ -72,6 +73,12 @@ assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(can
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
+assert.match(fieldControl, /async function preserveUserScopedSnapshotsBeforeCompanyLink\(userId: string, companyId: string\)/, "Vincular o administrador a uma empresa deve preservar snapshots pessoais preexistentes.");
+assert.match(fieldControl, /if \(userDbs\.data && companyDbs\.data\)/, "O vínculo deve pausar quando os escopos pessoal e empresarial já têm snapshots DBS divergentes.");
+assert.match(fieldControl, /if \(userTreasury\.data && companyTreasury\.data\)/, "O vínculo deve pausar quando os dois escopos financeiros já têm snapshots.");
+assert.match(fieldControl, /from\("dbs_control_snapshots"\)\.insert\(/, "O snapshot DBS pessoal deve ser copiado de forma aditiva, sem apagar a origem.");
+assert.match(fieldControl, /from\("treasury_snapshots"\)\.insert\(/, "O snapshot financeiro pessoal deve ser copiado de forma aditiva, sem apagar a origem.");
+assert.match(fieldControl, /await preserveUserScopedSnapshotsBeforeCompanyLink\(String\(data\.id\), String\(companyId\)\)/, "A preservação deve acontecer antes de atualizar company_id do administrador.");
 assert.match(route, /postMessage\(\s*\{ type: "DBS_CONTROL_CLOUD_STATE", state: cloudState \}/, "Quando existe snapshot compartilhado, a inicialização deve entregar a nuvem sem mesclar/gravar o snapshot local.");
 assert.match(route, /if \(!cloudState && !employeeModeRef\.current\) \{[\s\S]*?tecnicos: \[\], clientes: \[\], equipamentos: \[\], pecas: \[\],[\s\S]*?osHistorico: \[\],[\s\S]*?type: "DBS_CONTROL_CLOUD_STATE", state: initialState, allowEmptyBaseBootstrap: true/, "Quando não há snapshot nem registros canônicos no escopo, a administração pode iniciar a base compartilhada vazia sem usar o cache antigo como fonte.");
 assert.match(html, /const allowEmptyBaseBootstrap = msg\.allowEmptyBaseBootstrap === true[\s\S]*?event\.source === window\.parent[\s\S]*?event\.origin === window\.location\.origin/, "O bootstrap vazio deve exigir a mensagem da janela pai e mesma origem.");
