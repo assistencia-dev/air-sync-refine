@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   CheckCircle2,
   CircleDot,
   Landmark,
@@ -222,7 +223,18 @@ function AdminPage() {
         ) : tab === "users" ? (
           <UsersPanel isSuperAdmin={isSuperAdmin} />
         ) : (
-          <HrWorkspace embedded />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Módulo RH</p>
+                <p className="text-xs text-slate-500">Gestão de funcionários, ponto e benefícios</p>
+              </div>
+              <button type="button" onClick={() => setTab("tickets")} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                <ArrowLeft className="h-4 w-4" /> Voltar ao menu principal
+              </button>
+            </div>
+            <HrWorkspace embedded />
+          </div>
         )}
       </main>
     </div>
