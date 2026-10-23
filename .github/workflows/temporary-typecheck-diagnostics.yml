@@ -1,0 +1,29 @@
+name: Temporary TypeScript diagnostics
+on:
+  push:
+    branches:
+      - diag/typecheck-8-errors
+permissions:
+  contents: read
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - name: Install exactly from bun.lock
+        run: bun install --frozen-lockfile
+      - name: TypeScript diagnostics
+        shell: bash
+        run: |
+          set +e
+          bunx tsc --noEmit --pretty false 2>&1 | tee /tmp/tsc.log
+          TSC_STATUS=${PIPESTATUS[0]}
+          echo "TSC_EXIT_CODE=$TSC_STATUS"
+          echo "TSC_ERROR_COUNT=$(grep -Ec 'error TS[0-9]+' /tmp/tsc.log)"
+          exit "$TSC_STATUS"
+      - name: Production build (still run if typecheck failed)
+        if: always()
+        run: bun run build
