@@ -254,12 +254,12 @@ const ticketFunctions = fs.readFileSync("src/lib/tickets.functions.ts", "utf8");
 const profileLookup = authFunctions.slice(authFunctions.indexOf("export const getMyProfile"));
 assert.match(
   profileLookup,
-  /if \(data\\.unit_id\)[\\s\\S]*?\.from\("units"\)[\\s\\S]*?\.select\("name, cnpj, address_json"\)[\\s\\S]*?\.eq\("id", data\\.unit_id\)/,
+  /if \(data\.unit_id\)[\s\S]*?\.from\("units"\)[\s\S]*?\.select\("name, cnpj, address_json"\)[\s\S]*?\.eq\("id", data\.unit_id\)/,
   "O perfil deve carregar a unidade pela consulta canônica usando unit_id.",
 );
 assert.match(
   profileLookup,
-  /if \(data\\.company_id\)[\\s\\S]*?\.from\("companies"\)[\\s\\S]*?\.select\("legal_name, trade_name"\)[\\s\\S]*?\.eq\("id", data\\.company_id\)/,
+  /if \(data\.company_id\)[\s\S]*?\.from\("companies"\)[\s\S]*?\.select\("legal_name, trade_name"\)[\s\S]*?\.eq\("id", data\.company_id\)/,
   "O perfil deve carregar a empresa pela consulta canônica usando company_id.",
 );
 assert.ok(adminFunctions.includes("unit:units!users_unit_id_fkey("), "A lista de acessos deve usar a relação real de unidades.");
