@@ -125,26 +125,36 @@ async function getCollaboratorEmployee(userId: string) {
   };
 }
 
+function isDbsOrderAssignedToEmployee(order: any, employeeId: string, technicianIds: Set<string>) {
+  const assignedEmployeeIds = [
+    order?.employeeId,
+    order?.assignedEmployeeId,
+    order?.assigned_employee_id,
+    order?.concluidoPorEmployeeId,
+  ].map((value) => String(value ?? "").trim()).filter(Boolean);
+
+  return assignedEmployeeIds.includes(employeeId) ||
+    technicianIds.has(String(order?.tecnicoId ?? "").trim());
+}
+
 function filterCollaboratorState(state: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
   const normalized = normalizeState(state);
   const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
+  const normalizedEmployeeId = String(employeeId ?? "").trim();
   const technicians = (normalized.tecnicos as any[]).filter((tech) =>
-    String(tech?.employeeId ?? "") === employeeId ||
+    String(tech?.employeeId ?? tech?.employee_id ?? "").trim() === normalizedEmployeeId ||
     (normalizedEmail && String(tech?.email ?? "").trim().toLowerCase() === normalizedEmail)
   );
-  const technicianIds = new Set(technicians.map((tech) => String(tech.id)));
+  const technicianIds = new Set(technicians.map((tech) => String(tech?.id ?? "").trim()).filter(Boolean));
 
-  // employeeId é a referência canônica. tecnicoId continua sendo aceito para
-  // preservar OS antigas que ainda não receberam o vínculo central do RH.
+  // RH employee ID e os aliases de atribuição cobrem OS novas e legadas.
+  // tecnicoId continua sendo aceito quando corresponde a um técnico vinculado ao colaborador.
   const orders = (normalized.ordens as any[])
-    .filter((order) =>
-      String(order?.employeeId ?? "") === employeeId ||
-      technicianIds.has(String(order?.tecnicoId))
-    )
+    .filter((order) => isDbsOrderAssignedToEmployee(order, normalizedEmployeeId, technicianIds))
     .map((order) => (
-      String(order?.employeeId ?? "") === employeeId
+      String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? "").trim() === normalizedEmployeeId
         ? order
-        : { ...order, employeeId }
+        : { ...order, employeeId: normalizedEmployeeId }
     ));
   const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
   const equipmentIds = new Set<string>();
@@ -228,9 +238,7 @@ function mergeCollaboratorOrderState(currentState: Record<string, unknown>, inco
     .filter((order) => protocolKey(order))
     .map((order) => [protocolKey(order), order]));
 
-  const isMine = (order: any) =>
-    String(order?.employeeId ?? "") === employeeId ||
-    technicianIds.has(String(order?.tecnicoId));
+  const isMine = (order: any) => isDbsOrderAssignedToEmployee(order, employeeId, technicianIds);
 
   const mergedOrders = currentOrders.map((currentOrder) => {
     if (!isMine(currentOrder)) return currentOrder;
