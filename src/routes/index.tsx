@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ChevronDown,
@@ -23,6 +23,11 @@ import {
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/")({
+  // This repository is the operational app. Keep the corporate landing page
+  // available at /site, but send the default app entry to the login screen.
+  beforeLoad: () => {
+    throw redirect({ to: "/login" });
+  },
   component: Index,
 });
 
@@ -31,7 +36,7 @@ const wa = (msg: string) => whatsappBase + encodeURIComponent(msg);
 const defaultMsg =
   "Olá. Gostaria de solicitar uma avaliação técnica para contrato de manutenção/PMOC na minha empresa.";
 
-function Index() {
+export function Index() {
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isIosDevice, setIsIosDevice] = useState(false);
@@ -146,7 +151,7 @@ function Index() {
               <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
               <a href="#modalidades" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Modalidades</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">FAQ</a>
-              <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Portal do Cliente</a>
+              <a href="/login" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Acessar Sistema</a>
 <button type="button" onClick={() => { setMenuOpen(false); void handleInstallApp(); }} className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-bold text-sm" style={{ color: "#1E3A8A", background: "#DBEAFE", border: "1px solid #93C5FD" }}><Download className="w-4 h-4" /> Baixe o App</button>
               <a
                 href={wa(defaultMsg)}
