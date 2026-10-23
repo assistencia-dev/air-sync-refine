@@ -3254,7 +3254,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // A base enviada ao colaborador é filtrada pelo servidor. Não comparar a quantidade
             // de registros com o cache completo deste navegador, pois isso bloqueia a hidratação legítima.
             const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            if (!collaboratorSession && localRecoveryCount > 0 && incomingCloudCount < localRecoveryCount) {
+            // Só aceita o início explicitamente autorizado pela rota autenticada e mesma origem,
+            // quando o servidor confirmou que não há snapshot nem registros canônicos neste escopo.
+            const allowEmptyBaseBootstrap = msg.allowEmptyBaseBootstrap === true
+                && event.source === window.parent
+                && event.origin === window.location.origin;
+            if (!allowEmptyBaseBootstrap && !collaboratorSession && localRecoveryCount > 0 && incomingCloudCount < localRecoveryCount) {
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
                 DBS_CONTROL_CLOUD_READY = false;
                 const indicator = document.getElementById('dbs-sync-indicator');
