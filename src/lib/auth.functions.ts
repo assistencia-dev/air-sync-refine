@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 
 const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
 const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
@@ -103,7 +104,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
       throw new Error("Acesso suspenso. Entre em contato com a DBS Air.");
     }
 
-    let unit: { name: string; cnpj: string | null; address_json: unknown } | null = null;
+    let unit: { name: string; cnpj: string | null; address_json: Json | null } | null = null;
     let company: { legal_name: string; trade_name: string | null } | null = null;
     if (data.unit_id) {
       const result = await supabaseAdmin
