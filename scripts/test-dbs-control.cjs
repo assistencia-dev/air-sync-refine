@@ -251,8 +251,17 @@ assert.match(dashboardUx, /\["dash-os-concluidas","OS Concluídas",done\]/, "O K
 const authFunctions = fs.readFileSync("src/lib/auth.functions.ts", "utf8");
 const adminFunctions = fs.readFileSync("src/lib/admin.functions.ts", "utf8");
 const ticketFunctions = fs.readFileSync("src/lib/tickets.functions.ts", "utf8");
-assert.ok(authFunctions.includes("unit:units!users_unit_id_fkey("), "O perfil deve carregar a unidade pela relação real users_unit_id_fkey.");
-assert.ok(authFunctions.includes("company:companies!users_company_id_fkey("), "O perfil deve carregar a empresa pela relação real users_company_id_fkey.");
+const profileLookup = authFunctions.slice(authFunctions.indexOf("export const getMyProfile"));
+assert.match(
+  profileLookup,
+  /if \(data\.unit_id\)[\s\S]*?\.from\("units"\)[\s\S]*?\.select\("name, cnpj, address_json"\)[\s\S]*?\.eq\("id", data\.unit_id\)/,
+  "O perfil deve carregar a unidade pela consulta canônica usando unit_id.",
+);
+assert.match(
+  profileLookup,
+  /if \(data\.company_id\)[\s\S]*?\.from\("companies"\)[\s\S]*?\.select\("legal_name, trade_name"\)[\s\S]*?\.eq\("id", data\.company_id\)/,
+  "O perfil deve carregar a empresa pela consulta canônica usando company_id.",
+);
 assert.ok(adminFunctions.includes("unit:units!users_unit_id_fkey("), "A lista de acessos deve usar a relação real de unidades.");
 assert.ok(adminFunctions.includes("company:companies!users_company_id_fkey("), "A lista de acessos deve usar a relação real de empresas.");
 assert.ok(ticketFunctions.includes("users:users!tickets_created_by_user_id_fkey("), "Os chamados devem carregar o autor pela FK real.");
