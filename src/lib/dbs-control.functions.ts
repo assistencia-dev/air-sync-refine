@@ -893,7 +893,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     const assignedId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
     const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
     const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
-    const fields: TablesInsert<"dbs_control_work_orders"> = {
+    const fields: Record<string, unknown> = {
       protocol, protocolo: protocol, client_id: clientId,
       site_id: isUuid(siteId) ? siteId : null,
       assigned_employee_id: isUuid(assignedId) ? assignedId : null,
@@ -924,7 +924,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       // IDs legados que não são UUID usam o UUID gerado pelo banco; o protocolo
       // permanece como identidade estável para futuras reconciliações.
       const insertPayload = isUuid(orderId) ? { id: orderId, ...fields } : fields;
-      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload);
+      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload as unknown as TablesInsert<"dbs_control_work_orders">);
       if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
       continue;
     }
@@ -966,7 +966,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       delete fields.signature_name;
     }
     const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
-      .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
+      .update({ ...fields, version: currentVersion } as unknown as TablesUpdate<"dbs_control_work_orders">).eq("id", existing.id).eq("version", currentVersion)
       .select("id,version").maybeSingle();
     if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
     if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
