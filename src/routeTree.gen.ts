@@ -104,6 +104,8 @@ export interface FileRoutesByTo {
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
+  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
@@ -145,6 +147,8 @@ export interface FileRouteTypes {
     | '/passage'
     | '/portal'
     | '/treasury'
+    | '/financeiro-acesso'
+    | '/financeiro-acompanhamento'
     | '/admin/rh-dashboard'
   id:
     | '__root__'
@@ -157,6 +161,8 @@ export interface FileRouteTypes {
     | '/_authenticated/passage'
     | '/_authenticated/portal'
     | '/_authenticated/treasury'
+    | '/_authenticated/financeiro-acesso'
+    | '/_authenticated/financeiro-acompanhamento'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
 }

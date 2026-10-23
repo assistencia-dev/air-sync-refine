@@ -125,7 +125,7 @@ export const cancelTicket = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const me = await requireStaff(context);
-    const { error } = await context.supabase
+    const { data: updated, error } = await context.supabase
       .from("tickets")
       .update({
         status: "cancelado",

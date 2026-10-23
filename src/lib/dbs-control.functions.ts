@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type DbsControlUser = {
   id: string;
@@ -68,6 +69,8 @@ function normalizeState(state: Record<string, unknown>) {
     servicos: Array.isArray(state.servicos) ? state.servicos : [],
     compras: Array.isArray(state.compras) ? state.compras : [],
     ordens: Array.isArray(state.ordens) ? state.ordens : [],
+    sites: Array.isArray(state.sites) ? state.sites : [],
+    locais: Array.isArray(state.locais) ? state.locais : [],
   };
 }
 
@@ -396,7 +399,14 @@ async function hydrateDbsControlStateFromCanonicalDb(
   if (firstError) throw new Error(firstError.message);
 
   const current = normalizeState(state);
-  const byId = (items: unknown[]) => new Map(items.map((item: any) => [String(item?.id ?? ""), item]).filter(([id]) => id));
+  const byId = (items: unknown[]): Map<string, any> => {
+    const entries: Array<[string, any]> = [];
+    for (const item of items as any[]) {
+      const id = String(item?.id ?? "");
+      if (id) entries.push([id, item]);
+    }
+    return new Map<string, any>(entries);
+  };
   const mergeArray = (
     currentItems: unknown[],
     incomingItems: unknown[],
@@ -827,7 +837,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
     if (!source || !legalName) {
       throw new Error("Não foi possível despachar a OS " + protocol + ": o cliente vinculado não existe na base relacional e não há cadastro completo no snapshot. Nenhum dado foi descartado.");
     }
-    const clientPayload: Record<string, unknown> = {
+    const clientPayload: TablesInsert<"dbs_control_clients"> = {
       legal_name: legalName,
       trade_name: tradeName || legalName,
       cnpj: cnpj || null,
@@ -914,7 +924,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       // IDs legados que não são UUID usam o UUID gerado pelo banco; o protocolo
       // permanece como identidade estável para futuras reconciliações.
       const insertPayload = isUuid(orderId) ? { id: orderId, ...fields } : fields;
-      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload);
+      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload as unknown as TablesInsert<"dbs_control_work_orders">);
       if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
       continue;
     }
@@ -956,7 +966,7 @@ async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapsho
       delete fields.signature_name;
     }
     const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
-      .update({ ...fields, version: currentVersion }).eq("id", existing.id).eq("version", currentVersion)
+      .update({ ...fields, version: currentVersion } as unknown as TablesUpdate<"dbs_control_work_orders">).eq("id", existing.id).eq("version", currentVersion)
       .select("id,version").maybeSingle();
     if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
     if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
@@ -999,8 +1009,16 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         const orderId = (order: any) => String(order?.id ?? "").trim();
         const orderProtocol = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
         const isCompleted = (order: any) => normalizeDbsStatus(order?.status) === "concluida";
-        const latestById = new Map(latestOrders.map((order) => [orderId(order), order]).filter(([id]) => Boolean(id)));
-        const latestByProtocol = new Map(latestOrders.map((order) => [orderProtocol(order), order]).filter(([protocol]) => Boolean(protocol)));
+        const latestByIdEntries: Array<[string, any]> = [];
+        const latestByProtocolEntries: Array<[string, any]> = [];
+        for (const order of latestOrders) {
+          const id = orderId(order);
+          if (id) latestByIdEntries.push([id, order]);
+          const protocol = orderProtocol(order);
+          if (protocol) latestByProtocolEntries.push([protocol, order]);
+        }
+        const latestById = new Map<string, any>(latestByIdEntries);
+        const latestByProtocol = new Map<string, any>(latestByProtocolEntries);
         const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
         const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
         const changedFields = ["status", "employeeId", "assignedEmployeeId", "tecnicoId", "clienteId", "client_id", "siteId", "localId", "diagnostico", "technical_opinion", "trabalhoExecutado", "servicoExecutado", "observacao", "observation", "prioridade", "tipo", "scheduledAt", "scheduled_at", "assinaturaStoragePath", "assinatura", "signature_name", "concluidoEm", "completedAt"];
@@ -1148,7 +1166,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const incomingObservation = String(incomingOrder?.observacao ?? currentOrder?.observacao ?? "").trim();
           const incomingSignature = String(incomingOrder?.assinatura ?? "").trim();
           const incomingSignatureName = String(incomingOrder?.signature_name ?? "").trim();
-          const update: Record<string, unknown> = {
+          const update: TablesUpdate<"dbs_control_work_orders"> = {
             updated_at: new Date().toISOString(),
           };
 
@@ -1235,7 +1253,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
       scope_key: scope.scopeKey,
       company_id: scope.companyId,
       owner_user_id: ownerUserId,
-      state: stateToSave,
+      state: stateToSave as Json,
       state_version: 2,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
@@ -1327,7 +1345,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
         ...payload,
         owner_user_id: latestSnapshot.owner_user_id ?? payload.owner_user_id,
         company_id: scope.companyId,
-        state: mergeRetryState(latestSnapshot.state as Record<string, unknown>, stateToSave),
+        state: mergeRetryState(latestSnapshot.state as Record<string, unknown>, stateToSave) as Json,
         base_updated_at: latestSnapshot.updated_at,
         updated_at: new Date().toISOString(),
       };
@@ -1339,6 +1357,7 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
     const saved = saveResult.data;
     const error = saveResult.error;
     if (error) throw new Error(error.message);
+    if (!saved) throw new Error("A gravação da base compartilhada não retornou confirmação.");
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");

@@ -347,7 +347,7 @@ export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(target.auth_id);
     if (authErr) throw new Error("Não foi possível remover o login: " + authErr.message);
     // Keep the profile row as a tombstone so OS, tickets, and audit foreign keys remain intact.
-    const { error: profileErr } = await supabaseAdmin.from("users").update({ status: "bloqueado", auth_id: null }).eq("id", target.id);
+    const { error: profileErr } = await supabaseAdmin.from("users").update({ status: "bloqueado" }).eq("id", target.id);
     if (profileErr) throw new Error("Login removido, mas o perfil histórico precisa de revisão administrativa: " + profileErr.message);
     await supabaseAdmin.from("audit_log").insert({ actor_user_id: me.id, target_user_id: target.id, action: "permanently_removed_user_access", metadata_json: { previous_role: target.role_key, at: new Date().toISOString() } });
     return { ok: true };
