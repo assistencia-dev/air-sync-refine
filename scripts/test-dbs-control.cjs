@@ -2,12 +2,18 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
 
+const indexRoute = fs.readFileSync("src/routes/index.tsx", "utf8");
+const siteRoute = fs.readFileSync("src/routes/site.tsx", "utf8");
 const html = fs.readFileSync("public/dbs-control.html", "utf8");
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
 const ux = fs.readFileSync("public/dbs-control-ux.js", "utf8");
 const pdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
 const observations = fs.readFileSync("public/dbs-control-observations.js", "utf8");
 const theme = fs.readFileSync("public/dbs-control-theme.css", "utf8");
+
+assert.match(indexRoute, /beforeLoad:\s*\(\)\s*=>\s*\{\s*throw redirect\(\{ to: ["']\/login["'] \}\);/, "A entrada padrão deve levar o usuário à tela de login, não deixar o app operacional escondido atrás da landing page.");
+assert.match(siteRoute, /createFileRoute\(["']\/site["']\)/, "A landing page corporativa deve continuar disponível em /site.");
+assert.match(siteRoute, /import \{ Index \} from ["']\.\/index["']/, "A rota /site deve reutilizar a landing page original, sem remover seu conteúdo.");
 
 let parsedInlineScripts = 0;
 const scriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
