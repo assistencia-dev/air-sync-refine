@@ -6,6 +6,82 @@ const BASE = "https://carchost.fieldcontrol.com.br";
 
 type AppUser = { id: string; company_id: string | null; role_key: string; status: string };
 
+/**
+ * Quando um perfil administrativo sem empresa é vinculado à empresa DBS AIR,
+ * os módulos deixam de usar scope_key=user:<id> e passam a usar company:<id>.
+ * Copiamos os retratos existentes para o novo escopo sem apagar o original.
+ * Se os dois escopos já tiverem retratos diferentes, paramos a vinculação para
+ * não esconder ou sobrescrever silenciosamente dados de nenhuma das bases.
+ */
+async function preserveUserScopedSnapshotsBeforeCompanyLink(userId: string, companyId: string) {
+  const userScope = `user:${userId}`;
+  const companyScope = `company:${companyId}`;
+
+  const [userDbs, companyDbs, userTreasury, companyTreasury] = await Promise.all([
+    supabaseAdmin.from("dbs_control_snapshots")
+      .select("state, state_version, updated_by, updated_at")
+      .eq("scope_key", userScope).maybeSingle(),
+    supabaseAdmin.from("dbs_control_snapshots")
+      .select("scope_key")
+      .eq("scope_key", companyScope).maybeSingle(),
+    supabaseAdmin.from("treasury_snapshots")
+      .select("state, state_version, updated_by, updated_at")
+      .eq("scope_key", userScope).maybeSingle(),
+    supabaseAdmin.from("treasury_snapshots")
+      .select("scope_key")
+      .eq("scope_key", companyScope).maybeSingle(),
+  ]);
+
+  for (const result of [userDbs, companyDbs, userTreasury, companyTreasury]) {
+    if (result.error) throw new Error("Não foi possível conferir os dados antes de vincular a empresa: " + result.error.message);
+  }
+
+  if (userDbs.data && companyDbs.data) {
+    throw new Error("Existem retratos DBS CONTROL nos escopos pessoal e empresarial. A vinculação foi pausada para não ocultar dados; é necessária uma reconciliação administrativa.");
+  }
+  if (userTreasury.data && companyTreasury.data) {
+    throw new Error("Existem retratos financeiros nos escopos pessoal e empresarial. A vinculação foi pausada para não ocultar lançamentos; é necessária uma reconciliação administrativa.");
+  }
+
+  if (userDbs.data && !companyDbs.data) {
+    const { error } = await supabaseAdmin.from("dbs_control_snapshots").insert({
+      scope_key: companyScope,
+      company_id: companyId,
+      owner_user_id: userId,
+      state: userDbs.data.state,
+      state_version: userDbs.data.state_version,
+      updated_by: userDbs.data.updated_by ?? userId,
+      updated_at: userDbs.data.updated_at,
+    });
+    if (error) {
+      const { data: racedTarget, error: verifyError } = await supabaseAdmin
+        .from("dbs_control_snapshots").select("scope_key").eq("scope_key", companyScope).maybeSingle();
+      if (verifyError || !racedTarget || error.code !== "23505") {
+        throw new Error("Não foi possível preservar o retrato DBS CONTROL no novo escopo: " + error.message);
+      }
+    }
+  }
+
+  if (userTreasury.data && !companyTreasury.data) {
+    const { error } = await supabaseAdmin.from("treasury_snapshots").insert({
+      scope_key: companyScope,
+      company_id: companyId,
+      owner_user_id: userId,
+      state: userTreasury.data.state,
+      state_version: userTreasury.data.state_version,
+      updated_by: userTreasury.data.updated_by ?? userId,
+      updated_at: userTreasury.data.updated_at,
+    });
+    if (error) {
+      const { data: racedTarget, error: verifyError } = await supabaseAdmin
+        .from("treasury_snapshots").select("scope_key").eq("scope_key", companyScope).maybeSingle();
+      if (verifyError || !racedTarget || error.code !== "23505") {
+        throw new Error("Não foi possível preservar o retrato financeiro no novo escopo: " + error.message);
+      }
+    }
+  }
+}
+
 async function requireDbsControlAdmin(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
@@ -59,6 +135,10 @@ async function requireDbsControlAdmin(context: { userId: string }) {
   }
 
   if (!data.company_id) {
+    // Preserve os snapshots pessoais antes que os módulos passem a ler o escopo da empresa.
+    // A função não apaga nem sobrescreve o escopo de origem.
+    await preserveUserScopedSnapshotsBeforeCompanyLink(String(data.id), String(companyId));
+
     const { error: linkError } = await supabaseAdmin
       .from("users")
       .update({ company_id: companyId })
