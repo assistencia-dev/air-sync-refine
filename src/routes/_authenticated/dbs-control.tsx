@@ -28,11 +28,6 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
 }
 
-function dbsControlStateHasAnyArrayData(state: Record<string, unknown> | null | undefined) {
-  if (!state) return false;
-  return Object.values(state).some((value) => Array.isArray(value) && value.length > 0);
-}
-
 const DBS_CONTROL_PROTECTED_ARRAYS = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
 
 function dbsControlStateIsSmallerThan(localState: Record<string, unknown> | null | undefined, cloudState: Record<string, unknown> | null | undefined) {
@@ -266,19 +261,20 @@ function DbsControlPage() {
           const localHasData = dbsControlStateHasData(localState);
           const cloudHasData = dbsControlStateHasData(cloudState);
           localRecoveryStateRef.current = localState;
-          // Se a base relacional e o snapshot estão realmente vazios, a administração
-          // pode iniciar uma base nova. Isso não autoriza importar um cache local com
-          // registros sem antes confirmar que a nuvem contém a mesma base.
-          if (!cloudState && !dbsControlStateHasAnyArrayData(localState) && !employeeModeRef.current) {
-            const initialState = localState ?? {
+          // O servidor retorna null somente quando não existe snapshot nem registro canônico
+          // no escopo atual. Nesse caso, iniciar a base compartilhada vazia é mais seguro do que
+          // bloquear todos os comandos por causa de um cache antigo deste navegador.
+          // O iframe faz backup da cópia local antes da hidratação; nenhum cache é apagado.
+          if (!cloudState && !employeeModeRef.current) {
+            const initialState: Record<string, unknown> = {
               tecnicos: [], clientes: [], equipamentos: [], pecas: [],
-              servicos: [], compras: [], ordens: [],
+              servicos: [], compras: [], ordens: [], osHistorico: [],
             };
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = null;
             localRecoveryStateRef.current = initialState;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: initialState },
+              { type: "DBS_CONTROL_CLOUD_STATE", state: initialState, allowEmptyBaseBootstrap: true },
               "*",
             );
             iframeRef.current?.contentWindow?.postMessage({
