@@ -15,5 +15,6 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - run: bun run scripts/test-rh-ponto.ts
       - run: bun run build
       - run: bunx tsc --noEmit --pretty false
