@@ -3837,39 +3837,36 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
 
-        function mergeCollaboratorCloudState(nextState) {
-            const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            if (!collaboratorSession || !nextState || typeof nextState !== 'object') return nextState;
-            const localOrders = Array.isArray(ERP_STATE?.ordens) ? ERP_STATE.ordens : [];
-            const incomingOrders = Array.isArray(nextState.ordens) ? nextState.ordens : [];
-            const keyOf = order => {
-                const id = String(order?.id || '').trim();
-                const protocol = String(order?.protocolo || order?.protocol || '').trim();
-                return id ? 'id:' + id : (protocol ? 'protocol:' + protocol : '');
-            };
-            const localByKey = new Map(localOrders.map(order => [keyOf(order), order]).filter(([key]) => key));
-            const isCompleted = order => typeof isOSConcluida === 'function'
-                ? isOSConcluida(order)
-                : /conclu[ií]d/.test(String(order?.status || '').toLocaleLowerCase('pt-BR'));
-            const orders = incomingOrders.map(incoming => {
-                const local = localByKey.get(keyOf(incoming));
-                const localVersion = Number(local?.version || 0);
-                const incomingVersion = Number(incoming?.version || 0);
-                // Um evento de leitura atrasado nunca rebaixa uma conclusão já
-                // confirmada nesta sessão. Conflitos rejeitados restauram o
-                // estado anterior antes desta função ser chamada.
-                if (local && isCompleted(local) && !isCompleted(incoming)
-                    && localVersion >= incomingVersion) {
-                    return { ...incoming, ...local };
-                }
-                return incoming;
-            });
-            return { ...nextState, ordens: orders };
-        }
-
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
+            const mergeCollaboratorCloudState = (nextState) => {
+                const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
+                if (!collaboratorSession || !nextState || typeof nextState !== 'object') return nextState;
+                const localOrders = Array.isArray(ERP_STATE?.ordens) ? ERP_STATE.ordens : [];
+                const incomingOrders = Array.isArray(nextState.ordens) ? nextState.ordens : [];
+                const keyOf = order => {
+                    const id = String(order?.id || '').trim();
+                    const protocol = String(order?.protocolo || order?.protocol || '').trim();
+                    return id ? 'id:' + id : (protocol ? 'protocol:' + protocol : '');
+                };
+                const localByKey = new Map(localOrders.map(order => [keyOf(order), order]).filter(([key]) => key));
+                const isCompleted = order => typeof isOSConcluida === 'function'
+                    ? isOSConcluida(order)
+                    : /conclu[ií]d/.test(String(order?.status || '').toLocaleLowerCase('pt-BR'));
+                const orders = incomingOrders.map(incoming => {
+                    const local = localByKey.get(keyOf(incoming));
+                    const localVersion = Number(local?.version || 0);
+                    const incomingVersion = Number(incoming?.version || 0);
+                    if (local && isCompleted(local) && !isCompleted(incoming)
+                        && localVersion >= incomingVersion) {
+                        return { ...incoming, ...local };
+                    }
+                    return incoming;
+                });
+                return { ...nextState, ordens: orders };
+            };
+
             if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
                 if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
                 else if (msg.status === 'synced') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
