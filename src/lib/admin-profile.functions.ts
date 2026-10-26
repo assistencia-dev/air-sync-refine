@@ -3,14 +3,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
  * Reads the authenticated application's own user profile for admin navigation.
- * The role lookup uses the server-only client so restrictive users-table RLS
- * cannot cause a false "view-only" state in the admin menu.
+ * Read through the verified user's client and self-select RLS policy. Loading
+ * a personal profile must not require a privileged deployment secret.
  */
 export const getMyProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
+    const { supabase } = context;
+    const { data, error } = await supabase
       .from("users")
       .select("id, username, full_name, email, role_key, unit_id, company_id, is_unit_manager, status")
       .eq("auth_id", context.userId)
@@ -27,7 +27,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
     let unit = null;
     let company = null;
     if (data.unit_id) {
-      const result = await supabaseAdmin
+      const result = await supabase
         .from("units")
         .select("name, cnpj, address_json")
         .eq("id", data.unit_id)
@@ -35,7 +35,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
       if (!result.error) unit = result.data;
     }
     if (data.company_id) {
-      const result = await supabaseAdmin
+      const result = await supabase
         .from("companies")
         .select("legal_name, trade_name")
         .eq("id", data.company_id)

@@ -16,6 +16,7 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: node scripts/test-module-recovery.cjs
+      - run: node scripts/test-auth-boundary.cjs
       - run: node scripts/test-runtime-loader.cjs
       - run: node scripts/test-preview-imports.mjs
       - run: bun run build
