@@ -842,23 +842,30 @@
   document.addEventListener('click',function(event){
     const item=event.target && event.target.closest ? event.target.closest('.nav-item') : null;
     if(!item)return;
-    const id=targetId(item);
+    const explicitEmployeeId = item.matches('[data-employee-dashboard-visible]') ? 'tab-dashboard'
+      : item.matches('[data-employee-issue-visible]') ? 'tab-nova-os' : '';
+    const id=targetId(item) || explicitEmployeeId;
     if(!id)return;
-    // A recuperação de navegação nunca pode retirar o colaborador da área Minhas OS.
+    const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+    // A recuperação de navegação nunca pode retirar o colaborador da área permitida.
     const employeeNavAllowed = id === 'tab-dashboard'
       || id === 'tab-pwa'
       || (document.body.classList.contains('dbs-control-can-issue-os') && id === 'tab-nova-os');
-    if (document.body.classList.contains('dbs-control-employee-mode') && !employeeNavAllowed) {
+    if (employeeMode && !employeeNavAllowed) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
+    // No modo colaborador, a camada direta é determinística e não depende de
+    // handlers legados ou de estado do cabeçalho.
+    if (employeeMode) {
+      activateDirect(id,item);
+      return;
+    }
     let ok=false;
     try { if(typeof window.switchTab==='function')ok=window.switchTab(id,item)!==false; } catch(error){console.error('DBS CONTROL: falha no menu legado',error);}
-    // Um handler legado pode retornar true sem ter aplicado a troca. Confirme o estado
-    // antes de encerrar o evento e acione a camada direta quando necessário.
     const activeId = document.querySelector('.tab-view.active')?.id || '';
     if (!ok || activeId !== id) ok = activateDirect(id,item);
     if (!ok) item.setAttribute('aria-disabled','true');
