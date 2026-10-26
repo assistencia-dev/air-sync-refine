@@ -1427,8 +1427,12 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       if (isNewCollaboratorOrder && !collaboratorScope?.canIssueWorkOrders) {
         throw new Error("DBS_OS_ISSUE_FORBIDDEN: este colaborador não está autorizado a emitir OS.");
       }
-      if (isNewCollaboratorOrder && !(collaboratorScope?.clientIds ?? []).includes(String((fullPatch as any).client_id ?? ""))) {
-        throw new Error("DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE: cliente não está vinculado à base do colaborador.");
+      if (isNewCollaboratorOrder) {
+        const scopedClientIds = new Set((collaboratorScope?.clientIds ?? []).map((id: string) => String(id).trim().toLocaleLowerCase()));
+        const requestedClientId = String((fullPatch as any).client_id ?? "").trim().toLocaleLowerCase();
+        if (!requestedClientId || !scopedClientIds.has(requestedClientId)) {
+          throw new Error("DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE: cliente não está vinculado à base do colaborador.");
+        }
       }
       if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${orderLabel} não possui cliente relacional válido.`);
       const idempotencyKey = `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
