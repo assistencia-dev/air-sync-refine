@@ -559,7 +559,9 @@ function DbsControlPage() {
               }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: !hasConflict,
-                updated_at: ackUpdatedAt, conflicts: result.conflicts ?? [], error: resultMessage ?? undefined,
+                updated_at: ackUpdatedAt, conflicts: result.conflicts ?? [],
+                appliedOrders: result.appliedOrders ?? [],
+                error: resultMessage ?? undefined,
               }, "*"));
 
               // Reconcilia o estado retornado pelo banco depois do ACK. Se essa
