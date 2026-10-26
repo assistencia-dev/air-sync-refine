@@ -2258,6 +2258,67 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
       }
     </style>
+    <!-- dbs-field-navigation-20261026 -->
+    <style id="dbs-field-navigation-20261026">
+      body.dbs-control-employee-mode .employee-location-card {
+        min-width: 0;
+      }
+      body.dbs-control-employee-mode .employee-map-link {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 6px;
+        row-gap: 2px;
+        margin-top: 4px;
+        color: #075985;
+        text-decoration: none;
+        border-radius: 8px;
+        outline-offset: 3px;
+      }
+      body.dbs-control-employee-mode .employee-map-link:hover,
+      body.dbs-control-employee-mode .employee-map-link:focus-visible {
+        color: #0369a1;
+        text-decoration: underline;
+      }
+      body.dbs-control-employee-mode .employee-map-pin {
+        grid-row: span 2;
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border-radius: 50%;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: 16px;
+        font-weight: 900;
+      }
+      body.dbs-control-employee-mode .employee-map-link b {
+        min-width: 0;
+        margin-top: 0;
+        overflow-wrap: anywhere;
+        color: inherit;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      body.dbs-control-employee-mode .employee-map-action {
+        color: #0284c7;
+        font-size: 10px;
+        font-weight: 900;
+        line-height: 1.2;
+      }
+      @media (max-width: 520px) {
+        body.dbs-control-employee-mode .employee-map-link {
+          min-height: 44px;
+          padding: 4px 0;
+        }
+        body.dbs-control-employee-mode .employee-map-link b {
+          font-size: 13px;
+        }
+        body.dbs-control-employee-mode .employee-map-action {
+          font-size: 11px;
+        }
+      }
+    </style>
 </head>
 <body>
 
