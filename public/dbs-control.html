@@ -5429,6 +5429,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // técnicos legados. Alguns registros guardam employeeId; outros guardam
             // o ID numérico do técnico em tecnicoId; outros já guardam o UUID do RH.
             const norm = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
+            const isEmployeeHiddenOrder = order => {
+                if (!order || order.deleted_at || order.deletedAt || order.excluidaEm || order.arquivadaEm) return true;
+                return /cancelad/.test(norm(order.status || order.situacao || order.statusOS).normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+            };
             const employeeIds = new Set([tec.employeeId, tec.employee_id, tec.id]
                 .filter(value => value !== null && value !== undefined && String(value).trim())
                 .map(value => String(value).trim()));
@@ -5460,7 +5464,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     (tec.email && norm(assigned.email) === norm(tec.email)) ||
                     (tec.nome && norm(assigned.nome) === norm(tec.nome)))) return true;
                 return false;
-            }).filter(o => !o.excluidaEm && !o.arquivadaEm);
+            }).filter(o => !isEmployeeHiddenOrder(o));
 
             const employeeOsTab = window.__DBS_EMPLOYEE_OS_TAB__ || 'abertas';
             const minhasOSVisiveis = minhasOS.filter(o => employeeOsTab === 'concluidas'

@@ -1,6 +1,6 @@
 # Backup diário da base DBS Air
 
-A rotina de backup exporta diariamente as tabelas críticas do Supabase para o bucket privado `db-backups`. O arquivo é JSON, recebe um manifesto com contagem por tabela e hash SHA-256, e nunca é publicado como arquivo público.
+A rotina de backup exporta diariamente as tabelas operacionais do Supabase e copia os objetos dos buckets privados `dbs-control-os`, `rh-files` e `ticket-files` para `db-backups`. O snapshot JSON e cada documento recebem SHA-256, são baixados e lidos novamente para verificação, e o manifesto verificado (incluindo os buckets cobertos) é registrado em `dbs_control_backup_manifests`. Nada é publicado como arquivo público.
 
 ## Tabelas protegidas
 
@@ -15,7 +15,7 @@ No repositório privado do GitHub, em **Settings → Secrets and variables → A
 | `SUPABASE_URL` | URL do projeto Supabase que realmente alimenta o portal DBS Air |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key do mesmo projeto; nunca colocar no código ou no Lovable |
 
-O workflow `.github/workflows/daily-supabase-backup.yml` executa diariamente às 03:17 UTC e também pode ser iniciado manualmente pelo botão **Run workflow**.
+O workflow `.github/workflows/daily-supabase-backup.yml` executa diariamente às 03:17 UTC e também pode ser iniciado manualmente pelo botão **Run workflow**. A variável `SUPABASE_DOCUMENT_BUCKETS` mantém a cobertura explícita dos três buckets de documentos; se um bucket não existir e houver metadado relacional correspondente, o backup falha fechado.
 
 ## Regra de segurança
 
@@ -27,7 +27,7 @@ Cada execução deve exibir no log a quantidade de registros exportados por tabe
 
 ## Restauração
 
-A restauração não é automática e não deve sobrescrever a produção. Primeiro deve-se baixar uma cópia para análise, comparar o manifesto com a produção e restaurar apenas registros ausentes usando chaves primárias e `upsert` controlado. Qualquer restauração deve ser autorizada e registrada separadamente.
+A restauração não é automática e não deve sobrescrever a produção. Primeiro deve-se baixar uma cópia para análise, comparar o manifesto e os checksums com a produção e restaurar apenas registros/objetos ausentes usando chaves primárias e `upsert` controlado. Qualquer restauração deve ser autorizada e registrada separadamente. Se houver metadado relacional de anexo sem objeto correspondente, a rotina falha fechada em vez de marcar um backup incompleto como sucesso.
 
 ## Worker da outbox do DBS CONTROL
 

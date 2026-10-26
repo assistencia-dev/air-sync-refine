@@ -111,18 +111,27 @@ function PontoRh() {
   const monthlySummary = useMemo(() => {
     const byEmployee = new Map<string, any>();
     for (const e of (employees.data ?? []) as any[]) {
-      byEmployee.set(e.id, { employee: e, days: 0, worked: 0, expected: 0, overtime: 0, late: 0, early: 0, incomplete: 0, absences: 0, attestados: 0, justified: 0 });
+      byEmployee.set(e.id, { employee: e, days: 0, worked: 0, expected: 0, overtime: 0, late: 0, early: 0, adjustments: 0, incomplete: 0, absences: 0, attestados: 0, justified: 0 });
     }
+    // `listRhPontoRecords` intentionally returns one row per batida. Agrupe
+    // por funcionário/dia antes de somar, evitando contar quatro vezes o
+    // mesmo dia no painel e nos relatórios.
+    const days = new Map<string, any>();
     for (const r of (report.data ?? []) as any[]) {
+      const key = `${r.employee_id}|${r.work_date}`;
+      if (!days.has(key)) days.set(key, r);
+    }
+    for (const r of days.values()) {
       const item = byEmployee.get(r.employee_id);
       if (!item) continue;
       const s = r.day_summary ?? {};
       item.days += 1;
-      item.worked += Number(s.worked_minutes || 0);
+      item.worked += Number(s.adjusted_worked_minutes ?? s.worked_minutes ?? 0);
       item.expected += Number(s.expected_minutes || 0);
       item.overtime += Number(s.overtime_minutes || 0);
       item.late += Number(s.late_minutes || 0);
       item.early += Number(s.early_leave_minutes || 0);
+      item.adjustments += Number(s.adjustment_minutes || 0);
       if (s.missing_punches?.length) item.incomplete += 1;
     }
     for (const row of (management.data ?? []) as any[]) {
@@ -138,8 +147,8 @@ function PontoRh() {
 
   const timeText = (value:number) => String(Math.floor(Math.abs(Number(value||0))/60)).padStart(2,"0")+":"+String(Math.abs(Number(value||0))%60).padStart(2,"0");
   const exportMonthlyCsv = () => {
-    const rows = [["Funcionário","Unidade","Horas previstas","Horas trabalhadas","Horas extras","Atrasos","Saídas antecipadas","Faltas","Atestados","Ponto incompleto","Outras ocorrências"]];
-    for (const item of monthlySummary) rows.push([item.employee.full_name,item.employee.unit,timeText(item.expected),timeText(item.worked),timeText(item.overtime),timeText(item.late),timeText(item.early),String(item.absences),String(item.attestados),String(item.incomplete),String(item.justified)]);
+    const rows = [["Funcionário","Unidade","Horas previstas","Horas trabalhadas (corrigidas)","Ajustes aprovados","Horas extras","Atrasos","Saídas antecipadas","Faltas","Atestados","Ponto incompleto","Outras ocorrências"]];
+    for (const item of monthlySummary) rows.push([item.employee.full_name,item.employee.unit,timeText(item.expected),timeText(item.worked),timeText(item.adjustments),timeText(item.overtime),timeText(item.late),timeText(item.early),String(item.absences),String(item.attestados),String(item.incomplete),String(item.justified)]);
     const csv = rows.map(row=>row.map(v=>"\"" + String(v??"").replace(/\"/g,'\"\"') + "\"").join(";")).join("\n");
     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="espelho_rh_"+reportDate+".csv";a.click();URL.revokeObjectURL(url);
   };
@@ -150,19 +159,27 @@ function PontoRh() {
     const monthLabel = new Date(reportDate + "-15T12:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
     const moneyTime = (m:number) => Math.floor(Math.abs(m)/60) + "h " + String(Math.abs(m)%60).padStart(2,"0") + "m";
     const esc = (v:any) => String(v ?? "").replace(/[&<>"']/g, (m:string) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} as any)[m]);
-    const employeeRows = (report.data ?? []).filter((x:any) => x.employee_id === employeeId && String(x.work_date).startsWith(reportDate)).sort((a:any,b:any)=>String(a.work_date).localeCompare(String(b.work_date)));
+    const employeeRows = (report.data ?? []).filter((x:any) => x.employee_id === employeeId && String(x.work_date).startsWith(reportDate));
+    const employeeDays = new Map<string, any[]>();
+    for (const row of employeeRows) {
+      const group = employeeDays.get(String(row.work_date)) ?? [];
+      group.push(row);
+      employeeDays.set(String(row.work_date), group);
+    }
     const managementRows = (management.data ?? []).filter((x:any) => x.employee_id === employeeId && String(x.details?.work_date ?? "").startsWith(reportDate));
     const managementMap = new Map(managementRows.map((x:any)=>[x.details.work_date,x.details]));
-    const detailed = employeeRows.map((r:any) => {
-      const s=r.day_summary??{};
-      const punches=(r.records??[]).map((p:any)=>labels[p.punch_type]+": "+new Date(p.punched_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})).join(" · ");
-      const occ=managementMap.get(r.work_date)?.status;
-      return `<tr><td>${esc(new Date(r.work_date+"T12:00:00").toLocaleDateString("pt-BR"))}</td><td>${esc(punches||"Sem marcações")}</td><td>${moneyTime(Number(s.expected_minutes||0))}</td><td>${moneyTime(Number(s.worked_minutes||0))}</td><td>${moneyTime(Number(s.overtime_minutes||0))}</td><td>${moneyTime(Number(s.late_minutes||0))}</td><td>${esc(occ || (s.missing_punches?.length ? "Ponto incompleto" : "Presença"))}</td></tr>`;
+    const detailed = [...employeeDays.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([workDate, records]) => {
+      const first = records[0] ?? {};
+      const s=first.day_summary??{};
+      const punches=records.sort((a:any,b:any)=>String(a.punched_at).localeCompare(String(b.punched_at))).map((p:any)=>labels[p.punch_type]+": "+new Date(p.punched_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})).join(" · ");
+      const occ=managementMap.get(workDate)?.status;
+      const adjustment = Number(s.adjustment_minutes || 0);
+      return `<tr><td>${esc(new Date(workDate+"T12:00:00").toLocaleDateString("pt-BR"))}</td><td>${esc(punches||"Sem marcações")}</td><td>${moneyTime(Number(s.expected_minutes||0))}</td><td>${moneyTime(Number(s.adjusted_worked_minutes ?? s.worked_minutes ?? 0))}</td><td>${adjustment ? moneyTime(adjustment) : "—"}</td><td>${moneyTime(Number(s.overtime_minutes||0))}</td><td>${moneyTime(Number(s.late_minutes||0))}</td><td>${esc(occ || (s.missing_punches?.length ? "Ponto incompleto" : "Presença"))}</td></tr>`;
     }).join("");
     const title = mode === "folha" ? "Espelho individual de ponto" : "Resumo gerencial individual de ponto";
     const body = mode === "folha" ? `
       <div class="cards"><div><span>Horas previstas</span><b>${moneyTime(item.expected)}</b></div><div><span>Horas trabalhadas</span><b>${moneyTime(item.worked)}</b></div><div><span>Horas extras</span><b>${moneyTime(item.overtime)}</b></div><div><span>Atrasos</span><b>${moneyTime(item.late)}</b></div></div>
-      <table><thead><tr><th>Data</th><th>Marcações</th><th>Previsto</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Situação</th></tr></thead><tbody>${detailed || '<tr><td colspan="7">Nenhum registro de ponto no período.</td></tr>'}</tbody></table>`
+      <table><thead><tr><th>Data</th><th>Marcações</th><th>Previsto</th><th>Trabalhado corrigido</th><th>Ajuste</th><th>Extra</th><th>Atraso</th><th>Situação</th></tr></thead><tbody>${detailed || '<tr><td colspan="8">Nenhum registro de ponto no período.</td></tr>'}</tbody></table>`
       : `
       <div class="cards"><div><span>Dias com ponto</span><b>${item.days}</b></div><div><span>Faltas</span><b>${item.absences}</b></div><div><span>Atestados</span><b>${item.attestados}</b></div><div><span>Atrasos</span><b>${moneyTime(item.late)}</b></div><div><span>Horas extras</span><b>${moneyTime(item.overtime)}</b></div><div><span>Saídas antecipadas</span><b>${moneyTime(item.early)}</b></div><div><span>Ponto incompleto</span><b>${item.incomplete}</b></div><div><span>Outras ocorrências</span><b>${item.justified}</b></div></div>
       <table><thead><tr><th>Indicador</th><th>Resultado</th></tr></thead><tbody>
@@ -178,15 +195,17 @@ function PontoRh() {
     const totalExpected = monthlySummary.reduce((a,r)=>a+r.expected,0);
     const totalExtra = monthlySummary.reduce((a,r)=>a+r.overtime,0);
     const totalLate = monthlySummary.reduce((a,r)=>a+r.late,0);
-    const rowsHtml = monthlySummary.map(r => `<tr><td><strong>${r.employee.full_name}</strong><br><small>${r.employee.unit||"Sem unidade"}</small></td><td>${r.days}</td><td>${moneyTime(r.expected)}</td><td>${moneyTime(r.worked)}</td><td>${moneyTime(r.overtime)}</td><td>${moneyTime(r.late)}</td><td>${r.early ? moneyTime(r.early) : "—"}</td><td>${r.absences}</td><td>${r.justified}</td><td>${r.incomplete}</td></tr>`).join("");
+    const totalAdjustments = monthlySummary.reduce((a,r)=>a+r.adjustments,0);
+    const rowsHtml = monthlySummary.map(r => `<tr><td><strong>${r.employee.full_name}</strong><br><small>${r.employee.unit||"Sem unidade"}</small></td><td>${r.days}</td><td>${moneyTime(r.expected)}</td><td>${moneyTime(r.worked)}</td><td>${r.adjustments ? moneyTime(r.adjustments) : "—"}</td><td>${moneyTime(r.overtime)}</td><td>${moneyTime(r.late)}</td><td>${r.early ? moneyTime(r.early) : "—"}</td><td>${r.absences}</td><td>${r.justified}</td><td>${r.incomplete}</td></tr>`).join("");
     const body = `
       <div class="kpis">
         <div class="kpi"><span>Horas previstas</span><b>${moneyTime(totalExpected)}</b></div>
         <div class="kpi"><span>Horas trabalhadas</span><b>${moneyTime(totalWorked)}</b></div>
         <div class="kpi"><span>Horas extras</span><b>${moneyTime(totalExtra)}</b></div>
         <div class="kpi"><span>Atrasos</span><b>${moneyTime(totalLate)}</b></div>
+        <div class="kpi"><span>Ajustes aprovados</span><b>${moneyTime(totalAdjustments)}</b></div>
       </div>
-      <table><thead><tr><th>Colaborador</th><th>Dias</th><th>Previsto</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Saída ant.</th><th>Faltas</th><th>Justif.</th><th>Incompleto</th></tr></thead>
+      <table><thead><tr><th>Colaborador</th><th>Dias</th><th>Previsto</th><th>Trabalhado corrigido</th><th>Ajuste</th><th>Extra</th><th>Atraso</th><th>Saída ant.</th><th>Faltas</th><th>Justif.</th><th>Incompleto</th></tr></thead>
       <tbody>${rowsHtml}</tbody></table>`;
     openRhPrint("Relatório Gerencial de Folha de Ponto", monthLabel, body);
   };

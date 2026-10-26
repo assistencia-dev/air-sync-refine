@@ -145,6 +145,17 @@ async function getCollaboratorBaseScope(employee: any) {
   };
 }
 
+function isWorkOrderHiddenFromCollaborator(order: any): boolean {
+  if (!order || typeof order !== "object") return true;
+  if (order.deleted_at || order.deletedAt || order.excluidaEm || order.arquivadaEm) return true;
+  const status = String(order.status ?? order.situacao ?? order.statusOS ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return status.includes("cancelad");
+}
+
 function filterCollaboratorState(
   state: Record<string, unknown>,
   employeeId: string,
@@ -163,8 +174,10 @@ function filterCollaboratorState(
   // preservar OS antigas que ainda não receberam o vínculo central do RH.
   const orders = (normalized.ordens as any[])
     .filter((order) =>
-      String(order?.employeeId ?? "") === employeeId ||
-      technicianIds.has(String(order?.tecnicoId))
+      !isWorkOrderHiddenFromCollaborator(order) && (
+        String(order?.employeeId ?? "") === employeeId ||
+        technicianIds.has(String(order?.tecnicoId))
+      )
     )
     .map((order) => (
       String(order?.employeeId ?? "") === employeeId
@@ -1483,6 +1496,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_equipment").select("id,client_id,site_id,tag_code,serial_number,status"),
       supabaseAdmin.from("dbs_control_service_catalog").select("id,name,status"),
       supabaseAdmin.from("rh_employees").select("id,full_name,is_active,source_system,source_key,registration_data"),
+      supabaseAdmin.from("dbs_control_work_orders").select("id,protocol,assigned_employee_id,status,client_id,site_id,service_id"),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
       supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),

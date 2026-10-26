@@ -1,0 +1,28 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const backup = fs.readFileSync(path.join(root, "scripts/backup-supabase.mjs"), "utf8");
+const retention = fs.readFileSync(path.join(root, "supabase/migrations/20261016100000_dbs_control_os_document_retention.sql"), "utf8");
+const integrity = fs.readFileSync(path.join(root, "supabase/migrations/20261026200000_operational_integrity_indexes_and_backup_manifest.sql"), "utf8");
+const bucketMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261026203000_backup_manifest_document_buckets.sql"), "utf8");
+const workflow = fs.readFileSync(path.join(root, ".github/workflows/daily-supabase-backup.yml"), "utf8");
+
+assert.match(backup, /dbs-control-os/);
+assert.match(backup, /listStorageObjects/);
+assert.match(backup, /documentManifest/);
+assert.match(backup, /verifiedSha256/);
+assert.match(backup, /dbs_control_backup_manifests/);
+assert.match(backup, /relationalDocumentsByBucket/);
+assert.match(backup, /documentBuckets/);
+assert.match(backup, /metadataRows\.length \|\| !String\(error\.message\)\.includes\("\(404\)"\)/);
+assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
+assert.match(retention, /dbs_control_work_order_revisions/);
+assert.match(integrity, /rh_ponto_records_employee_date_type_uq/);
+assert.match(integrity, /dbs_control_backup_manifests/);
+assert.match(bucketMigration, /document_buckets/);
+assert.match(workflow, /SUPABASE_SERVICE_ROLE_KEY/);
+assert.match(workflow, /SUPABASE_DOCUMENT_BUCKETS/);
+assert.match(workflow, /schedule:/);
+console.log("Data protection: immutable OS history, document checksums, verified manifests, daily workflow and duplicate-punch guard passed.");

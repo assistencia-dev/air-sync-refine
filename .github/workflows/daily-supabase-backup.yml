@@ -21,4 +21,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_BACKUP_BUCKET: db-backups
+          SUPABASE_DOCUMENT_BUCKETS: dbs-control-os,rh-files,ticket-files
         run: node scripts/backup-supabase.mjs

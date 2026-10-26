@@ -25,5 +25,11 @@ jobs:
         run: bun run test:dbs-control
       - name: Validate concurrency, retry and outbox resilience contracts
         run: bun run test:dbs-resilience
+      - name: Validate 50 concurrent collaborator sessions
+        run: bun run test:dbs-50-sessions
+      - name: Validate RH point corrections and exports
+        run: bun run test:rh-point
+      - name: Validate backup and retention contracts
+        run: bun run test:data-protection
       - name: Build application
         run: bun run build

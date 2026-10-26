@@ -131,23 +131,46 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
 });
 
 
-function minutesFromTime(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const match = value.match(/(?:T| )([01]\d|2[0-3]):([0-5]\d)/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
+/** Parse database `time`, ISO timestamps and legacy `HH:MM` values safely. */
+export function minutesFromTime(value: string | null | undefined): number | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  // `time without time zone` is returned by Postgres as HH:MM[:SS].
+  const plain = raw.match(/^(?:[T ]?)([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/);
+  if (plain) return Number(plain[1]) * 60 + Number(plain[2]);
+
+  // Punches are timestamptz. Normalize them to the company's operating
+  // timezone instead of comparing UTC text with local work schedules.
+  if (/\d{4}-\d{2}-\d{2}[T ]/.test(raw)) {
+    const timestamp = Date.parse(raw);
+    if (Number.isFinite(timestamp)) {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(new Date(timestamp));
+      const hour = Number(parts.find((part) => part.type === "hour")?.value);
+      const minute = Number(parts.find((part) => part.type === "minute")?.value);
+      if (Number.isInteger(hour) && Number.isInteger(minute)) return hour * 60 + minute;
+    }
+  }
+
+  const match = raw.match(/(?:T|\s|^)([01]\d|2[0-3]):([0-5]\d)/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
-function durationBetween(start: string | null | undefined, end: string | null | undefined): number {
+export function durationBetween(start: string | null | undefined, end: string | null | undefined): number {
   const a = minutesFromTime(start);
   const b = minutesFromTime(end);
-  if (a == null || b == null || b < a) return 0;
-  return b - a;
+  if (a == null || b == null) return 0;
+  return b >= a ? b - a : (b + 24 * 60) - a;
 }
 
-function pointSummary(records: Array<{ punch_type: PointType; punched_at: string }>, employee: any) {
+export function pointSummary(records: Array<{ punch_type: PointType; punched_at: string }>, employee: any, approvedAdjustmentMinutes = 0) {
   const byType = new Map(records.map((r) => [r.punch_type, r.punched_at]));
-  const workedMinutes =
+  const rawWorkedMinutes =
     durationBetween(byType.get("entrada"), byType.get("almoco_saida")) +
     durationBetween(byType.get("almoco_retorno"), byType.get("saida"));
 
@@ -160,15 +183,20 @@ function pointSummary(records: Array<{ punch_type: PointType; punched_at: string
     ? lunchEnd - lunchStart
     : Math.max(0, Number.isFinite(configuredBreak) ? configuredBreak : 0);
   const tolerance = Math.max(0, Number(employee?.registration_data?.tolerance_minutes ?? 5));
-  const spanMinutes = expectedStart != null && expectedEnd != null && expectedEnd >= expectedStart
-    ? expectedEnd - expectedStart
+  const spanMinutes = expectedStart != null && expectedEnd != null
+    ? (expectedEnd >= expectedStart ? expectedEnd - expectedStart : expectedEnd + 24 * 60 - expectedStart)
     : 0;
   const expectedMinutes = spanMinutes > 0 ? Math.max(0, spanMinutes - breakMinutes) : null;
   const actualStart = minutesFromTime(byType.get("entrada"));
   const actualEnd = minutesFromTime(byType.get("saida"));
+  const adjustmentMinutes = Number.isFinite(Number(approvedAdjustmentMinutes)) ? Math.trunc(Number(approvedAdjustmentMinutes)) : 0;
+  const workedMinutes = Math.max(0, rawWorkedMinutes + adjustmentMinutes);
 
   return {
     worked_minutes: workedMinutes,
+    raw_worked_minutes: rawWorkedMinutes,
+    adjustment_minutes: adjustmentMinutes,
+    adjusted_worked_minutes: workedMinutes,
     expected_minutes: expectedMinutes,
     late_minutes: expectedStart != null && actualStart != null ? Math.max(0, actualStart - expectedStart - tolerance) : 0,
     early_leave_minutes: expectedEnd != null && actualEnd != null ? Math.max(0, expectedEnd - actualEnd - tolerance) : 0,
@@ -197,7 +225,7 @@ export type RhPontoDayStatus = (typeof RH_PONTO_DAY_STATUSES)[number];
 export const listRhPontoDayManagement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.start_date) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
     if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
     return input;
   })
@@ -221,7 +249,7 @@ export const setRhPontoDayManagement = createServerFn({ method: "POST" })
     status: RhPontoDayStatus;
     note?: string | null;
   }) => {
-    if (!input?.employee_id || !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.work_date)) throw new Error("Funcionário ou data inválidos.");
+    if (!input?.employee_id || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Funcionário ou data inválidos.");
     if (!RH_PONTO_DAY_STATUSES.includes(input.status)) throw new Error("Situação do dia inválida.");
     return { ...input, note: input.note?.trim() || null };
   })
@@ -262,6 +290,20 @@ export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([
   const byId = new Map(employees.map(e => [e.id, e]));
   const enriched = (records ?? []).map(r => ({ ...r, employee: byId.get(r.employee_id) ?? null }));
 
+  const adjustmentsResult = await supabaseAdmin.from("rh_time_adjustments")
+    .select("id, employee_id, reference_date, adjustment_type, minutes, reason, status, approved_at")
+    .gte("reference_date", data.start_date)
+    .lte("reference_date", data.end_date)
+    .eq("status", "aprovado");
+  if (adjustmentsResult.error) throw new Error(adjustmentsResult.error.message);
+  const approvedAdjustments = new Map<string, any[]>();
+  for (const adjustment of adjustmentsResult.data ?? []) {
+    const key = `${adjustment.employee_id}|${adjustment.reference_date}`;
+    const list = approvedAdjustments.get(key) ?? [];
+    list.push(adjustment);
+    approvedAdjustments.set(key, list);
+  }
+
   // Mantém os registros originais e acrescenta um resumo diário calculado,
   // permitindo que a tela mostre horas, atrasos e marcações faltantes sem alterar dados.
   const grouped = new Map<string, typeof enriched>();
@@ -280,7 +322,12 @@ export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([
       day_summary: pointSummary(
         group.map((item) => ({ punch_type: item.punch_type as PointType, punched_at: item.punched_at })),
         row.employee,
+        (approvedAdjustments.get(key) ?? []).reduce((total, adjustment) => {
+          const minutes = Math.abs(Number(adjustment.minutes ?? 0));
+          return total + (adjustment.adjustment_type === "desconto" ? -minutes : minutes);
+        }, 0),
       ),
+      approved_adjustments: approvedAdjustments.get(key) ?? [],
     };
   });
 });

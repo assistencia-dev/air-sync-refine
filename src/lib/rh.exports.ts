@@ -67,10 +67,15 @@ ${body}
 }
 
 export function openRhPrint(title: string, subtitle: string, body: string) {
-  const win = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
+  // `noopener` can make window.open return null in mobile WebViews before the
+  // document is written, which was the source of intermittent blank PDFs.
+  // Detach the opener immediately after the popup is created instead.
+  const win = window.open("", "_blank", "width=1000,height=800");
   if (!win) {
     throw new Error("O navegador bloqueou a janela de impressão. Permita pop-ups para exportar o documento.");
   }
+  try { win.opener = null; } catch { /* browsers may expose a read-only opener */ }
+  win.document.open();
   win.document.write(printableHtml(title, subtitle, body));
   win.document.close();
 }
@@ -87,6 +92,13 @@ export function exportRhEmployeeFichaPdf(employee: any, data: any) {
   const item = (label: string, val: unknown) => `<div class="item"><div class="label">${esc(label)}</div><div class="value">${esc(val || "—")}</div></div>`;
   const list = (title: string, rows: any[], mapper: (row: any) => string) =>
     `<div class="section"><h2>${esc(title)} (${rows.length})</h2>${rows.length ? rows.map(mapper).join("") : '<div class="item"><div class="value">Nenhum registro.</div></div>'}</div>`;
+  const pointLabels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
+  const pointRows = (data?.pointRecords ?? []).map((record: any) => ({
+    ...record,
+    _date: record.work_date || record.record_date || record.date || "",
+    _time: record.punched_at ? new Date(record.punched_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "",
+    _label: pointLabels[record.punch_type] || record.punch_type || "Marcação",
+  }));
 
   const body = [
     `<div class="section"><h2>Identificação</h2><div class="grid">${item("Nome completo", employee.full_name)}${item("Unidade / setor", employee.unit)}${item("CPF", value("cpf"))}${item("RG", value("rg"))}${item("Nascimento", value("birth_date"))}${item("Telefone", value("phone"))}${item("Endereço", value("address"))}${item("Nome da mãe", value("mother_name"))}${item("Nome do pai", value("father_name"))}</div></div>`,
@@ -98,7 +110,7 @@ export function exportRhEmployeeFichaPdf(employee: any, data: any) {
     list("Benefícios", data?.benefits ?? [], (x) => `<div class="item"><div class="value">${esc([x.benefit_type || x.type || x.name, x.status, x.amount_cents != null && "Valor: "+money(x.amount_cents), x.monthly_value_cents != null && "Mensal: "+money(x.monthly_value_cents)].filter(Boolean).join(" · "))}</div></div>`),
     list("Recargas de benefícios", data?.benefitTopups ?? [], (x) => `<div class="item"><div class="value">${esc([x.benefit_type, x.paid_at, x.amount_cents != null && "Valor: "+money(x.amount_cents)].filter(Boolean).join(" · "))}</div></div>`),
     list("Vales e descontos", data?.advances ?? [], (x) => `<div class="item"><div class="value">${esc([x.advance_type, x.description, x.competence && String(x.competence).slice(0,7), x.amount_cents != null && "Valor: "+money(x.amount_cents), x.authorized ? "Autorizado" : "Sem autorização", x.status].filter(Boolean).join(" · "))}</div></div>`),
-    list("Registros de ponto", (data?.pointRecords ?? []).slice(0, 31), (x) => `<div class="item"><div class="value">${esc([x.record_date || x.date, x.entry_time && "Entrada: "+x.entry_time, x.lunch_start && "Almoço: "+x.lunch_start, x.lunch_end && "Retorno: "+x.lunch_end, x.exit_time && "Saída: "+x.exit_time, x.status].filter(Boolean).join(" · "))}</div></div>`),
+    list("Registros de ponto", pointRows.slice(0, 120), (x) => `<div class="item"><div class="value">${esc([x._date, x._label + (x._time ? ": " + x._time : ""), x.inside_radius === false ? "Fora do raio" : "Dentro do raio", x.note].filter(Boolean).join(" · "))}</div></div>`),
     list("Histórico de folha", (data?.payrollRuns ?? []).slice(0, 12), (x) => `<div class="item"><div class="value">${esc([x.competence || x.period_competence, x.status, x.gross_cents != null && "Bruto: "+money(x.gross_cents), x.discount_cents != null && "Descontos: "+money(x.discount_cents), x.net_cents != null && "Líquido: "+money(x.net_cents)].filter(Boolean).join(" · "))}</div></div>`),
     `<div class="section"><h2>Acessos</h2><div class="grid">${item("Login", data?.access?.login_identifier || "—")}${item("Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada")}${item("DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado")}</div></div>`,
     `<div class="section"><h2>Observações</h2><div class="item"><div class="value">${esc(value("notes"))}</div></div></div>`,
