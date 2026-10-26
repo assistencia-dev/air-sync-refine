@@ -3223,9 +3223,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
             });
-            // Só considera o estado local confirmado depois que o pai recebeu o
-            // lote, o RPC terminou e o ACK voltou para este cliente.
-            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
+            // O ACK já traz a versão retornada pela RPC. Atualize a cópia
+            // local antes de formar a próxima intenção para que uma segunda
+            // alteração não seja confundida com conflito por usar uma versão velha.
+            const appliedOrders = Array.isArray(result?.appliedOrders) ? result.appliedOrders : [];
+            appliedOrders.forEach(item => {
+                const localOrder = (ERP_STATE.ordens || []).find(order => String(order?.id) === String(item?.id));
+                if (localOrder && Number.isFinite(Number(item?.version))) localOrder.version = Number(item.version);
+            });
+            const confirmedState = getPersistableState();
+            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(confirmedState));
             return result;
         }
 
@@ -6998,21 +7005,3 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body.dbs-control-employee-mode .employee-execution-roadmap {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       row-gap: 7px;
-    }
-    body.dbs-control-employee-mode .employee-execution-intro {
-      padding: 14px;
-    }
-  }
-  @media (max-width: 400px) {
-    body.dbs-control-employee-mode .employee-execution-roadmap {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    body.dbs-control-employee-mode .employee-execution-intro-title {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-  }
-</style>
-</style>
-</body>
-</html>
