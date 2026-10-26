@@ -9,9 +9,10 @@ type AppUser = { id: string; company_id: string | null; role_key: string; status
 /**
  * Quando um perfil administrativo sem empresa é vinculado à empresa DBS AIR,
  * os módulos deixam de usar scope_key=user:<id> e passam a usar company:<id>.
- * Copiamos os retratos existentes para o novo escopo sem apagar o original.
- * Se os dois escopos já tiverem retratos diferentes, paramos a vinculação para
- * não esconder ou sobrescrever silenciosamente dados de nenhuma das bases.
+ * A partir da migração relacional, snapshots DBS legados são somente leitura:
+ * não copiamos nem sobrescrevemos JSON completo durante o vínculo. Se existir
+ * um snapshot pessoal, o vínculo é pausado para uma reconciliação explícita,
+ * preservando o dado original e evitando criar uma segunda fonte de verdade.
  */
 async function preserveUserScopedSnapshotsBeforeCompanyLink(userId: string, companyId: string) {
   const userScope = `user:${userId}`;
@@ -44,22 +45,7 @@ async function preserveUserScopedSnapshotsBeforeCompanyLink(userId: string, comp
   }
 
   if (userDbs.data && !companyDbs.data) {
-    const { error } = await supabaseAdmin.from("dbs_control_snapshots").insert({
-      scope_key: companyScope,
-      company_id: companyId,
-      owner_user_id: userId,
-      state: userDbs.data.state,
-      state_version: userDbs.data.state_version,
-      updated_by: userDbs.data.updated_by ?? userId,
-      updated_at: userDbs.data.updated_at,
-    });
-    if (error) {
-      const { data: racedTarget, error: verifyError } = await supabaseAdmin
-        .from("dbs_control_snapshots").select("scope_key").eq("scope_key", companyScope).maybeSingle();
-      if (verifyError || !racedTarget || error.code !== "23505") {
-        throw new Error("Não foi possível preservar o retrato DBS CONTROL no novo escopo: " + error.message);
-      }
-    }
+    throw new Error("Existe um retrato legado do DBS CONTROL no escopo pessoal. O vínculo foi pausado para reconciliação relacional; nenhum snapshot foi copiado ou sobrescrito.");
   }
 
   if (userTreasury.data && !companyTreasury.data) {

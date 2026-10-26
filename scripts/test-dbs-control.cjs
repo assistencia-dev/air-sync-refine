@@ -92,10 +92,11 @@ assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(can
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
-assert.match(fieldControl, /async function preserveUserScopedSnapshotsBeforeCompanyLink\(userId: string, companyId: string\)/, "Vincular o administrador a uma empresa deve preservar snapshots pessoais preexistentes.");
+assert.match(fieldControl, /async function preserveUserScopedSnapshotsBeforeCompanyLink\(userId: string, companyId: string\)/, "Vincular o administrador a uma empresa deve verificar snapshots pessoais preexistentes.");
 assert.match(fieldControl, /if \(userDbs\.data && companyDbs\.data\)/, "O vínculo deve pausar quando os escopos pessoal e empresarial já têm snapshots DBS divergentes.");
 assert.match(fieldControl, /if \(userTreasury\.data && companyTreasury\.data\)/, "O vínculo deve pausar quando os dois escopos financeiros já têm snapshots.");
-assert.match(fieldControl, /from\("dbs_control_snapshots"\)\.insert\(/, "O snapshot DBS pessoal deve ser copiado de forma aditiva, sem apagar a origem.");
+assert.doesNotMatch(fieldControl, /from\("dbs_control_snapshots"\)\.insert\(/, "O vínculo não pode criar um novo snapshot DBS completo.");
+assert.match(fieldControl, /Existe um retrato legado do DBS CONTROL no escopo pessoal/, "Um snapshot DBS legado deve bloquear o vínculo até a reconciliação relacional, sem perder a origem.");
 assert.match(fieldControl, /from\("treasury_snapshots"\)\.insert\(/, "O snapshot financeiro pessoal deve ser copiado de forma aditiva, sem apagar a origem.");
 assert.match(fieldControl, /await preserveUserScopedSnapshotsBeforeCompanyLink\(String\(data\.id\), String\(companyId\)\)/, "A preservação deve acontecer antes de atualizar company_id do administrador.");
 assert.match(route, /const reconciledInitialState = employeeModeRef\.current[\s\S]*?mergeDbsControlStates\(cloudState, localState\)/, "Quando existe snapshot compartilhado, a administração deve reconciliar a nuvem e a cópia local por identidade antes de hidratar o módulo.");
