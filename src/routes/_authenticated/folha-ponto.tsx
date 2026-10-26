@@ -25,13 +25,17 @@ function FolhaPontoPage() {
     navigate({ to: "/login", replace: true });
   }
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
-  const access = useQuery({ queryKey: ["my-ponto-access"], queryFn: () => hasMyPontoAccess(), retry: false });
-  const controlAccess = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: false });
+  const access = useQuery({ queryKey: ["my-ponto-access"], queryFn: () => hasMyPontoAccess(), retry: 2, retryDelay: 700 });
+  const controlAccess = useQuery({ queryKey: ["my-dbs-control-access"], queryFn: () => hasMyDbsControlAccess(), retry: 2, retryDelay: 700 });
   const isRh = profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || ["DBS123", "DBSASSISTENCIA123"].includes(profile.data?.username ?? "");
   useEffect(() => {
-    if (!profile.isLoading && !isRh && access.data && !access.data.enabled) navigate({ to: "/portal", replace: true });
-  }, [profile.isLoading, isRh, access.data, navigate]);
+    if (!profile.isLoading && !isRh && access.data && !access.data.enabled) {
+      if (controlAccess.data?.enabled) navigate({ to: "/dbs-control", replace: true });
+      else if (!controlAccess.isLoading && !controlAccess.error) navigate({ to: "/portal", replace: true });
+    }
+  }, [profile.isLoading, isRh, access.data, controlAccess.data, controlAccess.isLoading, controlAccess.error, navigate]);
   if (profile.isLoading || access.isLoading || controlAccess.isLoading) return <div className="collaborator-loading min-h-[100dvh] grid place-items-center bg-slate-50 px-5 text-center text-sm text-slate-500"><div><div className="mx-auto mb-3 h-8 w-8 animate-pulse rounded-full bg-sky-100" /><p className="font-bold text-slate-700">Preparando seu portal</p><p className="mt-1 text-xs text-slate-400">Validando seus acessos de colaborador…</p></div></div>;
+  if (!isRh && (access.isError || (!access.data?.enabled && controlAccess.isError))) return <main className="collaborator-shell grid min-h-[100dvh] place-items-center bg-[#f4f7f6] px-3 py-3 sm:px-4 sm:py-5"><div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-6 text-center shadow-sm sm:p-8"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-600">!</div><h1 className="mt-4 text-xl font-black text-slate-900">Não foi possível preparar seu portal</h1><p className="mt-2 text-sm leading-6 text-slate-500">A validação de acesso demorou ou falhou momentaneamente. Nenhum dado foi alterado.</p><div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center"><button type="button" onClick={() => { void profile.refetch(); void access.refetch(); void controlAccess.refetch(); }} className="min-h-11 rounded-xl bg-sky-600 px-4 py-3 text-sm font-black text-white hover:bg-sky-700">Tentar novamente</button><button type="button" onClick={signOut} className="min-h-11 rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:border-sky-200">Sair</button></div></div></main>;
   if (!isRh && !access.data?.enabled) return null;
   return (
     <main className="collaborator-shell min-h-[100dvh] bg-[#f4f7f6] px-3 py-3 sm:px-4 sm:py-5 lg:px-8">

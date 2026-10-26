@@ -241,7 +241,7 @@ function PontoRh() {
 }
 function PontoColaborador() {
   const qc = useQueryClient();
-  const query = useQuery({ queryKey: ["my-ponto"], queryFn: () => getMyPonto(), retry: false });
+  const query = useQuery({ queryKey: ["my-ponto"], queryFn: () => getMyPonto(), retry: 2, retryDelay: 700 });
   const [status, setStatus] = useState<{type:"success"|"error"|"info"; text:string}|null>(null);
 
   const friendlyError = (e: unknown) => {
@@ -320,6 +320,7 @@ function PontoColaborador() {
       <h2 className="mt-4 text-xl font-black text-slate-900">Folha de ponto indisponível</h2>
       <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">Seu acesso ainda não está liberado pelo RH ou houve uma falha momentânea de comunicação. Nenhum registro foi alterado.</p>
       <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-xs font-bold text-slate-600">{friendlyError(query.error)}</p>
+      <button type="button" onClick={() => void query.refetch()} className="mt-5 min-h-11 rounded-xl bg-sky-600 px-4 py-3 text-sm font-black text-white hover:bg-sky-700">Tentar novamente</button>
     </div>;
   }
 

@@ -19,10 +19,15 @@ export async function resolveCollaboratorLanding(): Promise<CollaboratorLanding>
   const controlEnabled = controlResult.status === "fulfilled"
     && controlResult.value.enabled === true
     && controlResult.value.administrative !== true;
+  const accessCheckFailed = pontoResult.status === "rejected" || controlResult.status === "rejected";
 
   // Folha de Ponto is the shared collaborator shell when both modules exist;
   // it exposes the "Minhas OS" switch without adding another login.
   if (pontoEnabled) return "/folha-ponto";
   if (controlEnabled) return "/dbs-control";
+  // Keep a collaborator inside the collaborator shell while an optional RH
+  // lookup is recovering. The page can show a retry state; sending the user
+  // to the customer portal would look like a permission loss.
+  if (accessCheckFailed) return "/folha-ponto";
   return "/portal";
 }
