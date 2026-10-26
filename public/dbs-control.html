@@ -2759,6 +2759,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         body.dbs-control-employee-mode.dbs-control-can-issue-os #dbs-employee-issue-cta {
             display:none !important;
         }
+        /* No modo colaborador, o cabeçalho informa o estado; a navegação fica somente no menu lateral. */
+        body.dbs-control-employee-mode main > header .dbs-secondary-menu,
+        body.dbs-control-employee-mode main > header .btn.btn-primary {
+            display:none !important;
+        }
         body.dbs-control-employee-mode main { margin-left:0 !important; width:auto !important; }
         @media(max-width:760px) {
             body.dbs-control-employee-mode aside {
