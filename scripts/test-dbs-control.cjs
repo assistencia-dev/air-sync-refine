@@ -277,6 +277,10 @@ assert.match(quoteBuilder, /subtotalServicos/, "O orçamento deve discriminar su
 assert.match(quoteBuilder, /function openAcceptance\(/, "A proposta deve permitir aceite web.");
 assert.match(quoteBuilder, /oq-accept-approve/, "O aceite web deve oferecer aprovação.");
 assert.match(quoteBuilder, /oq-accept-reject/, "O aceite web deve oferecer recusa.");
+assert.match(quoteBuilder, /oq-search/, "O menu de orçamentos deve permitir busca por proposta, cliente ou serviço.");
+assert.match(quoteBuilder, /oq-accept-status/, "O modal de aceite deve informar o estado da gravação.");
+assert.match(quoteBuilder, /saveStateAndConfirmCloud/, "O aceite web deve aguardar a confirmação da nuvem.");
+assert.match(quoteBuilder, /acceptanceInFlight/, "O aceite web deve bloquear duplo envio durante a gravação.");
 assert.match(quoteBuilder, /signatureCanvas\.toDataURL/, "A assinatura desenhada deve ser registrada na proposta.");
 
 assert.match(quoteBuilder, /function unitsCompatible\(/, "O orçamento deve validar compatibilidade dimensional.");
