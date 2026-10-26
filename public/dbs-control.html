@@ -2427,6 +2427,183 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         color: #8a5200;
       }
     </style>
+    <style id="dbs-quotes-professional-20261026">
+        #tab-orcamentos {
+            --oq-ink: #102a43;
+            --oq-muted: #5b7086;
+            --oq-line: #dce7f1;
+            --oq-surface: #ffffff;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            color: var(--oq-ink);
+            letter-spacing: .005em;
+        }
+        #tab-orcamentos .oq-shell,
+        #tab-orcamentos .oq-list-card {
+            border: 1px solid var(--oq-line);
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(16, 42, 67, .07);
+            overflow: hidden;
+        }
+        #tab-orcamentos .oq-heading h2,
+        #tab-orcamentos .oq-list-head h3 {
+            letter-spacing: -.02em;
+            color: var(--oq-ink);
+        }
+        #tab-orcamentos .oq-list-head {
+            align-items: flex-end;
+            gap: 18px;
+            padding: 18px 20px;
+            border-bottom: 1px solid #e7eef5;
+            background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+        }
+        #tab-orcamentos .oq-list-caption {
+            margin: 5px 0 0;
+            color: var(--oq-muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        #tab-orcamentos .oq-list-tools {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #tab-orcamentos .oq-search-label,
+        #tab-orcamentos .oq-filter-label {
+            display: flex;
+            min-width: 160px;
+            flex-direction: column;
+            gap: 5px;
+            color: var(--oq-muted);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            line-height: 1.1;
+            text-transform: uppercase;
+        }
+        #tab-orcamentos #oq-search,
+        #tab-orcamentos #oq-filter {
+            min-height: 40px;
+            border: 1px solid #cbd9e6;
+            border-radius: 10px;
+            background: #fff;
+            color: var(--oq-ink);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0;
+            outline: none;
+            padding: 0 12px;
+            text-transform: none;
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+        #tab-orcamentos #oq-search {
+            min-width: 245px;
+        }
+        #tab-orcamentos #oq-search::placeholder {
+            color: #91a3b5;
+            font-weight: 500;
+        }
+        #tab-orcamentos #oq-search:focus,
+        #tab-orcamentos #oq-filter:focus {
+            border-color: #2379b8;
+            box-shadow: 0 0 0 3px rgba(35, 121, 184, .14);
+        }
+        #tab-orcamentos #oq-list tr {
+            border-top: 1px solid #edf2f6;
+            transition: background .16s ease, box-shadow .16s ease;
+        }
+        #tab-orcamentos #oq-list tr:hover {
+            background: #f7fbff;
+            box-shadow: inset 3px 0 0 #2384c6;
+        }
+        #tab-orcamentos #oq-list td {
+            color: #29435c;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+        #tab-orcamentos .oq-row-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            min-width: 190px;
+        }
+        #tab-orcamentos .oq-row-actions button {
+            min-height: 34px;
+            border-radius: 9px;
+            font-size: 11px;
+            font-weight: 750;
+            letter-spacing: .01em;
+            white-space: nowrap;
+        }
+        #tab-orcamentos .oq-status {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            border: 1px solid #d9e7f2;
+            border-radius: 999px;
+            background: #f2f7fb;
+            color: #31566f;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 9px;
+            white-space: nowrap;
+        }
+        #tab-orcamentos .oq-status[data-status="Aprovado"] {
+            border-color: #b6e3cb;
+            background: #ecfbf2;
+            color: #147343;
+        }
+        #tab-orcamentos .oq-status[data-status="Rejeitado"] {
+            border-color: #f5c2c0;
+            background: #fff2f1;
+            color: #a43c36;
+        }
+        #tab-orcamentos .oq-status[data-status="Convertido em OS"] {
+            border-color: #bbd9f4;
+            background: #edf6ff;
+            color: #155b91;
+        }
+        #tab-orcamentos .oq-accept-status {
+            min-height: 20px;
+            margin: 12px 0 0;
+            color: #1b668f;
+            font-size: 12px;
+            font-weight: 750;
+            line-height: 1.45;
+        }
+        #tab-orcamentos .oq-accept-status.is-error {
+            color: #a43c36;
+        }
+        #tab-orcamentos .oq-accept-panel:focus-within {
+            box-shadow: 0 20px 55px rgba(16, 42, 67, .22), 0 0 0 3px rgba(35, 121, 184, .12);
+        }
+        @media (max-width: 760px) {
+            #tab-orcamentos .oq-list-head {
+                align-items: stretch;
+                flex-direction: column;
+            }
+            #tab-orcamentos .oq-list-tools {
+                align-items: stretch;
+                justify-content: stretch;
+                width: 100%;
+            }
+            #tab-orcamentos .oq-search-label,
+            #tab-orcamentos .oq-filter-label,
+            #tab-orcamentos #oq-search,
+            #tab-orcamentos #oq-filter {
+                width: 100%;
+            }
+            #tab-orcamentos .oq-table-wrap {
+                overflow-x: auto;
+            }
+            #tab-orcamentos .oq-row-actions {
+                min-width: 168px;
+            }
+        }
+    </style>
 </head>
 <body>
 
