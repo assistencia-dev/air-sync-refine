@@ -1244,15 +1244,23 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
 
     for (const [index, order] of (changes.ordens ?? []).entries()) {
       const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
-      if (!protocol) throw new Error("Não é possível sincronizar OS sem protocolo.");
+      // O protocolo é uma identificação canônica gerada pelo banco para uma
+      // OS nova. O formulário legado usa apenas um id local (ex.: OS-04891),
+      // portanto não devemos bloquear a intenção de criação enquanto o
+      // protocolo ainda não existe. Para mensagens e logs usamos o id local
+      // como rótulo transitório, mas nunca o persistimos como protocolo.
+      const orderLabel = protocol || String(order?.id ?? `nova-${index + 1}`).trim();
       let orderForPatch = order;
       let currentCanonicalOrder: any = null;
       if (user.role_key === "COLABORADOR") {
-        const currentOrder = await supabaseAdmin.from("dbs_control_work_orders")
-          .select("id, version, assigned_employee_id, observation,servico_executado")
-          .eq(isDbsControlUuid(order?.id) ? "id" : "protocol", isDbsControlUuid(order?.id) ? String(order.id) : protocol)
-          .maybeSingle();
-        if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${protocol}: ${currentOrder.error.message}`);
+        const localOrderId = isDbsControlUuid(order?.id) ? String(order.id) : null;
+        const currentOrder = localOrderId || protocol
+          ? await supabaseAdmin.from("dbs_control_work_orders")
+            .select("id, version, assigned_employee_id, observation,servico_executado")
+            .eq(localOrderId ? "id" : "protocol", localOrderId ?? protocol)
+            .maybeSingle()
+          : { data: null, error: null };
+        if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${orderLabel}: ${currentOrder.error.message}`);
         currentCanonicalOrder = currentOrder.data;
         if (currentOrder.data) {
           const mergedObservation = mergeAppendOnlyCollaboratorObservations(
@@ -1277,7 +1285,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       if (isNewCollaboratorOrder && !(collaboratorScope?.clientIds ?? []).includes(String((fullPatch as any).client_id ?? ""))) {
         throw new Error("DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE: cliente não está vinculado à base do colaborador.");
       }
-      if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${protocol} não possui cliente relacional válido.`);
+      if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${orderLabel} não possui cliente relacional válido.`);
       const idempotencyKey = `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
       const expectedVersion = Number(order?.version);
       const parts = Array.isArray(order?.pecasUsadas)
@@ -1294,7 +1302,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         actor_user_id: user.id,
         company_id: scope.companyId,
         work_order_id: isDbsControlUuid(order?.id) ? String(order.id) : undefined,
-        protocol,
+        protocol: protocol || undefined,
         operation: "upsert",
         expected_version: Number.isFinite(expectedVersion) && expectedVersion > 0 ? expectedVersion : undefined,
         event_type: "work_order_delta",
@@ -1307,7 +1315,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       if (result.error) {
         const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
         if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND", "DBS_OS_ISSUE_FORBIDDEN", "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE", "DBS_OS_ISSUE_CLIENT_INACTIVE", "DBS_OS_ISSUE_BASE_INACTIVE", "DBS_OS_ISSUE_SITE_INVALID", "DBS_OS_ISSUE_COMPANY_MISMATCH"].includes(permanentCode)) {
-          conflicts.push({ protocol, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
+          conflicts.push({ protocol: orderLabel, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
             ? "A OS já foi concluída e seus dados assinados estão protegidos."
             : permanentCode === "DBS_OS_NOT_ASSIGNED"
               ? "A OS não está atribuída a este colaborador."
@@ -1324,15 +1332,15 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
               : "A OS mudou em outro acesso; recarregue para reconciliar." });
           continue;
         }
-        throw new Error(`Falha ao sincronizar a OS ${protocol}: ${result.error.message}`);
+        throw new Error(`Falha ao sincronizar a OS ${orderLabel}: ${result.error.message}`);
       }
       const row: any = Array.isArray(result.data) ? result.data[0] : result.data;
       if (!row?.ok) {
         if (row?.status === "conflict") {
-          conflicts.push({ protocol, message: row.error_message || "Conflito de versão; recarregue para reconciliar." });
+          conflicts.push({ protocol: orderLabel, message: row.error_message || "Conflito de versão; recarregue para reconciliar." });
           continue;
         }
-        throw new Error(`Falha ao sincronizar a OS ${protocol}: ${row?.error_message || "operação rejeitada"}`);
+        throw new Error(`Falha ao sincronizar a OS ${orderLabel}: ${row?.error_message || "operação rejeitada"}`);
       }
       applied += 1;
       if (row.work_order_id) appliedOrderIds.push(String(row.work_order_id));

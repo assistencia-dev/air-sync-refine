@@ -79,6 +79,8 @@ const deltaMigration = fs.readFileSync("supabase/migrations/20261026130000_dbs_c
 const legacyBackfillMigration = fs.readFileSync("supabase/migrations/20261026150000_dbs_control_legacy_relational_backfill.sql", "utf8");
 const legacyHistoryRepairMigration = fs.readFileSync("supabase/migrations/20261026153000_dbs_control_legacy_history_repair.sql", "utf8");
 const deletedAtMigration = fs.readFileSync("supabase/migrations/20261026160000_dbs_control_deleted_at_backfill.sql", "utf8");
+const protocolMigration = fs.readFileSync("supabase/migrations/20261026190000_dbs_control_autogenerate_protocol.sql", "utf8");
+const protocolLookupFixMigration = fs.readFileSync("supabase/migrations/20261026191000_dbs_control_delta_empty_protocol_fix.sql", "utf8");
 assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
 assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
@@ -162,6 +164,12 @@ assert.match(deletedAtMigration, /add column if not exists deleted_at timestampt
 assert.match(cloudFunctions, /buildDbsControlWorkOrderPatch/, "O servidor deve converter registros de UI em patches canônicos.");
 assert.match(cloudFunctions, /dbs_control_apply_work_order_delta/, "A alteração da OS deve passar pelo RPC transacional com versão esperada.");
 assert.match(cloudFunctions, /event_type: "work_order_delta"/, "Cada lote de OS deve carregar um tipo de evento auditável.");
+assert.match(cloudFunctions, /const orderLabel = protocol \|\|/, "Uma OS nova deve usar um rótulo transitório sem exigir protocolo no formulário.");
+assert.doesNotMatch(cloudFunctions, /Não é possível sincronizar OS sem protocolo/, "O sincronizador não pode bloquear uma OS nova sem protocolo.");
+assert.match(protocolMigration, /dbs_control_work_order_protocol_seq/, "A migração deve criar o gerador canônico de protocolos de OS.");
+assert.match(protocolMigration, /'DBS-' \|\| to_char\(clock_timestamp\(\), 'YYYY'\)/, "O protocolo automático deve ser legível e gerado no banco.");
+assert.match(protocolMigration, /v_current_found boolean/, "A migração deve separar explicitamente consulta encontrada de FOUND residual.");
+assert.match(protocolLookupFixMigration, /v_current_found := found/, "A correção de protocolo vazio deve proteger o caminho de criação contra falso conflito.");
 assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
 assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
