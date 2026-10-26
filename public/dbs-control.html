@@ -4288,18 +4288,92 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (foot) foot.textContent = 'Base analisada: '+orders.length.toLocaleString('pt-BR')+' OS carregadas. '+clientLinkIssues.length.toLocaleString('pt-BR')+' OS com cliente não resolvido e '+equipmentLinkIssues.length.toLocaleString('pt-BR')+' com vínculo de equipamento não resolvido. Confira os detalhes antes de corrigir cadastros.';
         }
 
+
+        function renderizarEmployeeDashboard() {
+            const root = document.getElementById('employee-dashboard-root');
+            if (!root) return;
+            const params = new URLSearchParams(window.location.search);
+            const employeeName = String(params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
+            const baseName = String(params.get('base_name') || '').trim();
+            const canIssue = params.get('can_issue_os') === '1';
+            const syncIndicator = document.getElementById('dbs-sync-indicator');
+            const syncText = syncIndicator ? String(syncIndicator.textContent || '').trim() : '';
+            const loadStatus = String(DBS_CONTROL_DASHBOARD_LOAD_STATUS || '');
+            const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
+            const activeOrders = orders.filter(order => {
+                if (!order || order.deleted_at || order.deletedAt || order.excluidaEm || order.arquivadaEm) return false;
+                const status = String(order.status || order.situacao || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return !status.includes('cancelad') && !status.includes('arquivad') && !status.includes('excluid');
+            });
+            const isDone = order => typeof isOSConcluida === 'function'
+                ? isOSConcluida(order)
+                : /conclu[ií]d/.test(String(order.status || '').toLocaleLowerCase('pt-BR'));
+            const isPending = order => /aguardando|pendenc|peca|cliente/.test(String(order.status || order.situacao || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+            const completed = activeOrders.filter(isDone).length;
+            const pending = activeOrders.filter(order => !isDone(order) && isPending(order)).length;
+            const inProgress = Math.max(0, activeOrders.length - completed - pending);
+            const progress = activeOrders.length ? Math.round((completed / activeOrders.length) * 100) : 0;
+            const recent = activeOrders.slice().reverse().slice(0, 4);
+            const clientName = order => {
+                const client = (ERP_STATE.clientes || []).find(item => String(item.id) === String(order.clienteId));
+                return client ? (client.nome || client.nomeFantasia || client.razaoSocial || 'Cliente sem nome') : 'Cliente da OS';
+            };
+            const orderStatus = order => String(order.status || 'Em atendimento');
+            const esc = value => typeof escDbsControl === 'function' ? escDbsControl(String(value || '')) : String(value || '');
+            if (loadStatus === 'loading' && !activeOrders.length) {
+                root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Sincronizando sua base operacional…</div></section>';
+                return;
+            }
+            if (loadStatus === 'error' && !activeOrders.length) {
+                root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Aguardando a sincronização da base. Quando a conexão voltar, seu progresso aparecerá aqui.</div></section>';
+                return;
+            }
+            root.innerHTML =
+                '<section class="employee-dashboard-hero">' +
+                    '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu dashboard</div>' +
+                    '<h2>Olá, ' + esc(employeeName) + '</h2>' +
+                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p></div>' +
+                    '<div class="employee-dashboard-sync"><small>Estado da conexão</small><strong>' + esc(syncText || (loadStatus === 'loaded' ? 'Sincronizado' : 'Sincronizando…')) + '</strong></div>' +
+                '</section>' +
+                '<div class="employee-dashboard-actions">' +
+                    '<button type="button" class="primary" onclick="switchTab(\\'tab-pwa\\')">Abrir minhas OS</button>' +
+                    (canIssue ? '<button type="button" class="secondary" onclick="switchTab(\\'tab-nova-os\\')">＋ Emitir OS</button>' : '') +
+                '</div>' +
+                '<section class="employee-dashboard-kpis">' +
+                    '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Em atendimento</small><strong>' + inProgress.toLocaleString('pt-BR') + '</strong><span>Execuções em andamento</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Com pendência</small><strong>' + pending.toLocaleString('pt-BR') + '</strong><span>Peça, cliente ou retorno</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Concluídas</small><strong>' + completed.toLocaleString('pt-BR') + '</strong><span>Confirmadas no banco</span></div>' +
+                '</section>' +
+                '<section class="employee-dashboard-progress"><div class="employee-dashboard-progress-head"><span>Progresso do seu atendimento</span><b>' + progress + '%</b></div><div class="employee-dashboard-progress-track" aria-label="Progresso de OS concluídas"><span style="width:' + progress + '%"></span></div></section>' +
+                '<section class="employee-dashboard-section"><div class="employee-dashboard-section-head"><h3>Próximas OS para acompanhar</h3><span>' + recent.length + ' exibida(s)</span></div>' +
+                    (recent.length ? '<div class="employee-dashboard-recent">' + recent.map(order =>
+                        '<div class="employee-dashboard-order"><b>' + esc(order.protocolo || order.id || 'OS sem protocolo') + '</b><small>' + esc(clientName(order)) + ' · ' + esc(orderStatus(order)) + '</small></div>'
+                    ).join('') + '</div>' : '<div class="employee-dashboard-empty">Nenhuma OS ativa no momento. Abra “Minhas OS” para atualizar.</div>') +
+                '</section>';
+        }
+
         function renderizarAbaAtiva(tabId) {
             const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
             const canIssueOs = new URLSearchParams(window.location.search).get('can_issue_os') === '1';
             const requestedId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
-            const activeId = employeeMode && !(canIssueOs && requestedId === 'tab-nova-os') ? 'tab-pwa' : requestedId;
+            const employeeAllowed = new Set(['tab-dashboard', 'tab-pwa']);
+            const activeId = employeeMode
+                ? (canIssueOs && requestedId === 'tab-nova-os'
+                    ? 'tab-nova-os'
+                    : (employeeAllowed.has(requestedId) ? requestedId : 'tab-dashboard'))
+                : requestedId;
             const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
             // Renderização sob demanda: não montar milhares de linhas em abas ocultas.
             switch (activeId) {
                 case 'tab-dashboard':
-                    safe(renderizarOrdens);
-                    safe(atualizarMetricas);
-                    safe(renderizarResumoOperacional);
+                    if (employeeMode) {
+                        safe(renderizarEmployeeDashboard);
+                    } else {
+                        safe(renderizarOrdens);
+                        safe(atualizarMetricas);
+                        safe(renderizarResumoOperacional);
+                    }
                     break;
                 case 'tab-atividades':
                     safe(garantirHistoricoInicial);
