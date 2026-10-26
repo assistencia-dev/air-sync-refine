@@ -1010,7 +1010,11 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
         .eq("id", resolvedEmployee.dbs_control_base_id)
         .maybeSingle();
       if (baseError) throw new Error(baseError.message);
-      baseName = base?.status === "ativo" ? String(base.name) : null;
+      const baseIsActive = String(base?.status ?? "").trim().toLocaleLowerCase("pt-BR") === "ativo";
+      baseName = baseIsActive ? String(base.name ?? "").trim() : null;
+      // A autorização depende do vínculo ativo e da flag do RH. O nome da base
+      // é apenas informativo e nunca pode bloquear a emissão por estar vazio.
+      if (!baseIsActive) baseName = null;
     }
     return {
       enabled: Boolean(resolvedEmployee),
@@ -1021,7 +1025,7 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
         email: user.email ?? null,
         base_id: resolvedEmployee.dbs_control_base_id ?? null,
         base_name: baseName,
-        can_issue_work_orders: Boolean(resolvedEmployee.dbs_control_can_issue_work_orders && baseName),
+        can_issue_work_orders: Boolean(resolvedEmployee.dbs_control_can_issue_work_orders && baseName !== null),
       } : null,
       administrative: false,
     };
