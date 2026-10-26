@@ -11,6 +11,8 @@ type EmployeeRecordInput = {
   full_name: string;
   unit: string;
   registration_data?: Record<string, unknown> | null;
+  dbs_control_base_id?: string | null;
+  dbs_control_can_issue_work_orders?: boolean;
 };
 
 function moneyToCents(value: unknown) {
@@ -43,7 +45,7 @@ function normalizeEmployeeRegistration(input: Record<string, unknown> | null | u
 async function requireNativeOperator(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, username, role_key, status")
+    .select("id, username, role_key, status, company_id")
     .eq("auth_id", context.userId)
     .maybeSingle();
   if (
@@ -56,6 +58,132 @@ async function requireNativeOperator(context: { userId: string }) {
   }
   return data;
 }
+
+type DbsControlBaseInput = {
+  id?: string;
+  name: string;
+  code?: string | null;
+  address_json?: Record<string, unknown> | null;
+  status?: "ativo" | "inativo";
+};
+
+async function validateDbsControlBaseForOperator(actor: { id: string; company_id?: string | null }, baseId: string | null | undefined) {
+  if (!baseId) return null;
+  const { data: base, error } = await (supabaseAdmin as any)
+    .from("dbs_control_bases")
+    .select("id, company_id, name, status")
+    .eq("id", baseId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!base) throw new Error("Base operacional DBS não encontrada.");
+  if (base.status !== "ativo") throw new Error("A base operacional selecionada está inativa.");
+  if (base.company_id && actor.company_id && String(base.company_id) !== String(actor.company_id)) {
+    throw new Error("A base operacional pertence a outra empresa.");
+  }
+  return base;
+}
+
+/** Bases e clientes são administrados pelo RH/operacional; colaboradores nunca
+ * recebem acesso direto às tabelas de escopo. */
+export const listDbsControlBases = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const actor = await requireNativeOperator(context);
+    const baseQuery = (supabaseAdmin as any)
+      .from("dbs_control_bases")
+      .select("id, company_id, name, code, address_json, status, created_at, updated_at")
+      .order("status", { ascending: true })
+      .order("name", { ascending: true });
+    if (actor.company_id) baseQuery.eq("company_id", actor.company_id);
+    const [basesResult, linksResult, clientsResult] = await Promise.all([
+      baseQuery,
+      (supabaseAdmin as any).from("dbs_control_base_clients").select("base_id, client_id, created_at"),
+      (supabaseAdmin as any).from("dbs_control_clients").select("id, legal_name, trade_name, cnpj, status").order("trade_name", { ascending: true }),
+    ]);
+    for (const result of [basesResult, linksResult, clientsResult]) {
+      if (result.error) throw new Error(result.error.message);
+    }
+    const linksByBase = new Map<string, string[]>();
+    for (const link of linksResult.data ?? []) {
+      const list = linksByBase.get(String(link.base_id)) ?? [];
+      list.push(String(link.client_id));
+      linksByBase.set(String(link.base_id), list);
+    }
+    return {
+      bases: (basesResult.data ?? []).map((base: any) => ({
+        ...base,
+        client_ids: linksByBase.get(String(base.id)) ?? [],
+        client_count: (linksByBase.get(String(base.id)) ?? []).length,
+      })),
+      clients: clientsResult.data ?? [],
+    };
+  });
+
+export const saveDbsControlBase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: DbsControlBaseInput) => {
+    const name = String(input?.name ?? "").trim();
+    if (!name) throw new Error("Informe o nome da base operacional.");
+    if (name.length > 120) throw new Error("O nome da base deve ter no máximo 120 caracteres.");
+    return {
+      ...input,
+      id: input?.id || undefined,
+      name,
+      code: input?.code ? String(input.code).trim().slice(0, 40) : null,
+      status: input?.status === "inativo" ? "inativo" : "ativo",
+      address_json: input?.address_json && typeof input.address_json === "object" ? input.address_json : {},
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const existingBase = await validateDbsControlBaseForOperator(actor, data.id);
+    const payload = {
+      name: data.name,
+      code: data.code || null,
+      address_json: data.address_json || {},
+      status: data.status || "ativo",
+      company_id: existingBase?.company_id ?? actor.company_id ?? null,
+      created_by_user_id: actor.id,
+      updated_at: new Date().toISOString(),
+    };
+    const query = (supabaseAdmin as any).from("dbs_control_bases");
+    const result = data.id
+      ? await query.update(payload).eq("id", data.id).select("id, company_id, name, code, address_json, status, created_at, updated_at").single()
+      : await query.insert(payload).select("id, company_id, name, code, address_json, status, created_at, updated_at").single();
+    if (result.error) throw new Error(result.error.message);
+    return result.data;
+  });
+
+export const setDbsControlBaseClients = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { base_id: string; client_ids: string[] }) => {
+    if (!input?.base_id) throw new Error("Base operacional inválida.");
+    const clientIds = [...new Set((input.client_ids ?? []).map((id) => String(id).trim()).filter(Boolean))];
+    if (clientIds.length > 5000) throw new Error("Uma base não pode ter mais de 5.000 clientes em uma única operação.");
+    return { base_id: input.base_id, client_ids: clientIds };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    await validateDbsControlBaseForOperator(actor, data.base_id);
+    if (data.client_ids.length) {
+      const { data: clients, error: clientsError } = await (supabaseAdmin as any)
+        .from("dbs_control_clients").select("id").in("id", data.client_ids);
+      if (clientsError) throw new Error(clientsError.message);
+      const known = new Set((clients ?? []).map((client: any) => String(client.id)));
+      const missing = data.client_ids.find((id) => !known.has(id));
+      if (missing) throw new Error("Um dos clientes selecionados não existe no cadastro relacional.");
+    }
+    const { error: deleteError } = await (supabaseAdmin as any)
+      .from("dbs_control_base_clients").delete().eq("base_id", data.base_id);
+    if (deleteError) throw new Error(deleteError.message);
+    if (data.client_ids.length) {
+      const { error: insertError } = await (supabaseAdmin as any)
+        .from("dbs_control_base_clients")
+        .insert(data.client_ids.map((client_id) => ({ base_id: data.base_id, client_id, created_by_user_id: actor.id })));
+      if (insertError) throw new Error(insertError.message);
+    }
+    return { ok: true, base_id: data.base_id, client_ids: data.client_ids };
+  });
 
 function validateBenefit(input: RhInput) {
   if (input.benefit_type !== "passagem" && input.benefit_type !== "alimentacao") {
@@ -371,7 +499,7 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
     await requireNativeOperator(context);
     const { data: employee, error } = await supabaseAdmin
       .from("rh_employees")
-      .select("id, full_name, unit, registration_data, is_active, registry_employee_id, ponto_access_enabled, ponto_portal_user_id, dbs_control_access_enabled, created_at, updated_at")
+      .select("id, full_name, unit, registration_data, is_active, registry_employee_id, ponto_access_enabled, ponto_portal_user_id, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, created_at, updated_at")
       .eq("id", data.employee_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -491,7 +619,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
     const { data, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, created_at, updated_at, is_active, registry_employee_id, benefit_configured, benefit_type")
+      .select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, created_at, updated_at, is_active, registry_employee_id, benefit_configured, benefit_type")
       .order("full_name");
     if (error) throw new Error(error.message);
     const registry = (data ?? []).filter((employee: any) =>
@@ -513,10 +641,14 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
     if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
+    if (input.dbs_control_can_issue_work_orders && !input.dbs_control_base_id) {
+      throw new Error("Para permitir emissão de OS, vincule primeiro uma base operacional DBS.");
+    }
     return { ...input, id: input.id || undefined, full_name: input.full_name.trim(), unit: input.unit.trim(), registration_data: normalizeEmployeeRegistration(input.registration_data) };
   })
   .handler(async ({ context, data }) => {
     const actor = await requireNativeOperator(context);
+    const base = await validateDbsControlBaseForOperator(actor, data.dbs_control_base_id);
     const registration = normalizeEmployeeRegistration(data.registration_data);
     const salaryCents = moneyToCents(registration.salary_cents ?? registration.salary);
     const weeklyHours = numberValue(registration.weekly_hours);
@@ -532,7 +664,9 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       const { data: employee, error } = await supabaseAdmin.from("rh_employees").update({
         full_name: data.full_name, unit: data.unit, registration_data: registration as any, is_active: current.is_active,
         ponto_entrada_prevista: entryTime, ponto_saida_prevista: exitTime, ponto_almoco_inicio_previsto: lunchStart, ponto_almoco_fim_previsto: lunchEnd,
-      }).eq("id", data.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+        dbs_control_base_id: base?.id ?? null,
+        dbs_control_can_issue_work_orders: Boolean(data.dbs_control_can_issue_work_orders),
+      } as any).eq("id", data.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id, dbs_control_base_id, dbs_control_can_issue_work_orders").single();
       if (error) throw new Error(error.message);
       const { data: currentContract } = await supabaseAdmin.from("rh_employee_contracts").select("id").eq("employee_id", data.id).eq("is_current", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const contractPayload = { employee_id: data.id, contract_type: String(registration.contract_type ?? "CLT"), admission_date: admissionDate, salary_cents: salaryCents, salary_effective_from: admissionDate, work_regime: String(registration.work_regime ?? "presencial"), weekly_hours: weeklyHours, work_shift: String(registration.work_shift ?? ""), notes: String(registration.notes ?? ""), is_current: true, updated_at: new Date().toISOString() };
@@ -541,10 +675,10 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
       await supabaseAdmin.from("rh_audit_log").insert({ employee_id: data.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_ATUALIZADO", entity_type: "rh_employees", entity_id: data.id, before_data: current, after_data: employee });
       return employee;
     }
-    const payload = { full_name: data.full_name, unit: data.unit, registration_data: registration ?? {}, is_active: true, registry_employee_id: null, ponto_entrada_prevista: entryTime, ponto_saida_prevista: exitTime, ponto_almoco_inicio_previsto: lunchStart, ponto_almoco_fim_previsto: lunchEnd };
-    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees").insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false } as any).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active").single();
+    const payload = { full_name: data.full_name, unit: data.unit, registration_data: registration ?? {}, is_active: true, registry_employee_id: null, ponto_entrada_prevista: entryTime, ponto_saida_prevista: exitTime, ponto_almoco_inicio_previsto: lunchStart, ponto_almoco_fim_previsto: lunchEnd, dbs_control_base_id: base?.id ?? null, dbs_control_can_issue_work_orders: Boolean(data.dbs_control_can_issue_work_orders) };
+    const { data: created, error: createError } = await supabaseAdmin.from("rh_employees").insert({ ...payload, benefit_type: "alimentacao", fare_cents: 1, trips_per_day: 1, benefit_configured: false } as any).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, dbs_control_base_id, dbs_control_can_issue_work_orders").single();
     if (createError) throw new Error(createError.message);
-    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id }).eq("id", created.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id").single();
+    const { data: employee, error: linkError } = await supabaseAdmin.from("rh_employees").update({ registry_employee_id: created.id } as any).eq("id", created.id).select("id, full_name, unit, registration_data, ficha_file_name, ficha_storage_path, created_at, updated_at, is_active, registry_employee_id, dbs_control_base_id, dbs_control_can_issue_work_orders").single();
     if (linkError) throw new Error(linkError.message);
     const { error: contractError } = await supabaseAdmin.from("rh_employee_contracts").insert({ employee_id: employee.id, contract_type: String(registration.contract_type ?? "CLT"), admission_date: admissionDate, salary_cents: salaryCents, salary_effective_from: admissionDate, work_regime: String(registration.work_regime ?? "presencial"), weekly_hours: weeklyHours, work_shift: String(registration.work_shift ?? ""), notes: String(registration.notes ?? ""), is_current: true });
     if (contractError) throw new Error(contractError.message);
@@ -844,15 +978,51 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
       return { enabled: true, employee: null, administrative: true };
     }
     const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, dbs_control_access_enabled, is_active")
+      .select("id, full_name, unit, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, is_active")
       .eq("ponto_portal_user_id", user.id)
       .eq("dbs_control_access_enabled", true)
       .eq("is_active", true)
       .maybeSingle();
     if (employeeError) throw new Error(employeeError.message);
+    let resolvedEmployee: any = employee;
+    if (!resolvedEmployee) {
+      const { data: access, error: accessError } = await supabaseAdmin.from("rh_employee_access")
+        .select("employee_id")
+        .eq("user_id", user.id)
+        .eq("access_enabled", true)
+        .maybeSingle();
+      if (accessError) throw new Error(accessError.message);
+      if (access?.employee_id) {
+        const fallback = await supabaseAdmin.from("rh_employees")
+          .select("id, full_name, unit, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, is_active")
+          .eq("id", access.employee_id)
+          .eq("dbs_control_access_enabled", true)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (fallback.error) throw new Error(fallback.error.message);
+        resolvedEmployee = fallback.data;
+      }
+    }
+    let baseName: string | null = null;
+    if (resolvedEmployee?.dbs_control_base_id) {
+      const { data: base, error: baseError } = await (supabaseAdmin as any).from("dbs_control_bases")
+        .select("id, name, status")
+        .eq("id", resolvedEmployee.dbs_control_base_id)
+        .maybeSingle();
+      if (baseError) throw new Error(baseError.message);
+      baseName = base?.status === "ativo" ? String(base.name) : null;
+    }
     return {
-      enabled: Boolean(employee),
-      employee: employee ? { id: employee.id, full_name: employee.full_name, unit: employee.unit, email: user.email ?? null } : null,
+      enabled: Boolean(resolvedEmployee),
+      employee: resolvedEmployee ? {
+        id: resolvedEmployee.id,
+        full_name: resolvedEmployee.full_name,
+        unit: resolvedEmployee.unit,
+        email: user.email ?? null,
+        base_id: resolvedEmployee.dbs_control_base_id ?? null,
+        base_name: baseName,
+        can_issue_work_orders: Boolean(resolvedEmployee.dbs_control_can_issue_work_orders && baseName),
+      } : null,
       administrative: false,
     };
   });

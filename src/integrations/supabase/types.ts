@@ -1848,6 +1848,8 @@ export type Database = {
           benefit_type: string
           created_at: string
           dbs_control_access_enabled: boolean
+          dbs_control_base_id: string | null
+          dbs_control_can_issue_work_orders: boolean
           fare_cents: number
           ficha_file_name: string | null
           ficha_storage_path: string | null
@@ -1876,6 +1878,8 @@ export type Database = {
           benefit_type: string
           created_at?: string
           dbs_control_access_enabled?: boolean
+          dbs_control_base_id?: string | null
+          dbs_control_can_issue_work_orders?: boolean
           fare_cents: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
@@ -1904,6 +1908,8 @@ export type Database = {
           benefit_type?: string
           created_at?: string
           dbs_control_access_enabled?: boolean
+          dbs_control_base_id?: string | null
+          dbs_control_can_issue_work_orders?: boolean
           fare_cents?: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null

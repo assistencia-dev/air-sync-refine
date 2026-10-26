@@ -244,19 +244,22 @@
         body.dbs-control-employee-mode aside .nav-menu .nav-section,
         body.dbs-control-employee-mode aside .nav-menu .nav-item { display:none !important; }
         body.dbs-control-employee-mode aside .nav-menu .nav-item[data-employee-visible="true"] { display:flex !important; }
+        body.dbs-control-employee-mode.dbs-control-can-issue-os aside .nav-menu .nav-item[data-employee-issue-visible="true"] { display:flex !important; }
         body.dbs-control-employee-mode header .btn-secondary,
         body.dbs-control-employee-mode header .btn-primary { display:none !important; }
         body.dbs-control-employee-mode #tab-dashboard,
         body.dbs-control-employee-mode #tab-atividades,
         body.dbs-control-employee-mode #tab-despacho,
         body.dbs-control-employee-mode #tab-ordens,
-        body.dbs-control-employee-mode #tab-nova-os,
         body.dbs-control-employee-mode #tab-clientes,
         body.dbs-control-employee-mode #tab-equipamentos,
         body.dbs-control-employee-mode #tab-tecnicos,
         body.dbs-control-employee-mode #tab-pecas,
         body.dbs-control-employee-mode #tab-servicos,
         body.dbs-control-employee-mode #tab-compras { display:none !important; }
+        body.dbs-control-employee-mode:not(.dbs-control-can-issue-os) #tab-nova-os { display:none !important; }
+        body.dbs-control-employee-mode.dbs-control-can-issue-os #tab-pwa:not(.active) { display:none !important; }
+        body.dbs-control-employee-mode.dbs-control-can-issue-os #tab-nova-os.active { display:block !important; }
         body.dbs-control-employee-mode #tab-pwa { display:block !important; }
         body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:700px; }
     
@@ -2169,7 +2172,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             <li class="nav-item" onclick="switchTab('tab-atividades', this)"><span>Atividades do Dia</span></li>
             <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
             <li class="nav-item" title="Consulte, filtre, conclua e exporte suas ordens de serviço" onclick="switchTab('tab-ordens', this)"><span>Ordens de Serviço</span></li>
-            <li class="nav-item" title="Crie uma nova ordem de serviço e envie para a equipe" onclick="switchTab('tab-nova-os', this)"><span>Nova OS</span></li>
+            <li class="nav-item" data-employee-issue-visible="true" title="Crie uma nova ordem de serviço dentro da sua base" onclick="switchTab('tab-nova-os', this)"><span>Emitir OS</span></li>
 
             <div class="nav-section">Base de Informação</div>
             <li class="nav-item active-data-center" title="Visão central dos cadastros e integridade da base" onclick="switchTab('tab-cadastros', this)"><span>Central de Cadastros</span></li>
@@ -3765,7 +3768,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function renderizarAbaAtiva(tabId) {
             const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            const activeId = employeeMode ? 'tab-pwa' : String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+            const canIssueOs = new URLSearchParams(window.location.search).get('can_issue_os') === '1';
+            const requestedId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+            const activeId = employeeMode && !(canIssueOs && requestedId === 'tab-nova-os') ? 'tab-pwa' : requestedId;
             const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
             // Renderização sob demanda: não montar milhares de linhas em abas ocultas.
             switch (activeId) {
@@ -3852,7 +3857,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         function switchTab(tabId, element) {
             try {
                 // Isolamento de perfil: o colaborador só pode abrir a própria área de OS.
-                if (document.body.classList.contains('dbs-control-employee-mode') && String(tabId || '') !== 'tab-pwa') {
+                if (document.body.classList.contains('dbs-control-employee-mode') && String(tabId || '') !== 'tab-pwa' && !(document.body.classList.contains('dbs-control-can-issue-os') && String(tabId || '') === 'tab-nova-os')) {
                     return false;
                 }
                 const target = document.getElementById(String(tabId || ''));
@@ -5357,7 +5362,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             ERP_STATE.ordens.push(novaOS);
             saveState();
             renderizarTudo();
-            switchTab('tab-ordens');
+            const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+            switchTab(employeeMode ? 'tab-pwa' : 'tab-ordens');
         }
 
         function renderizarKanban() {
@@ -5989,9 +5995,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('mode') !== 'employee') return;
                 document.body.classList.add('dbs-control-employee-mode');
+                const canIssueOs = params.get('can_issue_os') === '1';
+                if (canIssueOs) document.body.classList.add('dbs-control-can-issue-os');
                 // O menu do colaborador é uma área própria: manter somente "Minhas OS".
                 document.querySelectorAll('aside .nav-menu .nav-section, aside .nav-menu .nav-item').forEach(item => {
-                    item.style.setProperty('display', item.matches('.nav-item[data-employee-visible="true"]') ? 'flex' : 'none', 'important');
+                    const visible = item.matches('.nav-item[data-employee-visible="true"]') || (canIssueOs && item.matches('.nav-item[data-employee-issue-visible="true"]'));
+                    item.style.setProperty('display', visible ? 'flex' : 'none', 'important');
                 });
                 const employeeNav = document.querySelector('aside .nav-menu .nav-item[data-employee-visible="true"]');
                 if (employeeNav) {
@@ -6023,7 +6032,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const title = document.getElementById('view-title');
                 const subtitle = document.getElementById('view-subtitle');
                 if (title) title.textContent = 'DBS CONTROL · Minhas Ordens';
-                if (subtitle) subtitle.textContent = employeeName ? `Atendimento de campo · ${employeeName}` : 'Atendimento de campo';
+                const baseName = params.get('base_name') || '';
+                if (subtitle) subtitle.textContent = canIssueOs
+                    ? `Emissão autorizada · ${baseName ? `Base ${baseName}` : 'base operacional vinculada'}`
+                    : (employeeName ? `Atendimento de campo · ${employeeName}` : 'Atendimento de campo');
                 renderizarPWAScreen();
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();

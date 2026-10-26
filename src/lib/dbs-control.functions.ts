@@ -76,14 +76,14 @@ function normalizeState(state: Record<string, unknown>) {
 async function getCollaboratorEmployee(userId: string) {
   const { data: user, error: userError } = await supabaseAdmin
     .from("users")
-    .select("id, email")
+    .select("id, email, company_id")
     .eq("id", userId)
     .maybeSingle();
   if (userError) throw new Error(userError.message);
 
   const direct = await supabaseAdmin
     .from("rh_employees")
-    .select("id, full_name, unit, is_active, registration_data")
+    .select("id, full_name, unit, is_active, registration_data, dbs_control_base_id, dbs_control_can_issue_work_orders")
     .eq("ponto_portal_user_id", userId)
     .eq("ponto_access_enabled", true)
     .eq("dbs_control_access_enabled", true)
@@ -105,7 +105,7 @@ async function getCollaboratorEmployee(userId: string) {
     if (access.data?.employee_id) {
       const fallback = await supabaseAdmin
         .from("rh_employees")
-        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, dbs_control_access_enabled")
+        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders")
         .eq("id", access.data.employee_id)
         .eq("is_active", true)
         .maybeSingle();
@@ -121,10 +121,37 @@ async function getCollaboratorEmployee(userId: string) {
   return {
     ...data,
     login_email: String(user?.email ?? "").trim().toLowerCase() || registrationEmail || null,
+    user_company_id: user?.company_id ?? null,
   };
 }
 
-function filterCollaboratorState(state: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
+async function getCollaboratorBaseScope(employee: any) {
+  const baseId = String(employee?.dbs_control_base_id ?? "").trim();
+  if (!baseId) return { baseId: null, baseName: null, canIssueWorkOrders: false, clientIds: [] as string[] };
+  const [baseResult, linksResult] = await Promise.all([
+    (supabaseAdmin as any).from("dbs_control_bases").select("id, company_id, name, status").eq("id", baseId).maybeSingle(),
+    (supabaseAdmin as any).from("dbs_control_base_clients").select("client_id").eq("base_id", baseId),
+  ]);
+  if (baseResult.error) throw new Error(baseResult.error.message);
+  if (linksResult.error) throw new Error(linksResult.error.message);
+  if (baseResult.data?.company_id && employee?.user_company_id && String(baseResult.data.company_id) !== String(employee.user_company_id)) {
+    return { baseId: null, baseName: null, canIssueWorkOrders: false, clientIds: [] as string[] };
+  }
+  const active = baseResult.data?.status === "ativo";
+  return {
+    baseId: active ? baseId : null,
+    baseName: active ? String(baseResult.data?.name ?? "") : null,
+    canIssueWorkOrders: Boolean(active && employee?.dbs_control_can_issue_work_orders),
+    clientIds: active ? (linksResult.data ?? []).map((row: any) => String(row.client_id)) : [],
+  };
+}
+
+function filterCollaboratorState(
+  state: Record<string, unknown>,
+  employeeId: string,
+  loginEmail?: string | null,
+  scope: { clientIds?: string[]; canIssueWorkOrders?: boolean } = {},
+) {
   const normalized = normalizeState(state);
   const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
   const technicians = (normalized.tecnicos as any[]).filter((tech) =>
@@ -145,7 +172,10 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
         ? order
         : { ...order, employeeId }
     ));
-  const clientIds = new Set(orders.map((order) => String(order?.clienteId)).filter(Boolean));
+  const clientIds = new Set([
+    ...orders.map((order) => String(order?.clienteId)).filter(Boolean),
+    ...(scope.canIssueWorkOrders ? (scope.clientIds ?? []).map(String) : []),
+  ]);
   const equipmentIds = new Set<string>();
   for (const order of orders) {
     if (order?.equipamentoId != null) equipmentIds.add(String(order.equipamentoId));
@@ -167,8 +197,14 @@ function filterCollaboratorState(state: Record<string, unknown>, employeeId: str
     tecnicos: technicians,
     ordens: orders,
     clientes: (normalized.clientes as any[]).filter((item) => clientIds.has(String(item?.id))),
-    equipamentos: (normalized.equipamentos as any[]).filter((item) => equipmentIds.has(String(item?.id))),
-    servicos: (normalized.servicos as any[]).filter((item) => serviceIds.has(String(item?.id))),
+    equipamentos: (normalized.equipamentos as any[]).filter((item) =>
+      equipmentIds.has(String(item?.id)) || (scope.canIssueWorkOrders && clientIds.has(String(item?.clienteId ?? item?.client_id)))
+    ),
+    servicos: scope.canIssueWorkOrders
+      ? (normalized.servicos as any[])
+      : (normalized.servicos as any[]).filter((item) => serviceIds.has(String(item?.id))),
+    sites: (normalized.sites as any[]).filter((item) => clientIds.has(String(item?.clienteId ?? item?.client_id))),
+    locais: (normalized.locais as any[]).filter((item) => clientIds.has(String(item?.clienteId ?? item?.client_id))),
     pecas: (normalized.pecas as any[]).filter((item) => partsUsed.has(String(item?.id))),
     compras: [],
   };
@@ -828,10 +864,17 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
     const employee = await getCollaboratorEmployee(user.id);
     if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+    const collaboratorScope = await getCollaboratorBaseScope(employee);
 
     return {
       ...hydrated,
-      state: filterCollaboratorState(hydratedState, employee.id, employee.login_email),
+      state: filterCollaboratorState(hydratedState, employee.id, employee.login_email, collaboratorScope),
+      collaboratorScope: {
+        baseId: collaboratorScope.baseId,
+        baseName: collaboratorScope.baseName,
+        canIssueWorkOrders: collaboratorScope.canIssueWorkOrders,
+        clientCount: collaboratorScope.clientIds.length,
+      },
     };
   });
 
@@ -1158,6 +1201,11 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
     const scope = await resolveDbsControlScope(user);
+    const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
+    if (user.role_key === "COLABORADOR" && !collaboratorEmployee) {
+      throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+    }
     let changes = data.changes;
     // Apenas para compatibilidade de IDs legados: se uma OS ainda referencia um
     // cliente local não-UUID, recuperamos o cadastro legado por leitura e o
@@ -1198,12 +1246,14 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
       if (!protocol) throw new Error("Não é possível sincronizar OS sem protocolo.");
       let orderForPatch = order;
+      let currentCanonicalOrder: any = null;
       if (user.role_key === "COLABORADOR") {
         const currentOrder = await supabaseAdmin.from("dbs_control_work_orders")
-          .select("observation,servico_executado")
+          .select("id, version, assigned_employee_id, observation,servico_executado")
           .eq(isDbsControlUuid(order?.id) ? "id" : "protocol", isDbsControlUuid(order?.id) ? String(order.id) : protocol)
           .maybeSingle();
         if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${protocol}: ${currentOrder.error.message}`);
+        currentCanonicalOrder = currentOrder.data;
         if (currentOrder.data) {
           const mergedObservation = mergeAppendOnlyCollaboratorObservations(
             { observacao: currentOrder.data.observation ?? currentOrder.data.servico_executado ?? "" },
@@ -1220,6 +1270,13 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
             "signature_path", "assinatura_path", "signature_data",
           ].map((key) => [key, (fullPatch as any)[key]]))
         : fullPatch;
+      const isNewCollaboratorOrder = user.role_key === "COLABORADOR" && !currentCanonicalOrder;
+      if (isNewCollaboratorOrder && !collaboratorScope?.canIssueWorkOrders) {
+        throw new Error("DBS_OS_ISSUE_FORBIDDEN: este colaborador não está autorizado a emitir OS.");
+      }
+      if (isNewCollaboratorOrder && !(collaboratorScope?.clientIds ?? []).includes(String((fullPatch as any).client_id ?? ""))) {
+        throw new Error("DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE: cliente não está vinculado à base do colaborador.");
+      }
       if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${protocol} não possui cliente relacional válido.`);
       const idempotencyKey = `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
       const expectedVersion = Number(order?.version);
@@ -1244,14 +1301,22 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         patch,
         parts,
       };
-      const result = await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", { p_payload: payload as any });
+      const result = isNewCollaboratorOrder
+        ? await (supabaseAdmin as any).rpc("dbs_control_issue_work_order", { p_payload: { ...payload, patch: fullPatch } })
+        : await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", { p_payload: payload as any });
       if (result.error) {
         const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
-        if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND"].includes(permanentCode)) {
+        if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND", "DBS_OS_ISSUE_FORBIDDEN", "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE", "DBS_OS_ISSUE_CLIENT_INACTIVE", "DBS_OS_ISSUE_BASE_INACTIVE", "DBS_OS_ISSUE_SITE_INVALID", "DBS_OS_ISSUE_COMPANY_MISMATCH"].includes(permanentCode)) {
           conflicts.push({ protocol, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
             ? "A OS já foi concluída e seus dados assinados estão protegidos."
             : permanentCode === "DBS_OS_NOT_ASSIGNED"
               ? "A OS não está atribuída a este colaborador."
+              : permanentCode === "DBS_OS_ISSUE_FORBIDDEN"
+                ? "A emissão de OS não está liberada para este colaborador."
+                : permanentCode === "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE"
+                  ? "O cliente selecionado não pertence à base deste colaborador."
+                : permanentCode === "DBS_OS_ISSUE_CLIENT_INACTIVE"
+                  ? "O cliente selecionado está inativo."
               : permanentCode === "DBS_OS_STOCK_INSUFFICIENT"
                 ? "Estoque insuficiente para as peças informadas na OS."
                 : permanentCode === "DBS_OS_PART_NOT_FOUND"
@@ -1272,7 +1337,9 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       applied += 1;
       if (row.work_order_id) appliedOrderIds.push(String(row.work_order_id));
 
-      const equipmentIds = Array.isArray(order?.equipamentosIds) ? order.equipamentosIds : [];
+      const equipmentIds = Array.isArray(order?.equipamentosIds)
+        ? order.equipamentosIds
+        : (order?.equipamentoId ? [order.equipamentoId] : []);
       for (const rawEquipmentId of equipmentIds) {
         const equipmentId = maps.equipmentMap.get(String(rawEquipmentId)) ?? (isDbsControlUuid(rawEquipmentId) ? String(rawEquipmentId) : null);
         if (equipmentId && row.work_order_id) {

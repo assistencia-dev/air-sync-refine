@@ -12,6 +12,9 @@ import {
   saveRhEmployeeAccess,
   listRhCollaboratorUsers,
   getRhEmployee360,
+  listDbsControlBases,
+  saveDbsControlBase,
+  setDbsControlBaseClients,
 } from "@/lib/rh.functions";
 import { exportRhEmployeeFichaPdf, exportRhEmployeeRegistryPdf } from "@/lib/rh.exports";
 
@@ -22,6 +25,8 @@ type Employee = {
   registration_data: Record<string, string> | null;
   ficha_file_name: string | null;
   is_active: boolean;
+  dbs_control_base_id?: string | null;
+  dbs_control_can_issue_work_orders?: boolean;
   access?: {
     employee_id: string;
     user_id: string;
@@ -57,6 +62,10 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
     queryKey: ["rh-employee-registry"],
     queryFn: () => listRhEmployeeRegistry(),
   });
+  const bases = useQuery({
+    queryKey: ["dbs-control-bases"],
+    queryFn: () => listDbsControlBases(),
+  });
   const [editing, setEditing] = useState<Employee | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [accessing, setAccessing] = useState<Employee | null>(null);
@@ -67,7 +76,11 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("ativos");
   const [accessFilter, setAccessFilter] = useState<"todos" | "com_acesso" | "sem_acesso">("todos");
-  const refresh = () => qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
+  const [baseManagerOpen, setBaseManagerOpen] = useState(false);
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["rh-employee-registry"] });
+    void qc.invalidateQueries({ queryKey: ["dbs-control-bases"] });
+  };
   const employeeList = (employees.data ?? []) as unknown as Employee[];
   const filteredEmployees = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
@@ -120,6 +133,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
         <div className="flex flex-wrap gap-2">
           <button onClick={exportEmployees} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-bold text-white"><FileSpreadsheet className="h-4 w-4"/>CSV</button>
           <button onClick={() => exportRhEmployeeRegistryPdf(filteredEmployees)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-slate-900"><FileDown className="h-4 w-4"/>Relatório / PDF</button>
+          <button onClick={() => setBaseManagerOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2.5 text-xs font-black text-emerald-100"><BriefcaseBusiness className="h-4 w-4"/>Bases DBS</button>
           <button
             onClick={() => {
               setEditing(null);
@@ -235,6 +249,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
       {formOpen && (
         <EmployeeForm
           employee={editing}
+          bases={(bases.data?.bases ?? []) as any[]}
           onClose={() => setFormOpen(false)}
           onDone={() => {
             setFormOpen(false);
@@ -258,6 +273,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
           }}
         />
       )}
+      {baseManagerOpen && <DbsControlBaseManager onClose={() => setBaseManagerOpen(false)} />}
     </section>
   );
 }
@@ -459,6 +475,8 @@ function Employee360({ employee, onClose }: { employee: Employee; onClose: () =>
               <InfoGrid items={[
                 ["Folha de Ponto", data?.employee?.ponto_access_enabled ? "Liberada" : "Não liberada"],
                 ["DBS CONTROL", data?.employee?.dbs_control_access_enabled ? "Liberado" : "Não liberado"],
+                ["Base DBS", data?.employee?.dbs_control_base_id ? "Base vinculada" : "Sem base"],
+                ["Emissão de OS", data?.employee?.dbs_control_can_issue_work_orders ? "Autorizada" : "Não autorizada"],
                 ["Login", data?.access?.login_identifier || "—"],
                 ["Registro criado", data?.employee?.created_at ? dateText(data.employee.created_at) : "—"],
               ]} />
@@ -645,13 +663,105 @@ function EmployeeAccessForm({
   );
 }
 
-function EmployeeForm({ employee, onClose, onDone }: { employee: Employee | null; onClose: () => void; onDone: () => void }) {
+function DbsControlBaseManager({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: ["dbs-control-bases"], queryFn: () => listDbsControlBases() });
+  const bases = (query.data?.bases ?? []) as any[];
+  const clients = (query.data?.clients ?? []) as any[];
+  const [selectedId, setSelectedId] = useState("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientIds, setClientIds] = useState<string[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const selected = bases.find((base) => String(base.id) === selectedId);
+  useEffect(() => {
+    if (!selectedId && bases[0]) setSelectedId(String(bases[0].id));
+  }, [bases, selectedId]);
+  useEffect(() => {
+    if (!selected) return;
+    setName(String(selected.name ?? ""));
+    setCode(String(selected.code ?? ""));
+    setClientIds((selected.client_ids ?? []).map(String));
+  }, [selectedId, selected?.id]);
+  const create = useMutation({
+    mutationFn: () => saveDbsControlBase({ data: { name, code: code || null, status: "ativo" } }),
+    onSuccess: (base: any) => {
+      setSelectedId(String(base.id));
+      setMessage("Base criada. Agora selecione os clientes vinculados e salve o escopo.");
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["dbs-control-bases"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Não foi possível criar a base."),
+  });
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!selectedId) throw new Error("Crie ou selecione uma base antes de salvar.");
+      await saveDbsControlBase({ data: { id: selectedId, name, code: code || null, status: selected?.status === "inativo" ? "inativo" : "ativo" } });
+      return setDbsControlBaseClients({ data: { base_id: selectedId, client_ids: clientIds } });
+    },
+    onSuccess: () => {
+      setMessage("Base e clientes vinculados com segurança.");
+      setError(null);
+      void qc.invalidateQueries({ queryKey: ["dbs-control-bases"] });
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Não foi possível salvar os vínculos."),
+  });
+  const filteredClients = clients.filter((client) => {
+    const term = clientSearch.trim().toLocaleLowerCase("pt-BR");
+    return !term || [client.trade_name, client.legal_name, client.cnpj].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR").includes(term);
+  });
+  const toggleClient = (id: string) => setClientIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-slate-950/75 p-4">
+      <div className="my-6 w-full max-w-4xl rounded-2xl bg-[#1E293B] p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div><p className="text-[10px] font-black uppercase tracking-[.2em] text-emerald-300">DBS CONTROL · escopo operacional</p><h3 className="mt-1 text-xl font-black text-white">Bases e clientes vinculados</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">Uma base pode atender quantos clientes forem necessários. O colaborador emissor verá somente os clientes da base vinculada.</p></div>
+          <button onClick={onClose} className="text-xs font-bold text-slate-400">Fechar</button>
+        </div>
+        {error && <p className="mt-4 rounded-lg border border-rose-400/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-200">{error}</p>}
+        {message && <p className="mt-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-200">{message}</p>}
+        {query.isLoading ? <p className="py-10 text-center text-sm text-slate-400">Carregando bases…</p> : (
+          <div className="mt-5 grid gap-5 lg:grid-cols-[240px_1fr]">
+            <div className="rounded-xl border border-slate-700 bg-[#0F172A] p-3">
+              <div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Bases ({bases.length})</p></div>
+              <div className="space-y-1">
+                {bases.map((base) => <button key={base.id} onClick={() => setSelectedId(String(base.id))} className={`w-full rounded-lg px-3 py-2 text-left text-xs font-bold ${selectedId === String(base.id) ? "bg-emerald-500/20 text-emerald-200" : "text-slate-300 hover:bg-slate-800"}`}><span className="block truncate">{base.name}</span><span className="mt-1 block text-[10px] font-normal text-slate-500">{base.client_count ?? 0} cliente(s) · {base.status === "ativo" ? "Ativa" : "Inativa"}</span></button>)}
+                {!bases.length && <p className="px-2 py-4 text-xs text-slate-500">Nenhuma base cadastrada.</p>}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+                <label className="text-xs font-bold text-slate-300">Nome da base *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Base Campinas" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-white" /></label>
+                <label className="text-xs font-bold text-slate-300">Código<input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BASE-01" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-white" /></label>
+                <button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()} className="self-end rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-50">{create.isPending ? "Criando…" : "Criar base"}</button>
+              </div>
+              <div className="rounded-xl border border-slate-700 bg-[#0F172A] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black text-white">Clientes da base</p><p className="mt-1 text-[11px] text-slate-500">Selecionados: {clientIds.length.toLocaleString("pt-BR")}</p></div><input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Filtrar clientes…" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" /></div>
+                <div className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {filteredClients.map((client) => { const id = String(client.id); const checked = clientIds.includes(id); return <label key={id} className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs ${checked ? "bg-emerald-500/10 text-emerald-100" : "text-slate-300 hover:bg-slate-800"}`}><input type="checkbox" checked={checked} onChange={() => toggleClient(id)} /><span className="min-w-0"><span className="block truncate font-bold">{client.trade_name || client.legal_name || "Cliente sem nome"}</span><span className="block truncate text-[10px] text-slate-500">{client.cnpj || "CNPJ não informado"} · {client.status === "ativo" ? "Ativo" : "Inativo"}</span></span></label>; })}
+                  {!filteredClients.length && <p className="py-6 text-center text-xs text-slate-500">Nenhum cliente encontrado no cadastro relacional.</p>}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2"><button onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-bold text-slate-400">Fechar</button><button onClick={() => save.mutate()} disabled={save.isPending || !selectedId || !name.trim()} className="rounded-lg bg-sky-600 px-5 py-2.5 text-xs font-black text-white disabled:opacity-50">{save.isPending ? "Salvando…" : "Salvar base e vínculos"}</button></div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmployeeForm({ employee, bases, onClose, onDone }: { employee: Employee | null; bases: any[]; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(employee?.full_name ?? "");
   const [unit, setUnit] = useState(employee?.unit ?? "");
   const [values, setValues] = useState<Record<string, any>>(employee?.registration_data ?? {});
+  const [baseId, setBaseId] = useState(employee?.dbs_control_base_id ?? "");
+  const [canIssueWorkOrders, setCanIssueWorkOrders] = useState(Boolean(employee?.dbs_control_can_issue_work_orders));
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: () => saveRhEmployeeRecord({ data: { id: employee?.id, full_name: name, unit, registration_data: values } }),
+    mutationFn: () => saveRhEmployeeRecord({ data: { id: employee?.id, full_name: name, unit, registration_data: values, dbs_control_base_id: baseId || null, dbs_control_can_issue_work_orders: canIssueWorkOrders } }),
     onSuccess: onDone,
     onError: (e) => setError(e instanceof Error ? e.message : "Não foi possível salvar o funcionário."),
   });
@@ -676,6 +786,15 @@ function EmployeeForm({ employee, onClose, onDone }: { employee: Employee | null
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Nome completo *" value={name} onChange={setName} className="sm:col-span-2" />
           <Field label="Unidade / setor *" value={unit} onChange={setUnit} className="sm:col-span-2" />
+          <div className="sm:col-span-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div><p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">DBS CONTROL · escopo do colaborador</p><p className="mt-1 text-xs leading-5 text-slate-400">A base limita os clientes que aparecem no celular. A permissão de emissão libera uma Nova OS somente para esses clientes e força o colaborador como responsável.</p></div>
+              <label className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-100"><input type="checkbox" checked={canIssueWorkOrders} onChange={(e) => setCanIssueWorkOrders(e.target.checked)} disabled={!baseId} /> Permitir emitir OS</label>
+            </div>
+            <label className="mt-3 block text-xs font-bold text-slate-300">Base operacional vinculada<select value={baseId} onChange={(e) => { setBaseId(e.target.value); if (!e.target.value) setCanIssueWorkOrders(false); }} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-white"><option value="">Sem base vinculada</option>{bases.filter((base) => base.status === "ativo").map((base) => <option key={base.id} value={base.id}>{base.name}{base.client_count != null ? ` · ${base.client_count} cliente(s)` : ""}</option>)}</select></label>
+            {!bases.length && <p className="mt-2 text-[11px] text-amber-200">Cadastre uma base no botão “Bases DBS” antes de liberar a emissão.</p>}
+            {baseId && canIssueWorkOrders && <p className="mt-2 text-[11px] text-emerald-200">Emissão liberada: o colaborador verá somente os clientes vinculados a esta base.</p>}
+          </div>
           <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Dados pessoais</p><div className="mt-3 grid gap-3 sm:grid-cols-2">
             {FIELDS.filter(([key]) => ["cpf","rg","birth_date","phone","address","mother_name","father_name"].includes(key)).map(([key,label]) => <label key={key} className="text-xs font-bold text-slate-400">{label}<input value={values[key] ?? ""} onChange={(e)=>update(key,e.target.value)} type={key==="birth_date"?"date":"text"} placeholder={key==="cpf"?"000.000.000-00":key==="phone"?"(00) 00000-0000":""} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#0F172A] px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400"/></label>)}
           </div></div>

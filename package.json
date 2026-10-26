@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test:dbs-control": "node scripts/test-dbs-control.cjs",
     "test:dbs-resilience": "node scripts/test-dbs-control-resilience.cjs",
+    "test:dbs-base-scope": "node scripts/test-dbs-control-base-scope.cjs",
     "test:rh-scale": "node scripts/test-rh-collaborator-scale.cjs"
   },
   "dependencies": {
