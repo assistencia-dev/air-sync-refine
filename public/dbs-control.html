@@ -5627,6 +5627,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
                     const isConcluido = isOSConcluida(o);
+                    const address = String(cli.endereco || o.localAtendimento || '').trim();
+                    const mapsUrl = address
+                      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
+                      : '';
+                    const localHtml = address
+                      ? `<a class='employee-map-link' href='${escHtml(mapsUrl)}' target='_blank' rel='noopener noreferrer' aria-label='Abrir o endereço de ${escHtml(cli.nome || 'cliente')} no Google Maps'><span class='employee-map-pin' aria-hidden='true'>⌖</span><b>${escHtml(address)}</b><span class='employee-map-action'>Abrir rota no Maps&nbsp;↗</span></a>`
+                      : '<b>Não informado</b>';
                     return `
                       <article class="employee-order">
                         <div class="employee-order-top">
@@ -5640,7 +5647,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                           <div><small>Atendimento</small><b>${escHtml(o.tipo || 'Serviço')}</b></div>
                           <div><small>Data</small><b>${escHtml(o.data || '—')}</b></div>
                           <div><small>Equipamento</small><b>${escHtml(eq.tag || eq.tipo || 'Não informado')}</b></div>
-                          <div><small>Local</small><b>${escHtml(cli.endereco || o.localAtendimento || 'Não informado')}</b></div>
+                          <div class="employee-location-card"><small>Local</small>${localHtml}</div>
                         </div>
                         <div class="employee-description"><small>Solicitação</small><p>${escHtml(o.desc || 'Sem descrição cadastrada.')}</p></div>
                         ${o.prioridade || o.sla ? `<div class="employee-meta-row">${o.prioridade ? '<span>Prioridade: <b>'+escHtml(o.prioridade)+'</b></span>' : ''}${o.sla ? '<span>SLA: <b>'+escHtml(o.sla)+'</b></span>' : ''}</div>` : ''}
