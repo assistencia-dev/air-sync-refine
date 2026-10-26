@@ -2613,64 +2613,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
     </style>
-    <style id="dbs-employee-navigation-20261026">
-        #dbs-employee-context-nav {
-            display:none;
-            align-items:center;
-            gap:3px;
-            padding:4px;
-            border:1px solid #dce7f2;
-            border-radius:12px;
-            background:#f7fbff;
-        }
-        #dbs-employee-context-nav button {
-            min-height:34px;
-            padding:0 12px;
-            border:0;
-            border-radius:8px;
-            background:transparent;
-            color:#60758d;
-            font-size:10px;
-            font-weight:900;
-            letter-spacing:.02em;
-            cursor:pointer;
-            transition:background .16s ease,color .16s ease,box-shadow .16s ease;
-        }
-        #dbs-employee-context-nav button:hover { background:#eaf3ff; color:#145da0; }
-        #dbs-employee-context-nav button.active {
-            background:#fff;
-            color:#145da0;
-            box-shadow:0 2px 8px rgba(20,61,110,.10);
-        }
-        #dbs-employee-issue-cta[hidden] { display:none !important; }
-        body.dbs-control-employee-mode header > div:last-child { gap:8px; }
-        body.dbs-control-employee-mode header > div:last-child > #dbs-sync-indicator { white-space:nowrap; }
-        body.dbs-control-employee-mode #dbs-employee-context-nav { display:inline-flex; }
-        @media(max-width:760px) {
-            body.dbs-control-employee-mode header {
-                align-items:flex-start;
-                flex-wrap:wrap;
-                gap:10px;
-                padding:12px 14px;
-            }
-            body.dbs-control-employee-mode header > .page-title { width:100%; }
-            body.dbs-control-employee-mode header > div:last-child {
-                width:100%;
-                justify-content:space-between;
-                align-items:center;
-            }
-            body.dbs-control-employee-mode #dbs-employee-context-nav {
-                flex:1 1 auto;
-                min-width:0;
-            }
-            body.dbs-control-employee-mode #dbs-employee-context-nav button {
-                flex:1 1 0;
-                padding:0 9px;
-            }
-            body.dbs-control-employee-mode #dbs-employee-issue-cta { flex:0 0 auto; }
-        }
-    </style>
-    <style id="dbs-employee-dashboard-20261026">
+<style id="dbs-employee-dashboard-20261026">
         body.dbs-control-employee-mode #tab-dashboard { padding: 20px clamp(14px, 3vw, 34px) 34px; }
         body.dbs-control-employee-mode .employee-dashboard-root { max-width: 1180px; margin: 0 auto; }
         .employee-dashboard-hero { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding:26px; border-radius:24px; color:#fff; background:radial-gradient(circle at 90% 0%,rgba(56,189,248,.27),transparent 34%),linear-gradient(135deg,#0b1324,#123456); box-shadow:0 18px 42px rgba(15,23,42,.16); }
@@ -2714,6 +2657,120 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             .employee-dashboard-actions button { flex:1 1 150px; }
         }
         @media(prefers-reduced-motion:reduce){ .employee-dashboard-progress-track span { transition:none; } }
+    </style>
+    <style id="dbs-employee-menu-final-20261026">
+        /* Menu único do colaborador: o conteúdo fica dentro do drawer/sidebar,
+           sem uma segunda navegação solta no cabeçalho. */
+        body.dbs-control-employee-mode aside {
+            display:flex !important;
+            visibility:visible !important;
+            flex:0 0 232px !important;
+            width:232px !important;
+            position:relative !important;
+            inset:auto !important;
+            transform:none !important;
+            background:#ffffff !important;
+            color:#14243a !important;
+            border-right:1px solid #e5edf5 !important;
+            box-shadow:none !important;
+        }
+        body.dbs-control-employee-mode aside .brand-header {
+            min-height:76px;
+            padding:16px 14px;
+            background:linear-gradient(145deg,#fafdff,#eef6ff);
+            border-bottom:1px solid #e5edf5;
+        }
+        body.dbs-control-employee-mode aside .brand-header .dbs-control-logo {
+            width:34px;
+            height:34px;
+            object-fit:cover;
+            border-radius:10px;
+        }
+        body.dbs-control-employee-mode aside .brand-title {
+            color:#15395d;
+            font-size:12px;
+            letter-spacing:.12em;
+        }
+        body.dbs-control-employee-mode aside .brand-badge { display:none !important; }
+        body.dbs-control-employee-mode aside .nav-menu {
+            display:flex !important;
+            flex:1 1 auto;
+            flex-direction:column;
+            gap:6px;
+            padding:16px 12px 20px;
+            overflow-y:auto;
+            background:#fff;
+        }
+        body.dbs-control-employee-mode aside .nav-section { display:none !important; }
+        body.dbs-control-employee-mode aside .nav-item {
+            display:none !important;
+            order:10;
+            min-height:46px;
+            margin:0;
+            padding:0 13px;
+            border:1px solid transparent;
+            border-radius:12px;
+            color:#526b84;
+            font-size:12px;
+            font-weight:800;
+            justify-content:flex-start;
+            gap:10px;
+        }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-visible="true"],
+        body.dbs-control-employee-mode aside .nav-item[data-employee-issue-visible="true"] {
+            display:flex !important;
+        }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-dashboard-visible="true"] { order:1; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-visible="true"]:not([data-employee-dashboard-visible="true"]) { order:2; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-issue-visible="true"] { order:3; }
+        body.dbs-control-employee-mode aside .nav-item:hover,
+        body.dbs-control-employee-mode aside .nav-item.active {
+            background:#eef6ff;
+            border-color:#d8eaff;
+            color:#1168b5;
+        }
+        body.dbs-control-employee-mode aside .nav-item span { white-space:nowrap; }
+        .employee-menu-caption { display:none; }
+        body.dbs-control-employee-mode .employee-menu-caption {
+            display:block;
+            order:0;
+            padding:0 8px 5px;
+            color:#9aaabd;
+            font-size:9px;
+            font-weight:900;
+            letter-spacing:.14em;
+            text-transform:uppercase;
+        }
+        body.dbs-control-employee-mode #dbs-employee-context-nav,
+        body.dbs-control-employee-mode #dbs-employee-issue-cta {
+            display:none !important;
+        }
+        body.dbs-control-employee-mode main { margin-left:0 !important; width:auto !important; }
+        @media(max-width:760px) {
+            body.dbs-control-employee-mode aside {
+                position:fixed !important;
+                z-index:10050 !important;
+                inset:0 auto 0 0 !important;
+                width:min(86vw,320px) !important;
+                max-width:calc(100vw - 52px) !important;
+                height:100dvh !important;
+                flex:0 0 auto !important;
+                transform:translateX(-105%) !important;
+                transition:transform .22s ease;
+                box-shadow:0 0 0 100vmax transparent !important;
+            }
+            body.dbs-control-employee-mode.dbs-mobile-menu-open aside {
+                transform:translateX(0) !important;
+                box-shadow:0 0 0 100vmax rgba(15,23,42,.48) !important;
+            }
+            body.dbs-control-employee-mode main { width:100% !important; }
+            body.dbs-control-employee-mode .dbs-mobile-menu-toggle {
+                display:inline-flex !important;
+            }
+        }
+        @media(min-width:761px) {
+            body.dbs-control-employee-mode .dbs-mobile-menu-toggle { display:none !important; }
+        }
     </style>
 </head>
 <body>
@@ -2760,11 +2817,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <nav id="dbs-employee-context-nav" aria-label="Navegação do colaborador">
-                    <button type="button" data-employee-tab="tab-dashboard" class="active" aria-current="page" onclick="switchTab('tab-dashboard', this)">Dashboard</button>
-                    <button type="button" data-employee-tab="tab-pwa" onclick="switchTab('tab-pwa', this)">Minhas OS</button>
-                </nav>
-                <span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
+<span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
                 <button id="dbs-employee-issue-cta" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
                 <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
                 <details class="dbs-secondary-menu" style="position:relative;"><summary class="btn btn-secondary btn-sm" style="min-height:36px;cursor:pointer;list-style:none;">Mais opções ▾</summary><div style="position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:190px;padding:8px;background:#fff;border:1px solid #dbe5ef;border-radius:10px;box-shadow:0 8px 24px rgba(16,42,67,.14);"><button class="btn btn-secondary btn-sm" style="min-height:44px;width:100%;white-space:normal;" onclick="resetarDadosPadrao()">Limpar dados locais</button></div></details>
@@ -4535,27 +4588,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             atualizarMetricas();
             setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
         }
-
-        function atualizarNavegacaoColaborador(tabId) {
-            const nav = document.getElementById('dbs-employee-context-nav');
-            const current = String(tabId || 'tab-dashboard');
-            if (nav) {
-                nav.querySelectorAll('button[data-employee-tab]').forEach(button => {
-                    const active = button.getAttribute('data-employee-tab') === current;
-                    button.classList.toggle('active', active);
-                    if (active) button.setAttribute('aria-current', 'page');
-                    else button.removeAttribute('aria-current');
-                });
-            }
-            const issueCta = document.getElementById('dbs-employee-issue-cta');
-            if (issueCta && document.body.classList.contains('dbs-control-employee-mode')) {
-                const canIssue = document.body.classList.contains('dbs-control-can-issue-os');
-                const hidden = !canIssue || current === 'tab-nova-os';
-                issueCta.hidden = hidden;
-                issueCta.setAttribute('aria-hidden', hidden ? 'true' : 'false');
-            }
-        }
-
         function switchTab(tabId, element) {
             try {
                 // Isolamento de perfil: o colaborador pode acompanhar o próprio
@@ -4608,7 +4640,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (title) title.textContent = meta[0];
                     if (subtitle) subtitle.textContent = meta[1];
                 }
-                if (employeeMode) atualizarNavegacaoColaborador(tabId);
                 // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
                 if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
                 // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
