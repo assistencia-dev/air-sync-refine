@@ -168,6 +168,11 @@ function DbsControlPage() {
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   useEffect(() => {
+    const logSyncEvent = (event: string, details: Record<string, unknown> = {}) => {
+      const entry = JSON.stringify({ scope: "dbs-control-sync", event, at: new Date().toISOString(), ...details });
+      if (event.includes("error") || event.includes("conflict") || event.includes("retry")) console.warn(entry);
+      else console.info(entry);
+    };
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
@@ -513,6 +518,7 @@ function DbsControlPage() {
                 if (retryAttemptRef.current < 3) {
                   const delays = [5000, 15000, 45000];
                   const delay = delays[retryAttemptRef.current++];
+                  logSyncEvent("save_retry_waiting_for_cloud", { attempt: retryAttemptRef.current, delayMs: delay });
                   if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
                   retryTimerRef.current = setTimeout(() => {
                     retryTimerRef.current = null;
@@ -533,6 +539,11 @@ function DbsControlPage() {
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
               const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
+              logSyncEvent(hasConflict ? "save_conflict" : "save_applied", {
+                requestCount: requestIds.length,
+                applied: Number(result.applied ?? 0),
+                conflicts: hasConflict ? result.conflicts.length : 0,
+              });
               const resultMessage = hasConflict
                 ? `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
                 : null;
@@ -548,8 +559,8 @@ function DbsControlPage() {
                 updated_at: latest?.updated_at ?? null, conflicts: result.conflicts ?? [], error: resultMessage ?? undefined,
               }, "*"));
             } catch (err) {
-              console.error("DBS Control cloud save:", err);
               const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
+              logSyncEvent("save_error", { message, attempt: retryAttemptRef.current + 1 });
               setCloudError(message);
               iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: pendingChangesRef.current ? 1 : 0, error: message,
@@ -560,6 +571,7 @@ function DbsControlPage() {
               if (retryAttemptRef.current < 3 && pendingChangesRef.current) {
                 const delays = [5000, 15000, 45000];
                 const delay = delays[retryAttemptRef.current++];
+                logSyncEvent("save_retry_scheduled", { attempt: retryAttemptRef.current, delayMs: delay });
                 if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
                 retryTimerRef.current = setTimeout(() => {
                   retryTimerRef.current = null;
@@ -616,13 +628,15 @@ function DbsControlPage() {
           return;
         }
         if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
+          logSyncEvent("canonical_reconciled", { forced: force, changed: latest.updated_at !== cloudUpdatedAtRef.current });
           cloudUpdatedAtRef.current = latest.updated_at;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState }, "*");
         }
         setCloudError(null);
       } catch (err) {
-        console.error("DBS Control Realtime recovery:", err);
-        setCloudError(err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.");
+        const message = err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.";
+        logSyncEvent("realtime_recovery_error", { message });
+        setCloudError(message);
       } finally {
         refreshInFlight = false;
       }
@@ -642,10 +656,12 @@ function DbsControlPage() {
         })
         .subscribe((status) => {
           if (disposed) return;
+          logSyncEvent("realtime_status", { status });
           if (status === "SUBSCRIBED") {
             void refreshLatestCloudState();
             setCloudError(null);
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            logSyncEvent("realtime_retry", { status, delayMs: 3000 });
             setCloudError("Realtime desconectado. Recuperação automática em andamento.");
             if (reconnectTimer) clearTimeout(reconnectTimer);
             reconnectTimer = setTimeout(() => {
@@ -673,6 +689,7 @@ function DbsControlPage() {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
     const handleOnline = () => {
+      logSyncEvent("network_online");
       retryPendingSaveRef.current?.(true);
       void refreshLatestCloudState();
     };

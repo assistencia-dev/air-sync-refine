@@ -973,6 +973,66 @@ export type Database = {
           },
         ]
       }
+      dbs_control_outbox: {
+        Row: {
+          aggregate_id: string | null
+          aggregate_type: string
+          aggregate_version: number
+          attempts: number
+          available_at: string
+          command_id: string | null
+          company_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          payload: Json
+          published_at: string | null
+          status: string
+        }
+        Insert: {
+          aggregate_id?: string | null
+          aggregate_type: string
+          aggregate_version: number
+          attempts?: number
+          available_at?: string
+          command_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          status?: string
+        }
+        Update: {
+          aggregate_id?: string | null
+          aggregate_type?: string
+          aggregate_version?: number
+          attempts?: number
+          available_at?: string
+          command_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       dbs_control_entity_records: {
         Row: {
           created_at: string
@@ -1022,6 +1082,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dbs_control_sync_metrics: {
+        Row: {
+          claimed_count: number
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          failure_count: number
+          id: string
+          metric_name: string
+          retry_count: number
+          status: string
+          success_count: number
+          worker_id: string
+        }
+        Insert: {
+          claimed_count?: number
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_count?: number
+          id?: string
+          metric_name: string
+          retry_count?: number
+          status: string
+          success_count?: number
+          worker_id: string
+        }
+        Update: {
+          claimed_count?: number
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_count?: number
+          id?: string
+          metric_name?: string
+          retry_count?: number
+          status?: string
+          success_count?: number
+          worker_id?: string
+        }
+        Relationships: []
       }
       dbs_control_legacy_id_map: {
         Row: {
@@ -3230,6 +3332,18 @@ export type Database = {
           version: number | null
           work_order_id: string | null
         }[]
+      }
+      dbs_control_claim_outbox: {
+        Args: { p_limit?: number; p_worker_id: string }
+        Returns: Database["public"]["Tables"]["dbs_control_outbox"]["Row"][]
+      }
+      dbs_control_complete_outbox: {
+        Args: { p_error?: string; p_outbox_id: string; p_retry_seconds?: number; p_success: boolean; p_worker_id: string }
+        Returns: boolean
+      }
+      dbs_control_sync_health: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       current_unit_id: { Args: never; Returns: string }
       dbs_control_save_snapshot_safe: {

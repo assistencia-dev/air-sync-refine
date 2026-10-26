@@ -109,6 +109,8 @@ assert.match(route, /if \(!employeeModeRef\.current && localHasData && dbsContro
 assert.match(route, /const reconciledLatestState = employeeModeRef\.current[\s\S]*?mergeDbsControlStates\(latestCloudState, localRecoveryStateRef\.current\)/, "O Realtime deve reconciliar reduções do snapshot administrativo sem misturar o recorte filtrado do colaborador.");
 assert.match(route, /if \(!employeeModeRef\.current && dbsControlStateIsSmallerThan\(localRecoveryStateRef\.current, latestCloudState\)\)/, "A redução do snapshot deve ser registrada para diagnóstico sem bloquear o salvamento administrativo.");
 assert.match(route, /pendingChangesRef/, "A fila de salvamento deve transportar somente alterações por registro.");
+assert.match(route, /scope: \"dbs-control-sync\"/, "Falhas, retries e reconciliações precisam gerar logs estruturados sem payload operacional.");
+assert.match(route, /realtime_status/, "O estado do canal Realtime precisa ser observável no navegador.");
 assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");

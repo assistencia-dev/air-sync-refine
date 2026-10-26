@@ -1313,6 +1313,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const [
       clientsResult, sitesResult, equipmentResult, servicesResult, employeesResult,
       ordersResult, orderEquipmentResult, refsResult, syncRunsResult, snapshotsResult,
+      syncHealthResult, syncMetricsResult,
     ] = await Promise.all([
       supabaseAdmin.from("dbs_control_clients").select("id,legal_name,trade_name,cnpj,email,status"),
       supabaseAdmin.from("dbs_control_sites").select("id,client_id,name,status"),
@@ -1324,8 +1325,10 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
       supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
       supabaseAdmin.from("dbs_control_snapshots").select("state,updated_at,scope_key").limit(20),
+      (supabaseAdmin as any).rpc("dbs_control_sync_health"),
+      (supabaseAdmin as any).from("dbs_control_sync_metrics").select("worker_id,metric_name,status,duration_ms,claimed_count,success_count,failure_count,retry_count,details,created_at").order("created_at",{ascending:false}).limit(20),
     ]);
-    const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult];
+    const results = [clientsResult,sitesResult,equipmentResult,servicesResult,employeesResult,ordersResult,orderEquipmentResult,refsResult,syncRunsResult,snapshotsResult,syncHealthResult,syncMetricsResult];
     const firstError = results.find((r) => r.error)?.error;
     if (firstError) throw new Error(firstError.message);
 
@@ -1333,6 +1336,8 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const services=servicesResult.data??[], employees=employeesResult.data??[], orders=ordersResult.data??[];
     const orderEquipment=orderEquipmentResult.data??[], refs=refsResult.data??[], syncRuns=syncRunsResult.data??[];
     const snapshots=snapshotsResult.data??[];
+    const syncHealth=syncHealthResult.data??null;
+    const recentSyncMetrics=syncMetricsResult.data??[];
     const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
     const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
     const groups=(rows:any[],key:(x:any)=>string)=>{
@@ -1403,7 +1408,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const counts={clients:clients.length,sites:sites.length,equipment:equipment.length,services:services.length,employees:employees.length,fieldControlEmployees:fcEmployees.length,orders:orders.length,orderEquipmentLinks:orderEquipment.length,externalRefs:refs.length};
     const critical=issues.filter((x:any)=>x.severity==="critical").length;
     const warnings=issues.filter((x:any)=>x.severity==="warning").length;
-    return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:syncRuns[0]??null,snapshotCounts,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
+    return {ok:critical===0,auditedAt:new Date().toISOString(),status:critical?"critical":warnings?"warning":"ok",counts,issues,latestSync:syncRuns[0]??null,snapshotCounts,syncHealth,recentSyncMetrics,policy:{destructiveActions:false,sameNameEmployeesAreNotMerged:true,automaticDeletion:false}};
   });
 
 

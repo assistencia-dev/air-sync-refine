@@ -28,3 +28,7 @@ Cada execução deve exibir no log a quantidade de registros exportados por tabe
 ## Restauração
 
 A restauração não é automática e não deve sobrescrever a produção. Primeiro deve-se baixar uma cópia para análise, comparar o manifesto com a produção e restaurar apenas registros ausentes usando chaves primárias e `upsert` controlado. Qualquer restauração deve ser autorizada e registrada separadamente.
+
+## Worker da outbox do DBS CONTROL
+
+O workflow `.github/workflows/dbs-control-outbox-worker.yml` executa a cada cinco minutos e chama a Edge Function `dbs-control-outbox-worker`. Ele usa os mesmos secrets `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, processa até 200 eventos por lote, recupera locks abandonados e registra métricas na tabela `dbs_control_sync_metrics`. A chave nunca é enviada ao navegador nem gravada no repositório.

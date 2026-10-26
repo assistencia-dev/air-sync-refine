@@ -3551,6 +3551,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if(r.latestSync){
                 html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:#334155;">Última sincronização FieldControl:</b> '+escDbsControl(r.latestSync.status||'—')+' · '+escDbsControl(r.latestSync.mode||'—')+'</div>';
             }
+            if(r.syncHealth){
+                const h=r.syncHealth||{};
+                const pending=Number(h.pending||0), processing=Number(h.processing||0), published=Number(h.published||0), failed=Number(h.failed||0);
+                const healthColor=failed?'#991b1b':processing?'#92400e':'#166534';
+                const healthBg=failed?'#fff1f2':processing?'#fffbeb':'#f0fdf4';
+                html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:'+healthBg+';border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:'+healthColor+';">Saúde da sincronização:</b> '+escDbsControl('pendentes '+pending+' · processando '+processing+' · publicados '+published+' · falhos '+failed)+'</div>';
+                if(h.last_error) html+='<div style="margin-top:5px;color:#991b1b;font-size:10px;">Último erro da outbox: '+escDbsControl(String(h.last_error))+'</div>';
+            }
             body.innerHTML=html;
         }
 

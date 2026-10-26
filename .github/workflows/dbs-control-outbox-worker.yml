@@ -1,0 +1,28 @@
+name: DBS Control outbox worker
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/dbs-control-outbox-worker.yml"
+      - "scripts/run-dbs-control-outbox-worker.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Drain transactional outbox
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/run-dbs-control-outbox-worker.mjs
