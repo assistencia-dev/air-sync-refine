@@ -2164,6 +2164,100 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
   body.dbs-control-employee-mode .employee-os-tabs{grid-template-columns:minmax(0,1fr)!important;}
 }
 </style>
+    <!-- dbs-field-execution-pro-20261026 -->
+    <style id="dbs-field-execution-pro-20261026">
+      /* Execução de campo: leitura confortável e alvos de toque grandes.
+         Mantém os handlers e o fluxo de dados existentes. */
+      body.dbs-control-employee-mode .employee-execution-body {
+        gap: 18px;
+      }
+      body.dbs-control-employee-mode .employee-execution summary {
+        min-height: 46px;
+        align-items: center;
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      body.dbs-control-employee-mode .employee-execution-body > label {
+        font-size: 11px;
+        letter-spacing: .06em;
+      }
+      body.dbs-control-employee-mode .employee-execution-body select,
+      body.dbs-control-employee-mode .employee-execution-body textarea {
+        min-height: 44px;
+        padding: 11px 12px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      body.dbs-control-employee-mode .employee-execution-body textarea {
+        min-height: 128px;
+      }
+      body.dbs-control-employee-mode .employee-photo-grid {
+        gap: 12px;
+      }
+      body.dbs-control-employee-mode .employee-photo-grid label {
+        min-height: 92px;
+        padding: 13px;
+        font-size: 11px;
+        line-height: 1.4;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+      body.dbs-control-employee-mode .employee-photo-grid input {
+        min-height: 40px;
+        font-size: 12px;
+      }
+      body.dbs-control-employee-mode .field-check-card {
+        padding: 16px;
+      }
+      body.dbs-control-employee-mode .field-check-item {
+        min-height: 46px;
+        padding: 12px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      body.dbs-control-employee-mode .employee-finish-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: 10px;
+      }
+      body.dbs-control-employee-mode .employee-finish-row .employee-finish {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 48px;
+        font-size: 15px;
+      }
+      body.dbs-control-employee-mode .employee-finish-row .employee-save-status {
+        grid-column: 1 / -1;
+        min-height: 18px;
+        color: #315a7c;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      @media (max-width: 520px) {
+        body.dbs-control-employee-mode .employee-execution-body {
+          gap: 16px;
+        }
+        body.dbs-control-employee-mode .employee-execution {
+          padding: 16px 13px;
+        }
+        body.dbs-control-employee-mode .employee-execution-intro {
+          padding: 15px;
+        }
+        body.dbs-control-employee-mode .employee-execution-intro-title {
+          align-items: flex-start;
+          flex-direction: column;
+          font-size: 16px;
+        }
+        body.dbs-control-employee-mode .employee-execution-roadmap span {
+          font-size: 12px;
+        }
+        body.dbs-control-employee-mode .employee-finish-row {
+          bottom: 4px;
+          padding: 11px;
+        }
+      }
+    </style>
 </head>
 <body>
 
@@ -3181,7 +3275,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         // Conclusão de OS só é confirmada ao técnico depois da confirmação da nuvem.
         async function saveStateAndConfirmCloud() {
-            if (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_CLOUD_HYDRATING || window.parent === window) {
+            if (!DBS_CONTROL_CLOUD_READY || window.parent === window) {
+                // Uma hidratação de leitura em segundo plano não pode bloquear uma
+                // conclusão. O delta usa a versão otimista e o ACK da RPC é a
+                // confirmação autoritativa; se houver concorrência, a API devolve
+                // conflito explícito para reconciliação.
                 throw new Error('A conexão com a nuvem não está pronta. A OS não foi confirmada; verifique a conexão e tente novamente.');
             }
             registrarHistoricoOS();
@@ -5808,7 +5906,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             setProgress('Preparando evidências...');
 
             try {
-                if (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_CLOUD_HYDRATING) {
+                if (!DBS_CONTROL_CLOUD_READY) {
                     throw new Error('A conexão com a nuvem ainda não está pronta. Aguarde o indicador Sincronizado e tente novamente.');
                 }
                 const beforeFile = beforeInput?.files?.[0] || null;
