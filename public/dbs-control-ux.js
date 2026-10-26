@@ -808,11 +808,13 @@
     'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
   };
   function targetId(item){
+    const explicit = item.getAttribute('data-dbs-target') || item.getAttribute('data-tab');
+    if (explicit) return explicit;
     const inline = item.getAttribute('onclick') || '';
     const match = inline.match(/switchTab\(\s*['"]([^'"]+)['"]/);
     if (match) return match[1];
     const text = (item.textContent || '').trim().toLocaleLowerCase('pt-BR');
-    const map = {'painel operacional':'tab-dashboard','dashboard principal':'tab-dashboard','atividades do dia':'tab-atividades','quadros de despacho':'tab-despacho','ordens de serviço':'tab-ordens','nova os':'tab-nova-os','clientes':'tab-clientes','importação em massa':'tab-importacao','parque de equipamentos':'tab-equipamentos','equipe técnica':'tab-tecnicos','peças & estoque':'tab-pecas','serviços':'tab-servicos','compras':'tab-compras','minhas os':'tab-pwa','orçamentos':'tab-orcamentos','central de cadastros':'tab-cadastros'};
+    const map = {'painel operacional':'tab-dashboard','dashboard principal':'tab-dashboard','dashboard':'tab-dashboard','atividades do dia':'tab-atividades','quadros de despacho':'tab-despacho','ordens de serviço':'tab-ordens','nova os':'tab-nova-os','emitir os':'tab-nova-os','clientes':'tab-clientes','importação em massa':'tab-importacao','parque de equipamentos':'tab-equipamentos','equipe técnica':'tab-tecnicos','peças & estoque':'tab-pecas','serviços':'tab-servicos','compras':'tab-compras','minhas os':'tab-pwa','orçamentos':'tab-orcamentos','central de cadastros':'tab-cadastros'};
     return map[text] || '';
   }
   function activateDirect(id,item){
@@ -855,6 +857,10 @@
     event.stopImmediatePropagation();
     let ok=false;
     try { if(typeof window.switchTab==='function')ok=window.switchTab(id,item)!==false; } catch(error){console.error('DBS CONTROL: falha no menu legado',error);}
-    if(!ok)activateDirect(id,item);
+    // Um handler legado pode retornar true sem ter aplicado a troca. Confirme o estado
+    // antes de encerrar o evento e acione a camada direta quando necessário.
+    const activeId = document.querySelector('.tab-view.active')?.id || '';
+    if (!ok || activeId !== id) ok = activateDirect(id,item);
+    if (!ok) item.setAttribute('aria-disabled','true');
   },true);
 })();
