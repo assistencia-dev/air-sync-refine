@@ -92,7 +92,6 @@ const tables = [
   "dbs_control_outbox",
   "dbs_control_legacy_id_map",
   "dbs_control_sync_metrics",
-  "dbs_control_work_order_revisions",
   "dbs_control_backup_manifests",
 ];
 
