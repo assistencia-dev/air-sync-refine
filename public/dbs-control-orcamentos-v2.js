@@ -127,29 +127,61 @@
     body.innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:20px;">Nenhum orçamento registrado.</td></tr>';
   }
 
-  window.quoteStatus = function (id, status) {
+  var commercialMutationInFlight = false;
+  async function persistCommercialMutation() {
+    if (commercialMutationInFlight) throw new Error('Outra atualização comercial está em andamento. Aguarde a confirmação.');
+    commercialMutationInFlight = true;
+    try {
+      if (typeof window.saveStateAndConfirmCloud === 'function' && window.parent !== window) {
+        await window.saveStateAndConfirmCloud();
+      } else if (typeof window.saveState === 'function') {
+        window.saveState();
+      }
+    } finally {
+      commercialMutationInFlight = false;
+    }
+  }
+
+  window.quoteStatus = async function (id, status) {
+    ensureState();
     var q = ERP_STATE.orcamentos.find(function (x) { return x.id === id; }); if (!q) return;
-    q.status = status; window.saveState(); renderQuotes();
+    var previousStatus = q.status;
+    q.status = status;
+    try {
+      await persistCommercialMutation();
+      renderQuotes();
+    } catch (error) {
+      q.status = previousStatus;
+      renderQuotes();
+      alert('A alteração do orçamento não foi confirmada na nuvem. ' + (error && error.message ? error.message : 'Tente novamente.'));
+    }
   };
 
-  window.quoteToOs = function (id) {
+  window.quoteToOs = async function (id) {
     ensureState(); var q = ERP_STATE.orcamentos.find(function (x) { return x.id === id; });
-    if (!q || q.status !== "Aprovado") return;
-    if (q.osId) { alert("Este orçamento já foi convertido em OS."); return; }
-    if (!ERP_STATE.tecnicos.length) { alert("Cadastre ou vincule um técnico antes de gerar a OS."); return; }
+    if (!q || q.status !== 'Aprovado') return;
+    if (q.osId) { alert('Este orçamento já foi convertido em OS.'); return; }
+    if (!ERP_STATE.tecnicos.length) { alert('Cadastre ou vincule um técnico antes de gerar a OS.'); return; }
     var tech = ERP_STATE.tecnicos[0];
+    var previousStatus = q.status, previousOsId = q.osId || null;
     var os = {
-      id: "OS-0" + (4891 + ERP_STATE.ordens.length), data: new Date().toLocaleDateString("pt-BR"),
-      clienteId: q.clienteId, equipamentoId: q.equipamentoId || null, tecnicoId: tech.id, tecnicoEmployeeId: tech.employeeId || null,
-      tecnicoEmail: tech.email || tech.loginEmail || null, servicoId: q.servicoId || q.serviceId, tipo: "Orçamento aprovado",
-      valor: Number(q.total || 0), status: "Em Atendimento", desc: q.desc, pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null, orcamentoId: q.id
+      id: 'OS-0' + (4891 + ERP_STATE.ordens.length), data: new Date().toLocaleDateString('pt-BR'),
+      clienteId: q.clienteId, equipamentoId: String(q.equipamentoId || '') || null, tecnicoId: tech.id, tecnicoEmployeeId: tech.employeeId || null,
+      tecnicoEmail: tech.email || tech.loginEmail || null, servicoId: q.servicoId || q.serviceId, tipo: 'Orçamento aprovado',
+      valor: Number(q.total || 0), status: 'Em Atendimento', desc: q.desc, pecasUsadas: [], assinatura: null, fotoAntes: null, fotoDepois: null, orcamentoId: q.id
     };
-    ERP_STATE.ordens.push(os); q.status = "Convertido em OS"; q.osId = os.id;
-    window.saveState();
-    if (typeof window.renderizarTudo === "function") window.renderizarTudo();
-    alert("Orçamento convertido em " + os.id + ".");
+    ERP_STATE.ordens.push(os); q.status = 'Convertido em OS'; q.osId = os.id;
+    try {
+      await persistCommercialMutation();
+      if (typeof window.renderizarTudo === 'function') window.renderizarTudo();
+      alert('Orçamento convertido em ' + os.id + '.');
+    } catch (error) {
+      ERP_STATE.ordens = ERP_STATE.ordens.filter(function (item) { return item !== os; });
+      q.status = previousStatus; q.osId = previousOsId;
+      if (typeof window.renderizarTudo === 'function') window.renderizarTudo();
+      alert('A conversão do orçamento não foi confirmada na nuvem. ' + (error && error.message ? error.message : 'Tente novamente.'));
+    }
   };
-
   function migrateTechnicianLinks() {
     ensureState(); var changed = false;
     ERP_STATE.ordens.forEach(function (o) {
