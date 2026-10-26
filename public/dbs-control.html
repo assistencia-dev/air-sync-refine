@@ -6053,7 +6053,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (subtitle) subtitle.textContent = canIssueOs
                     ? `Emissão autorizada · ${baseName ? `Base ${baseName}` : 'base operacional vinculada'}`
                     : (employeeName ? `Atendimento de campo · ${employeeName}` : 'Atendimento de campo');
-                renderizarPWAScreen();
+                // O modo colaborador esconde as abas administrativas. Ative a
+                // aba própria de campo explicitamente para que o painel não
+                // fique vazio ao entrar ou após uma atualização do iframe.
+                switchTab('tab-pwa', employeeNav || undefined);
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();
     </script>

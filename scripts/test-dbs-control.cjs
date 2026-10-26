@@ -152,6 +152,7 @@ assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar 
 assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
 assert.match(html, /employee-issue-inline/, "A área móvel do colaborador precisa oferecer emissão de OS no próprio portal de campo.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
+assert.match(html, /switchTab\('tab-pwa', employeeNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente a aba Minhas OS após ocultar o painel administrativo.");
 assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
 assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
 assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
