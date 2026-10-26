@@ -3962,7 +3962,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const trabalho = Boolean(String(os?.trabalhoExecutado || '').trim());
             const checklist = Array.isArray(os?.checklist) ? os.checklist : [];
             const checklistPendente = checklist.some(item => item?.obrigatorio && !item?.concluido);
-            if (!concluida && !cancelada && (!diagnostico || !trabalho || checklistPendente)) classificacoes.push('PENDENCIA_EXECUCAO');
+            const emExecucao = /atendimento|execucao|andamento/.test(status) || diagnostico || trabalho || checklist.length > 0;
+            if (!concluida && !cancelada && emExecucao && (!diagnostico || !trabalho || checklistPendente)) classificacoes.push('PENDENCIA_EXECUCAO');
             if (concluida) {
                 const assinatura = Boolean(String(os?.assinatura || '').trim());
                 if (!diagnostico || !trabalho || !assinatura || checklistPendente) classificacoes.push('CONFERIR_CONCLUSAO');
