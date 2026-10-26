@@ -1331,6 +1331,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     }
     const maps = await persistDbsControlMasterDeltas(changes, user);
     const appliedOrderIds: string[] = [];
+    const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
     const conflicts: Array<{ protocol: string; message: string }> = [];
     let applied = maps.applied;
 
@@ -1444,7 +1445,15 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         throw new Error(`Falha ao sincronizar a OS ${orderLabel}: ${row?.error_message || "operação rejeitada"}`);
       }
       applied += 1;
-      if (row.work_order_id) appliedOrderIds.push(String(row.work_order_id));
+      if (row.work_order_id) {
+        const appliedId = String(row.work_order_id);
+        appliedOrderIds.push(appliedId);
+        appliedOrders.push({
+          id: appliedId,
+          protocol: row.protocol ? String(row.protocol) : null,
+          version: Number(row.version ?? 1),
+        });
+      }
 
       const equipmentIds = Array.isArray(order?.equipamentosIds)
         ? order.equipamentosIds
@@ -1462,6 +1471,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       ok: conflicts.length === 0,
       applied,
       appliedOrderIds,
+      appliedOrders,
       conflicts,
       requestId: data.requestId,
       sourceOfTruth: "relational_delta",
