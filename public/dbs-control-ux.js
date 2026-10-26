@@ -500,10 +500,19 @@
     function syncPageHeader(){
       const tab=activeTab(), id=tab?.id;
       if(!id||!titleMap[id])return;
-      const [title,subtitle]=titleMap[id];
+      const employeeMode=document.body.classList.contains("dbs-control-employee-mode");
+      const employeeTitleMap={
+        "tab-dashboard":["Meu dashboard","Progresso e operação do colaborador"],
+        "tab-pwa":["Minhas OS","Execução das Ordens de Serviço do colaborador"],
+        "tab-nova-os":["Emitir OS","Nova ordem dentro da base vinculada"]
+      };
+      const meta=employeeMode ? (employeeTitleMap[id] || titleMap[id]) : titleMap[id];
+      if(!meta)return;
+      const [title,subtitle]=meta;
       const h=document.getElementById("view-title"), p=document.getElementById("view-subtitle");
       if(h)h.textContent=title;
       if(p)p.textContent=subtitle;
+      if(employeeMode)return;
       const headerAction=document.querySelector("main>header>div:last-child .btn-primary");
       if(!headerAction)return;
       const actions={
