@@ -139,8 +139,8 @@ async function getCollaboratorBaseScope(employee: any) {
   // Status é normalizado para tolerar valores legados com caixa/espaços
   // diferentes sem relaxar a regra de base ativa.
   const active = normalizeDbsStatus(baseResult.data?.status) === "ativo";
-  const clientIds = active
-    ? [...new Set((linksResult.data ?? [])
+  const clientIds: string[] = active
+    ? [...new Set<string>((linksResult.data ?? [])
       .map((row: any) => String(row.client_id ?? "").trim())
       .filter(Boolean))]
     : [];
