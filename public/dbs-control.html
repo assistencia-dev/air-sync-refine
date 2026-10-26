@@ -5543,6 +5543,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                           <details class="employee-execution">
                             <summary>Executar atendimento <span>›</span></summary>
                             <div class="employee-execution-body">
+                              <div class="employee-execution-intro" role="note">
+                                <div class="employee-execution-intro-title"><span class="employee-step-badge">EXECUÇÃO</span><strong>Registre o atendimento com clareza</strong></div>
+                                <p>Preencha o relato técnico, registre as evidências e só então confirme a conclusão. O salvamento é confirmado na nuvem antes de fechar esta OS.</p>
+                                <div class="employee-execution-roadmap" aria-label="Etapas do atendimento"><span><b>1</b> Relato</span><span><b>2</b> Evidências</span><span><b>3</b> Assinatura</span><span><b>4</b> Confirmar</span></div>
+                              </div>
                               <details class="employee-register-equipment" style="margin:0 0 14px;padding:12px;border:1px solid #cbdced;border-radius:12px;background:#f7fbff;">
                                 <summary style="font-weight:800;color:#12436c;cursor:pointer;">＋ Cadastrar equipamento para este cliente</summary>
                                 <p style="font-size:12px;color:#52677d;margin:8px 0 10px;">O cadastro ficará vinculado a ${escHtml(cli.nome || "este cliente")} e a esta OS. Preencha os dados disponíveis; os campos são flexíveis.</p>
@@ -6908,6 +6913,106 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body.dbs-control-employee-mode .employee-finish-row .btn { width: 100% !important; }
   }
   @media (max-width:400px) { body.dbs-control-employee-mode .employee-grid { grid-template-columns: minmax(0,1fr) !important; } }
+
+<style id="dbs-field-execution-clarity-20261026">
+  /* Execução de campo: hierarquia visual simples, leitura em uma coluna e
+     alvos de toque confortáveis sem alterar os handlers existentes. */
+  body.dbs-control-employee-mode .employee-execution-intro {
+    display: grid;
+    gap: 10px;
+    padding: 16px 18px;
+    border: 1px solid #bfdbfe;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+    box-shadow: 0 5px 16px rgba(30, 64, 175, .06);
+  }
+  body.dbs-control-employee-mode .employee-execution-intro-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #123f68;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  body.dbs-control-employee-mode .employee-step-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #0f4c81;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+  body.dbs-control-employee-mode .employee-execution-intro p {
+    margin: 0;
+    color: #49657f;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  body.dbs-control-employee-mode .employee-execution-roadmap {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  body.dbs-control-employee-mode .employee-execution-roadmap span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #315a7c;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  body.dbs-control-employee-mode .employee-execution-roadmap b {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 50%;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+  }
+  body.dbs-control-employee-mode .employee-execution-body > label,
+  body.dbs-control-employee-mode .employee-execution-body > .employee-photo-grid,
+  body.dbs-control-employee-mode .employee-execution-body > canvas {
+    width: 100%;
+  }
+  body.dbs-control-employee-mode .employee-execution-body .employee-finish-row {
+    position: sticky;
+    bottom: 8px;
+    z-index: 4;
+    padding: 10px;
+    border: 1px solid #cbddec;
+    border-radius: 15px;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 10px 26px rgba(15,23,42,.12);
+    backdrop-filter: blur(8px);
+  }
+  body.dbs-control-employee-mode .employee-execution-body .employee-finish-row .employee-finish {
+    box-shadow: 0 8px 18px rgba(5, 122, 85, .22);
+  }
+  @media (max-width: 760px) {
+    body.dbs-control-employee-mode .employee-execution-roadmap {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      row-gap: 7px;
+    }
+    body.dbs-control-employee-mode .employee-execution-intro {
+      padding: 14px;
+    }
+  }
+  @media (max-width: 400px) {
+    body.dbs-control-employee-mode .employee-execution-roadmap {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    body.dbs-control-employee-mode .employee-execution-intro-title {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>
 </style>
 </body>
 </html>
