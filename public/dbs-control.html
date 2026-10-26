@@ -4452,8 +4452,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function switchTab(tabId, element) {
             try {
-                // Isolamento de perfil: o colaborador só pode abrir a própria área de OS.
-                if (document.body.classList.contains('dbs-control-employee-mode') && String(tabId || '') !== 'tab-pwa' && !(document.body.classList.contains('dbs-control-can-issue-os') && String(tabId || '') === 'tab-nova-os')) {
+                // Isolamento de perfil: o colaborador pode acompanhar o próprio
+                // dashboard, executar suas OS e emitir quando o RH autorizou.
+                const employeeTab = String(tabId || '');
+                if (document.body.classList.contains('dbs-control-employee-mode')
+                    && !['tab-dashboard', 'tab-pwa'].includes(employeeTab)
+                    && !(document.body.classList.contains('dbs-control-can-issue-os') && employeeTab === 'tab-nova-os')) {
                     return false;
                 }
                 const target = document.getElementById(String(tabId || ''));
