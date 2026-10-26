@@ -5961,18 +5961,42 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
+        function atualizarResultadoAtendimentoMobile(osId, value) {
+            const pending = String(value || '') === 'aguardando_peca';
+            const fields = document.getElementById('dbs-mob-pending-' + osId);
+            if (fields) {
+                fields.hidden = !pending;
+                fields.setAttribute('aria-hidden', pending ? 'false' : 'true');
+            }
+            const executionBody = fields?.closest('.employee-execution-body') || document.getElementById('dbs-mob-result-' + osId)?.closest('.employee-execution-body');
+            const finishButton = executionBody?.querySelector('.employee-finish');
+            if (finishButton && !finishButton.disabled) {
+                finishButton.textContent = pending ? 'Registrar pendência' : 'Concluir atendimento';
+            }
+        }
+
         async function concluirOSMobile(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
             const relatoInput = document.getElementById(`dbs-mob-relato-${osId}`);
             const observationInput = document.getElementById(`dbs-mob-observacao-${osId}`);
+            const resultInput = document.getElementById(`dbs-mob-result-${osId}`);
+            const pendingNoteInput = document.getElementById(`dbs-mob-pending-note-${osId}`);
             const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
             const afterInput = document.getElementById(`dbs-mob-after-${osId}`);
 
             if (!os) return;
 
             const relatoTecnico = String(relatoInput?.value || '').trim();
+            const atendimentoStatus = resultInput?.value === 'aguardando_peca' ? 'aguardando_peca' : 'concluida';
+            const pendingReason = String(pendingNoteInput?.value || '').trim();
+            const finishLabel = atendimentoStatus === 'aguardando_peca' ? 'Registrar pendência' : 'Concluir atendimento';
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
+            if (atendimentoStatus === 'aguardando_peca' && !pendingReason) {
+                alert('Descreva a pendência técnica antes de registrar este atendimento.');
+                pendingNoteInput?.focus();
+                return;
+            }
             if (!canvas) { alert('A assinatura do cliente não foi carregada.'); return; }
 
             const signature = canvas.toDataURL('image/png');
@@ -5987,7 +6011,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const setProgress = (message) => {
                 if (finishButton) {
                     finishButton.disabled = Boolean(message);
-                    finishButton.textContent = message || 'Concluir atendimento';
+                    finishButton.textContent = message || finishLabel;
                     finishButton.setAttribute('aria-busy', message ? 'true' : 'false');
                 }
                 if (progressNode) progressNode.textContent = message || '';
@@ -6027,6 +6051,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         os[observationKey] = existingObservation ? `${existingObservation}\n\n${entry}` : entry;
                     }
                 }
+                if (atendimentoStatus === 'aguardando_peca' && pendingReason) {
+                    const pendingKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
+                        .find(key => os[key] == null || typeof os[key] === 'string') || 'observacaoComplementarTecnico';
+                    const previousPending = typeof os[pendingKey] === 'string' ? os[pendingKey].trim() : '';
+                    const pendingEntry = `[PENDÊNCIA OPERACIONAL · AGUARDANDO PEÇA] ${pendingReason}`;
+                    const alreadyPending = previousPending.split(/\n\n/).some(entry => entry.trim() === pendingEntry);
+                    if (!alreadyPending) os[pendingKey] = previousPending ? `${previousPending}\n\n${pendingEntry}` : pendingEntry;
+                }
                 os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
                 os.relatoTecnico = relatoTecnico;
                 os.diagnostico = relatoTecnico;
@@ -6038,22 +6070,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     os[item.pathField] = item.result.storagePath;
                     os[item.field] = item.result.signedUrl;
                 });
-                os.assinaturaEm = new Date().toISOString();
-                os.concluidoEm = new Date().toISOString();
-                os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
-                os.status = "Concluída";
+                const statusTimestamp = new Date().toISOString();
+                os.assinaturaEm = statusTimestamp;
+                os.status = atendimentoStatus === 'aguardando_peca' ? 'Aguardando peça' : 'Concluída';
+                os.concluidoEm = atendimentoStatus === 'aguardando_peca' ? null : statusTimestamp;
+                os.concluidoPorEmployeeId = atendimentoStatus === 'aguardando_peca'
+                    ? null
+                    : (ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null);
 
-                setProgress('Confirmando OS na nuvem...');
+                setProgress(atendimentoStatus === 'aguardando_peca' ? 'Registrando pendência na nuvem...' : 'Confirmando OS na nuvem...');
                 await saveStateAndConfirmCloud();
                 renderizarTudo();
-                alert(`OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
+                alert(atendimentoStatus === 'aguardando_peca'
+                    ? `OS ${osId} registrada como atendimento com pendência e confirmada na nuvem. A administração poderá acompanhar a troca da peça.`
+                    : `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
                 if (progressNode) progressNode.textContent = 'Não confirmado — revise a conexão e tente novamente.';
                 if (finishButton) {
                     finishButton.disabled = false;
-                    finishButton.textContent = 'Concluir atendimento';
+                    finishButton.textContent = finishLabel;
                     finishButton.setAttribute('aria-busy', 'false');
                 }
             }
