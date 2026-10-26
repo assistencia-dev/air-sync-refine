@@ -38,6 +38,9 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { TicketAttachments } from "@/components/TicketAttachments";
 
 export const Route = createFileRoute("/_authenticated/admin")({
+  validateSearch: (search: Record<string, unknown>): { tab?: "tickets" | "users" | "passage" } => ({
+    tab: search.tab === "users" || search.tab === "passage" || search.tab === "tickets" ? search.tab : undefined,
+  }),
   head: () => ({ meta: [{ title: "Admin DBS Air" }, { name: "robots", content: "noindex" }] }),
   component: AdminPage,
 });
@@ -66,7 +69,9 @@ const STATUS_LABELS: Record<string, string> = {
 function AdminPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"tickets" | "users" | "passage">("tickets");
+  const { tab: requestedTab } = Route.useSearch();
+  const tab = requestedTab ?? "tickets";
+  const setTab = (tab: "tickets" | "users" | "passage") => navigate({ to: "/admin", search: { tab } });
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
 
   useEffect(() => {
@@ -87,6 +92,21 @@ function AdminPage() {
     qc.clear();
     await supabase.auth.signOut();
     navigate({ to: "/login", replace: true });
+  }
+
+  if (profile.isPending || profile.isError || !profile.data) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
+        <section role={profile.isPending ? "status" : "alert"} className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-slate-900">{profile.isPending ? "Carregando painel DBS Air…" : "Não foi possível carregar o acesso aos módulos"}</h1>
+          {!profile.isPending && <>
+            <p className="mt-3 break-words text-sm text-slate-600">{profile.error instanceof Error ? profile.error.message : "O perfil desta sessão não foi encontrado."}</p>
+            <button onClick={() => void profile.refetch()} className="mt-5 min-h-11 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white">Tentar novamente</button>
+            <button onClick={signOut} className="ml-3 mt-5 min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Entrar novamente</button>
+          </>}
+        </section>
+      </main>
+    );
   }
 
   return (

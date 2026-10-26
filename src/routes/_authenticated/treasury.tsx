@@ -221,13 +221,19 @@ function TreasuryPage() {
                 window.location.origin,
               );
             }
-          } else if (localState) {
-            localState._meta = {
-              ...(localState._meta || {}),
+          } else {
+            // A leitura autenticada confirmou que este escopo ainda não tem snapshot.
+            // Um cache bloqueado/inválido não pode impedir a inicialização da base nova.
+            const initialState = localState ?? {
+              passivos: [], recorrencias: [], recebimentos: [], contasPagar: [],
+              bancos: [], movimentacoes: [], auditoria: [],
+            };
+            initialState._meta = {
+              ...(initialState._meta || {}),
               version: 5,
               cloudMigratedAt: new Date().toISOString(),
             };
-            const saved = await saveTreasuryClientCloudState(localState);
+            const saved = await saveTreasuryClientCloudState(initialState);
             cloudUpdatedAtRef.current = saved.updated_at ?? null;
             cloudReadyRef.current = true;
             iframeRef.current?.contentWindow?.postMessage(

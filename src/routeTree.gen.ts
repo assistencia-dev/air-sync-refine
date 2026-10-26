@@ -12,14 +12,19 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SiteRouteImport } from './routes/site'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedChamadosRouteImport } from './routes/_authenticated/chamados'
 import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
+import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedFinanceiroAcessoRouteImport } from './routes/_authenticated/financeiro-acesso'
+import { Route as AuthenticatedFinanceiroAcompanhamentoRouteImport } from './routes/_authenticated/financeiro-acompanhamento'
 import { Route as AuthenticatedFolhaPontoRouteImport } from './routes/_authenticated/folha-ponto'
 import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticated/passage'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
+import { Route as AuthenticatedRhRouteImport } from './routes/_authenticated/rh'
 import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
-import { Route as AuthenticatedFinanceiroAcessoRouteImport } from './routes/_authenticated/financeiro-acesso'
-import { Route as AuthenticatedFinanceiroAcompanhamentoRouteImport } from './routes/_authenticated/financeiro-acompanhamento'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
 
 const IndexRoute = IndexRouteImport.update({
@@ -36,9 +41,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SiteRoute = SiteRouteImport.update({
+  id: '/site',
+  path: '/site',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedChamadosRoute = AuthenticatedChamadosRouteImport.update({
+  id: '/chamados',
+  path: '/chamados',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
@@ -46,6 +61,23 @@ const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
   path: '/dbs-control',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceiroAcessoRoute =
+  AuthenticatedFinanceiroAcessoRouteImport.update({
+    id: '/financeiro-acesso',
+    path: '/financeiro-acesso',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedFinanceiroAcompanhamentoRoute =
+  AuthenticatedFinanceiroAcompanhamentoRouteImport.update({
+    id: '/financeiro-acompanhamento',
+    path: '/financeiro-acompanhamento',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedFolhaPontoRoute = AuthenticatedFolhaPontoRouteImport.update({
   id: '/folha-ponto',
   path: '/folha-ponto',
@@ -61,19 +93,19 @@ const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRhRoute = AuthenticatedRhRouteImport.update({
+  id: '/rh',
+  path: '/rh',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
   id: '/treasury',
   path: '/treasury',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedFinanceiroAcessoRoute = AuthenticatedFinanceiroAcessoRouteImport.update({
-  id: '/financeiro-acesso',
-  path: '/financeiro-acesso',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedFinanceiroAcompanhamentoRoute = AuthenticatedFinanceiroAcompanhamentoRouteImport.update({
-  id: '/financeiro-acompanhamento',
-  path: '/financeiro-acompanhamento',
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
@@ -85,27 +117,37 @@ const AdminRhDashboardRoute = AdminRhDashboardRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/site': typeof SiteRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/chamados': typeof AuthenticatedChamadosRoute
   '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/rh': typeof AuthenticatedRhRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
-  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
-  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/site': typeof SiteRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/chamados': typeof AuthenticatedChamadosRoute
   '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/passage': typeof AuthenticatedPassageRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/rh': typeof AuthenticatedRhRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
-  '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
-  '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRoutesById {
@@ -113,14 +155,19 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/site': typeof SiteRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/chamados': typeof AuthenticatedChamadosRoute
   '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
+  '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
   '/_authenticated/folha-ponto': typeof AuthenticatedFolhaPontoRoute
   '/_authenticated/passage': typeof AuthenticatedPassageRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
+  '/_authenticated/rh': typeof AuthenticatedRhRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
-  '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
-  '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
 export interface FileRouteTypes {
@@ -128,41 +175,56 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/site'
     | '/admin'
+    | '/chamados'
     | '/dbs-control'
+    | '/financeiro'
+    | '/financeiro-acesso'
+    | '/financeiro-acompanhamento'
     | '/folha-ponto'
     | '/passage'
     | '/portal'
+    | '/rh'
     | '/treasury'
-    | '/financeiro-acesso'
-    | '/financeiro-acompanhamento'
+    | '/users'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/site'
     | '/admin'
+    | '/chamados'
     | '/dbs-control'
+    | '/financeiro'
+    | '/financeiro-acesso'
+    | '/financeiro-acompanhamento'
     | '/folha-ponto'
     | '/passage'
     | '/portal'
+    | '/rh'
     | '/treasury'
-    | '/financeiro-acesso'
-    | '/financeiro-acompanhamento'
+    | '/users'
     | '/admin/rh-dashboard'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/site'
     | '/_authenticated/admin'
+    | '/_authenticated/chamados'
     | '/_authenticated/dbs-control'
+    | '/_authenticated/financeiro'
+    | '/_authenticated/financeiro-acesso'
+    | '/_authenticated/financeiro-acompanhamento'
     | '/_authenticated/folha-ponto'
     | '/_authenticated/passage'
     | '/_authenticated/portal'
+    | '/_authenticated/rh'
     | '/_authenticated/treasury'
-    | '/_authenticated/financeiro-acesso'
-    | '/_authenticated/financeiro-acompanhamento'
+    | '/_authenticated/users'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
 }
@@ -170,6 +232,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  SiteRoute: typeof SiteRoute
   AdminRhDashboardRoute: typeof AdminRhDashboardRoute
 }
 
@@ -196,6 +259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/site': {
+      id: '/site'
+      path: '/site'
+      fullPath: '/site'
+      preLoaderRoute: typeof SiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -203,11 +273,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/chamados': {
+      id: '/_authenticated/chamados'
+      path: '/chamados'
+      fullPath: '/chamados'
+      preLoaderRoute: typeof AuthenticatedChamadosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dbs-control': {
       id: '/_authenticated/dbs-control'
       path: '/dbs-control'
       fullPath: '/dbs-control'
       preLoaderRoute: typeof AuthenticatedDbsControlRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro': {
+      id: '/_authenticated/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro-acesso': {
+      id: '/_authenticated/financeiro-acesso'
+      path: '/financeiro-acesso'
+      fullPath: '/financeiro-acesso'
+      preLoaderRoute: typeof AuthenticatedFinanceiroAcessoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro-acompanhamento': {
+      id: '/_authenticated/financeiro-acompanhamento'
+      path: '/financeiro-acompanhamento'
+      fullPath: '/financeiro-acompanhamento'
+      preLoaderRoute: typeof AuthenticatedFinanceiroAcompanhamentoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/folha-ponto': {
@@ -231,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/rh': {
+      id: '/_authenticated/rh'
+      path: '/rh'
+      fullPath: '/rh'
+      preLoaderRoute: typeof AuthenticatedRhRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/treasury': {
       id: '/_authenticated/treasury'
       path: '/treasury'
@@ -238,18 +343,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/financeiro-acesso': {
-      id: '/_authenticated/financeiro-acesso'
-      path: '/financeiro-acesso'
-      fullPath: '/financeiro-acesso'
-      preLoaderRoute: typeof AuthenticatedFinanceiroAcessoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/financeiro-acompanhamento': {
-      id: '/_authenticated/financeiro-acompanhamento'
-      path: '/financeiro-acompanhamento'
-      fullPath: '/financeiro-acompanhamento'
-      preLoaderRoute: typeof AuthenticatedFinanceiroAcompanhamentoRouteImport
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/admin/rh-dashboard': {
@@ -264,24 +362,33 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedChamadosRoute: typeof AuthenticatedChamadosRoute
   AuthenticatedDbsControlRoute: typeof AuthenticatedDbsControlRoute
+  AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedFinanceiroAcessoRoute: typeof AuthenticatedFinanceiroAcessoRoute
+  AuthenticatedFinanceiroAcompanhamentoRoute: typeof AuthenticatedFinanceiroAcompanhamentoRoute
   AuthenticatedFolhaPontoRoute: typeof AuthenticatedFolhaPontoRoute
   AuthenticatedPassageRoute: typeof AuthenticatedPassageRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
+  AuthenticatedRhRoute: typeof AuthenticatedRhRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
-  AuthenticatedFinanceiroAcessoRoute: typeof AuthenticatedFinanceiroAcessoRoute
-  AuthenticatedFinanceiroAcompanhamentoRoute: typeof AuthenticatedFinanceiroAcompanhamentoRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedChamadosRoute: AuthenticatedChamadosRoute,
   AuthenticatedDbsControlRoute: AuthenticatedDbsControlRoute,
+  AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedFinanceiroAcessoRoute: AuthenticatedFinanceiroAcessoRoute,
+  AuthenticatedFinanceiroAcompanhamentoRoute:
+    AuthenticatedFinanceiroAcompanhamentoRoute,
   AuthenticatedFolhaPontoRoute: AuthenticatedFolhaPontoRoute,
   AuthenticatedPassageRoute: AuthenticatedPassageRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
+  AuthenticatedRhRoute: AuthenticatedRhRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
-  AuthenticatedFinanceiroAcessoRoute: AuthenticatedFinanceiroAcessoRoute,
-  AuthenticatedFinanceiroAcompanhamentoRoute: AuthenticatedFinanceiroAcompanhamentoRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -291,6 +398,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  SiteRoute: SiteRoute,
   AdminRhDashboardRoute: AdminRhDashboardRoute,
 }
 export const routeTree = rootRouteImport

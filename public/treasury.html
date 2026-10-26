@@ -1134,6 +1134,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     const TREASURY_CLOUD_MIGRATION_BACKUP_KEY = 'DBS_TREASURY_CLOUD_MIGRATION_BACKUP';
     const TREASURY_VERSION = 5;
     let CLOUD_STATE_RECEIVED = false;
+    let PRESERVE_UNREADABLE_TREASURY_CACHE = false;
     function treasuryPost(type, extra = {}) { try { window.parent.postMessage({ type, ...extra }, window.location.origin); } catch (e) {} }
 
     let treasuryAdminAuthSequence = 0;
@@ -1176,15 +1177,29 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                     localStorage.setItem(TREASURY_PREVIOUS_KEY, localBeforeCloud);
                 }
             } catch (_) {}
-            STATE = msg.state;
+            STATE = normalizeTreasuryState(msg.state);
             if (!STATE._meta || typeof STATE._meta !== "object") STATE._meta = {};
             STATE._meta.version = Math.max(Number(STATE._meta.version) || 1, TREASURY_VERSION);
-            try { localStorage.setItem(TREASURY_STATE_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_SNAPSHOT_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_PREVIOUS_KEY, JSON.stringify(STATE)); } catch (_) {}
+            if (!PRESERVE_UNREADABLE_TREASURY_CACHE) {
+                try { localStorage.setItem(TREASURY_STATE_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_SNAPSHOT_KEY, JSON.stringify(STATE)); localStorage.setItem(TREASURY_PREVIOUS_KEY, JSON.stringify(STATE)); } catch (_) {}
+            }
             populateAllBankSelects(); render();
         }
         treasuryPost("DBS_TREASURY_CLOUD_READY", { hasState: !!msg.state });
     });
     let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION, planoContas: [], centrosCusto: [], orcamentos: [], conciliacoes: [], fechamentos: [], snapshots: [] } };
+
+    function normalizeTreasuryState(state) {
+        const normalized = { ...state };
+        for (const key of ['passivos', 'recorrencias', 'recebimentos', 'contasPagar', 'bancos', 'movimentacoes', 'auditoria']) {
+            if (!Array.isArray(normalized[key])) normalized[key] = [];
+        }
+        normalized._meta = normalized._meta && typeof normalized._meta === 'object' && !Array.isArray(normalized._meta) ? { ...normalized._meta } : {};
+        for (const key of ['planoContas', 'centrosCusto', 'orcamentos', 'conciliacoes', 'fechamentos', 'snapshots']) {
+            if (!Array.isArray(normalized._meta[key])) normalized._meta[key] = [];
+        }
+        return normalized;
+    }
 
     function formatMoney(value){ const n=Number(value); return (Number.isFinite(n)?n:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -1210,11 +1225,19 @@ function showToast(msg) {
         const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('global-period-filter').value = monthStr;
 
-        const local = localStorage.getItem(TREASURY_STATE_KEY);
+        let local;
+        try { local = localStorage.getItem(TREASURY_STATE_KEY); }
+        catch (error) {
+            console.warn('Cache financeiro indisponível; consultando a base compartilhada.', error);
+            treasuryPost('DBS_TREASURY_READY', { state: null });
+            return;
+        }
         if (local) {
             // Snapshot imutável da entrada da sessão: nunca perde o estado que já existia.
-            localStorage.setItem(TREASURY_SNAPSHOT_KEY, local);
-            localStorage.setItem(TREASURY_PREVIOUS_KEY, local);
+            try {
+                localStorage.setItem(TREASURY_SNAPSHOT_KEY, local);
+                localStorage.setItem(TREASURY_PREVIOUS_KEY, local);
+            } catch (error) { console.warn('O cache original foi mantido; backup adicional indisponível.', error); }
         }
         if (!local) {
             STATE = { recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], passivos: [], recorrencias: [], _meta: { version: TREASURY_VERSION } };
@@ -1248,7 +1271,11 @@ function showToast(msg) {
                 });
                 save();
             } catch (err) {
-                alert('Não foi possível ler os dados salvos. O conteúdo original foi preservado. Use um Backup JSON para recuperação.');
+                // A cópia inválida permanece intacta até a resposta autoritativa da nuvem.
+                // Não inicializar nem enviar STATE vazio como se fosse o cache recuperado.
+                PRESERVE_UNREADABLE_TREASURY_CACHE = true;
+                console.warn('Cache financeiro inválido; consultando a base compartilhada.', err);
+                treasuryPost('DBS_TREASURY_READY', { state: null });
                 return;
             }
         }
@@ -1261,20 +1288,22 @@ function showToast(msg) {
         const payload = JSON.stringify(STATE);
         try {
             // Nunca sobrescreve o último estado válido sem guardar uma cópia anterior.
-            const previous = localStorage.getItem(TREASURY_STATE_KEY);
-            if (previous) localStorage.setItem(TREASURY_PREVIOUS_KEY, previous);
-            localStorage.setItem(TREASURY_STATE_KEY, payload);
-            localStorage.setItem('DBS_TREASURY_LAST_SAVE_AT', new Date().toISOString());
-            treasuryPost('DBS_TREASURY_SAVE', { state: STATE });
+            if (!PRESERVE_UNREADABLE_TREASURY_CACHE) {
+                const previous = localStorage.getItem(TREASURY_STATE_KEY);
+                if (previous) localStorage.setItem(TREASURY_PREVIOUS_KEY, previous);
+                localStorage.setItem(TREASURY_STATE_KEY, payload);
+                localStorage.setItem('DBS_TREASURY_LAST_SAVE_AT', new Date().toISOString());
+            }
         } catch (err) {
             console.error('DBS Treasury: falha ao persistir estado', err);
             try {
                 // Mesmo se o storage atingir a cota, preserva uma cópia em memória da sessão.
                 window.__DBS_TREASURY_LAST_VALID_STATE = payload;
             } catch (_) {}
-            showToast('Não foi possível salvar no navegador. Faça um backup JSON antes de continuar.');
-            throw err;
+            showToast('Cache local indisponível. Confira a sincronização no painel antes de sair.');
         }
+        // A falha do cache não pode impedir o envio ao pai autenticado.
+        treasuryPost('DBS_TREASURY_SAVE', { state: STATE });
     }
 
     function getDaysDiff(dateString) {

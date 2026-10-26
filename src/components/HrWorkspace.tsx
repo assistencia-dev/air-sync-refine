@@ -33,6 +33,7 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
   const vaTopups = useQuery({ queryKey: ["rh-workspace-va-topups"], queryFn: () => listRhTopups({ data: { benefit_type: "alimentacao" } }) });
   const payroll = useQuery({ queryKey: ["rh-workspace-payroll"], queryFn: () => listRhPayroll() });
   const alerts = useQuery({ queryKey: ["rh-workspace-alerts"], queryFn: () => getRhDashboardAlerts(), staleTime: 30_000 });
+  const failedQueries = [registry, vt, va, ponto, vtTopups, vaTopups, payroll, alerts].filter(query => query.isError);
 
   const summary = useMemo(() => {
     const employees = registry.data ?? [];
@@ -68,6 +69,13 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="space-y-6">
+      {failedQueries.length > 0 && (
+        <section role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-bold">Não foi possível carregar parte dos dados do RH</p>
+          <p className="mt-1 break-words">{failedQueries[0].error instanceof Error ? failedQueries[0].error.message : "Falha de conexão com o serviço de RH."}</p>
+          <button type="button" onClick={() => void Promise.all(failedQueries.map(query => query.refetch()))} className="mt-3 min-h-11 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold">Carregar dados novamente</button>
+        </section>
+      )}
       <header className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,.35)]">
         <div className="relative bg-gradient-to-br from-[#0F172A] via-[#172554] to-[#0F172A] px-5 py-6 text-white sm:px-7 sm:py-7">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />

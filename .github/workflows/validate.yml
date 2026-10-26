@@ -15,5 +15,6 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - run: node scripts/test-module-recovery.cjs
       - run: bun run build
       - run: bunx tsc --noEmit --pretty false

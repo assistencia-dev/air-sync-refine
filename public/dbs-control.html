@@ -3311,10 +3311,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
-                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                    version: DBS_CONTROL_STATE_VERSION,
-                    data: getPersistableState()
-                }));
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION,
+                        data: getPersistableState()
+                    }));
+                } catch (cacheError) {
+                    console.warn('Cache local indisponível; estado compartilhado mantido em memória.', cacheError);
+                }
                 renderizarTudo();
             } finally {
                 DBS_CONTROL_CLOUD_HYDRATING = false;
