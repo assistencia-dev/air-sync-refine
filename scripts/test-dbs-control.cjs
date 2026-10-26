@@ -141,7 +141,7 @@ assert.match(html, /safe\(window\.renderizarOrcamentos\)/, "A aba Orçamentos pr
 assert.match(fs.readFileSync("public/dbs-control-orcamentos-v2.js", "utf8"), /window\.renderizarOrcamentos/, "O módulo de orçamentos deve expor seu renderizador.");
 assert.match(html, /function switchTab\s*\(/, "A navegação principal switchTab precisa existir.");
 assert.match(html, /function renderizarAbaAtiva\s*\(/, "O renderizador sob demanda precisa existir.");
-assert.match(html, /dbs-control-employee-mode[^]*?String\(tabId\s*\|\|\s*['"]{0,1}['"]\)\s*!==\s*['"]tab-pwa['"]/, "O modo colaborador deve bloquear a navegação para abas administrativas.");
+assert.match(html, /employeeTab[\s\S]*?tab-dashboard[\s\S]*?tab-pwa[\s\S]*?tab-nova-os/, "O modo colaborador deve permitir apenas dashboard, Minhas OS e emissão autorizada.");
 assert.match(html, /data-employee-visible=["']true["']/, "A área do colaborador precisa ter item de navegação explícito.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_SAVE["']/, "A rota deve receber eventos de salvamento do iframe.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sincronizar o estado inicial do iframe.");
@@ -152,7 +152,14 @@ assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar 
 assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
 assert.match(html, /employee-issue-inline/, "A área móvel do colaborador precisa oferecer emissão de OS no próprio portal de campo.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
-assert.match(html, /switchTab\('tab-pwa', employeeNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente a aba Minhas OS após ocultar o painel administrativo.");
+assert.match(html, /function renderizarEmployeeDashboard\(\)/, "O colaborador precisa de um dashboard próprio de progresso.");
+assert.match(html, /await saveStateAndConfirmCloud\(\)/, "A criação da OS do colaborador deve aguardar ACK relacional antes de sair do formulário.");
+assert.match(html, /ERP_STATE\.ordens = ERP_STATE\.ordens\.filter\(order => order !== novaOS/, "Falha na criação deve remover somente o draft local não confirmado.");
+assert.match(html, /const beforeCompletion = JSON\.parse\(JSON\.stringify\(os\)\)/, "A conclusão deve guardar o estado anterior para rollback seguro.");
+assert.match(html, /ERP_STATE\.ordens\[currentIndex\] = beforeCompletion/, "Uma conclusão sem ACK deve restaurar a OS anterior.");
+assert.match(html, /mergeCollaboratorCloudState\(msg\.state\)/, "Leitura atrasada não pode reabrir visualmente uma OS concluída.");
+
+assert.match(html, /switchTab\('tab-dashboard', dashboardNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente o dashboard de progresso.");
 assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
 assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
 assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
