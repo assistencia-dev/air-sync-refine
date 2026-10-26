@@ -247,7 +247,9 @@
         body.dbs-control-employee-mode.dbs-control-can-issue-os aside .nav-menu .nav-item[data-employee-issue-visible="true"] { display:flex !important; }
         body.dbs-control-employee-mode header .btn-secondary,
         body.dbs-control-employee-mode header .btn-primary { display:none !important; }
-        body.dbs-control-employee-mode #tab-dashboard,
+        /* No modo colaborador só ficam disponíveis o dashboard, Minhas OS
+           e, quando autorizado pelo RH, a emissão. As áreas administrativas
+           continuam isoladas sem desmontar o markup original. */
         body.dbs-control-employee-mode #tab-atividades,
         body.dbs-control-employee-mode #tab-despacho,
         body.dbs-control-employee-mode #tab-ordens,
@@ -256,12 +258,20 @@
         body.dbs-control-employee-mode #tab-tecnicos,
         body.dbs-control-employee-mode #tab-pecas,
         body.dbs-control-employee-mode #tab-servicos,
-        body.dbs-control-employee-mode #tab-compras { display:none !important; }
+        body.dbs-control-employee-mode #tab-compras,
+        body.dbs-control-employee-mode #tab-cadastros,
+        body.dbs-control-employee-mode #tab-orcamentos,
+        body.dbs-control-employee-mode #tab-importacao,
+        body.dbs-control-employee-mode #tab-pmoc { display:none !important; }
         body.dbs-control-employee-mode:not(.dbs-control-can-issue-os) #tab-nova-os { display:none !important; }
-        body.dbs-control-employee-mode.dbs-control-can-issue-os #tab-pwa:not(.active) { display:none !important; }
+        body.dbs-control-employee-mode #tab-dashboard:not(.active),
+        body.dbs-control-employee-mode #tab-pwa:not(.active),
+        body.dbs-control-employee-mode #tab-nova-os:not(.active) { display:none !important; }
+        body.dbs-control-employee-mode #tab-dashboard.active,
+        body.dbs-control-employee-mode #tab-pwa.active,
         body.dbs-control-employee-mode.dbs-control-can-issue-os #tab-nova-os.active { display:block !important; }
-        body.dbs-control-employee-mode #tab-pwa { display:block !important; }
-        body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:700px; }
+        body.dbs-control-employee-mode #tab-dashboard > *:not(#employee-dashboard-root) { display:none !important; }
+        body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:1100px; }
     
         /* VISUAL LIGHT PASS v1 */
         /* Apenas refinamento visual: nenhuma função, campo, fluxo ou dado é removido. */
