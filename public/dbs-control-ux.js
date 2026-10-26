@@ -843,7 +843,10 @@
     const id=targetId(item);
     if(!id)return;
     // A recuperação de navegação nunca pode retirar o colaborador da área Minhas OS.
-    if (document.body.classList.contains('dbs-control-employee-mode') && id !== 'tab-pwa') {
+    const employeeNavAllowed = id === 'tab-dashboard'
+      || id === 'tab-pwa'
+      || (document.body.classList.contains('dbs-control-can-issue-os') && id === 'tab-nova-os');
+    if (document.body.classList.contains('dbs-control-employee-mode') && !employeeNavAllowed) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
