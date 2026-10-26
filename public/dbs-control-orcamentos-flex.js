@@ -56,13 +56,14 @@
       '<label class="oq-notes-label">Descrição geral, condições e observações<textarea id="oq-notes" rows="3" placeholder="Prazo de entrega, garantia, escopo, condições especiais..."></textarea></label>' +
       '<div class="oq-totals"><span>Subtotal <strong id="oq-subtotal">R$ 0,00</strong></span><span>Desconto <strong id="oq-discount-show">R$ 0,00</strong></span><span class="oq-grand">Total da proposta <strong id="oq-total">R$ 0,00</strong></span></div>' +
       '<div class="oq-actions"><button type="button" class="btn btn-secondary" id="oq-clear">Limpar formulário</button><button type="submit" class="btn btn-primary">Salvar proposta</button></div></form></div>' +
-      '<div class="data-card oq-list-card"><div class="oq-list-head"><h3>Propostas registradas</h3><select id="oq-filter"><option value="TODOS">Todos os status</option><option>Rascunho</option><option>Aprovado</option><option>Rejeitado</option><option>Convertido em OS</option></select></div>' +
+      '<div class="data-card oq-list-card"><div class="oq-list-head"><div><h3>Propostas registradas</h3><p class="oq-list-caption">Pesquise por proposta, cliente, serviço ou responsável.</p></div><div class="oq-list-tools"><label class="oq-search-label" for="oq-search">Buscar<input id="oq-search" type="search" placeholder="Nº, cliente ou serviço" aria-label="Buscar proposta"></label><label class="oq-filter-label" for="oq-filter">Status<select id="oq-filter"><option value="TODOS">Todos os status</option><option>Rascunho</option><option>Aprovado</option><option>Rejeitado</option><option>Convertido em OS</option></select></label></div></div>' +
       '<div class="oq-table-wrap"><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead><tbody id="oq-list"></tbody></table></div></div>';
-    var acceptance = document.createElement("div"); acceptance.id = "oq-accept-modal"; acceptance.hidden = true; acceptance.innerHTML = '<div class="oq-accept-panel" role="dialog" aria-modal="true" aria-labelledby="oq-accept-title"><div class="oq-accept-head"><div><h3 id="oq-accept-title">Aceite da proposta</h3><p>Registre a decisão e a assinatura do responsável pelo cliente.</p></div><button type="button" class="btn btn-secondary" id="oq-accept-close">Fechar</button></div><label>Comentário do cliente<textarea id="oq-accept-comment" rows="3" placeholder="Comentário, ressalvas ou motivo da recusa"></textarea></label><label>Nome do responsável<input id="oq-accept-name" maxlength="160" placeholder="Nome completo"></label><label>Assinatura digital do cliente <canvas id="oq-signature" width="900" height="180" aria-label="Área para assinatura digital"></canvas></label><div class="oq-accept-actions"><button type="button" class="btn btn-secondary" id="oq-sign-clear">Limpar assinatura</button><span></span><button type="button" class="btn btn-danger" id="oq-accept-reject">Recusar orçamento</button><button type="button" class="btn btn-primary" id="oq-accept-approve">Aprovar orçamento</button></div><p class="oq-accept-note">A assinatura é registrada neste orçamento no sistema. Confirme a identidade do responsável conforme o procedimento comercial da empresa.</p></div>'; tab.appendChild(acceptance);
+    var acceptance = document.createElement("div"); acceptance.id = "oq-accept-modal"; acceptance.hidden = true; acceptance.innerHTML = '<div class="oq-accept-panel" role="dialog" aria-modal="true" aria-labelledby="oq-accept-title"><div class="oq-accept-head"><div><h3 id="oq-accept-title">Aceite da proposta</h3><p>Registre a decisão e a assinatura do responsável pelo cliente.</p></div><button type="button" class="btn btn-secondary" id="oq-accept-close">Fechar</button></div><label>Comentário do cliente<textarea id="oq-accept-comment" rows="3" placeholder="Comentário, ressalvas ou motivo da recusa"></textarea></label><label>Nome do responsável<input id="oq-accept-name" maxlength="160" placeholder="Nome completo"></label><label>Assinatura digital do cliente <canvas id="oq-signature" width="900" height="180" aria-label="Área para assinatura digital"></canvas></label><div class="oq-accept-actions"><button type="button" class="btn btn-secondary" id="oq-sign-clear">Limpar assinatura</button><span></span><button type="button" class="btn btn-danger" id="oq-accept-reject">Recusar orçamento</button><button type="button" class="btn btn-primary" id="oq-accept-approve">Aprovar orçamento</button></div><p id="oq-accept-status" class="oq-accept-status" role="status" aria-live="polite"></p><p class="oq-accept-note">A assinatura é registrada neste orçamento no sistema. Confirme a identidade do responsável conforme o procedimento comercial da empresa.</p></div>'; tab.appendChild(acceptance);
     var quickProductModal = document.createElement("div"); quickProductModal.id = "oq-product-modal"; quickProductModal.hidden = true;
     quickProductModal.innerHTML = '<div class="oq-product-panel" role="dialog" aria-modal="true" aria-labelledby="oq-product-title"><div class="oq-accept-head"><div><h3 id="oq-product-title">Cadastro rápido de produto</h3><p>O produto será incluído no cadastro de peças do DBS Control.</p></div><button type="button" class="btn btn-secondary" id="oq-product-close">Fechar</button></div><form id="oq-product-form"><div class="oq-product-grid"><label>SKU / código<input id="oq-product-sku" maxlength="80" placeholder="Código interno"></label><label>Nome do produto *<input id="oq-product-name" maxlength="180" required placeholder="Nome do produto"></label><label>Quantidade inicial<input id="oq-product-qty" type="number" min="0" step="1" value="0" required></label><label>Custo unitário (R$)<input id="oq-product-cost" type="number" min="0" step="0.01" value="0"></label><label>Preço de venda (R$) *<input id="oq-product-sale" type="number" min="0" step="0.01" value="0" required></label></div><p class="oq-product-note">Cadastrar aqui não baixa nem reserva estoque. Quantidade inicial só é usada se você preencher; revise antes de salvar.</p><div class="oq-accept-actions"><span></span><button type="submit" class="btn btn-primary">Cadastrar e adicionar ao orçamento</button></div></form></div>';
     tab.appendChild(quickProductModal);
     var signatureCanvas = $("oq-signature"), signatureCtx = signatureCanvas.getContext("2d"), drawing = false, activeQuoteId = null, signed = false;
+    var acceptanceInFlight = false;
     signatureCtx.strokeStyle = "#123e65"; signatureCtx.lineWidth = 3; signatureCtx.lineCap = "round"; signatureCtx.lineJoin = "round";
     function point(ev) { var r = signatureCanvas.getBoundingClientRect(); return { x: (ev.clientX-r.left)*signatureCanvas.width/r.width, y: (ev.clientY-r.top)*signatureCanvas.height/r.height }; }
     signatureCanvas.addEventListener("pointerdown", function(ev){ drawing=true; signed=true; signatureCanvas.setPointerCapture(ev.pointerId); var p=point(ev); signatureCtx.beginPath(); signatureCtx.moveTo(p.x,p.y); });
@@ -71,15 +72,60 @@
     function closeAcceptance(){ acceptance.hidden=true; activeQuoteId=null; }
     function quoteSnapshot(q){return {id:q.id,clienteId:q.clienteId,data:q.data,validade:q.validade,pagamento:q.pagamento,desc:q.desc,itens:(q.itens||[]).map(function(i){return {tipo:i.tipo,catalogoId:i.catalogoId,descricao:i.descricao,unidade:i.unidade,unidadePreco:i.unidadePreco,quantidade:i.quantidade,valorUnitario:i.valorUnitario,total:i.total};}),subtotalProdutos:q.subtotalProdutos,subtotalServicos:q.subtotalServicos,subtotal:q.subtotal,desconto:q.desconto,total:q.total};}
     function quoteSnapshotHash(q){var s=JSON.stringify(quoteSnapshot(q)),h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return ("00000000"+(h>>>0).toString(16)).slice(-8);}
-    function commitAcceptance(status){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(activeQuoteId);}); if(!q)return;
+    function setAcceptanceStatus(message, tone) {
+      var status = $("oq-accept-status");
+      if (!status) return;
+      status.textContent = message || "";
+      status.className = "oq-accept-status" + (tone ? " " + tone : "");
+    }
+    function setAcceptanceBusy(busy) {
+      ["oq-accept-approve", "oq-accept-reject", "oq-sign-clear", "oq-accept-close"].forEach(function (id) {
+        var button = $(id);
+        if (button) button.disabled = !!busy;
+      });
+    }
+    function persistAcceptanceMutation() {
+      if (typeof window.saveStateAndConfirmCloud === "function" && window.parent !== window) {
+        return window.saveStateAndConfirmCloud();
+      }
+      if (typeof window.saveState === "function") {
+        window.saveState();
+        return Promise.resolve({ ok: true, localOnly: true });
+      }
+      return Promise.reject(new Error("A rotina de gravação do orçamento não está disponível."));
+    }
+    async function commitAcceptance(status){
+      var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(activeQuoteId);});
+      if(!q || acceptanceInFlight)return;
       var name=$("oq-accept-name").value.trim(), comment=$("oq-accept-comment").value.trim();
       if(status==="Aprovado" && (!name || !signed)){ alert("Para aprovar, informe o nome do responsável e registre a assinatura."); return; }
       if(status==="Rejeitado" && !comment && !name){ alert("Informe o responsável ou o motivo da recusa."); return; }
-      var acceptedAt=new Date().toISOString(); q.status=status;
-      q.aceiteWeb={status:status,responsavel:name,comentario:comment,assinatura:status==="Aprovado"?signatureCanvas.toDataURL("image/png"):null,data:acceptedAt,versao:1,propostaId:q.id,hashConteudo:quoteSnapshotHash(q),snapshot:quoteSnapshot(q),historico:(q.aceiteWeb&&Array.isArray(q.aceiteWeb.historico)?q.aceiteWeb.historico:[]).concat([{status:status,responsavel:name,comentario:comment,data:acceptedAt,versao:1}])};
-      if(typeof window.saveState==="function")window.saveState(); closeAcceptance(); render(); alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
+      var previousStatus=q.status, previousAcceptance=q.aceiteWeb;
+      var previousVersion=previousAcceptance && Number(previousAcceptance.versao);
+      var version=Number.isFinite(previousVersion) && previousVersion>0 ? previousVersion+1 : 1;
+      var acceptedAt=new Date().toISOString();
+      q.status=status;
+      q.aceiteWeb={status:status,responsavel:name,comentario:comment,assinatura:status==="Aprovado"?signatureCanvas.toDataURL("image/png"):null,data:acceptedAt,versao:version,propostaId:q.id,hashConteudo:quoteSnapshotHash(q),snapshot:quoteSnapshot(q),historico:(previousAcceptance&&Array.isArray(previousAcceptance.historico)?previousAcceptance.historico:[]).concat([{status:status,responsavel:name,comentario:comment,data:acceptedAt,versao:version}])};
+      acceptanceInFlight=true;
+      setAcceptanceBusy(true);
+      setAcceptanceStatus("Salvando e confirmando o aceite na nuvem…");
+      try {
+        await persistAcceptanceMutation();
+        render();
+        closeAcceptance();
+        alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
+      } catch (error) {
+        q.status=previousStatus;
+        q.aceiteWeb=previousAcceptance;
+        render();
+        setAcceptanceStatus("Não foi possível confirmar o aceite. Os dados foram preservados; tente novamente.", "is-error");
+        alert("Aceite não confirmado na nuvem. " + (error && error.message ? error.message : "Tente novamente."));
+      } finally {
+        acceptanceInFlight=false;
+        setAcceptanceBusy(false);
+      }
     }
-    function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; acceptance.hidden=false; }
+    function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; setAcceptanceStatus(""); setAcceptanceBusy(false); acceptance.hidden=false; $("oq-accept-name").focus(); }
     $("oq-accept-close").addEventListener("click",closeAcceptance); $("oq-sign-clear").addEventListener("click",function(){signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height);signed=false;}); $("oq-accept-approve").addEventListener("click",function(){commitAcceptance("Aprovado");}); $("oq-accept-reject").addEventListener("click",function(){commitAcceptance("Rejeitado");});
     function closeProductModal(){quickProductModal.hidden=true;}
     $("oq-quick-product").addEventListener("click",function(){ $("oq-product-form").reset(); $("oq-product-qty").value="0"; $("oq-product-cost").value="0"; $("oq-product-sale").value="0"; quickProductModal.hidden=false; $("oq-product-name").focus(); });
@@ -121,6 +167,7 @@
     $("oq-items").addEventListener("click", function (ev) { if (ev.target.classList.contains("oq-remove")) { ev.target.closest("tr").remove(); totals(); } });
     $("oq-discount").addEventListener("input", totals);
     $("oq-filter").addEventListener("change", render);
+    $("oq-search").addEventListener("input", render);
     $("oq-clear").addEventListener("click", reset);
     $("oq-form").addEventListener("submit", save);
     render(); totals();
@@ -188,22 +235,34 @@
   function render() {
     var body = $("oq-list"); if (!body) return;
     var filter = $("oq-filter").value;
-    var rows = (ERP_STATE.orcamentos || []).filter(function (q) { return filter === "TODOS" || q.status === filter; }).map(function (q) {
+    var search = String($("oq-search").value || "").trim().toLocaleLowerCase("pt-BR");
+    var rows = (ERP_STATE.orcamentos || []).filter(function (q) {
+      if (filter !== "TODOS" && q.status !== filter) return false;
+      if (!search) return true;
+      var c = clients().find(function (x) { return String(x.id) === String(q.clienteId); }) || {};
+      var items = quoteItems(q);
+      var acceptance = q.aceiteWeb || {};
+      var haystack = [
+        q.id, q.status, q.data, q.validade, q.desc, q.pagamento,
+        c.nome, c.razaoSocial, c.nomeFantasia, acceptance.responsavel, acceptance.comentario,
+        items.map(function (item) { return item.descricao || item.catalogoId || ""; }).join(" ")
+      ].join(" ").toLocaleLowerCase("pt-BR");
+      return haystack.indexOf(search) >= 0;
+    }).map(function (q) {
       var c = clients().find(function (x) { return String(x.id) === String(q.clienteId); }) || {};
       var items = quoteItems(q); var label = items.map(function (x) { return x.descricao || "Item"; }).join(", ");
       var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> <button type="button" class="btn btn-secondary btn-sm" data-accept="' + esc(q.id) + '">Aceite Web</button> ';
       if (q.status === "Rascunho") actions += '<button type="button" class="btn btn-secondary btn-sm" data-status="Aprovado" data-id="' + esc(q.id) + '">Aprovar</button>';
       if (q.status === "Aprovado") actions += '<button type="button" class="btn btn-success btn-sm" data-os="' + esc(q.id) + '">Gerar OS</button>';
-      return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td>' + esc(q.status || "Rascunho") + '</td><td class="oq-row-actions">' + actions + '</td></tr>';
+      return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td><span class="oq-status" data-status="' + esc(q.status || "Rascunho") + '">' + esc(q.status || "Rascunho") + '</span></td><td class="oq-row-actions">' + actions + '</td></tr>';
     }).join("");
-    body.innerHTML = rows || '<tr><td colspan="8" style="padding:20px;text-align:center;color:#64748b">Nenhuma proposta registrada.</td></tr>';
+    body.innerHTML = rows || '<tr><td colspan="8" style="padding:20px;text-align:center;color:#64748b">' + (search ? "Nenhuma proposta corresponde à busca." : "Nenhuma proposta registrada.") + '</td></tr>';
     body.onclick = function (ev) {
       var b = ev.target.closest("button"); if (!b) return;
-      if (b.dataset.pdf) pdf(b.dataset.pdf);
-      if (b.dataset.accept) openAcceptance(b.dataset.accept);
-      if (b.dataset.status && typeof window.quoteStatus === "function") window.quoteStatus(b.dataset.id, b.dataset.status);
-      if (b.dataset.os && typeof window.quoteToOs === "function") window.quoteToOs(b.dataset.os);
-      render();
+      if (b.dataset.pdf) return pdf(b.dataset.pdf);
+      if (b.dataset.accept) return openAcceptance(b.dataset.accept);
+      if (b.dataset.status && typeof window.quoteStatus === "function") return window.quoteStatus(b.dataset.id, b.dataset.status);
+      if (b.dataset.os && typeof window.quoteToOs === "function") return window.quoteToOs(b.dataset.os);
     };
   }
   function pdf(id) {
