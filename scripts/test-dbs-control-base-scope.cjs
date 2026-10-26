@@ -21,6 +21,8 @@ const required = [
   ['collaborator scope hydration', /getCollaboratorBaseScope/i],
   ['employee issue flag in URL', /can_issue_os=/i],
   ['employee issue tab guard', /dbs-control-can-issue-os/i],
+  ['legacy client canonicalization', /resolveCollaboratorClientIdMap[\s\S]*dbs_control_legacy_id_map/i],
+  ['normalized active base', /normalizeDbsStatus\(baseResult\.data\?\.status\) === "ativo"/i],
 ];
 
 for (const [name, pattern] of required) {
