@@ -6772,15 +6772,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     issueCta.hidden = !canIssueOs;
                     issueCta.setAttribute('aria-hidden', canIssueOs ? 'false' : 'true');
                 }
-                // O menu do colaborador é uma área própria: manter somente "Minhas OS".
+                // O menu do colaborador permanece enxuto, mas agora começa pelo
+                // dashboard; Minhas OS e Emitir OS seguem no mesmo contexto.
                 document.querySelectorAll('aside .nav-menu .nav-section, aside .nav-menu .nav-item').forEach(item => {
-                    const visible = item.matches('.nav-item[data-employee-visible="true"]') || (canIssueOs && item.matches('.nav-item[data-employee-issue-visible="true"]'));
+                    const visible = item.matches('.nav-item[data-employee-visible="true"]')
+                        || (canIssueOs && item.matches('.nav-item[data-employee-issue-visible="true"]'));
                     item.style.setProperty('display', visible ? 'flex' : 'none', 'important');
                 });
-                const employeeNav = document.querySelector('aside .nav-menu .nav-item[data-employee-visible="true"]');
-                if (employeeNav) {
-                    employeeNav.classList.add('active');
-                    employeeNav.setAttribute('aria-current', 'page');
+                const dashboardNav = document.querySelector('aside .nav-menu .nav-item[data-employee-dashboard-visible="true"]')
+                    || document.querySelector('aside .nav-menu .nav-item[data-employee-visible="true"]');
+                if (dashboardNav) {
+                    dashboardNav.classList.add('active');
+                    dashboardNav.setAttribute('aria-current', 'page');
                 }
                 const employeeName = params.get('employee_name') || '';
                 const employeeEmail = (params.get('employee_email') || '').trim().toLowerCase();
@@ -6806,15 +6809,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 }
                 const title = document.getElementById('view-title');
                 const subtitle = document.getElementById('view-subtitle');
-                if (title) title.textContent = 'DBS CONTROL · Minhas Ordens';
+                if (title) title.textContent = 'DBS CONTROL · Meu dashboard';
                 const baseName = params.get('base_name') || '';
                 if (subtitle) subtitle.textContent = canIssueOs
-                    ? `Emissão autorizada · ${baseName ? `Base ${baseName}` : 'base operacional vinculada'}`
-                    : (employeeName ? `Atendimento de campo · ${employeeName}` : 'Atendimento de campo');
-                // O modo colaborador esconde as abas administrativas. Ative a
-                // aba própria de campo explicitamente para que o painel não
-                // fique vazio ao entrar ou após uma atualização do iframe.
-                switchTab('tab-pwa', employeeNav || undefined);
+                    ? 'Progresso, execução e emissão · ' + (baseName ? 'Base ' + baseName : 'base operacional vinculada')
+                    : (employeeName ? 'Progresso e atendimento de campo · ' + employeeName : 'Progresso e atendimento de campo');
+                switchTab('tab-dashboard', dashboardNav || undefined);
             } catch (e) { console.error('Falha ao inicializar modo colaborador DBS CONTROL', e); }
         })();
     </script>
