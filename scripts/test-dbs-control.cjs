@@ -125,6 +125,14 @@ assert.match(route, /const persist = async \(\) => \{[\s\S]*?saveDbsControlCloud
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
+assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
+assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
+assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
+assert.match(html, /Release the filtered view before rendering/, "A hidratação filtrada deve liberar o portal do colaborador antes da renderização da mesma mensagem.");
+const styles = fs.readFileSync("src/styles.css", "utf8");
+assert.match(styles, /body:has\(input\[autocomplete=\"username\"\]\)[\s\S]*?\.grid-cols-1\.lg\\:grid-cols-2 > div:first-child \{\s*display: none !important;/, "O login mobile não deve deixar um painel de apresentação vazio acima do formulário.");
+assert.match(loginRoute, /autoCapitalize=\"none\"[\s\S]*?autoCorrect=\"off\"[\s\S]*?enterKeyHint=\"next\"/, "O campo de identificação deve respeitar teclado e preenchimento do celular.");
+assert.match(loginRoute, /role=\"alert\" aria-live=\"polite\"/, "Falhas de login precisam ser anunciadas de forma acessível no celular.");
 assert.match(ux, /DOMContentLoaded/, "A camada UX precisa ter inicialização compatível com carregamento tardio.");
 assert.match(html, /dbs-control-theme\.css/, "O tema visual do DBS Control precisa estar carregado.");
 assert.doesNotMatch(ux, /quick-flow\{display:none!important\}/, "O guia de fluxo do dashboard não deve ser ocultado.");

@@ -311,6 +311,40 @@ body:has(input[autocomplete="username"]) form a[href^="https://wa.me"] {
     letter-spacing: -.035em;
   }
 }
+
+/* Mobile login: the desktop presentation panel must not reserve an empty strip
+   above the form. Keep the authenticated form reachable with the keyboard and
+   safe-area insets on iOS/Android without changing the login contract. */
+@media (max-width: 1023px) {
+  body:has(input[autocomplete="username"]) {
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #f5f9ff;
+  }
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child {
+    display: none !important;
+  }
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child {
+    display: flex !important;
+    min-height: 100dvh;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    padding-top: max(22px, env(safe-area-inset-top)) !important;
+    padding-right: max(18px, env(safe-area-inset-right)) !important;
+    padding-bottom: max(28px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(18px, env(safe-area-inset-left)) !important;
+  }
+  body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:last-child > div {
+    width: 100%;
+    max-width: 440px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+  body:has(input[autocomplete="username"]) form {
+    padding-bottom: 4px;
+  }
+}
 @media (max-width: 420px) {
   body:has(input[autocomplete="username"]) .min-h-screen.grid.grid-cols-1.lg\:grid-cols-2 > div:first-child {
     padding: 18px 16px 20px !important;

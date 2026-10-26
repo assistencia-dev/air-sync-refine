@@ -304,7 +304,8 @@ function DbsControlPage() {
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
               { type: "DBS_CONTROL_CLOUD_STATE", state: reconciledInitialState },
-              "*");
+              "*",
+            );
             // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
             iframeRef.current?.contentWindow?.postMessage({
               type: "DBS_CONTROL_SYNC_STATUS",
@@ -702,12 +703,12 @@ function DbsControlPage() {
   const employeeMode = !access.data.administrative;
   employeeModeRef.current = employeeMode;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261018-collaborator-sync-guard-fix-1`
-    : "/dbs-control.html?v=20261018-collaborator-sync-guard-fix-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&v=20261026-collaborator-mobile-1`
+    : "/dbs-control.html?v=20261026-collaborator-mobile-1"
 
   return (
-    <main className="min-h-screen bg-[#f4f8fc]">
-      <div className="flex h-10 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
+    <main className="flex min-h-[100dvh] flex-col overflow-hidden bg-[#f4f8fc]">
+      <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
           {cloudError && <span role="alert" title={cloudError} className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-700">Erro de sincronização</span>}
@@ -721,13 +722,13 @@ function DbsControlPage() {
         </button>
       </div>
       {cloudError && (
-        <section role="alert" aria-live="polite" className="mx-4 mt-3 rounded-xl border border-rose-200 bg-white p-4 shadow-sm">
+        <section role="alert" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-rose-200 bg-white p-4 shadow-sm">
           <p className="text-sm font-bold text-rose-700">A sincronização automática do DBS CONTROL encontrou uma falha</p>
           <p className="mt-1 break-words text-xs leading-5 text-slate-700">{cloudError}</p>
           <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
         </section>
       )}
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="h-[calc(100vh-2.5rem)] w-full border-0" style={{ height: "calc(100dvh - 2.5rem)" }} allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
     </main>
   );
 }
