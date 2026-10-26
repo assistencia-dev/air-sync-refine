@@ -1768,7 +1768,6 @@
       #dbs-employee-issue-cta { display:none !important; }
       body.dbs-control-employee-mode.dbs-control-can-issue-os #dbs-employee-issue-cta { display:inline-flex !important; align-items:center; gap:6px; background:linear-gradient(135deg,#2185e4,#1261bd); color:#fff; border-color:transparent; box-shadow:0 6px 16px rgba(22,116,209,.16); }
       body.dbs-control-employee-mode .employee-toolbar-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
-      body.dbs-control-employee-mode .employee-toolbar-actions .employee-issue-inline { display:inline-flex; align-items:center; gap:6px; }
       body.dbs-control-employee-mode #tab-pwa { padding:clamp(14px,3vw,30px) !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:1120px !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-screen { min-height:calc(100vh - 40px); }
@@ -2614,6 +2613,63 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
     </style>
+    <style id="dbs-employee-navigation-20261026">
+        #dbs-employee-context-nav {
+            display:none;
+            align-items:center;
+            gap:3px;
+            padding:4px;
+            border:1px solid #dce7f2;
+            border-radius:12px;
+            background:#f7fbff;
+        }
+        #dbs-employee-context-nav button {
+            min-height:34px;
+            padding:0 12px;
+            border:0;
+            border-radius:8px;
+            background:transparent;
+            color:#60758d;
+            font-size:10px;
+            font-weight:900;
+            letter-spacing:.02em;
+            cursor:pointer;
+            transition:background .16s ease,color .16s ease,box-shadow .16s ease;
+        }
+        #dbs-employee-context-nav button:hover { background:#eaf3ff; color:#145da0; }
+        #dbs-employee-context-nav button.active {
+            background:#fff;
+            color:#145da0;
+            box-shadow:0 2px 8px rgba(20,61,110,.10);
+        }
+        #dbs-employee-issue-cta[hidden] { display:none !important; }
+        body.dbs-control-employee-mode header > div:last-child { gap:8px; }
+        body.dbs-control-employee-mode header > div:last-child > #dbs-sync-indicator { white-space:nowrap; }
+        body.dbs-control-employee-mode #dbs-employee-context-nav { display:inline-flex; }
+        @media(max-width:760px) {
+            body.dbs-control-employee-mode header {
+                align-items:flex-start;
+                flex-wrap:wrap;
+                gap:10px;
+                padding:12px 14px;
+            }
+            body.dbs-control-employee-mode header > .page-title { width:100%; }
+            body.dbs-control-employee-mode header > div:last-child {
+                width:100%;
+                justify-content:space-between;
+                align-items:center;
+            }
+            body.dbs-control-employee-mode #dbs-employee-context-nav {
+                flex:1 1 auto;
+                min-width:0;
+            }
+            body.dbs-control-employee-mode #dbs-employee-context-nav button {
+                flex:1 1 0;
+                padding:0 9px;
+            }
+            body.dbs-control-employee-mode #dbs-employee-issue-cta { flex:0 0 auto; }
+        }
+    </style>
     <style id="dbs-employee-dashboard-20261026">
         body.dbs-control-employee-mode #tab-dashboard { padding: 20px clamp(14px, 3vw, 34px) 34px; }
         body.dbs-control-employee-mode .employee-dashboard-root { max-width: 1180px; margin: 0 auto; }
@@ -2704,6 +2760,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <nav id="dbs-employee-context-nav" aria-label="Navegação do colaborador">
+                    <button type="button" data-employee-tab="tab-dashboard" class="active" aria-current="page" onclick="switchTab('tab-dashboard', this)">Dashboard</button>
+                    <button type="button" data-employee-tab="tab-pwa" onclick="switchTab('tab-pwa', this)">Minhas OS</button>
+                </nav>
                 <span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
                 <button id="dbs-employee-issue-cta" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
                 <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
@@ -4364,7 +4424,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 '</section>' +
                 '<div class="employee-dashboard-actions">' +
                     '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Abrir minhas OS</button>' +
-                    (canIssue ? '<button type="button" class="secondary" onclick="switchTab(&quot;tab-nova-os&quot;)">＋ Emitir OS</button>' : '') +
                 '</div>' +
                 '<section class="employee-dashboard-kpis">' +
                     '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
@@ -4477,6 +4536,26 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
         }
 
+        function atualizarNavegacaoColaborador(tabId) {
+            const nav = document.getElementById('dbs-employee-context-nav');
+            const current = String(tabId || 'tab-dashboard');
+            if (nav) {
+                nav.querySelectorAll('button[data-employee-tab]').forEach(button => {
+                    const active = button.getAttribute('data-employee-tab') === current;
+                    button.classList.toggle('active', active);
+                    if (active) button.setAttribute('aria-current', 'page');
+                    else button.removeAttribute('aria-current');
+                });
+            }
+            const issueCta = document.getElementById('dbs-employee-issue-cta');
+            if (issueCta && document.body.classList.contains('dbs-control-employee-mode')) {
+                const canIssue = document.body.classList.contains('dbs-control-can-issue-os');
+                const hidden = !canIssue || current === 'tab-nova-os';
+                issueCta.hidden = hidden;
+                issueCta.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+            }
+        }
+
         function switchTab(tabId, element) {
             try {
                 // Isolamento de perfil: o colaborador pode acompanhar o próprio
@@ -4514,13 +4593,22 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
                     'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
                 };
-                const meta = titleMap[String(tabId)];
+                const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+                const employeeTitleMap = {
+                    'tab-dashboard':['Meu dashboard','Progresso e operação do colaborador'],
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+                    'tab-nova-os':['Emitir OS','Nova ordem dentro da base vinculada']
+                };
+                const meta = employeeMode
+                    ? (employeeTitleMap[String(tabId)] || titleMap[String(tabId)])
+                    : titleMap[String(tabId)];
                 const title = document.getElementById('view-title');
                 const subtitle = document.getElementById('view-subtitle');
                 if (meta) {
                     if (title) title.textContent = meta[0];
                     if (subtitle) subtitle.textContent = meta[1];
                 }
+                if (employeeMode) atualizarNavegacaoColaborador(tabId);
                 // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
                 if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
                 // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
@@ -6179,7 +6267,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
               <div class="employee-toolbar">
                 <div><strong>Minhas ordens de serviço</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Ordens que ainda precisam de acompanhamento'}</span></div>
                 <div class="employee-toolbar-actions">
-                  ${new URLSearchParams(window.location.search).get('can_issue_os') === '1' ? '<button type="button" class="btn btn-primary employee-issue-inline" onclick="switchTab(\'tab-nova-os\')">＋ Emitir OS</button>' : ''}
                   <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
                 </div>
               </div>
