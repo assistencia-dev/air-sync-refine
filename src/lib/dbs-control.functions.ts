@@ -136,12 +136,19 @@ async function getCollaboratorBaseScope(employee: any) {
   if (baseResult.data?.company_id && employee?.user_company_id && String(baseResult.data.company_id) !== String(employee.user_company_id)) {
     return { baseId: null, baseName: null, canIssueWorkOrders: false, clientIds: [] as string[] };
   }
-  const active = baseResult.data?.status === "ativo";
+  // Status é normalizado para tolerar valores legados com caixa/espaços
+  // diferentes sem relaxar a regra de base ativa.
+  const active = normalizeDbsStatus(baseResult.data?.status) === "ativo";
+  const clientIds = active
+    ? [...new Set((linksResult.data ?? [])
+      .map((row: any) => String(row.client_id ?? "").trim())
+      .filter(Boolean))]
+    : [];
   return {
     baseId: active ? baseId : null,
-    baseName: active ? String(baseResult.data?.name ?? "") : null,
+    baseName: active ? String(baseResult.data?.name ?? "").trim() : null,
     canIssueWorkOrders: Boolean(active && employee?.dbs_control_can_issue_work_orders),
-    clientIds: active ? (linksResult.data ?? []).map((row: any) => String(row.client_id)) : [],
+    clientIds,
   };
 }
 
@@ -988,6 +995,38 @@ type DbsControlDeltaInput = {
   changes: DbsControlDeltaChanges;
 };
 
+async function resolveCollaboratorClientIdMap(
+  scopeKey: string,
+  changes: DbsControlDeltaChanges,
+) {
+  const rawIds = [...new Set((changes.ordens ?? [])
+    .map((order: any) => String(order?.clienteId ?? order?.client_id ?? "").trim())
+    .filter(Boolean))];
+  const resolved = new Map<string, string>();
+  const legacyIds: string[] = [];
+  for (const rawId of rawIds) {
+    if (DBS_CONTROL_UUID_RE.test(rawId)) resolved.set(rawId, rawId);
+    else legacyIds.push(rawId);
+  }
+  // A collaborator cannot write client master data. This is read-only
+  // canonicalization for old snapshots whose client id is still legacy.
+  if (legacyIds.length && scopeKey) {
+    const result = await supabaseAdmin
+      .from("dbs_control_legacy_id_map")
+      .select("legacy_key, canonical_id")
+      .eq("scope_key", scopeKey)
+      .eq("entity_type", "client")
+      .in("legacy_key", legacyIds);
+    if (result.error) throw new Error(result.error.message);
+    for (const row of result.data ?? []) {
+      const legacy = String((row as any).legacy_key ?? "").trim();
+      const canonical = String((row as any).canonical_id ?? "").trim();
+      if (legacy && canonical && DBS_CONTROL_UUID_RE.test(canonical)) resolved.set(legacy, canonical);
+    }
+  }
+  return resolved;
+}
+
 function isDbsControlUuid(value: unknown) {
   return DBS_CONTROL_UUID_RE.test(String(value ?? ""));
 }
@@ -1330,6 +1369,10 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       }
     }
     const maps = await persistDbsControlMasterDeltas(changes, user);
+    if (user.role_key === "COLABORADOR" && collaboratorScope) {
+      const collaboratorClientMap = await resolveCollaboratorClientIdMap(scope.scopeKey, changes);
+      collaboratorClientMap.forEach((canonicalId, rawId) => maps.clientMap.set(rawId, canonicalId));
+    }
     const appliedOrderIds: string[] = [];
     const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
     const conflicts: Array<{ protocol: string; message: string }> = [];
