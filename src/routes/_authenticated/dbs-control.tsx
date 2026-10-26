@@ -527,9 +527,13 @@ function DbsControlPage() {
                 }
                 return;
               }
+              // A RPC relacional é a confirmação da gravação. Não bloqueie o ACK
+              // esperando uma hidratação completa do estado (que pode consultar
+              // milhares de OS e storage). O técnico precisa saber imediatamente
+              // que a intenção foi aceita; a atualização visual vem em segundo
+              // plano e nunca transforma uma gravação confirmada em erro.
               const result = await applyDbsControlDelta({ data: { requestId: batchId, changes } });
-              const latest = await getDbsControlCloudState();
-              cloudUpdatedAtRef.current = latest?.updated_at ?? cloudUpdatedAtRef.current;
+              const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
               if (pendingChangesRef.current === changes) {
                 pendingChangesRef.current = null;
                 pendingBatchIdRef.current = null;
@@ -538,7 +542,6 @@ function DbsControlPage() {
               retryAttemptRef.current = 0;
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
-              const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
               logSyncEvent(hasConflict ? "save_conflict" : "save_applied", {
                 requestCount: requestIds.length,
                 applied: Number(result.applied ?? 0),
@@ -548,20 +551,43 @@ function DbsControlPage() {
                 ? `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
                 : null;
               setCloudError(resultMessage);
+              const ackUpdatedAt = cloudUpdatedAtRef.current;
               iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SYNC_STATUS", status: hasConflict ? "conflict" : (pendingChangesRef.current ? "pending" : "synced"),
-                pendingCount: pendingChangesRef.current ? 1 : 0, updated_at: latest?.updated_at ?? null,
+                pendingCount: pendingChangesRef.current ? 1 : 0, updated_at: ackUpdatedAt,
                 error: resultMessage,
               }, "*");
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: !hasConflict,
-                updated_at: latest?.updated_at ?? null, conflicts: result.conflicts ?? [], error: resultMessage ?? undefined,
+                updated_at: ackUpdatedAt, conflicts: result.conflicts ?? [], error: resultMessage ?? undefined,
               }, "*"));
-              // O status/ACK vem antes do estado de leitura. Assim um fluxo
-              // crítico que aguarda confirmação não abre o diálogo de
-              // "alterações locais pendentes" ao receber a própria atualização.
-              if (!hasConflict && latest?.state) {
-                iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
+
+              // Reconcilia o estado retornado pelo banco depois do ACK. Se essa
+              // leitura falhar ou demorar, a OS continua confirmada e o retry
+              // não é rearmado: a gravação já foi aplicada na transação.
+              if (!hasConflict) {
+                void (async () => {
+                  try {
+                    const latest = await Promise.race([
+                      getDbsControlCloudState(),
+                      new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+                    ]);
+                    if (!latest?.state) {
+                      logSyncEvent("post_save_refresh_timeout");
+                      return;
+                    }
+                    cloudUpdatedAtRef.current = latest.updated_at ?? cloudUpdatedAtRef.current;
+                    if (!pendingChangesRef.current) {
+                      iframeRef.current?.contentWindow?.postMessage({
+                        type: "DBS_CONTROL_CLOUD_STATE", state: latest.state,
+                      }, "*");
+                    }
+                  } catch (refreshError) {
+                    logSyncEvent("post_save_refresh_error", {
+                      message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a leitura após a gravação.",
+                    });
+                  }
+                })();
               }
             } catch (err) {
               const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
