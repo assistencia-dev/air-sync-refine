@@ -6650,28 +6650,31 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const select = document.getElementById('os-select-cliente');
             if (!input || !select) return;
 
-            const typed = String(input.value || '').trim().toLocaleLowerCase('pt-BR');
+            const normalize = value => String(value || '').trim().toLocaleLowerCase('pt-BR')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const typed = normalize(input.value);
+            const typedDigits = String(input.value || '').replace(/\D/g, '');
             const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
 
-            if (!typed) {
+            if (!typed && !typedDigits) {
                 select.value = '';
                 atualizarEquipamentosDoClienteOS();
                 return;
             }
 
-            const match = clientes.find(c => {
-                const nome = String(c.nome || c.nomeFantasia || c.razaoSocial || '').trim().toLocaleLowerCase('pt-BR');
-                const cnpj = String(c.cnpj || '').trim().toLocaleLowerCase('pt-BR');
-                return typed === nome || typed === cnpj || typed === (nome + ' — ' + cnpj);
+            const matches = clientes.filter(c => {
+                const nome = normalize(c.nome || c.nomeFantasia || c.razaoSocial || '');
+                const cnpj = String(c.cnpj || '').replace(/\D/g, '');
+                const display = cnpj ? nome + ' ' + cnpj : nome;
+                return typed === nome || (typed && display.includes(typed))
+                    || (typedDigits.length >= 4 && cnpj.includes(typedDigits));
             });
-
-            if (match) {
-                select.value = String(match.id);
-                atualizarEquipamentosDoClienteOS();
-            } else {
-                select.value = '';
-                atualizarEquipamentosDoClienteOS();
-            }
+            // Só seleciona automaticamente quando a busca é inequívoca. Isso
+            // evita escolher um cliente homônimo e elimina o erro de escopo
+            // causado por uma seleção parcial/legada.
+            const match = matches.length === 1 ? matches[0] : null;
+            select.value = match ? String(match.id) : '';
+            atualizarEquipamentosDoClienteOS();
         }
 
         function atualizarBuscaClienteOS() {
