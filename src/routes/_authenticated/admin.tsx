@@ -873,12 +873,12 @@ function UsersPanel({ isSuperAdmin }: { isSuperAdmin: boolean }) {
             <h3 className="text-lg font-bold text-slate-900">Remover acesso permanentemente</h3>
             <p className="mt-3 text-sm text-slate-600">O login será removido e os dados pessoais do perfil serão ocultados. O registro histórico necessário para preservar vínculos de OS e auditoria será mantido. Essa ação não pode ser desfeita.</p>
             <p className="mt-4 text-sm text-slate-700">Usuário: <strong>{deleteUser.full_name ?? deleteUser.email ?? "—"}</strong></p>
-            <label className="mt-4 block text-xs font-semibold text-slate-700">Digite EXCLUIR para confirmar</label>
-            <input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100" placeholder="EXCLUIR" />
+            <label className="mt-4 block text-xs font-semibold text-slate-700">Digite EXCLUIR PERMANENTEMENTE para confirmar</label>
+            <input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100" placeholder="EXCLUIR PERMANENTEMENTE" aria-label="Confirmação de remoção permanente" />
             {err && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{err}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setDeleteUser(null)} disabled={deleteMut.isPending} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</button>
-              <button onClick={() => deleteMut.mutate(deleteUser.id)} disabled={deleteText !== "EXCLUIR" || deleteMut.isPending} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{deleteMut.isPending ? "Removendo..." : "Remover acesso"}</button>
+              <button onClick={() => deleteMut.mutate(deleteUser.id)} disabled={deleteText !== "EXCLUIR PERMANENTEMENTE" || deleteMut.isPending} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{deleteMut.isPending ? "Removendo..." : "Remover acesso"}</button>
             </div>
           </div>
         </div>

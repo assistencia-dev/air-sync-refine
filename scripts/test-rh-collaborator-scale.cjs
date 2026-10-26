@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, "..");
 const adminFunctions = fs.readFileSync(path.join(root, "src/lib/admin.functions.ts"), "utf8");
 const rhFunctions = fs.readFileSync(path.join(root, "src/lib/rh.functions.ts"), "utf8");
 const registry = fs.readFileSync(path.join(root, "src/components/RhEmployeeRegistry.tsx"), "utf8");
+const adminPanel = fs.readFileSync(path.join(root, "src/routes/_authenticated/admin.tsx"), "utf8");
 
 function requirePattern(source, pattern, message) {
   assert.match(source, pattern, message);
@@ -25,6 +26,8 @@ requirePattern(rhFunctions, /auth\.admin\.deleteUser\(linkedUser\.auth_id\)/, "A
 requirePattern(rhFunctions, /\.update\(\{ access_enabled: false \}\)[\s\S]*?\.eq\("employee_id", employee\.id\)/, "A exclusão do cadastro RH deve revogar o vínculo dedicado.");
 requirePattern(registry, /Digite EXCLUIR CADASTRO para confirmar/, "A interface deve exigir confirmação textual.");
 requirePattern(registry, /Excluir definitivamente o cadastro de/, "A ação destrutiva precisa ser identificável por acessibilidade.");
+requirePattern(adminPanel, /Digite EXCLUIR PERMANENTEMENTE para confirmar/, "A exclusão de acesso precisa exibir a confirmação correta.");
+requirePattern(adminPanel, /deleteText !== "EXCLUIR PERMANENTEMENTE"/, "A exclusão de acesso precisa bloquear confirmação incompleta.");
 
 // Large-scale, non-destructive model test. It exercises the same invariants
 // expected from the server operation without touching the real Supabase data.
