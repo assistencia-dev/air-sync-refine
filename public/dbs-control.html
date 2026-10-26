@@ -3196,12 +3196,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
             if (!dbsControlDeltaHasRows(changes)) return { ok: true, noop: true };
-            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
+            // A confirmação síncrona é usada pelos fluxos críticos (concluir OS).
+            // Não avance a base de comparação antes do ACK: se a API ou a rede
+            // falhar, a próxima tentativa precisa reenviar exatamente o delta.
             DBS_CONTROL_HAS_PENDING_SAVE = true;
             const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
                 ? window.crypto.randomUUID()
                 : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-            return await new Promise((resolve, reject) => {
+            const result = await new Promise((resolve, reject) => {
                 let settled = false;
                 const finish = (error, value) => {
                     if (settled) return;
@@ -3221,6 +3223,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
             });
+            // Só considera o estado local confirmado depois que o pai recebeu o
+            // lote, o RPC terminou e o ACK voltou para este cliente.
+            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
+            return result;
         }
 
         function loadState() {
@@ -5585,7 +5591,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               </div>
                               <label>Assinatura do cliente</label>
                               <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
-                              <div class="employee-inline"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button></div>
+                              <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
                             </div>
                           </details>
                         `}
@@ -5776,10 +5782,23 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
 
-            const finishButton = canvas.closest('.employee-execution-body')?.querySelector('.employee-finish');
-            if (finishButton) { finishButton.disabled = true; finishButton.textContent = 'Salvando atendimento...'; }
+            const executionBody = canvas.closest('.employee-execution-body');
+            const finishButton = executionBody?.querySelector('.employee-finish');
+            const progressNode = executionBody?.querySelector('.employee-save-status');
+            const setProgress = (message) => {
+                if (finishButton) {
+                    finishButton.disabled = Boolean(message);
+                    finishButton.textContent = message || 'Concluir atendimento';
+                    finishButton.setAttribute('aria-busy', message ? 'true' : 'false');
+                }
+                if (progressNode) progressNode.textContent = message || '';
+            };
+            setProgress('Preparando evidências...');
 
             try {
+                if (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_CLOUD_HYDRATING) {
+                    throw new Error('A conexão com a nuvem ainda não está pronta. Aguarde o indicador Sincronizado e tente novamente.');
+                }
                 const beforeFile = beforeInput?.files?.[0] || null;
                 const afterFile = afterInput?.files?.[0] || null;
                 const [fotoAntes, fotoDepois] = await Promise.all([
@@ -5794,6 +5813,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result })));
                 uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
                     .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result })));
+                setProgress('Enviando evidências...');
                 const uploadedAttachments = await Promise.all(uploadJobs);
 
                 const observationText = String(observationInput?.value || '').trim();
@@ -5824,13 +5844,19 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 os.concluidoPorEmployeeId = ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null;
                 os.status = "Concluída";
 
+                setProgress('Confirmando OS na nuvem...');
                 await saveStateAndConfirmCloud();
                 renderizarTudo();
                 alert(`OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
-                if (finishButton) { finishButton.disabled = false; finishButton.textContent = 'Concluir atendimento'; }
+                if (progressNode) progressNode.textContent = 'Não confirmado — revise a conexão e tente novamente.';
+                if (finishButton) {
+                    finishButton.disabled = false;
+                    finishButton.textContent = 'Concluir atendimento';
+                    finishButton.setAttribute('aria-busy', 'false');
+                }
             }
         }
 
@@ -6420,6 +6446,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     const eqCli = document.getElementById('eq-select-cliente');
     const tec = document.getElementById('os-select-tecnico');
     const srv = document.getElementById('os-select-servico');
+    // A renderização da tela acontece também após hidratação/realtime. Preserve
+    // as escolhas em andamento para que o cliente não "desapareça" enquanto a
+    // OS está sendo montada.
+    const previousClientId = String(cli?.value || '');
+    const previousEquipmentId = String(document.getElementById('os-select-equipamento')?.value || '');
+    const previousEquipmentIds = [...state.equipmentIds];
+    const previousTechId = String(tec?.value || '');
+    const previousServiceId = String(srv?.value || '');
+    const previousEqClientId = String(eqCli?.value || '');
     const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
     const tecnicos = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
     const servicos = Array.isArray(ERP_STATE.servicos) ? ERP_STATE.servicos : [];
@@ -6449,8 +6484,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
       '<option value="' + optionText(s.id) + '">' + optionText(s.nome || 'Serviço') +
       (Number(s.valor || 0) ? ' · R$ ' + Number(s.valor || 0).toFixed(2).replace('.', ',') : '') + '</option>'
     ).join('');
+    if (cli && clientes.some(c => String(c.id) === previousClientId)) cli.value = previousClientId;
+    if (eqCli && clientes.some(c => String(c.id) === previousEqClientId)) eqCli.value = previousEqClientId;
+    if (tec && tecnicos.some(t => String(t.id) === previousTechId)) tec.value = previousTechId;
+    if (srv && servicos.some(s => String(s.id) === previousServiceId)) srv.value = previousServiceId;
+    if (previousEquipmentIds.length) state.equipmentIds = new Set(previousEquipmentIds);
     if (typeof window.atualizarBuscaClienteOS === 'function') window.atualizarBuscaClienteOS();
     window.atualizarEquipamentosDoClienteOS();
+    const nativeEquipment = document.getElementById('os-select-equipamento');
+    if (nativeEquipment && previousEquipmentId && [...nativeEquipment.options].some(option => option.value === previousEquipmentId)) {
+      nativeEquipment.value = previousEquipmentId;
+    }
   };
 
   function injectSiteField(){
@@ -6812,5 +6856,58 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
 </script>
+<style id="dbs-field-operator-polish-20261026">
+  /* Camada final de legibilidade do campo: mantém IDs/handlers existentes e
+     reorganiza densidade, foco e alvos de toque. */
+  body.dbs-control-employee-mode .employee-order { padding: clamp(18px, 2.8vw, 28px) !important; border-radius: 22px !important; border-color: #d9e6f2 !important; box-shadow: 0 14px 34px rgba(20,61,110,.07) !important; }
+  body.dbs-control-employee-mode .employee-order-top { padding-bottom: 18px !important; gap: 16px !important; }
+  body.dbs-control-employee-mode .employee-order-top h3 { font-size: clamp(19px,2.4vw,24px) !important; line-height: 1.25 !important; }
+  body.dbs-control-employee-mode .employee-grid { grid-template-columns: repeat(4,minmax(0,1fr)) !important; gap: 12px !important; padding: 18px 0 !important; }
+  body.dbs-control-employee-mode .employee-grid > div { min-height: 68px; padding: 13px 14px !important; }
+  body.dbs-control-employee-mode .employee-grid small, body.dbs-control-employee-mode .employee-description small { font-size: 11px !important; letter-spacing: .02em !important; }
+  body.dbs-control-employee-mode .employee-grid b { margin-top: 7px !important; font-size: 14px !important; line-height: 1.35 !important; }
+  body.dbs-control-employee-mode .employee-description { padding: 16px 18px !important; }
+  body.dbs-control-employee-mode .employee-description p { font-size: 14px !important; line-height: 1.65 !important; }
+  body.dbs-control-employee-mode .employee-execution { margin-top: 20px !important; border-radius: 18px !important; border-color: #cfe0f0 !important; background: linear-gradient(180deg,#f9fcff 0%,#f3f7fb 100%) !important; box-shadow: 0 12px 28px rgba(31,76,119,.08) !important; }
+  body.dbs-control-employee-mode .employee-execution summary { min-height: 60px; padding: 18px 20px !important; font-size: 15px !important; background: linear-gradient(110deg,#edf6ff,#f7fbff) !important; color: #124b80 !important; }
+  body.dbs-control-employee-mode .employee-execution-body { padding: 22px !important; gap: 18px !important; font-size: 14px !important; }
+  body.dbs-control-employee-mode .employee-execution-body > label, body.dbs-control-employee-mode .employee-execution-body .employee-register-equipment > summary, body.dbs-control-employee-mode .pmoc-result-card label { color: #274a6a !important; font-size: 13px !important; font-weight: 800 !important; letter-spacing: 0 !important; text-transform: none !important; line-height: 1.4 !important; }
+  body.dbs-control-employee-mode .employee-execution-body input:not([type=file]), body.dbs-control-employee-mode .employee-execution-body select, body.dbs-control-employee-mode .employee-execution-body textarea { min-height: 48px !important; margin-top: 7px !important; padding: 12px 13px !important; border-radius: 12px !important; font-size: 16px !important; line-height: 1.45 !important; }
+  body.dbs-control-employee-mode .employee-execution-body textarea { min-height: 148px !important; resize: vertical; }
+  body.dbs-control-employee-mode .employee-execution-body .employee-observation-field textarea { min-height: 112px !important; }
+  body.dbs-control-employee-mode .employee-register-equipment { margin: 0 !important; padding: 16px !important; border: 1px solid #c8dced !important; border-radius: 15px !important; background: #f5faff !important; }
+  body.dbs-control-employee-mode .employee-register-equipment p { margin: 9px 0 13px !important; color: #587089 !important; font-size: 13px !important; line-height: 1.55 !important; }
+  body.dbs-control-employee-mode .employee-register-equipment .employee-fields, body.dbs-control-employee-mode .employee-fields { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 14px !important; }
+  body.dbs-control-employee-mode .employee-fields-single { display: block !important; }
+  body.dbs-control-employee-mode .field-check-card, body.dbs-control-employee-mode .pmoc-result-card { padding: 18px !important; border-radius: 16px !important; border-color: #d4e3ef !important; box-shadow: 0 6px 18px rgba(31,76,119,.045) !important; }
+  body.dbs-control-employee-mode .field-check-title { font-size: 15px !important; line-height: 1.35 !important; }
+  body.dbs-control-employee-mode .field-check-summary { align-items: flex-start !important; font-size: 13px !important; }
+  body.dbs-control-employee-mode .field-check-summary small, body.dbs-control-employee-mode .field-check-note, body.dbs-control-employee-mode .pmoc-result-card small { font-size: 12px !important; line-height: 1.55 !important; }
+  body.dbs-control-employee-mode .field-checklist { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 10px !important; margin-top: 14px !important; }
+  body.dbs-control-employee-mode .field-check-item { min-height: 52px; align-items: center !important; padding: 12px 13px !important; border-radius: 11px !important; font-size: 13px !important; line-height: 1.4 !important; }
+  body.dbs-control-employee-mode .field-check-item input { width: 19px; height: 19px; flex: 0 0 19px; margin: 0 !important; }
+  body.dbs-control-employee-mode .employee-photo-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 14px !important; }
+  body.dbs-control-employee-mode .employee-photo-grid label { min-height: 102px; display: flex; flex-direction: column; justify-content: center; padding: 15px !important; border: 1px dashed #9bbbd7 !important; border-radius: 14px !important; background: #f7fbff !important; color: #274a6a !important; font-size: 13px !important; text-transform: none !important; letter-spacing: 0 !important; }
+  body.dbs-control-employee-mode .employee-photo-grid input { min-height: 42px !important; margin-top: 10px !important; font-size: 13px !important; }
+  body.dbs-control-employee-mode canvas.sig-canvas { height: 240px !important; min-height: 240px !important; border-radius: 15px !important; border: 2px dashed #9bbbd7 !important; }
+  body.dbs-control-employee-mode .employee-finish-row { display: grid !important; grid-template-columns: auto minmax(210px,1fr) minmax(180px,1fr) !important; gap: 12px !important; align-items: center !important; }
+  body.dbs-control-employee-mode .employee-finish-row .btn { min-height: 52px !important; padding: 12px 17px !important; font-size: 14px !important; }
+  body.dbs-control-employee-mode .employee-finish-row .employee-finish { margin-left: 0 !important; font-weight: 900 !important; background: linear-gradient(135deg,#087f5b,#0b9a70) !important; border-color: transparent !important; }
+  body.dbs-control-employee-mode .employee-save-status { min-height: 20px; color: #55718b; font-size: 12px; line-height: 1.4; }
+  #tab-nova-os .os-premium-body { padding: clamp(22px,3vw,36px) !important; }
+  #tab-nova-os .os-premium-field label, #tab-nova-os .os-premium-description label { font-size: 13px !important; letter-spacing: 0 !important; text-transform: none !important; }
+  #tab-nova-os .os-premium-field input, #tab-nova-os .os-premium-field select, #tab-nova-os .os-premium-description textarea { min-height: 50px !important; font-size: 16px !important; border-radius: 12px !important; }
+  #tab-nova-os .os-premium-description textarea { min-height: 130px !important; }
+  #tab-nova-os .os-premium-submit { min-height: 54px !important; font-size: 15px !important; border-radius: 12px !important; }
+  @media (max-width:760px) {
+    body.dbs-control-employee-mode .employee-order { padding: 16px !important; }
+    body.dbs-control-employee-mode .employee-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+    body.dbs-control-employee-mode .employee-execution-body { padding: 16px !important; }
+    body.dbs-control-employee-mode .employee-fields, body.dbs-control-employee-mode .employee-register-equipment .employee-fields, body.dbs-control-employee-mode .field-checklist { grid-template-columns: minmax(0,1fr) !important; }
+    body.dbs-control-employee-mode .employee-photo-grid, body.dbs-control-employee-mode .employee-finish-row { grid-template-columns: minmax(0,1fr) !important; }
+    body.dbs-control-employee-mode .employee-finish-row .btn { width: 100% !important; }
+  }
+  @media (max-width:400px) { body.dbs-control-employee-mode .employee-grid { grid-template-columns: minmax(0,1fr) !important; } }
+</style>
 </body>
 </html>

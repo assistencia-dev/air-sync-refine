@@ -548,7 +548,6 @@ function DbsControlPage() {
                 ? `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
                 : null;
               setCloudError(resultMessage);
-              if (latest?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
               iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SYNC_STATUS", status: hasConflict ? "conflict" : (pendingChangesRef.current ? "pending" : "synced"),
                 pendingCount: pendingChangesRef.current ? 1 : 0, updated_at: latest?.updated_at ?? null,
@@ -558,6 +557,12 @@ function DbsControlPage() {
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: !hasConflict,
                 updated_at: latest?.updated_at ?? null, conflicts: result.conflicts ?? [], error: resultMessage ?? undefined,
               }, "*"));
+              // O status/ACK vem antes do estado de leitura. Assim um fluxo
+              // crítico que aguarda confirmação não abre o diálogo de
+              // "alterações locais pendentes" ao receber a própria atualização.
+              if (!hasConflict && latest?.state) {
+                iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
+              }
             } catch (err) {
               const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
               logSyncEvent("save_error", { message, attempt: retryAttemptRef.current + 1 });
