@@ -54,6 +54,10 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
+              if (/error loading dynamically imported module|failed to fetch dynamically imported module|importing a module script failed/i.test(String(error instanceof Error ? error.message : error))) {
+                window.location.reload();
+                return;
+              }
               router.invalidate();
               reset();
             }}
@@ -144,6 +148,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
+        <script src="/module-recovery.js?v=20261026-1" data-preview={import.meta.env.DEV ? "true" : "false"} />
         <HeadContent />
       </head>
       <body>
@@ -158,7 +163,12 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    window.dispatchEvent(new Event("dbs:app-ready"));
+  }, []);
+
+  useEffect(() => {
+    // Preview modules are served live by Vite and must never be controlled by a PWA worker.
+    if (import.meta.env.DEV || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     let disposed = false;
     let refreshing = false;
     let registration: ServiceWorkerRegistration | undefined;
