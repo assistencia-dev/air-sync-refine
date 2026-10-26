@@ -258,6 +258,7 @@ assert.match(persistence, /Reconcile complete snapshots against the latest share
 assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
 assert.match(persistence, /hydrateDbsControlStateFromCanonicalDb\(\s*snapshotState,\s*scope\.companyId,\s*\)/, "Collaborators without a direct company_id must hydrate canonical OS using the resolved administrative company scope.");
 assert.match(persistence, /latestById[\s\S]*latestByProtocol/, "Admin reconciliation must match work orders by ID first and protocol second.");
+assert.match(persistence, /if \(!protocol && latest\) return false/, "OS legadas sem protocolo devem permanecer no snapshot sem bloquear o autosalvamento administrativo.");
 assert.match(persistence, /protectedCompletedFields[\s\S]*tecnicoId[\s\S]*signature_data[\s\S]*diagnostico/, "Completed OS must protect technician, signature, and diagnostic fields.");
 assert.match(persistence, /incomingByProtocol\.get\(protocolKey\(currentOrder\)\)/, "Collaborator reconciliation must accept protocol aliases when IDs differ.");
 assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest\.value->>'protocolo'/, "SQL reconciliation must fall back from ID to protocol.");

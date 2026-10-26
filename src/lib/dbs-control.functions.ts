@@ -1026,6 +1026,12 @@ export const saveDbsControlCloudState = createServerFn({ method: "POST" })
           const id = orderId(incoming);
           const protocol = orderProtocol(incoming);
           const latest = (id ? latestById.get(id) : undefined) ?? (protocol ? latestByProtocol.get(protocol) : undefined);
+          // Algumas OS legadas do snapshot têm apenas o ID interno e nunca
+          // tiveram protocolo. Elas continuam preservadas no snapshot, mas
+          // não podem ser tratadas como uma OS nova no espelho relacional.
+          // OS novas sem protocolo continuam seguindo para a validação abaixo
+          // e são rejeitadas sem gravar dados incompletos.
+          if (!protocol && latest) return false;
           if (!latest) return true;
           return changedFields.some((field) => JSON.stringify((incoming as any)?.[field] ?? null) !== JSON.stringify((latest as any)?.[field] ?? null));
         });
