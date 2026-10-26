@@ -5688,6 +5688,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
                     const isConcluido = isOSConcluida(o);
+                    const isPending = /aguardando peça/i.test(String(o.status || ''));
                     const address = String(cli.endereco || o.localAtendimento || '').trim();
                     const mapsUrl = address
                       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
@@ -5721,6 +5722,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <p>Preencha o relato técnico, registre as evidências e só então confirme a conclusão. O salvamento é confirmado na nuvem antes de fechar esta OS.</p>
                                 <div class="employee-execution-roadmap" aria-label="Etapas do atendimento"><span><b>1</b> Relato</span><span><b>2</b> Evidências</span><span><b>3</b> Assinatura</span><span><b>4</b> Confirmar</span></div>
                               </div>
+                              <section class="employee-result-card" aria-labelledby="employee-result-title-${o.id}">
+                                <div class="employee-result-title" id="employee-result-title-${o.id}"><span class="employee-step-badge employee-step-badge-result">RESULTADO</span><strong>Como ficou este atendimento?</strong></div>
+                                <label>Resultado da visita
+                                  <select id="dbs-mob-result-${o.id}" onchange="atualizarResultadoAtendimentoMobile('${o.id}', this.value)">
+                                    <option value="concluida" ${isPending ? '' : 'selected'}>Atendimento concluído</option>
+                                    <option value="aguardando_peca" ${isPending ? 'selected' : ''}>Atendimento com pendência · aguardando peça</option>
+                                  </select>
+                                </label>
+                                <div id="dbs-mob-pending-${o.id}" class="employee-pending-fields" ${isPending ? '' : 'hidden'}>
+                                  <label>O que ficou pendente? <span class="field-required">Obrigatório</span>
+                                    <textarea id="dbs-mob-pending-note-${o.id}" rows="3" placeholder="Ex.: compressor aguardando substituição; retornar com peça e concluir testes."></textarea>
+                                  </label>
+                                  <small>Essa informação ficará visível para a administração acompanhar o retorno.</small>
+                                </div>
+                              </section>
                               <details class="employee-register-equipment" style="margin:0 0 14px;padding:12px;border:1px solid #cbdced;border-radius:12px;background:#f7fbff;">
                                 <summary style="font-weight:800;color:#12436c;cursor:pointer;">＋ Cadastrar equipamento para este cliente</summary>
                                 <p style="font-size:12px;color:#52677d;margin:8px 0 10px;">O cadastro ficará vinculado a ${escHtml(cli.nome || "este cliente")} e a esta OS. Preencha os dados disponíveis; os campos são flexíveis.</p>
@@ -5778,7 +5794,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
               </div>
             `;
 
-            minhasOSVisiveis.forEach(o => { if (!isOSConcluida(o)) setTimeout(() => initCanvas('sig-canvas-' + o.id), 50); });
+            minhasOSVisiveis.forEach(o => {
+              if (!isOSConcluida(o)) setTimeout(() => {
+                initCanvas('sig-canvas-' + o.id);
+                atualizarResultadoAtendimentoMobile(o.id, /aguardando peça/i.test(String(o.status || '')) ? 'aguardando_peca' : 'concluida');
+              }, 50);
+            });
         }
 
 
