@@ -701,6 +701,7 @@ export type Database = {
           details: Json
           event_type: string
           id: string
+          idempotency_key: string | null
           new_status: string | null
           old_status: string | null
           work_order_id: string
@@ -711,6 +712,7 @@ export type Database = {
           details?: Json
           event_type: string
           id?: string
+          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id: string
@@ -721,6 +723,7 @@ export type Database = {
           details?: Json
           event_type?: string
           id?: string
+          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id?: string
@@ -837,9 +840,11 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by_user_id: string | null
+          deleted_at: string | null
           description: string | null
           diagnostico: string | null
           id: string
+          idempotency_key: string | null
           latitude: number | null
           longitude: number | null
           observation: string | null
@@ -869,9 +874,11 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
           id?: string
+          idempotency_key?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -901,9 +908,11 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
           id?: string
+          idempotency_key?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -963,6 +972,80 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dbs_control_entity_records: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          entity_type: string
+          id: string
+          idempotency_key: string | null
+          payload: Json
+          record_key: string
+          scope_key: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_type: string
+          id?: string
+          idempotency_key?: string | null
+          payload?: Json
+          record_key: string
+          scope_key: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_type?: string
+          id?: string
+          idempotency_key?: string | null
+          payload?: Json
+          record_key?: string
+          scope_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_entity_records_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_legacy_id_map: {
+        Row: {
+          canonical_id: string
+          created_at: string
+          entity_type: string
+          legacy_key: string
+          scope_key: string
+        }
+        Insert: {
+          canonical_id: string
+          created_at?: string
+          entity_type: string
+          legacy_key: string
+          scope_key: string
+        }
+        Update: {
+          canonical_id?: string
+          created_at?: string
+          entity_type?: string
+          legacy_key?: string
+          scope_key?: string
+        }
+        Relationships: []
       }
       project: {
         Row: {
@@ -3133,6 +3216,21 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["role_key"]
       }
+      dbs_control_apply_work_order_delta: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string | null
+          error_message: string | null
+          idempotency_key: string
+          ok: boolean
+          protocol: string | null
+          status: string
+          version: number | null
+          work_order_id: string | null
+        }[]
+      }
       current_unit_id: { Args: never; Returns: string }
       dbs_control_save_snapshot_safe: {
         Args: { p_payload: Json }
@@ -3148,6 +3246,21 @@ export type Database = {
           state: Json
           state_version: number
           updated_at: string
+        }[]
+      }
+      process_work_order_update: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string | null
+          error_message: string | null
+          idempotency_key: string
+          ok: boolean
+          protocol: string | null
+          status: string
+          version: number | null
+          work_order_id: string | null
         }[]
       }
       is_admin: { Args: never; Returns: boolean }

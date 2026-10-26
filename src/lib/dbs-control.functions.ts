@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
 type DbsControlUser = {
   id: string;
@@ -211,117 +210,6 @@ function normalizeDbsStatus(value: unknown): string {
   return String(value ?? "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function mergeCollaboratorOrderState(currentState: Record<string, unknown>, incomingState: Record<string, unknown>, employeeId: string, loginEmail?: string | null) {
-  const current = normalizeState(currentState);
-  const incoming = filterCollaboratorState(incomingState, employeeId, loginEmail);
-  const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
-  const currentTechs = (current.tecnicos as any[]).filter((tech) =>
-    String(tech?.employeeId ?? "") === employeeId ||
-    (normalizedEmail && String(tech?.email ?? "").trim().toLowerCase() === normalizedEmail)
-  );
-  const technicianIds = new Set(currentTechs.map((tech) => String(tech.id)));
-  const currentOrders = current.ordens as any[];
-  const incomingOrders = incoming.ordens as any[];
-  const incomingById = new Map(incomingOrders.map((order) => [String(order?.id), order]));
-  const protocolKey = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
-  const incomingByProtocol = new Map(incomingOrders
-    .filter((order) => protocolKey(order))
-    .map((order) => [protocolKey(order), order]));
-
-  const isMine = (order: any) =>
-    String(order?.employeeId ?? "") === employeeId ||
-    technicianIds.has(String(order?.tecnicoId));
-
-  const mergedOrders = currentOrders.map((currentOrder) => {
-    if (!isMine(currentOrder)) return currentOrder;
-    // O protocolo também reconcilia OS legadas com IDs diferentes no snapshot.
-    const incomingOrder =
-      incomingById.get(String(currentOrder?.id)) ??
-      incomingByProtocol.get(protocolKey(currentOrder));
-    if (!incomingOrder) return currentOrder;
-
-    const oldParts = Array.isArray(currentOrder?.pecasUsadas) ? currentOrder.pecasUsadas : [];
-    const newParts = Array.isArray(incomingOrder?.pecasUsadas) ? incomingOrder.pecasUsadas : oldParts;
-    const oldQty = new Map<string, number>();
-    const newQty = new Map<string, number>();
-    for (const part of oldParts) {
-      const id = String(part?.id ?? "");
-      if (id) oldQty.set(id, (oldQty.get(id) ?? 0) + Math.max(0, Number(part?.qtd ?? 0)));
-    }
-    for (const part of newParts) {
-      const id = String(part?.id ?? "");
-      if (id) newQty.set(id, (newQty.get(id) ?? 0) + Math.max(0, Number(part?.qtd ?? 0)));
-    }
-    const parts = current.pecas as any[];
-    const partById = new Map(parts.map((part) => [String(part?.id), part]));
-    const allPartIds = new Set([...oldQty.keys(), ...newQty.keys()]);
-    for (const partId of allPartIds) {
-      const delta = (newQty.get(partId) ?? 0) - (oldQty.get(partId) ?? 0);
-      if (delta <= 0) continue;
-      const stock = partById.get(partId);
-      if (!stock) throw new Error("Uma peça utilizada na OS não existe mais no estoque.");
-      if (Number(stock.qtd ?? 0) < delta) {
-        throw new Error(`Estoque insuficiente para a peça ${stock.nome ?? partId}.`);
-      }
-    }
-    for (const partId of allPartIds) {
-      const delta = (newQty.get(partId) ?? 0) - (oldQty.get(partId) ?? 0);
-      if (!delta) continue;
-      const stock = partById.get(partId);
-      if (stock) {
-        stock.qtd = Math.max(0, Number(stock.qtd ?? 0) - delta);
-      }
-    }
-
-    const incomingStatus = String(incomingOrder.status ?? "").trim();
-    const allowedEmployeeStatuses = new Set([
-      "em atendimento",
-      "aguardando peca",
-      "aguardando cliente",
-      "concluida",
-    ].map(normalizeDbsStatus));
-    // Uma OS já concluída nunca pode voltar a um status anterior por autosave
-    // atrasado ou por um snapshot antigo do dispositivo do colaborador.
-    const currentIsCompleted = normalizeDbsStatus(currentOrder?.status) === "concluida";
-    const safeStatus = currentIsCompleted ? currentOrder.status : (allowedEmployeeStatuses.has(normalizeDbsStatus(incomingStatus)) ? incomingStatus : currentOrder.status);
-
-    const preserveCompletedValue = (field: string, fallback: unknown) => {
-      const existing = currentOrder?.[field];
-      if (currentIsCompleted && existing !== null && existing !== undefined && String(existing).trim() !== "") return existing;
-      const submitted = incomingOrder?.[field];
-      return submitted !== null && submitted !== undefined && String(submitted).trim() !== "" ? submitted : fallback;
-    };
-
-    return {
-      ...currentOrder,
-      ...mergeAppendOnlyCollaboratorObservations(currentOrder, incomingOrder),
-      // O colaborador só pode atualizar a execução da própria OS.
-      // Dados administrativos/originais (inclusive valor) permanecem intactos.
-      // Em OS concluída, conteúdo já preenchido não pode ser apagado por autosave antigo.
-      status: safeStatus,
-      diagnostico: preserveCompletedValue("diagnostico", currentOrder.diagnostico ?? ""),
-      trabalhoExecutado: preserveCompletedValue("trabalhoExecutado", currentOrder.trabalhoExecutado ?? ""),
-      fotoAntes: preserveCompletedValue("fotoAntes", currentOrder.fotoAntes ?? null),
-      fotoDepois: preserveCompletedValue("fotoDepois", currentOrder.fotoDepois ?? null),
-      assinatura: preserveCompletedValue("assinatura", currentOrder.assinatura ?? null),
-      assinaturaEm: preserveCompletedValue("assinaturaEm", currentOrder.assinaturaEm ?? null),
-      concluidoEm: preserveCompletedValue("concluidoEm", currentOrder.concluidoEm ?? null),
-      concluidoPorEmployeeId: preserveCompletedValue("concluidoPorEmployeeId", currentOrder.concluidoPorEmployeeId ?? null),
-      pecasUsadas: newParts,
-    };
-  });
-
-  return {
-    ...current,
-    ordens: mergedOrders,
-  };
-}
-
-
-function dbsValue(value: unknown) {
-  return value === null || value === undefined || String(value).trim() === "" ? undefined : value;
-}
-
 function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<string, unknown> | undefined) {
   if (!current) return { ...canonical };
   // A tabela operacional é a fonte de verdade para campos que ela armazena.
@@ -344,7 +232,7 @@ async function fetchAllDbsControlWorkOrders() {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("dbs_control_work_orders")
-      .select("id,protocol,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,observation,signature_name,signature_data,total_cents,created_at,updated_at")
+      .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,assinatura_path,signature_path,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
       .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
@@ -359,17 +247,22 @@ async function fetchAllDbsControlWorkOrders() {
 async function hydrateDbsControlStateFromCanonicalDb(
   state: Record<string, unknown>,
   companyId: string | null,
+  scopeKey?: string,
 ) {
-  if (!companyId) return normalizeState(state);
+  if (!companyId && !scopeKey) return normalizeState(state);
 
   const [
     clientsResult,
     sitesResult,
     equipmentResult,
     servicesResult,
+    partsResult,
     employeesResult,
     ordersResult,
     orderEquipmentResult,
+    orderPartsResult,
+    legacyRecordsResult,
+    legacyMapResult,
   ] = await Promise.all([
     supabaseAdmin.from("dbs_control_clients")
       .select("id,legal_name,trade_name,cnpj,phone,email,notes,status,updated_at"),
@@ -379,11 +272,26 @@ async function hydrateDbsControlStateFromCanonicalDb(
       .select("id,client_id,site_id,tag_code,equipment_type,brand,model,serial_number,capacity,environment,installation_date,status,technical_notes,updated_at"),
     supabaseAdmin.from("dbs_control_service_catalog")
       .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
+    supabaseAdmin.from("dbs_control_parts")
+      .select("id,sku,name,description,stock_quantity,cost_cents,sale_cents,status,updated_at"),
     supabaseAdmin.from("rh_employees")
       .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at"),
     fetchAllDbsControlWorkOrders(),
     supabaseAdmin.from("dbs_control_work_order_equipment")
       .select("work_order_id,equipment_id"),
+    supabaseAdmin.from("dbs_control_work_order_parts")
+      .select("work_order_id,part_id,quantity,unit_cents"),
+    scopeKey
+      ? supabaseAdmin.from("dbs_control_entity_records")
+        .select("entity_type,record_key,payload,version,updated_at")
+        .eq("scope_key", scopeKey)
+        .is("deleted_at", null)
+      : Promise.resolve({ data: [], error: null }),
+    scopeKey
+      ? supabaseAdmin.from("dbs_control_legacy_id_map")
+        .select("entity_type,legacy_key,canonical_id")
+        .eq("scope_key", scopeKey)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const results = [
@@ -391,14 +299,70 @@ async function hydrateDbsControlStateFromCanonicalDb(
     sitesResult,
     equipmentResult,
     servicesResult,
+    partsResult,
     employeesResult,
     ordersResult,
     orderEquipmentResult,
+    orderPartsResult,
+    legacyRecordsResult,
+    legacyMapResult,
   ];
   const firstError = results.find((result) => result.error)?.error;
   if (firstError) throw new Error(firstError.message);
 
-  const current = normalizeState(state);
+  const legacyIdMap = new Map<string, string>(
+    (legacyMapResult.data ?? []).map((row: any) => [
+      `${String(row.entity_type)}:${String(row.legacy_key)}`,
+      String(row.canonical_id),
+    ]),
+  );
+  const mapLegacyId = (entityType: string, value: unknown) => {
+    const raw = String(value ?? "").trim();
+    return raw ? (legacyIdMap.get(`${entityType}:${raw}`) ?? raw) : raw;
+  };
+  const remapLegacyState = (source: Record<string, unknown>) => {
+    const next = { ...source } as Record<string, any>;
+    const remap = (key: string, entityType: string, transform?: (item: any) => any) => {
+      if (!Array.isArray(next[key])) return;
+      next[key] = next[key].map((item: any) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+        const mapped = { ...item, id: mapLegacyId(entityType, item.id) };
+        return transform ? transform(mapped) : mapped;
+      });
+    };
+    remap("clientes", "client");
+    remap("sites", "site", (item) => ({ ...item, clienteId: mapLegacyId("client", item.clienteId ?? item.client_id) }));
+    remap("locais", "site", (item) => ({ ...item, clienteId: mapLegacyId("client", item.clienteId ?? item.client_id) }));
+    remap("equipamentos", "equipment", (item) => ({
+      ...item,
+      clienteId: mapLegacyId("client", item.clienteId ?? item.client_id),
+      client_id: mapLegacyId("client", item.client_id ?? item.clienteId),
+      siteId: mapLegacyId("site", item.siteId ?? item.localId ?? item.site_id),
+      localId: mapLegacyId("site", item.localId ?? item.siteId ?? item.site_id),
+    }));
+    remap("servicos", "service");
+    remap("pecas", "part");
+    const remapOrder = (item: any) => ({
+      ...item,
+      id: mapLegacyId("work_order", item.id),
+      clienteId: mapLegacyId("client", item.clienteId ?? item.client_id),
+      client_id: mapLegacyId("client", item.client_id ?? item.clienteId),
+      siteId: mapLegacyId("site", item.siteId ?? item.localId ?? item.site_id),
+      localId: mapLegacyId("site", item.localId ?? item.siteId ?? item.site_id),
+      servicoId: mapLegacyId("service", item.servicoId ?? item.service_id),
+      equipamentoId: mapLegacyId("equipment", item.equipamentoId),
+      equipamentosIds: Array.isArray(item.equipamentosIds)
+        ? item.equipamentosIds.map((id: unknown) => mapLegacyId("equipment", id))
+        : item.equipamentosIds,
+      pecasUsadas: Array.isArray(item.pecasUsadas)
+        ? item.pecasUsadas.map((part: any) => ({ ...part, id: mapLegacyId("part", part?.id) }))
+        : item.pecasUsadas,
+    });
+    if (Array.isArray(next.ordens)) next.ordens = next.ordens.map(remapOrder);
+    if (Array.isArray(next.osHistorico)) next.osHistorico = next.osHistorico.map(remapOrder);
+    return next;
+  };
+  const current = remapLegacyState(normalizeState(state));
   const byId = (items: unknown[]): Map<string, any> => {
     const entries: Array<[string, any]> = [];
     for (const item of items as any[]) {
@@ -507,6 +471,19 @@ async function hydrateDbsControlStateFromCanonicalDb(
     status: row.status || "ativo",
   }));
 
+  const canonicalParts = (partsResult.data ?? []).map((row: any) => ({
+    id: String(row.id),
+    sku: row.sku || "",
+    nome: row.name || "Peça",
+    name: row.name || "Peça",
+    descricao: row.description || "",
+    qtd: Number(row.stock_quantity || 0),
+    stock_quantity: Number(row.stock_quantity || 0),
+    custo: Number(row.cost_cents || 0) / 100,
+    venda: Number(row.sale_cents || 0) / 100,
+    status: row.status || "ativo",
+  }));
+
   const canonicalTechnicians = (employeesResult.data ?? [])
     .filter((row: any) => row.is_active !== false)
     .map((row: any) => {
@@ -547,13 +524,27 @@ async function hydrateDbsControlStateFromCanonicalDb(
     equipmentLinks.set(orderId, list);
   }
 
+  const partLinks = new Map<string, any[]>();
+  for (const link of orderPartsResult.data ?? []) {
+    const orderId = String((link as any).work_order_id);
+    const list = partLinks.get(orderId) ?? [];
+    list.push({
+      id: String((link as any).part_id),
+      qtd: Number((link as any).quantity || 0),
+      quantity: Number((link as any).quantity || 0),
+      venda: Number((link as any).unit_cents || 0) / 100,
+      unit_cents: (link as any).unit_cents ?? null,
+    });
+    partLinks.set(orderId, list);
+  }
+
   const canonicalOrders = (ordersResult.data ?? []).map((row: any) => {
     const equipmentIds = equipmentLinks.get(String(row.id)) ?? [];
     const assignedEmployeeId = row.assigned_employee_id ? String(row.assigned_employee_id) : null;
     const mappedStatus = statusMap[String(row.status || "").trim().toLowerCase()] || row.status || "Em Atendimento";
     return {
       id: String(row.id),
-      protocolo: row.protocol || "",
+      protocolo: row.protocolo || row.protocol || "",
       data: row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "",
       dataCriacao: row.created_at || "",
       clienteId: String(row.client_id),
@@ -561,6 +552,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
       localId: row.site_id ? String(row.site_id) : null,
       equipamentoId: equipmentIds[0] || null,
       equipamentosIds: equipmentIds,
+      pecasUsadas: partLinks.get(String(row.id)) ?? [],
       tecnicoId: assignedEmployeeId,
       employeeId: assignedEmployeeId,
       servicoId: row.service_id ? String(row.service_id) : null,
@@ -578,7 +570,10 @@ async function hydrateDbsControlStateFromCanonicalDb(
       signature_name: row.signature_name || null,
       assinaturaStoragePath: row.assinatura_path || row.signature_path || null,
       assinatura: row.assinatura_path || row.signature_path ? null : (row.signature_data || null),
+      deleted_at: row.deleted_at || null,
+      excluidaEm: row.deleted_at || null,
       version: Number(row.version || 1),
+      idempotency_key: row.idempotency_key || null,
       valor: Number(row.total_cents || 0) / 100,
     };
   });
@@ -614,13 +609,23 @@ async function hydrateDbsControlStateFromCanonicalDb(
     };
   });
 
+  const legacyCompras = (legacyRecordsResult.data ?? [])
+    .filter((row: any) => row.entity_type === "compra")
+    .map((row: any) => ({ ...(row.payload && typeof row.payload === "object" ? row.payload : {}), version: row.version }));
+  const legacyOrcamentos = (legacyRecordsResult.data ?? [])
+    .filter((row: any) => row.entity_type === "orcamento")
+    .map((row: any) => ({ ...(row.payload && typeof row.payload === "object" ? row.payload : {}), version: row.version }));
+
   return {
     ...current,
     clientes: mergeArray(current.clientes as unknown[], canonicalClients),
     equipamentos: mergeArray(current.equipamentos as unknown[], canonicalEquipment),
     servicos: mergeArray(current.servicos as unknown[], canonicalServices),
+    pecas: mergeArray(current.pecas as unknown[], canonicalParts),
     tecnicos: mergeArray(current.tecnicos as unknown[], canonicalTechnicians),
     ordens: mergedOrders,
+    compras: mergeArray(current.compras as unknown[], legacyCompras),
+    orcamentos: mergeArray(Array.isArray((current as any).orcamentos) ? (current as any).orcamentos : [], legacyOrcamentos),
     sites,
     locais,
   };
@@ -676,18 +681,45 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
     const scope = await resolveDbsControlScope(user);
-    const { data: snapshot, error: snapshotError } = await supabaseAdmin.from("dbs_control_snapshots")
-      .select("state").eq("scope_key", scope.scopeKey).maybeSingle();
-    if (snapshotError) throw new Error(snapshotError.message);
-    const state = snapshot?.state as Record<string, unknown> | null;
-    const orders = Array.isArray(state?.ordens) ? state.ordens as any[] : [];
-    const order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
-      String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
+    let state: Record<string, unknown> | null = null;
+    let order: any = null;
+    let canonicalOrderId: string | null = null;
+    if (DBS_CONTROL_UUID_RE.test(data.orderId)) {
+      const canonical = await supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,assigned_employee_id,status,client_id,site_id")
+        .eq("id", data.orderId).maybeSingle();
+      if (canonical.error) throw new Error(canonical.error.message);
+      if (canonical.data) {
+        order = canonical.data;
+        canonicalOrderId = String(canonical.data.id);
+      }
+    }
+    if (!order) {
+      const canonical = await supabaseAdmin.from("dbs_control_work_orders")
+        .select("id,protocol,assigned_employee_id,status,client_id,site_id")
+        .eq("protocol", data.orderId).limit(1).maybeSingle();
+      if (canonical.error) throw new Error(canonical.error.message);
+      if (canonical.data) {
+        order = canonical.data;
+        canonicalOrderId = String(canonical.data.id);
+      }
+    }
+    // Compatibilidade de leitura para OS ainda não migrada: nunca grava snapshot;
+    // apenas permite localizar o registro legado enquanto a administração o reconcilia.
+    if (!order) {
+      const { data: snapshot, error: snapshotError } = await supabaseAdmin.from("dbs_control_snapshots")
+        .select("state").eq("scope_key", scope.scopeKey).maybeSingle();
+      if (snapshotError) throw new Error(snapshotError.message);
+      state = snapshot?.state as Record<string, unknown> | null;
+      const orders = Array.isArray(state?.ordens) ? state.ordens as any[] : [];
+      order = orders.find((item) => String(item?.id ?? "") === data.orderId ||
+        String(item?.protocolo ?? item?.protocol ?? item?.numero ?? "") === data.orderId);
+    }
     if (!order) throw new Error("OS não encontrada na base compartilhada.");
     if (user.role_key === "COLABORADOR") {
       const employee = await getCollaboratorEmployee(user.id);
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
-      const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? "") === String(employee.id);
+      const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? "") === String(employee.id);
       const techs = Array.isArray(state?.tecnicos) ? state!.tecnicos as any[] : [];
       const technicianMatches = techs.some((item) => String(item?.id ?? "") === String(order?.tecnicoId ?? "") &&
         (String(item?.employeeId ?? "") === String(employee.id) ||
@@ -711,7 +743,7 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     }
     // Registra o anexo na tabela relacional quando a OS já tem chave canônica.
     // OS legadas continuam compatíveis: a referência também é persistida no snapshot.
-    let canonicalOrder: { id: string } | null = null;
+    let canonicalOrder: { id: string } | null = canonicalOrderId ? { id: canonicalOrderId } : null;
     const orderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.orderId);
     if (orderUuid) {
       const found = await supabaseAdmin.from("dbs_control_work_orders").select("id").eq("id", data.orderId).maybeSingle();
@@ -768,6 +800,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
       snapshotState,
       scope.companyId,
+      scope.scopeKey,
     );
     const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
     const hasCanonicalRecords = [
@@ -805,577 +838,470 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
 const DBS_CONTROL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function syncAdminOrdersToCanonical(orders: any[], userId: string, snapshotClients: any[] = []) {
-  const isUuid = (value: unknown) => DBS_CONTROL_UUID_RE.test(String(value ?? ""));
-  const completed = (value: unknown) => normalizeDbsStatus(value) === "concluida";
-  const clientIdCache = new Map<string, string>();
-  const resolveCanonicalClient = async (rawClientId: string, protocol: string): Promise<string> => {
-    const cacheKey = rawClientId.trim();
-    if (clientIdCache.has(cacheKey)) return clientIdCache.get(cacheKey)!;
-    const source = snapshotClients.find((client) => String(client?.id ?? "").trim() === cacheKey);
-    let canonicalId = isUuid(cacheKey) ? cacheKey : "";
-    if (canonicalId) {
-      const existing = await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", canonicalId).maybeSingle();
-      if (existing.error) throw new Error("Falha ao validar o cliente da OS " + protocol + ": " + existing.error.message);
-      if (existing.data) {
-        clientIdCache.set(cacheKey, String(existing.data.id));
-        return String(existing.data.id);
-      }
-    }
+type DbsControlDeltaChanges = {
+  clientes?: any[];
+  sites?: any[];
+  locais?: any[];
+  equipamentos?: any[];
+  servicos?: any[];
+  pecas?: any[];
+  compras?: any[];
+  orcamentos?: any[];
+  ordens?: any[];
+};
 
-    const cnpj = String(source?.cnpj ?? source?.CNPJ ?? "").replace(/\D/g, "");
-    if (cnpj) {
-      const byCnpj = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
-      if (byCnpj.error) throw new Error("Falha ao localizar cliente por CNPJ na OS " + protocol + ": " + byCnpj.error.message);
-      if (byCnpj.data) {
-        clientIdCache.set(cacheKey, String(byCnpj.data.id));
-        return String(byCnpj.data.id);
-      }
-    }
-    const legalName = String(source?.razaoSocial ?? source?.razao_social ?? source?.legal_name ?? source?.nome ?? source?.name ?? "").trim();
-    const tradeName = String(source?.nomeFantasia ?? source?.nome_fantasia ?? source?.trade_name ?? source?.nome ?? source?.name ?? "").trim();
-    if (!source || !legalName) {
-      throw new Error("Não foi possível despachar a OS " + protocol + ": o cliente vinculado não existe na base relacional e não há cadastro completo no snapshot. Nenhum dado foi descartado.");
-    }
-    const clientPayload: TablesInsert<"dbs_control_clients"> = {
-      legal_name: legalName,
-      trade_name: tradeName || legalName,
-      cnpj: cnpj || null,
-      phone: String(source?.telefone ?? source?.phone ?? source?.contato ?? "").trim() || null,
-      email: String(source?.email ?? "").trim() || null,
-      notes: String(source?.observacoes ?? source?.notes ?? "").trim() || null,
-      status: String(source?.status ?? "ativo").toLowerCase() === "inativo" ? "inativo" : "ativo",
-    };
-    if (canonicalId) clientPayload.id = canonicalId;
-    const inserted = await supabaseAdmin.from("dbs_control_clients").insert(clientPayload).select("id").single();
-    if (inserted.error || !inserted.data) {
-      if (cnpj) {
-        const retry = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
-        if (!retry.error && retry.data) {
-          clientIdCache.set(cacheKey, String(retry.data.id));
-          return String(retry.data.id);
-        }
-      }
-      throw new Error("Não foi possível preparar o cadastro relacional do cliente da OS " + protocol + ": " + (inserted.error?.message ?? "cliente não retornado"));
-    }
-    clientIdCache.set(cacheKey, String(inserted.data.id));
-    return String(inserted.data.id);
-  };
+type DbsControlDeltaInput = {
+  requestId?: string;
+  changes: DbsControlDeltaChanges;
+};
 
-  for (const order of orders) {
-    const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
-    const orderId = String(order?.id ?? "").trim();
-    const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
-    if (!protocol) throw new Error("Não foi possível despachar uma OS sem protocolo. Corrija o cadastro antes de continuar.");
-    if (!rawClientId) throw new Error("Não foi possível despachar a OS " + protocol + ": cliente não vinculado.");
-    const clientId = await resolveCanonicalClient(rawClientId, protocol);
-    let query = supabaseAdmin.from("dbs_control_work_orders")
-      .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
-      .eq("protocol", protocol).limit(1);
-    if (isUuid(orderId)) {
-      const byId = await supabaseAdmin.from("dbs_control_work_orders")
-        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
-        .eq("id", orderId).maybeSingle();
-      if (byId.error) throw new Error("Falha ao ler OS relacional " + protocol + ": " + byId.error.message);
-      if (byId.data) query = supabaseAdmin.from("dbs_control_work_orders")
-        .select("id,protocol,client_id,site_id,assigned_employee_id,status,technical_opinion,diagnostico,observation,servico_executado,started_at,completed_at,signature_data,signature_path,assinatura_path,signature_name,version")
-        .eq("id", orderId);
-    }
-    const { data: existing, error: lookupError } = await query.maybeSingle();
-    if (lookupError) throw new Error("Falha ao localizar OS " + protocol + ": " + lookupError.message);
-    const normalizedStatus = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
-    const status = normalizedStatus === "concluido" ? "concluida"
-      : normalizedStatus === "em_atendimento" || normalizedStatus === "andamento" ? "em_atendimento"
-      : normalizedStatus === "aguardando_peca" ? "aguardando_peca"
-      : normalizedStatus === "aguardando_cliente" ? "aguardando_cliente"
-      : normalizedStatus === "cancelada" ? "cancelada"
-      : normalizedStatus || "aberta";
-    const assignedId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
-    const siteId = String(order?.siteId ?? order?.localId ?? "").trim();
-    const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
-    const fields: Record<string, unknown> = {
-      protocol, protocolo: protocol, client_id: clientId,
-      site_id: isUuid(siteId) ? siteId : null,
-      assigned_employee_id: isUuid(assignedId) ? assignedId : null,
-      created_by_user_id: userId,
-      type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
-      priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
-      status,
-      scheduled_at: order?.scheduledAt ?? order?.scheduled_at ?? null,
-      started_at: order?.startedAt ?? order?.started_at ?? null,
-      completed_at: completed(status) ? (order?.concluidoEm ?? order?.completedAt ?? order?.completed_at ?? new Date().toISOString()) : null,
-      description: String(order?.desc ?? order?.description ?? ""),
-      technical_opinion: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
-      diagnostico: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
-      observation: String(order?.observacao ?? order?.observation ?? ""),
-      servico_executado: String(order?.trabalhoExecutado ?? order?.servicoExecutado ?? order?.observacao ?? order?.observation ?? ""),
-      signature_name: String(order?.signature_name ?? order?.signatureName ?? ""),
-      signature_path: signaturePath || null, assinatura_path: signaturePath || null,
-      signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
-      total_cents: Math.round((() => {
-        const raw = String(order?.valor ?? order?.total ?? 0).trim();
-        const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
-        const amount = Number(normalized);
-        return Number.isFinite(amount) ? amount * 100 : 0;
-      })()),
-      updated_at: new Date().toISOString(),
-    };
-    if (!existing) {
-      // IDs legados que não são UUID usam o UUID gerado pelo banco; o protocolo
-      // permanece como identidade estável para futuras reconciliações.
-      const insertPayload = isUuid(orderId) ? { id: orderId, ...fields } : fields;
-      const { error } = await supabaseAdmin.from("dbs_control_work_orders").insert(insertPayload as unknown as TablesInsert<"dbs_control_work_orders">);
-      if (error) throw new Error("Falha ao registrar OS " + protocol + " na tabela relacional: " + error.message);
-      continue;
-    }
-    if (completed(existing.status)) continue;
-    const expectedVersion = Number(order?.version);
-    const currentVersion = Number(existing.version || 1);
-    const staleVersion = Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== currentVersion;
-    if (staleVersion) {
-      const preserveWhenIncomingEmpty: Array<[string, string]> = [
-        ["technical_opinion", "technical_opinion"], ["diagnostico", "diagnostico"],
-        ["observation", "observation"], ["servico_executado", "servico_executado"],
-        ["signature_data", "signature_data"], ["signature_name", "signature_name"],
-        ["signature_path", "signature_path"], ["assinatura_path", "assinatura_path"],
-        ["started_at", "started_at"], ["completed_at", "completed_at"],
-      ];
-      for (const [target, source] of preserveWhenIncomingEmpty) {
-        const currentValue = (existing as Record<string, unknown>)[source];
-        const incomingValue = fields[target];
-        if (currentValue !== null && currentValue !== undefined && String(currentValue).trim() !== ""
-            && (incomingValue === null || incomingValue === undefined || String(incomingValue).trim() === "")) {
-          fields[target] = currentValue;
-        }
-      }
-      const statusRank: Record<string, number> = {
-        aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3,
-        "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5,
-      };
-      const currentStatus = String(existing.status ?? "").trim().toLocaleLowerCase("pt-BR");
-      const incomingStatus = String(fields.status ?? "").trim().toLocaleLowerCase("pt-BR");
-      if ((statusRank[currentStatus] ?? 0) > (statusRank[incomingStatus] ?? 0)) fields.status = existing.status;
-      if (!fields.started_at && existing.started_at) fields.started_at = existing.started_at;
-      if (!fields.completed_at && existing.completed_at) fields.completed_at = existing.completed_at;
-    }
-    for (const key of ["protocol","protocolo","created_by_user_id"]) delete fields[key];
-    if (!signaturePath && !String(order?.assinatura ?? order?.signature_data ?? "").trim()) {
-      delete fields.signature_data;
-      delete fields.signature_path;
-      delete fields.assinatura_path;
-      delete fields.signature_name;
-    }
-    const { data: updated, error } = await supabaseAdmin.from("dbs_control_work_orders")
-      .update({ ...fields, version: currentVersion } as unknown as TablesUpdate<"dbs_control_work_orders">).eq("id", existing.id).eq("version", currentVersion)
-      .select("id,version").maybeSingle();
-    if (error) throw new Error("Falha ao salvar OS relacional " + protocol + ": " + error.message);
-    if (!updated) throw new Error("A OS " + protocol + " mudou durante o salvamento; recarregue e tente novamente.");
-  }
+function isDbsControlUuid(value: unknown) {
+  return DBS_CONTROL_UUID_RE.test(String(value ?? ""));
 }
 
-export const saveDbsControlCloudState = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { state: Record<string, unknown>; baseUpdatedAt?: string | null }) => {
-    if (!input?.state || typeof input.state !== "object" || Array.isArray(input.state)) {
-      throw new Error("Estado do DBS CONTROL inválido.");
+function deltaRecordKey(record: any, fallback: string) {
+  return String(record?.id ?? record?.codigo ?? record?.numero ?? record?.protocolo ?? fallback).trim();
+}
+
+function normalizeDbsControlDelta(input: DbsControlDeltaInput): DbsControlDeltaChanges {
+  const source = input?.changes;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    throw new Error("Alterações do DBS CONTROL inválidas.");
+  }
+  const allowed: Array<keyof DbsControlDeltaChanges> = [
+    "clientes", "sites", "locais", "equipamentos", "servicos", "pecas", "compras", "orcamentos", "ordens",
+  ];
+  const normalized: DbsControlDeltaChanges = {};
+  let total = 0;
+  for (const key of allowed) {
+    const values = source[key];
+    if (values === undefined) continue;
+    if (!Array.isArray(values)) throw new Error(`Delta ${key} inválido: esperado array de registros.`);
+    if (values.length > 2000) throw new Error(`Delta ${key} excede o limite seguro de 2.000 registros.`);
+    total += values.length;
+    normalized[key] = values.map((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`Delta ${key} contém um registro inválido.`);
+      }
+      return value;
+    });
+  }
+  if (total > 6000) throw new Error("O lote de alterações excede o limite seguro; sincronize em lotes menores.");
+  const serialized = JSON.stringify(normalized);
+  if (serialized.length > 8 * 1024 * 1024) throw new Error("O lote de alterações excede 8 MB.");
+  return normalized;
+}
+
+function storedDeltaRecord(record: any) {
+  const normalized = stripStoredAttachmentPayloads({ ordens: [record] });
+  return (normalized.ordens as any[])[0] ?? record;
+}
+
+async function persistDbsControlLegacyEntityDeltas(
+  scopeKey: string,
+  userId: string,
+  entityType: "compra" | "orcamento",
+  records: any[],
+  requestId: string,
+) {
+  let applied = 0;
+  for (const record of records) {
+    const recordKey = deltaRecordKey(record, `${requestId}:${entityType}:${applied}`);
+    if (!recordKey) throw new Error(`Registro de ${entityType} sem identificador estável.`);
+    const idempotencyKey = `${requestId}:${entityType}:${recordKey}`.slice(0, 240);
+    const existingResult = await supabaseAdmin
+      .from("dbs_control_entity_records")
+      .select("id,version,idempotency_key")
+      .eq("scope_key", scopeKey)
+      .eq("entity_type", entityType)
+      .eq("record_key", recordKey)
+      .maybeSingle();
+    if (existingResult.error) throw new Error(existingResult.error.message);
+    const existing = existingResult.data;
+    if (existing?.idempotency_key === idempotencyKey) continue;
+    const expectedVersion = Number(record?.version);
+    if (existing && Number.isFinite(expectedVersion) && expectedVersion > 0 && expectedVersion !== Number(existing.version)) {
+      throw new Error(`Conflito de versão no registro ${entityType}/${recordKey}; recarregue antes de salvar.`);
     }
-    return {
-      state: stripStoredAttachmentPayloads(input.state),
-      baseUpdatedAt: input.baseUpdatedAt ?? null,
+    const payload = storedDeltaRecord(record) as Record<string, unknown>;
+    if (!existing) {
+      const inserted = await supabaseAdmin.from("dbs_control_entity_records").insert({
+        scope_key: scopeKey,
+        entity_type: entityType,
+        record_key: recordKey,
+        payload: payload as any,
+        version: 1,
+        idempotency_key: idempotencyKey,
+        updated_by: userId,
+        deleted_at: record?.deleted ? new Date().toISOString() : null,
+      } as any).select("id").single();
+      if (inserted.error) throw new Error(inserted.error.message);
+    } else {
+      const updated = await supabaseAdmin.from("dbs_control_entity_records").update({
+        payload: payload as any,
+        version: Number(existing.version) + 1,
+        idempotency_key: idempotencyKey,
+        updated_by: userId,
+        deleted_at: record?.deleted ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      } as any).eq("id", existing.id).eq("version", existing.version).select("id").maybeSingle();
+      if (updated.error) throw new Error(updated.error.message);
+      if (!updated.data) throw new Error(`Conflito de versão no registro ${entityType}/${recordKey}; nenhum dado foi sobrescrito.`);
+    }
+    applied += 1;
+  }
+  return applied;
+}
+
+async function persistDbsControlMasterDeltas(
+  changes: DbsControlDeltaChanges,
+  user: DbsControlUser,
+) {
+  const clientMap = new Map<string, string>();
+  const siteMap = new Map<string, string>();
+  const equipmentMap = new Map<string, string>();
+  const serviceMap = new Map<string, string>();
+  const partMap = new Map<string, string>();
+  const isAdmin = user.role_key !== "COLABORADOR";
+  if (!isAdmin) return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied: 0 };
+  let applied = 0;
+
+  for (const client of changes.clientes ?? []) {
+    const rawId = String(client?.id ?? "").trim();
+    const cnpj = String(client?.cnpj ?? client?.CNPJ ?? "").replace(/\D/g, "") || null;
+    const byId = isDbsControlUuid(rawId)
+      ? await supabaseAdmin.from("dbs_control_clients").select("id").eq("id", rawId).maybeSingle()
+      : { data: null, error: null } as any;
+    if (byId.error) throw new Error(byId.error.message);
+    let canonicalId = byId.data?.id ? String(byId.data.id) : "";
+    if (!canonicalId && cnpj) {
+      const byCnpj = await supabaseAdmin.from("dbs_control_clients").select("id").eq("cnpj", cnpj).limit(1).maybeSingle();
+      if (byCnpj.error) throw new Error(byCnpj.error.message);
+      canonicalId = byCnpj.data?.id ? String(byCnpj.data.id) : "";
+    }
+    const payload: any = {
+      legal_name: String(client?.razaoSocial ?? client?.razao_social ?? client?.legal_name ?? client?.nome ?? client?.name ?? "").trim(),
+      trade_name: String(client?.nomeFantasia ?? client?.nome_fantasia ?? client?.trade_name ?? client?.nome ?? client?.name ?? "").trim() || null,
+      cnpj,
+      phone: String(client?.telefone ?? client?.phone ?? client?.contato ?? "").trim() || null,
+      email: String(client?.email ?? "").trim() || null,
+      notes: String(client?.observacoes ?? client?.notes ?? "").trim() || null,
+      status: String(client?.status ?? "ativo").toLowerCase() === "inativo" ? "inativo" : "ativo",
+      updated_at: new Date().toISOString(),
     };
+    if (!payload.legal_name) throw new Error("Cliente sem razão social/nome; o registro não foi gravado.");
+    if (canonicalId) {
+      const updated = await supabaseAdmin.from("dbs_control_clients").update(payload).eq("id", canonicalId).select("id").single();
+      if (updated.error) throw new Error(updated.error.message);
+    } else {
+      if (isDbsControlUuid(rawId)) payload.id = rawId;
+      const inserted = await supabaseAdmin.from("dbs_control_clients").insert(payload).select("id").single();
+      if (inserted.error || !inserted.data) throw new Error(inserted.error?.message ?? "Cliente não retornado.");
+      canonicalId = String(inserted.data.id);
+    }
+    if (rawId) clientMap.set(rawId, canonicalId);
+    if (canonicalId) clientMap.set(canonicalId, canonicalId);
+    applied += 1;
+  }
+
+  for (const site of [...(changes.sites ?? []), ...(changes.locais ?? [])]) {
+    const rawId = String(site?.id ?? "").trim();
+    const rawClientId = String(site?.clienteId ?? site?.client_id ?? "").trim();
+    const clientId = clientMap.get(rawClientId) ?? (isDbsControlUuid(rawClientId) ? rawClientId : "");
+    if (!clientId) throw new Error(`Local ${rawId || "sem id"} sem cliente relacional válido.`);
+    const payload: any = {
+      client_id: clientId,
+      name: String(site?.nome ?? site?.name ?? "Local").trim() || "Local",
+      address_json: site?.address_json ?? { texto: String(site?.endereco ?? "") },
+      contact_name: String(site?.contato ?? site?.contact_name ?? "").trim() || null,
+      contact_phone: String(site?.telefone ?? site?.contact_phone ?? "").trim() || null,
+      contact_email: String(site?.email ?? site?.contact_email ?? "").trim() || null,
+      notes: String(site?.observacoes ?? site?.notes ?? "").trim() || null,
+      status: String(site?.status ?? "ativo"),
+      updated_at: new Date().toISOString(),
+    };
+    if (isDbsControlUuid(rawId)) payload.id = rawId;
+    const saved = await supabaseAdmin.from("dbs_control_sites").upsert(payload).select("id").single();
+    if (saved.error || !saved.data) throw new Error(saved.error?.message ?? "Local não retornado.");
+    if (rawId) siteMap.set(rawId, String(saved.data.id));
+    siteMap.set(String(saved.data.id), String(saved.data.id));
+    applied += 1;
+  }
+
+  for (const equipment of changes.equipamentos ?? []) {
+    const rawId = String(equipment?.id ?? "").trim();
+    const rawClientId = String(equipment?.clienteId ?? equipment?.client_id ?? "").trim();
+    const clientId = clientMap.get(rawClientId) ?? (isDbsControlUuid(rawClientId) ? rawClientId : "");
+    if (!clientId) throw new Error(`Equipamento ${rawId || "sem id"} sem cliente relacional válido.`);
+    const rawSiteId = String(equipment?.siteId ?? equipment?.localId ?? equipment?.site_id ?? "").trim();
+    const payload: any = {
+      client_id: clientId,
+      site_id: siteMap.get(rawSiteId) ?? (isDbsControlUuid(rawSiteId) ? rawSiteId : null),
+      tag_code: String(equipment?.tag ?? equipment?.patrimonio ?? equipment?.codigo ?? equipment?.tag_code ?? "").trim() || null,
+      equipment_type: String(equipment?.tipo ?? equipment?.type ?? equipment?.equipment_type ?? "").trim() || null,
+      brand: String(equipment?.marca ?? equipment?.fabricante ?? equipment?.brand ?? "").trim() || null,
+      model: String(equipment?.modelo ?? equipment?.model ?? "").trim() || null,
+      serial_number: String(equipment?.serie ?? equipment?.numeroSerie ?? equipment?.serial_number ?? "").trim() || null,
+      capacity: String(equipment?.capacidade ?? equipment?.capacity ?? "").trim() || null,
+      environment: String(equipment?.ambiente ?? equipment?.localizacao ?? equipment?.environment ?? "").trim() || null,
+      installation_date: equipment?.dataInstalacao ?? equipment?.installation_date ?? null,
+      status: String(equipment?.status ?? "ativo"),
+      technical_notes: String(equipment?.observacoes ?? equipment?.descricao ?? equipment?.technical_notes ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (isDbsControlUuid(rawId)) payload.id = rawId;
+    const saved = await supabaseAdmin.from("dbs_control_equipment").upsert(payload).select("id").single();
+    if (saved.error || !saved.data) throw new Error(saved.error?.message ?? "Equipamento não retornado.");
+    if (rawId) equipmentMap.set(rawId, String(saved.data.id));
+    equipmentMap.set(String(saved.data.id), String(saved.data.id));
+    applied += 1;
+  }
+
+  for (const service of changes.servicos ?? []) {
+    const rawId = String(service?.id ?? "").trim();
+    const amount = Number(service?.valor ?? service?.valorTabela ?? service?.table_value_cents ?? 0);
+    const payload: any = {
+      name: String(service?.nome ?? service?.name ?? "Serviço").trim() || "Serviço",
+      description: String(service?.descricao ?? service?.description ?? "").trim() || null,
+      estimated_hours: service?.horasEstimadas ?? service?.estimated_hours ?? null,
+      table_value_cents: Number.isFinite(amount) ? (service?.table_value_cents ? Math.round(amount) : Math.round(amount * 100)) : 0,
+      status: String(service?.status ?? "ativo"),
+      updated_at: new Date().toISOString(),
+    };
+    if (isDbsControlUuid(rawId)) payload.id = rawId;
+    const saved = await supabaseAdmin.from("dbs_control_service_catalog").upsert(payload).select("id").single();
+    if (saved.error || !saved.data) throw new Error(saved.error?.message ?? "Serviço não retornado.");
+    if (rawId) serviceMap.set(rawId, String(saved.data.id));
+    serviceMap.set(String(saved.data.id), String(saved.data.id));
+    applied += 1;
+  }
+
+  for (const part of changes.pecas ?? []) {
+    const rawId = String(part?.id ?? "").trim();
+    const price = Number(part?.venda ?? part?.sale_cents ?? 0);
+    const cost = Number(part?.custo ?? part?.cost_cents ?? 0);
+    const payload: any = {
+      name: String(part?.nome ?? part?.name ?? "Peça").trim() || "Peça",
+      description: String(part?.descricao ?? part?.description ?? "").trim() || null,
+      sku: String(part?.sku ?? "").trim() || null,
+      sale_cents: Number.isFinite(price) ? (part?.sale_cents ? Math.round(price) : Math.round(price * 100)) : 0,
+      cost_cents: Number.isFinite(cost) ? (part?.cost_cents ? Math.round(cost) : Math.round(cost * 100)) : 0,
+      stock_quantity: Number(part?.qtd ?? part?.stock_quantity ?? 0) || 0,
+      status: String(part?.status ?? "ativo"),
+      updated_at: new Date().toISOString(),
+    };
+    if (isDbsControlUuid(rawId)) payload.id = rawId;
+    const saved = await supabaseAdmin.from("dbs_control_parts").upsert(payload).select("id").single();
+    if (saved.error || !saved.data) throw new Error(saved.error?.message ?? "Peça não retornada.");
+    if (rawId) partMap.set(rawId, String(saved.data.id));
+    partMap.set(String(saved.data.id), String(saved.data.id));
+    applied += 1;
+  }
+
+  return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied };
+}
+
+function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persistDbsControlMasterDeltas> extends Promise<infer T> ? T : never) {
+  const status = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
+  const normalizedStatus = status === "concluida" || status === "concluido" ? "concluida"
+    : status === "em_atendimento" || status === "andamento" ? "em_atendimento"
+    : status === "aguardando_peca" ? "aguardando_peca"
+    : status === "aguardando_cliente" ? "aguardando_cliente"
+    : status === "cancelada" || status === "cancelado" ? "cancelada"
+    : status || "aberta";
+  const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+  const rawSiteId = String(order?.siteId ?? order?.localId ?? order?.site_id ?? "").trim();
+  const rawEmployeeId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
+  const rawServiceId = String(order?.servicoId ?? order?.service_id ?? "").trim();
+  const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
+  const amountRaw = String(order?.valor ?? order?.total ?? 0).trim();
+  const normalizedAmount = amountRaw.includes(",") ? amountRaw.replace(/\./g, "").replace(",", ".") : amountRaw;
+  const amount = Number(normalizedAmount);
+  const patch: Record<string, unknown> = {
+    protocol: String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim(),
+    protocolo: String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim(),
+    client_id: maps.clientMap.get(rawClientId) ?? (isDbsControlUuid(rawClientId) ? rawClientId : null),
+    site_id: maps.siteMap.get(rawSiteId) ?? (isDbsControlUuid(rawSiteId) ? rawSiteId : null),
+    assigned_employee_id: isDbsControlUuid(rawEmployeeId) ? rawEmployeeId : null,
+    service_id: maps.serviceMap.get(rawServiceId) ?? (isDbsControlUuid(rawServiceId) ? rawServiceId : null),
+    type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
+    priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
+    status: normalizedStatus,
+    scheduled_at: order?.scheduledAt ?? order?.scheduled_at ?? null,
+    started_at: order?.startedAt ?? order?.started_at ?? null,
+    completed_at: normalizedStatus === "concluida" ? (order?.concluidoEm ?? order?.completedAt ?? order?.completed_at ?? new Date().toISOString()) : null,
+    sla_deadline: order?.sla ?? order?.slaDeadline ?? order?.sla_deadline ?? null,
+    description: String(order?.desc ?? order?.description ?? ""),
+    technical_opinion: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+    diagnostico: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
+    observation: String(order?.observacao ?? order?.observation ?? ""),
+    servico_executado: String(order?.trabalhoExecutado ?? order?.servicoExecutado ?? order?.observacao ?? order?.observation ?? ""),
+    latitude: order?.latitude ?? null,
+    longitude: order?.longitude ?? null,
+    signature_name: String(order?.signature_name ?? order?.signatureName ?? "") || null,
+    signature_path: signaturePath || null,
+    assinatura_path: signaturePath || null,
+    signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
+    total_cents: Number.isFinite(amount) ? Math.round(amount * 100) : 0,
+  };
+  const deletedAt = String(order?.deleted_at ?? order?.excluidaEm ?? "").trim();
+  if (deletedAt) patch.deleted_at = deletedAt;
+  return patch;
+}
+
+export const applyDbsControlDelta = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: DbsControlDeltaInput) => {
+    const requestId = String(input?.requestId ?? crypto.randomUUID()).trim().slice(0, 160);
+    return { requestId, changes: normalizeDbsControlDelta(input) };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
     const scope = await resolveDbsControlScope(user);
+    let changes = data.changes;
+    // Apenas para compatibilidade de IDs legados: se uma OS ainda referencia um
+    // cliente local não-UUID, recuperamos o cadastro legado por leitura e o
+    // materializamos como uma linha relacional antes do delta da OS. Nenhum
+    // snapshot é atualizado ou reenviado.
+    if (user.role_key !== "COLABORADOR" && (changes.ordens?.length ?? 0) > 0) {
+      const knownClientIds = new Set((changes.clientes ?? []).map((client: any) => String(client?.id ?? "")));
+      const referencedLegacyIds = new Set((changes.ordens ?? [])
+        .map((order: any) => String(order?.clienteId ?? order?.client_id ?? "").trim())
+        .filter((id) => id && !isDbsControlUuid(id) && !knownClientIds.has(id)));
+      if (referencedLegacyIds.size) {
+        const snapshot = await supabaseAdmin.from("dbs_control_snapshots").select("state").eq("scope_key", scope.scopeKey).maybeSingle();
+        if (snapshot.error) throw new Error(snapshot.error.message);
+        const legacyClients = snapshot.data?.state && typeof snapshot.data.state === "object" && !Array.isArray(snapshot.data.state)
+          ? ((snapshot.data.state as any).clientes ?? [])
+          : [];
+        changes = {
+          ...changes,
+          clientes: [...(changes.clientes ?? []), ...legacyClients.filter((client: any) => referencedLegacyIds.has(String(client?.id ?? "")))],
+        };
+      }
+    }
+    const maps = await persistDbsControlMasterDeltas(changes, user);
+    const appliedOrderIds: string[] = [];
+    const conflicts: Array<{ protocol: string; message: string }> = [];
+    let applied = maps.applied;
 
-    let stateToSave = data.state;
-    let ownerUserId = scope.ownerUserId;
-    let adminOrdersToSync: any[] = [];
+    if (user.role_key === "COLABORADOR" && (changes.clientes?.length || changes.sites?.length || changes.locais?.length || changes.equipamentos?.length || changes.servicos?.length || changes.pecas?.length || changes.compras?.length || changes.orcamentos?.length)) {
+      throw new Error("Colaborador só pode enviar deltas de execução das OS atribuídas.");
+    }
 
-    // Reconcile complete snapshots against the latest shared snapshot before an
-    // administrative save, preventing delayed autosaves from dropping existing OS.
     if (user.role_key !== "COLABORADOR") {
-      const { data: latestSnapshot, error: latestError } = await supabaseAdmin
-        .from("dbs_control_snapshots")
-        .select("state, owner_user_id, company_id")
-        .eq("scope_key", scope.scopeKey)
-        .maybeSingle();
-      if (latestError) throw new Error(latestError.message);
-      if (latestSnapshot?.state && typeof latestSnapshot.state === "object") {
-        const latestState = normalizeState(latestSnapshot.state as Record<string, unknown>);
-        const incomingState = normalizeState(data.state);
-        const latestOrders = latestState.ordens as any[];
-        const incomingOrders = incomingState.ordens as any[];
-        const orderId = (order: any) => String(order?.id ?? "").trim();
-        const orderProtocol = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
-        const isCompleted = (order: any) => normalizeDbsStatus(order?.status) === "concluida";
-        const latestByIdEntries: Array<[string, any]> = [];
-        const latestByProtocolEntries: Array<[string, any]> = [];
-        for (const order of latestOrders) {
-          const id = orderId(order);
-          if (id) latestByIdEntries.push([id, order]);
-          const protocol = orderProtocol(order);
-          if (protocol) latestByProtocolEntries.push([protocol, order]);
-        }
-        const latestById = new Map<string, any>(latestByIdEntries);
-        const latestByProtocol = new Map<string, any>(latestByProtocolEntries);
-        const incomingIds = new Set(incomingOrders.map(orderId).filter(Boolean));
-        const incomingProtocols = new Set(incomingOrders.map(orderProtocol).filter(Boolean));
-        const changedFields = ["status", "employeeId", "assignedEmployeeId", "tecnicoId", "clienteId", "client_id", "siteId", "localId", "diagnostico", "technical_opinion", "trabalhoExecutado", "servicoExecutado", "observacao", "observation", "prioridade", "tipo", "scheduledAt", "scheduled_at", "assinaturaStoragePath", "assinatura", "signature_name", "concluidoEm", "completedAt"];
-        adminOrdersToSync = incomingOrders.filter((incoming) => {
-          const id = orderId(incoming);
-          const protocol = orderProtocol(incoming);
-          const latest = (id ? latestById.get(id) : undefined) ?? (protocol ? latestByProtocol.get(protocol) : undefined);
-          // Algumas OS legadas do snapshot têm apenas o ID interno e nunca
-          // tiveram protocolo. Elas continuam preservadas no snapshot, mas
-          // não podem ser tratadas como uma OS nova no espelho relacional.
-          // OS novas sem protocolo continuam seguindo para a validação abaixo
-          // e são rejeitadas sem gravar dados incompletos.
-          if (!protocol && latest) return false;
-          if (!latest) return true;
-          return changedFields.some((field) => JSON.stringify((incoming as any)?.[field] ?? null) !== JSON.stringify((latest as any)?.[field] ?? null));
-        });
-        const seenIds = new Set<string>();
-        const seenProtocols = new Set<string>();
-        const protectedCompletedFields = [
-          "tecnicoId", "employeeId", "assignedEmployeeId", "concluidoPorEmployeeId",
-          "assinatura", "assinaturaCliente", "signature_data", "signature_name",
-          "assinaturaEm", "concluidoEm", "completedAt", "completed_at",
-          "diagnostico", "laudo", "technical_opinion", "trabalhoExecutado",
-          "observacao", "observation", "observacaoTecnico", "observacaoComplementarTecnico",
-          "fotoAntes", "fotoDepois",
-        ];
-        const reconciledOrders = incomingOrders.flatMap((incoming) => {
-          const id = orderId(incoming);
-          const protocol = orderProtocol(incoming);
-          // One business protocol is one OS even if legacy clients generated different IDs.
-          if ((id && seenIds.has(id)) || (protocol && seenProtocols.has(protocol))) return [];
-          const latest = (id ? latestById.get(id) : undefined) ??
-            (protocol ? latestByProtocol.get(protocol) : undefined);
-          let reconciled = incoming;
-          if (latest && isCompleted(latest)) {
-            const protectedValues: Record<string, unknown> = {};
-            for (const field of protectedCompletedFields) {
-              const value = latest[field];
-              if (value !== null && value !== undefined && String(value).trim() !== "") {
-                protectedValues[field] = value;
-              }
-            }
-            reconciled = {
-              ...incoming,
-              id: latest.id ?? incoming.id,
-              protocolo: latest.protocolo || latest.protocol || latest.numero || incoming.protocolo,
-              status: latest.status,
-              ...protectedValues,
-            };
-          }
-          if (id) seenIds.add(id);
-          if (protocol) seenProtocols.add(protocol);
-          const canonicalId = orderId(latest);
-          const canonicalProtocol = orderProtocol(latest);
-          if (canonicalId) seenIds.add(canonicalId);
-          if (canonicalProtocol) seenProtocols.add(canonicalProtocol);
-          return [reconciled];
-        });
-        const missingLatestOrders = latestOrders.filter((order) => {
-          const id = orderId(order);
-          const protocol = orderProtocol(order);
-          return !((id && (incomingIds.has(id) || seenIds.has(id))) ||
-            (protocol && (incomingProtocols.has(protocol) || seenProtocols.has(protocol))));
-        });
-        stateToSave = { ...incomingState, ordens: [...reconciledOrders, ...missingLatestOrders] };
-        ownerUserId = latestSnapshot.owner_user_id ?? ownerUserId;
-      }
+      applied += await persistDbsControlLegacyEntityDeltas(scope.scopeKey, user.id, "compra", changes.compras ?? [], data.requestId);
+      applied += await persistDbsControlLegacyEntityDeltas(scope.scopeKey, user.id, "orcamento", changes.orcamentos ?? [], data.requestId);
     }
 
-    if (user.role_key === "COLABORADOR") {
-      const employee = await getCollaboratorEmployee(user.id);
-      if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
-
-      const { data: current, error: currentError } = await supabaseAdmin
-        .from("dbs_control_snapshots")
-        .select("state, owner_user_id, company_id")
-        .eq("scope_key", scope.scopeKey)
-        .maybeSingle();
-
-      if (currentError) throw new Error(currentError.message);
-      if (!current?.state) throw new Error("O DBS CONTROL ainda não possui uma base operacional compartilhada.");
-
-      const currentState = current.state as Record<string, unknown>;
-      stateToSave = mergeCollaboratorOrderState(
-        currentState,
-        data.state,
-        employee.id,
-        employee.login_email,
-      );
-
-      // Persiste execução/conclusão também na tabela operacional canônica.
-      // Apenas OS atribuídas a este funcionário podem ser atualizadas; dados
-      // administrativos e financeiros não são enviados neste UPDATE.
-      const incomingForEmployee = filterCollaboratorState(data.state, employee.id, employee.login_email).ordens as any[];
-      const protocolKey = (order: any) => String(order?.protocolo || order?.protocol || order?.numero || "").trim().toLocaleLowerCase("pt-BR");
-      if (incomingForEmployee.length) {
-        const { data: assignedOrders, error: assignedError } = await supabaseAdmin
-          .from("dbs_control_work_orders")
-          .select("id,protocol,assigned_employee_id,status,technical_opinion,observation,completed_at,signature_data,signature_name,diagnostico,servico_executado,signature_path,assinatura_path,version")
-          .eq("assigned_employee_id", employee.id);
-        if (assignedError) throw new Error(assignedError.message);
-
-        const currentOrders = normalizeState(currentState).ordens as any[];
-        const ignoradas: Array<{ protocolo: string; motivo: string }> = [];
-        for (const incomingOrder of incomingForEmployee) {
-          const submittedStatus = String(incomingOrder?.status ?? "").trim();
-          const submittedCompleted = normalizeDbsStatus(submittedStatus) === "concluida";
-          const protocolo = String(incomingOrder?.protocolo ?? incomingOrder?.protocol ?? incomingOrder?.numero ?? incomingOrder?.id ?? "sem protocolo").trim();
-          const incomingProtocol = protocolKey(incomingOrder);
-          const currentOrder = currentOrders.find((order) =>
-            String(order?.id ?? "") === String(incomingOrder?.id ?? "") ||
-            (incomingProtocol && protocolKey(order) === incomingProtocol)
+    for (const [index, order] of (changes.ordens ?? []).entries()) {
+      const protocol = String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim();
+      if (!protocol) throw new Error("Não é possível sincronizar OS sem protocolo.");
+      let orderForPatch = order;
+      if (user.role_key === "COLABORADOR") {
+        const currentOrder = await supabaseAdmin.from("dbs_control_work_orders")
+          .select("observation,servico_executado")
+          .eq(isDbsControlUuid(order?.id) ? "id" : "protocol", isDbsControlUuid(order?.id) ? String(order.id) : protocol)
+          .maybeSingle();
+        if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${protocol}: ${currentOrder.error.message}`);
+        if (currentOrder.data) {
+          const mergedObservation = mergeAppendOnlyCollaboratorObservations(
+            { observacao: currentOrder.data.observation ?? currentOrder.data.servico_executado ?? "" },
+            { observacao: order?.observacao ?? order?.observation ?? "" },
           );
-          const canonicalProtocol = protocolKey(currentOrder ?? incomingOrder);
-          const canonicalOrder = (assignedOrders ?? []).find((order: any) =>
-            String(order.id) === String(currentOrder?.id ?? incomingOrder?.id ?? "") ||
-            (canonicalProtocol && String(order.protocol ?? "").trim().toLocaleLowerCase("pt-BR") === canonicalProtocol)
-          );
-          if (!canonicalOrder || String(canonicalOrder.assigned_employee_id) !== String(employee.id)) {
-            if (submittedCompleted) ignoradas.push({ protocolo, motivo: "OS não localizada na base operacional ou não atribuída a este técnico." });
-            continue;
-          }
-          const allowedStatuses: Record<string, string> = {
-            "em atendimento": "em_atendimento",
-            "aguardando peca": "aguardando_peca",
-            "aguardando cliente": "aguardando_cliente",
-            "concluida": "concluida",
-          };
-          const dbStatus = allowedStatuses[normalizeDbsStatus(submittedStatus)];
-          if (!dbStatus) {
-            if (submittedCompleted) ignoradas.push({ protocolo, motivo: "O status enviado não foi reconhecido como válido para gravação." });
-            continue;
-          }
-
-          const wasCompleted = normalizeDbsStatus(canonicalOrder.status) === "concluida";
-          const isStatusTransition = normalizeDbsStatus(canonicalOrder.status) !== normalizeDbsStatus(dbStatus);
-          const submittedVersion = Number(incomingOrder?.version);
-          const canonicalVersion = Number(canonicalOrder.version || 1);
-          // A versão local pode estar atrasada quando o despacho/atendimento foi
-          // atualizado noutro dispositivo. Reconciliamos contra a versão canônica
-          // recém-lida, preservando os relatórios existentes em vez de rejeitar a OS.
-          const staleVersion = Number.isFinite(submittedVersion) && submittedVersion > 0 && submittedVersion !== canonicalVersion;
-
-          // OS concluída é imutável contra autosaves antigos: nunca reabrir nem
-          // substituir observação, diagnóstico, assinatura ou data por conteúdo vazio/antigo.
-          // Se o registro canônico ainda não tiver um campo de conclusão, só preenchemos
-          // o campo ausente com conteúdo válido recebido do técnico.
-          if (wasCompleted && !submittedCompleted) continue;
-
-          const incomingDiagnosis = String(incomingOrder?.diagnostico ?? currentOrder?.diagnostico ?? "").trim();
-          const incomingObservation = String(incomingOrder?.observacao ?? currentOrder?.observacao ?? "").trim();
-          const incomingSignature = String(incomingOrder?.assinatura ?? "").trim();
-          const incomingSignatureName = String(incomingOrder?.signature_name ?? "").trim();
-          const update: TablesUpdate<"dbs_control_work_orders"> = {
-            updated_at: new Date().toISOString(),
-          };
-
-          if (!wasCompleted) {
-            update.status = dbStatus;
-            update.technical_opinion = staleVersion && String(canonicalOrder.technical_opinion ?? "").trim()
-              ? canonicalOrder.technical_opinion : incomingDiagnosis;
-            update.diagnostico = staleVersion && String(canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion ?? "").trim()
-              ? (canonicalOrder.diagnostico ?? canonicalOrder.technical_opinion) : incomingDiagnosis;
-            update.observation = staleVersion && String(canonicalOrder.observation ?? "").trim()
-              ? canonicalOrder.observation : incomingObservation;
-            const incomingWork = String(incomingOrder?.trabalhoExecutado ?? incomingOrder?.servicoExecutado ?? incomingObservation).trim();
-            update.servico_executado = staleVersion && String(canonicalOrder.servico_executado ?? "").trim()
-              ? canonicalOrder.servico_executado : incomingWork;
-          }
-
-          if (submittedCompleted) {
-            if (!wasCompleted || !canonicalOrder.completed_at) {
-              update.completed_at = incomingOrder?.concluidoEm ?? incomingOrder?.completedAt ?? new Date().toISOString();
-            }
-            if (incomingSignature && (!wasCompleted || !String(canonicalOrder.signature_data ?? "").trim()) && !incomingOrder?.assinaturaStoragePath) {
-              update.signature_data = incomingSignature;
-            }
-            const signaturePath = String(incomingOrder?.assinaturaStoragePath ?? "").trim();
-            if (signaturePath && (!wasCompleted || !String(canonicalOrder.assinatura_path ?? canonicalOrder.signature_path ?? "").trim())) {
-              update.assinatura_path = signaturePath;
-              update.signature_path = signaturePath;
-              update.signature_data = null;
-            }
-            if (incomingSignatureName && (!wasCompleted || !String(canonicalOrder.signature_name ?? "").trim())) {
-              update.signature_name = incomingSignatureName;
-            }
-          }
-
-          let updateQuery = supabaseAdmin
-            .from("dbs_control_work_orders")
-            .update(update)
-            .eq("id", canonicalOrder.id)
-            .eq("assigned_employee_id", employee.id);
-          if (Number.isFinite(submittedVersion) && submittedVersion > 0) {
-            updateQuery = updateQuery.eq("version", canonicalVersion);
-          } else {
-            updateQuery = updateQuery.eq("version", canonicalVersion);
-          }
-          const { data: updatedOrder, error: updateError } = await updateQuery.select("id,version").maybeSingle();
-          if (updateError) throw new Error(updateError.message);
-          if (!updatedOrder) throw new Error("Conflito de versão: a OS " + protocolo + " mudou durante o salvamento. Recarregue a versão mais recente e despache novamente.");
-          incomingOrder.version = Number(updatedOrder.version || canonicalVersion + 1);
-
-          // Histórico append-only de cada transição real de status para auditoria.
-          // Falha ao registrar o evento é reportada; nunca é ocultada como sucesso.
-          if (isStatusTransition && !wasCompleted) {
-            const { error: eventError } = await supabaseAdmin
-              .from("dbs_control_work_order_events")
-              .insert({
-                work_order_id: canonicalOrder.id,
-                actor_user_id: user.id,
-                event_type: "status_changed",
-                old_status: String(canonicalOrder.status ?? ""),
-                new_status: dbStatus,
-                details: {
-                  protocol: String(canonicalOrder.protocol ?? incomingOrder?.protocolo ?? ""),
-                  source: "collaborator_save",
-                  employee_id: employee.id,
-                  recorded_at: new Date().toISOString(),
-                },
-              });
-            if (eventError) throw new Error(`A OS foi salva, mas o histórico de auditoria não foi registrado: ${eventError.message}`);
-          }
-        }
-        if (ignoradas.length) {
-          throw new Error("Não foi possível confirmar a conclusão de uma ou mais OS: " + ignoradas.map((item) => `${item.protocolo} — ${item.motivo}`).join("; "));
+          if (mergedObservation.observacao) orderForPatch = { ...order, observacao: mergedObservation.observacao };
         }
       }
-
-      ownerUserId = current.owner_user_id ?? user.id;
-    }
-
-    if (user.role_key !== "COLABORADOR" && adminOrdersToSync.length) {
-      await syncAdminOrdersToCanonical(adminOrdersToSync, user.id, Array.isArray((stateToSave as any).clientes) ? (stateToSave as any).clientes : []);
-    }
-
-    const payload = {
-      scope_key: scope.scopeKey,
-      company_id: scope.companyId,
-      owner_user_id: ownerUserId,
-      state: stateToSave as Json,
-      state_version: 2,
-      updated_by: user.id,
-      updated_at: new Date().toISOString(),
-      base_updated_at: data.baseUpdatedAt,
-    };
-
-    // A função SQL bloqueia a linha do escopo e reconcilia OS dentro da mesma
-    // transação. Em conflito de base_updated_at, relê a nuvem e tenta uma única
-    // reconciliação adicional, sem mudar o escopo da empresa nem descartar anexos.
-    const mergeRetryState = (
-      latestInput: Record<string, unknown>,
-      pendingInput: Record<string, unknown>,
-    ): Record<string, unknown> => {
-      const latest = normalizeState(latestInput);
-      const pending = normalizeState(pendingInput);
-      const latestOrders = Array.isArray(latest.ordens) ? latest.ordens as any[] : [];
-      const pendingOrders = Array.isArray(pending.ordens) ? pending.ordens as any[] : [];
-      const protocolKey = (order: any) => String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
-      const rank: Record<string, number> = { aberta: 0, atribuida: 1, atribuída: 1, em_rota: 2, em_atendimento: 3, "em atendimento": 3, aguardando_peca: 4, aguardando_cliente: 4, concluida: 5, concluída: 5 };
-      const protectedFields = ["assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"];
-      const latestById = new Map<string, any>(
-        latestOrders
-          .map((order): [string, any] => [String(order?.id ?? "").trim(), order])
-          .filter(([key]) => Boolean(key)),
-      );
-      const latestByProtocol = new Map<string, any>(
-        latestOrders
-          .map((order): [string, any] => [protocolKey(order), order])
-          .filter(([key]) => Boolean(key)),
-      );
-      const mergedOrders = pendingOrders.map((incoming) => {
-        const id = String(incoming?.id ?? "").trim();
-        const protocol = protocolKey(incoming);
-        const current = (id ? latestById.get(id) : undefined) ??
-          (protocol ? latestByProtocol.get(protocol) : undefined);
-        if (!current) return incoming;
-        const merged: Record<string, unknown> = { ...current, ...incoming };
-        const currentStatus = String(current.status ?? "").trim().toLocaleLowerCase("pt-BR");
-        const incomingStatus = String(incoming.status ?? "").trim().toLocaleLowerCase("pt-BR");
-        if ((rank[currentStatus] ?? 0) > (rank[incomingStatus] ?? 0)) merged.status = current.status;
-        for (const field of protectedFields) {
-          const oldValue = current[field];
-          const newValue = incoming[field];
-          if (Array.isArray(oldValue) || Array.isArray(newValue)) {
-            const combined = [...(Array.isArray(oldValue) ? oldValue : []), ...(Array.isArray(newValue) ? newValue : [])];
-            const seen = new Set<string>();
-            merged[field] = combined.filter(item => {
-              const itemKey = typeof item === "string" ? item : JSON.stringify(item);
-              if (seen.has(itemKey)) return false;
-              seen.add(itemKey);
-              return true;
-            });
-          } else if ((newValue === null || newValue === undefined || String(newValue).trim() === "") && oldValue !== null && oldValue !== undefined && String(oldValue).trim() !== "") {
-            merged[field] = oldValue;
-          }
-        }
-        if (normalizeDbsStatus(current.status) === "concluida") {
-          merged.status = current.status;
-          for (const field of ["completedAt", "concluidoEm", "completed_at", "assinaturaEm", "assinatura", "assinaturaCliente", "signature_data", "signature_name", "assinaturaStoragePath", "signature_path", "assinatura_path", "fotoAntes", "fotoDepois", "fotos", "anexos", "attachments", "relatorio", "laudo", "technical_opinion", "diagnostico", "trabalhoExecutado", "servicoExecutado", "observacaoTecnico"]) {
-            if (current[field] !== null && current[field] !== undefined && String(current[field]).trim() !== "") merged[field] = current[field];
-          }
-        }
-        return merged;
-      });
-      const pendingIds = new Set(mergedOrders.map(order => String(order?.id ?? "").trim()).filter(Boolean));
-      const pendingProtocols = new Set(mergedOrders.map(protocolKey).filter(Boolean));
-      const missingLatest = latestOrders.filter(order => {
-        const id = String(order?.id ?? "").trim();
-        const protocol = protocolKey(order);
-        return !((id && pendingIds.has(id)) || (protocol && pendingProtocols.has(protocol)));
-      });
-      return { ...latest, ...pending, ordens: [...mergedOrders, ...missingLatest] };
-    };
-
-    let saveResult = await supabaseAdmin
-      .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: payload })
-      .single();
-    if (saveResult.error && /base_updated_at|conflito|concurrent|serialization|vers[aã]o|updated_at/i.test(saveResult.error.message)) {
-      const { data: latestSnapshot, error: latestError } = await supabaseAdmin
-        .from("dbs_control_snapshots")
-        .select("state, updated_at, owner_user_id, company_id")
-        .eq("scope_key", scope.scopeKey)
-        .maybeSingle();
-      if (latestError) throw new Error("Conflito de salvamento; não foi possível recarregar a versão mais recente: " + latestError.message);
-      if (!latestSnapshot?.state || !latestSnapshot.updated_at) {
-        throw new Error("Conflito de salvamento; a versão mais recente da base não pôde ser confirmada. Nenhum sucesso foi informado.");
-      }
-      const retryPayload = {
-        ...payload,
-        owner_user_id: latestSnapshot.owner_user_id ?? payload.owner_user_id,
+      const fullPatch = buildDbsControlWorkOrderPatch(orderForPatch, maps);
+      const patch = user.role_key === "COLABORADOR"
+        ? Object.fromEntries([
+            "status", "started_at", "completed_at", "technical_opinion", "diagnostico",
+            "observation", "servico_executado", "latitude", "longitude", "signature_name",
+            "signature_path", "assinatura_path", "signature_data",
+          ].map((key) => [key, (fullPatch as any)[key]]))
+        : fullPatch;
+      if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${protocol} não possui cliente relacional válido.`);
+      const idempotencyKey = `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
+      const expectedVersion = Number(order?.version);
+      const parts = Array.isArray(order?.pecasUsadas)
+        ? order.pecasUsadas.map((part: any) => ({
+            part_id: maps.partMap.get(String(part?.id ?? "")) ?? (isDbsControlUuid(part?.id) ? String(part.id) : null),
+            quantity: Math.max(0, Number(part?.qtd ?? part?.quantity ?? 0)),
+            unit_cents: Number.isFinite(Number(part?.unit_cents))
+              ? Math.round(Number(part.unit_cents))
+              : Number.isFinite(Number(part?.venda)) ? Math.round(Number(part.venda) * 100) : null,
+          })).filter((part: any) => part.part_id && part.quantity > 0)
+        : undefined;
+      const payload = {
+        idempotency_key: idempotencyKey,
+        actor_user_id: user.id,
         company_id: scope.companyId,
-        state: mergeRetryState(latestSnapshot.state as Record<string, unknown>, stateToSave) as Json,
-        base_updated_at: latestSnapshot.updated_at,
-        updated_at: new Date().toISOString(),
+        work_order_id: isDbsControlUuid(order?.id) ? String(order.id) : undefined,
+        protocol,
+        operation: "upsert",
+        expected_version: Number.isFinite(expectedVersion) && expectedVersion > 0 ? expectedVersion : undefined,
+        event_type: "work_order_delta",
+        patch,
+        parts,
       };
-      saveResult = await supabaseAdmin
-        .rpc("dbs_control_save_snapshot_safe_v2", { p_payload: retryPayload })
-        .single();
+      const result = await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", { p_payload: payload as any });
+      if (result.error) {
+        const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
+        if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND"].includes(permanentCode)) {
+          conflicts.push({ protocol, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
+            ? "A OS já foi concluída e seus dados assinados estão protegidos."
+            : permanentCode === "DBS_OS_NOT_ASSIGNED"
+              ? "A OS não está atribuída a este colaborador."
+              : permanentCode === "DBS_OS_STOCK_INSUFFICIENT"
+                ? "Estoque insuficiente para as peças informadas na OS."
+                : permanentCode === "DBS_OS_PART_NOT_FOUND"
+                  ? "Uma peça da OS não existe no catálogo relacional."
+              : "A OS mudou em outro acesso; recarregue para reconciliar." });
+          continue;
+        }
+        throw new Error(`Falha ao sincronizar a OS ${protocol}: ${result.error.message}`);
+      }
+      const row: any = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!row?.ok) {
+        if (row?.status === "conflict") {
+          conflicts.push({ protocol, message: row.error_message || "Conflito de versão; recarregue para reconciliar." });
+          continue;
+        }
+        throw new Error(`Falha ao sincronizar a OS ${protocol}: ${row?.error_message || "operação rejeitada"}`);
+      }
+      applied += 1;
+      if (row.work_order_id) appliedOrderIds.push(String(row.work_order_id));
+
+      const equipmentIds = Array.isArray(order?.equipamentosIds) ? order.equipamentosIds : [];
+      for (const rawEquipmentId of equipmentIds) {
+        const equipmentId = maps.equipmentMap.get(String(rawEquipmentId)) ?? (isDbsControlUuid(rawEquipmentId) ? String(rawEquipmentId) : null);
+        if (equipmentId && row.work_order_id) {
+          const link = await supabaseAdmin.from("dbs_control_work_order_equipment").upsert({ work_order_id: row.work_order_id, equipment_id: equipmentId });
+          if (link.error) throw new Error(`Falha ao vincular equipamento à OS ${protocol}: ${link.error.message}`);
+        }
+      }
     }
 
-    const saved = saveResult.data;
-    const error = saveResult.error;
-    if (error) throw new Error(error.message);
-    if (!saved) throw new Error("A gravação da base compartilhada não retornou confirmação.");
-    if (user.role_key === "COLABORADOR") {
-      const employee = await getCollaboratorEmployee(user.id);
-      if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
-      return {
-        ...saved,
-        state: filterCollaboratorState(saved.state as Record<string, unknown>, employee.id, employee.login_email),
-      };
-    }
-    return saved;
+    return {
+      ok: conflicts.length === 0,
+      applied,
+      appliedOrderIds,
+      conflicts,
+      requestId: data.requestId,
+      sourceOfTruth: "relational_delta",
+    };
   });
 
-
+/**
+ * Snapshot writes were intentionally retired. The snapshot tables remain
+ * readable as a compatibility cache while all new writes go through
+ * applyDbsControlDelta and the relational work-order RPC.
+ */
+export const saveDbsControlCloudState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    throw new Error("Gravação por snapshot desativada. Envie apenas deltas relacionais.");
+  });
 export const auditDbsControlDatabase = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

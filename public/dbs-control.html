@@ -2935,6 +2935,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
         let DBS_CONTROL_CLOUD_READY = false;
         let DBS_CONTROL_CLOUD_HYDRATING = false;
+        // O estado completo permanece apenas como cache/visualização. Toda escrita
+        // enviada ao servidor é formada por registros alterados (deltas).
+        let DBS_CONTROL_SYNC_BASE_STATE = null;
         // Dashboard só exibe números depois da primeira hidratação autoritativa.
         let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
 
@@ -3069,6 +3072,64 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             return snapshot;
         }
 
+        const DBS_CONTROL_DELTA_ARRAY_KEYS = [
+            'clientes', 'sites', 'locais', 'equipamentos', 'servicos', 'pecas',
+            'compras', 'orcamentos', 'ordens'
+        ];
+
+        function dbsControlDeltaIdentity(item, key, index) {
+            const row = item && typeof item === 'object' ? item : {};
+            const value = row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email;
+            return value === null || value === undefined || String(value).trim() === ''
+                ? `${key}:${index}`
+                : String(value).trim().toLocaleLowerCase('pt-BR');
+        }
+
+        function dbsControlStableStringify(value) {
+            if (Array.isArray(value)) return '[' + value.map(dbsControlStableStringify).join(',') + ']';
+            if (value && typeof value === 'object') {
+                return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + dbsControlStableStringify(value[key])).join(',') + '}';
+            }
+            return JSON.stringify(value);
+        }
+
+        function dbsControlDeltaRecord(item, key) {
+            const copy = JSON.parse(JSON.stringify(item || {}));
+            // Evidências binárias são enviadas pelo fluxo de Storage. Se já existe
+            // um caminho, nunca duplicar a base64 dentro do delta relacional.
+            if (key === 'ordens') {
+                if (copy.assinaturaStoragePath || copy.assinatura_path || copy.signature_path) copy.assinatura = null;
+                if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
+                if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+            }
+            return copy;
+        }
+
+        function buildDbsControlDelta(previousState, nextState) {
+            const previous = previousState && typeof previousState === 'object' ? previousState : {};
+            const next = nextState && typeof nextState === 'object' ? nextState : {};
+            const changes = {};
+            DBS_CONTROL_DELTA_ARRAY_KEYS.forEach(key => {
+                const previousRows = Array.isArray(previous[key]) ? previous[key] : [];
+                const nextRows = Array.isArray(next[key]) ? next[key] : [];
+                const previousById = new Map(previousRows.map((row, index) => [dbsControlDeltaIdentity(row, key, index), row]));
+                const changedRows = [];
+                nextRows.forEach((row, index) => {
+                    const identity = dbsControlDeltaIdentity(row, key, index);
+                    const previousRow = previousById.get(identity);
+                    if (!previousRow || dbsControlStableStringify(dbsControlDeltaRecord(previousRow, key)) !== dbsControlStableStringify(dbsControlDeltaRecord(row, key))) {
+                        changedRows.push(dbsControlDeltaRecord(row, key));
+                    }
+                });
+                if (changedRows.length) changes[key] = changedRows;
+            });
+            return changes;
+        }
+
+        function dbsControlDeltaHasRows(changes) {
+            return changes && Object.values(changes).some(rows => Array.isArray(rows) && rows.length > 0);
+        }
+
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
         function saveState() {
             // Em recuperação local, os dados são exibidos em modo somente leitura:
@@ -3087,8 +3148,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
             }
             if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
+                const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
+                if (!dbsControlDeltaHasRows(changes)) return changes;
+                // Avança a base local de comparação somente depois de enfileirar o
+                // delta. Se a rede falhar, o pai mantém o lote e aplica retry idempotente.
+                DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
                 DBS_CONTROL_HAS_PENDING_SAVE = true;
-                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state: persistableState }, '*');
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes }, '*');
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
                     indicator.textContent = 'Alterações não enviadas';
@@ -3096,7 +3162,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     indicator.style.background = '#fffbeb';
                     indicator.style.borderColor = '#fde68a';
                 }
+                return changes;
             }
+            return {};
         }
 
         // Conclusão de OS só é confirmada ao técnico depois da confirmação da nuvem.
@@ -3104,8 +3172,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_CLOUD_HYDRATING || window.parent === window) {
                 throw new Error('A conexão com a nuvem não está pronta. A OS não foi confirmada; verifique a conexão e tente novamente.');
             }
-            saveState();
-            const state = getPersistableState();
+            registrarHistoricoOS();
+            const persistableState = getPersistableState();
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
+            const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
+            if (!dbsControlDeltaHasRows(changes)) return { ok: true, noop: true };
+            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
+            DBS_CONTROL_HAS_PENDING_SAVE = true;
             const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
                 ? window.crypto.randomUUID()
                 : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
@@ -3127,7 +3207,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 };
                 const timeout = setTimeout(() => finish(new Error('A nuvem não confirmou a gravação em 15 segundos. A OS permanece pendente de confirmação; atualize a conexão antes de tentar novamente.')), 15000);
                 window.addEventListener('message', onMessage);
-                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', state, requestId }, '*');
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
             });
         }
 
@@ -3254,6 +3334,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         indicator.style.color = '#92400e';
                         indicator.style.background = '#fffbeb';
                         indicator.style.borderColor = '#fde68a';
+                    } else if (msg.status === 'conflict') {
+                        DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        indicator.textContent = 'Conflito para revisão' + (msg.error ? ': ' + msg.error : '');
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
                     } else {
                         indicator.textContent = 'Erro de sincronização' + (msg.error ? ': ' + msg.error : '');
                         indicator.style.color = '#b91c1c';
@@ -3269,6 +3355,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 atualizarMetricas();
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
                 DBS_CONTROL_CLOUD_READY = false;
+                DBS_CONTROL_SYNC_BASE_STATE = null;
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
                     indicator.textContent = 'AMBIENTE DESCONECTADO · CACHE PRESERVADO · SOMENTE LEITURA';
@@ -3387,6 +3474,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 DBS_CONTROL_CLOUD_READY = true;
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                DBS_CONTROL_SYNC_BASE_STATE = getPersistableState();
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
                 try {
                     localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({

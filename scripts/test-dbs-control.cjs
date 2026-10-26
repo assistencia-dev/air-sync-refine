@@ -75,7 +75,12 @@ const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8
 const fieldControl = fs.readFileSync("src/lib/fieldcontrol.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
-assert.match(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2", \{ p_payload: payload \}\)/, "O snapshot deve usar o contrato safe_v2 com controle de versão.");
+const deltaMigration = fs.readFileSync("supabase/migrations/20261026130000_dbs_control_delta_outbox.sql", "utf8");
+const legacyBackfillMigration = fs.readFileSync("supabase/migrations/20261026150000_dbs_control_legacy_relational_backfill.sql", "utf8");
+const legacyHistoryRepairMigration = fs.readFileSync("supabase/migrations/20261026153000_dbs_control_legacy_history_repair.sql", "utf8");
+const deletedAtMigration = fs.readFileSync("supabase/migrations/20261026160000_dbs_control_deleted_at_backfill.sql", "utf8");
+assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
+assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
 assert.match(atomicSnapshotMigration, /not \(v_key = any\(v_seen_keys\)\)/, "A migração deve preservar OS ausentes de autosaves atrasados.");
@@ -102,7 +107,8 @@ assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicializaçã
 assert.match(route, /if \(!employeeModeRef\.current && localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)\)/, "A inicialização deve detectar uma redução administrativa sem comparar o recorte filtrado do colaborador.");
 assert.match(route, /const reconciledLatestState = employeeModeRef\.current[\s\S]*?mergeDbsControlStates\(latestCloudState, localRecoveryStateRef\.current\)/, "O Realtime deve reconciliar reduções do snapshot administrativo sem misturar o recorte filtrado do colaborador.");
 assert.match(route, /if \(!employeeModeRef\.current && dbsControlStateIsSmallerThan\(localRecoveryStateRef\.current, latestCloudState\)\)/, "A redução do snapshot deve ser registrada para diagnóstico sem bloquear o salvamento administrativo.");
-assert.match(route, /if \(!cloudReadyRef\.current\) \{[\s\S]*?return;\s*\}\s*pendingStateRef\.current = msg\.state/, "Uma gravação bloqueada não pode entrar na fila de salvamento.");
+assert.match(route, /pendingChangesRef/, "A fila de salvamento deve transportar somente alterações por registro.");
+assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
 assert.match(route, /"concluidoPorEmployeeId"[\s\S]*?"fotoDepois"/, "A reconciliação deve preservar os campos de execução já preenchidos na OS concluída.");
 assert.match(route, /if \(hasValue\(value\) \|\| !hasValue\(combined\[field\]\)\) combined\[field\] = value/, "Dados locais só podem preencher campos vazios da nuvem.");
@@ -121,7 +127,7 @@ assert.match(html, /dbs-control-employee-mode[^]*?String\(tabId\s*\|\|\s*['"]{0,
 assert.match(html, /data-employee-visible=["']true["']/, "A área do colaborador precisa ter item de navegação explícito.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_SAVE["']/, "A rota deve receber eventos de salvamento do iframe.");
 assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sincronizar o estado inicial do iframe.");
-assert.match(route, /const persist = async \(\) => \{[\s\S]*?saveDbsControlCloudState/, "O salvamento na nuvem precisa ser processado.");
+assert.match(route, /const persist = async \(\) => \{[\s\S]*?applyDbsControlDelta/, "O salvamento na nuvem precisa ser processado por deltas.");
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
@@ -141,12 +147,18 @@ assert.match(ux, /overflow-x:auto!important/, "Tabelas amplas devem usar rolagem
 assert.match(theme, /employee-observation-field/, "O tema deve contemplar a área de observações do colaborador.");
 assert.match(html, /employee-observation-field/, "A execução deve oferecer campo complementar separado para observações técnicas.");
 assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
-assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(currentOrder, incomingOrder\)/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
-assert.match(cloudFunctions, /const preserveCompletedValue = \(field: string, fallback: unknown\)/, "OS concluída deve preservar campos preenchidos contra autosaves antigos.");
-assert.match(cloudFunctions, /const wasCompleted = normalizeDbsStatus\(canonicalOrder\.status\) === ["']concluida["']/, "The canonical save must detect work orders already completed.");
-assert.match(cloudFunctions, /!String\(canonicalOrder\.signature_data \?\? ""\)\.trim\(\)/, "Assinatura já gravada de OS concluída não pode ser substituída.");
-assert.match(cloudFunctions, /from\("dbs_control_work_order_events"\)[\s\S]*?event_type: "status_changed"/, "Transições de status devem ser registradas no histórico de auditoria.");
-assert.match(cloudFunctions, /technical_opinion,observation,completed_at,signature_data,signature_name/, "A proteção deve ler os campos canônicos antes de decidir se pode preenchê-los.");
+assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
+assert.match(deltaMigration, /DBS_OS_COMPLETED_LOCKED/, "OS concluída deve preservar campos assinados contra autosaves antigos.");
+assert.match(deltaMigration, /v_expected is null or v_expected <> v_current\.version/, "A RPC deve rejeitar gravações sem a versão esperada ou com versão antiga.");
+assert.match(deltaMigration, /dbs_control_apply_work_order_parts_in_tx/, "Peças e estoque devem ser aplicados no caminho relacional transacional.");
+assert.match(deltaMigration, /DBS_OS_STOCK_INSUFFICIENT/, "Estoque insuficiente deve rejeitar a intenção sem desconto parcial.");
+assert.match(legacyBackfillMigration, /dbs_control_legacy_id_map/, "A recuperação legada deve manter um mapa estável entre IDs antigos e chaves UUID relacionais.");
+assert.doesNotMatch(legacyBackfillMigration, /state->'ordens'\) else .*osHistorico/s, "Eventos históricos não podem ser materializados como novas OS.");
+assert.match(legacyHistoryRepairMigration, /event_type,\s*details,\s*idempotency_key/, "O histórico legado deve ser preservado como evento relacional idempotente.");
+assert.match(deletedAtMigration, /add column if not exists deleted_at timestamptz/i, "Exclusões antigas devem permanecer auditáveis sem apagar a OS relacional.");
+assert.match(cloudFunctions, /buildDbsControlWorkOrderPatch/, "O servidor deve converter registros de UI em patches canônicos.");
+assert.match(cloudFunctions, /dbs_control_apply_work_order_delta/, "A alteração da OS deve passar pelo RPC transacional com versão esperada.");
+assert.match(cloudFunctions, /event_type: "work_order_delta"/, "Cada lote de OS deve carregar um tipo de evento auditável.");
 assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
 assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
@@ -272,13 +284,12 @@ assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a aç
 
 
 const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
-assert.match(persistence, /Reconcile complete snapshots against the latest shared snapshot/, "Admin saves must reconcile against the latest shared snapshot.");
-assert.match(persistence, /missingLatestOrders/, "A delayed snapshot must preserve OS records missing from the submitted payload.");
-assert.match(persistence, /hydrateDbsControlStateFromCanonicalDb\(\s*snapshotState,\s*scope\.companyId,\s*\)/, "Collaborators without a direct company_id must hydrate canonical OS using the resolved administrative company scope.");
-assert.match(persistence, /latestById[\s\S]*latestByProtocol/, "Admin reconciliation must match work orders by ID first and protocol second.");
-assert.match(persistence, /if \(!protocol && latest\) return false/, "OS legadas sem protocolo devem permanecer no snapshot sem bloquear o autosalvamento administrativo.");
-assert.match(persistence, /protectedCompletedFields[\s\S]*tecnicoId[\s\S]*signature_data[\s\S]*diagnostico/, "Completed OS must protect technician, signature, and diagnostic fields.");
-assert.match(persistence, /incomingByProtocol\.get\(protocolKey\(currentOrder\)\)/, "Collaborator reconciliation must accept protocol aliases when IDs differ.");
+assert.match(persistence, /sourceOfTruth: "relational_delta"/, "Toda gravação nova deve declarar a fonte relacional de verdade.");
+assert.match(persistence, /persistDbsControlLegacyEntityDeltas/, "Compras e orçamentos devem ser preservados como registros relacionais individuais.");
+assert.match(persistence, /scope\.scopeKey,\s*\)/, "A hidratação deve carregar registros legados do escopo administrativo correto.");
+assert.match(persistence, /dbs_control_apply_work_order_delta/, "OS deve ser aplicada no RPC transacional com idempotência.");
+assert.match(persistence, /expected_version/, "O cliente precisa enviar a versão esperada para rejeitar concorrência silenciosa.");
+assert.match(persistence, /pendingChangesRef|buildDbsControlWorkOrderPatch/, "A camada de persistência deve operar em mudanças por registro.");
 assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest\.value->>'protocolo'/, "SQL reconciliation must fall back from ID to protocol.");
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
