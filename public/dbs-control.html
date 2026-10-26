@@ -5919,36 +5919,50 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             setTimeout(() => URL.revokeObjectURL(a.href), 500);
         }
 
-        function salvarNovaOS(e) {
+        async function salvarNovaOS(e) {
             e.preventDefault();
-            const cliId = String(document.getElementById('os-select-cliente').value || '');
-            const equipId = String(document.getElementById('os-select-equipamento').value || '');
-            const tecId = String(document.getElementById('os-select-tecnico').value || '');
-            const srvId = String(document.getElementById('os-select-servico').value || '');
+            const form = e.currentTarget || document.getElementById('form-nova-os');
+            const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+            const params = new URLSearchParams(window.location.search);
+            const cliId = String(document.getElementById('os-select-cliente')?.value || '').trim();
+            const equipId = String(document.getElementById('os-select-equipamento')?.value || '').trim();
+            const selectedTecId = String(document.getElementById('os-select-tecnico')?.value || '').trim();
+            const srvId = String(document.getElementById('os-select-servico')?.value || '').trim();
 
             if (!cliId) { alert("Selecione um cliente válido para continuar."); document.getElementById('os-select-cliente')?.focus(); return; }
             if (!equipId) { alert("Selecione pelo menos um equipamento válido para esta OS."); document.getElementById('os-select-equipamento')?.focus(); return; }
             if (!srvId) { alert("Selecione o serviço que será executado."); document.getElementById('os-select-servico')?.focus(); return; }
 
             const srv = ERP_STATE.servicos.find(s => String(s.id) === String(srvId));
-
-            const tecnicoSelecionado = ERP_STATE.tecnicos.find(t => String(t.id) === String(tecId));
+            const session = ERP_STATE.sessionTecnicoLogado || {};
+            const tecnicoSelecionado = ERP_STATE.tecnicos.find(t => String(t.id) === String(selectedTecId));
+            const assignedEmployeeId = employeeMode
+                ? String(session.employeeId || params.get('employee_id') || '').trim()
+                : String(tecnicoSelecionado?.employeeId || '').trim();
+            if (employeeMode && !assignedEmployeeId) {
+                alert('O vínculo do colaborador ainda não foi carregado. Aguarde a sincronização do painel e tente novamente.');
+                return;
+            }
+            const assignedTechnicianId = employeeMode
+                ? String(session.id && session.id !== '__rh__' ? session.id : assignedEmployeeId)
+                : selectedTecId;
             const novaOS = {
                 id: (() => { let n = 4891 + ERP_STATE.ordens.length; const ids = new Set(ERP_STATE.ordens.map(o => String(o.id))); while (ids.has('OS-0' + n)) n++; return 'OS-0' + n; })(),
+                protocolo: null,
                 data: new Date().toLocaleDateString('pt-BR'),
                 clienteId: cliId,
                 equipamentoId: equipId,
-                tecnicoId: tecId,
-                employeeId: tecnicoSelecionado?.employeeId || null,
+                tecnicoId: assignedTechnicianId,
+                employeeId: assignedEmployeeId || null,
                 servicoId: srvId,
-                tipo: document.getElementById('os-select-tipo').value,
+                tipo: document.getElementById('os-select-tipo')?.value || 'corretiva',
                 valor: srv ? srv.valor : 0.00,
                 status: "Em Atendimento",
                 desc: String(document.getElementById('os-desc')?.value || '').trim(),
                 orientacaoTecnico: String(document.getElementById('os-orientacao-tecnico')?.value || '').trim(),
                 pecasUsadas: [],
-                checklist: tipoPermiteChecklist(document.getElementById('os-select-tipo').value)
-                    ? obterChecklistPadrao(document.getElementById('os-select-tipo').value).map((titulo, index) => ({
+                checklist: tipoPermiteChecklist(document.getElementById('os-select-tipo')?.value)
+                    ? obterChecklistPadrao(document.getElementById('os-select-tipo')?.value).map((titulo, index) => ({
                         id: 'check-' + (index + 1),
                         titulo,
                         obrigatorio: false,
@@ -5962,10 +5976,54 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             };
 
             ERP_STATE.ordens.push(novaOS);
-            saveState();
-            renderizarTudo();
-            const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
-            switchTab(employeeMode ? 'tab-pwa' : 'tab-ordens');
+            const submit = form?.querySelector('button[type="submit"]') || document.querySelector('#form-nova-os button[type="submit"]');
+            const originalSubmitText = submit?.textContent || 'Criar OS';
+            if (submit) {
+                submit.disabled = true;
+                submit.textContent = employeeMode ? 'Confirmando na nuvem…' : 'Salvando…';
+                submit.setAttribute('aria-busy', 'true');
+            }
+
+            try {
+                const confirmation = employeeMode
+                    ? await saveStateAndConfirmCloud()
+                    : (saveState(), { ok: true });
+                if (employeeMode) {
+                    const applied = Array.isArray(confirmation?.appliedOrders) ? confirmation.appliedOrders[0] : null;
+                    // A emissão usa um id temporário apenas no formulário. Assim
+                    // que o RPC devolve a linha canônica, reconciliamos o draft
+                    // antes de renderizar para não criar uma OS fantasma local.
+                    if (applied?.id) novaOS.id = String(applied.id);
+                    if (applied?.protocol) novaOS.protocolo = String(applied.protocol);
+                    if (Number.isFinite(Number(applied?.version))) novaOS.version = Number(applied.version);
+                    DBS_CONTROL_SYNC_BASE_STATE = getPersistableState();
+                }
+                renderizarTudo();
+                switchTab(employeeMode ? 'tab-pwa' : 'tab-ordens');
+                if (employeeMode) {
+                    alert('OS ' + (novaOS.protocolo || novaOS.id) + ' criada e confirmada na nuvem.');
+                }
+            } catch (error) {
+                // O draft só fica visível enquanto a gravação relacional é
+                // aceita. Em caso de recusa, removemos somente o draft local;
+                // nenhum registro do banco é apagado.
+                ERP_STATE.ordens = ERP_STATE.ordens.filter(order => order !== novaOS && String(order.id) !== String(novaOS.id));
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION,
+                        data: getPersistableState()
+                    }));
+                } catch (_) {}
+                renderizarTudo();
+                const message = error instanceof Error ? error.message : 'A OS não foi confirmada na nuvem.';
+                alert('A OS não foi criada: ' + message + ' Nenhum dado existente foi removido.');
+            } finally {
+                if (submit) {
+                    submit.disabled = false;
+                    submit.textContent = originalSubmitText;
+                    submit.setAttribute('aria-busy', 'false');
+                }
+            }
         }
 
         function renderizarKanban() {
