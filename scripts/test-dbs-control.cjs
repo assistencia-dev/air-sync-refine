@@ -151,7 +151,7 @@ assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persis
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
 assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
 assert.match(html, /dbs-employee-context-nav/, "O colaborador precisa de um menu contextual único para voltar ao dashboard sem atualizar a página.");
-assert.match(html, /function atualizarNavegacaoColaborador\\(tabId\\)/, "A navegação do colaborador deve trocar de tela internamente.");
+assert.match(html, /function atualizarNavegacaoColaborador\(tabId\)/, "A navegação do colaborador deve trocar de tela internamente.");
 assert.doesNotMatch(html, /employee-issue-inline/, "A emissão de OS não deve ser duplicada dentro da tela Minhas OS.");
 const employeeDashboardSource = html.slice(html.indexOf("function renderizarEmployeeDashboard"), html.indexOf("function renderizarAbaAtiva"));
 assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não deve duplicar a ação Emitir OS do cabeçalho.");
