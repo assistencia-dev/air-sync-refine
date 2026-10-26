@@ -927,7 +927,7 @@ export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST"
   .handler(async ({ context, data }) => {
     const actor = await requireNativeOperator(context);
     const { data: employee, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, is_active, registration_data, registry_employee_id")
+      .select("id, full_name, is_active, registration_data, registry_employee_id, ponto_portal_user_id")
       .eq("id", data.id).maybeSingle();
     if (error) throw new Error(error.message);
     if (!employee) throw new Error("Funcionário não encontrado.");
@@ -936,15 +936,40 @@ export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST"
     }
     const registration = employee.registration_data && typeof employee.registration_data === "object"
       ? employee.registration_data as Record<string, unknown> : {};
+    const linkedUserId = String(employee.ponto_portal_user_id ?? "").trim();
+    let linkedUser: { id: string; auth_id: string | null; role_key: string | null } | null = null;
+    if (linkedUserId) {
+      const { data: user, error: userError } = await supabaseAdmin.from("users")
+        .select("id, auth_id, role_key")
+        .eq("id", linkedUserId).maybeSingle();
+      if (userError) throw new Error("Não foi possível localizar o login vinculado: " + userError.message);
+      linkedUser = user;
+    }
+    if (linkedUser?.role_key === "COLABORADOR") {
+      const { error: userBlockError } = await supabaseAdmin.from("users").update({ status: "bloqueado" }).eq("id", linkedUser.id);
+      if (userBlockError) throw new Error("O login não pôde ser bloqueado antes da remoção: " + userBlockError.message);
+    }
     const nextRegistration = { ...registration, __deleted_at: new Date().toISOString(), __deleted_by: actor.id };
     const { error: updateError } = await supabaseAdmin.from("rh_employees").update({
       is_active: false, ponto_access_enabled: false, dbs_control_access_enabled: false,
       ponto_portal_user_id: null, registration_data: nextRegistration,
     }).eq("id", employee.id);
     if (updateError) throw new Error(updateError.message);
+    const { error: accessError } = await supabaseAdmin.from("rh_employee_access")
+      .update({ access_enabled: false })
+      .eq("employee_id", employee.id);
+    if (accessError) throw new Error("Cadastro removido, mas não foi possível revogar o vínculo de acesso: " + accessError.message);
+    if (linkedUser?.role_key === "COLABORADOR") {
+      if (linkedUser.auth_id) {
+        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(linkedUser.auth_id);
+        if (authError && !/not found|user.*does not exist|already.*removed/i.test(authError.message)) {
+          throw new Error("Cadastro removido e login bloqueado, mas a identidade Auth não pôde ser removida: " + authError.message);
+        }
+      }
+    }
     await supabaseAdmin.from("rh_ponto_audit").insert({
       employee_id: employee.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_EXCLUIDO_DA_LISTA",
-      details: { full_name: employee.full_name, preserved_as_history: true },
+      details: { full_name: employee.full_name, linked_user_id: linkedUser?.id ?? null, preserved_as_history: true },
     });
     return { ok: true };
   });
@@ -958,12 +983,27 @@ export const removeRhEmployeeFromRegistry = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const actor = await requireNativeOperator(context);
     const { data: employee, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, registration_data, registry_employee_id")
+      .select("id, full_name, registration_data, registry_employee_id, ponto_portal_user_id")
       .eq("id", data.id).maybeSingle();
     if (error) throw new Error(error.message);
     if (!employee) throw new Error("Funcionário não encontrado.");
     if (employee.registry_employee_id && employee.registry_employee_id !== employee.id) {
       throw new Error("Este registro é auxiliar de benefício. Remova-o pela área do benefício.");
+    }
+    const linkedUserId = String(employee.ponto_portal_user_id ?? "").trim();
+    let linkedUser: { id: string; auth_id: string | null; role_key: string | null; status: string | null } | null = null;
+    if (linkedUserId) {
+      const { data: user, error: userError } = await supabaseAdmin.from("users")
+        .select("id, auth_id, role_key, status")
+        .eq("id", linkedUserId).maybeSingle();
+      if (userError) throw new Error("Não foi possível localizar o login vinculado: " + userError.message);
+      linkedUser = user;
+    }
+    if (linkedUser && linkedUser.role_key === "COLABORADOR") {
+      const { error: userBlockError } = await supabaseAdmin.from("users")
+        .update({ status: "bloqueado" })
+        .eq("id", linkedUser.id);
+      if (userBlockError) throw new Error("O login não pôde ser bloqueado antes da remoção: " + userBlockError.message);
     }
     const registration = employee.registration_data && typeof employee.registration_data === "object"
       ? employee.registration_data as Record<string, unknown> : {};
@@ -975,12 +1015,35 @@ export const removeRhEmployeeFromRegistry = createServerFn({ method: "POST" })
       registration_data: { ...registration, __deleted_at: new Date().toISOString(), __deleted_by: actor.id },
     }).eq("id", employee.id);
     if (updateError) throw new Error(updateError.message);
+
+    // Um colaborador removido do cadastro não pode continuar entrando pelo
+    // portal geral. Revogamos também o vínculo dedicado e o perfil de login,
+    // mas preservamos todas as linhas históricas de RH/OS/auditoria.
+    const { error: accessError } = await supabaseAdmin.from("rh_employee_access")
+      .update({ access_enabled: false })
+      .eq("employee_id", employee.id);
+    if (accessError) throw new Error("Cadastro removido, mas não foi possível revogar o vínculo de acesso: " + accessError.message);
+    if (linkedUser && linkedUser.role_key === "COLABORADOR") {
+      if (linkedUser.auth_id) {
+        const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(linkedUser.auth_id);
+        if (authError && !/not found|user.*does not exist|already.*removed/i.test(authError.message)) {
+          throw new Error("Cadastro removido e login bloqueado, mas a identidade Auth não pôde ser removida: " + authError.message);
+        }
+      }
+      const { error: userAuditError } = await supabaseAdmin.from("audit_log").insert({
+        actor_user_id: actor.id,
+        target_user_id: linkedUser.id,
+        action: "permanently_removed_user_access",
+        metadata_json: { previous_role: linkedUser.role_key, linked_employee_id: employee.id, preserved_history: true, at: new Date().toISOString() },
+      });
+      if (userAuditError) throw new Error("Acesso removido, mas a auditoria do login falhou: " + userAuditError.message);
+    }
     await supabaseAdmin.from("rh_ponto_audit").insert({
       employee_id: employee.id, actor_user_id: actor.id,
       action: "CADASTRO_FUNCIONARIO_REMOVIDO_DA_LISTA",
-      details: { full_name: employee.full_name, history_preserved: true },
+      details: { full_name: employee.full_name, linked_user_id: linkedUser?.id ?? null, history_preserved: true },
     });
-    return { ok: true };
+    return { ok: true, linked_user_id: linkedUser?.id ?? null };
   });
 
 export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })

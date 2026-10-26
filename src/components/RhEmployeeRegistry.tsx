@@ -202,7 +202,7 @@ export function RhEmployeeRegistry({ initialEmployeeId }: { initialEmployeeId?: 
             <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => { setPermanentDelete(null); setDeleteConfirmation(""); }}>
               <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <h3 className="text-lg font-black text-white">Excluir cadastro da lista</h3>
-                <p className="mt-2 text-sm text-slate-300">O cadastro de <strong>{permanentDelete.full_name}</strong> deixará de aparecer no RH e perderá os vínculos de acesso ao Ponto/DBS Control. O histórico de folha, ponto e auditoria será preservado.</p>
+                <p className="mt-2 text-sm text-slate-300">O cadastro de <strong>{permanentDelete.full_name}</strong> deixará de aparecer no RH, perderá os vínculos de acesso ao Ponto/DBS CONTROL e o login de colaborador será bloqueado/removido. O histórico de folha, ponto, OS e auditoria será preservado.</p>
                 <label className="mt-4 block text-xs font-bold text-slate-300">Digite EXCLUIR CADASTRO para confirmar</label>
                 <input value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white" placeholder="EXCLUIR CADASTRO" />
                 {error && <p className="mt-3 rounded-lg bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
@@ -375,10 +375,10 @@ function EmployeeRow({
         <button onClick={onEdit} className="mr-2 text-sky-300">
           <Pencil className="inline h-4 w-4" />
         </button>
-        <button onClick={onDelete} title={employee.is_active ? "Inativar funcionário" : "Reativar funcionário"} className="mr-2 text-red-300">
+        <button onClick={onDelete} aria-label={employee.is_active ? `Inativar ${employee.full_name}` : `Reativar ${employee.full_name}`} title={employee.is_active ? "Inativar funcionário (preserva o cadastro)" : "Reativar funcionário"} className="mr-2 text-red-300">
           <Trash2 className="inline h-4 w-4" />
         </button>
-        <button onClick={onPermanentDelete} title="Excluir cadastro da lista" className="text-rose-400 hover:text-rose-200">
+        <button onClick={onPermanentDelete} aria-label={`Excluir definitivamente o cadastro de ${employee.full_name}`} title="Excluir definitivamente o cadastro (preserva o histórico)" className="text-rose-400 hover:text-rose-200">
           <Trash2 className="inline h-4 w-4" />
         </button>
       </td>

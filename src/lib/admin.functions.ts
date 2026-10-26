@@ -326,7 +326,15 @@ export const createClientUser = createServerFn({ method: "POST" })
     return { ok: true, email: data.email };
   });
 
-/** Permanently removes a user's login and access profile. Historical records/audit are retained where referenced. */
+/**
+ * Permanently removes a user's login while keeping a blocked profile tombstone.
+ *
+ * A collaborator can be linked from both `users` and the RH access tables. The
+ * old implementation removed only the Auth identity and blocked `users`, which
+ * left a stale RH/DBS CONTROL link behind. Revoke every operational link first
+ * so a retry is safe and no deleted collaborator can retain a module session.
+ * Historical OS, tickets, payroll and audit rows are intentionally preserved.
+ */
 export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { user_id: string; confirmation: string }) => {
@@ -340,15 +348,79 @@ export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
     if (!me || me.status !== "ativo" || me.role_key !== "SUPER_ADMIN") throw new Error("Somente um SUPER_ADMIN ativo pode excluir acessos permanentemente.");
     if (me.id === data.user_id) throw new Error("Não é permitido excluir o próprio acesso.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: target, error: targetErr } = await supabaseAdmin.from("users").select("id, auth_id, full_name, email, role_key").eq("id", data.user_id).maybeSingle();
+    const { data: target, error: targetErr } = await supabaseAdmin.from("users").select("id, auth_id, full_name, email, role_key, status").eq("id", data.user_id).maybeSingle();
     if (targetErr || !target) throw new Error("Usuário não encontrado.");
     if (target.role_key === "SUPER_ADMIN") throw new Error("Por segurança, a conta SUPER_ADMIN não pode ser removida por esta tela.");
-    if (!target.auth_id) throw new Error("Este perfil já não possui um login vinculado.");
-    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(target.auth_id);
-    if (authErr) throw new Error("Não foi possível remover o login: " + authErr.message);
-    // Keep the profile row as a tombstone so OS, tickets, and audit foreign keys remain intact.
+
+    const [{ data: linkedEmployees, error: linkedEmployeesError }, { data: accessRows, error: accessRowsError }] = await Promise.all([
+      supabaseAdmin.from("rh_employees")
+        .select("id, full_name, ponto_portal_user_id, ponto_access_enabled, dbs_control_access_enabled")
+        .eq("ponto_portal_user_id", target.id),
+      supabaseAdmin.from("rh_employee_access")
+        .select("id, employee_id, access_enabled")
+        .eq("user_id", target.id),
+    ]);
+    if (linkedEmployeesError) throw new Error("Não foi possível localizar o vínculo RH: " + linkedEmployeesError.message);
+    if (accessRowsError) throw new Error("Não foi possível localizar o vínculo de acesso RH: " + accessRowsError.message);
+
+    // Block the profile before touching Auth: if Auth deletion fails, the
+    // account remains fail-closed and the operation can be retried safely.
     const { error: profileErr } = await supabaseAdmin.from("users").update({ status: "bloqueado" }).eq("id", target.id);
-    if (profileErr) throw new Error("Login removido, mas o perfil histórico precisa de revisão administrativa: " + profileErr.message);
-    await supabaseAdmin.from("audit_log").insert({ actor_user_id: me.id, target_user_id: target.id, action: "permanently_removed_user_access", metadata_json: { previous_role: target.role_key, at: new Date().toISOString() } });
-    return { ok: true };
+    if (profileErr) throw new Error("Não foi possível bloquear o perfil histórico: " + profileErr.message);
+
+    const employeeIds = [...new Set([
+      ...(linkedEmployees ?? []).map((row: any) => String(row.id)),
+      ...(accessRows ?? []).map((row: any) => String(row.employee_id)),
+    ].filter(Boolean))];
+
+    if (employeeIds.length) {
+      const { error: employeeError } = await supabaseAdmin.from("rh_employees")
+        .update({ ponto_access_enabled: false, dbs_control_access_enabled: false, ponto_portal_user_id: null })
+        .in("id", employeeIds);
+      if (employeeError) throw new Error("Perfil bloqueado, mas não foi possível revogar o vínculo RH: " + employeeError.message);
+    }
+    if ((accessRows ?? []).length) {
+      const { error: accessError } = await supabaseAdmin.from("rh_employee_access")
+        .update({ access_enabled: false })
+        .eq("user_id", target.id);
+      if (accessError) throw new Error("Perfil bloqueado, mas não foi possível revogar o acesso RH: " + accessError.message);
+    }
+
+    if (target.auth_id) {
+      const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(target.auth_id);
+      // Auth deletion is idempotent from the operator's perspective: a user
+      // already removed in a previous attempt is still fully revoked here.
+      if (authErr && !/not found|user.*does not exist|already.*removed/i.test(authErr.message)) {
+        throw new Error("Acesso bloqueado, mas não foi possível remover o login: " + authErr.message);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const { error: auditError } = await supabaseAdmin.from("audit_log").insert({
+      actor_user_id: me.id,
+      target_user_id: target.id,
+      action: "permanently_removed_user_access",
+      metadata_json: {
+        previous_role: target.role_key,
+        previous_status: target.status,
+        linked_employee_ids: employeeIds,
+        preserved_history: true,
+        at: now,
+      },
+    });
+    if (auditError) throw new Error("Acesso removido, mas o registro de auditoria falhou: " + auditError.message);
+
+    for (const employeeId of employeeIds) {
+      const { error: rhAuditError } = await supabaseAdmin.from("rh_audit_log").insert({
+        employee_id: employeeId,
+        actor_user_id: me.id,
+        action: "ACESSO_COLABORADOR_REMOVIDO",
+        entity_type: "users",
+        entity_id: target.id,
+        after_data: { access_enabled: false, dbs_control_access_enabled: false, history_preserved: true, at: now },
+      });
+      if (rhAuditError) throw new Error("Acesso removido, mas a auditoria RH falhou: " + rhAuditError.message);
+    }
+
+    return { ok: true, already_blocked: target.status !== "ativo", linked_employee_ids: employeeIds };
   });
