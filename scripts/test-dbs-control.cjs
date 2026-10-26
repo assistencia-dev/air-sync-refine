@@ -81,6 +81,7 @@ const legacyHistoryRepairMigration = fs.readFileSync("supabase/migrations/202610
 const deletedAtMigration = fs.readFileSync("supabase/migrations/20261026160000_dbs_control_deleted_at_backfill.sql", "utf8");
 const protocolMigration = fs.readFileSync("supabase/migrations/20261026190000_dbs_control_autogenerate_protocol.sql", "utf8");
 const protocolLookupFixMigration = fs.readFileSync("supabase/migrations/20261026191000_dbs_control_delta_empty_protocol_fix.sql", "utf8");
+const timestampMigration = fs.readFileSync("supabase/migrations/20261026192000_dbs_control_normalize_empty_timestamps.sql", "utf8");
 assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
 assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
@@ -170,6 +171,12 @@ assert.match(protocolMigration, /dbs_control_work_order_protocol_seq/, "A migra�
 assert.match(protocolMigration, /'DBS-' \|\| to_char\(clock_timestamp\(\), 'YYYY'\)/, "O protocolo automático deve ser legível e gerado no banco.");
 assert.match(protocolMigration, /v_current_found boolean/, "A migração deve separar explicitamente consulta encontrada de FOUND residual.");
 assert.match(protocolLookupFixMigration, /v_current_found := found/, "A correção de protocolo vazio deve proteger o caminho de criação contra falso conflito.");
+assert.match(cloudFunctions, /normalizeOptionalTimestamp/, "Campos de data opcionais devem ser normalizados antes do RPC relacional.");
+assert.match(cloudFunctions, /scheduled_at: normalizeOptionalTimestamp/, "A data de agendamento vazia deve virar NULL, nunca string vazia.");
+assert.match(cloudFunctions, /sla_deadline: normalizeOptionalTimestamp/, "O SLA vazio deve virar NULL, nunca string vazia.");
+assert.match(timestampMigration, /dbs_control_normalize_work_order_timestamps/, "A RPC deve normalizar timestamps opcionais no servidor.");
+assert.match(timestampMigration, /v_raw := nullif\(btrim\(v_patch->>v_key\), ''\)/, "A migração deve converter timestamps vazios em NULL.");
+assert.match(timestampMigration, /exception when others then/, "Timestamp inválido não pode bloquear a sincronização da OS.");
 assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
 assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
 assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");

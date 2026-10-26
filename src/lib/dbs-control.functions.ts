@@ -1157,6 +1157,15 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
   const rawEmployeeId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
   const rawServiceId = String(order?.servicoId ?? order?.service_id ?? "").trim();
   const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
+  // O formulário legado usa string vazia para campos de data não preenchidos.
+  // Nunca envie "" para colunas timestamptz: o Postgres rejeita o lote inteiro.
+  // Valores inválidos também viram NULL para que uma OS não fique presa na fila
+  // por um campo opcional malformado.
+  const normalizeOptionalTimestamp = (value: unknown) => {
+    const text = String(value ?? "").trim();
+    if (!text || !Number.isFinite(Date.parse(text))) return null;
+    return text;
+  };
   const amountRaw = String(order?.valor ?? order?.total ?? 0).trim();
   const normalizedAmount = amountRaw.includes(",") ? amountRaw.replace(/\./g, "").replace(",", ".") : amountRaw;
   const amount = Number(normalizedAmount);
@@ -1170,10 +1179,12 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
     priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
     status: normalizedStatus,
-    scheduled_at: order?.scheduledAt ?? order?.scheduled_at ?? null,
-    started_at: order?.startedAt ?? order?.started_at ?? null,
-    completed_at: normalizedStatus === "concluida" ? (order?.concluidoEm ?? order?.completedAt ?? order?.completed_at ?? new Date().toISOString()) : null,
-    sla_deadline: order?.sla ?? order?.slaDeadline ?? order?.sla_deadline ?? null,
+    scheduled_at: normalizeOptionalTimestamp(order?.scheduledAt || order?.scheduled_at),
+    started_at: normalizeOptionalTimestamp(order?.startedAt || order?.started_at),
+    completed_at: normalizedStatus === "concluida"
+      ? (normalizeOptionalTimestamp(order?.concluidoEm || order?.completedAt || order?.completed_at) ?? new Date().toISOString())
+      : null,
+    sla_deadline: normalizeOptionalTimestamp(order?.sla || order?.slaDeadline || order?.sla_deadline),
     description: String(order?.desc ?? order?.description ?? ""),
     technical_opinion: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
     diagnostico: String(order?.diagnostico ?? order?.technical_opinion ?? ""),
@@ -1187,7 +1198,7 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
     total_cents: Number.isFinite(amount) ? Math.round(amount * 100) : 0,
   };
-  const deletedAt = String(order?.deleted_at ?? order?.excluidaEm ?? "").trim();
+  const deletedAt = normalizeOptionalTimestamp(order?.deleted_at || order?.excluidaEm);
   if (deletedAt) patch.deleted_at = deletedAt;
   return patch;
 }
