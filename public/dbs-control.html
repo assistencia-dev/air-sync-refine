@@ -6496,6 +6496,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (progressNode) progressNode.textContent = message || '';
             };
             setProgress('Preparando evidências...');
+            // Mantém uma cópia imutável do atendimento antes de qualquer upload
+            // ou mutação. Se o ACK falhar, a tela volta para este estado e não
+            // apresenta uma conclusão que o banco ainda não confirmou.
+            const beforeCompletion = JSON.parse(JSON.stringify(os));
 
             try {
                 if (!DBS_CONTROL_CLOUD_READY) {
@@ -6565,8 +6569,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     : `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
-                alert(err instanceof Error ? err.message : 'Não foi possível salvar o atendimento.');
-                if (progressNode) progressNode.textContent = 'Não confirmado — revise a conexão e tente novamente.';
+                const currentIndex = ERP_STATE.ordens.findIndex(order => String(order?.id) === String(osId));
+                if (currentIndex >= 0) ERP_STATE.ordens[currentIndex] = beforeCompletion;
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION,
+                        data: getPersistableState()
+                    }));
+                } catch (_) {}
+                renderizarTudo();
+                alert(err instanceof Error ? err.message : 'Não foi possível confirmar o atendimento na nuvem.');
+                if (progressNode) progressNode.textContent = 'Não confirmado — a OS foi restaurada; revise a conexão e tente novamente.';
                 if (finishButton) {
                     finishButton.disabled = false;
                     finishButton.textContent = finishLabel;
