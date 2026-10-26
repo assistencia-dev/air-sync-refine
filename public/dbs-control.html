@@ -2319,6 +2319,114 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
       }
     </style>
+    <!-- dbs-field-pending-visual-20261026 -->
+    <style id="dbs-field-pending-visual-20261026">
+      body.dbs-control-employee-mode .employee-result-card {
+        display: grid;
+        gap: 12px;
+        padding: 17px;
+        border: 1px solid #cfe2f2;
+        border-radius: 16px;
+        background: linear-gradient(135deg,#f6fbff 0%,#ffffff 100%);
+        box-shadow: 0 6px 18px rgba(30,78,121,.06);
+      }
+      body.dbs-control-employee-mode .employee-result-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: #153d61;
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      body.dbs-control-employee-mode .employee-step-badge-result {
+        background: #0e7490;
+      }
+      body.dbs-control-employee-mode .employee-result-card > label {
+        color: #47627e;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+      }
+      body.dbs-control-employee-mode .employee-result-card select {
+        min-height: 46px;
+        margin-top: 6px;
+        border: 1px solid #b9d2e6;
+        border-radius: 11px;
+        background: #fff;
+        color: #163b5f;
+        font-size: 14px;
+        font-weight: 750;
+      }
+      body.dbs-control-employee-mode .employee-pending-fields {
+        display: grid;
+        gap: 7px;
+        padding: 12px;
+        border-left: 4px solid #f59e0b;
+        border-radius: 10px;
+        background: #fffaf0;
+      }
+      body.dbs-control-employee-mode .employee-pending-fields[hidden] {
+        display: none;
+      }
+      body.dbs-control-employee-mode .employee-pending-fields label {
+        color: #7c4a03;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      body.dbs-control-employee-mode .employee-pending-fields textarea {
+        min-height: 96px;
+        margin-top: 6px;
+        background: #fff;
+        border-color: #f2c46f;
+      }
+      body.dbs-control-employee-mode .employee-pending-fields small {
+        color: #91651b;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      body.dbs-control-employee-mode .employee-status {
+        max-width: 220px;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.25;
+      }
+      body.dbs-control-employee-mode .employee-progress-card {
+        position: relative;
+        overflow: hidden;
+      }
+      body.dbs-control-employee-mode .employee-progress-card::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        content: '';
+        background: #38bdf8;
+      }
+      body.dbs-control-employee-mode .employee-progress-card:nth-child(2)::before {
+        background: #f59e0b;
+      }
+      body.dbs-control-employee-mode .employee-progress-card:nth-child(3)::before {
+        background: #10b981;
+      }
+      @media (max-width: 520px) {
+        body.dbs-control-employee-mode .employee-result-card {
+          padding: 14px;
+        }
+        body.dbs-control-employee-mode .employee-result-title {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        body.dbs-control-employee-mode .employee-status {
+          max-width: 100%;
+        }
+      }
+      body .badge-pendente {
+        background: #fff4d6;
+        color: #8a5200;
+      }
+    </style>
 </head>
 <body>
 
@@ -4592,12 +4700,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const technicianId = String(o.tecnicoId ?? o.employeeId ?? '');
                 const tec = technicianById.get(technicianId) || {};
                 const isConcluido = isOSConcluida(o);
-                const badgeClass = isConcluido ? "badge-concluido" : "badge-andamento";
+                const hasPending = /aguardando peça/i.test(String(o.status || '')) || /\[PENDÊNCIA OPERACIONAL/i.test(String(o.observacao || o.observacaoTecnico || o.observacaoComplementarTecnico || ''));
+                const badgeClass = isConcluido ? "badge-concluido" : hasPending ? "badge-pendente" : "badge-andamento";
+                const statusLabel = hasPending ? 'Atendimento com pendência · aguardando peça' : (o.status || 'Em Atendimento');
                 const archived = Boolean(o.arquivadaEm);
                 const classificationCodes = classificacoesOS(o);
                 const classificationLabels = classificationCodes.map(code => ROTULOS_CLASSIFICACAO_OS[code] || code);
                 const priority = normalizarTextoOperacional(o.prioridade || o.priority || 'normal');
-                const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.trabalhoExecutado,o.localAtendimento,o.prioridade,o.sla,classificationLabels.join(' '),cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome,o.tecnicoNome].join(' ').replace(/"/g,'&quot;');
+                const searchText = [o.id,o.data,o.status,o.tipo,o.desc,o.diagnostico,o.trabalhoExecutado,o.observacao,o.observacaoTecnico,o.observacaoComplementarTecnico,o.localAtendimento,o.prioridade,o.sla,classificationLabels.join(' '),cli.nome,cli.cnpj,cli.endereco,eq.tag,eq.tipo,eq.modelo,eq.ambiente,tec.nome,o.tecnicoNome].join(' ').replace(/"/g,'&quot;');
                 const classificationHtml = classificationLabels.map((label, index) => `<span class="os-classification-chip ${classeVisualClassificacao(classificationCodes[index])}">${escDbsControl(label)}</span>`).join('');
                 return `
                     <tr data-status="${escDbsControl(o.status)}" data-archived="${archived ? 'true' : 'false'}" data-date="${normalizarDataFiltroOS(o.data)}" data-client="${escDbsControl(o.clienteId || '')}" data-technician="${escDbsControl(technicianId)}" data-priority="${escDbsControl(priority)}" data-classifications="${escDbsControl(classificationCodes.join('|'))}" data-search="${escDbsControl(searchText)}">
@@ -4609,7 +4719,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <td>${escDbsControl(tec.nome || o.tecnicoNome || '-')}</td>
                         <td><span class="badge badge-pmoc">${escDbsControl(o.tipo || 'Serviço')}</span></td>
                         <td>R$ ${Number(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                        <td><span class="badge ${badgeClass}">${escDbsControl(o.status || 'Em Atendimento')}</span>${classificationHtml ? `<div class="os-classification-list" aria-label="Classificações">${classificationHtml}</div>` : ''}</td>
+                        <td><span class="badge ${badgeClass}">${escDbsControl(statusLabel)}</span>${classificationHtml ? `<div class="os-classification-list" aria-label="Classificações">${classificationHtml}</div>` : ''}</td>
                         <td class="os-actions-cell">
                             <div class="os-row-actions">
                                 <button type="button" class="os-row-action" title="Baixar PDF" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
@@ -5646,7 +5756,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
                 if (isOSConcluida(s)) return ['Concluída','employee-status-done'];
-                if (/aguardando peça/i.test(s)) return ['Aguardando peça','employee-status-wait'];
+                if (/aguardando peça/i.test(s)) return ['Atendimento com pendência','employee-status-wait'];
                 if (/aguardando cliente/i.test(s)) return ['Aguardando cliente','employee-status-wait'];
                 if (/cancelad/i.test(s)) return ['Cancelada','employee-status-cancelled'];
                 return [s,'employee-status-active'];
@@ -5665,7 +5775,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
               <div class="employee-progress-grid" aria-label="Resumo de produtividade">
                 <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
-                <div class="employee-progress-card"><span>Aguardando</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Dependem de retorno ou insumo</small></div>
+                <div class="employee-progress-card"><span>Pendências operacionais</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Aguardam peça, retorno ou decisão</small></div>
                 <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(isOSConcluida).length}</strong><small>Ordens finalizadas</small></div>
                 <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(isOSConcluida).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
               </div>
