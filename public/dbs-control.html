@@ -5299,8 +5299,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (!area) return;
 
             const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            if (collaboratorSession && (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_LOCAL_RECOVERY_MODE || DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error')) {
-                const disconnected = DBS_CONTROL_LOCAL_RECOVERY_MODE || DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error';
+            if (collaboratorSession && (!DBS_CONTROL_CLOUD_READY || DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error')) {
+                // LOCAL_RECOVERY_MODE starts true inside the iframe while the
+                // first authenticated snapshot is still being requested. Only
+                // the explicit error status should switch the copy to retry.
+                const disconnected = DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error';
                 area.innerHTML = `<div class="employee-empty employee-sync-state" role="status" aria-live="polite"><div class="employee-icon">${disconnected ? '⚠' : '⟳'}</div><h3>${disconnected ? 'Não foi possível carregar suas OS' : 'Carregando suas OS'}</h3><p>${disconnected ? 'A conexão segura com a base de operações não foi confirmada. Tente atualizar a tela; nenhum dado local será exibido neste modo.' : 'Validando sua sessão e buscando somente as ordens atribuídas a você.'}</p>${disconnected ? '<button type="button" class="btn btn-primary" onclick="window.location.reload()">Tentar novamente</button>' : ''}</div>`;
                 return;
             }
