@@ -32,7 +32,13 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = DBS_SUPABASE_URL;
-  const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY
+  // Lovable reserves the SUPABASE_* environment-variable namespace for its
+  // built-in backend. Keep the app's server key under our own namespace so
+  // the published app can talk to the canonical DBS Supabase project without
+  // accidentally pairing its URL with Lovable's internal key.
+  const SUPABASE_SECRET_KEY = process.env.DBS_SUPABASE_SERVICE_ROLE_KEY
+    || process.env.DBS_SUPABASE_SECRET_KEY
+    || process.env.SUPABASE_SECRET_KEY
     || process.env.SUPABASE_SERVICE_ROLE_KEY
     || (() => {
       try {
@@ -46,7 +52,7 @@ function createSupabaseAdminClient() {
   if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
     const missing = [
       ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
-      ...(!SUPABASE_SECRET_KEY ? ['SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY)'] : []),
+      ...(!SUPABASE_SECRET_KEY ? ['DBS_SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY)'] : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Configure the Supabase server secret in the hosting environment.`;
     console.error(`[Supabase] ${message}`);
