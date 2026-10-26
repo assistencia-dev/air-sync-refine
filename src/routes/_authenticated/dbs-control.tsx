@@ -259,7 +259,6 @@ function DbsControlPage() {
             : null;
 
           const localHasData = dbsControlStateHasData(localState);
-          const cloudHasData = dbsControlStateHasData(cloudState);
           localRecoveryStateRef.current = localState;
           // O servidor retorna null somente quando não existe snapshot nem registro canônico
           // no escopo atual. Nesse caso, iniciar a base compartilhada vazia é mais seguro do que
@@ -288,17 +287,24 @@ function DbsControlPage() {
           }
           // A sessão de colaborador recebe deliberadamente um subconjunto da base (somente OS e cadastros vinculados).
           // Comparar esse subconjunto com o cache local completo gera falso alarme de perda e bloqueia a sincronização.
-          const cloudIsIncomplete = !employeeModeRef.current && localHasData && dbsControlStateIsSmallerThan(localState, cloudState);
-          if (cloudState && !cloudIsIncomplete) {
-            // Nunca grave automaticamente um snapshot local no estado compartilhado durante
-            // a inicialização. Se a nuvem vier vazia enquanto há dados locais, trate como
-            // falha de validação e mantenha a cópia local em modo somente leitura.
+          if (cloudState) {
+            // A administração pode ter registros locais que ainda não chegaram ao snapshot
+            // compartilhado. Reconciliamos por ID/protocolo antes de hidratar o iframe:
+            // a nuvem prevalece nos campos preenchidos e os registros locais exclusivos
+            // permanecem disponíveis para a próxima gravação. O colaborador recebe apenas
+            // o recorte filtrado pelo servidor e nunca entra neste merge.
+            const reconciledInitialState = employeeModeRef.current
+              ? cloudState
+              : mergeDbsControlStates(cloudState, localState);
+            if (!employeeModeRef.current && localHasData && dbsControlStateIsSmallerThan(localState, cloudState)) {
+              console.warn("DBS Control: snapshot remoto menor; estado administrativo reconciliado sem descarte.");
+            }
+            if (!employeeModeRef.current) localRecoveryStateRef.current = reconciledInitialState;
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: cloudState },
-              "*",
-            );
+              { type: "DBS_CONTROL_CLOUD_STATE", state: reconciledInitialState },
+              "*");
             // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
             iframeRef.current?.contentWindow?.postMessage({
               type: "DBS_CONTROL_SYNC_STATUS",
@@ -310,11 +316,9 @@ function DbsControlPage() {
             // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
             throw new Error(
-              cloudIsIncomplete
-                ? "A nuvem retornou menos registros que a cópia local em uma ou mais áreas. Dados locais preservados em somente leitura; gravações bloqueadas para evitar perda."
-                : localState
-                  ? "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: a base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura; nenhuma gravação será enviada."
-                  : "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: o DBS CONTROL não conseguiu estabelecer conexão com a base compartilhada.",
+              localState
+                ? "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: a base compartilhada não retornou um snapshot. A cópia local foi preservada em somente leitura; nenhuma gravação será enviada."
+                : "AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE: o DBS CONTROL não conseguiu estabelecer conexão com a base compartilhada.",
             );
           }
 
@@ -573,14 +577,16 @@ function DbsControlPage() {
         const latest = await getDbsControlCloudState();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
         // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
-        if (!employeeModeRef.current && dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latest.state as Record<string, unknown>)) {
-          cloudReadyRef.current = false;
-          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
-          const message = "A nuvem retornou menos registros que a cópia local. Salvamento bloqueado para proteger os dados; é necessária reconciliação administrativa.";
-          setCloudError(message);
-          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: 0, error: message }, "*");
-          return;
+        // Para a administração, uma redução de contagem é reconciliada por identidade em vez de
+        // bloquear a operação. Isso preserva OS locais e evita que um snapshot atrasado congele o despacho.
+        const latestCloudState = latest.state as Record<string, unknown>;
+        const reconciledLatestState = employeeModeRef.current
+          ? latestCloudState
+          : mergeDbsControlStates(latestCloudState, localRecoveryStateRef.current);
+        if (!employeeModeRef.current && dbsControlStateIsSmallerThan(localRecoveryStateRef.current, latestCloudState)) {
+          console.warn("DBS Control: snapshot remoto menor durante o realtime; estado administrativo reconciliado sem descarte.");
         }
+        if (!employeeModeRef.current) localRecoveryStateRef.current = reconciledLatestState;
         // A falha na leitura inicial não pode bloquear todas as tentativas seguintes.
         // A primeira leitura válida também libera a fila de gravação do iframe.
         cloudReadyRef.current = true;
@@ -590,7 +596,7 @@ function DbsControlPage() {
         }
         if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
           cloudUpdatedAtRef.current = latest.updated_at;
-          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: latest.state }, "*");
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState }, "*");
         }
         setCloudError(null);
       } catch (err) {
