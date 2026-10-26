@@ -186,6 +186,16 @@ assert.match(html, /function renderizarResumoOperacional\s*\(/, "Os indicadores 
 assert.match(html, /Sem técnico vinculado/, "O painel deve identificar OS abertas sem técnico.");
 assert.match(html, /Vínculos a conferir/, "O painel deve sinalizar referências cadastrais não resolvidas.");
 assert.match(html, /safe\(renderizarResumoOperacional\)/, "A fila operacional deve atualizar ao abrir o dashboard.");
+assert.match(html, /id=["']os-filter-classificacao["']/, "A gestão de OS deve permitir filtrar por classificação operacional.");
+assert.match(html, /id=["']os-filter-cliente["']/, "A gestão de OS deve permitir filtrar por cliente.");
+assert.match(html, /id=["']os-filter-tecnico["']/, "A gestão de OS deve permitir filtrar por técnico.");
+assert.match(html, /id=["']os-filter-prioridade["']/, "A gestão de OS deve permitir filtrar por prioridade.");
+assert.match(html, /id=["']os-filter-summary["']/, "A gestão de OS deve informar quantos registros estão visíveis após os filtros.");
+assert.match(html, /function classificacoesOS\s*\(/, "A classificação deve ser calculada a partir dos campos já registrados na OS.");
+assert.match(html, /PENDENCIA_EXECUCAO/, "A classificação deve sinalizar pendência de execução.");
+assert.match(html, /function popularFiltrosOS\s*\(/, "Os filtros de cliente e técnico devem acompanhar os cadastros carregados.");
+assert.match(html, /data-classifications=/, "Cada linha de OS deve carregar suas classificações para filtragem sem nova consulta.");
+assert.match(html, /function agendarFiltrosOS\s*\(/, "A busca textual de OS deve ser levemente desduplicada para evitar re-render a cada tecla.");
 
 
 const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "utf8");
