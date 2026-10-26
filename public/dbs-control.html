@@ -1752,6 +1752,13 @@
       body.dbs-control-employee-mode .nav-menu { display:none !important; }
       body.dbs-control-employee-mode header .btn-secondary,
       body.dbs-control-employee-mode header .btn-primary { display:none !important; }
+      /* A navegação lateral do colaborador fica recolhida no mobile e no portal
+         de campo. A emissão autorizada precisa continuar visível sem abrir um
+         menu administrativo. */
+      #dbs-employee-issue-cta { display:none !important; }
+      body.dbs-control-employee-mode.dbs-control-can-issue-os #dbs-employee-issue-cta { display:inline-flex !important; align-items:center; gap:6px; background:linear-gradient(135deg,#2185e4,#1261bd); color:#fff; border-color:transparent; box-shadow:0 6px 16px rgba(22,116,209,.16); }
+      body.dbs-control-employee-mode .employee-toolbar-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+      body.dbs-control-employee-mode .employee-toolbar-actions .employee-issue-inline { display:inline-flex; align-items:center; gap:6px; }
       body.dbs-control-employee-mode #tab-pwa { padding:clamp(14px,3vw,30px) !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-wrapper { max-width:1120px !important; }
       body.dbs-control-employee-mode #tab-pwa .pwa-screen { min-height:calc(100vh - 40px); }
@@ -2132,7 +2139,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
   body.dbs-control-employee-mode .employee-progress-card small{font-size:9px!important;line-height:1.35!important;}
   body.dbs-control-employee-mode .employee-toolbar{padding:0 0 10px!important;gap:9px!important;}
   body.dbs-control-employee-mode .employee-toolbar strong{font-size:17px!important;}
-  body.dbs-control-employee-mode .employee-toolbar button{width:100%!important;}
+  body.dbs-control-employee-mode .employee-toolbar-actions{width:100%!important;justify-content:stretch!important;}
+  body.dbs-control-employee-mode .employee-toolbar-actions button{flex:1 1 180px!important;width:auto!important;}
   body.dbs-control-employee-mode .employee-os-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px!important;margin-bottom:11px!important;}
   body.dbs-control-employee-mode .employee-os-tabs .btn{width:100%!important;min-height:44px!important;padding:8px 6px!important;}
   body.dbs-control-employee-mode .employee-order{padding:13px!important;border-radius:15px!important;}
@@ -2202,6 +2210,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
+                <button id="dbs-employee-issue-cta" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
                 <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
                 <details class="dbs-secondary-menu" style="position:relative;"><summary class="btn btn-secondary btn-sm" style="min-height:36px;cursor:pointer;list-style:none;">Mais opções ▾</summary><div style="position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:190px;padding:8px;background:#fff;border:1px solid #dbe5ef;border-radius:10px;box-shadow:0 8px 24px rgba(16,42,67,.14);"><button class="btn btn-secondary btn-sm" style="min-height:44px;width:100%;white-space:normal;" onclick="resetarDadosPadrao()">Limpar dados locais</button></div></details>
                 <button class="btn btn-primary" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
@@ -5487,7 +5496,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
               <div class="employee-toolbar">
                 <div><strong>Minhas ordens de serviço</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Ordens que ainda precisam de acompanhamento'}</span></div>
-                <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
+                <div class="employee-toolbar-actions">
+                  ${new URLSearchParams(window.location.search).get('can_issue_os') === '1' ? '<button type="button" class="btn btn-primary employee-issue-inline" onclick="switchTab(\'tab-nova-os\')">＋ Emitir OS</button>' : ''}
+                  <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
+                </div>
               </div>
               <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
                 <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !isOSConcluida(o)).length})</span></button>
@@ -5997,6 +6009,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 document.body.classList.add('dbs-control-employee-mode');
                 const canIssueOs = params.get('can_issue_os') === '1';
                 if (canIssueOs) document.body.classList.add('dbs-control-can-issue-os');
+                const issueCta = document.getElementById('dbs-employee-issue-cta');
+                if (issueCta) {
+                    issueCta.hidden = !canIssueOs;
+                    issueCta.setAttribute('aria-hidden', canIssueOs ? 'false' : 'true');
+                }
                 // O menu do colaborador é uma área própria: manter somente "Minhas OS".
                 document.querySelectorAll('aside .nav-menu .nav-section, aside .nav-menu .nav-item').forEach(item => {
                     const visible = item.matches('.nav-item[data-employee-visible="true"]') || (canIssueOs && item.matches('.nav-item[data-employee-issue-visible="true"]'));

@@ -92,6 +92,8 @@ const deletedAtMigration = fs.readFileSync("supabase/migrations/20261026160000_d
 const protocolMigration = fs.readFileSync("supabase/migrations/20261026190000_dbs_control_autogenerate_protocol.sql", "utf8");
 const protocolLookupFixMigration = fs.readFileSync("supabase/migrations/20261026191000_dbs_control_delta_empty_protocol_fix.sql", "utf8");
 const timestampMigration = fs.readFileSync("supabase/migrations/20261026192000_dbs_control_normalize_empty_timestamps.sql", "utf8");
+const collaboratorIndependentAccessMigration = fs.readFileSync("supabase/migrations/20261026160010_dbs_control_collaborator_independent_access.sql", "utf8");
+const collaboratorPrivateScopeMigration = fs.readFileSync("supabase/migrations/20261026160020_dbs_control_private_employee_scope.sql", "utf8");
 assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
 assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
@@ -104,7 +106,7 @@ assert.match(cloudFunctions, /preserveCompletedWorkOrderStatus: true/, "A hidrat
 assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(canonical\?\.status\)/, "Um status canônico antigo não pode reabrir uma OS concluída no snapshot.");
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
 assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
-assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\)/, "A hidratação e a auditoria devem usar a consulta paginada.");
+assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\s*(?:\{\s*\}|\n)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(fieldControl, /async function preserveUserScopedSnapshotsBeforeCompanyLink\(userId: string, companyId: string\)/, "Vincular o administrador a uma empresa deve verificar snapshots pessoais preexistentes.");
 assert.match(fieldControl, /if \(userDbs\.data && companyDbs\.data\)/, "O vínculo deve pausar quando os escopos pessoal e empresarial já têm snapshots DBS divergentes.");
 assert.match(fieldControl, /if \(userTreasury\.data && companyTreasury\.data\)/, "O vínculo deve pausar quando os dois escopos financeiros já têm snapshots.");
@@ -147,6 +149,9 @@ assert.match(route, /const persist = async \(\) => \{[\s\S]*?applyDbsControlDelt
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
+assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
+assert.match(html, /employee-issue-inline/, "A área móvel do colaborador precisa oferecer emissão de OS no próprio portal de campo.");
+assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
 assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
 assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
 assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
@@ -299,6 +304,11 @@ assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o has
 assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
 assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
+assert.match(collaboratorIndependentAccessMigration, /create or replace function public\.dbs_my_employee_ids/, "O vínculo DBS do colaborador deve ser independente da Folha de Ponto.");
+assert.doesNotMatch(collaboratorIndependentAccessMigration, /where e\.ponto_portal_user_id = public\.current_app_user_id\(\)[\s\S]*?and e\.ponto_access_enabled = true/, "A política DBS não pode exigir a flag da Folha de Ponto.");
+assert.match(collaboratorIndependentAccessMigration, /dbs_control_can_issue_work_orders = true/, "A leitura de clientes para emissão deve continuar limitada à permissão explícita.");
+assert.match(collaboratorPrivateScopeMigration, /create or replace function private\.dbs_my_employee_ids/, "O helper RLS do colaborador deve ficar fora do schema exposto pela API.");
+assert.match(collaboratorPrivateScopeMigration, /revoke all on function public\.dbs_my_employee_ids\(\) from public, anon, authenticated/i, "O helper público de escopo não pode ficar executável pelo endpoint RPC.");
 
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
@@ -314,7 +324,7 @@ assert.match(html, /baixarPDFIndividual/, "A padronização deve preservar a aç
 const persistence = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 assert.match(persistence, /sourceOfTruth: "relational_delta"/, "Toda gravação nova deve declarar a fonte relacional de verdade.");
 assert.match(persistence, /persistDbsControlLegacyEntityDeltas/, "Compras e orçamentos devem ser preservados como registros relacionais individuais.");
-assert.match(persistence, /scope\.scopeKey,\s*\)/, "A hidratação deve carregar registros legados do escopo administrativo correto.");
+assert.match(persistence, /scope\.scopeKey,/, "A hidratação deve carregar registros legados do escopo administrativo correto.");
 assert.match(persistence, /dbs_control_apply_work_order_delta/, "OS deve ser aplicada no RPC transacional com idempotência.");
 assert.match(persistence, /expected_version/, "O cliente precisa enviar a versão esperada para rejeitar concorrência silenciosa.");
 assert.match(persistence, /pendingChangesRef|buildDbsControlWorkOrderPatch/, "A camada de persistência deve operar em mudanças por registro.");

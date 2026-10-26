@@ -85,7 +85,6 @@ async function getCollaboratorEmployee(userId: string) {
     .from("rh_employees")
     .select("id, full_name, unit, is_active, registration_data, dbs_control_base_id, dbs_control_can_issue_work_orders")
     .eq("ponto_portal_user_id", userId)
-    .eq("ponto_access_enabled", true)
     .eq("dbs_control_access_enabled", true)
     .eq("is_active", true)
     .maybeSingle();
@@ -105,12 +104,12 @@ async function getCollaboratorEmployee(userId: string) {
     if (access.data?.employee_id) {
       const fallback = await supabaseAdmin
         .from("rh_employees")
-        .select("id, full_name, unit, is_active, registration_data, ponto_access_enabled, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders")
+        .select("id, full_name, unit, is_active, registration_data, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders")
         .eq("id", access.data.employee_id)
         .eq("is_active", true)
         .maybeSingle();
       if (fallback.error) throw new Error(fallback.error.message);
-      if (fallback.data?.ponto_access_enabled && fallback.data?.dbs_control_access_enabled) {
+      if (fallback.data?.dbs_control_access_enabled) {
         data = fallback.data;
       }
     }
@@ -262,15 +261,22 @@ function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<stri
   return merged;
 }
 
-async function fetchAllDbsControlWorkOrders() {
+type DbsControlHydrationScope = {
+  employeeId?: string;
+  clientIds?: string[];
+  canIssueWorkOrders?: boolean;
+};
+
+async function fetchAllDbsControlWorkOrders(scope: DbsControlHydrationScope = {}) {
   const rows: any[] = [];
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("dbs_control_work_orders")
       .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,assinatura_path,signature_path,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1);
+      .order("id", { ascending: true });
+    if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
 
     if (error) return { data: null, error };
     const page = data ?? [];
@@ -284,8 +290,31 @@ async function hydrateDbsControlStateFromCanonicalDb(
   state: Record<string, unknown>,
   companyId: string | null,
   scopeKey?: string,
+  collaboratorScope?: DbsControlHydrationScope,
 ) {
   if (!companyId && !scopeKey) return normalizeState(state);
+
+  // Em modo colaborador, primeiro buscamos somente as OS atribuídas. Os IDs
+  // dos clientes dessas OS são adicionados ao escopo da base antes das demais
+  // consultas, evitando transportar milhares de clientes/equipamentos do
+  // administrativo para um celular que precisa de dezenas.
+  const scopedEmployeeId = String(collaboratorScope?.employeeId ?? "").trim();
+  const isScopedCollaborator = Boolean(scopedEmployeeId);
+  const ordersResult = await fetchAllDbsControlWorkOrders(
+    isScopedCollaborator ? { employeeId: scopedEmployeeId } : {},
+  );
+  if (ordersResult.error) throw new Error(ordersResult.error.message);
+  const orderRows = ordersResult.data ?? [];
+  const scopedClientIds = isScopedCollaborator
+    ? [...new Set([
+        ...(collaboratorScope?.clientIds ?? []).map(String),
+        ...orderRows.map((row: any) => String(row?.client_id ?? "")).filter(Boolean),
+      ])]
+    : [];
+  const scopedOrderIds = isScopedCollaborator ? orderRows.map((row: any) => String(row.id)) : [];
+  const scopedServiceIds = isScopedCollaborator ? [...new Set(orderRows.map((row: any) => String(row?.service_id ?? "")).filter(Boolean))] : [];
+  const noRows = { data: [], error: null };
+  const inScope = (values: string[]) => values.length > 0;
 
   const [
     clientsResult,
@@ -294,29 +323,69 @@ async function hydrateDbsControlStateFromCanonicalDb(
     servicesResult,
     partsResult,
     employeesResult,
-    ordersResult,
     orderEquipmentResult,
     orderPartsResult,
     legacyRecordsResult,
     legacyMapResult,
   ] = await Promise.all([
-    supabaseAdmin.from("dbs_control_clients")
-      .select("id,legal_name,trade_name,cnpj,phone,email,notes,status,updated_at"),
-    supabaseAdmin.from("dbs_control_sites")
-      .select("id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at"),
-    supabaseAdmin.from("dbs_control_equipment")
-      .select("id,client_id,site_id,tag_code,equipment_type,brand,model,serial_number,capacity,environment,installation_date,status,technical_notes,updated_at"),
-    supabaseAdmin.from("dbs_control_service_catalog")
-      .select("id,name,description,estimated_hours,table_value_cents,status,updated_at"),
-    supabaseAdmin.from("dbs_control_parts")
-      .select("id,sku,name,description,stock_quantity,cost_cents,sale_cents,status,updated_at"),
-    supabaseAdmin.from("rh_employees")
-      .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at"),
-    fetchAllDbsControlWorkOrders(),
-    supabaseAdmin.from("dbs_control_work_order_equipment")
-      .select("work_order_id,equipment_id"),
-    supabaseAdmin.from("dbs_control_work_order_parts")
-      .select("work_order_id,part_id,quantity,unit_cents"),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_clients")
+        .select("id,legal_name,trade_name,cnpj,phone,email,notes,status,updated_at");
+      return isScopedCollaborator
+        ? (inScope(scopedClientIds) ? query.in("id", scopedClientIds) : noRows)
+        : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_sites")
+        .select("id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at");
+      return isScopedCollaborator
+        ? (inScope(scopedClientIds) ? query.in("client_id", scopedClientIds) : noRows)
+        : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_equipment")
+        .select("id,client_id,site_id,tag_code,equipment_type,brand,model,serial_number,capacity,environment,installation_date,status,technical_notes,updated_at");
+      return isScopedCollaborator
+        ? (inScope(scopedClientIds) ? query.in("client_id", scopedClientIds) : noRows)
+        : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_service_catalog")
+        .select("id,name,description,estimated_hours,table_value_cents,status,updated_at");
+      if (!isScopedCollaborator) return query;
+      // Emissão precisa do catálogo ativo; execução sem emissão só precisa dos
+      // serviços já vinculados às OS atribuídas.
+      const ids = scopedServiceIds;
+      if (!collaboratorScope?.canIssueWorkOrders && !inScope(ids)) return noRows;
+      if (collaboratorScope?.canIssueWorkOrders && !inScope(ids)) return query.eq("status", "ativo");
+      return collaboratorScope?.canIssueWorkOrders
+        ? query.or(`status.eq.ativo,id.in.(${ids.join(",")})`)
+        : query.in("id", ids);
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_parts")
+        .select("id,sku,name,description,stock_quantity,cost_cents,sale_cents,status,updated_at");
+      return isScopedCollaborator ? noRows : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("rh_employees")
+        .select("id,full_name,is_active,source_system,source_key,registration_data,updated_at");
+      return isScopedCollaborator ? query.eq("id", scopedEmployeeId) : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_work_order_equipment")
+        .select("work_order_id,equipment_id");
+      return isScopedCollaborator
+        ? (inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows)
+        : query;
+    })(),
+    (() => {
+      const query = supabaseAdmin.from("dbs_control_work_order_parts")
+        .select("work_order_id,part_id,quantity,unit_cents");
+      return isScopedCollaborator
+        ? (inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows)
+        : query;
+    })(),
     scopeKey
       ? supabaseAdmin.from("dbs_control_entity_records")
         .select("entity_type,record_key,payload,version,updated_at")
@@ -817,6 +886,11 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const user = await requireDbsControlUser(context);
     const scope = await resolveDbsControlScope(user);
+    const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    if (user.role_key === "COLABORADOR" && !collaboratorEmployee) {
+      throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+    }
+    const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
 
     const { data, error } = await supabaseAdmin
       .from("dbs_control_snapshots")
@@ -837,6 +911,13 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       snapshotState,
       scope.companyId,
       scope.scopeKey,
+      collaboratorEmployee
+        ? {
+            employeeId: String(collaboratorEmployee.id),
+            clientIds: collaboratorScope?.clientIds ?? [],
+            canIssueWorkOrders: collaboratorScope?.canIssueWorkOrders ?? false,
+          }
+        : undefined,
     );
     const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
     const hasCanonicalRecords = [
@@ -862,18 +943,14 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
 
     if (user.role_key !== "COLABORADOR") return hydrated;
 
-    const employee = await getCollaboratorEmployee(user.id);
-    if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
-    const collaboratorScope = await getCollaboratorBaseScope(employee);
-
     return {
       ...hydrated,
-      state: filterCollaboratorState(hydratedState, employee.id, employee.login_email, collaboratorScope),
+      state: filterCollaboratorState(hydratedState, collaboratorEmployee!.id, collaboratorEmployee!.login_email, collaboratorScope!),
       collaboratorScope: {
-        baseId: collaboratorScope.baseId,
-        baseName: collaboratorScope.baseName,
-        canIssueWorkOrders: collaboratorScope.canIssueWorkOrders,
-        clientCount: collaboratorScope.clientIds.length,
+        baseId: collaboratorScope!.baseId,
+        baseName: collaboratorScope!.baseName,
+        canIssueWorkOrders: collaboratorScope!.canIssueWorkOrders,
+        clientCount: collaboratorScope!.clientIds.length,
       },
     };
   });
@@ -1406,7 +1483,6 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
       supabaseAdmin.from("dbs_control_equipment").select("id,client_id,site_id,tag_code,serial_number,status"),
       supabaseAdmin.from("dbs_control_service_catalog").select("id,name,status"),
       supabaseAdmin.from("rh_employees").select("id,full_name,is_active,source_system,source_key,registration_data"),
-      fetchAllDbsControlWorkOrders(),
       supabaseAdmin.from("dbs_control_work_order_equipment").select("work_order_id,equipment_id"),
       supabaseAdmin.from("dbs_control_external_refs").select("id,provider,entity_type,external_id,local_id"),
       supabaseAdmin.from("dbs_control_sync_runs").select("id,mode,status,started_at,finished_at,summary,errors").order("started_at",{ascending:false}).limit(10),
