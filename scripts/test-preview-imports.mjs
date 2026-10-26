@@ -8,7 +8,9 @@ try {
     const timer = setTimeout(() => reject(Error('Vite startup timeout: ' + log.slice(-1600))), 30000);
     child.stdout.on('data', chunk => {
       log += chunk;
-      if (log.includes('http://127.0.0.1:8091')) { clearTimeout(timer); resolve(); }
+      // GitHub forces colored output, including escape sequences inside the URL.
+      const plainLog = log.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+      if (plainLog.includes('http://127.0.0.1:8091')) { clearTimeout(timer); resolve(); }
     });
     child.stderr.on('data', chunk => { log += chunk; });
     child.on('exit', code => { clearTimeout(timer); reject(Error('Vite exited: ' + code + '\n' + log.slice(-1600))); });
