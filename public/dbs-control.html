@@ -2742,7 +2742,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             text-transform:uppercase;
         }
         body.dbs-control-employee-mode #dbs-employee-context-nav,
-        body.dbs-control-employee-mode #dbs-employee-issue-cta {
+        body.dbs-control-employee-mode #dbs-employee-issue-cta,
+        body.dbs-control-employee-mode.dbs-control-can-issue-os #dbs-employee-issue-cta {
             display:none !important;
         }
         body.dbs-control-employee-mode main { margin-left:0 !important; width:auto !important; }
@@ -2785,10 +2786,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         <ul class="nav-menu">
             <div class="nav-section">Painel Geral</div>
             <li class="nav-item active" data-employee-visible="true" data-employee-dashboard-visible="true" onclick="switchTab('tab-dashboard', this)"><span>Dashboard Principal</span></li>
+            <li class="nav-item" data-employee-visible="true" title="Veja e execute somente as suas OS" onclick="switchTab('tab-pwa', this)"><span>Minhas OS</span></li>
+            <li class="nav-item" data-employee-issue-visible="true" title="Crie uma nova ordem de serviço dentro da sua base" onclick="switchTab('tab-nova-os', this)"><span>Emitir OS</span></li>
             <li class="nav-item" onclick="switchTab('tab-atividades', this)"><span>Atividades do Dia</span></li>
             <li class="nav-item" onclick="switchTab('tab-despacho', this)"><span>Quadros de Despacho</span></li>
             <li class="nav-item" title="Consulte, filtre, conclua e exporte suas ordens de serviço" onclick="switchTab('tab-ordens', this)"><span>Ordens de Serviço</span></li>
-            <li class="nav-item" data-employee-issue-visible="true" title="Crie uma nova ordem de serviço dentro da sua base" onclick="switchTab('tab-nova-os', this)"><span>Emitir OS</span></li>
 
             <div class="nav-section">Base de Informação</div>
             <li class="nav-item active-data-center" title="Visão central dos cadastros e integridade da base" onclick="switchTab('tab-cadastros', this)"><span>Central de Cadastros</span></li>
@@ -2806,7 +2808,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             <li class="nav-item" title="Acompanhe solicitações e pedidos de compra" onclick="switchTab('tab-compras', this)"><span>Compras</span></li>
 
             <div class="nav-section">Mobile Field Service</div>
-            <li class="nav-item" data-employee-visible="true" title="Veja e execute somente as suas OS" onclick="switchTab('tab-pwa', this)"><span>Minhas OS</span></li>
         </ul>
     </aside>
 
