@@ -228,6 +228,36 @@ img, video, canvas, svg {
   }
 }
 
+/* Collaborator mobile shell: one compact control surface, not a desktop
+   dashboard squeezed into a phone. All actions remain available and keep a
+   touch target of at least 44px. */
+@media (max-width: 640px) {
+  .collaborator-shell {
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    padding-right: max(10px, env(safe-area-inset-right)) !important;
+    padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(10px, env(safe-area-inset-left)) !important;
+  }
+  .collaborator-topbar { border-radius: 16px !important; }
+  .collaborator-topbar > div:first-child { padding-top: 10px !important; padding-bottom: 10px !important; }
+  .collaborator-session-note { display: none !important; }
+  .collaborator-ponto { gap: 14px !important; }
+  .collaborator-ponto-card { border-radius: 20px !important; }
+  .collaborator-ponto-hero { padding: 18px 16px !important; }
+  .collaborator-ponto-hero h1 { font-size: 1.45rem !important; line-height: 1.2 !important; }
+  .collaborator-ponto-hero > div { gap: 14px !important; }
+  .collaborator-ponto-card > div:nth-child(2) { padding: 14px !important; }
+  .collaborator-ponto-card .grid { gap: 8px !important; }
+  .collaborator-ponto-card .grid > div { padding: 11px !important; border-radius: 14px !important; }
+  .collaborator-ponto-card .grid > div p.text-2xl { font-size: 1.35rem !important; }
+  .collaborator-ponto-card button { min-height: 46px; }
+  .collaborator-rh-panel { margin-top: 14px !important; border-radius: 18px !important; }
+  .collaborator-rh-panel > header { padding: 14px !important; }
+  .collaborator-rh-panel > header > div:last-child { width: 100%; }
+  .collaborator-rh-panel > header button { flex: 1 1 0; min-height: 44px; }
+  .collaborator-rh-panel > div { padding: 14px !important; }
+}
+
 
 
 /* Login nativo DBS AIR — refinamento premium e responsivo, sem alterar autenticação. */

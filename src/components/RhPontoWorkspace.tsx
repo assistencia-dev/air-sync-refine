@@ -328,9 +328,9 @@ function PontoColaborador() {
     return { type:t, record:r };
   });
 
-  return <div className="mx-auto max-w-4xl space-y-5">
-    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="bg-slate-950 px-6 py-7 text-white sm:px-8">
+  return <div className="collaborator-ponto mx-auto max-w-4xl space-y-5">
+    <section className="collaborator-ponto-card overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="collaborator-ponto-hero bg-slate-950 px-6 py-7 text-white sm:px-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[.22em] text-sky-300">DBS AIR · jornada individual</p>

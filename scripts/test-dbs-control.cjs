@@ -5,6 +5,9 @@ const assert = require("node:assert/strict");
 const indexRoute = fs.readFileSync("src/routes/index.tsx", "utf8");
 const siteRoute = fs.readFileSync("src/routes/site.tsx", "utf8");
 const loginRoute = fs.readFileSync("src/routes/login.tsx", "utf8");
+const collaboratorNavigation = fs.readFileSync("src/lib/collaborator-navigation.ts", "utf8");
+const authenticatedRoute = fs.readFileSync("src/routes/_authenticated/route.tsx", "utf8");
+const folhaPontoRoute = fs.readFileSync("src/routes/_authenticated/folha-ponto.tsx", "utf8");
 const html = fs.readFileSync("public/dbs-control.html", "utf8");
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
 const ux = fs.readFileSync("public/dbs-control-ux.js", "utf8");
@@ -21,6 +24,13 @@ assert.match(loginRoute, /if \(!profile\?\.role_key\) \{\s*setError\(profileAcce
 assert.match(loginRoute, /if \(!profile\?\.role_key\) throw new Error\(profileAccessError\)/, "Após autenticar, o sistema deve explicar quando não conseguiu determinar as permissões.");
 assert.match(loginRoute, /href=["']\/site["']/, "O retorno do login deve abrir a landing page preservada em /site, e não voltar para a raiz que redireciona ao login.");
 assert.doesNotMatch(loginRoute, /<Link to=["']\/["']/, "O link de retorno do login não pode apontar para a raiz que agora redireciona para /login.");
+assert.match(collaboratorNavigation, /Promise\.allSettled/, "O login do colaborador deve consultar Ponto e DBS CONTROL sem uma falha opcional derrubar a outra.");
+assert.match(collaboratorNavigation, /if \(pontoEnabled\) return "\/folha-ponto"/, "Colaborador com Ponto deve entrar no shell compartilhado de jornada.");
+assert.match(collaboratorNavigation, /if \(controlEnabled\) return "\/dbs-control"/, "Colaborador com somente DBS CONTROL deve entrar direto nas OS.");
+assert.match(loginRoute, /resolveCollaboratorLanding/, "O login precisa respeitar o destino por permissão, sem cair no portal do cliente.");
+assert.match(authenticatedRoute, /resolveCollaboratorLanding/, "O guard autenticado deve impedir o ciclo mobile portal/folha de ponto.");
+assert.match(folhaPontoRoute, /collaborator-topbar/, "O portal do colaborador precisa de shell compacto próprio para mobile.");
+assert.match(folhaPontoRoute, /aria-current="page"/, "A navegação mobile deve indicar a área ativa.");
 
 
 let parsedInlineScripts = 0;

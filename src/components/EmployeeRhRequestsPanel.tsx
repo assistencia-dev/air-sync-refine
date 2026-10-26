@@ -70,7 +70,7 @@ export function EmployeeRhRequestsPanel() {
 
   const formatDate = (v: string) => new Date(v).toLocaleDateString("pt-BR");
   return (
-    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="collaborator-rh-panel mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-sky-100 text-sky-700"><BellRing className="h-5 w-5" /></div><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Atendimento interno</p><h2 className="text-lg font-black text-slate-900">Solicitações ao RH</h2><p className="text-xs text-slate-500">Acompanhe ponto, documentos, benefícios e valores solicitados.</p></div></div>
         <div className="flex flex-wrap gap-2"><button onClick={()=>setValeOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-emerald-700"><WalletCards className="h-4 w-4"/> Solicitar vale</button><button onClick={()=>setOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-sky-700"><Plus className="h-4 w-4"/> Nova solicitação</button></div>
