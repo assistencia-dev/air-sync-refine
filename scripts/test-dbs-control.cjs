@@ -150,7 +150,11 @@ assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
 assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
 assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
-assert.match(html, /employee-issue-inline/, "A área móvel do colaborador precisa oferecer emissão de OS no próprio portal de campo.");
+assert.match(html, /dbs-employee-context-nav/, "O colaborador precisa de um menu contextual único para voltar ao dashboard sem atualizar a página.");
+assert.match(html, /function atualizarNavegacaoColaborador\\(tabId\\)/, "A navegação do colaborador deve trocar de tela internamente.");
+assert.doesNotMatch(html, /employee-issue-inline/, "A emissão de OS não deve ser duplicada dentro da tela Minhas OS.");
+const employeeDashboardSource = html.slice(html.indexOf("function renderizarEmployeeDashboard"), html.indexOf("function renderizarAbaAtiva"));
+assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não deve duplicar a ação Emitir OS do cabeçalho.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
 assert.match(html, /function renderizarEmployeeDashboard\(\)/, "O colaborador precisa de um dashboard próprio de progresso.");
 assert.match(html, /await saveStateAndConfirmCloud\(\)/, "A criação da OS do colaborador deve aguardar ACK relacional antes de sair do formulário.");
