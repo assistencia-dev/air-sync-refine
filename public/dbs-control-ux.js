@@ -29,6 +29,35 @@
   function addPartButtonToMobile(){document.querySelectorAll(".pwa-box").forEach(box=>{if(box.querySelector(".dbs-quick-part-btn"))return;const b=document.createElement("button");b.type="button";b.className="btn btn-secondary btn-sm dbs-quick-part-btn";b.style.cssText="margin-top:5px;width:100%;justify-content:center";b.textContent="+ Cadastrar peça agora";b.onclick=quickPart;const select=box.querySelector("select[id^='pwa-peca-select-']");if(select)select.parentElement.parentElement.appendChild(b);});}
   function wrapOsSave(){if(typeof window.salvarNovaOS!=="function"||window.__dbsOsSaveWrapped)return;const original=window.salvarNovaOS;window.salvarNovaOS=function(ev){const st=state(),before=st.ordens.map(o=>o.id),meta={prioridade:(document.getElementById("os-prioridade")||{}).value||"Normal",sla:(document.getElementById("os-sla")||{}).value||"",contatoLocal:(document.getElementById("os-contato-local")||{}).value||"",localAtendimento:(document.getElementById("os-local-atendimento")||{}).value||"",sintoma:(document.getElementById("os-sintoma")||{}).value||"",orientacoes:(document.getElementById("os-orientacoes")||{}).value||""};original(ev);const created=st.ordens.find(o=>before.indexOf(o.id)===-1);if(created){Object.assign(created,meta,{criadoEm:new Date().toISOString(),timeline:[{status:created.status||"Em Atendimento",at:new Date().toISOString(),by:"Sistema"}]});persist();refresh();}};window.__dbsOsSaveWrapped=true;}
   function addOsFields(){const form=document.getElementById("form-nova-os");if(!form||document.getElementById("dbs-os-extra-fields"))return;const block=document.createElement("div");block.id="dbs-os-extra-fields";block.style.cssText="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-color)";block.innerHTML='<div style="font-size:12px;font-weight:800;color:var(--color-primary);margin-bottom:10px">Detalhes do atendimento</div><div class="form-grid"><div class="form-group"><label>Prioridade</label><select id="os-prioridade"><option>Normal</option><option>Alta</option><option>Urgente</option><option>Programada</option></select></div><div class="form-group"><label>SLA / Prazo</label><input id="os-sla" placeholder="Ex.: 24 horas"></div><div class="form-group"><label>Contato no local</label><input id="os-contato-local" placeholder="Nome e telefone"></div><div class="form-group"><label>Local / Setor</label><input id="os-local-atendimento" placeholder="Ex.: loja, CPD, sala técnica"></div></div><div class="form-group" style="margin-top:10px"><label>Sintoma relatado / Solicitação do cliente</label><textarea id="os-sintoma" rows="2" placeholder="O que o cliente informou?"></textarea></div><div class="form-group" style="margin-top:10px"><label>Orientações especiais ao técnico</label><textarea id="os-orientacoes" rows="2" placeholder="Acesso, horário, EPI, contato ou restrições"></textarea></div>';const submit=form.querySelector("button[type=submit]");form.insertBefore(block,submit?submit.parentElement:null);addInlineButtons();}
+  function removeRedundantOsFields(){
+    // Cliente + equipamento são a única definição de local da OS. Mantemos os
+    // campos legados no objeto para leitura histórica, mas não os exibimos nem
+    // criamos novos valores duplicados no formulário.
+    ["os-local-atendimento","os-sintoma","os-orientacoes"].forEach(id=>{
+      const input=document.getElementById(id);
+      const group=input&&input.closest ? input.closest(".form-group") : null;
+      if(group) group.remove();
+    });
+    const block=document.getElementById("dbs-os-extra-fields");
+    const title=block&&block.querySelector ? block.querySelector("div:first-child") : null;
+    if(title) title.textContent="Operação e prazo";
+  }
+  function wrapOsDetailWithoutDuplicateLocation(){
+    if(typeof window.openOsDetail!=="function"||window.__dbsOsDetailCleanWrapped)return;
+    const original=window.openOsDetail;
+    const clean=()=>{
+      const input=document.getElementById("dbs-edit-localAtendimento");
+      const group=input&&input.closest ? input.closest(".form-group") : null;
+      if(group) group.remove();
+    };
+    window.openOsDetail=function(){
+      const result=original.apply(this,arguments);
+      clean();
+      setTimeout(clean,0);
+      return result;
+    };
+    window.__dbsOsDetailCleanWrapped=true;
+  }
   function installFieldControlOrderDetailsBridge(){
     if(window.__dbsFieldOrderDetailsBridge)return;
     window.__dbsFieldOrderDetailsBridge=true;
@@ -127,6 +156,8 @@
       enhanceRichClientForm();
       enhanceRichEquipmentForm();
       addOsFields();
+      removeRedundantOsFields();
+      wrapOsDetailWithoutDuplicateLocation();
       installMultiEquipmentSelector();
       installReliableOsComboStyles();
       installReliableOsComboboxes();
