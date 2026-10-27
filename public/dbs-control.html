@@ -4348,6 +4348,23 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
 
+            // Realtime pode reenviar o mesmo snapshot várias vezes. Re-renderizar o
+            // iframe inteiro em cada evento causa tremor e interrompe a assinatura.
+            // A assinatura abaixo considera somente campos que mudam a operação.
+            const renderSignature = ['ordens', 'clientes', 'equipamentos', 'tecnicos'].map(key => {
+                const rows = Array.isArray(msg.state[key]) ? msg.state[key] : [];
+                return [key, rows.map(row => [
+                    row?.id, row?.protocolo, row?.version, row?.updated_at, row?.status,
+                    row?.deleted_at, row?.deletedAt, row?.concluidoEm, row?.assinaturaEm,
+                ]).sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')) )];
+            });
+            const nextRenderSignature = JSON.stringify(renderSignature);
+            if (window.__DBS_LAST_CLOUD_RENDER_SIGNATURE === nextRenderSignature) {
+                DBS_CONTROL_CLOUD_READY = true;
+                return;
+            }
+            window.__DBS_LAST_CLOUD_RENDER_SIGNATURE = nextRenderSignature;
+
             DBS_CONTROL_CLOUD_HYDRATING = true;
             try {
                 const currentSession = ERP_STATE.sessionTecnicoLogado || null;
