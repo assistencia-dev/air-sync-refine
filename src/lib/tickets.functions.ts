@@ -48,7 +48,7 @@ async function requireStaff(context: { userId: string }) {
 /** Admin assume o chamado (somente se ainda estiver aberto). */
 export const assumeTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => {
+  .validator((input: { id: string }) => {
     if (!input?.id) throw new Error("Chamado inválido.");
     return input;
   })
@@ -77,7 +77,7 @@ export const assumeTicket = createServerFn({ method: "POST" })
 /** Admin conclui o chamado e atualiza a última manutenção do ativo. */
 export const completeTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; asset_id?: string | null }) => {
+  .validator((input: { id: string; asset_id?: string | null }) => {
     if (!input?.id) throw new Error("Chamado inválido.");
     return { id: input.id, asset_id: input.asset_id || null };
   })
@@ -116,7 +116,7 @@ export const completeTicket = createServerFn({ method: "POST" })
 /** Admin cancela o chamado com justificativa obrigatória. */
 export const cancelTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; reason: string }) => {
+  .validator((input: { id: string; reason: string }) => {
     if (!input?.id) throw new Error("Chamado inválido.");
     if (!input?.reason || input.reason.trim().length < 10) {
       throw new Error("Informe uma justificativa de cancelamento com pelo menos 10 caracteres.");
@@ -152,7 +152,7 @@ export const cancelTicket = createServerFn({ method: "POST" })
 
 export const createTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: { occurrence_type: string; description: string; asset_id?: string | null }) => {
       if (!input?.occurrence_type) throw new Error("Tipo de ocorrência obrigatório.");
       if (!input?.description || input.description.trim().length < 20)
@@ -190,7 +190,7 @@ export const createTicket = createServerFn({ method: "POST" })
 
 export const updateTicketStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; status: string }) => {
+  .validator((input: { id: string; status: string }) => {
     const allowed = ["aberto", "atribuido", "em_rota", "em_atendimento", "aguardando_peca", "concluido", "cancelado"];
     if (!input?.id || !allowed.includes(input.status)) throw new Error("Dados ou status do chamado inválidos.");
     return { id: input.id, status: input.status };
@@ -219,7 +219,7 @@ export const updateTicketStatus = createServerFn({ method: "POST" })
 /** Cliente reabre um chamado encerrado, mantendo o mesmo protocolo e o histórico. */
 export const reopenTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => {
+  .validator((input: { id: string }) => {
     if (!input?.id) throw new Error("Chamado inválido.");
     return input;
   })
