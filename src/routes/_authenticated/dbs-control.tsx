@@ -874,8 +874,23 @@ function DbsControlPage() {
   const employeeMode = !access.data.administrative;
   employeeModeRef.current = employeeMode;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261027-collaborator-ui-1`
-    : "/dbs-control.html?v=20261027-collaborator-ui-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261027-collaborator-ui-2`
+    : "/dbs-control.html?v=20261027-collaborator-ui-2"
+
+  if (employeeMode) {
+    return (
+      <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#f4f8fc]">
+        {cloudError && (
+          <section role="alert" aria-live="polite" className="pointer-events-none absolute inset-x-3 top-3 z-20 rounded-xl border border-rose-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+            <p className="text-sm font-bold text-rose-700">A sincronização automática do DBS CONTROL encontrou uma falha</p>
+            <p className="mt-1 break-words text-xs leading-5 text-slate-700">{cloudError}</p>
+            <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
+          </section>
+        )}
+        <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-[100dvh] flex-col overflow-hidden bg-[#f4f8fc]">
