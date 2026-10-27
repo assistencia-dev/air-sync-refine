@@ -359,8 +359,15 @@ assert.match(collaboratorPrivateScopeMigration, /revoke all on function public\.
 
 const osPdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
 const osTheme = fs.readFileSync("public/dbs-control-theme.css", "utf8");
+const osUx = fs.readFileSync("public/dbs-control-ux.js", "utf8");
 assert.match(osPdf, /statusFill[\s\S]*?statusInk/, "O PDF da OS deve padronizar o status com destaque visual sem alterar o status gravado.");
 assert.match(osPdf, /badgeWidth[\s\S]*?roundedRect/, "O cabeçalho do PDF deve apresentar status em selo visual consistente.");
+assert.doesNotMatch(osPdf, /const place = first\(order\.localAtendimento/, "O PDF não deve duplicar o local de atendimento quando o equipamento já identifica o ativo.");
+assert.strictEqual((osPdf.match(/'Tipo de atendimento'/g) || []).length, 1, "O PDF deve exibir o tipo de atendimento uma única vez.");
+assert.match(osUx, /removeRedundantOsFields/, "A emissão deve remover os campos duplicados de local, sintoma e orientação.");
+assert.match(osUx, /wrapOsDetailWithoutDuplicateLocation/, "A visão administrativa da OS não deve repetir o local físico do equipamento.");
+assert.match(html, /dbs-os-clean-layout-20261027/, "A emissão deve usar o layout limpo e responsivo da OS.");
+assert.strictEqual((html.match(/<style\b/g) || []).length, (html.match(/<\/style>/g) || []).length, "O HTML do DBS Control deve manter todos os blocos de estilo fechados.");
 assert.match(osTheme, /#tab-ordens #os-table thead th/, "A lista de OS deve ter cabeçalho padronizado e legível.");
 assert.match(osTheme, /@media \(max-width: 760px\)/, "A tela de OS deve se adaptar a telas menores.");
 assert.match(html, /id="os-table-body"/, "A padronização deve manter o mesmo corpo de tabela ligado aos dados existentes.");
