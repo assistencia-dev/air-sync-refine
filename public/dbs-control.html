@@ -2809,6 +2809,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
           body.dbs-control-employee-mode aside .nav-item { min-height:48px; }
           body.dbs-control-employee-mode aside .nav-menu { padding:18px 12px 24px; }
         }
+        body.dbs-control-employee-mode main > header .dbs-secondary-menu,
+        body.dbs-control-employee-mode main > header .btn.btn-primary,
+        body.dbs-control-employee-mode main > header button { display:none !important; }
+        body.dbs-control-employee-mode .tab-view:not(.active) { visibility:hidden !important; pointer-events:none !important; }
+        body.dbs-control-employee-mode #tab-dashboard > *:not(#employee-dashboard-root) { display:none !important; }
+        body.dbs-control-employee-mode .employee-dashboard-root,
+        body.dbs-control-employee-mode .employee-orders,
+        body.dbs-control-employee-mode .employee-execution { animation:none !important; }
+        body.dbs-control-employee-mode *, body.dbs-control-employee-mode *::before, body.dbs-control-employee-mode *::after { animation-duration:0.001ms !important; animation-iteration-count:1 !important; }
     </style>
 </head>
 <body>
@@ -6433,6 +6442,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // SIMULADOR APP MOBILE E CANVAS DE ASSINATURA
         let activeCanvas = null;
         let isDrawing = false;
+        // Mantém o traço local quando a lista de OS é re-renderizada por realtime,
+        // troca de aba ou retorno do celular. O rascunho só é descartado após ACK.
+        const DBS_SIGNATURE_DRAFTS = window.__DBS_SIGNATURE_DRAFTS || (window.__DBS_SIGNATURE_DRAFTS = new Map());
 
         function renderizarPWAScreen() {
             const area = document.getElementById('pwa-content-area');
@@ -6710,28 +6722,46 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const canvas = document.getElementById(id);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            const osId = String(id).replace(/^sig-canvas-/, '');
             const rect = canvas.getBoundingClientRect();
             const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-            const width = Math.max(320, Math.round(rect.width));
-            const height = Math.max(100, Math.round(rect.height));
-            canvas.width = Math.round(width * ratio);
-            canvas.height = Math.round(height * ratio);
+            const width = Math.max(320, Math.round(rect.width || 320));
+            const height = Math.max(100, Math.round(rect.height || 100));
+            const pixelWidth = Math.round(width * ratio);
+            const pixelHeight = Math.round(height * ratio);
+            if (canvas.dataset.dbsSignatureReady === 'true' && canvas.width === pixelWidth && canvas.height === pixelHeight) return;
+            const draft = DBS_SIGNATURE_DRAFTS.get(osId) || null;
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
             ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-            
             ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             ctx.strokeStyle = '#0f172a';
-
-            function getPos(e) {
-                const rect = canvas.getBoundingClientRect();
-                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            }
-            // Pointer Events keep the stroke directly under the finger/stylus on mobile,
-            // including when the browser uses a high-DPI canvas backing store.
             canvas.style.touchAction = 'none';
             canvas.style.cursor = 'crosshair';
+            canvas.dataset.dbsSignatureReady = 'true';
+            if (draft) {
+                const img = new Image();
+                img.onload = () => {
+                    try { ctx.drawImage(img, 0, 0, width, height); canvas.dataset.dbsDirty = 'true'; } catch (_) {}
+                };
+                img.src = draft;
+            }
+            function getPos(e) {
+                const bounds = canvas.getBoundingClientRect();
+                return { x: e.clientX - bounds.left, y: e.clientY - bounds.top };
+            }
+            function captureDraft() {
+                try {
+                    if (canvas.dataset.dbsDirty === 'true') DBS_SIGNATURE_DRAFTS.set(osId, canvas.toDataURL('image/png'));
+                } catch (_) {}
+            }
             canvas.onpointerdown = function(e) {
                 e.preventDefault();
                 isDrawing = true;
+                canvas.dataset.dbsDirty = 'true';
                 try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 const p = getPos(e);
                 ctx.beginPath();
@@ -6744,7 +6774,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ctx.lineTo(p.x, p.y);
                 ctx.stroke();
             };
-            const stopDrawing = () => { isDrawing = false; };
+            const stopDrawing = () => { isDrawing = false; captureDraft(); };
             canvas.onpointerup = stopDrawing;
             canvas.onpointercancel = stopDrawing;
             canvas.onlostpointercapture = stopDrawing;
@@ -6754,8 +6784,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const canvas = document.getElementById(`sig-canvas-${osId}`);
             if (canvas) {
                 const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (ctx) {
+                    const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                    ctx.save();
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                }
+                canvas.dataset.dbsDirty = 'false';
             }
+            DBS_SIGNATURE_DRAFTS.delete(String(osId));
         }
 
         function adicionarPecaMobile(osId) {
@@ -7017,6 +7055,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
                 setProgress(atendimentoStatus === 'concluida' ? 'Confirmando OS na nuvem...' : 'Registrando resultado na nuvem...');
                 await saveStateAndConfirmCloud();
+                DBS_SIGNATURE_DRAFTS.delete(String(osId));
                 renderizarTudo();
                 alert(atendimentoStatus === 'concluida'
                     ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`
@@ -7290,7 +7329,51 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     <script src="/dbs-control-orcamentos-pdf.js?v=20261014-pdf-standard-1"></script>
     <script src="/dbs-control-orcamentos-flex.js?v=20261026-quote-ack-1"></script>
     <script src="/dbs-control-employee-nav.js?v=20261027-collaborator-ui-3"></script>
-    <script src="/dbs-control-ux.js?v=20261027-collaborator-ui-3"></script>
+    <script src="/dbs-control-ux.js?v=20261027-collaborator-ui-4"></script>
+    <script id="dbs-employee-stability-20261027">
+    (function enforceDbsEmployeeStableShell(){
+        'use strict';
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') !== 'employee') return;
+        const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
+        const targetId = item => {
+            const explicit = item.getAttribute('data-dbs-target') || item.getAttribute('data-tab');
+            if (explicit) return explicit;
+            const match = String(item.getAttribute('onclick') || '').match(/switchTab\\(\\s*['"]([^'"]+)['"]/);
+            return match ? match[1] : '';
+        };
+        const apply = () => {
+            const body = document.body;
+            if (!body) return;
+            body.classList.add('dbs-control-employee-mode');
+            body.classList.toggle('dbs-control-can-issue-os', canIssue);
+            const allowed = new Set(['tab-dashboard', 'tab-pwa']);
+            if (canIssue) allowed.add('tab-nova-os');
+            document.querySelectorAll('aside .nav-section').forEach(section => section.style.setProperty('display', 'none', 'important'));
+            document.querySelectorAll('aside .nav-item').forEach(item => {
+                const id = targetId(item);
+                const visible = allowed.has(id) || (id === 'tab-dashboard' && item.matches('[data-employee-dashboard-visible]'));
+                item.style.setProperty('display', visible ? 'flex' : 'none', 'important');
+                item.setAttribute('aria-hidden', visible ? 'false' : 'true');
+                if (!visible) item.classList.remove('active');
+            });
+            document.querySelectorAll('main > header .dbs-secondary-menu, main > header .btn-primary, main > header button').forEach(el => el.style.setProperty('display', 'none', 'important'));
+            document.querySelectorAll('#tab-dashboard > *:not(#employee-dashboard-root)').forEach(el => el.style.setProperty('display', 'none', 'important'));
+            const active = document.querySelector('.tab-view.active')?.id || '';
+            if (!allowed.has(active)) {
+                const dashboard = document.querySelector('aside .nav-item[data-employee-dashboard-visible="true"]');
+                if (dashboard && typeof window.switchTab === 'function' && !window.__dbsEmployeeStableSwitching) {
+                    window.__dbsEmployeeStableSwitching = true;
+                    try { window.switchTab('tab-dashboard', dashboard); } finally { window.__dbsEmployeeStableSwitching = false; }
+                }
+            }
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply, { once: true });
+        else apply();
+        window.addEventListener('load', apply, { once: true });
+        [80, 280].forEach(delay => window.setTimeout(apply, delay));
+    })();
+    </script>
     <script src="/dbs-control-observations.js?v=20261011-main-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){
