@@ -42,7 +42,7 @@ export const listRhEmployeeAdvances = createServerFn({ method: "GET" })
 
 export const createRhEmployeeAdvance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
+  .validator((input: {
     employee_id: string; advance_type: "VALE" | "ADIANTAMENTO" | "OUTRO";
     description: string; amount_cents: number; competence: string;
     authorized: boolean; notes?: string;
@@ -89,7 +89,7 @@ export const createRhEmployeeAdvance = createServerFn({ method: "POST" })
 
 export const approveRhEmployeeValeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { request_id: string; authorized: boolean; note?: string }) => {
+  .validator((input: { request_id: string; authorized: boolean; note?: string }) => {
     if (!input?.request_id) throw new Error("Solicitação inválida.");
     return { ...input, note: input.note?.trim() || null };
   })
@@ -144,7 +144,7 @@ export const approveRhEmployeeValeRequest = createServerFn({ method: "POST" })
 
 export const cancelRhEmployeeAdvance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => {
+  .validator((input: { id: string }) => {
     if (!input?.id) throw new Error("Vale inválido.");
     return input;
   })
