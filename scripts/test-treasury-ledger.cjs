@@ -9,6 +9,8 @@ const fieldControl = fs.readFileSync('src/lib/fieldcontrol.functions.ts', 'utf8'
 const html = fs.readFileSync('public/treasury.html', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const healthMigration = fs.readFileSync('supabase/migrations/20261027162135_treasury_ledger_health_rpc.sql', 'utf8');
+const securityMigration = fs.readFileSync('supabase/migrations/20261027162711_treasury_ledger_security_grants.sql', 'utf8');
+const fkMigration = fs.readFileSync('supabase/migrations/20261027162717_treasury_ledger_fk_indexes.sql', 'utf8');
 const healthScript = fs.readFileSync('scripts/check-treasury-ledger-health.mjs', 'utf8');
 const healthWorkflow = fs.readFileSync('.github/workflows/treasury-ledger-health.yml', 'utf8');
 
@@ -34,6 +36,9 @@ assert.match(healthMigration, /revoke all on function public\.treasury_ledger_he
 assert.match(healthScript, /dead_letter/);
 assert.match(healthScript, /pending_critical/);
 assert.match(healthWorkflow, /cron: "\*\/5 \* \* \* \*"/);
+assert.match(securityMigration, /from public, anon, authenticated/);
+assert.match(securityMigration, /to service_role/);
+assert.match(fkMigration, /treasury_outbox_entry_fk_idx/);
 
 // Catch syntax regressions in the inline HTML script without executing browser APIs.
 const inlineScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((match) => match[1]);
