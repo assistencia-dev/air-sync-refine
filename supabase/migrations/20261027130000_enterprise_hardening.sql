@@ -422,9 +422,24 @@ AS $function$
     'processing', count(*) FILTER (WHERE status = 'processing'),
     'published', count(*) FILTER (WHERE status = 'published'),
     'failed', count(*) FILTER (WHERE status = 'failed'),
-    'oldest_pending_at', min(created_at) FILTER (WHERE status = 'pending'),
+    'oldest_pending_at', min(created_at) FILTER (WHERE status IN ('pending', 'processing')),
     'oldest_pending_age_seconds',
-      coalesce(extract(epoch FROM now() - min(created_at) FILTER (WHERE status = 'pending')), 0),
+      coalesce(extract(epoch FROM now() - min(created_at) FILTER (WHERE status IN ('pending', 'processing'))), 0),
+    'pending_over_sla',
+      count(*) FILTER (
+        WHERE status IN ('pending', 'processing')
+          AND created_at < now() - interval '10 minutes'
+      ),
+    'pending_critical',
+      count(*) FILTER (
+        WHERE status IN ('pending', 'processing')
+          AND created_at < now() - interval '15 minutes'
+      ),
+    'retries_over_3',
+      count(*) FILTER (
+        WHERE status <> 'published'
+          AND attempts > 3
+      ),
     'last_published_at', max(published_at),
     'last_error_at', max(created_at) FILTER (WHERE status = 'failed'),
     'last_error', max(last_error) FILTER (WHERE status = 'failed'),
