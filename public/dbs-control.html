@@ -5957,7 +5957,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const checked = Boolean(data[group] && data[group][label]);
                 return '<label class="field-check-item"><input type="checkbox" ' + (checked ? 'checked ' : '') + 'onchange="salvarChecklistTecnicoOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',\'' + group.replace(/'/g,"\\'") + '\',\'' + label.replace(/'/g,"\\'") + '\',this.checked)"><span>' + escDbsControl(label) + '</span></label>';
             }).join('') + '</div></div>').join('');
-            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Checklist técnico do atendimento</span><small>Disponível para PMOC, preventiva e corretiva. Marque somente o que foi verificado ou executado.</small></div><span class="field-check-badge ' + (done ? 'done' : 'pending') + '" id="dbs-checklist-tecnico-count-' + escDbsControl(os.id) + '">' + done + ' itens conferidos</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">' + groups + '</div></section>';
+            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Checklist técnico do atendimento</span><small>Obrigatório no encerramento. Marque cada verificação realmente executada no atendimento.</small></div><span class="field-check-badge ' + (done ? 'done' : 'pending') + '" id="dbs-checklist-tecnico-count-' + escDbsControl(os.id) + '">' + done + ' itens conferidos</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">' + groups + '</div></section>';
         }
 
         function renderizarParametrosOperacionaisOS(os) {
@@ -5970,15 +5970,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         function renderizarChecklistExecucao(os) {
             if (!tipoPermiteChecklist(os?.tipo)) return '';
             const checklist = garantirChecklistOS(os);
-            if (!checklist.length) return '<div class="field-check-note">Checklist opcional para serviços preventivos e PMOC. Nenhum item foi aplicado a esta OS.</div>';
+            if (!checklist.length) return '<div class="field-check-note">Nenhum item de checklist preventivo/PMOC foi aplicado a esta OS.</div>';
             const total = checklist.length;
             const concluidos = checklist.filter(i => i.concluido).length;
             const itens = checklist.map((item, index) => '<label class="field-check-item"><input type="checkbox" ' + (item.concluido ? 'checked' : '') + ' onchange="marcarChecklistOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',' + index + ',this.checked)"><span>' + escDbsControl(item.titulo) + '</span></label>').join('');
             return '<section class="field-check-card">' +
-                '<div class="field-check-summary"><div><span class="field-check-title">Checklist da preventiva / PMOC</span><small>Opcional · só entra no relatório se houver itens conferidos</small></div>' +
+                '<div class="field-check-summary"><div><span class="field-check-title">Checklist da preventiva / PMOC</span><small>Obrigatório quando houver itens aplicáveis · entra no relatório operacional</small></div>' +
                 '<span class="field-check-badge ' + (concluidos > 0 && concluidos === total ? 'done' : 'pending') + '" data-checklist-badge="' + escDbsControl(os.id) + '">' + concluidos + '/' + total + ' conferidos</span></div>' +
                 '<div class="field-checklist">' + itens + '</div>' +
-                '<div class="field-check-note">Você pode concluir a OS sem marcar o checklist. Marque apenas o que foi realmente verificado.</div></section>';
+                '<div class="field-check-note">Conclua todos os itens aplicáveis antes de registrar o atendimento.</div></section>';
         }
         // IMPORTAÇÃO DE PLANILHAS — clientes e equipamentos
         let DBS_CONTROL_IMPORT_ROWS = [];
@@ -6416,7 +6416,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
               <div class="employee-progress-grid" aria-label="Resumo de produtividade">
                 <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
-                <div class="employee-progress-card"><span>Pendências operacionais</span><strong>${minhasOS.filter(o => /aguardando peça|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Aguardam peça, retorno ou decisão</small></div>
+                <div class="employee-progress-card"><span>Pendências operacionais</span><strong>${minhasOS.filter(o => /conclu[ií]da com pend[eê]ncia|aguardando pe[cç]a|aguardando aprova[cç][aã]o|retorno necess[aá]rio|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Aguardam peça, retorno ou decisão</small></div>
                 <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(isOSConcluida).length}</strong><small>Ordens finalizadas</small></div>
                 <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(isOSConcluida).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
               </div>
