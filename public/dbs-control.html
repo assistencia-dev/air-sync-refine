@@ -6440,6 +6440,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const isConcluido = isOSConcluida(o);
                     const normalizedOrderStatus = String(o.status || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
                     const isPending = /concluida com pendencia|aguardando peca|aguardando aprovacao|retorno necessario|aguardando cliente/.test(normalizedOrderStatus);
+                    const hasPartsUsed = Array.isArray(o.pecasUsadas) && o.pecasUsadas.some(part => Number(part?.qtd ?? part?.quantity ?? 0) > 0);
                     const address = String(cli.endereco || o.localAtendimento || '').trim();
                     const mapsUrl = address
                       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
@@ -6508,8 +6509,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <button type="button" class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="cadastrarEquipamentoNaOS('${o.id}')">Salvar equipamento e vincular à OS</button>
                                 <div id="pwa-eq-feedback-${o.id}" role="status" style="font-size:12px;margin-top:8px;"></div>
                               </details>
-                              <label>Peça / insumo</label>
+                              <label>Peça / insumo <span class="field-required">Registre o uso ou confirme que não houve</span></label>
                               <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
+                              <label class="employee-parts-ack"><input type="checkbox" id="dbs-mob-no-parts-${o.id}" ${hasPartsUsed ? 'disabled' : ''}> Confirmo que não houve peça ou insumo utilizado nesta visita.</label>
                               <div class="employee-fields employee-fields-single">
                                 <label>Relato técnico do atendimento <span class="field-required">Obrigatório</span>
                                   <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado...">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
@@ -6519,7 +6521,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 const savedObservations = [...new Set([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation].map(value => String(value ?? '').trim()).filter(Boolean))];
                                 return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Novas notas serão anexadas ao histórico.</small></div>` : '';
                               })()}
-                              <label class="employee-observation-field">Observação complementar do técnico <span class="employee-observation-optional">Opcional · acrescentada ao histórico</span>
+                              <label class="employee-observation-field">Observação complementar do técnico <span class="field-required">Obrigatória · acrescentada ao histórico</span>
                                 <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas."></textarea>
                               </label>
                               ${tipoPermiteChecklist(o.tipo) ? `
@@ -6534,11 +6536,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               <div style="margin-top:2px;">${renderizarChecklistTecnicoOS(o)}</div>
                               <div style="margin-top:2px;">${renderizarParametrosOperacionaisOS(o)}</div>
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
+                              <div id="dbs-mob-geo-${o.id}" class="employee-geo-status" role="status">Localização do atendimento: será capturada ao confirmar.</div>
                               <div class="employee-photo-grid">
-                                <label>Foto antes<input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
-                                <label>Foto depois<input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}"></label>
+                                <label>Foto antes <span class="field-required">Obrigatória</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}" required></label>
+                                <label>Foto depois <span class="field-required">Obrigatória</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}" required></label>
                               </div>
-                              <label>Assinatura do cliente</label>
+                              <label>Assinatura do cliente <span class="field-required">Obrigatória</span></label>
                               <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
                               <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
                             </div>
@@ -6552,7 +6555,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             minhasOSVisiveis.forEach(o => {
               if (!isOSConcluida(o)) setTimeout(() => {
                 initCanvas('sig-canvas-' + o.id);
-                atualizarResultadoAtendimentoMobile(o.id, /aguardando peça/i.test(String(o.status || '')) ? 'aguardando_peca' : 'concluida');
+                const initialStatus = normalizarStatusAtendimentoMobile(o.completionStatusCode || String(o.status || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, '_'));
+                atualizarResultadoAtendimentoMobile(o.id, initialStatus);
               }, 50);
             });
         }
@@ -6716,11 +6720,38 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
+        const DBS_MOBILE_GEOLOCATION = window.__DBS_MOBILE_GEOLOCATION__ || (window.__DBS_MOBILE_GEOLOCATION__ = {});
         function normalizarStatusAtendimentoMobile(value) {
             const normalized = String(value || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
             return ['concluida', 'concluida_com_pendencia', 'aguardando_peca', 'aguardando_aprovacao', 'retorno_necessario', 'cancelada'].includes(normalized)
                 ? normalized
                 : 'concluida';
+        }
+
+        function capturarGeolocalizacaoOSMobile(osId) {
+            const cached = DBS_MOBILE_GEOLOCATION[String(osId)];
+            if (cached && Number.isFinite(Number(cached.latitude)) && Number.isFinite(Number(cached.longitude))) return Promise.resolve(cached);
+            const feedback = document.getElementById('dbs-mob-geo-' + osId);
+            if (!navigator.geolocation) return Promise.reject(new Error('Este dispositivo não disponibilizou geolocalização segura; a OS não pode ser concluída sem a localização.'));
+            if (feedback) feedback.textContent = 'Localização do atendimento: solicitando permissão…';
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const value = {
+                        latitude: Number(position.coords.latitude.toFixed(7)),
+                        longitude: Number(position.coords.longitude.toFixed(7)),
+                        capturedAt: new Date().toISOString(),
+                    };
+                    DBS_MOBILE_GEOLOCATION[String(osId)] = value;
+                    if (feedback) feedback.textContent = 'Localização capturada com precisão de ' + Math.round(Number(position.coords.accuracy || 0)) + ' m.';
+                    resolve(value);
+                }, error => {
+                    const message = error?.code === 1
+                        ? 'Permita a localização no navegador para registrar o atendimento.'
+                        : 'Não foi possível obter a localização agora. Verifique o GPS e tente novamente.';
+                    if (feedback) feedback.textContent = message;
+                    reject(new Error(message));
+                }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+            });
         }
 
         function rotuloStatusAtendimentoMobile(value) {
@@ -6756,8 +6787,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const observationInput = document.getElementById(`dbs-mob-observacao-${osId}`);
             const resultInput = document.getElementById(`dbs-mob-result-${osId}`);
             const pendingNoteInput = document.getElementById(`dbs-mob-pending-note-${osId}`);
+            const noPartsInput = document.getElementById(`dbs-mob-no-parts-${osId}`);
             const beforeInput = document.getElementById(`dbs-mob-before-${osId}`);
             const afterInput = document.getElementById(`dbs-mob-after-${osId}`);
+            const geoFeedback = document.getElementById(`dbs-mob-geo-${osId}`);
 
             if (!os) return;
 
@@ -6765,8 +6798,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const atendimentoStatus = normalizarStatusAtendimentoMobile(resultInput?.value);
             const atendimentoStatusLabel = rotuloStatusAtendimentoMobile(atendimentoStatus);
             const pendingReason = String(pendingNoteInput?.value || '').trim();
+            const observationText = String(observationInput?.value || '').trim();
+            const noPartsConfirmed = Boolean(noPartsInput?.checked);
+            const technicalChecklist = os.checklistTecnico && typeof os.checklistTecnico === 'object' ? os.checklistTecnico : {};
+            const technicalChecklistTotal = Object.values(DBS_CHECKLIST_TECNICO || {}).flat().length;
+            const technicalChecklistDone = Object.entries(DBS_CHECKLIST_TECNICO || {}).reduce((sum, [group, labels]) => sum + labels.filter(label => Boolean(technicalChecklist[group] && technicalChecklist[group][label] === true)).length, 0);
+            const hasParts = Array.isArray(os.pecasUsadas) && os.pecasUsadas.some(part => Number(part?.qtd ?? part?.quantity ?? 0) > 0);
             const finishLabel = atendimentoStatus === 'concluida' ? 'Concluir atendimento' : 'Registrar ' + atendimentoStatusLabel.toLocaleLowerCase('pt-BR');
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
+            if (!observationText) { alert('Registre uma observação do atendimento antes de concluir a OS.'); observationInput?.focus(); return; }
+            if (technicalChecklistTotal > 0 && technicalChecklistDone < technicalChecklistTotal) { alert('Conclua todos os itens do checklist técnico antes de registrar o atendimento.'); return; }
+            if (!hasParts && !noPartsConfirmed) { alert('Adicione as peças utilizadas ou confirme que não houve peça/insumo nesta visita.'); noPartsInput?.focus(); return; }
             if (atendimentoStatus !== 'concluida' && !pendingReason) {
                 alert('Descreva a pendência técnica antes de registrar este atendimento.');
                 pendingNoteInput?.focus();
@@ -6801,8 +6843,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (!DBS_CONTROL_CLOUD_READY) {
                     throw new Error('A conexão com a nuvem ainda não está pronta. Aguarde o indicador Sincronizado e tente novamente.');
                 }
+                setProgress('Capturando localização...');
+                const location = await capturarGeolocalizacaoOSMobile(osId);
                 const beforeFile = beforeInput?.files?.[0] || null;
                 const afterFile = afterInput?.files?.[0] || null;
+                if (!beforeFile && !os.fotoAntes) throw new Error('Registre a foto antes do atendimento.');
+                if (!afterFile && !os.fotoDepois) throw new Error('Registre a foto depois do atendimento.');
                 const [fotoAntes, fotoDepois] = await Promise.all([
                     beforeFile ? readExecutionPhoto(beforeFile) : Promise.resolve(os.fotoAntes || null),
                     afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
@@ -6818,7 +6864,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 setProgress('Enviando evidências...');
                 const uploadedAttachments = await Promise.all(uploadJobs);
 
-                const observationText = String(observationInput?.value || '').trim();
                 if (observationText) {
                     const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
                         .find(key => os[key] == null || typeof os[key] === 'string') || 'observacaoComplementarTecnico';
@@ -6845,6 +6890,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 os.fotoAntes = fotoAntes;
                 os.fotoDepois = fotoDepois;
                 os.assinatura = signature;
+                os.latitude = location.latitude;
+                os.longitude = location.longitude;
+                os.geolocationCapturedAt = location.capturedAt;
+                os.completionStatusCode = atendimentoStatus;
                 uploadedAttachments.forEach(item => {
                     os[item.pathField] = item.result.storagePath;
                     os[item.field] = item.result.signedUrl;
@@ -6857,7 +6906,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     ? (ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null)
                     : null;
 
-                setProgress(atendimentoStatus === 'aguardando_peca' ? 'Registrando pendência na nuvem...' : 'Confirmando OS na nuvem...');
+                setProgress(atendimentoStatus === 'concluida' ? 'Confirmando OS na nuvem...' : 'Registrando resultado na nuvem...');
                 await saveStateAndConfirmCloud();
                 renderizarTudo();
                 alert(atendimentoStatus === 'concluida'
