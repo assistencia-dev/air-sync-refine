@@ -48,7 +48,7 @@ async function resolveAccess(context: { supabase: any; userId: string }, ticketI
 /** Lista os anexos de um chamado com URLs assinadas temporárias. */
 export const listTicketAttachments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { ticket_id: string }) => {
+  .validator((input: { ticket_id: string }) => {
     if (!input?.ticket_id) throw new Error("Chamado inválido.");
     return { ticket_id: input.ticket_id };
   })
@@ -93,7 +93,7 @@ export const listTicketAttachments = createServerFn({ method: "POST" })
 /** Envia um anexo (cliente ou administrador) para um chamado. */
 export const uploadTicketAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       ticket_id: string;
       file_name: string;
@@ -150,7 +150,7 @@ export const uploadTicketAttachment = createServerFn({ method: "POST" })
 
 export const deleteTicketAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { attachment_id: string }) => {
+  .validator((input: { attachment_id: string }) => {
     if (!input?.attachment_id) throw new Error("Anexo inválido.");
     return input;
   })
