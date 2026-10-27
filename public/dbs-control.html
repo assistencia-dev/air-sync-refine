@@ -3969,6 +3969,77 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
 
+        function mergeDbsControlConflictState(cloudState, changes) {
+            const merged = JSON.parse(JSON.stringify(cloudState && typeof cloudState === 'object' ? cloudState : {}));
+            const identity = row => {
+                const value = row && typeof row === 'object'
+                    ? (row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email)
+                    : null;
+                return value === null || value === undefined || String(value).trim() === ''
+                    ? ''
+                    : String(value).trim().toLocaleLowerCase('pt-BR');
+            };
+            Object.entries(changes && typeof changes === 'object' ? changes : {}).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const currentRows = Array.isArray(merged[key]) ? merged[key] : [];
+                const byIdentity = new Map(currentRows.map(row => [identity(row), row]).filter(([id]) => id));
+                rows.forEach(row => {
+                    const id = identity(row);
+                    if (!id) return;
+                    const current = byIdentity.get(id);
+                    const next = { ...(current || {}), ...(row || {}) };
+                    // The cloud version is authoritative after the conflict. Local
+                    // fields are replayed against that version on the next delta.
+                    if (current && current.version !== undefined) next.version = current.version;
+                    if (key === 'ordens' && current) {
+                        next.id = current.id;
+                        if (current.protocolo) next.protocolo = current.protocolo;
+                        if (current.protocol) next.protocol = current.protocol;
+                    }
+                    byIdentity.set(id, next);
+                });
+                merged[key] = Array.from(byIdentity.values());
+            });
+            return merged;
+        }
+
+        function showDbsControlConflictBanner(conflicts) {
+            const existing = document.getElementById('dbs-control-conflict-banner');
+            if (existing) existing.remove();
+            const banner = document.createElement('div');
+            banner.id = 'dbs-control-conflict-banner';
+            banner.style.cssText = 'position:fixed;z-index:99999;left:16px;right:16px;top:16px;background:#fff7ed;border:1px solid #fdba74;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.18);padding:14px 16px;color:#7c2d12;font:600 14px/1.45 system-ui,sans-serif;';
+            const title = document.createElement('div');
+            title.textContent = 'Conflito de sincronização: esta OS foi atualizada em outro dispositivo.';
+            const detail = document.createElement('div');
+            detail.style.cssText = 'margin-top:4px;font-weight:500;';
+            const items = Array.isArray(conflicts) ? conflicts : [];
+            detail.textContent = items.map(item => {
+                const protocol = String(item?.protocol || 'OS');
+                const message = String(item?.message || 'Revisão necessária.');
+                return protocol + ': ' + message;
+            }).join(' | ');
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;';
+            const reconcile = document.createElement('button');
+            reconcile.type = 'button';
+            reconcile.textContent = 'Reconciliar mantendo minhas alterações';
+            reconcile.style.cssText = 'border:0;border-radius:9px;padding:9px 12px;background:#c2410c;color:#fff;font-weight:700;cursor:pointer;';
+            reconcile.onclick = () => {
+                window.parent.postMessage({ type: 'DBS_CONTROL_RECONCILE_CONFLICT', conflicts: items }, '*');
+                reconcile.disabled = true;
+                reconcile.textContent = 'Carregando versão atual…';
+            };
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.textContent = 'Revisar depois';
+            close.style.cssText = 'border:1px solid #fdba74;border-radius:9px;padding:9px 12px;background:#fff;color:#9a3412;font-weight:700;cursor:pointer;';
+            close.onclick = () => banner.remove();
+            actions.append(reconcile, close);
+            banner.append(title, detail, actions);
+            document.body.appendChild(banner);
+        }
+
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
@@ -4019,7 +4090,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         indicator.style.background = '#fffbeb';
                         indicator.style.borderColor = '#fde68a';
                     } else if (msg.status === 'conflict') {
-                        DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        // Keep the local draft pending until the operator explicitly
+                        // reconciles it; a conflict must never look like a successful save.
+                        DBS_CONTROL_HAS_PENDING_SAVE = true;
                         indicator.textContent = 'Conflito para revisão' + (msg.error ? ': ' + msg.error : '');
                         indicator.style.color = '#92400e';
                         indicator.style.background = '#fffbeb';
@@ -4031,7 +4104,32 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         indicator.style.borderColor = '#fecaca';
                     }
                 }
-                if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' ? 'inline-flex' : 'none';
+                if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' || msg.status === 'conflict' ? 'inline-flex' : 'none';
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_SYNC_CONFLICT') {
+                showDbsControlConflictBanner(msg.conflicts || []);
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_CONFLICT_RECONCILED') {
+                const baseState = JSON.parse(JSON.stringify(msg.state && typeof msg.state === 'object' ? msg.state : {}));
+                const reconciledState = mergeDbsControlConflictState(baseState, msg.changes || {});
+                const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+                ERP_STATE = reconciledState;
+                if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
+                DBS_CONTROL_CLOUD_READY = true;
+                DBS_CONTROL_HAS_PENDING_SAVE = false;
+                // Compare the local draft with the fresh cloud version. The next
+                // save therefore uses the same intention with the new expected_version.
+                DBS_CONTROL_SYNC_BASE_STATE = baseState;
+                const banner = document.getElementById('dbs-control-conflict-banner');
+                if (banner) banner.remove();
+                renderizarTudo();
+                const replay = saveState();
+                if (!dbsControlDeltaHasRows(replay)) {
+                    DBS_CONTROL_HAS_PENDING_SAVE = false;
+                }
                 return;
             }
             if (msg.type === 'DBS_CONTROL_LOCAL_RECOVERY') {
