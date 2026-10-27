@@ -502,7 +502,7 @@
       if(!id||!titleMap[id])return;
       const employeeMode=document.body.classList.contains("dbs-control-employee-mode");
       const employeeTitleMap={
-        "tab-dashboard":["Meu dashboard","Progresso e operação do colaborador"],
+        "tab-dashboard":["Meu painel","Progresso e operação do colaborador"],
         "tab-pwa":["Minhas OS","Execução das Ordens de Serviço do colaborador"],
         "tab-nova-os":["Emitir OS","Nova ordem dentro da base vinculada"]
       };
@@ -553,6 +553,12 @@
     function normalizeNav(){
       const sections=[...document.querySelectorAll("aside .nav-section")];
       const items=[...document.querySelectorAll("aside .nav-item")];
+      if(document.body.classList.contains("dbs-control-employee-mode")){
+        const dashboard=items.find(item=>item.matches("[data-employee-dashboard-visible='true']"));
+        const span=dashboard?.querySelector("span");
+        if(span)span.textContent="Meu painel";
+        return;
+      }
       const labels={
         "Dashboard Principal":"Dashboard",
         "Quadros de Despacho":"Despacho",
@@ -712,6 +718,7 @@
   function timeOf(o){return o?.horario||o?.hora||o?.horaInicio||"";}
 
   function ensureDashboardOperational(){
+    if(document.body.classList.contains("dbs-control-employee-mode"))return;
     const tab=document.getElementById("tab-dashboard");if(!tab)return;
     let panel=document.getElementById("dbs-dashboard-operational");
     if(!panel){panel=document.createElement("section");panel.id="dbs-dashboard-operational";panel.className="dbs-dashboard-operational";const quick=tab.querySelector(".quick-start-card");if(quick)quick.insertAdjacentElement("afterend",panel);else tab.insertBefore(panel,tab.firstElementChild);}
