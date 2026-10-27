@@ -288,21 +288,37 @@ type DbsControlHydrationScope = {
 };
 
 async function fetchAllDbsControlWorkOrders(scope: DbsControlHydrationScope = {}) {
+  // Keyset/cursor pagination: never use offset for the operational list. UUID
+  // ordering is stable and avoids scanning/skipping thousands of rows as the
+  // operation receives new OS records.
   const rows: any[] = [];
-  const pageSize = 1000;
-  for (let offset = 0; ; offset += pageSize) {
+  const pageSize = 500;
+  let cursor: string | null = null;
+
+  for (;;) {
     let query = supabaseAdmin
       .from("dbs_control_work_orders")
       .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,latitude,longitude,signature_name,signature_data,assinatura_path,signature_path,execution_checklist,completion_status_code,geolocation_captured_at,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
-      .order("id", { ascending: true });
-    if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
-    const { data, error } = await query.range(offset, offset + pageSize - 1);
+      .order("id", { ascending: true })
+      .limit(pageSize);
 
+    if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
+    if (cursor) query = query.gt("id", cursor);
+
+    const { data, error } = await query;
     if (error) return { data: null, error };
+
     const page = data ?? [];
     rows.push(...page);
     if (page.length < pageSize) break;
+
+    const nextCursor = String(page[page.length - 1]?.id ?? "").trim();
+    if (!nextCursor || nextCursor === cursor) {
+      return { data: null, error: new Error("Paginação por cursor não avançou; leitura interrompida por segurança.") };
+    }
+    cursor = nextCursor;
   }
+
   return { data: rows, error: null };
 }
 
