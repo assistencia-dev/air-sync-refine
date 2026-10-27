@@ -26,3 +26,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/run-dbs-control-outbox-worker.mjs
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## DBS Control outbox: alerta"
+            echo ""
+            echo "Falha no worker, backlog acima do SLA ou DLQ não vazia. Verifique pending, idade e retries no painel de observabilidade."
+          } >> "$GITHUB_STEP_SUMMARY"
