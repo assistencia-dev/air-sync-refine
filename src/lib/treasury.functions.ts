@@ -195,7 +195,7 @@ async function postLedgerWithRetry(payload: Record<string, unknown>) {
 
 export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: TreasuryLedgerCommand) => {
+  .validator((input: TreasuryLedgerCommand) => {
     if (!input?.idempotency_key || input.idempotency_key.length < 8 || input.idempotency_key.length > 200) {
       throw new Error("Chave de idempotência financeira inválida.");
     }
