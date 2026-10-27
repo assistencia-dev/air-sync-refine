@@ -1,6 +1,6 @@
 # Teste do fluxo administrativo e publicação
 
-Portal real: https://dbs-air-solutions.lovable.app/admin
+Portal real: https://air-sync-refine.lovable.app/admin
 
 A sessão administrativa existente abriu o painel sem solicitar novas credenciais. A aba `CONTROLE DE PASSAGEM` apareceu dentro do painel e navegou para `/passage`.
 
