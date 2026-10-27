@@ -166,6 +166,8 @@ assert.match(rhFunctions, /let baseActive = false[\s\S]*?baseActive = baseStatus
 assert.match(rhFunctions, /can_issue_work_orders: Boolean\(resolvedEmployee\.dbs_control_can_issue_work_orders && baseActive\)/, "A permissão de emitir OS deve chegar ao portal quando a base vinculada estiver ativa.");
 assert.doesNotMatch(rhFunctions, /can_issue_work_orders:[^\n]*baseName !== null/, "O nome da base não pode bloquear uma permissão já autorizada.");
 assert.match(route, /base_active=\$\{access\.data\.employee\?\.base_active \? "1" : "0"\}/, "O shell deve transportar o estado da base sem depender do nome exibido.");
+assert.match(route, /handleEmployeeFrameLoad/, "O shell deve reaplicar o título e esconder ações duplicadas quando o CDN entregar o HTML legado.");
+assert.match(route, /onLoad=\{handleEmployeeFrameLoad\}/, "A correção visual do colaborador deve ser aplicada no carregamento do iframe.");
 assert.match(html, /dbs-employee-clean-nav-20261027/, "O painel do colaborador deve carregar o refinamento visual sem depender de cache antigo.");
 assert.match(html, /<span>Meu painel<\/span>/, "O colaborador deve ver um único ponto de entrada chamado Meu painel.");
 assert.doesNotMatch(html, /<span>Dashboard Principal<\/span>/, "O rótulo antigo Dashboard Principal não deve duplicar a experiência do colaborador.");
