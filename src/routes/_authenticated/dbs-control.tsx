@@ -17,6 +17,33 @@ import {
 
 // DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
 
+function dbsControlHttpStatus(error: unknown) {
+  const candidate = error as { status?: unknown; statusCode?: unknown; cause?: { status?: unknown } } | null;
+  return Number(candidate?.status ?? candidate?.statusCode ?? candidate?.cause?.status ?? 0);
+}
+
+function isDbsControlTransientError(error: unknown) {
+  const status = dbsControlHttpStatus(error);
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return [408, 425, 429, 502, 503, 504].includes(status)
+    || /(timeout|timed out|timeout manager|gateway|failed to fetch|fetch failed|network|connection reset|temporarily unavailable|warp server error)/i.test(message);
+}
+
+async function withDbsControlTransientRetry<T>(operation: () => Promise<T>) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isDbsControlTransientError(error) || attempt === 2) throw error;
+      const delayMs = Math.min(2000, 500 * (2 ** attempt));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Falha transitória do DBS CONTROL.");
+}
+
 export const Route = createFileRoute("/_authenticated/dbs-control")({
   head: () => ({ meta: [{ title: "DBS CONTROL · DBS Air" }, { name: "robots", content: "noindex" }] }),
   component: DbsControlPage,
@@ -504,7 +531,7 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_RECONCILE_CONFLICT") {
         const draftChanges = pendingChangesRef.current;
         try {
-          const latest = await getDbsControlCloudState();
+          const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
           if (!latest?.state || typeof latest.state !== "object") {
             throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
           }
@@ -583,7 +610,9 @@ function DbsControlPage() {
               // milhares de OS e storage). O técnico precisa saber imediatamente
               // que a intenção foi aceita; a atualização visual vem em segundo
               // plano e nunca transforma uma gravação confirmada em erro.
-              const result = await applyDbsControlDelta({ data: { requestId: batchId, changes } });
+              const result = await withDbsControlTransientRetry(() =>
+                applyDbsControlDelta({ data: { requestId: batchId, changes } }),
+              );
               const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
               if (!hasConflict && pendingChangesRef.current === changes) {
                 pendingChangesRef.current = null;
@@ -663,10 +692,16 @@ function DbsControlPage() {
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
               }, "*"));
-              if (retryAttemptRef.current < 3 && pendingChangesRef.current) {
+              if (pendingChangesRef.current && (isDbsControlTransientError(err) || retryAttemptRef.current < 3)) {
                 const delays = [5000, 15000, 45000];
+                if (retryAttemptRef.current >= delays.length) return;
                 const delay = delays[retryAttemptRef.current++];
-                logSyncEvent("save_retry_scheduled", { attempt: retryAttemptRef.current, delayMs: delay });
+                logSyncEvent("save_retry_scheduled", {
+                  attempt: retryAttemptRef.current,
+                  delayMs: delay,
+                  transient: isDbsControlTransientError(err),
+                  httpStatus: dbsControlHttpStatus(err) || null,
+                });
                 if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
                 retryTimerRef.current = setTimeout(() => {
                   retryTimerRef.current = null;
