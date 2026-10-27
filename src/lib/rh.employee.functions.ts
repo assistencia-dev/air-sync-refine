@@ -25,7 +25,7 @@ async function getMyEmployee(context: { userId: string }) {
 
 export const createMyRhEmployeeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { request_type: string; title: string; description: string; reference_date?: string; priority?: string }) => {
+  .validator((input: { request_type: string; title: string; description: string; reference_date?: string; priority?: string }) => {
     if (!input?.request_type || !input.title?.trim() || !input.description?.trim()) throw new Error("Tipo, título e descrição são obrigatórios.");
     if (input.description.trim().length < 10) throw new Error("Descreva a solicitação com pelo menos 10 caracteres.");
     return { ...input, title: input.title.trim(), description: input.description.trim(), priority: input.priority ?? "normal" };
@@ -49,7 +49,7 @@ export const createMyRhEmployeeRequest = createServerFn({ method: "POST" })
 
 export const createMyRhEmployeeValeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
+  .validator((input: {
     advance_type: "VALE" | "ADIANTAMENTO";
     amount_cents: number;
     competence: string;
