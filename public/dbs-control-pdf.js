@@ -46,6 +46,13 @@
     const raw = digits(value);
     return raw.length === 8 ? raw.replace(/(\d{5})(\d{3})/, '$1-$2') : (text(value) || '—');
   };
+  const numeric = value => {
+    if (!has(value)) return null;
+    const raw = text(value).replace(/R\\$\\s*/g, '').trim();
+    const parsed = typeof value === 'number' ? value : Number(raw.includes(',') ? raw.replace(/\\./g, '').replace(',', '.') : raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const address = value => {
     if (!value) return '';
     if (typeof value === 'object') return unique([
@@ -299,7 +306,9 @@
     field(M + 99, dy, 87, 'Ação / peças', first(order.trabalhoExecutado, order.acaoNecessaria, order.recomendacao, unique(list(order.pecasUsadas).map(part => part.nome || part.descricao)), '—'), 2);
     field(M + 4, dy + 13, 88, 'Tipo de atendimento', first(order.tipo, service.nome, '—'), 1);
     const evidenceCount = list(order.anexos).length + list(order.attachments).length + (order.fotoAntes ? 1 : 0) + (order.fotoDepois ? 1 : 0);
-    field(M + 99, dy + 13, 87, 'Evidências registradas', evidenceCount ? `${evidenceCount} arquivo(s) anexado(s)` : 'Sem anexos', 1);
+    const totalValue = order.total_cents != null ? numeric(order.total_cents) / 100 : numeric(order.valor);
+    field(M + 4, dy + 13, 88, 'Tipo de atendimento', first(order.tipo, service.nome, '—'), 1);
+    field(M + 99, dy + 13, 87, !employeeMode && includeValues ? 'Valor do atendimento' : 'Evidências registradas', !employeeMode && includeValues && totalValue != null ? money(totalValue) : (evidenceCount ? `${evidenceCount} arquivo(s) anexado(s)` : 'Sem anexos'), 1);
     field(M + 4, dy + 24, 182, 'Resumo da execução', first(order.relatoTecnico, order.trabalhoExecutado, order.desc, order.descricao, '—'), 2);
     y += 41;
 
