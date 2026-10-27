@@ -830,7 +830,7 @@ async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
 
 export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
+  .validator((input: {
     orderId: string; attachmentType: "foto_antes" | "foto_depois" | "assinatura";
     fileName: string; contentType: string; dataBase64: string; requestId: string;
   }) => {
@@ -1393,7 +1393,7 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
 
 export const applyDbsControlDelta = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: DbsControlDeltaInput) => {
+  .validator((input: DbsControlDeltaInput) => {
     const requestId = String(input?.requestId ?? crypto.randomUUID()).trim().slice(0, 160);
     return { requestId, changes: normalizeDbsControlDelta(input) };
   })
@@ -1595,7 +1595,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
  */
 export const deleteDbsControlWorkOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: DeleteDbsControlWorkOrderInput) => ({
+  .validator((input: DeleteDbsControlWorkOrderInput) => ({
     requestId: String(input?.requestId ?? crypto.randomUUID()).trim().slice(0, 160),
     workOrderId: isDbsControlUuid(input?.workOrderId) ? String(input.workOrderId).trim() : null,
     protocol: String(input?.protocol ?? "").trim().slice(0, 160) || null,
@@ -1869,7 +1869,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
  */
 export const getDbsControlProductivity = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { startDate: string; endDate: string }) => {
+  .validator((input: { startDate: string; endDate: string }) => {
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     if (!input || !datePattern.test(input.startDate) || !datePattern.test(input.endDate)) {
       throw new Error("Período de análise inválido.");
