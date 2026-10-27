@@ -1,6 +1,11 @@
 -- Explicit RLS commands for every legacy FOR ALL policy.
 -- This is policy-only DDL: no table, column, row or operational data is removed.
 -- The original USING/WITH CHECK predicates and roles are preserved verbatim.
+--
+-- Production execution note: the identical block was applied in small batches
+-- (rls_explicit_single_backup_manifest and rls_explicit_batch_02..08) to stay
+-- below the Supabase management statement timeout. A normal Supabase CLI
+-- migration can run this complete block in one transaction.
 
 DO $$
 DECLARE
@@ -20,16 +25,14 @@ BEGIN
     role_sql := (
       SELECT string_agg(
         CASE
-          WHEN role_name = 'public' THEN 'PUBLIC'
-          ELSE format('%I', role_name)
+          WHEN r::text = 'public' THEN 'PUBLIC'
+          ELSE format('%I', r::text)
         END,
-        ', '
-        ORDER BY role_name
+        ', ' ORDER BY r::text
       )
-      FROM unnest(p.roles) AS role_name
+      FROM unnest(p.roles) AS role_values(r)
     );
 
-    -- Replace only this policy object; no table or row is affected.
     EXECUTE format(
       'DROP POLICY IF EXISTS %I ON %I.%I',
       p.policyname, p.schemaname, p.tablename
