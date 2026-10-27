@@ -2,6 +2,22 @@
 -- Existing data, tables and access intent are preserved; only overlapping
 -- permissive policies are replaced by one explicit policy per action.
 
+-- Re-runnable policy replacement guard. This only removes policies created by this
+-- migration; it never removes tables or rows and keeps the migration additive.
+DO $
+DECLARE p record;
+BEGIN
+  FOR p IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND policyname LIKE 'hardening\\_%' ESCAPE '\\'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', p.policyname, p.schemaname, p.tablename);
+  END LOOP;
+END
+$;
+
 -- Auth/RLS init-plan stabilization for the policies that directly call auth.uid().
 DO $$
 DECLARE p record;
