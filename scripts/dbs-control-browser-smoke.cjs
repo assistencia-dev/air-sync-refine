@@ -1,6 +1,6 @@
 const { chromium } = require("playwright");
 
-const baseUrl = process.env.DBS_CONTROL_URL || "https://dbs-air-solutions.lovable.app/dbs-control";
+const baseUrl = process.env.DBS_CONTROL_URL || "https://air-sync-refine.lovable.app/dbs-control";
 const e2eIdentifier = process.env.DBS_E2E_IDENTIFIER || process.env.DBS_E2E_EMAIL || "";
 const e2ePassword = process.env.DBS_E2E_PASSWORD || "";
 const errors = [];
