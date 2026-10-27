@@ -1139,13 +1139,113 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
 
     let treasuryAdminAuthSequence = 0;
     const treasuryAdminAuthRequests = new Map();
+    let treasuryLedgerSequence = 0;
+    const treasuryLedgerRequests = new Map();
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
-        if (msg.type !== "DBS_TREASURY_ADMIN_PASSWORD_RESULT") return;
-        const finish = treasuryAdminAuthRequests.get(String(msg.requestId || ""));
-        if (finish) finish(msg.ok === true);
+        if (msg.type === "DBS_TREASURY_ADMIN_PASSWORD_RESULT") {
+            const finish = treasuryAdminAuthRequests.get(String(msg.requestId || ""));
+            if (finish) finish(msg.ok === true);
+            return;
+        }
+        if (msg.type === "DBS_TREASURY_LEDGER_RESULT") {
+            const request = treasuryLedgerRequests.get(String(msg.requestId || ""));
+            if (!request) return;
+            clearTimeout(request.timeoutId);
+            treasuryLedgerRequests.delete(String(msg.requestId || ""));
+            if (msg.ok === true) request.resolve(msg.result || null);
+            else request.reject(new Error(String(msg.error || "Falha ao gravar o lançamento relacional.")));
+        }
     });
+
+    function postTreasuryLedgerCommand(command) {
+        return new Promise((resolve, reject) => {
+            const requestId = "treasury-ledger-" + Date.now() + "-" + (++treasuryLedgerSequence);
+            const timeoutId = setTimeout(() => {
+                treasuryLedgerRequests.delete(requestId);
+                reject(new Error("O Financeiro não confirmou o lançamento relacional. Tente novamente; a mesma chave de idempotência será reutilizada."));
+            }, 30000);
+            treasuryLedgerRequests.set(requestId, { resolve, reject, timeoutId });
+            treasuryPost("DBS_TREASURY_LEDGER_COMMAND", { requestId, command });
+        });
+    }
+
+    function cents(value) {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+    }
+
+    function isoToday() { return new Date().toISOString().slice(0, 10); }
+
+    function ledgerBankLine(bank, amount, direction, metadata = {}) {
+        return {
+            account_code: `bank:${String(bank?.id || "unknown")}`,
+            account_name: String(bank?.nome || "Conta bancária"),
+            account_type: "asset",
+            debit_cents: direction === "debit" ? cents(amount) : 0,
+            credit_cents: direction === "credit" ? cents(amount) : 0,
+            metadata,
+        };
+    }
+
+    function ledgerRevenueLine(category, amount, direction = "credit", metadata = {}) {
+        return {
+            account_code: `revenue:${String(category || "operacional").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")}`,
+            account_name: String(category || "Receita operacional"),
+            account_type: "revenue",
+            debit_cents: direction === "debit" ? cents(amount) : 0,
+            credit_cents: direction === "credit" ? cents(amount) : 0,
+            metadata,
+        };
+    }
+
+    function ledgerExpenseLine(category, amount, direction = "debit", metadata = {}) {
+        return {
+            account_code: `expense:${String(category || "operacional").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")}`,
+            account_name: String(category || "Despesa operacional"),
+            account_type: "expense",
+            debit_cents: direction === "debit" ? cents(amount) : 0,
+            credit_cents: direction === "credit" ? cents(amount) : 0,
+            metadata,
+        };
+    }
+
+    async function persistTreasuryLedgerMovement({
+        idempotencyKey,
+        description,
+        movement,
+        movements,
+        lines,
+        sourceKind,
+        sourceId,
+        record,
+        recordAfter,
+        status = "posted",
+        entryType = "manual",
+    }) {
+        return postTreasuryLedgerCommand({
+            idempotency_key: idempotencyKey,
+            competence_date: String(movement?.data || isoToday()).slice(0, 10),
+            document_date: String(movement?.data || isoToday()).slice(0, 10),
+            entry_type: entryType,
+            description,
+            status,
+            // External keys are unique per immutable ledger command. Including
+            // the idempotency key keeps draft revisions distinct while making
+            // retries of the same command converge on the same entry.
+            external_key: sourceId ? `treasury:${sourceKind}:${sourceId}:${status}:${idempotencyKey}` : null,
+            metadata: {
+                source_kind: sourceKind || null,
+                source_id: sourceId || null,
+                movement: movement || {},
+                movements: Array.isArray(movements) ? movements : (movement ? [movement] : []),
+                record: record || {},
+                record_after: recordAfter || {},
+            },
+            lines,
+        });
+    }
 
     function verifyTreasuryAdminPasswordInParent(password) {
         return new Promise((resolve) => {
@@ -1302,8 +1402,8 @@ function showToast(msg) {
             } catch (_) {}
             showToast('Cache local indisponível. Confira a sincronização no painel antes de sair.');
         }
-        // A falha do cache não pode impedir o envio ao pai autenticado.
-        treasuryPost('DBS_TREASURY_SAVE', { state: STATE });
+        // O cache acima é somente recuperação local. A fonte compartilhada é o
+        // Ledger relacional e recebe apenas comandos de delta via postTreasuryLedgerCommand.
     }
 
     function getDaysDiff(dateString) {
@@ -1489,17 +1589,40 @@ function showToast(msg) {
         const bancoId = document.getElementById('add-rec-banco').value;
         if (!cliente || !Number.isFinite(valor) || valor <= 0 || !data || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
 
+        const existing = id ? STATE.recebimentos.find(x => x.id === id) : null;
+        if (id && !existing) return;
+        if (existing?.status === 'Recebido') { alert('Este recebimento já foi baixado. Desfaça a baixa antes de alterar dados financeiros.'); return; }
+        const itemId = existing?.id || `rec_in_${Date.now()}`;
+        const nextRecord = {
+            ...(existing || {}), id: itemId, cliente, valor, categoria, data,
+            status: existing?.status || 'Pendente', bancoId,
+        };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:recebimento:${itemId}:draft:${existing ? Date.now() : "initial"}`,
+                description: `Recebimento previsto: ${cliente}`,
+                movement: {}, sourceKind: "recebimento", sourceId: itemId,
+                record: nextRecord, recordAfter: nextRecord, status: "draft", entryType: "receivable",
+                lines: [
+                    ledgerBankLine(getBankById(bancoId), valor, "debit"),
+                    ledgerRevenueLine(categoria, valor, "credit"),
+                ],
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível gravar o recebimento no Ledger.');
+            return;
+        }
+
         if(id) {
             const item = STATE.recebimentos.find(x => x.id === id);
             if (!item) return;
-            if (item.status === 'Recebido') { alert('Este recebimento já foi baixado. Desfaça a baixa antes de alterar dados financeiros.'); return; }
             if (!(await validarDataRetroativa(data))) return;
             registrarAlteracaoValor('Recebimentos', `Entrada de ${cliente}`, item.valor, valor);
             item.cliente = cliente; item.valor = valor; item.categoria = categoria; item.data = data; item.bancoId = bancoId;
             logAuditoria('EDIÇÃO', 'Recebimentos', `Entrada de ${cliente} alterada.`);
             showToast('Recebimento atualizado!');
         } else {
-            STATE.recebimentos.push({ id: `rec_in_${Date.now()}`, cliente, valor, categoria, data, status: 'Pendente', bancoId });
+            STATE.recebimentos.push(nextRecord);
             logAuditoria('CADASTRO', 'Recebimentos', `Nova entrada cadastrada: ${cliente} - R$ ${formatMoney(valor)}`);
             showToast('Novo recebimento cadastrado!');
         }
@@ -1516,17 +1639,40 @@ function showToast(msg) {
         const bancoId = document.getElementById('add-pag-banco').value;
         if (!fornecedor || !descricao || !Number.isFinite(valor) || valor <= 0 || !vencimento || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
 
+        const existing = id ? STATE.contasPagar.find(x => x.id === id) : null;
+        if (id && !existing) return;
+        if (existing?.status === 'Pago') { alert('Esta conta já foi paga. Desfaça o pagamento antes de alterar dados financeiros.'); return; }
+        const itemId = existing?.id || `pag_${Date.now()}`;
+        const nextRecord = {
+            ...(existing || {}), id: itemId, fornecedor, descricao, valor, vencimento,
+            status: existing?.status || 'Pendente', bancoId,
+        };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:conta_pagar:${itemId}:draft:${existing ? Date.now() : "initial"}`,
+                description: `Despesa prevista: ${fornecedor} · ${descricao}`,
+                movement: {}, sourceKind: "conta_pagar", sourceId: itemId,
+                record: nextRecord, recordAfter: nextRecord, status: "draft", entryType: "payable",
+                lines: [
+                    ledgerExpenseLine(descricao, valor, "debit"),
+                    ledgerBankLine(getBankById(bancoId), valor, "credit"),
+                ],
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível gravar a conta a pagar no Ledger.');
+            return;
+        }
+
         if(id) {
             const item = STATE.contasPagar.find(x => x.id === id);
             if (!item) return;
-            if (item.status === 'Pago') { alert('Esta conta já foi paga. Desfaça o pagamento antes de alterar dados financeiros.'); return; }
             if (!(await validarDatasRetroativas(item.vencimento, vencimento))) return;
             registrarAlteracaoValor('Contas a Pagar', `Conta de ${fornecedor}`, item.valor, valor);
             item.fornecedor = fornecedor; item.descricao = descricao; item.valor = valor; item.vencimento = vencimento; item.bancoId = bancoId;
             logAuditoria('EDIÇÃO', 'Contas a Pagar', `Conta de ${fornecedor} alterada.`);
             showToast('Conta a pagar atualizada!');
         } else {
-            STATE.contasPagar.push({ id: `pag_${Date.now()}`, fornecedor, descricao, valor, vencimento, status: 'Pendente', bancoId });
+            STATE.contasPagar.push(nextRecord);
             logAuditoria('CADASTRO', 'Contas a Pagar', `Nova conta cadastrada: ${fornecedor} - R$ ${formatMoney(valor)}`);
             showToast('Conta a pagar cadastrada!');
         }
@@ -1698,7 +1844,7 @@ function showToast(msg) {
         save(); render(); showToast('Conta excluída!');
     }
 
-    function salvarTransferencia(e) {
+    async function salvarTransferencia(e) {
         e.preventDefault();
         const origId = document.getElementById('transf-origem').value;
         const destId = document.getElementById('transf-destino').value;
@@ -1712,52 +1858,99 @@ function showToast(msg) {
 
         if(orig.saldo < valor) { alert('Saldo insuficiente na conta de origem!'); return; }
 
+        const hoje = new Date().toISOString().split('T')[0];
+        const transferId = `transfer_${Date.now()}`;
+        const outgoing = { id: `${transferId}_out`, data: hoje, descricao: `Transferência para ${dest.nome}`, conta: orig.nome, bancoId: orig.id, tipo: 'Transferência', valor, sinal: -1, origemTipo: 'transferencia' };
+        const incoming = { id: `${transferId}_in`, data: hoje, descricao: `Transferência de ${orig.nome}`, conta: dest.nome, bancoId: dest.id, tipo: 'Transferência', valor, sinal: 1, origemTipo: 'transferencia' };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:transferencia:${transferId}`,
+                description: `Transferência de ${orig.nome} para ${dest.nome}`,
+                movement: outgoing, movements: [outgoing, incoming], sourceKind: "transferencia", sourceId: transferId,
+                lines: [ledgerBankLine(dest, valor, "debit"), ledgerBankLine(orig, valor, "credit")],
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível gravar a transferência no Ledger.');
+            return;
+        }
+
         orig.saldo -= valor;
         dest.saldo += valor;
-
-        const hoje = new Date().toISOString().split('T')[0];
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: hoje, descricao: `Transferência para ${dest.nome}`, conta: orig.nome, bancoId: orig.id, tipo: 'Transferência', valor, sinal: -1, origemTipo: 'transferencia' });
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}_2`, data: hoje, descricao: `Transferência de ${orig.nome}`, conta: dest.nome, bancoId: dest.id, tipo: 'Transferência', valor, sinal: 1, origemTipo: 'transferencia' });
+        STATE.movimentacoes.unshift(outgoing, incoming);
 
         logAuditoria('TRANSFERÊNCIA', 'Bancos', `Transferência de R$ ${valor} de ${orig.nome} para ${dest.nome}`);
         showToast('Transferência realizada!');
         save(); closeModals(); render();
     }
 
-    function confirmarRecebimento(id) {
+    async function confirmarRecebimento(id) {
         const item = STATE.recebimentos.find(x => x.id === id);
         if (!item || item.status === 'Recebido') return;
         if (!validarBaixaValorAlto(item.valor, item.comprovanteData)) return;
         const banco = getBankById(getPreferredBankId(item, 'bancoId'));
         if (!banco || banco.status === 'Arquivada') { alert('Escolha uma conta bancária ativa.'); return; }
+        const amount = Number(item.valor) || 0;
+        const movementId = `mov_${Date.now()}`;
+        const movement = { id: movementId, data: isoToday(), descricao: `Recebimento: ${item.cliente}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor: amount, sinal: 1, origemId: item.id, origemTipo: 'recebimento' };
+        const recordAfter = { ...item, bancoId: banco.id, status: 'Recebido', dataRecebimento: movement.data, valorRecebido: amount };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:recebimento:${item.id}:posted`,
+                description: `Recebimento: ${item.cliente}`,
+                movement, sourceKind: "recebimento", sourceId: item.id,
+                record: item, recordAfter, lines: [ledgerBankLine(banco, amount, "debit"), ledgerRevenueLine(item.categoria, amount, "credit")],
+                entryType: "receipt",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível confirmar o recebimento no Ledger.');
+            return;
+        }
         item.bancoId = banco.id;
         item.status = 'Recebido';
-        item.dataRecebimento = new Date().toISOString().split('T')[0];
-        item.valorRecebido = item.valor;
-        banco.saldo += item.valor;
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: item.dataRecebimento, descricao: `Recebimento: ${item.cliente}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor: item.valor, sinal: 1, origemId: item.id, origemTipo: 'recebimento' });
+        item.dataRecebimento = movement.data;
+        item.valorRecebido = amount;
+        banco.saldo += amount;
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('BAIXA', 'Recebimentos', `Entrada confirmada: R$ ${formatMoney(item.valor)} de ${item.cliente} na conta ${banco.nome}`);
         showToast('Recebimento confirmado no Caixa!');
         save(); render();
     }
 
-    function desfazerRecebimento(id) {
+    async function desfazerRecebimento(id) {
         const item = STATE.recebimentos.find(x => x.id === id);
         if (!item || item.status !== 'Recebido') return;
         if (!confirm('Desfazer este recebimento e estornar o valor da conta?')) return;
         const banco = getBankById(item.bancoId);
-        if (banco) banco.saldo -= item.valorRecebido ?? item.valor;
+        if (!banco) { alert('A conta bancária do recebimento não está disponível.'); return; }
         const valor = item.valorRecebido ?? item.valor;
+        const reversalNo = Number(item._ledgerReversalNo || 0) + 1;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Estorno de recebimento: ${item.cliente}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor, sinal: -1, estorno: true, origemId: item.id, origemTipo: 'recebimento' };
+        const recordAfter = { ...item, status: 'Pendente', dataRecebimento: null, valorRecebido: null, _ledgerReversalNo: reversalNo };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:recebimento:${item.id}:reversal:${reversalNo}`,
+                description: `Estorno de recebimento: ${item.cliente}`,
+                movement, sourceKind: "recebimento", sourceId: item.id,
+                record: item, recordAfter,
+                lines: [ledgerRevenueLine(item.categoria, valor, "debit"), ledgerBankLine(banco, valor, "credit")],
+                entryType: "receipt_reversal",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível estornar o recebimento no Ledger.');
+            return;
+        }
+        if (banco) banco.saldo -= valor;
         item.status = 'Pendente';
         item.dataRecebimento = null;
         item.valorRecebido = null;
+        item._ledgerReversalNo = reversalNo;
         anularUltimoMovimento(item.id, 'recebimento');
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de recebimento: ${item.cliente}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Saída', valor, sinal: -1, estorno: true, origemId: item.id, origemTipo: 'recebimento' });
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('REVERSÃO', 'Recebimentos', `Recebimento desfeito: ${item.cliente} - R$ ${formatMoney(valor)}`);
         save(); render(); showToast('Recebimento desfeito e estornado!');
     }
 
-    function confirmarPagamentoConta(id) {
+    async function confirmarPagamentoConta(id) {
         const item = STATE.contasPagar.find(x => x.id === id);
         if (!item || item.status === 'Pago') return;
         if (!validarBaixaValorAlto(item.valor, item.comprovanteData)) return;
@@ -1766,33 +1959,67 @@ function showToast(msg) {
         // Baixa financeira não pode ser bloqueada pelo saldo atual: obrigações e caixa são dimensões diferentes.
         // O saldo bancário pode ficar negativo quando a operação real exigir, preservando a baixa e o histórico.
         const saldoAntes = Number(banco.saldo) || 0;
+        const amount = Number(item.valor) || 0;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Pagamento: ${item.fornecedor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: amount, sinal: -1, origemId: item.id, origemTipo: 'conta_pagar' };
+        const recordAfter = { ...item, bancoId: banco.id, status: 'Pago', dataPagamento: movement.data };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:conta_pagar:${item.id}:posted`,
+                description: `Pagamento: ${item.fornecedor}`,
+                movement, sourceKind: "conta_pagar", sourceId: item.id,
+                record: item, recordAfter,
+                lines: [ledgerExpenseLine(item.descricao, amount, "debit"), ledgerBankLine(banco, amount, "credit")],
+                entryType: "payment",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível registrar o pagamento no Ledger.');
+            return;
+        }
         item.bancoId = banco.id;
         item.status = 'Pago';
-        item.dataPagamento = new Date().toISOString().split('T')[0];
-        banco.saldo -= item.valor;
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: item.dataPagamento, descricao: `Pagamento: ${item.fornecedor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: item.valor, sinal: -1, origemId: item.id, origemTipo: 'conta_pagar' });
+        item.dataPagamento = movement.data;
+        banco.saldo -= amount;
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('BAIXA', 'Contas a Pagar', `Pagamento efetuado: R$ ${formatMoney(item.valor)} para ${item.fornecedor} pela conta ${banco.nome}. Saldo antes: R$ ${formatMoney(saldoAntes)}; saldo após: R$ ${formatMoney(banco.saldo)}`);
         if (Number(banco.saldo) < 0) showToast(`Pagamento registrado. Atenção: ${banco.nome} ficou com saldo negativo de R$ ${formatMoney(Math.abs(Number(banco.saldo)))}.`);
         showToast('Conta quitada no Caixa!');
         save(); render();
     }
 
-    function desfazerPagamentoConta(id) {
+    async function desfazerPagamentoConta(id) {
         const item = STATE.contasPagar.find(x => x.id === id);
         if (!item || item.status !== 'Pago') return;
         if (!confirm('Desfazer este pagamento e devolver o valor à conta?')) return;
         const valor = item.valor;
         const banco = getBankById(item.bancoId);
-        if (banco) banco.saldo += valor;
+        if (!banco) { alert('A conta bancária do pagamento não está disponível.'); return; }
+        const reversalNo = Number(item._ledgerReversalNo || 0) + 1;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Estorno de pagamento: ${item.fornecedor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: item.id, origemTipo: 'conta_pagar' };
+        const recordAfter = { ...item, status: 'Pendente', dataPagamento: null, _ledgerReversalNo: reversalNo };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:conta_pagar:${item.id}:reversal:${reversalNo}`,
+                description: `Estorno de pagamento: ${item.fornecedor}`,
+                movement, sourceKind: "conta_pagar", sourceId: item.id,
+                record: item, recordAfter,
+                lines: [ledgerBankLine(banco, valor, "debit"), ledgerExpenseLine(item.descricao, valor, "credit")],
+                entryType: "payment_reversal",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível estornar o pagamento no Ledger.');
+            return;
+        }
+        banco.saldo += valor;
         item.status = 'Pendente';
         item.dataPagamento = null;
+        item._ledgerReversalNo = reversalNo;
         anularUltimoMovimento(item.id, 'conta_pagar');
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de pagamento: ${item.fornecedor}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: item.id, origemTipo: 'conta_pagar' });
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('REVERSÃO', 'Contas a Pagar', `Pagamento desfeito: ${item.fornecedor} - R$ ${formatMoney(valor)}`);
         save(); render(); showToast('Pagamento desfeito e estornado!');
     }
 
-    function baixarParcela(passId, parcId) {
+    async function baixarParcela(passId, parcId) {
         const pass = STATE.passivos.find(x => x.id === passId);
         const p = pass?.parcelas.find(x => x.id === parcId);
         if (!pass || !p || p.status === 'Pago') return;
@@ -1802,30 +2029,63 @@ function showToast(msg) {
         // Acordo parcelado não é descontado do caixa integralmente. Só a parcela baixada afeta o banco.
         // Saldo negativo é permitido para representar a obrigação de caixa sem impedir a operação.
         const saldoAntes = Number(banco.saldo) || 0;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Parcela #${p.num} - ${pass.credor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: p.valor, sinal: -1, origemId: p.id, origemTipo: 'parcela_acordo' };
+        const recordAfter = { ...p, bancoId: banco.id, status: 'Pago', dataPagamento: movement.data };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:parcela:${p.id}:posted`,
+                description: `Parcela #${p.num} - ${pass.credor}`,
+                movement, sourceKind: "parcela_acordo", sourceId: p.id,
+                record: p, recordAfter,
+                lines: [ledgerExpenseLine('Passivo', p.valor, "debit"), ledgerBankLine(banco, p.valor, "credit")],
+                entryType: "installment_payment",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível registrar a parcela no Ledger.');
+            return;
+        }
         p.bancoId = banco.id;
         p.status = 'Pago';
-        p.dataPagamento = new Date().toISOString().split('T')[0];
+        p.dataPagamento = movement.data;
         if(!p.comprovante) p.comprovante = "Baixa_Manual.pdf";
         banco.saldo -= p.valor;
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: p.dataPagamento, descricao: `Parcela #${p.num} - ${pass.credor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: p.valor, sinal: -1, origemId: p.id, origemTipo: 'parcela_acordo' });
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('BAIXA', 'Acordos', `Parcela #${p.num} quitada de ${pass.credor} pela conta ${banco.nome}. Saldo antes: R$ ${formatMoney(saldoAntes)}; saldo após: R$ ${formatMoney(banco.saldo)}`);
         if (Number(banco.saldo) < 0) showToast(`Parcela baixada. Atenção: ${banco.nome} ficou com saldo negativo de R$ ${formatMoney(Math.abs(Number(banco.saldo)))}.`);
         showToast('Parcela baixada com sucesso!');
         save(); render();
     }
 
-    function desfazerPagamentoParcela(passId, parcId) {
+    async function desfazerPagamentoParcela(passId, parcId) {
         if(!confirm('Deseja realmente desfazer o pagamento desta parcela? O saldo será estornado e o comprovante será preservado.')) return;
         const pass = STATE.passivos.find(x => x.id === passId);
         const p = pass?.parcelas.find(x => x.id === parcId);
         if (!pass || !p || p.status !== 'Pago') return;
         const valor = p.valor;
         const banco = getBankById(p.bancoId);
-        if (banco) banco.saldo += valor;
+        if (!banco) { alert('A conta bancária da parcela não está disponível.'); return; }
+        const reversalNo = Number(p._ledgerReversalNo || 0) + 1;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Estorno parcela #${p.num} - ${pass.credor}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: p.id, origemTipo: 'parcela_acordo' };
+        const recordAfter = { ...p, status: 'Pendente', dataPagamento: null, _ledgerReversalNo: reversalNo };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:parcela:${p.id}:reversal:${reversalNo}`,
+                description: `Estorno parcela #${p.num} - ${pass.credor}`,
+                movement, sourceKind: "parcela_acordo", sourceId: p.id,
+                record: p, recordAfter,
+                lines: [ledgerBankLine(banco, valor, "debit"), ledgerExpenseLine('Passivo', valor, "credit")],
+                entryType: "installment_reversal",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível estornar a parcela no Ledger.');
+            return;
+        }
+        banco.saldo += valor;
         p.status = 'Pendente';
         p.dataPagamento = null;
+        p._ledgerReversalNo = reversalNo;
         anularUltimoMovimento(p.id, 'parcela_acordo');
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno parcela #${p.num} - ${pass.credor}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: p.id, origemTipo: 'parcela_acordo' });
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('REVERSÃO', 'Acordos', `Pagamento desfeito da parcela #${p.num} de ${pass.credor}; comprovante preservado`);
         showToast('Pagamento desfeito; comprovante preservado!');
         save(); render();
@@ -1924,7 +2184,7 @@ function showToast(msg) {
         }
     }
 
-    function baixarRecorrencia(recId) {
+    async function baixarRecorrencia(recId) {
         const rec = STATE.recorrencias.find(x => x.id === recId);
         if (!rec) return;
         if (rec.arquivado) { alert('Esta conta fixa está arquivada. Restaure-a para registrar um novo pagamento.'); return; }
@@ -1940,11 +2200,25 @@ function showToast(msg) {
         rec.bancoId = banco.id;
         rec.historico = rec.historico || [];
         const historico = { id: `rh_${Date.now()}`, dataPagamento: hoje, valor: rec.valor, comprovante: file ? file.name : 'Recibo.pdf', bancoId: banco.id };
-        const concluirPagamento = (data) => {
+        const concluirPagamento = async (data) => {
             if (data) { historico.comprovanteData = data; historico.comprovanteType = file.type || 'application/octet-stream'; historico.comprovanteSize = file.size; }
+            const movement = { id: `mov_${Date.now()}`, data: hoje, descricao: `Gasto Fixo: ${rec.servico}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: rec.valor, sinal: -1, origemId: rec.id, origemTipo: 'recorrencia', origemHistoricoId: historico.id };
+            try {
+                await persistTreasuryLedgerMovement({
+                    idempotencyKey: `treasury:recorrencia:${rec.id}:${historico.id}:posted`,
+                    description: `Gasto Fixo: ${rec.servico}`,
+                    movement, sourceKind: "recorrencia", sourceId: rec.id,
+                    record: rec, recordAfter: { ...rec, historico: [...(rec.historico || []), historico] },
+                    lines: [ledgerExpenseLine(rec.servico, rec.valor, "debit"), ledgerBankLine(banco, rec.valor, "credit")],
+                    entryType: "recurring_payment",
+                });
+            } catch (error) {
+                alert(error instanceof Error ? error.message : 'Não foi possível registrar o gasto fixo no Ledger.');
+                return;
+            }
             rec.historico.push(historico);
             banco.saldo -= rec.valor;
-            STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: hoje, descricao: `Gasto Fixo: ${rec.servico}`, conta: banco.nome, bancoId: banco.id, tipo: 'Saída', valor: rec.valor, sinal: -1, origemId: rec.id, origemTipo: 'recorrencia', origemHistoricoId: historico.id });
+            STATE.movimentacoes.unshift(movement);
             let d = new Date(rec.proximoVencimento + 'T00:00:00');
             if (rec.frequencia === 'Mensal') d.setMonth(d.getMonth() + 1);
             else if (rec.frequencia === 'Trimestral') d.setMonth(d.getMonth() + 3);
@@ -1956,13 +2230,13 @@ function showToast(msg) {
         };
         if (file) {
             const reader = new FileReader();
-            reader.onload = e => concluirPagamento(e.target.result);
+            reader.onload = e => { void concluirPagamento(e.target.result); };
             reader.onerror = () => alert('Não foi possível ler o recibo.');
             reader.readAsDataURL(file);
-        } else { concluirPagamento(null); }
+        } else { void concluirPagamento(null); }
     }
 
-    function desfazerRecorrencia(recId, histId) {
+    async function desfazerRecorrencia(recId, histId) {
         const rec = STATE.recorrencias.find(x => x.id === recId);
         if (!rec || !rec.historico?.length) return;
         const idx = histId ? rec.historico.findIndex(h => h.id === histId) : rec.historico.length - 1;
@@ -1970,7 +2244,23 @@ function showToast(msg) {
         const h = rec.historico[idx];
         if (!confirm(`Desfazer o pagamento de R$ ${formatMoney(Number(h.valor))}?`)) return;
         const banco = getBankById(h.bancoId || rec.bancoId);
-        if (banco) banco.saldo += Number(h.valor);
+        if (!banco) { alert('A conta bancária do gasto fixo não está disponível.'); return; }
+        const valor = Number(h.valor) || 0;
+        const movement = { id: `mov_${Date.now()}`, data: isoToday(), descricao: `Estorno de gasto fixo: ${rec.servico}`, conta: banco.nome, bancoId: banco.id, tipo: 'Entrada', valor, sinal: 1, estorno: true, origemId: rec.id, origemTipo: 'recorrencia' };
+        try {
+            await persistTreasuryLedgerMovement({
+                idempotencyKey: `treasury:recorrencia:${rec.id}:${h.id}:reversal`,
+                description: `Estorno de gasto fixo: ${rec.servico}`,
+                movement, sourceKind: "recorrencia", sourceId: rec.id,
+                record: rec, recordAfter: rec,
+                lines: [ledgerBankLine(banco, valor, "debit"), ledgerExpenseLine(rec.servico, valor, "credit")],
+                entryType: "recurring_reversal",
+            });
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível estornar o gasto fixo no Ledger.');
+            return;
+        }
+        banco.saldo += valor;
         rec.historico.splice(idx, 1);
         let d = new Date(rec.proximoVencimento + 'T00:00:00');
         if (rec.frequencia === 'Mensal') d.setMonth(d.getMonth() - 1);
@@ -1978,7 +2268,7 @@ function showToast(msg) {
         else if (rec.frequencia === 'Anual') d.setFullYear(d.getFullYear() - 1);
         rec.proximoVencimento = d.toISOString().split('T')[0];
         anularUltimoMovimento(rec.id, 'recorrencia', h.id);
-        STATE.movimentacoes.unshift({ id: `mov_${Date.now()}`, data: new Date().toISOString().split('T')[0], descricao: `Estorno de gasto fixo: ${rec.servico}`, conta: banco?.nome || 'Conta', bancoId: banco?.id, tipo: 'Entrada', valor: Number(h.valor), sinal: 1, estorno: true, origemId: rec.id, origemTipo: 'recorrencia' });
+        STATE.movimentacoes.unshift(movement);
         logAuditoria('REVERSÃO', 'Recorrências', `Pagamento desfeito: ${rec.servico}`);
         save(); render(); showToast('Pagamento da conta fixa desfeito!');
     }

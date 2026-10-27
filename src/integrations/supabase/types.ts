@@ -3111,6 +3111,198 @@ export type Database = {
           },
         ]
       }
+      treasury_accounts: {
+        Row: {
+          id: string
+          company_id: string | null
+          scope_key: string
+          code: string
+          name: string
+          account_type: string
+          currency_code: string
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id?: string | null
+          scope_key: string
+          code: string
+          name: string
+          account_type: string
+          currency_code?: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string | null
+          scope_key?: string
+          code?: string
+          name?: string
+          account_type?: string
+          currency_code?: string
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      treasury_ledger_entries: {
+        Row: {
+          id: string
+          company_id: string | null
+          scope_key: string
+          competence_date: string
+          document_date: string | null
+          entry_type: string
+          status: string
+          description: string
+          source_module: string
+          external_key: string | null
+          idempotency_key: string
+          reversed_entry_id: string | null
+          created_by: string | null
+          posted_by: string | null
+          posted_at: string | null
+          version: number
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id?: string | null
+          scope_key: string
+          competence_date: string
+          document_date?: string | null
+          entry_type?: string
+          status?: string
+          description: string
+          source_module?: string
+          external_key?: string | null
+          idempotency_key: string
+          reversed_entry_id?: string | null
+          created_by?: string | null
+          posted_by?: string | null
+          posted_at?: string | null
+          version?: number
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string | null
+          scope_key?: string
+          competence_date?: string
+          document_date?: string | null
+          entry_type?: string
+          status?: string
+          description?: string
+          source_module?: string
+          external_key?: string | null
+          idempotency_key?: string
+          reversed_entry_id?: string | null
+          created_by?: string | null
+          posted_by?: string | null
+          posted_at?: string | null
+          version?: number
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      treasury_ledger_lines: {
+        Row: {
+          id: string
+          entry_id: string
+          account_id: string
+          line_no: number
+          debit_cents: number
+          credit_cents: number
+          memo: string | null
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          entry_id: string
+          account_id: string
+          line_no: number
+          debit_cents?: number
+          credit_cents?: number
+          memo?: string | null
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          entry_id?: string
+          account_id?: string
+          line_no?: number
+          debit_cents?: number
+          credit_cents?: number
+          memo?: string | null
+          metadata?: Json
+        }
+        Relationships: []
+      }
+      treasury_ledger_outbox: {
+        Row: {
+          id: string
+          company_id: string | null
+          scope_key: string
+          entry_id: string
+          event_type: string
+          idempotency_key: string
+          payload: Json
+          status: string
+          attempts: number
+          available_at: string
+          locked_at: string | null
+          published_at: string | null
+          last_error: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          company_id?: string | null
+          scope_key: string
+          entry_id: string
+          event_type: string
+          idempotency_key: string
+          payload?: Json
+          status?: string
+          attempts?: number
+          available_at?: string
+          locked_at?: string | null
+          published_at?: string | null
+          last_error?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string | null
+          scope_key?: string
+          entry_id?: string
+          event_type?: string
+          idempotency_key?: string
+          payload?: Json
+          status?: string
+          attempts?: number
+          available_at?: string
+          locked_at?: string | null
+          published_at?: string | null
+          last_error?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       treasury_snapshots: {
         Row: {
           company_id: string | null
@@ -3349,6 +3541,23 @@ export type Database = {
       }
       dbs_control_sync_health: {
         Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      post_treasury_ledger_entry: {
+        Args: {
+          p_scope_key: string
+          p_company_id: string | null
+          p_competence_date: string
+          p_document_date: string | null
+          p_entry_type: string
+          p_description: string
+          p_idempotency_key: string
+          p_external_key: string | null
+          p_created_by: string
+          p_status: string
+          p_metadata: Json
+          p_lines: Json
+        }
         Returns: Json
       }
       current_unit_id: { Args: never; Returns: string }

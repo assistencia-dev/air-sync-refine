@@ -49,22 +49,7 @@ async function preserveUserScopedSnapshotsBeforeCompanyLink(userId: string, comp
   }
 
   if (userTreasury.data && !companyTreasury.data) {
-    const { error } = await supabaseAdmin.from("treasury_snapshots").insert({
-      scope_key: companyScope,
-      company_id: companyId,
-      owner_user_id: userId,
-      state: userTreasury.data.state,
-      state_version: userTreasury.data.state_version,
-      updated_by: userTreasury.data.updated_by ?? userId,
-      updated_at: userTreasury.data.updated_at,
-    });
-    if (error) {
-      const { data: racedTarget, error: verifyError } = await supabaseAdmin
-        .from("treasury_snapshots").select("scope_key").eq("scope_key", companyScope).maybeSingle();
-      if (verifyError || !racedTarget || error.code !== "23505") {
-        throw new Error("Não foi possível preservar o retrato financeiro no novo escopo: " + error.message);
-      }
-    }
+    throw new Error("Existe um retrato financeiro legado no escopo pessoal. O vínculo foi pausado para reconciliação relacional; nenhum snapshot foi copiado ou sobrescrito.");
   }
 }
 

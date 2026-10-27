@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { readTreasuryScope } from "@/lib/treasury.functions";
 
 async function getCaller(context: { userId: string }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -71,13 +72,11 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     }
     const { data: owner, error: ownerError } = await admin.from("users").select("id, company_id, status").eq("id", ownerId).maybeSingle();
     if (ownerError || !owner || owner.status !== "ativo") throw new Error("O responsável pelo financeiro não está ativo.");
-    const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
-    const { data: snapshot, error } = await admin.from("treasury_snapshots").select("state, updated_at").eq("scope_key", scopeKey).maybeSingle();
-    if (error) throw new Error("Falha ao consultar o financeiro: " + error.message);
-    if (!snapshot?.state || typeof snapshot.state !== "object" || Array.isArray(snapshot.state)) {
+    const cloud = await readTreasuryScope({ id: owner.id, company_id: owner.company_id });
+    if (!cloud?.state || typeof cloud.state !== "object" || Array.isArray(cloud.state)) {
       throw new Error("O DBS TREASURY ainda não possui um retrato financeiro sincronizado na nuvem. Entre no módulo Financeiro com a conta administradora, aguarde a sincronização terminar e tente novamente.");
     }
-    const state = snapshot.state as Record<string, any>;
+    const state = cloud.state as Record<string, any>;
     const hasFinancialData = ["passivos", "recorrencias", "recebimentos", "contasPagar", "bancos", "movimentacoes", "auditoria"]
       .some((key) => Array.isArray(state[key]) && state[key].length > 0);
     if (!hasFinancialData) {
@@ -111,7 +110,7 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     }, 0);
     const incoming = (state.recebimentos || []).filter((x: any) => !["recebido","recebida","pago","paga","quitado","quitada","baixado","baixada"].includes(String(x.status || "").trim().toLowerCase()));
     return {
-      updatedAt: snapshot?.updated_at ?? null,
+      updatedAt: cloud.updated_at ?? null,
       today: isoToday,
       summary: {
         cash, overdue: sum(dues.filter(x => x.vencimento < isoToday)),

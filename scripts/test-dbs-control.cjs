@@ -112,7 +112,7 @@ assert.match(fieldControl, /if \(userDbs\.data && companyDbs\.data\)/, "O víncu
 assert.match(fieldControl, /if \(userTreasury\.data && companyTreasury\.data\)/, "O vínculo deve pausar quando os dois escopos financeiros já têm snapshots.");
 assert.doesNotMatch(fieldControl, /from\("dbs_control_snapshots"\)\.insert\(/, "O vínculo não pode criar um novo snapshot DBS completo.");
 assert.match(fieldControl, /Existe um retrato legado do DBS CONTROL no escopo pessoal/, "Um snapshot DBS legado deve bloquear o vínculo até a reconciliação relacional, sem perder a origem.");
-assert.match(fieldControl, /from\("treasury_snapshots"\)\.insert\(/, "O snapshot financeiro pessoal deve ser copiado de forma aditiva, sem apagar a origem.");
+assert.doesNotMatch(fieldControl, /from\("treasury_snapshots"\)\.insert\(/, "O vínculo não pode criar novos snapshots financeiros legados.");
 assert.match(fieldControl, /await preserveUserScopedSnapshotsBeforeCompanyLink\(String\(data\.id\), String\(companyId\)\)/, "A preservação deve acontecer antes de atualizar company_id do administrador.");
 assert.match(route, /const reconciledInitialState = employeeModeRef\.current[\s\S]*?mergeDbsControlStates\(cloudState, localState\)/, "Quando existe snapshot compartilhado, a administração deve reconciliar a nuvem e a cópia local por identidade antes de hidratar o módulo.");
 assert.match(route, /if \(!cloudState && !employeeModeRef\.current\) \{[\s\S]*?tecnicos: \[\], clientes: \[\], equipamentos: \[\], pecas: \[\],[\s\S]*?osHistorico: \[\],[\s\S]*?type: "DBS_CONTROL_CLOUD_STATE", state: initialState, allowEmptyBaseBootstrap: true/, "Quando não há snapshot nem registros canônicos no escopo, a administração pode iniciar a base compartilhada vazia sem usar o cache antigo como fonte.");
@@ -482,15 +482,12 @@ assert.match(treasuryHtml, /DBS_TREASURY_VERIFY_ADMIN_PASSWORD/, "As alteraçõe
 assert.match(treasuryHtml, /async function validarDatasRetroativas/, "As validações de datas devem aguardar a reautenticação sem aplicar alterações antes da resposta.");
 assert.match(treasuryHtml, /await verifyTreasuryAdminPasswordInParent\(senha\)/, "A senha real do administrador precisa ser validada no portal antes da edição retroativa.");
 assert.match(treasuryHtml, /async function alternarFechamentoPeriodo/, "Reabrir um mês financeiro deve aguardar a reautenticação do administrador.");
-assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261022-admin-reauth-1"/, "A atualização de segurança do Financeiro deve invalidar o cache do HTML.");
+assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261027-ledger-1"/, "A atualização do Ledger deve invalidar o cache do HTML.");
 assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautenticação deve ser conferida pelo Supabase Auth.");
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
-assert.match(treasuryRoute, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "A gravação financeira deve serializar snapshots concorrentes.");
-assert.match(treasuryRoute, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Uma falha de gravação anterior não pode inverter a ordem dos snapshots seguintes.");
-assert.match(treasuryRoute, /async function saveTreasuryClientCloudState\(state: Record<string, unknown>, expectedUpdatedAt: string \| null = null\)/, "O salvamento financeiro deve exigir a revisão esperada quando o snapshot já existe.");
-assert.match(treasuryRoute, /\.update\(payload as TablesUpdate<"treasury_snapshots">\)[\s\S]*?\.eq\("scope_key", scopeKey\)[\s\S]*?\.eq\("updated_at", expectedUpdatedAt\)[\s\S]*?if \(!data\)/, "Snapshots alterados por outro navegador devem rejeitar a gravação atrasada.");
-assert.match(treasuryRoute, /\.insert\(payload as TablesInsert<"treasury_snapshots">\)[\s\S]*?error\.code === "23505"/, "A inicialização concorrente do primeiro snapshot não pode sobrescrever uma sessão.");
-assert.match(treasuryRoute, /cloudUpdatedAtRef\.current = saved\.updated_at \?\? null/, "Cada gravação bem-sucedida deve atualizar a revisão usada pela próxima.");
+assert.doesNotMatch(treasuryRoute, /treasury_snapshots.*(?:update|insert|upsert)/s, "A rota não pode escrever snapshots financeiros.");
+assert.match(treasuryRoute, /DBS_TREASURY_LEDGER_COMMAND/, "A rota deve receber comandos de delta do Ledger.");
+assert.match(treasuryRoute, /postTreasuryLedgerEntry\(\{ data: msg\.command \}\)/, "A rota deve encaminhar o comando para o RPC relacional.");
 assert.match(treasuryRoute, /cloudReadyRef\.current = false;[\s\S]*?setLoading\(true\);/, "Conflito ou falha de sincronização deve bloquear o financeiro até nova tentativa.");
 
 assert.match(treasuryRoute, /if \(!cloudReadyRef\.current\) \{\s*throw new Error\("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados\."\);\s*\}\s*setCloudError\(null\);\s*setLoading\(false\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");

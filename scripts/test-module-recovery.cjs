@@ -63,7 +63,7 @@ assert.equal(session.messages.at(-1).state, null);
 assert.equal(session.context.PRESERVE_UNREADABLE_TREASURY_CACHE, true);
 assert.ok(!writes.some(([key]) => key === 'state'));
 vm.runInContext('STATE = { bancos: [{ id: "new" }] }; save()', session.context);
-assert.equal(session.messages.at(-1).type, 'DBS_TREASURY_SAVE');
+assert.ok(!session.messages.some(message => message.type === 'DBS_TREASURY_SAVE'), 'Cache local não pode enviar snapshot para a nuvem.');
 assert.ok(!writes.some(([key]) => key === 'state'));
 
 // Browsers that deny storage must still reach the authenticated cloud bridge.
@@ -71,8 +71,7 @@ session = treasurySession({ getItem() { throw Error('SecurityError'); }, setItem
 vm.runInContext('init()', session.context);
 assert.equal(session.messages.at(-1).type, 'DBS_TREASURY_READY');
 vm.runInContext('STATE = { bancos: [{ id: "bank-1" }] }; save()', session.context);
-assert.equal(session.messages.at(-1).type, 'DBS_TREASURY_SAVE');
-assert.equal(session.messages.at(-1).state.bancos[0].id, 'bank-1');
+assert.ok(!session.messages.some(message => message.type === 'DBS_TREASURY_SAVE'), 'Cache sem storage não pode enviar snapshot para a nuvem.');
 
 // A full cache must not prevent restoring a valid local state or sending it to the cloud.
 session = treasurySession({ getItem: () => JSON.stringify({ bancos: [{ id: 'retained' }] }), setItem() { throw Error('QuotaExceededError'); } });

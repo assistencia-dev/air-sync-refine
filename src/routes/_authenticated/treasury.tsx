@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { getTreasuryCloudState, postTreasuryLedgerEntry } from "@/lib/treasury.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 
 
@@ -20,101 +20,13 @@ export const Route = createFileRoute("/_authenticated/treasury")({
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html?v=20261022-admin-reauth-1";
-
-async function getTreasuryClientCloudState() {
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("id, company_id, role_key, status")
-    .eq("auth_id", auth.user.id)
-    .maybeSingle();
-  if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
-    throw new Error("Acesso ao Financeiro não autorizado.");
-  }
-  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
-  const { data, error } = await supabase
-    .from("treasury_snapshots")
-    .select("state, state_version, updated_at")
-    .eq("scope_key", scopeKey)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ?? null;
-}
-
-async function saveTreasuryClientCloudState(state: Record<string, unknown>, expectedUpdatedAt: string | null = null) {
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError || !auth.user) throw new Error("Sessão do Supabase não encontrada.");
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("id, company_id, role_key, status")
-    .eq("auth_id", auth.user.id)
-    .maybeSingle();
-  if (userError) throw new Error(userError.message);
-  if (!user || user.status !== "ativo" || user.role_key !== "SUPER_ADMIN") {
-    throw new Error("Acesso ao Financeiro não autorizado.");
-  }
-  const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
-  const previousTime = expectedUpdatedAt ? Date.parse(expectedUpdatedAt) : 0;
-  const nextUpdatedAt = new Date(Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0)).toISOString();
-  const payload = {
-    scope_key: scopeKey,
-    company_id: user.company_id ?? null,
-    owner_user_id: user.id,
-    state: state as unknown as Json,
-    state_version: Number((state as { _meta?: { version?: unknown } })._meta?.version) || 5,
-    updated_by: user.id,
-    updated_at: nextUpdatedAt,
-  };
-
-  if (expectedUpdatedAt) {
-    // Optimistic concurrency: do not replace a snapshot changed by another browser/device.
-    const { data, error } = await supabase
-      .from("treasury_snapshots")
-      .update(payload as TablesUpdate<"treasury_snapshots">)
-      .eq("scope_key", scopeKey)
-      .eq("updated_at", expectedUpdatedAt)
-      .select("state, state_version, updated_at")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) {
-      throw new Error("O Financeiro foi atualizado em outra sessão. Para não sobrescrever lançamentos, a gravação foi bloqueada. Tente sincronizar novamente e confira a cópia local de recuperação.");
-    }
-    return data;
-  }
-
-  // First snapshot: insert rather than upsert so a parallel first writer cannot silently win.
-  const { data, error } = await supabase
-    .from("treasury_snapshots")
-    .insert(payload as TablesInsert<"treasury_snapshots">)
-    .select("state, state_version, updated_at")
-    .single();
-  if (error) {
-    if (error.code === "23505") {
-      throw new Error("Outro navegador inicializou o Financeiro ao mesmo tempo. A gravação foi bloqueada; sincronize antes de continuar.");
-    }
-    throw new Error(error.message);
-  }
-  return data;
-}
-
-function treasuryStateHasData(state: Record<string, unknown> | null | undefined) {
-  if (!state) return false;
-  const keys = ["passivos", "recorrencias", "recebimentos", "contasPagar", "bancos", "movimentacoes", "auditoria"];
-  return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
-}
+const TREASURY_URL = "/treasury.html?v=20261027-ledger-1";
 
 
 function TreasuryPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<{ role_key?: string } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingStateRef = useRef<Record<string, unknown> | null>(null);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const cloudUpdatedAtRef = useRef<string | null>(null);
   const cloudReadyRef = useRef(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -188,63 +100,24 @@ function TreasuryPage() {
       }
       if (msg.type === "DBS_TREASURY_READY") {
         try {
-          const cloud = await getTreasuryClientCloudState();
+          const cloud = await getTreasuryCloudState();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
           const localState = msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)
             ? JSON.parse(JSON.stringify(msg.state)) as Record<string, unknown>
             : null;
-          cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
-
-          // A nuvem é a fonte compartilhada quando já existe um snapshot.
-          // Se ainda não houver snapshot, preservamos o estado deste dispositivo
-          // e fazemos a primeira migração para a nuvem sem apagar lançamentos.
-          if (cloudState) {
-            if (treasuryStateHasData(cloudState) || !treasuryStateHasData(localState)) {
-              cloudReadyRef.current = true;
-              iframeRef.current?.contentWindow?.postMessage(
-                { type: "DBS_TREASURY_CLOUD_STATE", state: cloudState },
-                window.location.origin,
-              );
-            } else if (localState) {
-              localState._meta = {
-                ...(localState._meta || {}),
-                version: 5,
-                cloudMigratedAt: new Date().toISOString(),
-              };
-              const saved = await saveTreasuryClientCloudState(localState, cloud?.updated_at ?? null);
-              cloudUpdatedAtRef.current = saved.updated_at ?? null;
-              cloudReadyRef.current = true;
-              iframeRef.current?.contentWindow?.postMessage(
-                { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
-                window.location.origin,
-              );
-            }
-          } else {
-            // A leitura autenticada confirmou que este escopo ainda não tem snapshot.
-            // Um cache bloqueado/inválido não pode impedir a inicialização da base nova.
-            const initialState = localState ?? {
-              passivos: [], recorrencias: [], recebimentos: [], contasPagar: [],
-              bancos: [], movimentacoes: [], auditoria: [],
-            };
-            initialState._meta = {
-              ...(initialState._meta || {}),
-              version: 5,
-              cloudMigratedAt: new Date().toISOString(),
-            };
-            const saved = await saveTreasuryClientCloudState(initialState);
-            cloudUpdatedAtRef.current = saved.updated_at ?? null;
-            cloudReadyRef.current = true;
-            iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_TREASURY_CLOUD_STATE", state: saved.state },
-              window.location.origin,
-            );
-          }
-
-          if (!cloudReadyRef.current) {
-            throw new Error("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados.");
-          }
+          // Snapshot legado é somente leitura. Sem snapshot, o cache local serve
+          // apenas como recuperação visual; os novos lançamentos seguem pelo Ledger.
+          const stateToHydrate = cloudState || localState || {
+            passivos: [], recorrencias: [], recebimentos: [], contasPagar: [],
+            bancos: [], movimentacoes: [], auditoria: [], _meta: { version: 5 },
+          };
+          cloudReadyRef.current = true;
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
+            window.location.origin,
+          );
           setCloudError(null);
           setLoading(false);
         } catch (err) {
@@ -256,35 +129,28 @@ function TreasuryPage() {
         }
         return;
       }
-      if (msg.type === "DBS_TREASURY_SAVE") {
-        if (!msg.state || typeof msg.state !== "object" || Array.isArray(msg.state)) return;
-        pendingStateRef.current = msg.state as Record<string, unknown>;
-        if (!cloudReadyRef.current) return;
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => {
-          saveTimerRef.current = null;
-          const state = pendingStateRef.current;
-          if (!state || !cloudReadyRef.current) return;
-          const persist = async () => {
-            if (!cloudReadyRef.current) return;
-            try {
-              const saved = await saveTreasuryClientCloudState(state, cloudUpdatedAtRef.current);
-              cloudUpdatedAtRef.current = saved.updated_at ?? null;
-              setCloudError(null);
-            } catch (err) {
-              console.error("DBS Treasury cloud save:", err);
-              cloudReadyRef.current = false;
-              setCloudError(err instanceof Error ? err.message : "Falha ao salvar o Financeiro.");
-              setLoading(true);
-            }
-          };
-          // Preserve arrival order so an older slow request cannot overwrite a newer snapshot.
-          saveQueueRef.current = saveQueueRef.current.then(persist, persist);
-        }, 450);
+      if (msg.type === "DBS_TREASURY_LEDGER_COMMAND") {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
+        if (!requestId || !msg.command || typeof msg.command !== "object") return;
+        try {
+          if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não terminou a sincronização inicial.");
+          const result = await postTreasuryLedgerEntry({ data: msg.command });
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_LEDGER_RESULT", requestId, ok: true, result },
+            window.location.origin,
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Falha ao gravar o lançamento relacional.";
+          console.error("DBS Treasury ledger command:", err);
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_LEDGER_RESULT", requestId, ok: false, error: message },
+            window.location.origin,
+          );
+        }
       }
     };
     window.addEventListener("message", handler);
-    return () => { window.removeEventListener("message", handler); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    return () => { window.removeEventListener("message", handler); };
   }, []);
 
   return (
@@ -303,10 +169,6 @@ function TreasuryPage() {
               <p className="mt-2 text-xs text-slate-500">O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem.</p>
               <button onClick={() => {
                 cloudReadyRef.current = false;
-                cloudUpdatedAtRef.current = null;
-                pendingStateRef.current = null;
-                if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                saveTimerRef.current = null;
                 setCloudError(null);
                 setLoading(true);
                 setIframeReloadKey((key) => key + 1);
