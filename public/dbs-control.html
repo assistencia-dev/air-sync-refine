@@ -3598,6 +3598,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // O estado completo permanece apenas como cache/visualização. Toda escrita
         // enviada ao servidor é formada por registros alterados (deltas).
         let DBS_CONTROL_SYNC_BASE_STATE = null;
+        // Exclusões seguem uma intenção própria e nunca entram no autosave de
+        // snapshot. O mapa mantém o rollback local até o ACK transacional.
+        const DBS_CONTROL_PENDING_DELETES = new Map();
         // Dashboard só exibe números depois da primeira hidratação autoritativa.
         let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
         let DBS_CONTROL_DASHBOARD_SUMMARY = null;
@@ -3792,6 +3795,62 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
+
+        function dbsControlClone(value) {
+            try { return JSON.parse(JSON.stringify(value)); } catch (error) { return value; }
+        }
+
+        function persistDbsControlLocalStateOnly() {
+            const persistableState = getPersistableState();
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
+            DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+            return persistableState;
+        }
+
+        function dbsControlDeleteLocator(os) {
+            const rawId = String(os?.id ?? '').trim();
+            const workOrderId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawId)
+                ? rawId
+                : '';
+            const protocol = [os?.protocolo, os?.protocol, os?.numero]
+                .map(value => String(value ?? '').trim())
+                .find(Boolean) || '';
+            return { workOrderId, protocol };
+        }
+
+        function solicitarExclusaoOS(os) {
+            if (!os || os.excluidaEm) return false;
+            const before = dbsControlClone(os);
+            const now = new Date().toISOString();
+            const randomId = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+            const requestId = ('delete:' + String(os.id || os.protocolo || Date.now()) + ':' + Date.now() + ':' + randomId).slice(0, 160);
+            os.excluidaEm = now;
+            os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador';
+            os.statusAntesExclusao = os.status || '';
+            const persistableState = persistDbsControlLocalStateOnly();
+            // A base local já representa a intenção de exclusão; assim, um
+            // autosave posterior não reenvia a OS completa e não reabre conflito.
+            DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(persistableState);
+            DBS_CONTROL_PENDING_DELETES.set(requestId, { osId: String(os.id), before });
+            const locator = dbsControlDeleteLocator(os);
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'DBS_CONTROL_DELETE_WORK_ORDER',
+                    requestId,
+                    workOrderId: locator.workOrderId,
+                    protocol: locator.protocol
+                }, '*');
+            }
+            return true;
+        }
+
         function saveState() {
             // Em recuperação local, os dados são exibidos em modo somente leitura:
             // nenhuma gravação local ou na nuvem é permitida até validar a nuvem.
@@ -4090,6 +4149,34 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 });
                 return { ...nextState, ordens: orders };
             };
+
+            if (msg.type === 'DBS_CONTROL_DELETE_WORK_ORDER_ACK') {
+                const requestId = String(msg.requestId || '');
+                const pending = DBS_CONTROL_PENDING_DELETES.get(requestId);
+                if (!pending) return;
+                DBS_CONTROL_PENDING_DELETES.delete(requestId);
+                if (msg.ok) {
+                    const current = (ERP_STATE.ordens || []).find(order => String(order?.id) === String(pending.osId));
+                    const version = Number(msg.result?.version);
+                    if (current && Number.isFinite(version) && version > 0) current.version = version;
+                    const confirmedState = persistDbsControlLocalStateOnly();
+                    DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(confirmedState);
+                    renderizarTudo();
+                    return;
+                }
+
+                // Rollback apenas da OS que não foi confirmada. Nenhuma outra
+                // alteração local é descartada e o usuário recebe uma mensagem
+                // operacional curta, sem detalhes de conflito/RPC.
+                const currentIndex = (ERP_STATE.ordens || []).findIndex(order => String(order?.id) === String(pending.osId));
+                if (currentIndex >= 0) ERP_STATE.ordens[currentIndex] = pending.before;
+                else ERP_STATE.ordens.push(pending.before);
+                const restoredState = persistDbsControlLocalStateOnly();
+                DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(restoredState);
+                renderizarTudo();
+                alert(msg.error || 'Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.');
+                return;
+            }
 
             if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
                 if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
@@ -4947,9 +5034,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const list = obterOSSelecionadas();
             if (!list.length) { alert('Selecione uma ou mais OS para excluir da operação.'); return; }
             if (!confirm('Excluir ' + list.length + ' OS selecionada(s) das listas operacionais? O histórico será preservado para rastreabilidade.')) return;
-            const now = new Date().toISOString();
-            list.forEach(os => { os.excluidaEm = now; os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador'; os.statusAntesExclusao = os.status || ''; });
-            saveState(); renderizarTudo();
+            list.forEach(os => solicitarExclusaoOS(os));
+            renderizarTudo();
         }
 
         function normalizarDataFiltroOS(value) {
@@ -5111,10 +5197,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
             if (!os || os.excluidaEm) return;
             if (!confirm('Excluir esta OS da operação? O registro será retirado das listas operacionais, mas permanecerá preservado no histórico interno para evitar perda de rastreabilidade.')) return;
-            os.excluidaEm = new Date().toISOString();
-            os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador';
-            os.statusAntesExclusao = os.status || '';
-            saveState(); renderizarTudo();
+            if (solicitarExclusaoOS(os)) renderizarTudo();
         }
 
 
