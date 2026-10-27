@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, getDbsControlCloudState, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, getDbsControlCloudState, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -173,6 +173,22 @@ function DbsControlPage() {
       if (event.includes("error") || event.includes("conflict") || event.includes("retry")) console.warn(entry);
       else console.info(entry);
     };
+    const sendDashboardSummary = () => {
+      void getDbsControlDashboardSummary()
+        .then((summary) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DASHBOARD_SUMMARY",
+            summary,
+          }, "*");
+        })
+        .catch((error) => {
+          // KPI failure must never block OS reads/writes; the relational path remains authoritative.
+          logSyncEvent("dashboard_summary_error", {
+            message: error instanceof Error ? error.message : "Falha ao carregar os indicadores agregados.",
+          });
+        });
+    };
+
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
@@ -250,6 +266,7 @@ function DbsControlPage() {
           } });
           const cloud = await getDbsControlCloudState();
           if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state }, "*");
+          sendDashboardSummary();
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_MASTER_REFRESH_RESULT", ok: true, result }, "*");
         } catch (err) {
           console.error("DBS Control master refresh:", err);
@@ -263,6 +280,7 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_READY") {
+        sendDashboardSummary();
         try {
           const cloud = await getDbsControlCloudState();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
