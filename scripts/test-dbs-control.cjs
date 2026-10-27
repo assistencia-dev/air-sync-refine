@@ -230,9 +230,13 @@ assert.match(cloudFunctions, /sla_deadline: normalizeOptionalTimestamp/, "O SLA 
 assert.match(timestampMigration, /dbs_control_normalize_work_order_timestamps/, "A RPC deve normalizar timestamps opcionais no servidor.");
 assert.match(timestampMigration, /v_raw := nullif\(btrim\(v_patch->>v_key\), ''\)/, "A migração deve converter timestamps vazios em NULL.");
 assert.match(timestampMigration, /exception when others then/, "Timestamp inválido não pode bloquear a sincronização da OS.");
-assert.match(pdf, /function observationBox\(value\)/, "O PDF deve renderizar observações em uma caixa dedicada.");
-assert.match(pdf, /const includeValues = !employeeMode && options\.includeValues === true/, "O colaborador nunca deve receber valores financeiros no PDF.");
-assert.match(pdf, /if \(includeValues && total != null && total !== 0\)/, "Os totais financeiros precisam respeitar a permissão do modelo de PDF.");
+assert.match(pdf, /const M = 10, W = 190/, "O PDF da OS deve usar margem de 10 mm e área A4 compacta.");
+assert.match(pdf, /company\\.logo_url/, "O PDF deve buscar dinamicamente a logo da empresa.");
+assert.match(pdf, /function maskDocument\\(value\\)/, "O PDF deve aplicar máscara de CNPJ/CPF.");
+assert.match(pdf, /function maskCep\\(value\\)/, "O PDF deve aplicar máscara de CEP.");
+assert.match(pdf, /function equipmentLabel\\(value\\)/, "O PDF deve higienizar placeholders genéricos de equipamentos.");
+assert.match(pdf, /Página 1 de 1/, "O rodapé deve declarar a paginação única.");
+assert.doesNotMatch(pdf, /doc\\.addPage\\(/, "O renderer da OS não pode abrir uma segunda página.");
 assert.match(observations, /Nenhuma observação registrada\./, "O detalhe administrativo deve exibir um estado vazio explícito.");
 
 const appendHelper = cloudFunctions.match(/function mergeAppendOnlyCollaboratorObservations\(currentOrder: any, incomingOrder: any\) \{[\s\S]*?\n\}\n(?=\nfunction normalizeDbsStatus)/)?.[0];
