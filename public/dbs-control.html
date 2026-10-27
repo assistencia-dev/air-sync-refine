@@ -7339,7 +7339,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         const targetId = item => {
             const explicit = item.getAttribute('data-dbs-target') || item.getAttribute('data-tab');
             if (explicit) return explicit;
-            const match = String(item.getAttribute('onclick') || '').match(/switchTab\\(\\s*['"]([^'"]+)['"]/);
+            const match = String(item.getAttribute('onclick') || '').match(/switchTab\(\s*['"]([^'"]+)['"]/);
             return match ? match[1] : '';
         };
         const apply = () => {
