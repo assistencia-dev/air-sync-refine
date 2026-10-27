@@ -1668,7 +1668,7 @@ export const deleteDbsControlWorkOrder = createServerFn({ method: "POST" })
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const deletedAt = new Date().toISOString();
-      const idempotencyKey = \`\${data.requestId}:work_order_delete:\${String(canonical.id)}:\${attempt}\`.slice(0, 240);
+      const idempotencyKey = `${data.requestId}:work_order_delete:${String(canonical.id)}:${attempt}`.slice(0, 240);
       const rpc = await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", {
         p_payload: {
           idempotency_key: idempotencyKey,
