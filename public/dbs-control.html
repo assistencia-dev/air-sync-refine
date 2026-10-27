@@ -8204,6 +8204,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body.dbs-control-employee-mode .employee-finish-row .btn { width: 100% !important; }
   }
   @media (max-width:400px) { body.dbs-control-employee-mode .employee-grid { grid-template-columns: minmax(0,1fr) !important; } }
+</style>
 
 <style id="dbs-field-execution-clarity-20261026">
   /* Execução de campo: hierarquia visual simples, leitura em uma coluna e
@@ -8289,3 +8290,54 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body.dbs-control-employee-mode .employee-execution-roadmap {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       row-gap: 7px;
+    }
+  }
+</style>
+
+<style id="dbs-os-clean-layout-20261027">
+  /* Emissão de OS: uma única origem para o local físico (equipamento). */
+  #dbs-os-extra-fields {
+    margin-top: 20px !important;
+    padding: 18px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%) !important;
+    box-shadow: 0 6px 18px rgba(15, 54, 92, .045);
+  }
+  #dbs-os-extra-fields > div:first-child {
+    margin-bottom: 13px !important;
+    color: #174a78 !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    letter-spacing: .1em !important;
+    text-transform: uppercase !important;
+  }
+  #dbs-os-extra-fields .form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  #dbs-os-extra-fields .form-group { margin: 0 !important; }
+  #dbs-os-extra-fields label {
+    color: #49647e !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    letter-spacing: .02em !important;
+    text-transform: none !important;
+  }
+  #dbs-os-extra-fields input,
+  #dbs-os-extra-fields select {
+    min-height: 44px !important;
+    border-radius: 10px !important;
+    font-size: 13px !important;
+  }
+  #tab-nova-os .os-premium-description { margin-top: 20px; }
+  #tab-nova-os .os-premium-description textarea { min-height: 104px !important; }
+  #tab-nova-os .os-premium-footer span { max-width: 60ch; line-height: 1.45; }
+  @media (max-width: 700px) {
+    #dbs-os-extra-fields { padding: 14px !important; }
+    #dbs-os-extra-fields .form-grid { grid-template-columns: 1fr; gap: 10px; }
+    #tab-nova-os .os-premium-description textarea { min-height: 112px !important; }
+  }
+</style>
+
