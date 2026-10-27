@@ -132,11 +132,11 @@ assert.match(route, /realtime_status/, "O estado do canal Realtime precisa ser o
 assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
 assert.match(cloudFunctions, /export const deleteDbsControlWorkOrder/, "A exclusão de OS deve usar uma intenção relacional própria, sem autosave de snapshot.");
 assert.match(cloudFunctions, /event_type: "work_order_deleted"/, "A exclusão deve gerar evento auditável na mesma transação da OS.");
-assert.match(cloudFunctions, /patch: \\{ deleted_at: deletedAt \\}/, "A exclusão deve ser lógica e enviar somente deleted_at.");
-assert.match(route, /msg\\.type === "DBS_CONTROL_DELETE_WORK_ORDER"/, "A rota deve receber a intenção explícita de exclusão.");
-assert.match(html, /const DBS_CONTROL_PENDING_DELETES = new Map\\(\\)/, "O iframe deve manter rollback local enquanto a exclusão aguarda confirmação.");
+assert.match(cloudFunctions, /patch: \{ deleted_at: deletedAt \}/, "A exclusão deve ser lógica e enviar somente deleted_at.");
+assert.match(route, /msg\.type === "DBS_CONTROL_DELETE_WORK_ORDER"/, "A rota deve receber a intenção explícita de exclusão.");
+assert.match(html, /const DBS_CONTROL_PENDING_DELETES = new Map\(\)/, "O iframe deve manter rollback local enquanto a exclusão aguarda confirmação.");
 assert.match(html, /type: 'DBS_CONTROL_DELETE_WORK_ORDER'/, "A exclusão deve sair do autosave e seguir pelo canal dedicado.");
-assert.doesNotMatch(html, /function excluirOSComSeguranca\\(osId\\) \\{[\\s\\S]*?saveState\\(\\); renderizarTudo\\(\\);/, "Excluir uma OS não pode reenviar o snapshot/delta completo.");
+assert.doesNotMatch(html, /function excluirOSComSeguranca\(osId\) \{[\s\S]*?saveState\(\); renderizarTudo\(\);/, "Excluir uma OS não pode reenviar o snapshot/delta completo.");
 assert.match(html, /DBS_CONTROL_DELETE_WORK_ORDER_ACK/, "O fluxo de exclusão deve aguardar ACK antes de consolidar a cópia local.");
 
 assert.match(route, /isCompleted\(localRecord\.status\) && !isCompleted\(cloudRecord\.status\)/, "Uma resposta de nuvem atrasada não pode reabrir uma OS concluída localmente.");
