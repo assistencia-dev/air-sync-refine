@@ -116,7 +116,7 @@ async function countAttachments(requestId: string) {
 
 export const listBenefitRequests = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { kind: BenefitKind }) => ({ kind: assertKind(input?.kind) }))
+  .validator((input: { kind: BenefitKind }) => ({ kind: assertKind(input?.kind) }))
   .handler(async ({ context, data }): Promise<BenefitRequest[]> => {
     await requireNativeOperator(context);
     const { data: rows, error } = await db
@@ -172,7 +172,7 @@ type SaveInput = {
 
 export const saveBenefitRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: SaveInput) => {
+  .validator((input: SaveInput) => {
     const kind = assertKind(input?.kind);
     if (!input.employee_name?.trim()) throw new Error("Informe o colaborador.");
     if (!input.filial?.trim()) throw new Error("Informe a filial / centro de custo.");
@@ -279,7 +279,7 @@ export const saveBenefitRequest = createServerFn({ method: "POST" })
 
 export const changeRequestStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; status: string; note?: string | null }) => {
+  .validator((input: { id: string; status: string; note?: string | null }) => {
     if (!input?.id || !input?.status) throw new Error("Solicitação inválida.");
     return { id: input.id, status: input.status, note: input.note?.trim() || null };
   })
@@ -339,7 +339,7 @@ export const changeRequestStatus = createServerFn({ method: "POST" })
 /** R4 — exclusão apenas lógica, o histórico financeiro é preservado. */
 export const softDeleteRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; reason?: string | null }) => {
+  .validator((input: { id: string; reason?: string | null }) => {
     if (!input?.id) throw new Error("Solicitação inválida.");
     return { id: input.id, reason: input.reason?.trim() || null };
   })
@@ -378,7 +378,7 @@ export type RequestAttachment = {
 
 export const listRequestAttachments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { request_id: string }) => {
+  .validator((input: { request_id: string }) => {
     if (!input?.request_id) throw new Error("Solicitação inválida.");
     return { request_id: input.request_id };
   })
@@ -411,7 +411,7 @@ export const listRequestAttachments = createServerFn({ method: "POST" })
 
 export const uploadRequestAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       request_id: string;
       file_name: string;
@@ -473,7 +473,7 @@ export type RequestAuditEntry = {
 
 export const listRequestAudit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { request_id: string }) => {
+  .validator((input: { request_id: string }) => {
     if (!input?.request_id) throw new Error("Solicitação inválida.");
     return { request_id: input.request_id };
   })
