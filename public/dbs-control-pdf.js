@@ -230,7 +230,6 @@
     const email = unique([site.contact_email, site.contactEmail, client.contatoEmail, client.email, order.contatoEmail]);
     const phone = unique([site.contact_phone, site.contactPhone, client.telefone, client.whatsapp, order.contatoTelefone]);
     const documentNumber = maskDocument(first(client.cnpj, client.cpf));
-    const place = first(order.localAtendimento, site.name, site.nome, '—');
     let y = 10;
     // Header / branding (logo height capped at 12 mm ≈ 45 px).
     doc.setFillColor(...theme.white); doc.setDrawColor(...theme.line); doc.setLineWidth(0.35); doc.roundedRect(M, y, W, 25, 1.4, 1.4, 'FD');
@@ -255,8 +254,7 @@
     let cy = section(1, 'Cliente e localização', y, 31);
     field(M + 4, cy, 88, 'Cliente', clientName, 1);
     field(M + 99, cy, 87, 'CNPJ / CPF', documentNumber, 1);
-    field(M + 4, cy + 10, 88, 'Endereço completo', clientAddress || '—', 2);
-    field(M + 99, cy + 10, 87, 'Unidade / local', place, 2);
+    field(M + 4, cy + 10, 182, 'Endereço completo', clientAddress || '—', 2);
     field(M + 4, cy + 21, 88, 'E-mail', email || '—', 1);
     field(M + 99, cy + 21, 87, 'Telefone', phone || '—', 1);
     y += 34;
@@ -304,7 +302,6 @@
     let dy = section(4, 'Diagnóstico e execução técnica', y, 38);
     field(M + 4, dy, 88, 'Diagnóstico técnico', first(order.diagnostico, order.technical_opinion, order.sintoma, '—'), 2);
     field(M + 99, dy, 87, 'Ação / peças', first(order.trabalhoExecutado, order.acaoNecessaria, order.recomendacao, unique(list(order.pecasUsadas).map(part => part.nome || part.descricao)), '—'), 2);
-    field(M + 4, dy + 13, 88, 'Tipo de atendimento', first(order.tipo, service.nome, '—'), 1);
     const evidenceCount = list(order.anexos).length + list(order.attachments).length + (order.fotoAntes ? 1 : 0) + (order.fotoDepois ? 1 : 0);
     const totalValue = order.total_cents != null ? numeric(order.total_cents) / 100 : numeric(order.valor);
     field(M + 4, dy + 13, 88, 'Tipo de atendimento', first(order.tipo, service.nome, '—'), 1);
