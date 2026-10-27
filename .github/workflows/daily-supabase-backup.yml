@@ -22,4 +22,14 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_BACKUP_BUCKET: db-backups
           SUPABASE_DOCUMENT_BUCKETS: dbs-control-os,rh-files,ticket-files
+          SUPABASE_REQUIRE_DOCUMENT_BACKUP: "true"
         run: node scripts/backup-supabase.mjs
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## Backup Supabase: falha"
+            echo ""
+            echo "O backup lógico ou o inventário de documentos falhou. Nenhum manifesto incompleto deve ser considerado válido."
+          } >> "$GITHUB_STEP_SUMMARY"
