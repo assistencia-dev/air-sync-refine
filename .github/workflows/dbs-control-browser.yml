@@ -36,7 +36,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Open published DBS Control and detect browser errors
         env:
-          DBS_CONTROL_URL: https://dbs-air-solutions.lovable.app/dbs-control
+          DBS_CONTROL_URL: https://air-sync-refine.lovable.app/dbs-control
           # Optional protected smoke credentials. When present, the test also
           # authenticates and verifies that the real DBS Control iframe opens.
           DBS_E2E_IDENTIFIER: ${{ secrets.DBS_E2E_IDENTIFIER || secrets.DBS_E2E_EMAIL }}
