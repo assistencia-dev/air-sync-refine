@@ -13,7 +13,7 @@ async function getCaller(context: { userId: string }) {
 
 export const createTreasuryViewer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { full_name: string; email: string; username: string; password: string }) => {
+  .validator((input: { full_name: string; email: string; username: string; password: string }) => {
     if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
     if (!input.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("E-mail inválido.");
     if (!input.username?.trim() || !/^[a-zA-Z0-9._-]{3,40}$/.test(input.username)) throw new Error("Usuário deve ter de 3 a 40 caracteres (letras, números, ponto, hífen ou sublinhado).");
