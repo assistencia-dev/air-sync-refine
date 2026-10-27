@@ -627,16 +627,23 @@ async function hydrateDbsControlStateFromCanonicalDb(
     });
 
   const statusMap: Record<string, string> = {
-    aberta: "Em Atendimento",
-    em_atendimento: "Em Atendimento",
-    andamento: "Em Atendimento",
+    aberta: "Aberta",
+    em_atendimento: "Em atendimento",
+    andamento: "Em atendimento",
     concluida: "Concluída",
     concluída: "Concluída",
     concluido: "Concluída",
     concluído: "Concluída",
+    concluida_com_pendencia: "Concluída com pendência",
+    concluída_com_pendência: "Concluída com pendência",
+    pendencia: "Concluída com pendência",
+    aguardando_peca: "Aguardando peça",
+    aguardando_peça: "Aguardando peça",
+    aguardando_aprovacao: "Aguardando aprovação",
+    aguardando_aprovação: "Aguardando aprovação",
+    retorno_necessario: "Retorno necessário",
     cancelada: "Cancelada",
     cancelado: "Cancelada",
-    aguardando_peca: "Aguardando peça",
     aguardando_cliente: "Aguardando cliente",
   };
 
