@@ -14,7 +14,7 @@ function normalizeDigits(v: string) {
  * yet, creates the SUPER_ADMIN user idempotently.
  */
 export const resolveLogin = createServerFn({ method: "POST" })
-  .inputValidator((input: { identifier: string }) => {
+  .validator((input: { identifier: string }) => {
     if (!input || typeof input.identifier !== "string" || input.identifier.trim().length < 3) {
       throw new Error("Informe um usuário válido.");
     }
