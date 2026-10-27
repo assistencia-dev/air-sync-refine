@@ -829,7 +829,13 @@
     if (!target) return false;
     document.querySelectorAll('.tab-view').forEach(el=>el.classList.toggle('active',el===target));
     document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el===item));
-    const meta=titles[id];
+    const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+    const employeeTitles = {
+      'tab-dashboard':['Meu painel','Progresso e operação do colaborador'],
+      'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+      'tab-nova-os':['Emitir OS','Nova ordem dentro da base vinculada']
+    };
+    const meta=employeeMode ? (employeeTitles[id] || titles[id]) : titles[id];
     if(meta){const title=document.getElementById('view-title');const subtitle=document.getElementById('view-subtitle');if(title)title.textContent=meta[0];if(subtitle)subtitle.textContent=meta[1];}
     try {
       const renderers = {
