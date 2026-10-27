@@ -102,11 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_hardening_sync_commands_conflicts
   ON public.dbs_control_sync_commands (conflict_at DESC)
   WHERE status = 'conflict';
 
-CREATE INDEX IF NOT EXISTS idx_hardening_work_order_events_order_created
-  ON public.dbs_control_work_order_events (work_order_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_hardening_work_order_attachments_order_created
-  ON public.dbs_control_work_order_attachments (work_order_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_hardening_ponto_employee_date
   ON public.rh_ponto_records (employee_id, work_date, punch_type);
