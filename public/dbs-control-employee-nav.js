@@ -52,7 +52,9 @@
   }
 
   function install() {
+    if (window.__dbsEmployeeNavigationInstalled) return;
     if (!document.body.classList.contains('dbs-control-employee-mode')) return;
+    window.__dbsEmployeeNavigationInstalled = true;
     document.addEventListener('click', function(event) {
       const item = event.target && event.target.closest ? event.target.closest('aside .nav-item') : null;
       if (!item) return;
@@ -82,6 +84,10 @@
     if (dashboardNav) activate('tab-dashboard', dashboardNav);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-  else install();
+  if (document.readyState === 'loading') {
+    // O script é carregado no fim do HTML; instalar já garante precedência
+    // sobre os handlers legados que também escutam a navegação em captura.
+    install();
+    document.addEventListener('DOMContentLoaded', install, { once: true });
+  } else install();
 })();
