@@ -932,6 +932,18 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
       contentType: data.contentType, attachmentType: data.attachmentType };
   });
 
+export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsControlUser(context);
+    const employee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    const { data, error } = await supabaseAdmin.rpc("dbs_control_dashboard_summary", {
+      p_employee_id: employee?.id ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? {}) as Record<string, unknown>;
+  });
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
