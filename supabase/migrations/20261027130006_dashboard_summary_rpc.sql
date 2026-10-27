@@ -56,7 +56,7 @@ AS $$
     'orders_open', (SELECT count(*)::bigint FROM scoped
       WHERE deleted_at IS NULL
         AND COALESCE(lower(trim(status)), '') NOT IN
-          ('concluida','concluído','concluida_com_pendencia','cancelada','cancelado')),
+          ('concluida','concluída','concluído','concluida_com_pendencia','concluída com pendência','cancelada','cancelado')),
     'orders_in_service', (SELECT count(*)::bigint FROM scoped
       WHERE deleted_at IS NULL
         AND COALESCE(lower(trim(status)), '') IN
@@ -64,7 +64,7 @@ AS $$
     'orders_completed', (SELECT count(*)::bigint FROM scoped
       WHERE deleted_at IS NULL
         AND COALESCE(lower(trim(status)), '') IN
-          ('concluida','concluído','concluida_com_pendencia')),
+          ('concluida','concluída','concluído','concluida_com_pendencia','concluída com pendência')),
     'orders_cancelled', (SELECT count(*)::bigint FROM scoped
       WHERE COALESCE(lower(trim(status)), '') IN ('cancelada','cancelado')),
     'orders_deleted', (SELECT count(*)::bigint FROM scoped WHERE deleted_at IS NOT NULL),
