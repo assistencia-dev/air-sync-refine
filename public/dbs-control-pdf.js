@@ -48,8 +48,8 @@
   };
   const numeric = value => {
     if (!has(value)) return null;
-    const raw = text(value).replace(/R\\$\\s*/g, '').trim();
-    const parsed = typeof value === 'number' ? value : Number(raw.includes(',') ? raw.replace(/\\./g, '').replace(',', '.') : raw);
+    const raw = text(value).replace(/R\$\s*/g, '').trim();
+    const parsed = typeof value === 'number' ? value : Number(raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw);
     return Number.isFinite(parsed) ? parsed : null;
   };
   const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
