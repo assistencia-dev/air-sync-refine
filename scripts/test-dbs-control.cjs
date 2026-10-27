@@ -195,7 +195,7 @@ assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do D
 assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
 assert.match(html, /Release the filtered view before rendering/, "A hidratação filtrada deve liberar o portal do colaborador antes da renderização da mesma mensagem.");
 const styles = fs.readFileSync("src/styles.css", "utf8");
-assert.match(styles, /body:has\(input\[autocomplete=\"username\"\]\)[\s\S]*?\.grid-cols-1\.lg\:grid-cols-2 > div:first-child \{\s*display: none !important;/, "O login mobile não deve deixar um painel de apresentação vazio acima do formulário.");
+assert.match(styles, /body:has\(input\[autocomplete=\"username\"\]\)[\s\S]*?\.grid-cols-1\.lg\\:grid-cols-2 > div:first-child \{\s*display: none !important;/, "O login mobile não deve deixar um painel de apresentação vazio acima do formulário.");
 assert.match(loginRoute, /autoCapitalize=\"none\"[\s\S]*?autoCorrect=\"off\"[\s\S]*?enterKeyHint=\"next\"/, "O campo de identificação deve respeitar teclado e preenchimento do celular.");
 assert.match(loginRoute, /role=\"alert\" aria-live=\"polite\"/, "Falhas de login precisam ser anunciadas de forma acessível no celular.");
 assert.match(ux, /DOMContentLoaded/, "A camada UX precisa ter inicialização compatível com carregamento tardio.");
