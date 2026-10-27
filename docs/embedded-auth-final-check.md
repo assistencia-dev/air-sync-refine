@@ -1,6 +1,6 @@
 # Teste final do módulo incorporado
 
-A rota publicada `https://air-sync-refine.lovable.app/passage` carregou corretamente dentro do portal DBS Air após a sessão administrativa existente.
+A rota publicada `https://dbs-air-solutions.lovable.app/passage` carregou corretamente dentro do portal DBS Air após a sessão administrativa existente.
 
 O portal DBS não solicitou novas credenciais para abrir a rota. Dentro do iframe, porém, o Sistema de Vale Passagem exibiu sua própria tela de login (`Usuário` e `Senha`). Isso confirma que a sessão nativa do DBS não é compartilhada automaticamente com o domínio do módulo independente.
 
