@@ -307,7 +307,7 @@ export const getFieldControlIntegrationStatus = createServerFn({ method: "GET" }
 
 export const saveFieldControlApiKey = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { apiKey: string }) => {
+  .validator((input: { apiKey: string }) => {
     const apiKey = normalizeText(input?.apiKey);
     if (!apiKey || apiKey.length < 10) throw new Error("Informe uma chave de API FieldControl válida.");
     return { apiKey };
@@ -574,7 +574,7 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
 
 export const getFieldControlWorkOrderDetails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { workOrderId: string }) => ({ workOrderId: normalizeText(input?.workOrderId) }))
+  .validator((input: { workOrderId: string }) => ({ workOrderId: normalizeText(input?.workOrderId) }))
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlAdmin(context);
     const companyId = user.company_id as string;
@@ -645,7 +645,7 @@ export const getFieldControlWorkOrderDetails = createServerFn({ method: "POST" }
 
 export const syncFieldControl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { mode?: "preview" | "apply" }) => ({
+  .validator((input: { mode?: "preview" | "apply" }) => ({
     mode: input?.mode === "apply" ? "apply" as const : "preview" as const,
   }))
   .handler(async ({ context, data }) => {
