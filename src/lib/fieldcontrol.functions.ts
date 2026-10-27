@@ -451,7 +451,10 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
       fetchAllSupabaseWorkOrderEquipmentLinks(),
     ]);
     for (const result of [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult]) {
-      if (result.error) throw new Error(result.error.message);
+      const error = (result as { error?: unknown }).error;
+      if (error) {
+        throw new Error(error instanceof Error ? error.message : String((error as { message?: unknown })?.message || error));
+      }
     }
 
     const employeesResult = await listAll("/employees", integration.api_key);

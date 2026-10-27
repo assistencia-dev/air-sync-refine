@@ -8,6 +8,9 @@ const viewer = fs.readFileSync('src/lib/treasury-viewer.functions.ts', 'utf8');
 const fieldControl = fs.readFileSync('src/lib/fieldcontrol.functions.ts', 'utf8');
 const html = fs.readFileSync('public/treasury.html', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
+const healthMigration = fs.readFileSync('supabase/migrations/20261027162135_treasury_ledger_health_rpc.sql', 'utf8');
+const healthScript = fs.readFileSync('scripts/check-treasury-ledger-health.mjs', 'utf8');
+const healthWorkflow = fs.readFileSync('.github/workflows/treasury-ledger-health.yml', 'utf8');
 
 assert.doesNotMatch(route, /from\(["']treasury_snapshots["']\)[\s\S]*?\.(?:insert|update|upsert)\(/);
 assert.doesNotMatch(functions, /from\(["']treasury_snapshots["']\)[\s\S]*?\.(?:insert|update|upsert)\(/);
@@ -25,6 +28,12 @@ assert.match(migration, /alter table public\.treasury_ledger_entries\s+add colum
 assert.match(migration, /pg_advisory_xact_lock\(hashtextextended/i);
 assert.match(migration, /case when p_status = 'posted' then 'draft' else p_status end/i);
 assert.match(migration, /revoke all on function public\.post_treasury_ledger_entry/i);
+assert.match(healthMigration, /treasury_ledger_health/);
+assert.match(healthMigration, /pending_over_sla/);
+assert.match(healthMigration, /revoke all on function public\.treasury_ledger_health/i);
+assert.match(healthScript, /dead_letter/);
+assert.match(healthScript, /pending_critical/);
+assert.match(healthWorkflow, /cron: "\*\/5 \* \* \* \*"/);
 
 // Catch syntax regressions in the inline HTML script without executing browser APIs.
 const inlineScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((match) => match[1]);

@@ -8,6 +8,8 @@ const retention = fs.readFileSync(path.join(root, "supabase/migrations/202610161
 const integrity = fs.readFileSync(path.join(root, "supabase/migrations/20261026200000_operational_integrity_indexes_and_backup_manifest.sql"), "utf8");
 const bucketMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261026203000_backup_manifest_document_buckets.sql"), "utf8");
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/daily-supabase-backup.yml"), "utf8");
+const restoreDrill = fs.readFileSync(path.join(root, "scripts/verify-backup-restore.mjs"), "utf8");
+const restoreWorkflow = fs.readFileSync(path.join(root, ".github/workflows/backup-restore-drill.yml"), "utf8");
 
 assert.match(backup, /dbs-control-os/);
 assert.match(backup, /listStorageObjects/);
@@ -25,4 +27,9 @@ assert.match(bucketMigration, /document_buckets/);
 assert.match(workflow, /SUPABASE_SERVICE_ROLE_KEY/);
 assert.match(workflow, /SUPABASE_DOCUMENT_BUCKETS/);
 assert.match(workflow, /schedule:/);
+assert.match(restoreDrill, /document_count/);
+assert.match(restoreDrill, /createHash\("sha256"\)/);
+assert.match(restoreDrill, /mode: "read-only restore verification"/);
+assert.match(restoreWorkflow, /SUPABASE_SERVICE_ROLE_KEY/);
+assert.match(restoreWorkflow, /SUPABASE_REQUIRE_DOCUMENT_BACKUP/);
 console.log("Data protection: immutable OS history, document checksums, verified manifests, daily workflow and duplicate-punch guard passed.");

@@ -17,7 +17,11 @@
     "test:dbs-50-sessions": "node scripts/test-dbs-control-50-sessions.cjs",
     "test:rh-point": "node scripts/test-rh-point-integrity.cjs",
     "test:treasury-ledger": "node scripts/test-treasury-ledger.cjs",
-    "test:data-protection": "node scripts/test-data-protection.cjs"
+    "test:data-protection": "node scripts/test-data-protection.cjs",
+    "test:performance": "node scripts/test-performance-contracts.cjs",
+    "test:operational": "node scripts/test-operational-e2e.cjs",
+    "test:treasury-health": "node scripts/check-treasury-ledger-health.mjs",
+    "verify:backup-restore": "node scripts/verify-backup-restore.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

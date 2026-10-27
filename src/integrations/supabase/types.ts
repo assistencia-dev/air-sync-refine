@@ -838,13 +838,16 @@ export type Database = {
           assinatura_path: string | null
           client_id: string
           completed_at: string | null
+          completion_status_code: string | null
           created_at: string
           created_by_user_id: string | null
           deleted_at: string | null
           description: string | null
           diagnostico: string | null
+          execution_checklist: Json
           id: string
           idempotency_key: string | null
+          geolocation_captured_at: string | null
           latitude: number | null
           longitude: number | null
           observation: string | null
@@ -872,13 +875,16 @@ export type Database = {
           assinatura_path?: string | null
           client_id: string
           completed_at?: string | null
+          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
           deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
+          execution_checklist?: Json
           id?: string
           idempotency_key?: string | null
+          geolocation_captured_at?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -906,13 +912,16 @@ export type Database = {
           assinatura_path?: string | null
           client_id?: string
           completed_at?: string | null
+          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
           deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
+          execution_checklist?: Json
           id?: string
           idempotency_key?: string | null
+          geolocation_captured_at?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -3515,6 +3524,10 @@ export type Database = {
       current_role_key: {
         Args: never
         Returns: Database["public"]["Enums"]["role_key"]
+      }
+      dbs_control_dashboard_summary: {
+        Args: { p_employee_id?: string | null }
+        Returns: Json
       }
       dbs_control_apply_work_order_delta: {
         Args: { p_payload: Json }

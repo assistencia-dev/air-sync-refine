@@ -1,0 +1,33 @@
+name: Backup restore verification
+
+on:
+  schedule:
+    - cron: "37 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun run verify:backup-restore
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_BACKUP_BUCKET: db-backups
+          SUPABASE_REQUIRE_DOCUMENT_BACKUP: "true"
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## Backup restore drill: falha"
+            echo ""
+            echo "O manifesto, snapshot ou algum documento não passou na verificação de checksum/tamanho."
+          } >> "$GITHUB_STEP_SUMMARY"

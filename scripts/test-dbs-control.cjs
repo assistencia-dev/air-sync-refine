@@ -105,7 +105,7 @@ assert.match(cloudFunctions, /const merged: Record<string, unknown> = \{ \.\.\.c
 assert.match(cloudFunctions, /preserveCompletedWorkOrderStatus: true/, "A hidratação das OS deve proteger uma conclusão já registrada no snapshot contra status canônico desatualizado.");
 assert.match(cloudFunctions, /isCompleted\(item\?\.status\) && !isCompleted\(canonical\?\.status\)/, "Um status canônico antigo não pode reabrir uma OS concluída no snapshot.");
 assert.match(cloudFunctions, /status: canonicalCompleted \? "Concluída" : \(snapshotCompleted \? merged\.status : canonical\.status\)/, "Um completed_at antigo ou inconsistente não pode rebaixar o status concluído do snapshot.");
-assert.match(cloudFunctions, /\.range\(offset, offset \+ pageSize - 1\)/, "A consulta de OS deve paginar a base completa.");
+assert.match(cloudFunctions, /\.limit\(pageSize\)[\s\S]*?\.gt\("id", cursor\)/, "A consulta de OS deve usar paginação por cursor para a base completa.");
 assert.match(cloudFunctions, /fetchAllDbsControlWorkOrders\(\s*(?:\{\s*\}|\n)/, "A hidratação e a auditoria devem usar a consulta paginada.");
 assert.match(fieldControl, /async function preserveUserScopedSnapshotsBeforeCompanyLink\(userId: string, companyId: string\)/, "Vincular o administrador a uma empresa deve verificar snapshots pessoais preexistentes.");
 assert.match(fieldControl, /if \(userDbs\.data && companyDbs\.data\)/, "O vínculo deve pausar quando os escopos pessoal e empresarial já têm snapshots DBS divergentes.");
@@ -490,7 +490,7 @@ assert.match(treasuryRoute, /DBS_TREASURY_LEDGER_COMMAND/, "A rota deve receber 
 assert.match(treasuryRoute, /postTreasuryLedgerEntry\(\{ data: msg\.command \}\)/, "A rota deve encaminhar o comando para o RPC relacional.");
 assert.match(treasuryRoute, /cloudReadyRef\.current = false;[\s\S]*?setLoading\(true\);/, "Conflito ou falha de sincronização deve bloquear o financeiro até nova tentativa.");
 
-assert.match(treasuryRoute, /if \(!cloudReadyRef\.current\) \{\s*throw new Error\("O Financeiro não conseguiu estabelecer a sincronização compartilhada com o banco de dados\."\);\s*\}\s*setCloudError\(null\);\s*setLoading\(false\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
+assert.match(treasuryRoute, /cloudReadyRef\.current = true;[\s\S]*?setCloudError\(null\);\s*setLoading\(false\);/, "O Financeiro só pode liberar a tela depois da hidratação compartilhada bem-sucedida.");
 assert.match(treasuryRoute, /setIframeReloadKey\(\(key\) => key \+ 1\)/, "A falha de sincronização precisa permitir uma nova tentativa sem apagar snapshots.");
 assert.match(treasuryRoute, /O módulo permanecerá bloqueado para evitar alterações locais que não sejam gravadas na nuvem/, "Falha na sincronização deve bloquear edição local não persistida.");
 assert.doesNotMatch(treasuryRoute, /onLoad=\{\(\) => setLoading\(false\)\}/, "O evento load do iframe, sozinho, não pode indicar sincronização pronta.");

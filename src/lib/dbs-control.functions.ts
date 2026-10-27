@@ -941,7 +941,7 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
       p_employee_id: employee?.id ?? null,
     });
     if (error) throw new Error(error.message);
-    return (data ?? {}) as Record<string, unknown>;
+    return data ?? {};
   });
 
 export const getDbsControlCloudState = createServerFn({ method: "GET" })

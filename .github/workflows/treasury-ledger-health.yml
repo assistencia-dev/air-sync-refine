@@ -1,0 +1,31 @@
+name: Treasury ledger health
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun run test:treasury-health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## Treasury ledger: alerta"
+            echo ""
+            echo "A outbox relacional apresentou falha, DLQ, retry excessivo ou atraso acima do SLA."
+          } >> "$GITHUB_STEP_SUMMARY"
