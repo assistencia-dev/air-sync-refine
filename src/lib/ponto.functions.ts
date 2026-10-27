@@ -56,7 +56,7 @@ export const listRhPontoEmployees = createServerFn({ method: "GET" }).middleware
   return canonical.map(e => ({ ...e, portal_user: e.ponto_portal_user_id ? byId.get(e.ponto_portal_user_id) ?? null : null }));
 });
 
-export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
+export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { employee_id: string; enabled: boolean; portal_identifier?: string; base_lat?: number | null; base_lng?: number | null; radius_m?: number; entrada_prevista?: string | null; saida_prevista?: string | null; almoco_inicio_previsto?: string | null; almoco_fim_previsto?: string | null }) => {
   if (!input?.employee_id) throw new Error("Colaborador inválido.");
   if (input.enabled && !input.portal_identifier?.trim()) throw new Error("Informe o usuário, e-mail ou CPF usado no login do colaborador.");
   if (input.enabled && ((input.base_lat == null) !== (input.base_lng == null))) throw new Error("Informe latitude e longitude da base juntas.");
@@ -100,7 +100,7 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
   return { employee, records: data ?? [] };
 });
 
-export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
+export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
   if (!TYPES.includes(input.punch_type) || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Marcação inválida.");
   if (input.latitude != null && (input.latitude < -90 || input.latitude > 90)) throw new Error("Latitude inválida.");
   if (input.longitude != null && (input.longitude < -180 || input.longitude > 180)) throw new Error("Longitude inválida.");
@@ -224,7 +224,7 @@ export type RhPontoDayStatus = (typeof RH_PONTO_DAY_STATUSES)[number];
 
 export const listRhPontoDayManagement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
+  .validator((input: { start_date: string; end_date: string; employee_id?: string }) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
     if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
     return input;
@@ -243,7 +243,7 @@ export const listRhPontoDayManagement = createServerFn({ method: "GET" })
 
 export const setRhPontoDayManagement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
+  .validator((input: {
     employee_id: string;
     work_date: string;
     status: RhPontoDayStatus;
@@ -275,7 +275,7 @@ export const setRhPontoDayManagement = createServerFn({ method: "POST" })
     return row;
   });
 
-export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((input: { start_date: string; end_date: string; employee_id?: string }) => {
+export const listRhPontoRecords = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).validator((input: { start_date: string; end_date: string; employee_id?: string }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.start_date) || !/^\d{4}-\d{2}-\d{2}$/.test(input.end_date)) throw new Error("Período inválido.");
   if (input.start_date > input.end_date) throw new Error("Data inicial maior que a final.");
   return input;
