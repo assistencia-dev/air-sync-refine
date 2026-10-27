@@ -483,6 +483,39 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_RECONCILE_CONFLICT") {
+        const draftChanges = pendingChangesRef.current;
+        try {
+          const latest = await getDbsControlCloudState();
+          if (!latest?.state || typeof latest.state !== "object") {
+            throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
+          }
+          pendingChangesRef.current = null;
+          pendingBatchIdRef.current = null;
+          pendingSaveRequestIdsRef.current = [];
+          cloudReadyRef.current = true;
+          cloudUpdatedAtRef.current = latest.updated_at ?? cloudUpdatedAtRef.current;
+          setCloudError(null);
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_CONFLICT_RECONCILED",
+            state: latest.state,
+            changes: draftChanges ?? {},
+            conflicts: Array.isArray(msg.conflicts) ? msg.conflicts : [],
+            updated_at: latest.updated_at ?? null,
+          }, "*");
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Não foi possível carregar a versão atual da OS.";
+          setCloudError(message);
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_STATUS",
+            status: "error",
+            pendingCount: pendingChangesRef.current ? 1 : 0,
+            error: message,
+          }, "*");
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_RETRY_SAVE") {
         retryPendingSaveRef.current?.(true);
         return;
@@ -534,11 +567,14 @@ function DbsControlPage() {
               // plano e nunca transforma uma gravação confirmada em erro.
               const result = await applyDbsControlDelta({ data: { requestId: batchId, changes } });
               const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
-              if (pendingChangesRef.current === changes) {
+              if (!hasConflict && pendingChangesRef.current === changes) {
                 pendingChangesRef.current = null;
                 pendingBatchIdRef.current = null;
                 pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
               }
+              // Em conflito, preserve the exact local delta in the parent queue until
+              // the operator explicitly reconciles it. This prevents the old version
+              // from being silently discarded after a rejected save.
               retryAttemptRef.current = 0;
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
@@ -563,6 +599,14 @@ function DbsControlPage() {
                 appliedOrders: result.appliedOrders ?? [],
                 error: resultMessage ?? undefined,
               }, "*"));
+              if (hasConflict) {
+                iframeRef.current?.contentWindow?.postMessage({
+                  type: "DBS_CONTROL_SYNC_CONFLICT",
+                  conflicts: result.conflicts ?? [],
+                  changes,
+                  requestIds,
+                }, "*");
+              }
 
               // Reconcilia o estado retornado pelo banco depois do ACK. Se essa
               // leitura falhar ou demorar, a OS continua confirmada e o retry
