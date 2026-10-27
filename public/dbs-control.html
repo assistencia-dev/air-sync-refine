@@ -4613,7 +4613,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             root.innerHTML =
                 '<section class="employee-dashboard-hero">' +
-                    '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu dashboard</div>' +
+                    '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu painel</div>' +
                     '<h2>Olá, ' + esc(employeeName) + '</h2>' +
                     '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p></div>' +
                     '<div class="employee-dashboard-sync"><small>Estado da conexão</small><strong>' + esc(syncText || (loadStatus === 'loaded' ? 'Sincronizado' : 'Sincronizando…')) + '</strong></div>' +
@@ -4776,7 +4776,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 };
                 const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
                 const employeeTitleMap = {
-                    'tab-dashboard':['Meu dashboard','Progresso e operação do colaborador'],
+                    'tab-dashboard':['Meu painel','Progresso e operação do colaborador'],
                     'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
                     'tab-nova-os':['Emitir OS','Nova ordem dentro da base vinculada']
                 };
@@ -7193,7 +7193,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 }
                 const title = document.getElementById('view-title');
                 const subtitle = document.getElementById('view-subtitle');
-                if (title) title.textContent = 'DBS CONTROL · Meu dashboard';
+                if (title) title.textContent = 'DBS CONTROL · Meu painel';
                 const baseName = params.get('base_name') || '';
                 if (subtitle) subtitle.textContent = canIssueOs
                     ? 'Progresso, execução e emissão · ' + (baseName ? 'Base ' + baseName : 'base operacional vinculada')

@@ -160,6 +160,7 @@ assert.doesNotMatch(html, /id=["']dbs-employee-context-nav["']/, "A navegação 
 assert.doesNotMatch(html, /employee-issue-inline/, "A emissão de OS não deve ser duplicada dentro da tela Minhas OS.");
 const employeeDashboardSource = html.slice(html.indexOf("function renderizarEmployeeDashboard"), html.indexOf("function renderizarAbaAtiva"));
 assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não deve duplicar a ação Emitir OS do cabeçalho.");
+assert.doesNotMatch(employeeDashboardSource, /Meu dashboard/, "O colaborador deve ter um único rótulo consistente para o painel.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
 assert.match(rhFunctions, /let baseActive = false[\s\S]*?baseActive = baseStatus === "ativo"/, "A autorização do colaborador deve validar o estado da base, não o texto do nome.");
 assert.match(rhFunctions, /can_issue_work_orders: Boolean\(resolvedEmployee\.dbs_control_can_issue_work_orders && baseActive\)/, "A permissão de emitir OS deve chegar ao portal quando a base vinculada estiver ativa.");
