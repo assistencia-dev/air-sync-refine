@@ -293,7 +293,7 @@ async function fetchAllDbsControlWorkOrders(scope: DbsControlHydrationScope = {}
   for (let offset = 0; ; offset += pageSize) {
     let query = supabaseAdmin
       .from("dbs_control_work_orders")
-      .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,assinatura_path,signature_path,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
+      .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,assinatura_path,signature_path,execution_checklist,completion_status_code,geolocation_captured_at,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
       .order("id", { ascending: true });
     if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
     const { data, error } = await query.range(offset, offset + pageSize - 1);
@@ -642,6 +642,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     aguardando_aprovacao: "Aguardando aprovação",
     aguardando_aprovação: "Aguardando aprovação",
     retorno_necessario: "Retorno necessário",
+    retorno_necessário: "Retorno necessário",
     cancelada: "Cancelada",
     cancelado: "Cancelada",
     aguardando_cliente: "Aguardando cliente",
@@ -699,6 +700,13 @@ async function hydrateDbsControlStateFromCanonicalDb(
       diagnostico: row.diagnostico || row.technical_opinion || "",
       observacao: row.servico_executado || row.observation || "",
       trabalhoExecutado: row.servico_executado || row.observation || "",
+      latitude: row.latitude ?? null,
+      longitude: row.longitude ?? null,
+      checklistTecnico: row.execution_checklist?.checklistTecnico ?? {},
+      checklist: Array.isArray(row.execution_checklist?.checklist) ? row.execution_checklist.checklist : [],
+      parametrosOperacionais: row.execution_checklist?.parametrosOperacionais ?? {},
+      completionStatusCode: row.completion_status_code || null,
+      geolocationCapturedAt: row.geolocation_captured_at || null,
       signature_name: row.signature_name || null,
       assinaturaStoragePath: row.assinatura_path || row.signature_path || null,
       assinatura: row.assinatura_path || row.signature_path ? null : (row.signature_data || null),
@@ -1283,8 +1291,11 @@ async function persistDbsControlMasterDeltas(
 function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persistDbsControlMasterDeltas> extends Promise<infer T> ? T : never) {
   const status = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
   const normalizedStatus = status === "concluida" || status === "concluido" ? "concluida"
+    : status === "concluida_com_pendencia" || status === "pendencia" ? "concluida_com_pendencia"
     : status === "em_atendimento" || status === "andamento" ? "em_atendimento"
     : status === "aguardando_peca" ? "aguardando_peca"
+    : status === "aguardando_aprovacao" ? "aguardando_aprovacao"
+    : status === "retorno_necessario" ? "retorno_necessario"
     : status === "aguardando_cliente" ? "aguardando_cliente"
     : status === "cancelada" || status === "cancelado" ? "cancelada"
     : status || "aberta";
@@ -1332,6 +1343,13 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     signature_path: signaturePath || null,
     assinatura_path: signaturePath || null,
     signature_data: signaturePath ? null : (order?.assinatura ?? order?.signature_data ?? null),
+    execution_checklist: {
+      checklistTecnico: order?.checklistTecnico && typeof order.checklistTecnico === "object" ? order.checklistTecnico : {},
+      checklist: Array.isArray(order?.checklist) ? order.checklist : [],
+      parametrosOperacionais: order?.parametrosOperacionais && typeof order.parametrosOperacionais === "object" ? order.parametrosOperacionais : {},
+    },
+    completion_status_code: String(order?.completionStatusCode ?? order?.completion_status_code ?? normalizedStatus).trim() || normalizedStatus,
+    geolocation_captured_at: normalizeOptionalTimestamp(order?.geolocationCapturedAt || order?.geolocation_captured_at),
     total_cents: Number.isFinite(amount) ? Math.round(amount * 100) : 0,
   };
   const deletedAt = normalizeOptionalTimestamp(order?.deleted_at || order?.excluidaEm);
@@ -1427,7 +1445,8 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         ? Object.fromEntries([
             "status", "started_at", "completed_at", "technical_opinion", "diagnostico",
             "observation", "servico_executado", "latitude", "longitude", "signature_name",
-            "signature_path", "assinatura_path", "signature_data",
+            "signature_path", "assinatura_path", "signature_data", "execution_checklist",
+            "completion_status_code", "geolocation_captured_at",
           ].map((key) => [key, (fullPatch as any)[key]]))
         : fullPatch;
       const isNewCollaboratorOrder = user.role_key === "COLABORADOR" && !currentCanonicalOrder;
