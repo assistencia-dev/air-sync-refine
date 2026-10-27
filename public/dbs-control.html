@@ -3580,6 +3580,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         let DBS_CONTROL_SYNC_BASE_STATE = null;
         // Dashboard só exibe números depois da primeira hidratação autoritativa.
         let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
+        let DBS_CONTROL_DASHBOARD_SUMMARY = null;
 
 
         function criarSnapshotHistoricoOS(ordens) {
@@ -4182,6 +4183,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 } else {
                     alert(msg.error || 'Não foi possível cadastrar o colaborador.');
                 }
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_DASHBOARD_SUMMARY') {
+                DBS_CONTROL_DASHBOARD_SUMMARY = msg.summary && typeof msg.summary === 'object' ? msg.summary : null;
+                if (DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'loading' && DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'error') atualizarMetricas();
                 return;
             }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
@@ -7090,6 +7096,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 .replace(/[_-]+/g, ' ')
                 .replace(/\s+/g, ' ');
             const statusKpi = order => normalizarStatusKpi(order.status ?? order.situacao ?? order.statusOS);
+            const aggregate = DBS_CONTROL_DASHBOARD_SUMMARY;
+            if (aggregate && typeof aggregate === 'object') {
+                const metric = (key, fallback) => Number.isFinite(Number(aggregate[key])) ? Number(aggregate[key]) : fallback;
+                document.getElementById('dash-client-count').innerText = metric('clients_count', clientes.length).toLocaleString('pt-BR');
+                document.getElementById('dash-equip-count').innerText = metric('equipment_count', equipamentos.length).toLocaleString('pt-BR');
+                document.getElementById('dash-os-andamento').innerText = metric('orders_in_service', 0).toLocaleString('pt-BR');
+                document.getElementById('dash-os-concluidas').innerText = metric('orders_completed', 0).toLocaleString('pt-BR');
+                return;
+            }
+
             // Arquivadas, excluídas e canceladas não entram nos indicadores da operação ativa.
             const ordensOperacionais = ordens.filter(order =>
                 !order.arquivadaEm &&
