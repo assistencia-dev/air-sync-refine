@@ -194,6 +194,39 @@ function DbsControlPage() {
   const employeeModeRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
+  // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
+  // autenticado reaplica apenas a apresentação do colaborador no carregamento
+  // do iframe, sem tocar nos dados nem nos handlers de negócio.
+  const handleEmployeeFrameLoad = () => {
+    if (!employeeModeRef.current) return;
+    const frame = iframeRef.current;
+    const frameDocument = frame?.contentDocument;
+    if (!frameDocument) return;
+
+    const employeeTitles: Record<string, [string, string]> = {
+      "tab-dashboard": ["Meu painel", "Progresso e operação do colaborador"],
+      "tab-pwa": ["Minhas OS", "Execução das Ordens de Serviço do colaborador"],
+      "tab-nova-os": ["Emitir OS", "Nova ordem dentro da base vinculada"],
+    };
+    const syncEmployeeFrameUi = () => {
+      const activeId = frameDocument.querySelector<HTMLElement>(".tab-view.active")?.id ?? "tab-dashboard";
+      const meta = employeeTitles[activeId] ?? employeeTitles["tab-dashboard"];
+      const title = frameDocument.getElementById("view-title");
+      const subtitle = frameDocument.getElementById("view-subtitle");
+      if (title) title.textContent = meta[0];
+      if (subtitle) subtitle.textContent = meta[1];
+      frameDocument.querySelectorAll<HTMLElement>("main > header .dbs-employee-issue-cta, main > header .btn-primary, main > header .dbs-secondary-menu").forEach((element) => {
+        element.style.setProperty("display", "none", "important");
+      });
+    };
+
+    if (frame.dataset.employeeUiBound !== "true") {
+      frame.dataset.employeeUiBound = "true";
+      frameDocument.addEventListener("click", () => window.setTimeout(syncEmployeeFrameUi, 0), true);
+    }
+    syncEmployeeFrameUi();
+  };
+
   useEffect(() => {
     const logSyncEvent = (event: string, details: Record<string, unknown> = {}) => {
       const entry = JSON.stringify({ scope: "dbs-control-sync", event, at: new Date().toISOString(), ...details });
@@ -887,7 +920,7 @@ function DbsControlPage() {
             <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
           </section>
         )}
-        <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+        <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
       </main>
     );
   }
