@@ -6394,7 +6394,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
                 if (isOSConcluida(s)) return ['Concluída','employee-status-done'];
-                if (/aguardando peça/i.test(s)) return ['Atendimento com pendência','employee-status-wait'];
+                if (/conclu[ií]da com pend[eê]ncia/i.test(s)) return ['Concluída com pendência','employee-status-wait'];
+                if (/aguardando pe[cç]a/i.test(s)) return ['Aguardando peça','employee-status-wait'];
+                if (/aguardando aprova[cç][aã]o/i.test(s)) return ['Aguardando aprovação','employee-status-wait'];
+                if (/retorno necess[aá]rio/i.test(s)) return ['Retorno necessário','employee-status-wait'];
                 if (/aguardando cliente/i.test(s)) return ['Aguardando cliente','employee-status-wait'];
                 if (/cancelad/i.test(s)) return ['Cancelada','employee-status-cancelled'];
                 return [s,'employee-status-active'];
@@ -6435,7 +6438,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
                     const isConcluido = isOSConcluida(o);
-                    const isPending = /aguardando peça/i.test(String(o.status || ''));
+                    const normalizedOrderStatus = String(o.status || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+                    const isPending = /concluida com pendencia|aguardando peca|aguardando aprovacao|retorno necessario|aguardando cliente/.test(normalizedOrderStatus);
                     const address = String(cli.endereco || o.localAtendimento || '').trim();
                     const mapsUrl = address
                       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
@@ -6473,8 +6477,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <div class="employee-result-title" id="employee-result-title-${o.id}"><span class="employee-step-badge employee-step-badge-result">RESULTADO</span><strong>Como ficou este atendimento?</strong></div>
                                 <label>Resultado da visita
                                   <select id="dbs-mob-result-${o.id}" onchange="atualizarResultadoAtendimentoMobile('${o.id}', this.value)">
-                                    <option value="concluida" ${isPending ? '' : 'selected'}>Atendimento concluído</option>
-                                    <option value="aguardando_peca" ${isPending ? 'selected' : ''}>Atendimento com pendência · aguardando peça</option>
+                                    <option value="concluida" ${normalizedOrderStatus === 'concluida' ? 'selected' : ''}>Atendimento concluído</option>
+                                    <option value="concluida_com_pendencia" ${normalizedOrderStatus === 'concluida com pendencia' ? 'selected' : ''}>Concluída com pendência</option>
+                                    <option value="aguardando_peca" ${normalizedOrderStatus === 'aguardando peca' ? 'selected' : ''}>Aguardando peça</option>
+                                    <option value="aguardando_aprovacao" ${normalizedOrderStatus === 'aguardando aprovacao' ? 'selected' : ''}>Aguardando aprovação</option>
+                                    <option value="retorno_necessario" ${normalizedOrderStatus === 'retorno necessario' ? 'selected' : ''}>Retorno necessário</option>
+                                    <option value="cancelada" ${normalizedOrderStatus === 'cancelada' ? 'selected' : ''}>Cancelada</option>
                                   </select>
                                 </label>
                                 <div id="dbs-mob-pending-${o.id}" class="employee-pending-fields" ${isPending ? '' : 'hidden'}>
@@ -6708,8 +6716,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
+        function normalizarStatusAtendimentoMobile(value) {
+            const normalized = String(value || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+            return ['concluida', 'concluida_com_pendencia', 'aguardando_peca', 'aguardando_aprovacao', 'retorno_necessario', 'cancelada'].includes(normalized)
+                ? normalized
+                : 'concluida';
+        }
+
+        function rotuloStatusAtendimentoMobile(value) {
+            return ({
+                concluida: 'Concluída',
+                concluida_com_pendencia: 'Concluída com pendência',
+                aguardando_peca: 'Aguardando peça',
+                aguardando_aprovacao: 'Aguardando aprovação',
+                retorno_necessario: 'Retorno necessário',
+                cancelada: 'Cancelada',
+            })[normalizarStatusAtendimentoMobile(value)];
+        }
+
         function atualizarResultadoAtendimentoMobile(osId, value) {
-            const pending = String(value || '') === 'aguardando_peca';
+            const statusCode = normalizarStatusAtendimentoMobile(value);
+            const pending = statusCode !== 'concluida';
             const fields = document.getElementById('dbs-mob-pending-' + osId);
             if (fields) {
                 fields.hidden = !pending;
@@ -6718,7 +6745,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const executionBody = fields?.closest('.employee-execution-body') || document.getElementById('dbs-mob-result-' + osId)?.closest('.employee-execution-body');
             const finishButton = executionBody?.querySelector('.employee-finish');
             if (finishButton && !finishButton.disabled) {
-                finishButton.textContent = pending ? 'Registrar pendência' : 'Concluir atendimento';
+                finishButton.textContent = pending ? 'Registrar ' + rotuloStatusAtendimentoMobile(statusCode).toLocaleLowerCase('pt-BR') : 'Concluir atendimento';
             }
         }
 
@@ -6735,11 +6762,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (!os) return;
 
             const relatoTecnico = String(relatoInput?.value || '').trim();
-            const atendimentoStatus = resultInput?.value === 'aguardando_peca' ? 'aguardando_peca' : 'concluida';
+            const atendimentoStatus = normalizarStatusAtendimentoMobile(resultInput?.value);
+            const atendimentoStatusLabel = rotuloStatusAtendimentoMobile(atendimentoStatus);
             const pendingReason = String(pendingNoteInput?.value || '').trim();
-            const finishLabel = atendimentoStatus === 'aguardando_peca' ? 'Registrar pendência' : 'Concluir atendimento';
+            const finishLabel = atendimentoStatus === 'concluida' ? 'Concluir atendimento' : 'Registrar ' + atendimentoStatusLabel.toLocaleLowerCase('pt-BR');
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
-            if (atendimentoStatus === 'aguardando_peca' && !pendingReason) {
+            if (atendimentoStatus !== 'concluida' && !pendingReason) {
                 alert('Descreva a pendência técnica antes de registrar este atendimento.');
                 pendingNoteInput?.focus();
                 return;
@@ -6802,11 +6830,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         os[observationKey] = existingObservation ? `${existingObservation}\n\n${entry}` : entry;
                     }
                 }
-                if (atendimentoStatus === 'aguardando_peca' && pendingReason) {
+                if (atendimentoStatus !== 'concluida' && pendingReason) {
                     const pendingKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
                         .find(key => os[key] == null || typeof os[key] === 'string') || 'observacaoComplementarTecnico';
                     const previousPending = typeof os[pendingKey] === 'string' ? os[pendingKey].trim() : '';
-                    const pendingEntry = `[PENDÊNCIA OPERACIONAL · AGUARDANDO PEÇA] ${pendingReason}`;
+                    const pendingEntry = `[${atendimentoStatusLabel.toLocaleUpperCase('pt-BR')}] ${pendingReason}`;
                     const alreadyPending = previousPending.split(/\n\n/).some(entry => entry.trim() === pendingEntry);
                     if (!alreadyPending) os[pendingKey] = previousPending ? `${previousPending}\n\n${pendingEntry}` : pendingEntry;
                 }
@@ -6823,18 +6851,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 });
                 const statusTimestamp = new Date().toISOString();
                 os.assinaturaEm = statusTimestamp;
-                os.status = atendimentoStatus === 'aguardando_peca' ? 'Aguardando peça' : 'Concluída';
-                os.concluidoEm = atendimentoStatus === 'aguardando_peca' ? null : statusTimestamp;
-                os.concluidoPorEmployeeId = atendimentoStatus === 'aguardando_peca'
-                    ? null
-                    : (ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null);
+                os.status = atendimentoStatusLabel;
+                os.concluidoEm = atendimentoStatus === 'concluida' ? statusTimestamp : null;
+                os.concluidoPorEmployeeId = atendimentoStatus === 'concluida'
+                    ? (ERP_STATE.sessionTecnicoLogado?.employeeId || os.employeeId || null)
+                    : null;
 
                 setProgress(atendimentoStatus === 'aguardando_peca' ? 'Registrando pendência na nuvem...' : 'Confirmando OS na nuvem...');
                 await saveStateAndConfirmCloud();
                 renderizarTudo();
-                alert(atendimentoStatus === 'aguardando_peca'
-                    ? `OS ${osId} registrada como atendimento com pendência e confirmada na nuvem. A administração poderá acompanhar a troca da peça.`
-                    : `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`);
+                alert(atendimentoStatus === 'concluida'
+                    ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`
+                    : `OS ${osId} registrada como "${atendimentoStatusLabel}" e confirmada na nuvem. A administração já pode acompanhar o próximo passo.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 const currentIndex = ERP_STATE.ordens.findIndex(order => String(order?.id) === String(osId));
