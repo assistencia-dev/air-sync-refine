@@ -1356,7 +1356,7 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     status: normalizedStatus,
     scheduled_at: normalizeOptionalTimestamp(order?.scheduledAt || order?.scheduled_at),
     started_at: normalizeOptionalTimestamp(order?.startedAt || order?.started_at),
-    completed_at: normalizedStatus === "concluida"
+    completed_at: ["concluida", "concluida_com_pendencia"].includes(normalizedStatus)
       ? (normalizeOptionalTimestamp(order?.concluidoEm || order?.completedAt || order?.completed_at) ?? new Date().toISOString())
       : null,
     sla_deadline: normalizeOptionalTimestamp(order?.sla || order?.slaDeadline || order?.sla_deadline),
