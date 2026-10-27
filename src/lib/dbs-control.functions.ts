@@ -10,6 +10,12 @@ type DbsControlUser = {
   created_by?: string | null;
 };
 
+type DeleteDbsControlWorkOrderInput = {
+  requestId?: string;
+  workOrderId?: string;
+  protocol?: string;
+};
+
 async function requireDbsControlUser(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
@@ -1577,6 +1583,163 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       requestId: data.requestId,
       sourceOfTruth: "relational_delta",
     };
+  });
+
+/** 
+ * Exclui uma OS da operação sem reutilizar o autosave de snapshot/delta completo.
+ *
+ * A exclusão é sempre lógica: o RPC relacional grava apenas \`deleted_at\`, cria o
+ * evento/outbox na mesma transação e preserva a OS para auditoria administrativa.
+ * Isso também evita que uma OS concluída seja interpretada como uma tentativa de
+ * alterar dados assinados e abra o fluxo de reconciliação para o usuário.
+ */
+export const deleteDbsControlWorkOrder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: DeleteDbsControlWorkOrderInput) => ({
+    requestId: String(input?.requestId ?? crypto.randomUUID()).trim().slice(0, 160),
+    workOrderId: isDbsControlUuid(input?.workOrderId) ? String(input.workOrderId).trim() : null,
+    protocol: String(input?.protocol ?? "").trim().slice(0, 160) || null,
+  }))
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const administrativeRoles = ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
+    if (!administrativeRoles.includes(user.role_key)) {
+      throw new Error("A exclusão de OS é restrita à administração.");
+    }
+    if (!data.workOrderId && !data.protocol) {
+      throw new Error("Não foi possível identificar a OS para exclusão.");
+    }
+
+    const readCanonicalOrder = async () => {
+      if (data.workOrderId) {
+        const byId = await supabaseAdmin
+          .from("dbs_control_work_orders")
+          .select("id, protocol, protocolo, version, deleted_at")
+          .eq("id", data.workOrderId)
+          .maybeSingle();
+        if (byId.error) throw new Error(byId.error.message);
+        return byId.data;
+      }
+
+      const protocol = data.protocol ?? "";
+      const byProtocol = await supabaseAdmin
+        .from("dbs_control_work_orders")
+        .select("id, protocol, protocolo, version, deleted_at")
+        .eq("protocol", protocol)
+        .maybeSingle();
+      if (byProtocol.error) throw new Error(byProtocol.error.message);
+      if (byProtocol.data) return byProtocol.data;
+
+      // Há registros antigos em que apenas a coluna legada \`protocolo\` foi
+      // preenchida. A leitura alternativa mantém a exclusão retrocompatível.
+      const byLegacyProtocol = await supabaseAdmin
+        .from("dbs_control_work_orders")
+        .select("id, protocol, protocolo, version, deleted_at")
+        .eq("protocolo", protocol)
+        .maybeSingle();
+      if (byLegacyProtocol.error) throw new Error(byLegacyProtocol.error.message);
+      return byLegacyProtocol.data;
+    };
+
+    let canonical = await readCanonicalOrder();
+    if (!canonical) {
+      // A operação é idempotente: se a OS já não existe no recorte operacional,
+      // não há motivo para transformar isso em alarme técnico para o usuário.
+      return {
+        ok: true,
+        status: "already_deleted",
+        already_deleted: true,
+        work_order_id: null,
+        protocol: data.protocol,
+        requestId: data.requestId,
+      };
+    }
+    if (canonical.deleted_at) {
+      return {
+        ok: true,
+        status: "already_deleted",
+        already_deleted: true,
+        work_order_id: String(canonical.id),
+        protocol: canonical.protocol ?? canonical.protocolo ?? data.protocol,
+        deleted_at: canonical.deleted_at,
+        requestId: data.requestId,
+      };
+    }
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const deletedAt = new Date().toISOString();
+      const idempotencyKey = \`\${data.requestId}:work_order_delete:\${String(canonical.id)}:\${attempt}\`.slice(0, 240);
+      const rpc = await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", {
+        p_payload: {
+          idempotency_key: idempotencyKey,
+          actor_user_id: user.id,
+          company_id: user.company_id,
+          work_order_id: String(canonical.id),
+          protocol: canonical.protocol ?? canonical.protocolo ?? data.protocol,
+          operation: "delete",
+          expected_version: Number(canonical.version),
+          event_type: "work_order_deleted",
+          patch: { deleted_at: deletedAt },
+        },
+      });
+
+      if (rpc.error) {
+        const latest = await readCanonicalOrder();
+        if (latest?.deleted_at) {
+          return {
+            ok: true,
+            status: "already_deleted",
+            already_deleted: true,
+            work_order_id: String(latest.id),
+            protocol: latest.protocol ?? latest.protocolo ?? data.protocol,
+            deleted_at: latest.deleted_at,
+            requestId: data.requestId,
+          };
+        }
+        if (latest && /DBS_OS_CONFLICT|version|alterada|conflito/i.test(rpc.error.message) && attempt < 2) {
+          canonical = latest;
+          continue;
+        }
+        throw new Error("Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.");
+      }
+
+      const row: any = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+      if (row?.ok) {
+        return {
+          ok: true,
+          status: "deleted",
+          already_deleted: false,
+          work_order_id: String(row.work_order_id ?? canonical.id),
+          protocol: row.protocol ?? canonical.protocol ?? canonical.protocolo ?? data.protocol,
+          version: Number(row.version ?? canonical.version),
+          deleted_at: deletedAt,
+          requestId: data.requestId,
+        };
+      }
+
+      if (row?.status === "conflict" && attempt < 2) {
+        const latest = await readCanonicalOrder();
+        if (latest?.deleted_at) {
+          return {
+            ok: true,
+            status: "already_deleted",
+            already_deleted: true,
+            work_order_id: String(latest.id),
+            protocol: latest.protocol ?? latest.protocolo ?? data.protocol,
+            deleted_at: latest.deleted_at,
+            requestId: data.requestId,
+          };
+        }
+        if (latest) {
+          canonical = latest;
+          continue;
+        }
+      }
+
+      throw new Error("Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.");
+    }
+
+    throw new Error("Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.");
   });
 
 /**
