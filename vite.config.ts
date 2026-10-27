@@ -15,5 +15,11 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // RH dashboard tabs are components, not route modules; keep them out of the
+    // filesystem route scan without moving or removing any functionality.
+    router: {
+      routeFileIgnorePattern:
+        "(TabGestaoColaboradores|TabValePassagem|TabValeAlimentacao)\\.tsx$",
+    },
   },
 });
