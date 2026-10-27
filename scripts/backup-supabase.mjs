@@ -10,6 +10,7 @@ const documentBuckets = String(
   .map((value) => value.trim())
   .filter(Boolean);
 const pageSize = 1000;
+const requireDocumentBackup = process.env.SUPABASE_REQUIRE_DOCUMENT_BACKUP === "true";
 
 if (!url || !serviceRoleKey) {
   throw new Error("SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios.");
@@ -90,6 +91,8 @@ const tables = [
   "dbs_control_sync_commands",
   "dbs_control_entity_records",
   "dbs_control_outbox",
+  "dbs_control_outbox_dlq",
+  "dbs_control_work_order_status_catalog",
   "dbs_control_legacy_id_map",
   "dbs_control_sync_metrics",
   "dbs_control_backup_manifests",
@@ -250,6 +253,10 @@ for (const documentBucket of documentBuckets) {
     });
     console.log(`documento: ${documentBucket}/${document.path} (${bytes.byteLength} bytes) verificado`);
   }
+}
+
+if (requireDocumentBackup && documentManifest.length === 0) {
+  throw new Error("Nenhum documento foi inventariado nos buckets obrigatórios; backup rejeitado para evitar manifesto falso.");
 }
 
 const manifest = {
