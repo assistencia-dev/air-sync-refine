@@ -45,7 +45,10 @@ const pending = Number(health.pending ?? 0);
 const processing = Number(health.processing ?? 0);
 const deadLetter = Number(health.dead_letter ?? health.deadLetter ?? 0);
 const oldestPendingAgeSeconds = Number(health.oldest_pending_age_seconds ?? health.oldestPendingAgeSeconds ?? 0);
-const backlogAlert = pending > 10 || oldestPendingAgeSeconds > 900 || deadLetter > 0;
+const pendingOverSla = Number(health.pending_over_sla ?? health.pendingOverSla ?? 0);
+const pendingCritical = Number(health.pending_critical ?? health.pendingCritical ?? 0);
+const retriesOver3 = Number(health.retries_over_3 ?? health.retriesOver3 ?? 0);
+const backlogAlert = pending > 10 || oldestPendingAgeSeconds > 900 || pendingOverSla > 10 || pendingCritical > 0 || retriesOver3 > 0 || deadLetter > 0;
 
 console.log(JSON.stringify({
   status: response.status,
@@ -55,7 +58,7 @@ console.log(JSON.stringify({
   failed: payload.failed ?? 0,
   retries: payload.retries ?? 0,
   durationMs: payload.durationMs ?? null,
-  health: { pending, processing, deadLetter, oldestPendingAgeSeconds },
+  health: { pending, processing, deadLetter, oldestPendingAgeSeconds, pendingOverSla, pendingCritical, retriesOver3 },
   backlogAlert,
 }));
 
