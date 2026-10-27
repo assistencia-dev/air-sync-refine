@@ -1004,17 +1004,19 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
       }
     }
     let baseName: string | null = null;
+    let baseActive = false;
     if (resolvedEmployee?.dbs_control_base_id) {
       const { data: base, error: baseError } = await (supabaseAdmin as any).from("dbs_control_bases")
         .select("id, name, status")
         .eq("id", resolvedEmployee.dbs_control_base_id)
         .maybeSingle();
       if (baseError) throw new Error(baseError.message);
-      const baseIsActive = String(base?.status ?? "").trim().toLocaleLowerCase("pt-BR") === "ativo";
-      baseName = baseIsActive ? String(base.name ?? "").trim() : null;
-      // A autorização depende do vínculo ativo e da flag do RH. O nome da base
-      // é apenas informativo e nunca pode bloquear a emissão por estar vazio.
-      if (!baseIsActive) baseName = null;
+      const baseStatus = String(base?.status ?? "").trim().toLocaleLowerCase("pt-BR");
+      baseActive = baseStatus === "ativo";
+      // O nome é somente apresentação. A autorização depende do ID vinculado,
+      // da existência da base e do seu estado ativo; uma base sem nome não
+      // pode esconder a ferramenta nem interromper o fluxo autorizado.
+      baseName = baseActive ? String(base?.name ?? "").trim() : null;
     }
     return {
       enabled: Boolean(resolvedEmployee),
@@ -1025,7 +1027,8 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
         email: user.email ?? null,
         base_id: resolvedEmployee.dbs_control_base_id ?? null,
         base_name: baseName,
-        can_issue_work_orders: Boolean(resolvedEmployee.dbs_control_can_issue_work_orders && baseName !== null),
+        base_active: baseActive,
+        can_issue_work_orders: Boolean(resolvedEmployee.dbs_control_can_issue_work_orders && baseActive),
       } : null,
       administrative: false,
     };

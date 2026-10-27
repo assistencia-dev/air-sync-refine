@@ -1753,7 +1753,7 @@
         }
 </style>
 
-    <link rel="stylesheet" href="/dbs-control-theme.css?v=20261013-os-visual-1">
+    <link rel="stylesheet" href="/dbs-control-theme.css?v=20261027-collaborator-ui-1">
     <style id="dbs-employee-experience-v2">
       body.dbs-control-employee-mode { background:#f3f7fc !important; color:#14243a; }
       /* Colaborador: área de trabalho própria, sem menu administrativo lateral. Ocultar navegação não remove nem altera funções/dados administrativos. */
@@ -2791,6 +2791,25 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             body.dbs-control-employee-mode .dbs-mobile-menu-toggle { display:none !important; }
         }
     </style>
+    <style id="dbs-employee-clean-nav-20261027">
+        /* Experiência única do colaborador: uma navegação lateral, sem
+           atalhos duplicados no cabeçalho e com emissão liberada somente pelo
+           vínculo de base + autorização do RH. */
+        body.dbs-control-employee-mode .page-title h1 { font-size:clamp(16px,2vw,20px); }
+        body.dbs-control-employee-mode .page-title p { color:#64748b; }
+        body.dbs-control-employee-mode #dbs-employee-issue-cta { display:none !important; }
+        body.dbs-control-employee-mode.dbs-control-can-issue-os #dbs-employee-issue-cta { display:none !important; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-dashboard-visible="true"] span::before { content:"⌂"; margin-right:8px; font-size:14px; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-visible="true"]:not([data-employee-dashboard-visible="true"]) span::before { content:"▤"; margin-right:8px; font-size:13px; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-issue-visible="true"] span::before { content:"＋"; margin-right:7px; font-size:14px; font-weight:900; }
+        body.dbs-control-employee-mode aside .nav-item[data-employee-issue-visible="true"] { display:none !important; }
+        body.dbs-control-employee-mode.dbs-control-can-issue-os aside .nav-item[data-employee-issue-visible="true"] { display:flex !important; }
+        body.dbs-control-employee-mode #tab-dashboard > *:not(#employee-dashboard-root) { display:none !important; }
+        @media(max-width:760px) {
+          body.dbs-control-employee-mode aside .nav-item { min-height:48px; }
+          body.dbs-control-employee-mode aside .nav-menu { padding:18px 12px 24px; }
+        }
+    </style>
 </head>
 <body>
 
@@ -2802,8 +2821,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         </div>
 
         <ul class="nav-menu">
+            <div class="employee-menu-caption">Operação de campo</div>
             <div class="nav-section">Painel Geral</div>
-            <li class="nav-item active" data-employee-visible="true" data-employee-dashboard-visible="true" title="Visão geral do seu atendimento" role="button" tabindex="0" onclick="switchTab('tab-dashboard', this)"><span>Dashboard Principal</span></li>
+            <li class="nav-item active" data-employee-visible="true" data-employee-dashboard-visible="true" title="Visão geral do seu atendimento" role="button" tabindex="0" onclick="switchTab('tab-dashboard', this)"><span>Meu painel</span></li>
             <li class="nav-item" data-employee-visible="true" title="Veja e execute somente as suas OS" role="button" tabindex="0" onclick="switchTab('tab-pwa', this)"><span>Minhas OS</span></li>
             <li class="nav-item" data-employee-issue-visible="true" title="Crie uma nova ordem de serviço dentro da sua base" role="button" tabindex="0" onclick="switchTab('tab-nova-os', this)"><span>Emitir OS</span></li>
             <li class="nav-item" onclick="switchTab('tab-atividades', this)"><span>Atividades do Dia</span></li>
@@ -7129,7 +7149,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('mode') !== 'employee') return;
                 document.body.classList.add('dbs-control-employee-mode');
-                const canIssueOs = params.get('can_issue_os') === '1';
+                const canIssueOs = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
                 if (canIssueOs) document.body.classList.add('dbs-control-can-issue-os');
                 const issueCta = document.getElementById('dbs-employee-issue-cta');
                 if (issueCta) {
@@ -7186,8 +7206,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     <script src="/dbs-control-orcamentos-v2.js?v=20261026-quote-ack-1"></script>
     <script src="/dbs-control-orcamentos-pdf.js?v=20261014-pdf-standard-1"></script>
     <script src="/dbs-control-orcamentos-flex.js?v=20261026-quote-ack-1"></script>
-    <script src="/dbs-control-employee-nav.js?v=20261026-employee-nav-1"></script>
-    <script src="/dbs-control-ux.js?v=20261026-employee-nav-4"></script>
+    <script src="/dbs-control-employee-nav.js?v=20261027-collaborator-ui-1"></script>
+    <script src="/dbs-control-ux.js?v=20261027-collaborator-ui-1"></script>
     <script src="/dbs-control-observations.js?v=20261011-main-1"></script>
     <script>
     (function bootFieldControlStaticPanel(){

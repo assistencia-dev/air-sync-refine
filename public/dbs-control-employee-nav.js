@@ -13,6 +13,7 @@
     return ({
       'dashboard': 'tab-dashboard',
       'dashboard principal': 'tab-dashboard',
+      'meu painel': 'tab-dashboard',
       'minhas os': 'tab-pwa',
       'emitir os': 'tab-nova-os'
     })[text] || '';
@@ -30,7 +31,7 @@
       else navItem.removeAttribute('aria-current');
     });
     const titleMap = {
-      'tab-dashboard': ['Meu dashboard', 'Progresso e operação do colaborador'],
+      'tab-dashboard': ['Meu painel', 'Progresso e operação do colaborador'],
       'tab-pwa': ['Minhas OS', 'Execução das Ordens de Serviço do colaborador'],
       'tab-nova-os': ['Emitir OS', 'Nova ordem dentro da base vinculada']
     };

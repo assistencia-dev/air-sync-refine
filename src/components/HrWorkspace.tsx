@@ -60,8 +60,6 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
     { key: "alimentacao", label: "Vale alimentação", icon: <Utensils className="h-4 w-4" />, group: "Benefícios & financeiro" },
   ];
 
-  const current = tabs.find(t => t.key === section) ?? tabs[0];
-
   const grouped = ["Visão geral", "Pessoas", "Jornada & folha", "Benefícios & financeiro"].map(group => ({
     group,
     items: tabs.filter(t => t.group === group),
@@ -107,19 +105,11 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-slate-400">RH</span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-            <span className="font-black text-slate-700">{current.label}</span>
-          </div>
-        </div>
-
         <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-[9px] font-black uppercase tracking-[.18em] text-slate-400">Navegação do RH</p>
-              <p className="mt-0.5 text-[11px] text-slate-500">Escolha uma área ou use as ações rápidas abaixo.</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">Todas as áreas ficam organizadas neste único menu.</p>
             </div>
             <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500 sm:inline-flex">Dados centralizados</span>
           </div>
@@ -186,21 +176,6 @@ export function HrWorkspace({ embedded = false }: { embedded?: boolean }) {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[.18em] text-slate-400">Acesso rápido</p>
-                <h2 className="mt-1 text-lg font-black text-slate-900">Tarefas frequentes</h2>
-              </div>
-              <RefreshCw className="h-5 w-5 text-slate-300" />
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <QuickAction icon={<UsersRound />} title="Cadastrar funcionário" text="Abrir cadastro central" onClick={() => setSection("cadastro")} />
-              <QuickAction icon={<Clock3 />} title="Conferir ponto" text="Espelho e registros" onClick={() => setSection("ponto")} />
-              <QuickAction icon={<BriefcaseBusiness />} title="Tratar solicitações" text="Fila do RH / DP" onClick={() => setSection("gestao")} />
-              <QuickAction icon={<WalletCards />} title="Lançar vale" text="Desconto em folha" onClick={() => setSection("financeiro")} />
-            </div>
-          </section>
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
