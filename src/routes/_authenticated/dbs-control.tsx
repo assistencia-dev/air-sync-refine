@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, getDbsControlCloudState, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -557,6 +557,55 @@ function DbsControlPage() {
         if (employeeId) {
           sessionStorage.setItem("DBS_RH_OPEN_EMPLOYEE", employeeId);
           await navigate({ to: "/admin/rh-dashboard", replace: true });
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_DELETE_WORK_ORDER") {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : crypto.randomUUID();
+        try {
+          const result = await withDbsControlTransientRetry(() => deleteDbsControlWorkOrder({
+            data: {
+              requestId,
+              workOrderId: String(msg.workOrderId || ""),
+              protocol: String(msg.protocol || ""),
+            },
+          }));
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DELETE_WORK_ORDER_ACK",
+            requestId,
+            ok: true,
+            result,
+          }, "*");
+
+          // O soft delete já foi confirmado pelo RPC transacional. A atualização
+          // visual da nuvem é uma etapa posterior e não deve transformar uma
+          // exclusão concluída em erro para o usuário.
+          try {
+            const cloud = await getDbsControlCloudState();
+            if (cloud?.state) {
+              iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state }, "*");
+            }
+            sendDashboardSummary();
+          } catch (refreshError) {
+            logSyncEvent("delete_cloud_refresh_error", {
+              requestId,
+              message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a visão após a exclusão.",
+            });
+          }
+        } catch (err) {
+          // Exclusão é uma intenção isolada. Não abrir o banner de conflito do
+          // autosave e não pedir reconciliação: o iframe fará rollback local.
+          logSyncEvent("delete_error", {
+            requestId,
+            message: err instanceof Error ? err.message : "Falha ao excluir a OS.",
+          });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DELETE_WORK_ORDER_ACK",
+            requestId,
+            ok: false,
+            error: "Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.",
+          }, "*");
         }
         return;
       }
