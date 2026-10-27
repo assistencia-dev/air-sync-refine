@@ -847,8 +847,16 @@
         'tab-servicos':['renderizarServicos'],'tab-compras':['renderizarCompras'],
         'tab-cadastros':['renderizarCentralCadastros'],'tab-pwa':['renderizarPWAScreen']
       };
-      (renderers[id]||[]).forEach(name=>{if(typeof window[name]==='function')window[name]();});
-      if(typeof window.atualizarSelects==='function')window.atualizarSelects();
+      // No modo colaborador existe uma única árvore de renderização. O renderer
+      // dedicado evita que o dashboard administrativo e o painel de campo sejam
+      // montados alternadamente, causa clássica do “tremor” visual.
+      if (employeeMode) {
+        if (typeof window.renderizarAbaAtiva === 'function') window.renderizarAbaAtiva(id);
+        else if (id === 'tab-pwa' && typeof window.renderizarPWAScreen === 'function') window.renderizarPWAScreen();
+      } else {
+        (renderers[id]||[]).forEach(name=>{if(typeof window[name]==='function')window[name]();});
+        if(typeof window.atualizarSelects==='function')window.atualizarSelects();
+      }
     } catch(error){console.error('DBS CONTROL: recuperação de navegação',error);}
     return true;
   }
