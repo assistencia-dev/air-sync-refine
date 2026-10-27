@@ -293,7 +293,7 @@ async function fetchAllDbsControlWorkOrders(scope: DbsControlHydrationScope = {}
   for (let offset = 0; ; offset += pageSize) {
     let query = supabaseAdmin
       .from("dbs_control_work_orders")
-      .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,assinatura_path,signature_path,execution_checklist,completion_status_code,geolocation_captured_at,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
+      .select("id,protocol,protocolo,client_id,site_id,assigned_employee_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,sla_deadline,description,technical_opinion,diagnostico,observation,servico_executado,latitude,longitude,signature_name,signature_data,assinatura_path,signature_path,execution_checklist,completion_status_code,geolocation_captured_at,total_cents,version,idempotency_key,deleted_at,created_at,updated_at")
       .order("id", { ascending: true });
     if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
     const { data, error } = await query.range(offset, offset + pageSize - 1);
