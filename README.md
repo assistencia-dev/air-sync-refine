@@ -36,7 +36,7 @@ Mantenha toda a estrutura excelente de design, fontes e cores que o Claude gerou
 
 This project was built with [Lovable](https://lovable.dev).
 
-**Live app**: https://dbs-air-solutions.lovable.app
+**Live app**: https://air-sync-refine.lovable.app
 
 ## Build with Lovable
 
