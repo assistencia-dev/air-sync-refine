@@ -381,6 +381,74 @@ export const testFieldControlConnection = createServerFn({ method: "POST" })
     };
   });
 
+async function fetchAllSupabaseRowsById(table: string) {
+  const pageSize = 1000;
+  const rows: any[] = [];
+  let cursor: string | null = null;
+
+  for (;;) {
+    let query = (supabaseAdmin as any)
+      .from(table)
+      .select("*")
+      .order("id", { ascending: true })
+      .limit(pageSize);
+    if (cursor) query = query.gt("id", cursor);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as any[];
+    if (!page.length) break;
+    rows.push(...page);
+
+    const nextCursor = String(page[page.length - 1]?.id ?? "");
+    if (!nextCursor || nextCursor === cursor) throw new Error(`Cursor de paginação não avançou para ${table}.`);
+    cursor = nextCursor;
+    if (page.length < pageSize) break;
+  }
+
+  return { data: rows, error: null };
+}
+
+async function fetchAllSupabaseWorkOrderEquipmentLinks() {
+  const pageSize = 1000;
+  const rows: any[] = [];
+  let cursorWorkOrder: string | null = null;
+  let cursorEquipment: string | null = null;
+
+  for (;;) {
+    let query = (supabaseAdmin as any)
+      .from("dbs_control_work_order_equipment")
+      .select("*")
+      .order("work_order_id", { ascending: true })
+      .order("equipment_id", { ascending: true })
+      .limit(pageSize);
+
+    if (cursorWorkOrder && cursorEquipment) {
+      query = query.or(
+        `work_order_id.gt.${cursorWorkOrder},and(work_order_id.eq.${cursorWorkOrder},equipment_id.gt.${cursorEquipment})`,
+      );
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as any[];
+    if (!page.length) break;
+    rows.push(...page);
+
+    const last = page[page.length - 1];
+    const nextWorkOrder = String(last?.work_order_id ?? "");
+    const nextEquipment = String(last?.equipment_id ?? "");
+    if (!nextWorkOrder || !nextEquipment || (nextWorkOrder === cursorWorkOrder && nextEquipment === cursorEquipment)) {
+      throw new Error("Cursor de paginação não avançou para dbs_control_work_order_equipment.");
+    }
+    cursorWorkOrder = nextWorkOrder;
+    cursorEquipment = nextEquipment;
+    if (page.length < pageSize) break;
+  }
+
+  return { data: rows, error: null };
+}
+
 export const getFieldControlImportedState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -390,12 +458,12 @@ export const getFieldControlImportedState = createServerFn({ method: "GET" })
     if (!integration?.api_key) throw new Error("Configure a chave de API do FieldControl antes de carregar a base.");
 
     const [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult] = await Promise.all([
-      supabaseAdmin.from("dbs_control_clients").select("*").order("legal_name"),
-      supabaseAdmin.from("dbs_control_sites").select("*"),
-      supabaseAdmin.from("dbs_control_equipment").select("*"),
-      supabaseAdmin.from("dbs_control_service_catalog").select("*").order("name"),
-      supabaseAdmin.from("dbs_control_work_orders").select("*").order("scheduled_at", { ascending: false, nullsFirst: false }).range(0, 4999),
-      supabaseAdmin.from("dbs_control_work_order_equipment").select("*").range(0, 9999),
+      fetchAllSupabaseRowsById("dbs_control_clients"),
+      fetchAllSupabaseRowsById("dbs_control_sites"),
+      fetchAllSupabaseRowsById("dbs_control_equipment"),
+      fetchAllSupabaseRowsById("dbs_control_service_catalog"),
+      fetchAllSupabaseRowsById("dbs_control_work_orders"),
+      fetchAllSupabaseWorkOrderEquipmentLinks(),
     ]);
     for (const result of [clientsResult, sitesResult, equipmentResult, servicesResult, ordersResult, linksResult]) {
       if (result.error) throw new Error(result.error.message);
