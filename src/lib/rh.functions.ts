@@ -121,7 +121,7 @@ export const listDbsControlBases = createServerFn({ method: "GET" })
 
 export const saveDbsControlBase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: DbsControlBaseInput) => {
+  .validator((input: DbsControlBaseInput) => {
     const name = String(input?.name ?? "").trim();
     if (!name) throw new Error("Informe o nome da base operacional.");
     if (name.length > 120) throw new Error("O nome da base deve ter no máximo 120 caracteres.");
@@ -156,7 +156,7 @@ export const saveDbsControlBase = createServerFn({ method: "POST" })
 
 export const setDbsControlBaseClients = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { base_id: string; client_ids: string[] }) => {
+  .validator((input: { base_id: string; client_ids: string[] }) => {
     if (!input?.base_id) throw new Error("Base operacional inválida.");
     const clientIds = [...new Set((input.client_ids ?? []).map((id) => String(id).trim()).filter(Boolean))];
     if (clientIds.length > 5000) throw new Error("Uma base não pode ter mais de 5.000 clientes em uma única operação.");
@@ -194,7 +194,7 @@ function validateBenefit(input: RhInput) {
 
 export const listRhEmployees = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(validateBenefit)
+  .validator(validateBenefit)
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
     const { data: employees, error } = await supabaseAdmin
@@ -228,7 +228,7 @@ export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" 
 
 export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { registry_employee_id: string; benefit_type: RhBenefitType; fare_cents: number; trips_per_day: number }) => {
+  .validator((input: { registry_employee_id: string; benefit_type: RhBenefitType; fare_cents: number; trips_per_day: number }) => {
     validateBenefit(input);
     if (!input.registry_employee_id) throw new Error("Selecione o funcionário no Cadastro de Funcionários.");
     if (!Number.isInteger(input.fare_cents) || input.fare_cents <= 0) throw new Error("Informe um valor diário válido.");
@@ -266,7 +266,7 @@ export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
 
 export const createRhEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       benefit_type: RhBenefitType;
       full_name: string;
@@ -303,7 +303,7 @@ export const createRhEmployee = createServerFn({ method: "POST" })
 
 export const updateRhEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       id: string;
       benefit_type: RhBenefitType;
@@ -347,7 +347,7 @@ export const updateRhEmployee = createServerFn({ method: "POST" })
 
 export const deleteRhEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; benefit_type: RhBenefitType }) => {
+  .validator((input: { id: string; benefit_type: RhBenefitType }) => {
     validateBenefit(input);
     if (!input.id) throw new Error("Colaborador inválido.");
     return input;
@@ -365,7 +365,7 @@ export const deleteRhEmployee = createServerFn({ method: "POST" })
 
 export const reactivateRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => {
+  .validator((input: { id: string }) => {
     if (!input?.id) throw new Error("Funcionário inválido.");
     return input;
   })
@@ -381,7 +381,7 @@ export const reactivateRhEmployeeRecord = createServerFn({ method: "POST" })
 
 export const listRhTopups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(validateBenefit)
+  .validator(validateBenefit)
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
     const { data: topups, error } = await supabaseAdmin
@@ -395,7 +395,7 @@ export const listRhTopups = createServerFn({ method: "GET" })
 
 export const createRhTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       benefit_type: RhBenefitType;
       employee_id: string;
@@ -436,7 +436,7 @@ export const createRhTopup = createServerFn({ method: "POST" })
 
 export const deleteRhTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; benefit_type: RhBenefitType }) => {
+  .validator((input: { id: string; benefit_type: RhBenefitType }) => {
     validateBenefit(input);
     if (!input.id) throw new Error("Recarga inválida.");
     return input;
@@ -458,7 +458,7 @@ export const deleteRhTopup = createServerFn({ method: "POST" })
  */
 export const unlockRhModule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { username: string; password: string }) => {
+  .validator((input: { username: string; password: string }) => {
     if (!input?.username?.trim() || !input?.password) {
       throw new Error("Informe usuário e senha do RH.");
     }
@@ -491,7 +491,7 @@ export const unlockRhModule = createServerFn({ method: "POST" })
 
 export const getRhEmployee360 = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string }) => {
+  .validator((input: { employee_id: string }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     return input;
   })
@@ -543,7 +543,7 @@ export const getRhEmployee360 = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeContract = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
+  .validator((input: {
     id?: string;
     employee_id: string;
     contract_type?: string;
@@ -639,7 +639,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: EmployeeRecordInput & { id?: string }) => {
+  .validator((input: EmployeeRecordInput & { id?: string }) => {
     if (!input?.full_name?.trim() || !input?.unit?.trim()) throw new Error("Informe nome e unidade do funcionário.");
     if (input.dbs_control_can_issue_work_orders && !input.dbs_control_base_id) {
       throw new Error("Para permitir emissão de OS, vincule primeiro uma base operacional DBS.");
@@ -783,7 +783,7 @@ export const listRhCollaboratorUsers = createServerFn({ method: "GET" })
 
 export const saveRhEmployeeAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string; enabled: boolean; login_identifier?: string; user_id?: string; dbs_control_enabled?: boolean }) => {
+  .validator((input: { employee_id: string; enabled: boolean; login_identifier?: string; user_id?: string; dbs_control_enabled?: boolean }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     if ((input.enabled || input.dbs_control_enabled) && !input.login_identifier?.trim()) throw new Error("Informe o login criado no menu Usuários vinculados.");
     if ((input.enabled || input.dbs_control_enabled) && !input.user_id?.trim()) throw new Error("Selecione o usuário exato criado em Usuários vinculados.");
@@ -1046,7 +1046,7 @@ export const listRhEmployeeAccess = createServerFn({ method: "GET" })
 
 export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string; file_name: string; data_base64: string }) => {
+  .validator((input: { employee_id: string; file_name: string; data_base64: string }) => {
     if (!input?.employee_id || !input.file_name || !input.data_base64)
       throw new Error("Ficha inválida.");
     if (!input.file_name.toLowerCase().endsWith(".pdf"))
@@ -1074,7 +1074,7 @@ export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })
 
 export const getRhEmployeeFichaUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { employee_id: string }) => {
+  .validator((input: { employee_id: string }) => {
     if (!input?.employee_id) throw new Error("Funcionário inválido.");
     return input;
   })
@@ -1097,7 +1097,7 @@ export const getRhEmployeeFichaUrl = createServerFn({ method: "POST" })
 
 export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; confirmation: string }) => {
+  .validator((input: { id: string; confirmation: string }) => {
     if (!input?.id || input.confirmation !== "EXCLUIR CADASTRO") throw new Error("Confirmação de exclusão inválida.");
     return input;
   })
@@ -1153,7 +1153,7 @@ export const permanentlyRemoveRhEmployeeRecord = createServerFn({ method: "POST"
 
 export const removeRhEmployeeFromRegistry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; confirmation: string }) => {
+  .validator((input: { id: string; confirmation: string }) => {
     if (!input?.id || input.confirmation !== "EXCLUIR CADASTRO") throw new Error("Confirmação de exclusão inválida.");
     return input;
   })
@@ -1225,7 +1225,7 @@ export const removeRhEmployeeFromRegistry = createServerFn({ method: "POST" })
 
 export const deactivateRhEmployeeRecord = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => {
+  .validator((input: { id: string }) => {
     if (!input?.id) throw new Error("Funcionário inválido.");
     return input;
   })
