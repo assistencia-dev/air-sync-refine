@@ -32,6 +32,13 @@ AS $$
     FROM scoped
     WHERE deleted_at IS NULL
       AND client_id IS NOT NULL
+  ),
+  equipment_totals AS (
+    SELECT count(DISTINCT l.equipment_id)::bigint AS total
+    FROM public.dbs_control_work_order_equipment l
+    JOIN scoped s ON s.id = l.work_order_id
+    WHERE s.deleted_at IS NULL
+      AND l.equipment_id IS NOT NULL
   )
   SELECT jsonb_build_object(
     'clients_count',
@@ -42,7 +49,7 @@ AS $$
     'equipment_count',
       CASE
         WHEN p_employee_id IS NULL THEN (SELECT count(*)::bigint FROM public.dbs_control_equipment)
-        ELSE 0::bigint
+        ELSE (SELECT total FROM equipment_totals)
       END,
     'orders_total', (SELECT count(*)::bigint FROM scoped),
     'orders_active', (SELECT count(*)::bigint FROM scoped WHERE deleted_at IS NULL),
