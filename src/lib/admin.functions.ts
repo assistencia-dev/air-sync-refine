@@ -30,7 +30,7 @@ export const listAllUsers = createServerFn({ method: "GET" })
 /** SUPER_ADMIN toggles user active/blocked. Records audit_log entry. */
 export const setUserStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { user_id: string; status: "ativo" | "bloqueado" }) => {
+  .validator((input: { user_id: string; status: "ativo" | "bloqueado" }) => {
     if (!input?.user_id) throw new Error("Usuário inválido.");
     if (input.status !== "ativo" && input.status !== "bloqueado")
       throw new Error("Status inválido.");
@@ -69,7 +69,7 @@ export const setUserStatus = createServerFn({ method: "POST" })
 /** SUPER_ADMIN edits a linked user without deleting historical tickets or attachments. */
 export const updateClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       user_id: string;
       full_name: string;
@@ -191,7 +191,7 @@ export const listCompaniesUnits = createServerFn({ method: "GET" })
  *  Mode B: cliente novo — cria empresa + unidade na hora. */
 export const createClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       full_name: string;
       email: string;
@@ -337,7 +337,7 @@ export const createClientUser = createServerFn({ method: "POST" })
  */
 export const permanentlyRemoveUserAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { user_id: string; confirmation: string }) => {
+  .validator((input: { user_id: string; confirmation: string }) => {
     if (!input?.user_id || input.confirmation !== "EXCLUIR PERMANENTEMENTE")
       throw new Error("Confirmação de exclusão inválida.");
     return input;
