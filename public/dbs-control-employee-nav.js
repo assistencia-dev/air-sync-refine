@@ -78,6 +78,8 @@
       event.stopImmediatePropagation();
       activate(id, item);
     }, true);
+    const dashboardNav = document.querySelector('aside .nav-item[data-employee-dashboard-visible="true"]');
+    if (dashboardNav) activate('tab-dashboard', dashboardNav);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
