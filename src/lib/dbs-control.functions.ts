@@ -1084,6 +1084,22 @@ function isDbsControlUuid(value: unknown) {
   return DBS_CONTROL_UUID_RE.test(String(value ?? ""));
 }
 
+function getDbsControlEmployeeId(order: any) {
+  const candidates = [
+    order?.employeeId,
+    order?.employee_id,
+    order?.assignedEmployeeId,
+    order?.assigned_employee_id,
+    order?.tecnicoId,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  // Snapshots antigos podem preencher primeiro um identificador legado. Dê
+  // preferência a qualquer UUID canônico presente nos aliases antes de
+  // considerar o valor legado (que será descartado pela validação da FK).
+  return candidates.find((value) => isDbsControlUuid(value)) ?? candidates[0] ?? "";
+}
+
 function deltaRecordKey(record: any, fallback: string) {
   return String(record?.id ?? record?.codigo ?? record?.numero ?? record?.protocolo ?? fallback).trim();
 }
@@ -1343,14 +1359,7 @@ function buildDbsControlWorkOrderPatch(
     : status || "aberta";
   const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
   const rawSiteId = String(order?.siteId ?? order?.localId ?? order?.site_id ?? "").trim();
-  const rawEmployeeId = String(
-    order?.employeeId
-      ?? order?.employee_id
-      ?? order?.assignedEmployeeId
-      ?? order?.assigned_employee_id
-      ?? order?.tecnicoId
-      ?? "",
-  ).trim();
+  const rawEmployeeId = getDbsControlEmployeeId(order);
   // A snapshot legado pode carregar um UUID de RH que já não existe nesta
   // base. Nunca o envie cegamente para a FK: em uma OS nova isso vira uma OS
   // sem responsável; em uma atualização, a ausência do campo preserva o
@@ -1453,14 +1462,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     const maps = await persistDbsControlMasterDeltas(changes, user);
     const rawEmployeeIds = [...new Set(
       (changes.ordens ?? [])
-        .map((order: any) => String(
-          order?.employeeId
-            ?? order?.employee_id
-            ?? order?.assignedEmployeeId
-            ?? order?.assigned_employee_id
-            ?? order?.tecnicoId
-            ?? "",
-        ).trim())
+        .map((order: any) => getDbsControlEmployeeId(order))
         .filter((id) => isDbsControlUuid(id)),
     )];
     let validEmployeeIds = new Set<string>();
@@ -1472,6 +1474,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       if (employees.error) throw new Error(employees.error.message);
       validEmployeeIds = new Set((employees.data ?? []).map((row: any) => String(row.id)));
     }
+    if (collaboratorEmployee?.id) validEmployeeIds.add(String(collaboratorEmployee.id));
     if (user.role_key === "COLABORADOR" && collaboratorScope) {
       const collaboratorClientMap = await resolveCollaboratorClientIdMap(scope.scopeKey, changes);
       collaboratorClientMap.forEach((canonicalId, rawId) => maps.clientMap.set(rawId, canonicalId));
@@ -1516,6 +1519,11 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
             { observacao: order?.observacao ?? order?.observation ?? "" },
           );
           if (mergedObservation.observacao) orderForPatch = { ...order, observacao: mergedObservation.observacao };
+        }
+        // A sessão de colaborador é a autoridade para a atribuição da OS.
+        // Isso corrige snapshots que ainda carregam o ID legado do técnico.
+        if (collaboratorEmployee?.id) {
+          orderForPatch = { ...orderForPatch, employeeId: String(collaboratorEmployee.id) };
         }
       }
       const fullPatch = buildDbsControlWorkOrderPatch(orderForPatch, maps, validEmployeeIds);
