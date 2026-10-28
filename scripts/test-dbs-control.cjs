@@ -171,7 +171,10 @@ assert.doesNotMatch(html, /employee-issue-inline/, "A emissão de OS não deve s
 assert.match(html, /Selecionar todos deste cliente/, "A seleção múltipla de equipamentos deve usar o cliente como único contexto físico da nova OS.");
 const employeeDashboardSource = html.slice(html.indexOf("function renderizarEmployeeDashboard"), html.indexOf("function renderizarAbaAtiva"));
 assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não deve duplicar a ação Emitir OS do cabeçalho.");
-assert.match(employeeDashboardSource, /canIssue[\s\S]*?tab-nova-os[\s\S]*?Emitir nova OS/, "O dashboard deve oferecer a emissão somente quando o colaborador estiver autorizado.");
+assert.doesNotMatch(employeeDashboardSource, /tab-nova-os|Emitir nova OS/, "O dashboard não deve duplicar a ação Emitir OS; ela fica no menu único do colaborador.");
+assert.match(html, /id=["']dbs-employee-bottom-nav["'][\s\S]*?data-employee-issue-nav=["']true["']/, "O menu móvel deve concentrar a emissão de OS em um único ponto.");
+assert.match(employeeNavigation, /issueBottomItems/, "A visibilidade de Emitir OS deve ser sincronizada também no menu móvel.");
+assert.match(html, /dbs-control-employee-nav\.js\?v=20261028-clean-menu-1/, "O menu móvel precisa invalidar o cache do script de navegação após a mudança visual.");
 assert.match(employeeDashboardSource, /base_active/, "A emissão do colaborador deve exigir uma base ativa também no dashboard.");
 assert.doesNotMatch(employeeDashboardSource, /Meu dashboard/, "O colaborador deve ter um único rótulo consistente para o painel.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
@@ -181,8 +184,13 @@ assert.doesNotMatch(rhFunctions, /can_issue_work_orders:[^\n]*baseName !== null/
 assert.match(route, /base_active=\$\{access\.data\.employee\?\.base_active \? "1" : "0"\}/, "O shell deve transportar o estado da base sem depender do nome exibido.");
 assert.match(route, /handleEmployeeFrameLoad/, "O shell deve reaplicar o título e esconder ações duplicadas quando o CDN entregar o HTML legado.");
 assert.match(route, /onLoad=\{handleEmployeeFrameLoad\}/, "A correção visual do colaborador deve ser aplicada no carregamento do iframe.");
+assert.match(route, /DBS_CONTROL_PARENT_READY/, "O pai autenticado deve confirmar o handshake do iframe para não perder a hidratação no mobile.");
+assert.match(route, /readyHydrationInFlightRef/, "A hidratação inicial deve ser serializada quando o iframe repetir o handshake.");
 assert.match(html, /dbs-employee-clean-nav-20261027/, "O painel do colaborador deve carregar o refinamento visual sem depender de cache antigo.");
 assert.match(html, /dbs-employee-mobile-stability-20261028/, "O portal mobile deve carregar a camada final de estabilidade sem reflow durante a execução.");
+assert.match(html, /notifyDbsControlParentReady/, "O shell deve reenviar o handshake sem criar gravações duplicadas.");
+assert.match(html, /DBS_CONTROL_READY_RETRY_ATTEMPTS >= 12/, "O retry do handshake precisa ser limitado para não criar tráfego infinito.");
+assert.match(html, /if \(!DBS_CONTROL_READY_SENT\) notifyDbsControlParentReady\(\)/, "O ACK do pai não pode iniciar um loop infinito de READY/ACK.");
 assert.match(employeeNavigation, /syncIssueVisibility/, "A navegação deve reaplicar a visibilidade de Emitir OS após o carregamento do iframe.");
 assert.match(employeeNavigation, /base_active.*!== '0'/, "A emissão deve continuar bloqueada quando a base vinculada estiver inativa.");
 assert.match(html, /<span>Meu painel<\/span>/, "O colaborador deve ver um único ponto de entrada chamado Meu painel.");
