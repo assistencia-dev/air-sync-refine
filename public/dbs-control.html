@@ -2623,6 +2623,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         .employee-dashboard-sync { min-width:170px; padding:13px 15px; border:1px solid rgba(255,255,255,.16); border-radius:16px; background:rgba(255,255,255,.08); }
         .employee-dashboard-sync small { display:block; color:#bae6fd; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
         .employee-dashboard-sync strong { display:block; margin-top:5px; font-size:13px; }
+        .employee-dashboard-permission { display:inline-flex; align-items:center; gap:7px; margin-top:12px; padding:7px 10px; border:1px solid rgba(125,211,252,.28); border-radius:999px; color:#e0f2fe; background:rgba(14,116,144,.18); font-size:10px; font-weight:850; letter-spacing:.03em; }
+        .employee-dashboard-permission::before { content:"✓"; display:inline-grid; width:17px; height:17px; place-items:center; border-radius:50%; color:#082f49; background:#7dd3fc; font-size:11px; font-weight:950; }
         .employee-dashboard-actions { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
         .employee-dashboard-actions button { min-height:42px; padding:0 16px; border:1px solid #bae6fd; border-radius:12px; font-size:11px; font-weight:900; cursor:pointer; }
         .employee-dashboard-actions .primary { color:#fff; background:#0284c7; border-color:#0284c7; }
@@ -2655,6 +2657,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             .employee-dashboard-kpi strong { font-size:24px; }
             .employee-dashboard-recent { grid-template-columns:1fr; }
             .employee-dashboard-actions button { flex:1 1 150px; }
+            .employee-dashboard-actions { display:grid; grid-template-columns:minmax(0,1fr); }
+            .employee-dashboard-actions button { width:100%; }
         }
         @media(prefers-reduced-motion:reduce){ .employee-dashboard-progress-track span { transition:none; } }
     </style>
@@ -4092,6 +4096,50 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             return merged;
         }
 
+        function mergeDbsControlCloudWithLocal(cloudState, localState) {
+            const cloud = cloudState && typeof cloudState === 'object' ? cloudState : {};
+            const local = localState && typeof localState === 'object' ? localState : {};
+            const merged = { ...local, ...cloud };
+            const identity = row => {
+                if (!row || typeof row !== 'object') return '';
+                const value = row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email;
+                return value === null || value === undefined || String(value).trim() === ''
+                    ? ''
+                    : String(value).trim().toLocaleLowerCase('pt-BR');
+            };
+            const hasValue = value => value !== null && value !== undefined
+                && !(typeof value === 'string' && value.trim() === '');
+            const arrayKeys = new Set([
+                ...Object.keys(local).filter(key => Array.isArray(local[key])),
+                ...Object.keys(cloud).filter(key => Array.isArray(cloud[key])),
+            ]);
+            arrayKeys.forEach(key => {
+                const rows = new Map();
+                (Array.isArray(local[key]) ? local[key] : []).forEach(row => {
+                    const id = identity(row);
+                    if (id) rows.set(id, row);
+                });
+                (Array.isArray(cloud[key]) ? cloud[key] : []).forEach(row => {
+                    const id = identity(row);
+                    if (!id) return;
+                    const localRow = rows.get(id);
+                    if (!localRow || typeof localRow !== 'object' || typeof row !== 'object') {
+                        rows.set(id, row);
+                        return;
+                    }
+                    const next = { ...localRow };
+                    Object.entries(row).forEach(([field, value]) => {
+                        if (hasValue(value) || !hasValue(next[field])) next[field] = value;
+                    });
+                    rows.set(id, next);
+                });
+                const anonymousCloudRows = (Array.isArray(cloud[key]) ? cloud[key] : []).filter(row => !identity(row));
+                const anonymousLocalRows = (Array.isArray(local[key]) ? local[key] : []).filter(row => !identity(row));
+                merged[key] = [...rows.values(), ...anonymousLocalRows, ...anonymousCloudRows];
+            });
+            return merged;
+        }
+
         function showDbsControlConflictBanner(conflicts) {
             const existing = document.getElementById('dbs-control-conflict-banner');
             if (existing) existing.remove();
@@ -4316,34 +4364,42 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 : 0;
             const localRecoveryState = getPersistableState();
             const localRecoveryCount = countStateRecords(localRecoveryState);
-            const incomingCloudCount = countStateRecords(msg.state);
+            const cloudBaseState = msg.baseState && typeof msg.baseState === 'object' && !Array.isArray(msg.baseState)
+                ? msg.baseState
+                : msg.state;
+            const incomingCloudCount = countStateRecords(cloudBaseState);
             // A base enviada ao colaborador é filtrada pelo servidor. Não comparar a quantidade
             // de registros com o cache completo deste navegador, pois isso bloqueia a hidratação legítima.
             const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            // Só aceita o início explicitamente autorizado pela rota autenticada e mesma origem,
-            // quando o servidor confirmou que não há snapshot nem registros canônicos neste escopo.
-            const allowEmptyBaseBootstrap = msg.allowEmptyBaseBootstrap === true
-                && event.source === window.parent
-                && event.origin === window.location.origin;
-            if (!allowEmptyBaseBootstrap && !collaboratorSession && localRecoveryCount > 0 && incomingCloudCount < localRecoveryCount) {
-                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
-                DBS_CONTROL_CLOUD_READY = false;
+            const cloudReturnedFewerRecords = !collaboratorSession
+                && localRecoveryCount > 0
+                && incomingCloudCount < localRecoveryCount;
+            const stateForHydration = cloudReturnedFewerRecords
+                ? mergeDbsControlCloudWithLocal(cloudBaseState, localRecoveryState)
+                : msg.state;
+            if (cloudReturnedFewerRecords) {
+                // A resposta menor é reconciliada por identidade. O cache local
+                // continua preservado, mas a sessão não fica bloqueada em
+                // somente leitura; o delta pendente será confirmado pelo ACK.
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
-                    indicator.textContent = 'Recuperação local — nuvem sem dados';
+                    indicator.textContent = 'Sincronizando diferenças…';
                     indicator.style.color = '#92400e';
                     indicator.style.background = '#fffbeb';
                     indicator.style.borderColor = '#fde68a';
                 }
-                renderizarTudo();
-                return;
             }
 
             if (DBS_CONTROL_HAS_PENDING_SAVE) {
-                const sendFirst = confirm('Existem alterações locais ainda não enviadas. Deseja enviar essas alterações primeiro? A versão da nuvem não será aplicada agora.');
-                if (sendFirst) {
-                    saveState();
-                    window.parent.postMessage({ type: 'DBS_CONTROL_RETRY_SAVE' }, '*');
+                // Não abrir confirm() durante um evento automático de Realtime:
+                // um popup bloqueia assinatura, troca de aba e reconexão no celular.
+                // O delta local continua protegido e a fila do shell fará o reenvio.
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Alterações pendentes — enviando…';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
                 }
                 return;
             }
@@ -4388,14 +4444,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     console.warn('Não foi possível gravar a cópia pré-sincronização local:', backupError);
                 }
 
-                ERP_STATE = JSON.parse(JSON.stringify(mergeCollaboratorCloudState(msg.state)));
+                ERP_STATE = JSON.parse(JSON.stringify(mergeCollaboratorCloudState(stateForHydration)));
                 DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 // Release the filtered view before rendering it in the same message turn.
                 DBS_CONTROL_CLOUD_READY = true;
                 if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
-                DBS_CONTROL_SYNC_BASE_STATE = getPersistableState();
+                DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(cloudBaseState));
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
                 try {
                     localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
@@ -4406,6 +4462,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     console.warn('Cache local indisponível; estado compartilhado mantido em memória.', cacheError);
                 }
                 renderizarTudo();
+                if (cloudReturnedFewerRecords && !collaboratorSession) {
+                    const reconciliationChanges = buildDbsControlDelta(cloudBaseState, getPersistableState());
+                    if (dbsControlDeltaHasRows(reconciliationChanges)) {
+                        DBS_CONTROL_HAS_PENDING_SAVE = true;
+                        window.parent.postMessage({
+                            type: 'DBS_CONTROL_SAVE',
+                            requestId: 'reconcile:' + Date.now(),
+                            changes: reconciliationChanges
+                        }, '*');
+                    }
+                }
             } finally {
                 DBS_CONTROL_CLOUD_HYDRATING = false;
                 DBS_CONTROL_CLOUD_READY = true;
@@ -4691,7 +4758,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const params = new URLSearchParams(window.location.search);
             const employeeName = String(params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
             const baseName = String(params.get('base_name') || '').trim();
-            const canIssue = params.get('can_issue_os') === '1';
+            const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
             const syncIndicator = document.getElementById('dbs-sync-indicator');
             const syncText = syncIndicator ? String(syncIndicator.textContent || '').trim() : '';
             const loadStatus = String(DBS_CONTROL_DASHBOARD_LOAD_STATUS || '');
@@ -4728,11 +4795,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 '<section class="employee-dashboard-hero">' +
                     '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu painel</div>' +
                     '<h2>Olá, ' + esc(employeeName) + '</h2>' +
-                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p></div>' +
+                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p>' +
+                    (canIssue ? '<span class="employee-dashboard-permission">Emissão de OS autorizada nesta base</span>' : '') +
+                    '</div>' +
                     '<div class="employee-dashboard-sync"><small>Estado da conexão</small><strong>' + esc(syncText || (loadStatus === 'loaded' ? 'Sincronizado' : 'Sincronizando…')) + '</strong></div>' +
                 '</section>' +
                 '<div class="employee-dashboard-actions">' +
                     '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Abrir minhas OS</button>' +
+                    (canIssue ? '<button type="button" class="secondary" onclick="switchTab(&quot;tab-nova-os&quot;)" aria-label="Emitir nova ordem de serviço">Emitir nova OS</button>' : '') +
                 '</div>' +
                 '<section class="employee-dashboard-kpis">' +
                     '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
@@ -4750,7 +4820,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function renderizarAbaAtiva(tabId) {
             const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
-            const canIssueOs = new URLSearchParams(window.location.search).get('can_issue_os') === '1';
+            const params = new URLSearchParams(window.location.search);
+            const canIssueOs = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
             const requestedId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
             const employeeAllowed = new Set(['tab-dashboard', 'tab-pwa']);
             const activeId = employeeMode
@@ -7345,8 +7416,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     <script src="/dbs-control-orcamentos-v2.js?v=20261026-quote-ack-1"></script>
     <script src="/dbs-control-orcamentos-pdf.js?v=20261014-pdf-standard-1"></script>
     <script src="/dbs-control-orcamentos-flex.js?v=20261026-quote-ack-1"></script>
-    <script src="/dbs-control-employee-nav.js?v=20261027-collaborator-ui-4"></script>
-    <script src="/dbs-control-ux.js?v=20261027-collaborator-ui-4"></script>
+    <script src="/dbs-control-employee-nav.js?v=20261028-sync-clean-2"></script>
+    <script src="/dbs-control-ux.js?v=20261028-sync-clean-2"></script>
     <script id="dbs-employee-stability-20261027">
     (function enforceDbsEmployeeStableShell(){
         'use strict';
@@ -7371,6 +7442,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const id = targetId(item);
                 const visible = allowed.has(id) || (id === 'tab-dashboard' && item.matches('[data-employee-dashboard-visible]'));
                 item.style.setProperty('display', visible ? 'flex' : 'none', 'important');
+                item.hidden = !visible;
                 item.setAttribute('aria-hidden', visible ? 'false' : 'true');
                 if (!visible) item.classList.remove('active');
             });
@@ -7515,8 +7587,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     return String(document.getElementById('os-select-cliente')?.value || '');
   }
 
+  // O equipamento é a única referência física da OS. Os campos siteId/localId
+  // continuam sendo lidos em registros antigos, mas não participam de novas
+  // emissões nem filtram a lista de equipamentos.
   function currentSiteId(){
-    return String(document.getElementById('os-select-site')?.value || state.siteId || '');
+    return '';
   }
 
   function equipmentForCurrentContext(){
@@ -7793,15 +7868,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     }
   };
 
-  function injectSiteField(){
-    const clientGroup = document.querySelector('#tab-nova-os .os-premium-client');
-    if (!clientGroup || document.getElementById('os-select-site')) return;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'dbs-site-field';
-    wrapper.innerHTML = '<label for="os-select-site">Local de atendimento</label><select id="os-select-site" onchange="window.__DBS_NOVA_OS_SELECTION__.siteId=this.value;window.atualizarEquipamentosDoClienteOS()"><option value="">Todos os equipamentos do cliente</option></select><small>Filtre os equipamentos pelo local quando o cliente tiver mais de um.</small>';
-    clientGroup.appendChild(wrapper);
-  }
-
   function injectSelectAll(){
     const picker = document.getElementById('dbs-equipment-picker');
     const options = document.getElementById('os-equipment-options');
@@ -7831,10 +7897,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     if (last && String(last.equipamentoId || '') === String(ids[0])) {
       last.equipamentosIds = ids;
       last.equipamentos = ids.map(id => ({ id }));
-      if (state.siteId) {
-        last.siteId = state.siteId;
-        last.localId = state.siteId;
-      }
       if (typeof saveState === 'function') saveState();
     }
     state.equipmentIds.clear();
@@ -7843,7 +7905,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
   };
 
   function boot(){
-    injectSiteField();
     injectSelectAll();
     window.atualizarSelects();
   }
@@ -7854,6 +7915,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     .dbs-site-field label{display:block;font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:#48627f;margin-bottom:5px}
     .dbs-site-field select{width:100%;min-height:38px;border:1px solid #cbd8e8;border-radius:9px;background:#fff;color:#102f52;padding:8px 10px;font-weight:650}
     .dbs-site-field small{display:block;margin-top:4px;font-size:9px;color:#7b8da2}
+    #os-select-site, .dbs-site-field{display:none !important}
     .dbs-equipment-select-all{width:100%;margin:6px 0 0;padding:8px 10px;border:1px solid #d4e2ef;border-radius:9px;background:#f7fbff;color:#1769d1;font-size:10px;font-weight:900;cursor:pointer;text-align:left}
     .dbs-equipment-select-all:hover{background:#eef6ff;border-color:#9fc5ec}
     .dbs-equipment-option{display:flex!important;align-items:flex-start;gap:9px;text-align:left}
@@ -8338,6 +8400,47 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     #dbs-os-extra-fields { padding: 14px !important; }
     #dbs-os-extra-fields .form-grid { grid-template-columns: 1fr; gap: 10px; }
     #tab-nova-os .os-premium-description textarea { min-height: 112px !important; }
+  }
+</style>
+
+<style id="dbs-employee-mobile-stability-20261028">
+  /* Última camada de estabilidade do portal de campo: evita reflow e
+     animações concorrentes durante a assinatura, checklist e troca de aba. */
+  body.dbs-control-employee-mode main,
+  body.dbs-control-employee-mode .tab-view,
+  body.dbs-control-employee-mode .employee-execution {
+    transform: none !important;
+    animation: none !important;
+  }
+  body.dbs-control-employee-mode .tab-view:not(.active) {
+    display: none !important;
+  }
+  body.dbs-control-employee-mode #tab-pwa,
+  body.dbs-control-employee-mode #tab-nova-os {
+    scroll-behavior: auto !important;
+    overscroll-behavior: contain;
+  }
+  body.dbs-control-employee-mode .employee-execution-body {
+    contain: layout paint;
+  }
+  body.dbs-control-employee-mode canvas.sig-canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 220px !important;
+    min-height: 220px !important;
+    touch-action: none !important;
+  }
+  @media (max-width: 760px) {
+    body.dbs-control-employee-mode .employee-dashboard-actions,
+    body.dbs-control-employee-mode .employee-finish-row,
+    body.dbs-control-employee-mode .field-checklist {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    body.dbs-control-employee-mode .employee-dashboard-actions button,
+    body.dbs-control-employee-mode .employee-finish-row .btn {
+      min-height: 48px !important;
+    }
   }
 </style>
 
