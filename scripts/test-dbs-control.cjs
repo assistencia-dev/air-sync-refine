@@ -168,6 +168,7 @@ assert.match(html, /data-employee-visible=["']true["']/, "O menu do colaborador 
 assert.match(html, /data-employee-issue-visible=["']true["']/, "O menu do colaborador precisa conter Emitir OS quando autorizado.");
 assert.doesNotMatch(html, /id=["']dbs-employee-context-nav["']/, "A navegação não deve ficar duplicada em um cabeçalho separado.");
 assert.doesNotMatch(html, /employee-issue-inline/, "A emissão de OS não deve ser duplicada dentro da tela Minhas OS.");
+assert.match(html, /Selecionar todos deste cliente/, "A seleção múltipla de equipamentos deve usar o cliente como único contexto físico da nova OS.");
 const employeeDashboardSource = html.slice(html.indexOf("function renderizarEmployeeDashboard"), html.indexOf("function renderizarAbaAtiva"));
 assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não deve duplicar a ação Emitir OS do cabeçalho.");
 assert.match(employeeDashboardSource, /canIssue[\s\S]*?tab-nova-os[\s\S]*?Emitir nova OS/, "O dashboard deve oferecer a emissão somente quando o colaborador estiver autorizado.");
@@ -225,6 +226,8 @@ assert.doesNotMatch(legacyBackfillMigration, /state->'ordens'\) else .*osHistori
 assert.match(legacyHistoryRepairMigration, /event_type,\s*details,\s*idempotency_key/, "O histórico legado deve ser preservado como evento relacional idempotente.");
 assert.match(deletedAtMigration, /add column if not exists deleted_at timestamptz/i, "Exclusões antigas devem permanecer auditáveis sem apagar a OS relacional.");
 assert.match(cloudFunctions, /buildDbsControlWorkOrderPatch/, "O servidor deve converter registros de UI em patches canônicos.");
+assert.match(cloudFunctions, /validEmployeeIds[\s\S]*?assigned_employee_id/, "A gravação deve validar o funcionário contra rh_employees antes de tocar na FK.");
+assert.doesNotMatch(cloudFunctions, /assigned_employee_id: isDbsControlUuid\(rawEmployeeId\) \? rawEmployeeId : null/, "Um UUID legado de técnico não pode ser enviado cegamente para a FK relacional.");
 assert.match(cloudFunctions, /dbs_control_apply_work_order_delta/, "A alteração da OS deve passar pelo RPC transacional com versão esperada.");
 assert.match(cloudFunctions, /event_type: "work_order_delta"/, "Cada lote de OS deve carregar um tipo de evento auditável.");
 assert.match(cloudFunctions, /const orderLabel = protocol \|\|/, "Uma OS nova deve usar um rótulo transitório sem exigir protocolo no formulário.");
