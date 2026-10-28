@@ -320,14 +320,20 @@ function DbsControlPage() {
   const syncCursorRef = useRef<string | null>(null);
   const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const employeeModeRef = useRef(false);
+  const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
   // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
   // autenticado reaplica apenas a apresentação do colaborador no carregamento
   // do iframe, sem tocar nos dados nem nos handlers de negócio.
   const handleEmployeeFrameLoad = () => {
-    if (!employeeModeRef.current) return;
     const frame = iframeRef.current;
+    // The static shell can finish loading before React's message listener on
+    // a suspended/mobile tab.  The shell treats this as an explicit handshake
+    // and sends DBS_CONTROL_READY again, so the first cloud hydration is never
+    // lost just because of load ordering.
+    frame?.contentWindow?.postMessage({ type: "DBS_CONTROL_PARENT_READY" }, window.location.origin);
+    if (!employeeModeRef.current) return;
     const frameDocument = frame?.contentDocument;
     if (!frameDocument) return;
 
@@ -812,6 +818,9 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_READY") {
+        iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_PARENT_READY" }, window.location.origin);
+        if (cloudReadyRef.current || readyHydrationInFlightRef.current) return;
+        readyHydrationInFlightRef.current = true;
         sendDashboardSummary();
         try {
           await hydrateLocalSyncQueue();
@@ -911,6 +920,8 @@ function DbsControlPage() {
             error: message,
           }, "*");
           await postLocalSyncStatus("error");
+        } finally {
+          readyHydrationInFlightRef.current = false;
         }
         return;
       }
@@ -1444,8 +1455,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control-shell.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261028-sync-integrity-2`
-    : "/dbs-control-shell.html?v=20261028-sync-integrity-2"
+    ? `/dbs-control-shell.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261028-clean-menu-1`
+    : "/dbs-control-shell.html?v=20261028-clean-menu-1"
 
   if (employeeMode) {
     return (
@@ -1482,7 +1493,7 @@ function DbsControlPage() {
           <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
         </section>
       )}
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
     </main>
   );
 }
