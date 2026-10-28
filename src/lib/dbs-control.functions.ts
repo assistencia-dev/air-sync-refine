@@ -93,30 +93,34 @@ async function getCollaboratorEmployee(userId: string) {
     .eq("ponto_portal_user_id", userId)
     .eq("dbs_control_access_enabled", true)
     .eq("is_active", true)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .limit(1);
 
   if (direct.error) throw new Error(direct.error.message);
 
-  let data = direct.data;
+  let data = direct.data?.[0] ?? null;
   if (!data) {
     const access = await supabaseAdmin
       .from("rh_employee_access")
       .select("employee_id")
       .eq("user_id", userId)
       .eq("access_enabled", true)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
 
     if (access.error) throw new Error(access.error.message);
-    if (access.data?.employee_id) {
+    if (access.data?.[0]?.employee_id) {
       const fallback = await supabaseAdmin
         .from("rh_employees")
         .select("id, full_name, unit, is_active, registration_data, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders")
-        .eq("id", access.data.employee_id)
+        .eq("id", access.data[0].employee_id)
         .eq("is_active", true)
-        .maybeSingle();
+        .order("updated_at", { ascending: false })
+        .limit(1);
       if (fallback.error) throw new Error(fallback.error.message);
-      if (fallback.data?.dbs_control_access_enabled) {
-        data = fallback.data;
+      if (fallback.data?.[0]?.dbs_control_access_enabled) {
+        data = fallback.data[0];
       }
     }
   }
