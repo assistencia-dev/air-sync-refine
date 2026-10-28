@@ -24,6 +24,7 @@ import { Route as AuthenticatedPassageRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
 import { Route as AuthenticatedRhRouteImport } from './routes/_authenticated/rh'
 import { Route as AuthenticatedTreasuryRouteImport } from './routes/_authenticated/treasury'
+import { Route as AuthenticatedTreinamentoRouteImport } from './routes/_authenticated/treinamento'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AdminRhDashboardRouteImport } from './routes/admin/rh-dashboard'
 
@@ -103,6 +104,12 @@ const AuthenticatedTreasuryRoute = AuthenticatedTreasuryRouteImport.update({
   path: '/treasury',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTreinamentoRoute =
+  AuthenticatedTreinamentoRouteImport.update({
+    id: '/treinamento',
+    path: '/treinamento',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -129,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof AuthenticatedPortalRoute
   '/rh': typeof AuthenticatedRhRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
+  '/treinamento': typeof AuthenticatedTreinamentoRoute
   '/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/portal': typeof AuthenticatedPortalRoute
   '/rh': typeof AuthenticatedRhRoute
   '/treasury': typeof AuthenticatedTreasuryRoute
+  '/treinamento': typeof AuthenticatedTreinamentoRoute
   '/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -167,6 +176,7 @@ export interface FileRoutesById {
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
   '/_authenticated/rh': typeof AuthenticatedRhRoute
   '/_authenticated/treasury': typeof AuthenticatedTreasuryRoute
+  '/_authenticated/treinamento': typeof AuthenticatedTreinamentoRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/admin/rh-dashboard': typeof AdminRhDashboardRoute
 }
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/rh'
     | '/treasury'
+    | '/treinamento'
     | '/users'
     | '/admin/rh-dashboard'
   fileRoutesByTo: FileRoutesByTo
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/rh'
     | '/treasury'
+    | '/treinamento'
     | '/users'
     | '/admin/rh-dashboard'
   id:
@@ -224,6 +236,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal'
     | '/_authenticated/rh'
     | '/_authenticated/treasury'
+    | '/_authenticated/treinamento'
     | '/_authenticated/users'
     | '/admin/rh-dashboard'
   fileRoutesById: FileRoutesById
@@ -343,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTreasuryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/treinamento': {
+      id: '/_authenticated/treinamento'
+      path: '/treinamento'
+      fullPath: '/treinamento'
+      preLoaderRoute: typeof AuthenticatedTreinamentoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/users': {
       id: '/_authenticated/users'
       path: '/users'
@@ -372,6 +392,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
   AuthenticatedRhRoute: typeof AuthenticatedRhRoute
   AuthenticatedTreasuryRoute: typeof AuthenticatedTreasuryRoute
+  AuthenticatedTreinamentoRoute: typeof AuthenticatedTreinamentoRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
 }
 
@@ -388,6 +409,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
   AuthenticatedRhRoute: AuthenticatedRhRoute,
   AuthenticatedTreasuryRoute: AuthenticatedTreasuryRoute,
+  AuthenticatedTreinamentoRoute: AuthenticatedTreinamentoRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
 }
 

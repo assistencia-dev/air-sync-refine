@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CircleDot,
+  GraduationCap,
   Landmark,
   LogOut,
   Pencil,
@@ -161,6 +162,14 @@ function AdminPage() {
               <Landmark className="h-4 w-4" /> Financeiro
             </button>
           )}
+          {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
+            <button
+              onClick={() => navigate({ to: "/treinamento" })}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-white/65 transition hover:bg-white/10 hover:text-white"
+            >
+              <GraduationCap className="h-4 w-4" /> Dúvidas / Treinamento
+            </button>
+          )}
         </nav>
         <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-emerald-200">
@@ -232,6 +241,14 @@ function AdminPage() {
             onClick={() => navigate({ to: "/treasury" })}
             icon={<Landmark className="w-3.5 h-3.5" />}
             label="Financeiro"
+          />
+        )}
+        {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
+          <TabBtn
+            active={false}
+            onClick={() => navigate({ to: "/treinamento" })}
+            icon={<GraduationCap className="w-3.5 h-3.5" />}
+            label="Dúvidas / Treinamento"
           />
         )}
       </div>

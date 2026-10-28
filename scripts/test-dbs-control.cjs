@@ -10,6 +10,7 @@ const authenticatedRoute = fs.readFileSync("src/routes/_authenticated/route.tsx"
 const folhaPontoRoute = fs.readFileSync("src/routes/_authenticated/folha-ponto.tsx", "utf8");
 const rhFunctions = fs.readFileSync("src/lib/rh.functions.ts", "utf8");
 const adminSurface = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8");
+const trainingRoute = fs.readFileSync("src/routes/_authenticated/treinamento.tsx", "utf8");
 const rhWorkspace = fs.readFileSync("src/components/HrWorkspace.tsx", "utf8");
 const html = fs.readFileSync("public/dbs-control.html", "utf8");
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
@@ -35,6 +36,11 @@ assert.match(loginRoute, /resolveCollaboratorLanding/, "O login precisa respeita
 assert.match(authenticatedRoute, /resolveCollaboratorLanding/, "O guard autenticado deve impedir o ciclo mobile portal/folha de ponto.");
 assert.match(folhaPontoRoute, /collaborator-topbar/, "O portal do colaborador precisa de shell compacto próprio para mobile.");
 assert.match(folhaPontoRoute, /aria-current="page"/, "A navegação mobile deve indicar a área ativa.");
+assert.match(adminSurface, /navigate\(\{ to: ["']\/treinamento["'] \}\)/, "O painel administrativo deve oferecer a central de Dúvidas / Treinamento.");
+assert.match(adminSurface, /GraduationCap[\s\S]*?Dúvidas \/ Treinamento/, "A central de treinamento deve aparecer com identidade própria no menu.");
+assert.match(trainingRoute, /createFileRoute\(["']\/_authenticated\/treinamento["']\)/, "A central de treinamento precisa ter uma rota autenticada própria.");
+assert.match(trainingRoute, /POP operacional DBS Air/, "O POP operacional deve estar disponível na central de treinamento.");
+assert.match(trainingRoute, /Sincronização/, "A central de treinamento deve documentar o fluxo de sincronização.");
 
 
 let parsedInlineScripts = 0;
