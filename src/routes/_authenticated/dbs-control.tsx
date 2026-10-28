@@ -1320,13 +1320,19 @@ function DbsControlPage() {
       retryPendingSaveRef.current?.(true);
       void refreshLatestCloudState();
     };
+    const handleOffline = () => {
+      logSyncEvent("network_offline");
+      void postLocalSyncStatus("pending");
+    };
     window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     window.addEventListener("focus", handleVisibilityChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       disposed = true;
       window.removeEventListener("message", handler);
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       window.removeEventListener("focus", handleVisibilityChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(refreshTimer);

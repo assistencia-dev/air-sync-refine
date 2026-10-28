@@ -31,6 +31,7 @@ assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um c
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
 assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar a mesma intenção simultaneamente.");
 assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
+assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
 assert.match(route, /Only network\n\s*\/\/ and gateway failures enter the backoff queue|Only network and gateway failures enter the backoff queue/, "Erros permanentes não podem entrar em retry infinito.");
 assert.match(iframe, /DBS_CONTROL_PENDING_SAVE_REQUESTS/, "O iframe precisa rastrear ACKs de cada delta.");
 assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pode avançar depois da confirmação relacional.");
