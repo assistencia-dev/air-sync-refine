@@ -30,6 +30,12 @@
       if (navItem === item) navItem.setAttribute('aria-current', 'page');
       else navItem.removeAttribute('aria-current');
     });
+    document.querySelectorAll('#dbs-employee-bottom-nav [data-dbs-target]').forEach(button => {
+      const active = button.getAttribute('data-dbs-target') === id;
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
     const titleMap = {
       'tab-dashboard': ['Meu painel', 'Progresso e operação do colaborador'],
       'tab-pwa': ['Minhas OS', 'Execução das Ordens de Serviço do colaborador'],
@@ -56,6 +62,12 @@
     const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
     const issueItems = document.querySelectorAll('aside .nav-item[data-employee-issue-visible="true"]');
     issueItems.forEach(item => {
+      item.hidden = !canIssue;
+      item.setAttribute('aria-hidden', canIssue ? 'false' : 'true');
+      item.style.setProperty('display', canIssue ? 'flex' : 'none', 'important');
+    });
+    const issueBottomItems = document.querySelectorAll('#dbs-employee-bottom-nav [data-employee-issue-nav="true"]');
+    issueBottomItems.forEach(item => {
       item.hidden = !canIssue;
       item.setAttribute('aria-hidden', canIssue ? 'false' : 'true');
       item.style.setProperty('display', canIssue ? 'flex' : 'none', 'important');
