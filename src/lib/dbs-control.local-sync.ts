@@ -1,4 +1,4 @@
-export type DbsControlLocalCommandStatus = "pending" | "sending" | "conflict" | "error";
+export type DbsControlLocalCommandStatus = "pending" | "sending" | "conflict" | "error" | "quarantined";
 
 export type DbsControlLocalChanges = Record<string, unknown[]>;
 
@@ -21,6 +21,7 @@ export interface DbsControlLocalSyncSummary {
   sending: number;
   conflict: number;
   error: number;
+  quarantined: number;
   total: number;
 }
 
@@ -139,7 +140,7 @@ export async function getDbsControlLocalSyncSummary(): Promise<DbsControlLocalSy
       summary.total += 1;
       return summary;
     },
-    { pending: 0, sending: 0, conflict: 0, error: 0, total: 0 },
+    { pending: 0, sending: 0, conflict: 0, error: 0, quarantined: 0, total: 0 },
   );
 }
 

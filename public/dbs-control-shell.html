@@ -3573,7 +3573,2040 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         };
 
         // Recuperação segura: nunca apagar caches locais/IndexedDB automaticamente.
-        /…32920 tokens truncated…     <td>${escDbsControl(o.data || '—')}</td>
+        // O cache local integrado é lido apenas como fallback de visualização; não é enviado à nuvem.
+        (function preserveLegacyEmbeddedCaches() {
+            try {
+                if (window.parent === window) return;
+                const raw = localStorage.getItem('DBS_AIR_ERP_STATE');
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                const sourceData = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+                const countRecords = value => value && typeof value === 'object'
+                    ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                    : 0;
+                if (countRecords(sourceData) > 0 && !localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS')) {
+                    // Só cria backup quando ainda não existe; nunca remove nem reduz caches.
+                    localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                        version: Number(parsed?.version || 1),
+                        data: sourceData,
+                        backedUpAt: new Date().toISOString(),
+                        reason: 'Backup de recuperação antes da leitura da nuvem'
+                    }));
+                }
+            } catch (error) {
+                console.warn('Caches locais preservados; não foi possível criar backup adicional.', error);
+            }
+        })();
+
+        let DBS_CONTROL_LOCAL_RECOVERY_MODE = window.parent !== window;
+        let ERP_STATE = loadState();
+        let DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+        if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+        let DBS_CONTROL_CLOUD_READY = false;
+        let DBS_CONTROL_CLOUD_HYDRATING = false;
+        // O estado completo permanece apenas como cache/visualização. Toda escrita
+        // enviada ao servidor é formada por registros alterados (deltas).
+        let DBS_CONTROL_SYNC_BASE_STATE = null;
+        // Exclusões seguem uma intenção própria e nunca entram no autosave de
+        // snapshot. O mapa mantém o rollback local até o ACK transacional.
+        const DBS_CONTROL_PENDING_DELETES = new Map();
+        // Dashboard só exibe números depois da primeira hidratação autoritativa.
+        let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
+        let DBS_CONTROL_DASHBOARD_SUMMARY = null;
+
+
+        function criarSnapshotHistoricoOS(ordens) {
+            return (Array.isArray(ordens) ? ordens : []).reduce((acc, o) => {
+                acc[String(o.id)] = {
+                    id: o.id,
+                    data: o.data || '',
+                    clienteId: o.clienteId ?? null,
+                    tecnicoId: o.tecnicoId ?? null,
+                    status: o.status || '',
+                    diagnostico: String(o.diagnostico || ''),
+                    trabalhoExecutado: String(o.trabalhoExecutado || ''),
+                    assinatura: Boolean(o.assinatura),
+                    fotoAntes: Boolean(o.fotoAntes),
+                    fotoDepois: Boolean(o.fotoDepois),
+                    valor: Number(o.valor || 0),
+                    checklist: (o.checklist || []).map(i => Boolean(i.concluido))
+                };
+                return acc;
+            }, {});
+        }
+
+        function escDbsControl(value) {
+            return String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        }
+
+        function formatarDataHoraHistorico(value) {
+            if (!value) return '—';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return escDbsControl(value);
+            return d.toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+        }
+
+        function dataOSParaISO(value) {
+            const raw = String(value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+            const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+            const d = new Date(raw);
+            if (!Number.isNaN(d.getTime())) {
+                const y = d.getFullYear();
+                const mo = String(d.getMonth()+1).padStart(2,'0');
+                const da = String(d.getDate()).padStart(2,'0');
+                return `${y}-${mo}-${da}`;
+            }
+            return '';
+        }
+
+        function nomeClienteOS(o) {
+            return (ERP_STATE.clientes.find(c => String(c.id) === String(o?.clienteId)) || {}).nome || 'Cliente não informado';
+        }
+
+        function nomeTecnicoOS(o) {
+            return (ERP_STATE.tecnicos.find(t => String(t.id) === String(o?.tecnicoId)) || {}).nome || 'Não atribuído';
+        }
+
+        function garantirHistoricoInicial() {
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            if (ERP_STATE.osHistorico.length || !Array.isArray(ERP_STATE.ordens) || !ERP_STATE.ordens.length) return;
+            const agora = new Date().toISOString();
+            ERP_STATE.osHistorico = ERP_STATE.ordens.map(o => ({
+                id: `hist-${o.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+                osId: o.id,
+                createdAt: agora,
+                clienteId: o.clienteId ?? null,
+                tecnicoId: o.tecnicoId ?? null,
+                tipo: 'registro_existente',
+                evento: 'OS já existente no DBS CONTROL',
+                detalhe: 'Registro histórico inicial criado sem alterar os dados da ordem.'
+            }));
+        }
+
+        // Reconhece variações legadas do status de conclusão sem alterar os dados originais.
+        function isOSConcluida(osOuStatus) {
+            const raw = (osOuStatus && typeof osOuStatus === 'object')
+                ? (osOuStatus.status ?? osOuStatus.situacao ?? osOuStatus.statusOS ?? '')
+                : (osOuStatus ?? '');
+            const status = String(raw).trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+            return /^(concluida|concluido|finalizada|finalizado|encerrada|encerrado|fechada|fechado)$/.test(status);
+        }
+
+        function adicionarHistoricoOS(os, tipo, evento, detalhe) {
+            if (!os) return;
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            ERP_STATE.osHistorico.push({
+                id: `hist-${os.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+                osId: os.id,
+                createdAt: new Date().toISOString(),
+                clienteId: os.clienteId ?? null,
+                tecnicoId: os.tecnicoId ?? null,
+                tipo,
+                evento,
+                detalhe: String(detalhe || '')
+            });
+        }
+
+        function registrarHistoricoOS() {
+            if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+            const atual = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+            const anterior = DBS_CONTROL_LAST_OS_SNAPSHOT || {};
+            Object.values(atual).forEach(s => {
+                const p = anterior[String(s.id)];
+                const os = ERP_STATE.ordens.find(o => String(o.id) === String(s.id));
+                if (!p) {
+                    adicionarHistoricoOS(os, 'criacao', 'OS criada', 'Ordem de serviço registrada no DBS CONTROL.');
+                    return;
+                }
+                if (p.status !== s.status) adicionarHistoricoOS(os, 'status', 'Status alterado', `${p.status || 'Sem status'} → ${s.status || 'Sem status'}`);
+                if (p.tecnicoId !== s.tecnicoId) adicionarHistoricoOS(os, 'atribuicao', 'Colaborador alterado', `${nomeTecnicoOS({ tecnicoId:p.tecnicoId })} → ${nomeTecnicoOS(os)}`);
+                if (p.diagnostico !== s.diagnostico) adicionarHistoricoOS(os, 'execucao', 'Diagnóstico atualizado', s.diagnostico ? 'Diagnóstico registrado/atualizado pelo atendimento.' : 'Diagnóstico removido.');
+                if (p.trabalhoExecutado !== s.trabalhoExecutado) adicionarHistoricoOS(os, 'execucao', 'Trabalho executado atualizado', s.trabalhoExecutado ? 'Descrição do trabalho executado registrada/atualizada.' : 'Descrição do trabalho executado removida.');
+                if (p.assinatura !== s.assinatura) adicionarHistoricoOS(os, 'evidencia', s.assinatura ? 'Assinatura do cliente registrada' : 'Assinatura do cliente removida');
+                if (p.fotoAntes !== s.fotoAntes) adicionarHistoricoOS(os, 'evidencia', s.fotoAntes ? 'Foto antes registrada' : 'Foto antes removida');
+                if (p.fotoDepois !== s.fotoDepois) adicionarHistoricoOS(os, 'evidencia', s.fotoDepois ? 'Foto depois registrada' : 'Foto depois removida');
+                const pChecklist = JSON.stringify((p.checklist || []).map(i => Boolean(i.concluido)));
+                const sChecklist = JSON.stringify((s.checklist || []).map(i => Boolean(i.concluido)));
+                if (pChecklist !== sChecklist) {
+                    const done = (s.checklist || []).filter(i => i.concluido).length;
+                    const total = (s.checklist || []).length;
+                    adicionarHistoricoOS(os, 'checklist', 'Checklist atualizado', `${done}/${total} itens conferidos.`);
+                }
+                if (p.valor !== s.valor) adicionarHistoricoOS(os, 'financeiro', 'Valor da OS alterado', `R$ ${Number(p.valor || 0).toFixed(2)} → R$ ${Number(s.valor || 0).toFixed(2)}`);
+            });
+            DBS_CONTROL_LAST_OS_SNAPSHOT = atual;
+        }
+
+        function getPersistableState() {
+            const snapshot = JSON.parse(JSON.stringify(ERP_STATE));
+            delete snapshot.sessionTecnicoLogado;
+            return snapshot;
+        }
+
+        const DBS_CONTROL_DELTA_ARRAY_KEYS = [
+            'clientes', 'sites', 'locais', 'equipamentos', 'servicos', 'pecas',
+            'compras', 'orcamentos', 'ordens'
+        ];
+
+        function dbsControlDeltaIdentity(item, key, index) {
+            const row = item && typeof item === 'object' ? item : {};
+            const value = row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email;
+            return value === null || value === undefined || String(value).trim() === ''
+                ? `${key}:${index}`
+                : String(value).trim().toLocaleLowerCase('pt-BR');
+        }
+
+        function dbsControlOrderSyncIdentity(item) {
+            const row = item && typeof item === 'object' ? item : {};
+            const value = row.protocolo ?? row.protocol ?? row.numero ?? row.id;
+            return value === null || value === undefined || String(value).trim() === ''
+                ? ''
+                : String(value).trim().toLocaleLowerCase('pt-BR');
+        }
+
+        function dbsControlStableStringify(value) {
+            if (Array.isArray(value)) return '[' + value.map(dbsControlStableStringify).join(',') + ']';
+            if (value && typeof value === 'object') {
+                return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + dbsControlStableStringify(value[key])).join(',') + '}';
+            }
+            return JSON.stringify(value);
+        }
+
+        function dbsControlDeltaRecord(item, key) {
+            const copy = JSON.parse(JSON.stringify(item || {}));
+            // Evidências binárias são enviadas pelo fluxo de Storage. Se já existe
+            // um caminho, nunca duplicar a base64 dentro do delta relacional.
+            if (key === 'ordens') {
+                if (copy.assinaturaStoragePath || copy.assinatura_path || copy.signature_path) copy.assinatura = null;
+                if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
+                if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+            }
+            return copy;
+        }
+
+        function buildDbsControlDelta(previousState, nextState) {
+            const previous = previousState && typeof previousState === 'object' ? previousState : {};
+            const next = nextState && typeof nextState === 'object' ? nextState : {};
+            const changes = {};
+            DBS_CONTROL_DELTA_ARRAY_KEYS.forEach(key => {
+                const previousRows = Array.isArray(previous[key]) ? previous[key] : [];
+                const nextRows = Array.isArray(next[key]) ? next[key] : [];
+                const previousById = new Map(previousRows.map((row, index) => [dbsControlDeltaIdentity(row, key, index), row]));
+                const changedRows = [];
+                nextRows.forEach((row, index) => {
+                    const identity = dbsControlDeltaIdentity(row, key, index);
+                    const previousRow = previousById.get(identity);
+                    // OS assinada/concluída é imutável no banco. Diferenças de
+                    // hidratação entre o formato legado e o relacional não
+                    // podem transformar uma simples abertura da tela em uma
+                    // tentativa de regravar OS concluídas.
+                    if (key === 'ordens' && previousRow && dbsControlIsCompletedOrder(previousRow)) return;
+                    if (!previousRow || dbsControlStableStringify(dbsControlDeltaRecord(previousRow, key)) !== dbsControlStableStringify(dbsControlDeltaRecord(row, key))) {
+                        changedRows.push(dbsControlDeltaRecord(row, key));
+                    }
+                });
+                if (changedRows.length) changes[key] = changedRows;
+            });
+            return changes;
+        }
+
+        function dbsControlDeltaHasRows(changes) {
+            return changes && Object.values(changes).some(rows => Array.isArray(rows) && rows.length > 0);
+        }
+
+        function dbsControlIsCompletedOrder(row) {
+            const status = String(row?.status ?? row?.situacao ?? row?.statusOS ?? '')
+                .trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return ['concluida', 'concluido', 'completed', 'complete'].includes(status);
+        }
+
+        let DBS_CONTROL_HAS_PENDING_SAVE = false;
+        // The shell acknowledges every delta with the same request id that was
+        // sent. Keeping this small in-memory ledger lets the iframe advance its
+        // optimistic base only after the relational transaction is confirmed.
+        // It also prevents a rejected version from being emitted again on every
+        // render/autosave cycle.
+        const DBS_CONTROL_PENDING_SAVE_REQUESTS = new Map();
+        const DBS_CONTROL_BLOCKED_SYNC_KEYS = new Set();
+
+        function dbsControlClone(value) {
+            try { return JSON.parse(JSON.stringify(value)); } catch (error) { return value; }
+        }
+
+        function persistDbsControlLocalStateOnly() {
+            const persistableState = getPersistableState();
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
+            DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+            return persistableState;
+        }
+
+        function dbsControlFilterBlockedChanges(changes) {
+            if (!changes || typeof changes !== 'object') return changes;
+            const filtered = {};
+            Object.entries(changes).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const kept = key === 'ordens'
+                    ? rows.filter(row => !DBS_CONTROL_BLOCKED_SYNC_KEYS.has(dbsControlOrderSyncIdentity(row)))
+                    : rows;
+                if (kept.length) filtered[key] = kept;
+            });
+            return filtered;
+        }
+
+        function dbsControlApplyCommittedChanges(changes, appliedOrders) {
+            if (!changes || typeof changes !== 'object') return;
+            const committed = dbsControlClone(changes);
+            const applied = Array.isArray(appliedOrders) ? appliedOrders : [];
+            const base = dbsControlClone(DBS_CONTROL_SYNC_BASE_STATE || {});
+            Object.entries(committed).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const currentRows = Array.isArray(base[key]) ? base[key] : [];
+                const byIdentity = new Map(currentRows.map((row, index) => [dbsControlDeltaIdentity(row, key, index), row]));
+                rows.forEach(row => {
+                    const orderMatch = key === 'ordens'
+                        ? applied.find(item => String(item?.id || '') === String(row?.id || '')
+                            || (item?.protocol && String(item.protocol) === String(row?.protocolo || row?.protocol || row?.numero || '')))
+                        : null;
+                    const canonicalId = orderMatch?.id ? String(orderMatch.id) : String(row?.id || '');
+                    const canonicalProtocol = orderMatch?.protocol ? String(orderMatch.protocol) : '';
+                    const lookupKeys = [
+                        dbsControlDeltaIdentity(row, key, 0),
+                        canonicalId ? dbsControlDeltaIdentity({ id: canonicalId }, key, 0) : '',
+                        canonicalProtocol ? dbsControlDeltaIdentity({ protocolo: canonicalProtocol }, key, 0) : '',
+                    ].filter(Boolean);
+                    const existingKey = lookupKeys.find(identity => byIdentity.has(identity));
+                    const next = { ...(existingKey ? byIdentity.get(existingKey) : {}), ...(row || {}) };
+                    if (orderMatch) {
+                        next.id = canonicalId || next.id;
+                        if (canonicalProtocol) next.protocolo = canonicalProtocol;
+                        if (Number.isFinite(Number(orderMatch.version))) next.version = Number(orderMatch.version);
+                    }
+                    const nextKey = dbsControlDeltaIdentity(next, key, 0) || existingKey;
+                    if (existingKey && existingKey !== nextKey) byIdentity.delete(existingKey);
+                    if (nextKey) byIdentity.set(nextKey, next);
+                });
+                base[key] = Array.from(byIdentity.values());
+            });
+            DBS_CONTROL_SYNC_BASE_STATE = base;
+
+            // Keep the live form aligned with the canonical id/version returned
+            // by the RPC. Without this, the next autosave sends expected_version
+            // 1 forever even though the row is already at version 2+.
+            applied.forEach(item => {
+                const local = (ERP_STATE.ordens || []).find(order => String(order?.id || '') === String(item?.id || '')
+                    || (item?.protocol && String(order?.protocolo || order?.protocol || '') === String(item.protocol)));
+                if (!local) return;
+                if (item?.id) local.id = String(item.id);
+                if (item?.protocol) local.protocolo = String(item.protocol);
+                if (Number.isFinite(Number(item?.version))) local.version = Number(item.version);
+            });
+        }
+
+        function dbsControlDeleteLocator(os) {
+            const rawId = String(os?.id ?? '').trim();
+            const workOrderId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawId)
+                ? rawId
+                : '';
+            const protocol = [os?.protocolo, os?.protocol, os?.numero]
+                .map(value => String(value ?? '').trim())
+                .find(Boolean) || '';
+            return { workOrderId, protocol };
+        }
+
+        function solicitarExclusaoOS(os) {
+            if (!os || os.excluidaEm) return false;
+            const before = dbsControlClone(os);
+            const now = new Date().toISOString();
+            const randomId = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+            const requestId = ('delete:' + String(os.id || os.protocolo || Date.now()) + ':' + Date.now() + ':' + randomId).slice(0, 160);
+            os.excluidaEm = now;
+            os.excluidaPor = ERP_STATE.sessionTecnicoLogado?.id || 'administrador';
+            os.statusAntesExclusao = os.status || '';
+            const persistableState = persistDbsControlLocalStateOnly();
+            // A base local já representa a intenção de exclusão; assim, um
+            // autosave posterior não reenvia a OS completa e não reabre conflito.
+            DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(persistableState);
+            DBS_CONTROL_PENDING_DELETES.set(requestId, { osId: String(os.id), before });
+            const locator = dbsControlDeleteLocator(os);
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'DBS_CONTROL_DELETE_WORK_ORDER',
+                    requestId,
+                    workOrderId: locator.workOrderId,
+                    protocol: locator.protocol
+                }, '*');
+            }
+            return true;
+        }
+
+        function saveState() {
+            // Em recuperação local, os dados são exibidos em modo somente leitura:
+            // nenhuma gravação local ou na nuvem é permitida até validar a nuvem.
+            if (DBS_CONTROL_LOCAL_RECOVERY_MODE && window.parent !== window) return;
+            registrarHistoricoOS();
+            const persistableState = getPersistableState();
+            // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
+            // espaço (principalmente por fotos), o salvamento na nuvem ainda deve ocorrer.
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
+            if (window.parent !== window && !DBS_CONTROL_CLOUD_HYDRATING) {
+                // The optimistic base is advanced only from the ACK handler.
+                // Keeping the last confirmed version here is what makes a
+                // second edit use expected_version=2 instead of replaying 1.
+                if (!DBS_CONTROL_SYNC_BASE_STATE || typeof DBS_CONTROL_SYNC_BASE_STATE !== 'object') {
+                    const indicator = document.getElementById('dbs-sync-indicator');
+                    if (indicator) {
+                        indicator.textContent = 'Aguardando a base compartilhada';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    }
+                    return {};
+                }
+                const changes = dbsControlFilterBlockedChanges(buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState));
+                if (!dbsControlDeltaHasRows(changes)) return changes;
+                const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                    ? window.crypto.randomUUID()
+                    : 'autosave-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
+                DBS_CONTROL_HAS_PENDING_SAVE = true;
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', requestId, changes }, '*');
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Alterações não enviadas';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                return changes;
+            }
+            return {};
+        }
+
+        // A conclusão de OS é confirmada na nuvem quando possível. Em perda
+        // temporária de conexão, a intenção/delta fica persistida no shell e o
+        // técnico recebe confirmação local explícita, sem reabrir a OS.
+        async function saveStateAndConfirmCloud() {
+            if (window.parent === window) {
+                throw new Error('O atendimento precisa estar aberto pelo ambiente autenticado do DBS CONTROL.');
+            }
+            registrarHistoricoOS();
+            const persistableState = getPersistableState();
+            try {
+                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: persistableState
+                }));
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+            }
+            if (!DBS_CONTROL_SYNC_BASE_STATE || typeof DBS_CONTROL_SYNC_BASE_STATE !== 'object') {
+                throw new Error('A base compartilhada ainda não foi carregada. A OS permanece no dispositivo; aguarde a conexão e tente novamente.');
+            }
+            const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
+            if (!dbsControlDeltaHasRows(changes)) return { ok: true, noop: true };
+            // A confirmação síncrona é usada pelos fluxos críticos (concluir OS).
+            // Não avance a base de comparação antes do ACK: se a API ou a rede
+            // falhar, a próxima tentativa precisa reenviar exatamente o delta.
+            DBS_CONTROL_HAS_PENDING_SAVE = true;
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
+            const queueLocally = (reason) => {
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                    indicator.title = reason || 'A intenção foi preservada localmente e será reenviada automaticamente.';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
+                return { ok: true, queuedLocally: true, requestId, error: reason || undefined };
+            };
+            if (!DBS_CONTROL_CLOUD_READY || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                return queueLocally('A conexão com a nuvem está temporariamente indisponível.');
+            }
+            const result = await new Promise((resolve, reject) => {
+                let settled = false;
+                const finish = (error, value) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', onMessage);
+                    if (error) reject(error); else resolve(value);
+                };
+                const onMessage = event => {
+                    if (event.source !== window.parent) return;
+                    const msg = event.data || {};
+                    if (msg.type !== 'DBS_CONTROL_SAVE_ACK' || msg.requestId !== requestId) return;
+                    if (msg.ok) finish(null, msg);
+                    else if (msg.queuedLocally) finish(null, { ...msg, ok: true, queuedLocally: true });
+                    else finish(new Error(msg.error || 'A nuvem recusou a gravação da OS.'));
+                };
+                const timeout = setTimeout(() => finish(null, {
+                    ok: true,
+                    queuedLocally: true,
+                    requestId,
+                    error: 'A nuvem demorou para responder. A intenção foi preservada localmente e será reenviada automaticamente.',
+                }), 15000);
+                window.addEventListener('message', onMessage);
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
+            });
+            // The global ACK handler has already applied only the committed
+            // delta to the optimistic base. Do not replace that base with the
+            // whole live state: another mobile edit may have arrived while the
+            // confirmation was in flight.
+            if (result?.queuedLocally) {
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+            }
+            return result;
+        }
+
+        function loadState() {
+            // Lê cache local também no iframe para recuperação somente leitura.
+            // A autorização para gravar só é liberada após confirmação de snapshot válido da nuvem.
+            // Escolhe a cópia local com mais registros entre principal e backups, sem alterar nenhum.
+            let saved = null;
+            let bestCount = 0;
+            for (const key of [
+                'DBS_AIR_ERP_STATE',
+                'DBS_AIR_ERP_STATE_PREVIOUS',
+                'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION',
+                'DBS_AIR_ERP_STATE_CORRUPTED_BACKUP'
+            ]) {
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) continue;
+                    const parsedCandidate = JSON.parse(raw);
+                    const candidateData = parsedCandidate?.data && typeof parsedCandidate.data === 'object'
+                        ? parsedCandidate.data
+                        : parsedCandidate;
+                    const count = candidateData && typeof candidateData === 'object'
+                        ? Object.values(candidateData).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                        : 0;
+                    if (count > bestCount) {
+                        bestCount = count;
+                        saved = raw;
+                    }
+                } catch (_) {}
+            }
+            if (!saved) return JSON.parse(JSON.stringify(INITIAL_STATE));
+            try {
+                const parsed = JSON.parse(saved);
+                // Migra apenas o estado antigo de demonstração para o ambiente vazio.
+                // Depois dessa migração, os dados cadastrados pelo usuário são preservados.
+                // Migração não destrutiva: nunca apaga um estado válido apenas porque a versão mudou.
+                const source = parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+                    ? parsed.data
+                    : parsed;
+                const migrated = { ...JSON.parse(JSON.stringify(INITIAL_STATE)), ...source };
+                Object.keys(INITIAL_STATE).forEach((key) => {
+                    if (Array.isArray(INITIAL_STATE[key]) && !Array.isArray(migrated[key])) migrated[key] = [];
+                });
+                try {
+                    const countRecords = value => value && typeof value === 'object'
+                        ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                        : 0;
+                    const previousRaw = localStorage.getItem('DBS_AIR_ERP_STATE_PREVIOUS');
+                    let previousCount = -1;
+                    if (previousRaw) {
+                        try {
+                            const previousParsed = JSON.parse(previousRaw);
+                            previousCount = countRecords(previousParsed.data && typeof previousParsed.data === 'object'
+                                ? previousParsed.data
+                                : previousParsed);
+                        } catch (_) {}
+                    }
+                    // Não substitui um backup maior por um estado local menor.
+                    if (window.parent === window && countRecords(source) >= previousCount) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PREVIOUS', JSON.stringify({
+                            version: parsed.version ?? 1, data: source, backedUpAt: new Date().toISOString()
+                        }));
+                        localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                            version: DBS_CONTROL_STATE_VERSION, data: migrated
+                        }));
+                    }
+                } catch (_) {}
+                return migrated;
+            } catch (error) {
+                // Nunca apaga silenciosamente um cache que não conseguiu ser lido.
+                // Mantemos uma cópia bruta para diagnóstico e iniciamos uma sessão vazia.
+                try {
+                    if (window.parent === window) localStorage.setItem('DBS_AIR_ERP_STATE_CORRUPTED_BACKUP', JSON.stringify({
+                        raw: saved,
+                        backedUpAt: new Date().toISOString(),
+                        reason: String(error?.message || error || 'JSON inválido')
+                    }));
+                } catch (_) {}
+                console.error('Cache local do DBS CONTROL inválido; backup preservado.', error);
+                return JSON.parse(JSON.stringify(INITIAL_STATE));
+            }
+        }
+
+        function resetarDadosPadrao() {
+            const hasPending = DBS_CONTROL_HAS_PENDING_SAVE;
+            if (hasPending && !confirm('Há alterações locais que ainda podem não ter sido enviadas. Deseja tentar enviá-las antes de limpar o cache local?')) return;
+            if (hasPending) {
+                saveState();
+                window.parent.postMessage({ type: 'DBS_CONTROL_RETRY_SAVE' }, '*');
+                alert('Solicitamos o envio das alterações. O cache local não será limpo agora; confirme a sincronização antes de tentar novamente.');
+                return;
+            }
+            if (window.parent !== window) {
+                alert("O DBS CONTROL está conectado à base compartilhada. O cache local não pode ser limpo por este botão, para evitar apagar dados da empresa.");
+                return;
+            }
+            if(confirm("Este botão limpa somente os dados locais deste navegador. Deseja continuar?")) {
+                localStorage.removeItem('DBS_AIR_ERP_STATE');
+                ERP_STATE = JSON.parse(JSON.stringify(INITIAL_STATE));
+                renderizarTudo();
+            }
+        }
+
+        function mergeDbsControlConflictState(cloudState, changes) {
+            const merged = JSON.parse(JSON.stringify(cloudState && typeof cloudState === 'object' ? cloudState : {}));
+            const identity = row => {
+                const value = row && typeof row === 'object'
+                    ? (row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email)
+                    : null;
+                return value === null || value === undefined || String(value).trim() === ''
+                    ? ''
+                    : String(value).trim().toLocaleLowerCase('pt-BR');
+            };
+            Object.entries(changes && typeof changes === 'object' ? changes : {}).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const currentRows = Array.isArray(merged[key]) ? merged[key] : [];
+                const byIdentity = new Map(currentRows.map(row => [identity(row), row]).filter(([id]) => id));
+                rows.forEach(row => {
+                    const id = identity(row);
+                    if (!id) return;
+                    const current = byIdentity.get(id);
+                    const next = { ...(current || {}), ...(row || {}) };
+                    // The cloud version is authoritative after the conflict. Local
+                    // fields are replayed against that version on the next delta.
+                    if (current && current.version !== undefined) next.version = current.version;
+                    if (key === 'ordens' && current) {
+                        next.id = current.id;
+                        if (current.protocolo) next.protocolo = current.protocolo;
+                        if (current.protocol) next.protocol = current.protocol;
+                    }
+                    byIdentity.set(id, next);
+                });
+                merged[key] = Array.from(byIdentity.values());
+            });
+            return merged;
+        }
+
+        function mergeDbsControlCloudWithLocal(cloudState, localState) {
+            const cloud = cloudState && typeof cloudState === 'object' ? cloudState : {};
+            const local = localState && typeof localState === 'object' ? localState : {};
+            const merged = { ...local, ...cloud };
+            const identity = row => {
+                if (!row || typeof row !== 'object') return '';
+                const value = row.id ?? row.protocolo ?? row.protocol ?? row.numero ?? row.codigo ?? row.sku ?? row.email;
+                return value === null || value === undefined || String(value).trim() === ''
+                    ? ''
+                    : String(value).trim().toLocaleLowerCase('pt-BR');
+            };
+            const hasValue = value => value !== null && value !== undefined
+                && !(typeof value === 'string' && value.trim() === '');
+            const arrayKeys = new Set([
+                ...Object.keys(local).filter(key => Array.isArray(local[key])),
+                ...Object.keys(cloud).filter(key => Array.isArray(cloud[key])),
+            ]);
+            arrayKeys.forEach(key => {
+                const rows = new Map();
+                (Array.isArray(local[key]) ? local[key] : []).forEach(row => {
+                    const id = identity(row);
+                    if (id) rows.set(id, row);
+                });
+                (Array.isArray(cloud[key]) ? cloud[key] : []).forEach(row => {
+                    const id = identity(row);
+                    if (!id) return;
+                    const localRow = rows.get(id);
+                    if (!localRow || typeof localRow !== 'object' || typeof row !== 'object') {
+                        rows.set(id, row);
+                        return;
+                    }
+                    const next = { ...localRow };
+                    Object.entries(row).forEach(([field, value]) => {
+                        if (hasValue(value) || !hasValue(next[field])) next[field] = value;
+                    });
+                    rows.set(id, next);
+                });
+                const anonymousCloudRows = (Array.isArray(cloud[key]) ? cloud[key] : []).filter(row => !identity(row));
+                const anonymousLocalRows = (Array.isArray(local[key]) ? local[key] : []).filter(row => !identity(row));
+                merged[key] = [...rows.values(), ...anonymousLocalRows, ...anonymousCloudRows];
+            });
+            return merged;
+        }
+
+        function showDbsControlConflictBanner(conflicts) {
+            const existing = document.getElementById('dbs-control-conflict-banner');
+            if (existing) existing.remove();
+            const banner = document.createElement('div');
+            banner.id = 'dbs-control-conflict-banner';
+            banner.style.cssText = 'position:fixed;z-index:99999;left:16px;right:16px;top:16px;background:#fff7ed;border:1px solid #fdba74;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.18);padding:14px 16px;color:#7c2d12;font:600 14px/1.45 system-ui,sans-serif;';
+            const title = document.createElement('div');
+            title.textContent = 'Conflito de sincronização: esta OS foi atualizada em outro dispositivo.';
+            const detail = document.createElement('div');
+            detail.style.cssText = 'margin-top:4px;font-weight:500;';
+            const items = Array.isArray(conflicts) ? conflicts : [];
+            detail.textContent = items.map(item => {
+                const protocol = String(item?.protocol || 'OS');
+                const message = String(item?.message || 'Revisão necessária.');
+                return protocol + ': ' + message;
+            }).join(' | ');
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;';
+            const reconcile = document.createElement('button');
+            reconcile.type = 'button';
+            reconcile.textContent = 'Reconciliar mantendo minhas alterações';
+            reconcile.style.cssText = 'border:0;border-radius:9px;padding:9px 12px;background:#c2410c;color:#fff;font-weight:700;cursor:pointer;';
+            reconcile.onclick = () => {
+                window.parent.postMessage({ type: 'DBS_CONTROL_RECONCILE_CONFLICT', conflicts: items }, '*');
+                reconcile.disabled = true;
+                reconcile.textContent = 'Carregando versão atual…';
+            };
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.textContent = 'Revisar depois';
+            close.style.cssText = 'border:1px solid #fdba74;border-radius:9px;padding:9px 12px;background:#fff;color:#9a3412;font-weight:700;cursor:pointer;';
+            close.onclick = () => banner.remove();
+            actions.append(reconcile, close);
+            banner.append(title, detail, actions);
+            document.body.appendChild(banner);
+        }
+
+        function dbsControlConflictIsCompletedLocked(conflict) {
+            const code = String(conflict?.code || conflict?.error_code || '').trim();
+            const message = String(conflict?.message || '').trim().toLocaleLowerCase('pt-BR');
+            return code === 'DBS_OS_COMPLETED_LOCKED'
+                || /já foi conclu[ií]da|dados assinados.*protegidos|os conclu[ií]da.*protegida/.test(message);
+        }
+
+        window.addEventListener('message', function(event) {
+            if (event.source !== window.parent) return;
+            const msg = event.data || {};
+            const mergeCollaboratorCloudState = (nextState) => {
+                const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
+                if (!collaboratorSession || !nextState || typeof nextState !== 'object') return nextState;
+                const localOrders = Array.isArray(ERP_STATE?.ordens) ? ERP_STATE.ordens : [];
+                const incomingOrders = Array.isArray(nextState.ordens) ? nextState.ordens : [];
+                const keyOf = order => {
+                    const id = String(order?.id || '').trim();
+                    const protocol = String(order?.protocolo || order?.protocol || '').trim();
+                    return id ? 'id:' + id : (protocol ? 'protocol:' + protocol : '');
+                };
+                const localByKey = new Map(localOrders.map(order => [keyOf(order), order]).filter(([key]) => key));
+                const isCompleted = order => typeof isOSConcluida === 'function'
+                    ? isOSConcluida(order)
+                    : /conclu[ií]d/.test(String(order?.status || '').toLocaleLowerCase('pt-BR'));
+                const orders = incomingOrders.map(incoming => {
+                    const local = localByKey.get(keyOf(incoming));
+                    const localVersion = Number(local?.version || 0);
+                    const incomingVersion = Number(incoming?.version || 0);
+                    if (local && isCompleted(local) && !isCompleted(incoming)
+                        && localVersion >= incomingVersion) {
+                        return { ...incoming, ...local };
+                    }
+                    return incoming;
+                });
+                return { ...nextState, ordens: orders };
+            };
+
+            if (msg.type === 'DBS_CONTROL_SAVE_ACK') {
+                const requestId = String(msg.requestId || '');
+                const pendingChanges = DBS_CONTROL_PENDING_SAVE_REQUESTS.get(requestId);
+                // A critical save has a dedicated promise listener as well; the
+                // global handler remains the single owner of the optimistic base.
+                if (msg.ok) {
+                    const committedChanges = msg.committedChanges || pendingChanges || {};
+                    dbsControlApplyCommittedChanges(committedChanges, msg.appliedOrders || []);
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    const hasMorePending = DBS_CONTROL_PENDING_SAVE_REQUESTS.size > 0 || Number(msg.pendingCount || 0) > 0;
+                    DBS_CONTROL_HAS_PENDING_SAVE = hasMorePending;
+                    if (!hasMorePending) {
+                        const indicator = document.getElementById('dbs-sync-indicator');
+                        if (indicator) {
+                            const time = msg.updated_at ? new Date(msg.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                            indicator.textContent = 'Sincronizado' + (time ? ' às ' + time : '');
+                            indicator.style.color = '#0f766e';
+                            indicator.style.background = '#f0fdfa';
+                            indicator.style.borderColor = '#99f6e4';
+                        }
+                    }
+                    persistDbsControlLocalStateOnly();
+                    renderizarTudo();
+                } else {
+                    // Keep the local intent for explicit reconciliation, but
+                    // block it from being emitted again on every autosave.
+                    const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+                    conflicts.forEach(conflict => {
+                        const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                        if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
+                    });
+                    // A transient failure is not a rejection of the intent:
+                    // the shell already owns a durable local command and will
+                    // retry it with the same idempotency key. Keep the request
+                    // in the in-memory ledger until a later ACK removes it.
+                    if (!msg.queuedLocally) DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    DBS_CONTROL_HAS_PENDING_SAVE = true;
+                    const indicator = document.getElementById('dbs-sync-indicator');
+                    if (indicator && msg.queuedLocally) {
+                        indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                        indicator.title = msg.error || 'A intenção permanece na fila local e será reenviada automaticamente.';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    }
+                }
+                return;
+            }
+
+            if (msg.type === 'DBS_CONTROL_DELETE_WORK_ORDER_ACK') {
+                const requestId = String(msg.requestId || '');
+                const pending = DBS_CONTROL_PENDING_DELETES.get(requestId);
+                if (!pending) return;
+                DBS_CONTROL_PENDING_DELETES.delete(requestId);
+                if (msg.ok) {
+                    const current = (ERP_STATE.ordens || []).find(order => String(order?.id) === String(pending.osId));
+                    const version = Number(msg.result?.version);
+                    if (current && Number.isFinite(version) && version > 0) current.version = version;
+                    const confirmedState = persistDbsControlLocalStateOnly();
+                    DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(confirmedState);
+                    renderizarTudo();
+                    return;
+                }
+
+                // Rollback apenas da OS que não foi confirmada. Nenhuma outra
+                // alteração local é descartada e o usuário recebe uma mensagem
+                // operacional curta, sem detalhes de conflito/RPC.
+                const currentIndex = (ERP_STATE.ordens || []).findIndex(order => String(order?.id) === String(pending.osId));
+                if (currentIndex >= 0) ERP_STATE.ordens[currentIndex] = pending.before;
+                else ERP_STATE.ordens.push(pending.before);
+                const restoredState = persistDbsControlLocalStateOnly();
+                DBS_CONTROL_SYNC_BASE_STATE = dbsControlClone(restoredState);
+                renderizarTudo();
+                alert(msg.error || 'Não foi possível excluir a OS agora. Nenhum dado foi perdido; tente novamente.');
+                return;
+            }
+
+            if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
+                if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
+                else if (msg.status === 'synced') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
+                atualizarMetricas();
+                const indicator = document.getElementById('dbs-sync-indicator');
+                const retry = document.getElementById('dbs-sync-retry');
+                if (indicator) {
+                    if (msg.status === 'synced') {
+                        // A Realtime refresh can arrive while an ACK is still
+                        // in flight. Never let that read event erase a local
+                        // write that has not been acknowledged yet.
+                        if (DBS_CONTROL_PENDING_SAVE_REQUESTS.size === 0 && Number(msg.pendingCount || 0) === 0) {
+                            DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        }
+                        const time = msg.updated_at ? new Date(msg.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                        indicator.textContent = 'Sincronizado' + (time ? ' às ' + time : '');
+                        indicator.style.color = '#0f766e';
+                        indicator.style.background = '#f0fdfa';
+                        indicator.style.borderColor = '#99f6e4';
+                    } else if (msg.status === 'pending') {
+                        indicator.textContent = 'Salvo no dispositivo · ' + String(msg.pendingCount || 1) + ' pendente(s)';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    } else if (msg.status === 'conflict') {
+                        // Keep the local draft pending until the operator explicitly
+                        // reconciles it; a conflict must never look like a successful save.
+                        DBS_CONTROL_HAS_PENDING_SAVE = true;
+                        indicator.textContent = 'Conflito para revisão' + (msg.error ? ': ' + msg.error : '');
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    } else {
+                        indicator.textContent = 'Erro de sincronização' + (msg.error ? ': ' + msg.error : '');
+                        indicator.style.color = '#b91c1c';
+                        indicator.style.background = '#fef2f2';
+                        indicator.style.borderColor = '#fecaca';
+                    }
+                }
+                if (retry) retry.style.display = msg.status === 'error' || msg.status === 'pending' || msg.status === 'conflict' ? 'inline-flex' : 'none';
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_SYNC_CONFLICT') {
+                (Array.isArray(msg.conflicts) ? msg.conflicts : []).forEach(conflict => {
+                    const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                    if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
+                });
+                const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+                const completedOnly = conflicts.length > 0 && conflicts.every(dbsControlConflictIsCompletedLocked);
+                if (completedOnly || msg.autoResolvable === true) {
+                    // A concluded/signed OS is intentionally immutable. There
+                    // is nothing for the operator to reconcile: discard only
+                    // this stale local intent and reload the canonical row.
+                    conflicts.forEach(conflict => {
+                        const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                        if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.delete(identity);
+                    });
+                    DBS_CONTROL_HAS_PENDING_SAVE = false;
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.clear();
+                    const banner = document.getElementById('dbs-control-conflict-banner');
+                    if (banner) banner.remove();
+                    window.parent.postMessage({ type: 'DBS_CONTROL_DISMISS_CONFLICT', conflicts }, '*');
+                    return;
+                }
+                showDbsControlConflictBanner(msg.conflicts || []);
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_CONFLICT_RECONCILED') {
+                const baseState = JSON.parse(JSON.stringify(msg.state && typeof msg.state === 'object' ? msg.state : {}));
+                const reconciledState = mergeDbsControlConflictState(baseState, msg.changes || {});
+                (Array.isArray(msg.conflicts) ? msg.conflicts : []).forEach(conflict => {
+                    const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                    if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.delete(identity);
+                });
+                const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+                ERP_STATE = reconciledState;
+                if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
+                DBS_CONTROL_CLOUD_READY = true;
+                DBS_CONTROL_HAS_PENDING_SAVE = false;
+                DBS_CONTROL_PENDING_SAVE_REQUESTS.clear();
+                // Compare the local draft with the fresh cloud version. The next
+                // save therefore uses the same intention with the new expected_version.
+                DBS_CONTROL_SYNC_BASE_STATE = baseState;
+                const banner = document.getElementById('dbs-control-conflict-banner');
+                if (banner) banner.remove();
+                renderizarTudo();
+                const replay = saveState();
+                if (!dbsControlDeltaHasRows(replay)) {
+                    DBS_CONTROL_HAS_PENDING_SAVE = false;
+                }
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_LOCAL_RECOVERY') {
+                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
+                atualizarMetricas();
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = true;
+                DBS_CONTROL_CLOUD_READY = false;
+                DBS_CONTROL_SYNC_BASE_STATE = null;
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'AMBIENTE DESCONECTADO · CACHE PRESERVADO · SOMENTE LEITURA';
+                    indicator.title = 'Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente publicado. Os dados locais não serão apagados nem enviados até validar a base compartilhada.';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                renderizarTudo();
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_DB_AUDIT_RESULT') {
+                if (msg.ok) renderizarResultadoAuditoriaBanco(msg.result);
+                else {
+                    DBS_CONTROL_DB_AUDIT_RUNNING=false;
+                    const body=document.getElementById('dbs-central-db-audit-body');
+                    const status=document.getElementById('dbs-central-db-audit-status');
+                    if(status){status.textContent='ERRO';status.style.background='#fee2e2';status.style.color='#991b1b';}
+                    if(body) body.textContent=msg.error||'Não foi possível concluir a auditoria do banco.';
+                }
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_TECHNICIAN_SYNCED') {
+                if (msg.ok) {
+                    const syncedEmail = String(msg.email || '').trim().toLowerCase();
+                    const existing = ERP_STATE.tecnicos.find(t => String(t.email || '').trim().toLowerCase() === syncedEmail);
+                    if (!existing && msg.name) {
+                        ERP_STATE.tecnicos.push({
+                            id: ERP_STATE.tecnicos.reduce((max, t) => Math.max(max, Number(t.id) || 0), 0) + 1,
+                            employeeId: msg.employee_id || null,
+                            nome: msg.name,
+                            email: syncedEmail,
+                            posicao: msg.position || 'Colaborador DBS AIR',
+                            fone: msg.phone || ''
+                        });
+                        saveState();
+                    }
+                    const form = document.getElementById('form-tecnico');
+                    if (form) form.reset();
+                    alert('Colaborador cadastrado e vinculado ao acesso central do sistema.');
+                    renderizarTudo();
+                } else {
+                    alert(msg.error || 'Não foi possível cadastrar o colaborador.');
+                }
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_DASHBOARD_SUMMARY') {
+                DBS_CONTROL_DASHBOARD_SUMMARY = msg.summary && typeof msg.summary === 'object' ? msg.summary : null;
+                if (DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'loading' && DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'error') atualizarMetricas();
+                return;
+            }
+            if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
+            if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
+
+            // Proteção contra snapshot remoto vazio: não substitui uma cópia local recuperável
+            // por um estado vazio/incompleto, nem permite que ela seja enviada à nuvem.
+            const countStateRecords = (value) => value && typeof value === 'object'
+                ? Object.values(value).reduce((total, item) => total + (Array.isArray(item) ? item.length : 0), 0)
+                : 0;
+            const localRecoveryState = getPersistableState();
+            const localRecoveryCount = countStateRecords(localRecoveryState);
+            const cloudBaseState = msg.baseState && typeof msg.baseState === 'object' && !Array.isArray(msg.baseState)
+                ? msg.baseState
+                : msg.state;
+            const incomingCloudCount = countStateRecords(cloudBaseState);
+            // A base enviada ao colaborador é filtrada pelo servidor. Não comparar a quantidade
+            // de registros com o cache completo deste navegador, pois isso bloqueia a hidratação legítima.
+            const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
+            const cloudReturnedFewerRecords = !collaboratorSession
+                && localRecoveryCount > 0
+                && incomingCloudCount < localRecoveryCount;
+            // Uma resposta da nuvem menor que o cache local não autoriza a
+            // regravação do cache. O cache pode conter legado, duplicatas ou
+            // uma visão administrativa diferente; tratá-lo como intenção
+            // recriava OS antigas e reintroduzia deleted_at durante a
+            // reconciliação automática. A base relacional é a única fonte de
+            // verdade: hidratar somente o estado canônico e manter a cópia
+            // local separada para auditoria/recuperação explícita.
+            const stateForHydration = msg.state;
+            if (cloudReturnedFewerRecords) {
+                // A resposta menor é sinalizada somente para diagnóstico. O
+                // cache local continua preservado e nenhum delta implícito é
+                // criado; somente uma intenção explícita do operador pode
+                // alterar a base relacional.
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Sincronizando diferenças…';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+            }
+
+            if (DBS_CONTROL_HAS_PENDING_SAVE) {
+                // Não abrir confirm() durante um evento automático de Realtime:
+                // um popup bloqueia assinatura, troca de aba e reconexão no celular.
+                // O delta local continua protegido e a fila do shell fará o reenvio.
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Alterações pendentes — enviando…';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                return;
+            }
+
+            // Realtime pode reenviar o mesmo snapshot várias vezes. Re-renderizar o
+            // iframe inteiro em cada evento causa tremor e interrompe a assinatura.
+            // A assinatura abaixo considera somente campos que mudam a operação.
+            const renderSignature = ['ordens', 'clientes', 'equipamentos', 'tecnicos'].map(key => {
+                const rows = Array.isArray(msg.state[key]) ? msg.state[key] : [];
+                return [key, rows.map(row => [
+                    row?.id, row?.protocolo, row?.version, row?.updated_at, row?.status,
+                    row?.deleted_at, row?.deletedAt, row?.concluidoEm, row?.assinaturaEm,
+                ]).sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')) )];
+            });
+            const nextRenderSignature = JSON.stringify(renderSignature);
+            if (window.__DBS_LAST_CLOUD_RENDER_SIGNATURE === nextRenderSignature) {
+                DBS_CONTROL_CLOUD_READY = true;
+                return;
+            }
+            window.__DBS_LAST_CLOUD_RENDER_SIGNATURE = nextRenderSignature;
+
+            DBS_CONTROL_CLOUD_HYDRATING = true;
+            try {
+                const currentSession = ERP_STATE.sessionTecnicoLogado || null;
+
+                // Preserva o estado local imediatamente antes de qualquer hidratação
+                // da nuvem. Se a nuvem estiver incompleta, esta cópia permite recuperar
+                // os dados anteriores sem depender do snapshot remoto.
+                try {
+                    const localBeforeCloud = getPersistableState();
+                    const localRecordCount = Object.keys(localBeforeCloud).reduce((total, key) =>
+                        total + (Array.isArray(localBeforeCloud[key]) ? localBeforeCloud[key].length : 0), 0);
+                    if (localRecordCount > 0) {
+                        localStorage.setItem('DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION', JSON.stringify({
+                            version: DBS_CONTROL_STATE_VERSION,
+                            data: localBeforeCloud,
+                            backedUpAt: new Date().toISOString(),
+                            reason: 'Cópia de segurança automática antes da sincronização com a nuvem'
+                        }));
+                    }
+                } catch (backupError) {
+                    console.warn('Não foi possível gravar a cópia pré-sincronização local:', backupError);
+                }
+
+                ERP_STATE = JSON.parse(JSON.stringify(mergeCollaboratorCloudState(stateForHydration)));
+                DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
+                DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
+                // Release the filtered view before rendering it in the same message turn.
+                DBS_CONTROL_CLOUD_READY = true;
+                if (!Array.isArray(ERP_STATE.osHistorico)) ERP_STATE.osHistorico = [];
+                if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
+                DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(cloudBaseState));
+                DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
+                try {
+                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
+                        version: DBS_CONTROL_STATE_VERSION,
+                        data: getPersistableState()
+                    }));
+                } catch (cacheError) {
+                    console.warn('Cache local indisponível; estado compartilhado mantido em memória.', cacheError);
+                }
+                renderizarTudo();
+                if (cloudReturnedFewerRecords && !collaboratorSession) {
+                    // Segurança de integridade: nunca transforme uma diferença
+                    // de contagem em escrita automática. O estado local já foi
+                    // preservado em DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION e a
+                    // restauração só pode ocorrer por ação administrativa
+                    // explícita, após identificar os registros.
+                    const indicator = document.getElementById('dbs-sync-indicator');
+                    if (indicator) {
+                        indicator.textContent = 'Base confirmada · cópia local preservada';
+                        indicator.title = 'A nuvem retornou uma visão menor. Nenhum dado local foi enviado nem descartado; a cópia anterior está preservada para auditoria.';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    }
+                }
+            } finally {
+                DBS_CONTROL_CLOUD_HYDRATING = false;
+                DBS_CONTROL_CLOUD_READY = true;
+                if (!DBS_CONTROL_DB_AUDIT_REQUESTED && new URLSearchParams(window.location.search).get('mode') !== 'employee') {
+                    DBS_CONTROL_DB_AUDIT_REQUESTED = true;
+                    setTimeout(() => solicitarAuditoriaBanco(), 900);
+                }
+            }
+        });
+
+        window.onload = function() {
+            renderizarTudo();
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
+                // A base principal não é atualizada automaticamente na abertura. O snapshot cloud é a fonte de verdade; sincronização FieldControl é explícita.
+            }
+        };
+
+        let DBS_CONTROL_DB_AUDIT_RUNNING = false;
+        let DBS_CONTROL_DB_AUDIT_REQUESTED = false;
+        function solicitarAuditoriaBanco() {
+            const body = document.getElementById('dbs-central-db-audit-body');
+            const status = document.getElementById('dbs-central-db-audit-status');
+            if (!body || DBS_CONTROL_DB_AUDIT_RUNNING) return;
+            if (window.parent === window) {
+                body.textContent = 'A auditoria de produção só pode ser executada dentro do DBS CONTROL autenticado.';
+                if(status) status.textContent='Indisponível';
+                return;
+            }
+            DBS_CONTROL_DB_AUDIT_RUNNING = true;
+            if(status){ status.textContent='Auditando...'; status.style.background='#fef3c7'; status.style.color='#92400e'; }
+            body.textContent='Conferindo clientes, locais, equipamentos, serviços, funcionários, OS, vínculos e referências FieldControl...';
+            window.parent.postMessage({type:'DBS_CONTROL_DB_AUDIT'}, '*');
+        }
+
+        function renderizarResultadoAuditoriaBanco(result) {
+            const body=document.getElementById('dbs-central-db-audit-body');
+            const status=document.getElementById('dbs-central-db-audit-status');
+            if(!body)return;
+            DBS_CONTROL_DB_AUDIT_RUNNING=false;
+            const r=result||{};
+            const issues=Array.isArray(r.issues)?r.issues:[];
+            const critical=issues.filter(x=>x.severity==='critical');
+            const warnings=issues.filter(x=>x.severity==='warning');
+            if(status){
+                status.textContent=r.status==='ok'?'OK':r.status==='critical'?'CRÍTICO':'ATENÇÃO';
+                status.style.background=r.status==='ok'?'#dcfce7':r.status==='critical'?'#fee2e2':'#fef3c7';
+                status.style.color=r.status==='ok'?'#166534':r.status==='critical'?'#991b1b':'#92400e';
+            }
+            const c=r.counts||{};
+            const counts='Clientes '+(c.clients??0)+' · Locais '+(c.sites??0)+' · Equipamentos '+(c.equipment??0)+' · Serviços '+(c.services??0)+' · Funcionários '+(c.employees??0)+' · OS '+(c.orders??0)+' · Vínculos OS×equipamento '+(c.orderEquipmentLinks??0);
+            let html='<div style="font-weight:800;color:#334155;margin-bottom:7px;">'+escDbsControl(counts)+'</div>';
+            html+='<div style="font-size:10px;color:#64748b;margin-bottom:9px;">Executada em '+escDbsControl(r.auditedAt||'agora')+' · '+critical.length+' crítico(s) · '+warnings.length+' aviso(s).</div>';
+            if(!issues.length){
+                html+='<div class="dbs-integrity-ok">✓ Banco de produção sem inconsistências detectáveis nesta auditoria.</div>';
+            }else{
+                html+=issues.slice(0,30).map(x=>{
+                    const color=x.severity==='critical'?'#991b1b':'#92400e';
+                    const bg=x.severity==='critical'?'#fff1f2':'#fffbeb';
+                    const samples=Array.isArray(x.samples)&&x.samples.length?' · '+x.samples.join(' | '):'';
+                    return '<div style="padding:9px 10px;border:1px solid #e2e8f0;border-radius:9px;background:'+bg+';margin-top:6px;"><b style="color:'+color+'">'+escDbsControl(x.label)+'</b><span style="display:block;margin-top:3px;color:#64748b;">'+escDbsControl(String(x.count)+' ocorrência(s)')+escDbsControl(samples)+'</span></div>';
+                }).join('');
+            }
+            if(r.latestSync){
+                html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:#334155;">Última sincronização FieldControl:</b> '+escDbsControl(r.latestSync.status||'—')+' · '+escDbsControl(r.latestSync.mode||'—')+'</div>';
+            }
+            if(r.syncHealth){
+                const h=r.syncHealth||{};
+                const pending=Number(h.pending||0), processing=Number(h.processing||0), published=Number(h.published||0), failed=Number(h.failed||0);
+                const healthColor=failed?'#991b1b':processing?'#92400e':'#166534';
+                const healthBg=failed?'#fff1f2':processing?'#fffbeb':'#f0fdf4';
+                html+='<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:'+healthBg+';border:1px solid #e2e8f0;font-size:10px;color:#64748b;"><b style="color:'+healthColor+';">Saúde da sincronização:</b> '+escDbsControl('pendentes '+pending+' · processando '+processing+' · publicados '+published+' · falhos '+failed)+'</div>';
+                if(h.last_error) html+='<div style="margin-top:5px;color:#991b1b;font-size:10px;">Último erro da outbox: '+escDbsControl(String(h.last_error))+'</div>';
+            }
+            body.innerHTML=html;
+        }
+
+        function contarRegistrosEstadoDBS(state) {
+            if (!state || typeof state !== 'object' || Array.isArray(state)) return 0;
+            return Object.values(state).reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0);
+        }
+
+        function lerBackupLocalDBS(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                let parsed = JSON.parse(raw);
+                if (parsed && typeof parsed.raw === 'string') {
+                    try { parsed = JSON.parse(parsed.raw); } catch (_) {}
+                }
+                const state = parsed?.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+                    ? parsed.data
+                    : parsed?.state && typeof parsed.state === 'object' && !Array.isArray(parsed.state)
+                        ? parsed.state
+                        : parsed;
+                if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+                return { key, state, count: contarRegistrosEstadoDBS(state), backedUpAt: parsed?.backedUpAt || null };
+            } catch (error) {
+                console.warn('Cópia local DBS não pôde ser lida:', key, error);
+                return null;
+            }
+        }
+
+        function mesclarEstadoRecuperacaoDBS(current, backup) {
+            const merged = { ...(current || {}), ...(backup || {}) };
+            const arrayKeys = new Set([
+                ...Object.keys(current || {}).filter(key => Array.isArray(current[key])),
+                ...Object.keys(backup || {}).filter(key => Array.isArray(backup[key]))
+            ]);
+            const identity = item => {
+                if (item && typeof item === 'object' && !Array.isArray(item)) {
+                    for (const key of ['id','employeeId','protocolo','protocol','sku','email','fieldControlId']) {
+                        if (item[key] !== null && item[key] !== undefined && String(item[key]).trim()) {
+                            return key + ':' + String(item[key]).trim().toLocaleLowerCase('pt-BR');
+                        }
+                    }
+                }
+                return 'value:' + JSON.stringify(item);
+            };
+            arrayKeys.forEach(key => {
+                const rows = new Map();
+                (Array.isArray(current?.[key]) ? current[key] : []).forEach(item => rows.set(identity(item), item));
+                (Array.isArray(backup?.[key]) ? backup[key] : []).forEach(item => {
+                    const id = identity(item);
+                    const old = rows.get(id);
+                    if (old && old && item && typeof old === 'object' && typeof item === 'object' && !Array.isArray(old) && !Array.isArray(item)) {
+                        const combined = { ...old };
+                        Object.entries(item).forEach(([field,value]) => {
+                            if (value !== null && value !== undefined && !(typeof value === 'string' && value.trim() === '')) combined[field] = value;
+                        });
+                        rows.set(id, combined);
+                    } else if (!old) rows.set(id, item);
+                });
+                merged[key] = [...rows.values()];
+            });
+            return merged;
+        }
+
+        function verificarRecuperacaoLocalDBS() {
+            const keys = [
+                'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION',
+                'DBS_AIR_ERP_STATE_PREVIOUS',
+                'DBS_AIR_ERP_STATE_CORRUPTED_BACKUP'
+            ];
+            const backups = keys.map(lerBackupLocalDBS).filter(Boolean).sort((a,b) => b.count - a.count);
+            const currentCount = contarRegistrosEstadoDBS(ERP_STATE);
+            const best = backups[0];
+            if (!best || best.count === 0) {
+                alert('Não encontrei uma cópia local recuperável neste navegador. Não apague os dados do navegador. A cópia pode existir em outro computador ou sessão onde o DBS CONTROL era utilizado.');
+                return;
+            }
+            const summary = backups.map(item => item.key + ': ' + item.count + ' registros' + (item.backedUpAt ? ' (' + item.backedUpAt + ')' : '')).join('\n');
+            const preview = 'Estado atual: ' + currentCount + ' registros estimados.\nCópias encontradas:\n' + summary + '\n\nA cópia mais completa será mesclada com o estado atual; os registros existentes não serão removidos. Deseja continuar?';
+            if (!confirm(preview)) return;
+            const session = ERP_STATE.sessionTecnicoLogado || null;
+            ERP_STATE = mesclarEstadoRecuperacaoDBS(ERP_STATE, best.state);
+            if (session) ERP_STATE.sessionTecnicoLogado = session;
+            saveState();
+            renderizarTudo();
+            alert('Mesclagem local concluída. Estado antes: ' + currentCount + ' registros estimados; após: ' + contarRegistrosEstadoDBS(ERP_STATE) + '. A cópia original permanece armazenada. Confira os cadastros e as OS antes de continuar a operação.');
+        }
+
+        function renderizarCentralCadastros() {
+            const st = ERP_STATE || {};
+            const clientes = Array.isArray(st.clientes) ? st.clientes : [];
+            const equipamentos = Array.isArray(st.equipamentos) ? st.equipamentos : [];
+            const servicos = Array.isArray(st.servicos) ? st.servicos : [];
+            const tecnicos = Array.isArray(st.tecnicos) ? st.tecnicos : [];
+            const ordens = Array.isArray(st.ordens) ? st.ordens : [];
+            const norm = v => String(v ?? '').trim().toLocaleLowerCase('pt-BR');
+            const dup = (arr, keyFn) => {
+                const m = new Map();
+                arr.forEach(x => { const k=keyFn(x); if(k){ const a=m.get(k)||[]; a.push(x); m.set(k,a); }});
+                return Array.from(m.entries()).filter(([,a])=>a.length>1);
+            };
+            const issues = [];
+            const checkIds = (label, arr) => {
+                const d=dup(arr,x=>String(x?.id??''));
+                if(d.length) issues.push({label,detail:d.slice(0,5).map(([k,a])=>k+' ('+a.length+' registros)').join('; ')});
+            };
+            checkIds('IDs duplicados', clientes);
+            checkIds('IDs duplicados', equipamentos);
+            checkIds('IDs duplicados', servicos);
+            checkIds('IDs duplicados', tecnicos);
+            checkIds('IDs duplicados', ordens);
+
+            const clientById=new Set(clientes.map(x=>String(x.id)));
+            const equipById=new Set(equipamentos.map(x=>String(x.id)));
+            const serviceById=new Set(servicos.map(x=>String(x.id)));
+            const techById=new Set(tecnicos.map(x=>String(x.id)));
+
+            const orphanEquip=equipamentos.filter(x=>x.clienteId!=null && !clientById.has(String(x.clienteId)));
+            if(orphanEquip.length) issues.push({label:'Equipamentos sem cliente válido',detail:orphanEquip.slice(0,8).map(x=>x.tag||x.id).join(', ')});
+            const orphanOsClient=ordens.filter(x=>x.clienteId!=null && !clientById.has(String(x.clienteId)));
+            if(orphanOsClient.length) issues.push({label:'OS com cliente inexistente',detail:orphanOsClient.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsService=ordens.filter(x=>x.servicoId!=null && !serviceById.has(String(x.servicoId)));
+            if(orphanOsService.length) issues.push({label:'OS com serviço inexistente',detail:orphanOsService.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsTech=ordens.filter(x=>x.tecnicoId!=null && !techById.has(String(x.tecnicoId)));
+            if(orphanOsTech.length) issues.push({label:'OS com técnico inexistente',detail:orphanOsTech.slice(0,8).map(x=>x.id).join(', ')});
+            const orphanOsEquip=ordens.filter(x=>x.equipamentoId!=null && !equipById.has(String(x.equipamentoId)));
+            if(orphanOsEquip.length) issues.push({label:'OS com equipamento inexistente',detail:orphanOsEquip.slice(0,8).map(x=>x.id).join(', ')});
+
+            const dupClientCnpj=dup(clientes,x=>norm(x.cnpj));
+            if(dupClientCnpj.length) issues.push({label:'CNPJ/CPF repetido',detail:dupClientCnpj.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupClientName=dup(clientes,x=>norm(x.nome));
+            if(dupClientName.length) issues.push({label:'Nome de cliente repetido',detail:dupClientName.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupService=dup(servicos,x=>norm(x.nome));
+            if(dupService.length) issues.push({label:'Serviço repetido',detail:dupService.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupTechEmail=dup(tecnicos,x=>norm(x.email));
+            if(dupTechEmail.length) issues.push({label:'E-mail de técnico repetido',detail:dupTechEmail.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupFcId=dup(tecnicos,x=>norm(x.fieldControlId));
+            if(dupFcId.length) issues.push({label:'ID FieldControl de técnico repetido',detail:dupFcId.slice(0,8).map(([k,a])=>k+' ('+a.length+')').join('; ')});
+            const dupEquipTag=dup(equipamentos,x=>String(x.clienteId||'')+'|'+norm(x.tag));
+            if(dupEquipTag.length) issues.push({label:'TAG duplicada dentro do mesmo cliente',detail:dupEquipTag.slice(0,8).map(([k,a])=>k.split('|')[1]+' ('+a.length+')').join('; ')});
+
+            const counts=document.getElementById('dbs-central-counts');
+            if(counts) counts.innerHTML=[
+              ['Clientes',clientes.length,'Cadastro principal'],
+              ['Equipamentos',equipamentos.length,'Ativos vinculados'],
+              ['Serviços',servicos.length,'Catálogo operacional'],
+              ['Técnicos',tecnicos.length,'Equipe disponível']
+            ].map(x=>'<div class="dbs-central-card"><small>'+x[0]+'</small><strong>'+x[1]+'</strong><span>'+x[2]+'</span></div>').join('');
+            const box=document.getElementById('dbs-central-integrity');
+            if(box) box.innerHTML=issues.length
+              ? '<div style="font-weight:900;color:#7c4a03;margin-bottom:10px">Conferência encontrou '+issues.length+' ponto(s) para revisar</div>'+issues.slice(0,20).map(x=>'<div class="dbs-integrity-issue"><b>'+escDbsControl(x.label)+'</b><span>'+escDbsControl(x.detail)+'</span></div>').join('')
+              : '<div class="dbs-integrity-ok">✓ Estrutura carregada sem inconsistências de vínculo detectáveis no estado atual.</div>';
+        }
+
+        function renderizarResumoOperacional() {
+            const grid = document.getElementById('ops-overview-grid');
+            const foot = document.getElementById('ops-overview-foot');
+            if (!grid || typeof ERP_STATE !== 'object' || !ERP_STATE) return;
+            // Indicadores operacionais ignoram OS arquivadas ou retiradas da operação.
+            const orders = (Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [])
+                .filter(order => !order.arquivadaEm && !order.excluidaEm);
+            const clients = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
+            const equipment = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
+            const technicians = Array.isArray(ERP_STATE.tecnicos) ? ERP_STATE.tecnicos : [];
+            const clientIds = new Set(clients.map(client => String(client?.id ?? '')));
+            const equipmentIds = new Set(equipment.map(item => String(item?.id ?? '')));
+            const technicianIds = new Set(technicians.flatMap(technician => [String(technician?.id ?? ''), String(technician?.employeeId ?? '')]).filter(Boolean));
+            const norm = value => String(value ?? '').trim().toLocaleLowerCase('pt-BR');
+            const statusOf = order => norm(order.status);
+            const completed = order => isOSConcluida(order);
+            const cancelled = order => /cancelad/.test(statusOf(order));
+            const openOrders = orders.filter(order => !completed(order) && !cancelled(order));
+            const waiting = openOrders.filter(order => /aguardando/.test(statusOf(order)));
+            const inProgress = openOrders.filter(order => /atendimento|execu[cç][aã]o|em andamento/.test(statusOf(order)));
+            const unassigned = openOrders.filter(order => {
+                const id = String(order.tecnicoId ?? order.employeeId ?? '').trim();
+                if (!id) return true;
+                return !technicianIds.has(id);
+            });
+            const clientLinkIssues = orders.filter(order => {
+                const id = String(order.clienteId ?? '').trim();
+                return !id || !clientIds.has(id);
+            });
+            const equipmentLinkIssues = orders.filter(order => {
+                const id = String(order.equipamentoId ?? '').trim();
+                // Equipamento pode ser opcional em algumas OS; só sinalizamos vínculos preenchidos que não resolvem.
+                return Boolean(id) && !equipmentIds.has(id);
+            });
+            const classifications = orders.map(order => classificacoesOS(order));
+            const countClassification = code => classifications.filter(list => list.includes(code)).length;
+            const cards = [
+                { label:'OS abertas', value:openOrders.length, hint:'Ainda não concluídas ou canceladas', icon:'▤', tab:'tab-ordens' },
+                { label:'Em atendimento', value:inProgress.length, hint:'Em execução segundo o status registrado', icon:'⚙', tab:'tab-atividades' },
+                { label:'Aguardando retorno', value:waiting.length, hint:'Peça, cliente ou outra dependência', icon:'◷', tab:'tab-atividades' },
+                { label:'Sem técnico vinculado', value:unassigned.length, hint:'OS abertas que precisam de atribuição', icon:'♙', tab:'tab-despacho' },
+                { label:'Urgentes', value:countClassification('URGENTE'), hint:'Prioridade urgente registrada na OS', icon:'!', classification:'URGENTE' },
+                { label:'Pendência de execução', value:countClassification('PENDENCIA_EXECUCAO'), hint:'Falta diagnóstico, execução ou checklist obrigatório', icon:'⚠', classification:'PENDENCIA_EXECUCAO' },
+                { label:'Concluídas', value:orders.filter(completed).length, hint:'Conforme o status salvo na OS', icon:'✓', tab:'tab-ordens' },
+                { label:'Vínculos a conferir', value:clientLinkIssues.length + equipmentLinkIssues.length, hint:'Referências de cliente/equipamento não resolvidas', icon:'⌕', tab:'tab-cadastros' }
+            ];
+            grid.innerHTML = cards.map(card => '<button type="button" class="ops-kpi" onclick="'+(card.classification ? 'abrirFiltroOS(\''+card.classification+'\')' : 'switchTab(\''+card.tab+'\')')+'" aria-label="'+card.label+': '+card.value+'. Abrir área relacionada."><span class="ops-kpi-icon" aria-hidden="true">'+card.icon+'</span><span style="min-width:0;display:block"><span class="ops-kpi-label">'+card.label+'</span><strong class="ops-kpi-number">'+Number(card.value).toLocaleString('pt-BR')+'</strong><small class="ops-kpi-hint">'+card.hint+'</small></span></button>').join('');
+            if (foot) foot.textContent = 'Base analisada: '+orders.length.toLocaleString('pt-BR')+' OS carregadas. '+clientLinkIssues.length.toLocaleString('pt-BR')+' OS com cliente não resolvido e '+equipmentLinkIssues.length.toLocaleString('pt-BR')+' com vínculo de equipamento não resolvido. Confira os detalhes antes de corrigir cadastros.';
+        }
+
+
+        function renderizarEmployeeDashboard() {
+            const root = document.getElementById('employee-dashboard-root');
+            if (!root) return;
+            const params = new URLSearchParams(window.location.search);
+            const employeeName = String(params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
+            const baseName = String(params.get('base_name') || '').trim();
+            const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
+            const syncIndicator = document.getElementById('dbs-sync-indicator');
+            const syncText = syncIndicator ? String(syncIndicator.textContent || '').trim() : '';
+            const loadStatus = String(DBS_CONTROL_DASHBOARD_LOAD_STATUS || '');
+            const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
+            const activeOrders = orders.filter(order => {
+                if (!order || order.deleted_at || order.deletedAt || order.excluidaEm || order.arquivadaEm) return false;
+                const status = String(order.status || order.situacao || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return !status.includes('cancelad') && !status.includes('arquivad') && !status.includes('excluid');
+            });
+            const isDone = order => typeof isOSConcluida === 'function'
+                ? isOSConcluida(order)
+                : /conclu[ií]d/.test(String(order.status || '').toLocaleLowerCase('pt-BR'));
+            const isPending = order => /aguardando|pendenc|peca|cliente/.test(String(order.status || order.situacao || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+            const completed = activeOrders.filter(isDone).length;
+            const pending = activeOrders.filter(order => !isDone(order) && isPending(order)).length;
+            const inProgress = Math.max(0, activeOrders.length - completed - pending);
+            const progress = activeOrders.length ? Math.round((completed / activeOrders.length) * 100) : 0;
+            const recent = activeOrders.slice().reverse().slice(0, 4);
+            const clientName = order => {
+                const client = (ERP_STATE.clientes || []).find(item => String(item.id) === String(order.clienteId));
+                return client ? (client.nome || client.nomeFantasia || client.razaoSocial || 'Cliente sem nome') : 'Cliente da OS';
+            };
+            const orderStatus = order => String(order.status || 'Em atendimento');
+            const esc = value => typeof escDbsControl === 'function' ? escDbsControl(String(value || '')) : String(value || '');
+            if (loadStatus === 'loading' && !activeOrders.length) {
+                root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Sincronizando sua base operacional…</div></section>';
+                return;
+            }
+            if (loadStatus === 'error' && !activeOrders.length) {
+                root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Aguardando a sincronização da base. Quando a conexão voltar, seu progresso aparecerá aqui.</div></section>';
+                return;
+            }
+            root.innerHTML =
+                '<section class="employee-dashboard-hero">' +
+                    '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu painel</div>' +
+                    '<h2>Olá, ' + esc(employeeName) + '</h2>' +
+                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p>' +
+                    (canIssue ? '<span class="employee-dashboard-permission">Emissão de OS autorizada nesta base</span>' : '') +
+                    '</div>' +
+                    '<div class="employee-dashboard-sync"><small>Estado da conexão</small><strong>' + esc(syncText || (loadStatus === 'loaded' ? 'Sincronizado' : 'Sincronizando…')) + '</strong></div>' +
+                '</section>' +
+                '<div class="employee-dashboard-actions">' +
+                    '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Abrir minhas OS</button>' +
+                    (canIssue ? '<button type="button" class="secondary" onclick="switchTab(&quot;tab-nova-os&quot;)" aria-label="Emitir nova ordem de serviço">Emitir nova OS</button>' : '') +
+                '</div>' +
+                '<section class="employee-dashboard-kpis">' +
+                    '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Em atendimento</small><strong>' + inProgress.toLocaleString('pt-BR') + '</strong><span>Execuções em andamento</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Com pendência</small><strong>' + pending.toLocaleString('pt-BR') + '</strong><span>Peça, cliente ou retorno</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Concluídas</small><strong>' + completed.toLocaleString('pt-BR') + '</strong><span>Confirmadas no banco</span></div>' +
+                '</section>' +
+                '<section class="employee-dashboard-progress"><div class="employee-dashboard-progress-head"><span>Progresso do seu atendimento</span><b>' + progress + '%</b></div><div class="employee-dashboard-progress-track" aria-label="Progresso de OS concluídas"><span style="width:' + progress + '%"></span></div></section>' +
+                '<section class="employee-dashboard-section"><div class="employee-dashboard-section-head"><h3>Próximas OS para acompanhar</h3><span>' + recent.length + ' exibida(s)</span></div>' +
+                    (recent.length ? '<div class="employee-dashboard-recent">' + recent.map(order =>
+                        '<div class="employee-dashboard-order"><b>' + esc(order.protocolo || order.id || 'OS sem protocolo') + '</b><small>' + esc(clientName(order)) + ' · ' + esc(orderStatus(order)) + '</small></div>'
+                    ).join('') + '</div>' : '<div class="employee-dashboard-empty">Nenhuma OS ativa no momento. Abra “Minhas OS” para atualizar.</div>') +
+                '</section>';
+        }
+
+        function renderizarAbaAtiva(tabId) {
+            const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
+            const params = new URLSearchParams(window.location.search);
+            const canIssueOs = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
+            const requestedId = String(tabId || document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+            const employeeAllowed = new Set(['tab-dashboard', 'tab-pwa']);
+            const activeId = employeeMode
+                ? (canIssueOs && requestedId === 'tab-nova-os'
+                    ? 'tab-nova-os'
+                    : (employeeAllowed.has(requestedId) ? requestedId : 'tab-dashboard'))
+                : requestedId;
+            const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
+            // Renderização sob demanda: não montar milhares de linhas em abas ocultas.
+            switch (activeId) {
+                case 'tab-dashboard':
+                    if (employeeMode) {
+                        safe(renderizarEmployeeDashboard);
+                    } else {
+                        safe(renderizarOrdens);
+                        safe(atualizarMetricas);
+                        safe(renderizarResumoOperacional);
+                    }
+                    break;
+                case 'tab-atividades':
+                    safe(garantirHistoricoInicial);
+                    safe(renderizarAtividadesDia);
+                    safe(renderizarHistoricoOperacional);
+                    break;
+                case 'tab-despacho':
+                    safe(renderizarKanban);
+                    break;
+                case 'tab-ordens':
+                    safe(renderizarOrdens);
+                    break;
+                case 'tab-clientes':
+                    safe(renderizarClientes);
+                    break;
+                case 'tab-pmoc':
+                    safe(renderizarControlePMOC);
+                    break;
+                case 'tab-equipamentos':
+                    safe(renderizarEquipamentos);
+                    break;
+                case 'tab-tecnicos':
+                    safe(renderizarTecnicos);
+                    break;
+                case 'tab-pecas':
+                    safe(renderizarPecas);
+                    break;
+                case 'tab-servicos':
+                    safe(renderizarServicos);
+                    break;
+                case 'tab-compras':
+                    safe(renderizarCompras);
+                    break;
+                case 'tab-cadastros':
+                    safe(renderizarCentralCadastros);
+                    break;
+                case 'tab-pwa':
+                    safe(renderizarPWAScreen);
+                    break;
+                case 'tab-orcamentos':
+                    safe(window.renderizarOrcamentos);
+                    break;
+                case 'tab-nova-os':
+                case 'tab-importacao':
+                    break;
+                default:
+                    safe(renderizarOrdens);
+                    safe(atualizarMetricas);
+            }
+        }
+
+        function renderizarTudo() {
+            // Atualiza dados compartilhados dos seletores sem reconstruir todas as telas.
+            const safe = (fn) => { try { if (typeof fn === 'function') fn(); } catch (error) { console.error('DBS CONTROL: falha ao renderizar', fn && fn.name, error); } };
+            safe(renderizarAbaAtiva);
+            safe(atualizarSelects);
+            safe(atualizarMetricas);
+        }
+        function __renderizarTudoLegado() {
+            renderizarTecnicos();
+            renderizarClientes();
+            renderizarEquipamentos();
+            renderizarPecas();
+            renderizarServicos();
+            renderizarCompras();
+            garantirHistoricoInicial();
+            renderizarOrdens();
+            renderizarAtividadesDia();
+            renderizarHistoricoOperacional();
+            renderizarKanban();
+            renderizarPWAScreen();
+            try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores', error); }
+            atualizarMetricas();
+            setTimeout(() => { try { atualizarSelects(); } catch (_) {} }, 0);
+        }
+        function switchTab(tabId, element) {
+            try {
+                // Isolamento de perfil: o colaborador pode acompanhar o próprio
+                // dashboard, executar suas OS e emitir quando o RH autorizou.
+                const employeeTab = String(tabId || '');
+                if (document.body.classList.contains('dbs-control-employee-mode')
+                    && !['tab-dashboard', 'tab-pwa'].includes(employeeTab)
+                    && !(document.body.classList.contains('dbs-control-can-issue-os') && employeeTab === 'tab-nova-os')) {
+                    return false;
+                }
+                const target = document.getElementById(String(tabId || ''));
+                if (!target) {
+                    console.error('DBS CONTROL: aba não encontrada:', tabId);
+                    return false;
+                }
+                document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(i => {
+                    i.classList.remove('active');
+                    i.removeAttribute('aria-current');
+                });
+                target.classList.add('active');
+                if (element) {
+                    element.classList.add('active');
+                    element.setAttribute('aria-current', 'page');
+                }
+                const titleMap = {
+                    'tab-dashboard':['Meu painel','Visão geral do atendimento e indicadores'],
+                    'tab-atividades':['Atividades do Dia','Acompanhamento das execuções e pendências'],
+                    'tab-despacho':['Quadros de Despacho','Distribuição e acompanhamento das Ordens de Serviço'],
+                    'tab-ordens':['Ordens de Serviço','Consulte, filtre, conclua e exporte suas OS'],
+                    'tab-nova-os':['Nova Ordem de Serviço','Crie e encaminhe uma nova OS'],
+                    'tab-cadastros':['Central de Cadastros','Visão central da base operacional'],
+                    'tab-clientes':['Clientes','Cadastro e relacionamento com clientes'],
+                    'tab-pmoc':['Controle Mensal PMOC','Competência, clientes atendidos, pendências e retornos'],
+                    'tab-importacao':['Importação em Massa','Importe e atualize sua base com segurança'],
+                    'tab-equipamentos':['Parque de Equipamentos','Ativos e equipamentos por cliente e local'],
+                    'tab-tecnicos':['Equipe Técnica','Técnicos, vínculos RH e acessos'],
+                    'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
+                    'tab-servicos':['Serviços','Catálogo de serviços'],
+                    'tab-compras':['Compras','Solicitações e pedidos de compra'],
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+                    'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
+                };
+                const employeeMode = document.body.classList.contains('dbs-control-employee-mode');
+                const employeeTitleMap = {
+                    'tab-dashboard':['Meu painel','Progresso e operação do colaborador'],
+                    'tab-pwa':['Minhas OS','Execução das Ordens de Serviço do colaborador'],
+                    'tab-nova-os':['Emitir OS','Nova ordem dentro da base vinculada']
+                };
+                const meta = employeeMode
+                    ? (employeeTitleMap[String(tabId)] || titleMap[String(tabId)])
+                    : titleMap[String(tabId)];
+                const title = document.getElementById('view-title');
+                const subtitle = document.getElementById('view-subtitle');
+                if (meta) {
+                    if (title) title.textContent = meta[0];
+                    if (subtitle) subtitle.textContent = meta[1];
+                }
+                // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
+                if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
+                // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
+                // aparecer vazia mesmo quando os cadastros existem na base.
+                if (typeof atualizarSelects === 'function') {
+                    try { atualizarSelects(); } catch (error) { console.error('DBS CONTROL: falha ao atualizar seletores da aba', tabId, error); }
+                }
+                return true;
+            } catch (error) {
+                console.error('DBS CONTROL: falha ao abrir aba', tabId, error);
+                return false;
+            }
+        }
+        window.switchTab = switchTab;
+
+        // Preferência armazenada no estado compartilhado; o modo colaborador é sempre sem valores.
+        function modoColaboradorPdf() {
+            return new URLSearchParams(window.location.search).get('mode') === 'employee';
+        }
+        function escolherModeloPdf() {
+            return new Promise(resolve => {
+                const admin = !modoColaboradorPdf();
+                const pref = ERP_STATE.configuracoesPdfDbs || {};
+                const defaultModel = admin && ['tecnica','cliente','administrativa'].includes(pref.modelo) ? pref.modelo : 'tecnica';
+                const old = document.getElementById('dbs-pdf-options-modal'); if (old) old.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'dbs-pdf-options-modal';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;';
+                const option = (value,title,desc) => '<label style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid #dbe5ef;border-radius:12px;cursor:pointer;background:#fff;margin-top:8px"><input type="radio" name="dbs-pdf-model" value="'+value+'" '+(defaultModel===value?'checked':'')+' style="margin-top:3px;accent-color:#0284c7"><span><b style="display:block;color:#0f172a;font-size:13px">'+title+'</b><small style="display:block;color:#64748b;line-height:1.45;margin-top:3px">'+desc+'</small></span></label>';
+                overlay.innerHTML = '<div style="width:min(540px,100%);max-height:90vh;overflow:auto;background:#f8fafc;border-radius:18px;box-shadow:0 24px 80px #0f172a55;padding:22px;color:#0f172a"><div style="font-size:10px;font-weight:900;letter-spacing:.14em;color:#0284c7">DBS AIR · DOCUMENTOS</div><h2 style="font-size:21px;font-weight:900;margin:6px 0">Como deseja emitir o PDF?</h2><p style="font-size:12px;color:#64748b;margin-bottom:12px">Escolha o nível de informação para esta emissão. Os dados técnicos e assinaturas são preservados.</p><div id="dbs-pdf-model-options">'+option('tecnica','OS técnica — sem valores','Para execução e registro do atendimento.')+option('cliente','OS para cliente','Documento de atendimento, com opção de mostrar valores.')+(admin?option('administrativa','OS administrativa completa — com valores','Inclui valores e total do atendimento. Disponível apenas no modo administrativo.'):'')+'</div><label id="dbs-pdf-values-row" style="display:flex;gap:9px;align-items:center;margin-top:13px;padding:11px 12px;background:#eff6ff;border-radius:10px;font-size:12px;font-weight:700"><input id="dbs-pdf-include-values" type="checkbox" '+(pref.incluirValores?'checked':'')+' style="accent-color:#0284c7"> Mostrar valores no PDF para cliente</label><label style="display:flex;gap:9px;align-items:center;margin-top:12px;font-size:12px;color:#475569"><input id="dbs-pdf-save-default" type="checkbox" style="accent-color:#0284c7"> Usar esta escolha como padrão nas próximas emissões</label><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><button type="button" id="dbs-pdf-cancel" class="btn btn-secondary">Cancelar</button><button type="button" id="dbs-pdf-confirm" class="btn btn-primary">Gerar PDF</button></div></div>';
+                document.body.appendChild(overlay);
+                const valuesRow = overlay.querySelector('#dbs-pdf-values-row');
+                const syncValues = () => { const chosen=overlay.querySelector('input[name="dbs-pdf-model"]:checked')?.value; valuesRow.style.display = chosen==='cliente' && admin ? 'flex' : 'none'; };
+                overlay.querySelectorAll('input[name="dbs-pdf-model"]').forEach(el=>el.addEventListener('change',syncValues)); syncValues();
+                const finish = value => { overlay.remove(); resolve(value); };
+                overlay.querySelector('#dbs-pdf-cancel').onclick=()=>finish(null);
+                overlay.querySelector('#dbs-pdf-confirm').onclick=()=>{
+                    const model=overlay.querySelector('input[name="dbs-pdf-model"]:checked')?.value||'tecnica';
+                    const includeValues=admin && (model==='administrativa' || (model==='cliente' && overlay.querySelector('#dbs-pdf-include-values').checked));
+                    if (overlay.querySelector('#dbs-pdf-save-default').checked) {
+                        ERP_STATE.configuracoesPdfDbs={modelo:model,incluirValores:includeValues};
+                        if (typeof window.saveState==='function') window.saveState();
+                    }
+                    finish({model,includeValues});
+                };
+            });
+        }
+
+        // Único motor: usa a base já hidratada; o renderizador também força sem valores no modo colaborador.
+        async function gerarPDFObjeto(osId, pdfOptions = { model:'tecnica', includeValues:false }) {
+            if (window.parent !== window && !DBS_CONTROL_CLOUD_READY) {
+                throw new Error('Aguarde o carregamento da base compartilhada antes de exportar.');
+            }
+            const safeOptions = { includeValues: !modoColaboradorPdf() && pdfOptions.includeValues === true };
+            return window.DbsControlPdf.generate(ERP_STATE, osId, safeOptions);
+        }
+
+        async function baixarPDFIndividual(osId) {
+            try {
+                const options = await escolherModeloPdf();
+                if (!options) return;
+                const doc = await gerarPDFObjeto(osId, options);
+                if (doc) doc.save(`Ordem_de_Servico_${osId}.pdf`);
+            } catch (error) {
+                console.error('Exportação da OS:', error);
+                alert(error instanceof Error ? error.message : 'Não foi possível gerar o PDF. Tente novamente.');
+            }
+        }
+
+        async function exportarSelecionadasPDF() {
+            const ids = Array.from(document.querySelectorAll('.chk-os-item:checked'), el => el.value);
+            if (!ids.length) { alert('Selecione ao menos uma Ordem de Serviço!'); return; }
+            try {
+                const options = await escolherModeloPdf();
+                if (!options) return;
+                if (ids.length === 1) {
+                    const doc = await gerarPDFObjeto(ids[0], options);
+                    if (doc) doc.save(`Ordem_de_Servico_${ids[0]}.pdf`);
+                    return;
+                }
+                const zip = new JSZip();
+                const folder = zip.folder('Ordens_de_Servico_DBS_AIR');
+                for (const osId of ids) {
+                    const doc = await gerarPDFObjeto(osId, options);
+                    if (doc) folder.file(`OS_${osId}.pdf`, doc.output('blob'));
+                }
+                const url = URL.createObjectURL(await zip.generateAsync({ type: 'blob' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Pacote_Ordens_de_Servico_${new Date().toISOString().slice(0,10)}.zip`;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (error) {
+                console.error('Exportação em lote:', error);
+                alert(error instanceof Error ? error.message : 'Não foi possível exportar as OS selecionadas.');
+            }
+        }
+
+        function concluirSelecionadasLote() {
+            const checkboxes = document.querySelectorAll('.chk-os-item:checked');
+            if (checkboxes.length === 0) { alert("Selecione ao menos uma OS para concluir!"); return; }
+
+            const selecionadas = Array.from(checkboxes)
+                .map(chk => ERP_STATE.ordens.find(o => String(o.id) === String(chk.value)))
+                .filter(Boolean);
+
+            const incompletas = selecionadas.filter(os =>
+                !String(os.relatoTecnico || os.diagnostico || os.trabalhoExecutado || '').trim() ||
+                !String(os.assinatura || '').trim()
+            );
+
+            if (incompletas.length) {
+                alert(
+                    `Não é possível concluir em lote. ${incompletas.length} OS(s) ainda possuem informações obrigatórias de execução pendentes (relato técnico ou assinatura). \\n\\nFinalize a execução pelo DBS CONTROL antes de concluir.`
+                );
+                return;
+            }
+
+            if (confirm(`Deseja concluir as ${selecionadas.length} OSs selecionadas?`)) {
+                selecionadas.forEach(os => {
+                    os.status = "Concluída";
+                    os.concluidoEm = os.concluidoEm || new Date().toISOString();
+                });
+                saveState();
+                renderizarTudo();
+            }
+        }
+
+        function obterOSSelecionadas() {
+            return Array.from(document.querySelectorAll('.chk-os-item:checked'))
+                .map(chk => (ERP_STATE.ordens || []).find(o => String(o.id) === String(chk.value)))
+                .filter(o => o && !o.excluidaEm);
+        }
+        function atualizarSelecaoOS() {
+            const count = document.getElementById('os-selected-count');
+            const checked = document.querySelectorAll('#os-table-body .chk-os-item:checked').length;
+            if (count) count.textContent = checked + (checked === 1 ? ' selecionada' : ' selecionadas');
+            const master = document.getElementById('chk-select-all');
+            const visible = Array.from(document.querySelectorAll('#os-table-body .chk-os-item')).filter(chk => !chk.disabled && chk.closest('tr')?.style.display !== 'none');
+            if (master) { master.checked = visible.length > 0 && visible.every(chk => chk.checked); master.indeterminate = visible.some(chk => chk.checked) && !master.checked; }
+        }
+        function toggleSelectAllOS(master) {
+            document.querySelectorAll('#os-table-body .chk-os-item').forEach(chk => { if (!chk.disabled && chk.closest('tr')?.style.display !== 'none') chk.checked = master.checked; });
+            atualizarSelecaoOS();
+        }
+        function alternarArquivoSelecionadas() {
+            const list = obterOSSelecionadas();
+            if (!list.length) { alert('Selecione uma ou mais OS.'); return; }
+            const restore = list.every(o => Boolean(o.arquivadaEm));
+            if (!confirm('Deseja ' + (restore ? 'restaurar ' : 'arquivar ') + list.length + ' OS selecionada(s)?')) return;
+            const now = new Date().toISOString();
+            list.forEach(os => { if (restore) { delete os.arquivadaEm; os.restauradaEm = now; } else { os.arquivadaEm = now; } });
+            saveState(); renderizarTudo();
+        }
+        function excluirSelecionadasOS() {
+            const list = obterOSSelecionadas();
+            if (!list.length) { alert('Selecione uma ou mais OS para excluir da operação.'); return; }
+            if (!confirm('Excluir ' + list.length + ' OS selecionada(s) das listas operacionais? O histórico será preservado para rastreabilidade.')) return;
+            list.forEach(os => solicitarExclusaoOS(os));
+            renderizarTudo();
+        }
+
+        function normalizarDataFiltroOS(value) {
+            const raw = String(value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0,10);
+            const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            return br ? br[3] + '-' + br[2] + '-' + br[1] : '';
+        }
+        const ROTULOS_CLASSIFICACAO_OS = {
+            URGENTE: 'Urgente',
+            ATRASADA: 'Atrasada',
+            HOJE: 'Vence hoje',
+            SEM_TECNICO: 'Sem técnico',
+            AGUARDANDO: 'Aguardando retorno',
+            PENDENCIA_EXECUCAO: 'Pendência de execução',
+            CONFERIR_CONCLUSAO: 'Conferir conclusão',
+            CONCLUIDA: 'Concluída',
+            CANCELADA: 'Cancelada',
+            ALTA: 'Prioridade alta'
+        };
+        function normalizarTextoOperacional(value) {
+            return String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+        }
+        function dataHojeOperacional() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        }
+        function prazoExplicitoOS(os) {
+            const fields = ['prazo','dataLimite','dataVencimento','dataVencimentoSla','slaData','dueDate','deadline','scheduledEnd','scheduled_end'];
+            for (const field of fields) {
+                const iso = normalizarDataFiltroOS(os?.[field]);
+                if (iso) return iso;
+            }
+            return '';
+        }
+        function classificacoesOS(os) {
+            const status = normalizarTextoOperacional(os?.status || os?.situacao || os?.statusOS);
+            const prioridade = normalizarTextoOperacional(os?.prioridade || os?.priority || 'normal');
+            const concluida = isOSConcluida(os);
+            const cancelada = /cancelad/.test(status);
+            const classificacoes = [];
+            if (prioridade === 'urgente' || prioridade === 'emergencia' || prioridade === 'emergencial') classificacoes.push('URGENTE');
+            else if (prioridade === 'alta' || prioridade === 'alto') classificacoes.push('ALTA');
+            const prazo = prazoExplicitoOS(os);
+            if (!concluida && !cancelada && prazo) {
+                if (prazo < dataHojeOperacional()) classificacoes.push('ATRASADA');
+                if (prazo === dataHojeOperacional()) classificacoes.push('HOJE');
+            }
+            const tecnicoId = String(os?.tecnicoId ?? os?.employeeId ?? '').trim();
+            const temTecnico = tecnicoId && Array.isArray(ERP_STATE?.tecnicos) && ERP_STATE.tecnicos.some(t => String(t?.id ?? t?.employeeId ?? '') === tecnicoId);
+            if (!concluida && !cancelada && !temTecnico) classificacoes.push('SEM_TECNICO');
+            if (!concluida && !cancelada && /aguardando/.test(status)) classificacoes.push('AGUARDANDO');
+            const diagnostico = Boolean(String(os?.diagnostico || '').trim());
+            const trabalho = Boolean(String(os?.trabalhoExecutado || '').trim());
+            const checklist = Array.isArray(os?.checklist) ? os.checklist : [];
+            const checklistPendente = checklist.some(item => item?.obrigatorio && !item?.concluido);
+            const emExecucao = /atendimento|execucao|andamento/.test(status) || diagnostico || trabalho || checklist.length > 0;
+            if (!concluida && !cancelada && emExecucao && (!diagnostico || !trabalho || checklistPendente)) classificacoes.push('PENDENCIA_EXECUCAO');
+            if (concluida) {
+                const assinatura = Boolean(String(os?.assinatura || '').trim());
+                if (!diagnostico || !trabalho || !assinatura || checklistPendente) classificacoes.push('CONFERIR_CONCLUSAO');
+                classificacoes.push('CONCLUIDA');
+            }
+            if (cancelada) classificacoes.push('CANCELADA');
+            return classificacoes;
+        }
+        function classeVisualClassificacao(codigo) {
+            if (codigo === 'URGENTE') return 'urgent';
+            if (['ATRASADA','PENDENCIA_EXECUCAO','CONFERIR_CONCLUSAO','SEM_TECNICO','AGUARDANDO'].includes(codigo)) return 'warning';
+            if (codigo === 'CONCLUIDA') return 'success';
+            return 'info';
+        }
+        function popularFiltrosOS() {
+            const clientEl = document.getElementById('os-filter-cliente');
+            const techEl = document.getElementById('os-filter-tecnico');
+            if (!clientEl && !techEl) return;
+            const clientValue = clientEl?.value || '';
+            const techValue = techEl?.value || '';
+            const clients = (Array.isArray(ERP_STATE?.clientes) ? ERP_STATE.clientes : []).slice().sort((a,b) => String(a?.nome || '').localeCompare(String(b?.nome || ''), 'pt-BR'));
+            const technicians = (Array.isArray(ERP_STATE?.tecnicos) ? ERP_STATE.tecnicos : []).slice().sort((a,b) => String(a?.nome || '').localeCompare(String(b?.nome || ''), 'pt-BR'));
+            if (clientEl) {
+                clientEl.innerHTML = '<option value="">Todos os clientes</option>' + clients.map(c => `<option value="${escDbsControl(c.id)}">${escDbsControl(c.nome || 'Cliente sem nome')}</option>`).join('');
+                clientEl.value = clients.some(c => String(c.id) === String(clientValue)) ? clientValue : '';
+            }
+            if (techEl) {
+                techEl.innerHTML = '<option value="">Todos os técnicos</option>' + technicians.map(t => `<option value="${escDbsControl(t.id)}">${escDbsControl(t.nome || 'Técnico sem nome')}</option>`).join('');
+                techEl.value = technicians.some(t => String(t.id) === String(techValue)) ? techValue : '';
+            }
+        }
+        let filtroOsTimer = null;
+        function agendarFiltrosOS() {
+            clearTimeout(filtroOsTimer);
+            filtroOsTimer = setTimeout(aplicarFiltrosOS, 120);
+        }
+        function abrirFiltroOS(classificacao) {
+            if (!switchTab('tab-ordens')) return;
+            const select = document.getElementById('os-filter-classificacao');
+            if (select) select.value = classificacao || '';
+            aplicarFiltrosOS();
+        }
+        function aplicarFiltrosOS() {
+            popularFiltrosOS();
+            const search = String(document.getElementById('os-search-input')?.value || '').trim().toLocaleLowerCase('pt-BR');
+            const statusFilter = document.getElementById('os-filter-status')?.value || 'ATIVAS';
+            const classificationFilter = document.getElementById('os-filter-classificacao')?.value || '';
+            const clientFilter = document.getElementById('os-filter-cliente')?.value || '';
+            const technicianFilter = document.getElementById('os-filter-tecnico')?.value || '';
+            const priorityFilter = document.getElementById('os-filter-prioridade')?.value || '';
+            const from = document.getElementById('os-filter-from')?.value || '';
+            const to = document.getElementById('os-filter-to')?.value || '';
+            const rows = document.querySelectorAll('#os-table-body tr');
+            const classificationBroadensStatus = ['CONCLUIDA','CONFERIR_CONCLUSAO','CANCELADA'].includes(classificationFilter) && statusFilter === 'ATIVAS';
+            let visible = 0;
+            rows.forEach(row => {
+                const status = row.getAttribute('data-status') || '';
+                const archived = row.getAttribute('data-archived') === 'true';
+                const date = row.getAttribute('data-date') || '';
+                const client = row.getAttribute('data-client') || '';
+                const technician = row.getAttribute('data-technician') || '';
+                const priority = row.getAttribute('data-priority') || '';
+                const classifications = (row.getAttribute('data-classifications') || '').split('|').filter(Boolean);
+                const searchable = (row.getAttribute('data-search') || row.innerText || '').toLocaleLowerCase('pt-BR');
+                const matchSearch = !search || searchable.includes(search);
+                const matchStatus = classificationBroadensStatus ? !archived : statusFilter === 'Arquivadas' ? archived :
+                    statusFilter === 'ATIVAS' ? (!archived && !isOSConcluida(status) && !/cancelad/i.test(status.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) :
+                    statusFilter === 'TODOS' ? !archived : (!archived && status === statusFilter);
+                const matchClassification = !classificationFilter || classifications.includes(classificationFilter);
+                const matchClient = !clientFilter || client === String(clientFilter);
+                const matchTechnician = !technicianFilter || technician === String(technicianFilter);
+                const matchPriority = !priorityFilter || priority === priorityFilter;
+                const matchFrom = !from || (date && date >= from);
+                const matchTo = !to || (date && date <= to);
+                const matches = matchSearch && matchStatus && matchClassification && matchClient && matchTechnician && matchPriority && matchFrom && matchTo;
+                row.style.display = matches ? '' : 'none';
+                if (matches) visible += 1;
+            });
+            const summary = document.getElementById('os-filter-summary');
+            if (summary) summary.textContent = `${visible.toLocaleString('pt-BR')} de ${rows.length.toLocaleString('pt-BR')} OS exibidas${classificationFilter ? ' · ' + (ROTULOS_CLASSIFICACAO_OS[classificationFilter] || classificationFilter) : ''}.`;
+        }
+        function limparFiltrosOS() {
+            ['os-search-input','os-filter-from','os-filter-to','os-filter-classificacao','os-filter-cliente','os-filter-tecnico','os-filter-prioridade'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+            const status=document.getElementById('os-filter-status'); if(status) status.value='ATIVAS';
+            aplicarFiltrosOS();
+        }
+        function alternarArquivoOS(osId) {
+            const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
+            if (!os || os.excluidaEm) return;
+            if (os.arquivadaEm) {
+                if (!confirm('Restaurar esta OS para a lista operacional?')) return;
+                delete os.arquivadaEm;
+                os.restauradaEm = new Date().toISOString();
+            } else {
+                if (!confirm('Arquivar esta OS? Ela sairá da lista ativa, mas continuará no histórico e poderá ser restaurada.')) return;
+                os.arquivadaEm = new Date().toISOString();
+            }
+            saveState(); renderizarTudo(); aplicarFiltrosOS();
+        }
+        function excluirOSComSeguranca(osId) {
+            const os = (ERP_STATE.ordens || []).find(item => String(item.id) === String(osId));
+            if (!os || os.excluidaEm) return;
+            if (!confirm('Excluir esta OS da operação? O registro será retirado das listas operacionais, mas permanecerá preservado no histórico interno para evitar perda de rastreabilidade.')) return;
+            if (solicitarExclusaoOS(os)) renderizarTudo();
+        }
+
+
+        function popularFiltrosOperacionais() {
+            const dayTec = document.getElementById('day-filter-tecnico');
+            const dayCli = document.getElementById('day-filter-cliente');
+            const histTec = document.getElementById('history-filter-tecnico');
+            const histCli = document.getElementById('history-filter-cliente');
+            const tecnicoAtual = dayTec?.value || '';
+            const clienteAtual = dayCli?.value || '';
+            const histTecnicoAtual = histTec?.value || '';
+            const histClienteAtual = histCli?.value || '';
+            const tecnicos = ERP_STATE.tecnicos || [];
+            const clientes = ERP_STATE.clientes || [];
+            const optTec = '<option value="">Todos os colaboradores</option>' + tecnicos.map(t => `<option value="${escDbsControl(t.id)}">${escDbsControl(t.nome)}</option>`).join('');
+            const optCli = '<option value="">Todos os clientes</option>' + clientes.map(cl => `<option value="${escDbsControl(cl.id)}">${escDbsControl(cl.nome)}</option>`).join('');
+            if (dayTec) { dayTec.innerHTML = optTec; dayTec.value = tecnicoAtual; }
+            if (histTec) { histTec.innerHTML = optTec; histTec.value = histTecnicoAtual; }
+            if (dayCli) { dayCli.innerHTML = optCli; dayCli.value = clienteAtual; }
+            if (histCli) { histCli.innerHTML = optCli; histCli.value = histClienteAtual; }
+        }
+
+        function obterDataFiltroDia() {
+            const input = document.getElementById('day-filter-date');
+            if (input?.value) return input.value;
+            const now = new Date();
+            const iso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            if (input) input.value = iso;
+            return iso;
+        }
+
+        function renderizarAtividadesDia() {
+            const tbody = document.getElementById('day-table-body');
+            const kpis = document.getElementById('day-kpis');
+            if (!tbody || !kpis) return;
+            popularFiltrosOperacionais();
+            const date = obterDataFiltroDia();
+            const tecId = document.getElementById('day-filter-tecnico')?.value || '';
+            const cliId = document.getElementById('day-filter-cliente')?.value || '';
+            const status = document.getElementById('day-filter-status')?.value || 'TODOS';
+            const search = String(document.getElementById('day-filter-search')?.value || '').trim().toLowerCase();
+
+            const all = (ERP_STATE.ordens || []).filter(o => dataOSParaISO(o.data) === date);
+            const filtered = all.filter(o => {
+                const cli = nomeClienteOS(o);
+                const tec = nomeTecnicoOS(o);
+                const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
+                const hay = [o.id, cli, tec, eq.tag, o.tipo, o.desc, o.status].join(' ').toLowerCase();
+                return (!tecId || String(o.tecnicoId) === String(tecId))
+                    && (!cliId || String(o.clienteId) === String(cliId))
+                    && (status === 'TODOS' || (isOSConcluida(status) ? isOSConcluida(o) : String(o.status) === status))
+                    && (!search || hay.includes(search));
+            });
+
+            const completed = filtered.filter(o => isOSConcluida(o)).length;
+            const inProgress = filtered.filter(o => !isOSConcluida(o)).length;
+            const withExecution = filtered.filter(o => String(o.diagnostico || '').trim() && String(o.trabalhoExecutado || '').trim()).length;
+            const missingSignature = filtered.filter(o => isOSConcluida(o) && !String(o.assinatura || '').trim()).length;
+            kpis.innerHTML = [
+                ['Programadas', filtered.length],
+                ['Em atendimento', inProgress],
+                ['Concluídas', completed],
+                ['Pendências de conferência', missingSignature + filtered.filter(o => !isOSConcluida(o) && (!String(o.diagnostico || '').trim() || !String(o.trabalhoExecutado || '').trim() || (Array.isArray(o.checklist) && o.checklist.length && !checklistConcluido(o)))).length]
+            ].map(([label,value]) => `<div class="day-kpi"><span>${label}</span><strong>${value}</strong></div>`).join('');
+
+            if (!filtered.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="padding:34px;text-align:center;color:#64748b;">Nenhuma atividade encontrada para os filtros selecionados.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(o => {
+                const cli = nomeClienteOS(o);
+                const tec = nomeTecnicoOS(o);
+                const hasDiag = Boolean(String(o.diagnostico || '').trim());
+                const hasWork = Boolean(String(o.trabalhoExecutado || '').trim());
+                const hasSig = Boolean(String(o.assinatura || '').trim());
+                const hasEvidence = Boolean(o.fotoAntes || o.fotoDepois);
+                const checklistTotal = Array.isArray(o.checklist) ? o.checklist.length : 0;
+                const checklistDone = Array.isArray(o.checklist) ? o.checklist.filter(i => i.concluido).length : 0;
+                const checklistOk = !checklistTotal || checklistDone === checklistTotal;
+                const complete = hasDiag && hasWork && hasSig;
+                const statusClass = isOSConcluida(o) ? 'ok' : (/aguardando/i.test(o.status || '') ? 'wait' : 'pending');
+                const checkHtml = `<div class="day-check"><b>${hasDiag ? '✓' : '○'} Diagnóstico</b> · <b>${hasWork ? '✓' : '○'} Execução</b> · <b>${hasSig ? '✓' : '○'} Assinatura</b><br><span>${hasEvidence ? '✓ Evidência fotográfica registrada' : '○ Sem foto de evidência'}</span><br><span>${checklistTotal ? (checklistOk ? '✓ Checklist conferido' : '○ Checklist ' + checklistDone + '/' + checklistTotal) : '○ Checklist não configurado'}</span></div>`;
+                const conclusion = isOSConcluida(o)
+                    ? `<span class="day-status ${complete ? 'ok' : 'missing'}">${complete ? 'Conferida' : 'Concluída com pendência'}</span>`
+                    : '<span class="day-status pending">Em aberto</span>';
+                return `<tr>
+                    <td><strong>${escDbsControl(o.id)}</strong></td>
+                    <td>${escDbsControl(cli)}</td>
+                    <td>${escDbsControl(tec)}</td>
+                    <td>${escDbsControl(o.data || '—')}</td>
                     <td><span class="day-status ${statusClass}">${escDbsControl(o.status || 'Sem status')}</span></td>
                     <td>${checkHtml}</td>
                     <td>${conclusion}</td>

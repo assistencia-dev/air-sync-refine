@@ -29,6 +29,9 @@ assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em u
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
+assert.match(route, /isLegacyAutomaticReconcileCommand/, "Comandos de reconciliação automática legados precisam ser isolados após uma atualização.");
+assert.match(route, /status: "quarantined"/, "Comandos legados isolados não podem voltar para a fila de envio.");
+assert.match(route, /legacy_reconcile_blocked/, "A rota deve rejeitar novas tentativas do protocolo legado sem tocar no banco.");
 assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar a mesma intenção simultaneamente.");
 assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
 assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
