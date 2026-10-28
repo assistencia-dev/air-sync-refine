@@ -226,8 +226,10 @@ assert.doesNotMatch(legacyBackfillMigration, /state->'ordens'\) else .*osHistori
 assert.match(legacyHistoryRepairMigration, /event_type,\s*details,\s*idempotency_key/, "O histórico legado deve ser preservado como evento relacional idempotente.");
 assert.match(deletedAtMigration, /add column if not exists deleted_at timestamptz/i, "Exclusões antigas devem permanecer auditáveis sem apagar a OS relacional.");
 assert.match(cloudFunctions, /buildDbsControlWorkOrderPatch/, "O servidor deve converter registros de UI em patches canônicos.");
+assert.match(cloudFunctions, /getDbsControlEmployeeId/, "A resolução de técnico deve priorizar um UUID canônico entre os aliases legados.");
 assert.match(cloudFunctions, /validEmployeeIds[\s\S]*?assigned_employee_id/, "A gravação deve validar o funcionário contra rh_employees antes de tocar na FK.");
 assert.doesNotMatch(cloudFunctions, /assigned_employee_id: isDbsControlUuid\(rawEmployeeId\) \? rawEmployeeId : null/, "Um UUID legado de técnico não pode ser enviado cegamente para a FK relacional.");
+assert.match(cloudFunctions, /sessão de colaborador é a autoridade/, "A emissão pelo colaborador deve usar o vínculo RH canônico da sessão.");
 assert.match(cloudFunctions, /dbs_control_apply_work_order_delta/, "A alteração da OS deve passar pelo RPC transacional com versão esperada.");
 assert.match(cloudFunctions, /event_type: "work_order_delta"/, "Cada lote de OS deve carregar um tipo de evento auditável.");
 assert.match(cloudFunctions, /const orderLabel = protocol \|\|/, "Uma OS nova deve usar um rótulo transitório sem exigir protocolo no formulário.");
