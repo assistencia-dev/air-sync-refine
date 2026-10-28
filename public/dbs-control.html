@@ -3554,6 +3554,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 </div>
             </div>
         </div>
+
+        <!-- Navegação única do colaborador no celular. As funções continuam nas
+             mesmas abas; este menu apenas organiza o acesso sem duplicar o
+             cabeçalho ou o conteúdo do dashboard. -->
+        <nav id="dbs-employee-bottom-nav" class="dbs-employee-bottom-nav" aria-label="Navegação do colaborador">
+            <button type="button" data-dbs-target="tab-dashboard" onclick="switchTab('tab-dashboard', this)" aria-label="Abrir meu painel">
+                <span class="dbs-employee-bottom-icon" aria-hidden="true">⌂</span><span>Início</span>
+            </button>
+            <button type="button" data-dbs-target="tab-pwa" onclick="switchTab('tab-pwa', this)" aria-label="Abrir minhas ordens de serviço">
+                <span class="dbs-employee-bottom-icon" aria-hidden="true">▤</span><span>Minhas OS</span>
+            </button>
+            <button type="button" data-dbs-target="tab-nova-os" data-employee-issue-nav="true" onclick="switchTab('tab-nova-os', this)" aria-label="Emitir nova ordem de serviço">
+                <span class="dbs-employee-bottom-icon" aria-hidden="true">＋</span><span>Emitir OS</span>
+            </button>
+        </nav>
     </main>
 
     <script>
@@ -4308,9 +4323,29 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 || /já foi conclu[ií]da|dados assinados.*protegidos|os conclu[ií]da.*protegida/.test(message);
         }
 
+        let DBS_CONTROL_READY_RETRY_TIMER = null;
+        let DBS_CONTROL_READY_RETRY_ATTEMPTS = 0;
+        let DBS_CONTROL_READY_SENT = false;
+        function notifyDbsControlParentReady() {
+            if (window.parent === window) return;
+            DBS_CONTROL_READY_SENT = true;
+            window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
+        }
+
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
+            if (msg.type === 'DBS_CONTROL_PARENT_READY') {
+                // The first READY may have been delivered before the parent
+                // listener existed. Only resend in that case; otherwise the
+                // ACK must not create a READY/ACK ping-pong loop.
+                if (!DBS_CONTROL_READY_SENT) notifyDbsControlParentReady();
+                if (DBS_CONTROL_READY_RETRY_TIMER) {
+                    clearInterval(DBS_CONTROL_READY_RETRY_TIMER);
+                    DBS_CONTROL_READY_RETRY_TIMER = null;
+                }
+                return;
+            }
             const mergeCollaboratorCloudState = (nextState) => {
                 const collaboratorSession = new URLSearchParams(window.location.search).get('mode') === 'employee';
                 if (!collaboratorSession || !nextState || typeof nextState !== 'object') return nextState;
@@ -4707,7 +4742,19 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         window.onload = function() {
             renderizarTudo();
             if (window.parent !== window) {
-                window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
+                notifyDbsControlParentReady();
+                // A mobile browser can deliver iframe load before the parent
+                // listener exists. Retry only the handshake (never a write)
+                // for a short bounded window; the parent ACK stops the timer.
+                DBS_CONTROL_READY_RETRY_ATTEMPTS = 0;
+                DBS_CONTROL_READY_RETRY_TIMER = setInterval(() => {
+                    DBS_CONTROL_READY_RETRY_ATTEMPTS += 1;
+                    notifyDbsControlParentReady();
+                    if (DBS_CONTROL_READY_RETRY_ATTEMPTS >= 12 && DBS_CONTROL_READY_RETRY_TIMER) {
+                        clearInterval(DBS_CONTROL_READY_RETRY_TIMER);
+                        DBS_CONTROL_READY_RETRY_TIMER = null;
+                    }
+                }, 800);
                 // A base principal não é atualizada automaticamente na abertura. O snapshot cloud é a fonte de verdade; sincronização FieldControl é explícita.
             }
         };
@@ -4980,8 +5027,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const employeeName = String(params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
             const baseName = String(params.get('base_name') || '').trim();
             const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
-            const syncIndicator = document.getElementById('dbs-sync-indicator');
-            const syncText = syncIndicator ? String(syncIndicator.textContent || '').trim() : '';
             const loadStatus = String(DBS_CONTROL_DASHBOARD_LOAD_STATUS || '');
             const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
             const activeOrders = orders.filter(order => {
@@ -5016,14 +5061,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 '<section class="employee-dashboard-hero">' +
                     '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu painel</div>' +
                     '<h2>Olá, ' + esc(employeeName) + '</h2>' +
-                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '. ' : '') + 'Acompanhe suas ordens, pendências e evolução sem sair do fluxo de campo.</p>' +
+                    '<p>' + (baseName ? 'Base operacional: ' + esc(baseName) + '.' : 'Acompanhe suas OS e pendências no fluxo de campo.') + '</p>' +
                     (canIssue ? '<span class="employee-dashboard-permission">Emissão de OS autorizada nesta base</span>' : '') +
                     '</div>' +
-                    '<div class="employee-dashboard-sync"><small>Estado da conexão</small><strong>' + esc(syncText || (loadStatus === 'loaded' ? 'Sincronizado' : 'Sincronizando…')) + '</strong></div>' +
                 '</section>' +
                 '<div class="employee-dashboard-actions">' +
-                    '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Abrir minhas OS</button>' +
-                    (canIssue ? '<button type="button" class="secondary" onclick="switchTab(&quot;tab-nova-os&quot;)" aria-label="Emitir nova ordem de serviço">Emitir nova OS</button>' : '') +
+                    '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Ver minhas OS</button>' +
                 '</div>' +
                 '<section class="employee-dashboard-kpis">' +
                     '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
@@ -5161,6 +5204,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     element.classList.add('active');
                     element.setAttribute('aria-current', 'page');
                 }
+                document.querySelectorAll('#dbs-employee-bottom-nav [data-dbs-target]').forEach(button => {
+                    const isActive = button.getAttribute('data-dbs-target') === String(tabId || '');
+                    button.classList.toggle('active', isActive);
+                    if (isActive) button.setAttribute('aria-current', 'page');
+                    else button.removeAttribute('aria-current');
+                });
                 const titleMap = {
                     'tab-dashboard':['Meu painel','Visão geral do atendimento e indicadores'],
                     'tab-atividades':['Atividades do Dia','Acompanhamento das execuções e pendências'],
@@ -6835,27 +6884,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const escHtml = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
             area.innerHTML = `
-              <div class="employee-hero">
-                <div>
-                  <div class="employee-hero-brand"><img class="employee-brand-logo" src="/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg" alt="DBS Air Refrigeração"><span class="employee-eyebrow">DBS CONTROL · ATENDIMENTO DE CAMPO</span></div>
-                  <h2>Olá, ${escHtml(tec.nome || 'Colaborador')}</h2>
-                  <p>Veja suas ordens, registre a execução e conclua o atendimento sem acessar o painel administrativo.</p>
-                </div>
-                <div class="employee-count"><strong>${minhasOS.length}</strong><span>OS atribuídas</span></div>
-              </div>
-
-              <div class="employee-progress-grid" aria-label="Resumo de produtividade">
-                <div class="employee-progress-card"><span>Em atendimento</span><strong>${minhasOS.filter(o => /em atendimento/i.test(String(o.status || ''))).length}</strong><small>Ordens em execução</small></div>
-                <div class="employee-progress-card"><span>Pendências operacionais</span><strong>${minhasOS.filter(o => /conclu[ií]da com pend[eê]ncia|aguardando pe[cç]a|aguardando aprova[cç][aã]o|retorno necess[aá]rio|aguardando cliente/i.test(String(o.status || ''))).length}</strong><small>Aguardam peça, retorno ou decisão</small></div>
-                <div class="employee-progress-card"><span>Concluídas</span><strong>${minhasOS.filter(isOSConcluida).length}</strong><small>Ordens finalizadas</small></div>
-                <div class="employee-progress-card"><span>Progresso</span><strong>${minhasOS.length ? Math.round(minhasOS.filter(isOSConcluida).length / minhasOS.length * 100) : 0}%</strong><small>Concluídas sobre as atribuídas</small></div>
-              </div>
-
-              <div class="employee-toolbar">
-                <div><strong>Minhas ordens de serviço</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Ordens que ainda precisam de acompanhamento'}</span></div>
-                <div class="employee-toolbar-actions">
-                  <button class="btn btn-secondary btn-sm" onclick="renderizarPWAScreen()">↻ Atualizar</button>
-                </div>
+              <div class="employee-list-summary" aria-label="Resumo das ordens do colaborador">
+                <div class="employee-list-summary-count"><strong>${minhasOSVisiveis.length}</strong><span>${employeeOsTab === 'concluidas' ? 'finalizadas' : 'em aberto'}</span></div>
+                <div class="employee-list-summary-copy"><strong>Ordens atribuídas</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico das ordens finalizadas' : 'Toque em uma OS para executar o atendimento'}</span></div>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarPWAScreen()" aria-label="Atualizar minhas ordens">↻ Atualizar</button>
               </div>
               <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
                 <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !isOSConcluida(o)).length})</span></button>
@@ -7637,7 +7669,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     <script src="/dbs-control-orcamentos-v2.js?v=20261026-quote-ack-1"></script>
     <script src="/dbs-control-orcamentos-pdf.js?v=20261014-pdf-standard-1"></script>
     <script src="/dbs-control-orcamentos-flex.js?v=20261026-quote-ack-1"></script>
-    <script src="/dbs-control-employee-nav.js?v=20261028-sync-clean-3"></script>
+    <script src="/dbs-control-employee-nav.js?v=20261028-clean-menu-1"></script>
     <script src="/dbs-control-ux.js?v=20261028-sync-clean-3"></script>
     <script id="dbs-employee-stability-20261027">
     (function enforceDbsEmployeeStableShell(){
@@ -8662,6 +8694,129 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body.dbs-control-employee-mode .employee-finish-row .btn {
       min-height: 48px !important;
     }
+  }
+</style>
+<style id="dbs-employee-clean-navigation-20261028">
+  /* Uma única navegação de campo: os mesmos três destinos, sem repetir
+     dashboard, resumo e ações no cabeçalho. */
+  .dbs-employee-bottom-nav { display:none; }
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav {
+    position:fixed;
+    z-index:1200;
+    left:50%;
+    bottom:0;
+    transform:translateX(-50%);
+    width:min(520px, calc(100% - 24px));
+    min-height:64px;
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:6px;
+    padding:7px 8px max(7px, env(safe-area-inset-bottom));
+    border:1px solid #d9e5f1;
+    border-bottom:0;
+    border-radius:17px 17px 0 0;
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -10px 28px rgba(20,61,110,.12);
+    backdrop-filter:blur(12px);
+  }
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button {
+    display:flex;
+    min-width:0;
+    min-height:50px;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:3px;
+    border:0;
+    border-radius:12px;
+    color:#64748b;
+    background:transparent;
+    font:700 10px/1.1 Inter, Roboto, system-ui, sans-serif;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    transition:background-color .18s ease, color .18s ease, transform .18s ease;
+  }
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button:active { transform:scale(.96); }
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button.active,
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button[aria-current="page"] {
+    color:#075985;
+    background:#e0f2fe;
+  }
+  body.dbs-control-employee-mode .dbs-employee-bottom-icon {
+    display:grid;
+    width:27px;
+    height:27px;
+    place-items:center;
+    border-radius:9px;
+    color:#0f6ca6;
+    font-size:19px;
+    line-height:1;
+  }
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button.active .dbs-employee-bottom-icon,
+  body.dbs-control-employee-mode .dbs-employee-bottom-nav button[aria-current="page"] .dbs-employee-bottom-icon { background:#bae6fd; }
+  body.dbs-control-employee-mode:not(.dbs-control-can-issue-os) .dbs-employee-bottom-nav [data-employee-issue-nav="true"] { display:none; }
+  body.dbs-control-employee-mode:not(.dbs-control-can-issue-os) .dbs-employee-bottom-nav { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  body.dbs-control-employee-mode.dbs-control-can-issue-os .dbs-employee-bottom-nav [data-employee-issue-nav="true"] { display:flex; }
+  body.dbs-control-employee-mode #tab-dashboard,
+  body.dbs-control-employee-mode #tab-pwa,
+  body.dbs-control-employee-mode #tab-nova-os { padding-bottom:96px !important; }
+
+  /* O estado da conexão já mora no cabeçalho. Não repetir a mesma informação
+     dentro do cartão de boas-vindas. */
+  body.dbs-control-employee-mode .employee-dashboard-sync { display:none !important; }
+
+  .employee-list-summary {
+    display:flex;
+    align-items:center;
+    gap:13px;
+    margin:0 0 14px;
+    padding:14px 16px;
+    border:1px solid #dfe8f2;
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 5px 16px rgba(20,61,110,.04);
+  }
+  .employee-list-summary-count {
+    display:grid;
+    min-width:58px;
+    min-height:58px;
+    place-items:center;
+    align-content:center;
+    border-radius:14px;
+    color:#fff;
+    background:#164c82;
+  }
+  .employee-list-summary-count strong { font-size:24px; line-height:1; }
+  .employee-list-summary-count span { margin-top:3px; font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+  .employee-list-summary-copy { min-width:0; flex:1; }
+  .employee-list-summary-copy strong { display:block; color:#173858; font-size:14px; }
+  .employee-list-summary-copy span { display:block; margin-top:3px; color:#6c7e91; font-size:11px; line-height:1.35; }
+  .employee-list-summary .btn { min-height:42px; white-space:nowrap; }
+
+  @media (max-width:760px) {
+    body.dbs-control-employee-mode .dbs-employee-bottom-nav { width:100%; border-radius:16px 16px 0 0; }
+    body.dbs-control-employee-mode main > header { padding-left:12px !important; padding-right:12px !important; }
+    body.dbs-control-employee-mode main > header .page-title h1 { font-size:21px !important; }
+    body.dbs-control-employee-mode main > header .page-title p { font-size:11px !important; max-width:46vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    body.dbs-control-employee-mode .employee-dashboard-hero { padding:16px !important; gap:10px !important; border-radius:18px !important; }
+    body.dbs-control-employee-mode .employee-dashboard-hero h2 { font-size:25px !important; }
+    body.dbs-control-employee-mode .employee-dashboard-hero p { max-width:none; font-size:12px; line-height:1.45; }
+    body.dbs-control-employee-mode .employee-dashboard-actions { display:none !important; }
+    body.dbs-control-employee-mode .employee-dashboard-kpis { gap:8px !important; margin:12px 0 !important; }
+    body.dbs-control-employee-mode .employee-dashboard-kpi { min-height:88px !important; padding:11px !important; border-radius:14px !important; }
+    body.dbs-control-employee-mode .employee-dashboard-kpi strong { margin-top:5px; font-size:23px; }
+    body.dbs-control-employee-mode .employee-dashboard-kpi span { font-size:9px; line-height:1.3; }
+    body.dbs-control-employee-mode .employee-dashboard-progress,
+    body.dbs-control-employee-mode .employee-dashboard-section { margin-top:12px; padding:14px; border-radius:15px; }
+    body.dbs-control-employee-mode .employee-list-summary { margin-bottom:10px; padding:11px; gap:10px; border-radius:14px; }
+    body.dbs-control-employee-mode .employee-list-summary-count { min-width:50px; min-height:50px; }
+    body.dbs-control-employee-mode .employee-list-summary-count strong { font-size:21px; }
+    body.dbs-control-employee-mode .employee-list-summary-copy strong { font-size:13px; }
+    body.dbs-control-employee-mode .employee-list-summary-copy span { font-size:10px; }
+    body.dbs-control-employee-mode .employee-list-summary .btn { min-height:44px; padding:0 10px; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    body.dbs-control-employee-mode .dbs-employee-bottom-nav button { transition:none; }
   }
 </style>
 <!-- DBS CONTROL mobile workspace styles end -->
