@@ -7,6 +7,15 @@ import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
+  deleteDbsControlLocalSyncCommand,
+  getDbsControlLocalSyncSummary,
+  putDbsControlLocalSyncCommand,
+  recoverExpiredDbsControlLocalSyncCommands,
+  updateDbsControlLocalSyncCommand,
+  withDbsControlLocalSyncLock,
+  type DbsControlLocalSyncCommand,
+} from "@/lib/dbs-control.local-sync";
+import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
   testFieldControlConnection,
@@ -130,6 +139,14 @@ function dbsControlStateHasData(state: Record<string, unknown> | null | undefine
   if (!state) return false;
   const keys = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
   return keys.some((key) => Array.isArray(state[key]) && (state[key] as unknown[]).length > 0);
+}
+
+function dbsControlClone<T>(value: T): T {
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch {
+    return value;
+  }
 }
 
 const DBS_CONTROL_PROTECTED_ARRAYS = ["tecnicos", "clientes", "equipamentos", "pecas", "servicos", "compras", "ordens"];
@@ -262,6 +279,15 @@ function DbsControlPage() {
   const pendingBatchIdRef = useRef<string | null>(null);
   const saveInFlightRef = useRef(false);
   const pendingSaveRequestIdsRef = useRef<string[]>([]);
+  // A second edit arriving while the first RPC is in flight is kept as a
+  // separate durable command. Merging it into the in-flight payload would
+  // replay the first intent with a new idempotency key after a reload.
+  const queuedChangesRef = useRef<Record<string, any[]> | null>(null);
+  const queuedBatchIdRef = useRef<string | null>(null);
+  const queuedRequestIdsRef = useRef<string[]>([]);
+  const localSyncCommandsRef = useRef<Map<string, DbsControlLocalSyncCommand>>(new Map());
+  const localSyncHydrationRef = useRef<Promise<void> | null>(null);
+  const localSyncRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef(0);
   const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
@@ -325,6 +351,326 @@ function DbsControlPage() {
             message: error instanceof Error ? error.message : "Falha ao carregar os indicadores agregados.",
           });
         });
+    };
+
+    const postLocalSyncStatus = async (fallbackStatus?: "synced" | "pending" | "conflict" | "error") => {
+      const summary = await getDbsControlLocalSyncSummary();
+      const pendingCount = summary.pending + summary.sending;
+      const status = summary.conflict > 0
+        ? "conflict"
+        : summary.error > 0
+          ? "error"
+          : pendingCount > 0
+            ? "pending"
+            : (fallbackStatus ?? "synced");
+      iframeRef.current?.contentWindow?.postMessage({
+        type: "DBS_CONTROL_SYNC_STATUS",
+        status,
+        pendingCount,
+        localQueue: summary,
+        error: status === "error"
+          ? "Há uma intenção local que precisa de nova tentativa. Nenhum dado foi descartado."
+          : undefined,
+      }, "*");
+    };
+
+    const persistLocalSyncCommand = async ({
+      id,
+      changes,
+      requestIds,
+      status = "pending",
+      nextAttemptAt = Date.now(),
+      lastError = null,
+      conflicts,
+      attempts,
+      leaseUntil = null,
+    }: {
+      id: string;
+      changes: Record<string, any[]>;
+      requestIds: string[];
+      status?: DbsControlLocalSyncCommand["status"];
+      nextAttemptAt?: number;
+      lastError?: string | null;
+      conflicts?: unknown[];
+      attempts?: number;
+      leaseUntil?: number | null;
+    }) => {
+      const existing = localSyncCommandsRef.current.get(id);
+      const command: DbsControlLocalSyncCommand = {
+        id,
+        requestIds: [...new Set([...(existing?.requestIds ?? []), ...requestIds].filter(Boolean))],
+        changes: dbsControlClone(changes) as Record<string, any[]>,
+        status,
+        attempts: Number(attempts ?? existing?.attempts ?? 0),
+        createdAt: Number(existing?.createdAt ?? Date.now()),
+        updatedAt: Date.now(),
+        nextAttemptAt,
+        leaseUntil,
+        lastError,
+        conflicts: conflicts ?? existing?.conflicts,
+      };
+      localSyncCommandsRef.current.set(id, command);
+      try {
+        await putDbsControlLocalSyncCommand(command);
+      } catch (error) {
+        console.warn("DBS CONTROL: não foi possível persistir a intenção local.", error);
+      }
+      return command;
+    };
+
+    const findNextRetryableLocalCommand = () => {
+      const now = Date.now();
+      return [...localSyncCommandsRef.current.values()]
+        .filter((command) => (command.status === "pending" || command.status === "sending") && Number(command.nextAttemptAt ?? 0) <= now)
+        .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0] ?? null;
+    };
+
+    const promoteNextLocalSyncCommand = () => {
+      if (pendingChangesRef.current || saveInFlightRef.current) return false;
+      const next = findNextRetryableLocalCommand();
+      if (!next) return false;
+      pendingChangesRef.current = dbsControlClone(next.changes);
+      pendingBatchIdRef.current = next.id;
+      pendingSaveRequestIdsRef.current = [...next.requestIds];
+      return true;
+    };
+
+    const hydrateLocalSyncQueue = async () => {
+      if (localSyncHydrationRef.current) return localSyncHydrationRef.current;
+      localSyncHydrationRef.current = (async () => {
+        const commands = await recoverExpiredDbsControlLocalSyncCommands();
+        localSyncCommandsRef.current = new Map(commands.map((command) => [command.id, command]));
+        if (!pendingChangesRef.current) promoteNextLocalSyncCommand();
+      })().catch((error) => {
+        console.warn("DBS CONTROL: fila local não pôde ser carregada; a sessão seguirá com retry em memória.", error);
+      });
+      return localSyncHydrationRef.current;
+    };
+
+    const scheduleLocalSyncRetry = (delayMs = 0) => {
+      if (localSyncRetryTimerRef.current) clearTimeout(localSyncRetryTimerRef.current);
+      localSyncRetryTimerRef.current = setTimeout(() => {
+        localSyncRetryTimerRef.current = null;
+        retryPendingSaveRef.current?.();
+      }, Math.max(0, delayMs));
+    };
+
+    const promoteQueuedCommandAfterCommit = () => {
+      if (queuedChangesRef.current && queuedBatchIdRef.current) {
+        pendingChangesRef.current = queuedChangesRef.current;
+        pendingBatchIdRef.current = queuedBatchIdRef.current;
+        pendingSaveRequestIdsRef.current = [...queuedRequestIdsRef.current];
+        queuedChangesRef.current = null;
+        queuedBatchIdRef.current = null;
+        queuedRequestIdsRef.current = [];
+        return true;
+      }
+      return promoteNextLocalSyncCommand();
+    };
+
+    // Only network and gateway failures enter the backoff queue; permanent
+    // business conflicts remain visible for explicit reconciliation.
+    const persist = async () => {
+      const changes = pendingChangesRef.current;
+      if (!changes || saveInFlightRef.current) return;
+      const batchId = pendingBatchIdRef.current ?? crypto.randomUUID();
+      const requestIds = [...pendingSaveRequestIdsRef.current];
+      const previousCommand = localSyncCommandsRef.current.get(batchId);
+      const attempt = Number(previousCommand?.attempts ?? 0) + 1;
+      saveInFlightRef.current = true;
+      await persistLocalSyncCommand({
+        id: batchId,
+        changes,
+        requestIds,
+        status: "sending",
+        attempts: attempt,
+        nextAttemptAt: Date.now(),
+        leaseUntil: Date.now() + 60_000,
+      });
+
+      try {
+        if (!cloudReadyRef.current) {
+          const delays = [5000, 15000, 45000, 120000, 300000, 900000];
+          const delay = delays[Math.min(retryAttemptRef.current, delays.length - 1)];
+          retryAttemptRef.current += 1;
+          await persistLocalSyncCommand({
+            id: batchId,
+            changes,
+            requestIds,
+            status: "pending",
+            attempts: attempt,
+            nextAttemptAt: Date.now() + delay,
+            lastError: "A conexão com a nuvem ainda não está pronta.",
+          });
+          await postLocalSyncStatus("pending");
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            retryPendingSaveRef.current?.();
+          }, delay);
+          return;
+        }
+
+        const result = await withDbsControlLocalSyncLock(() => withDbsControlTransientRetry(() =>
+          applyDbsControlDelta({ data: { requestId: batchId, changes } }),
+        ));
+        const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+        const hasConflict = conflicts.length > 0;
+        const conflictingChanges = hasConflict
+          ? dbsControlSelectConflictingChanges(changes, conflicts)
+          : null;
+        const committedChanges = hasConflict
+          ? dbsControlSubtractChanges(changes, conflictingChanges)
+          : changes;
+        const autoResolvableConflict = hasConflict && conflicts.every(dbsControlConflictIsAutoResolvable);
+        const permanentConflict = conflicts.some(dbsControlConflictIsPermanent);
+        const resultMessage = hasConflict
+          ? autoResolvableConflict
+            ? null
+            : permanentConflict
+              ? "A alteração ficou pendente de revisão. Nenhum dado foi descartado e não haverá novas tentativas automáticas."
+              : `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
+          : null;
+
+        if (hasConflict && !autoResolvableConflict) {
+          await persistLocalSyncCommand({
+            id: batchId,
+            changes: conflictingChanges ?? changes,
+            requestIds,
+            status: "conflict",
+            attempts: attempt,
+            nextAttemptAt: Number.MAX_SAFE_INTEGER,
+            lastError: resultMessage,
+            conflicts,
+          });
+        } else {
+          await deleteDbsControlLocalSyncCommand(batchId);
+          localSyncCommandsRef.current.delete(batchId);
+        }
+
+        // A second edit is deliberately kept in a different local command and
+        // is promoted only after the first transaction has an ACK.
+        pendingChangesRef.current = hasConflict && !autoResolvableConflict ? (conflictingChanges ?? changes) : null;
+        pendingBatchIdRef.current = hasConflict && !autoResolvableConflict ? batchId : null;
+        pendingSaveRequestIdsRef.current = hasConflict && !autoResolvableConflict ? requestIds : [];
+        if (!hasConflict || autoResolvableConflict) {
+          promoteQueuedCommandAfterCommit();
+        }
+        retryAttemptRef.current = 0;
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+        logSyncEvent(hasConflict ? "save_conflict" : "save_applied", {
+          requestCount: requestIds.length,
+          applied: Number(result.applied ?? 0),
+          conflicts: hasConflict ? result.conflicts.length : 0,
+          localQueue: true,
+        });
+        setCloudError(resultMessage);
+        const ackUpdatedAt = cloudUpdatedAtRef.current;
+        requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+          type: "DBS_CONTROL_SAVE_ACK",
+          requestId: id,
+          ok: !hasConflict,
+          updated_at: ackUpdatedAt,
+          conflicts: result.conflicts ?? [],
+          appliedOrders: result.appliedOrders ?? [],
+          committedChanges,
+          pendingCount: pendingChangesRef.current ? 1 : 0,
+          error: resultMessage ?? undefined,
+        }, "*"));
+        if (hasConflict) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_CONFLICT",
+            conflicts: result.conflicts ?? [],
+            changes,
+            requestIds,
+            permanent: permanentConflict,
+            autoResolvable: autoResolvableConflict,
+          }, "*");
+        }
+        await postLocalSyncStatus(hasConflict && !autoResolvableConflict ? "conflict" : "synced");
+
+        if (!hasConflict || autoResolvableConflict) {
+          if (pendingChangesRef.current) scheduleLocalSyncRetry(0);
+          void (async () => {
+            try {
+              const latest = await Promise.race([
+                getDbsControlCloudState(),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+              ]);
+              if (!latest?.state) {
+                logSyncEvent("post_save_refresh_timeout");
+                return;
+              }
+              cloudUpdatedAtRef.current = latest.updated_at ?? cloudUpdatedAtRef.current;
+              if (!pendingChangesRef.current) {
+                iframeRef.current?.contentWindow?.postMessage({
+                  type: "DBS_CONTROL_CLOUD_STATE", state: latest.state, baseState: latest.state,
+                }, "*");
+              }
+            } catch (refreshError) {
+              logSyncEvent("post_save_refresh_error", {
+                message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a leitura após a gravação.",
+              });
+            }
+          })();
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
+        const transient = isDbsControlTransientError(err) || /Outra aba está sincronizando/i.test(message);
+        const delays = [5000, 15000, 45000, 120000, 300000, 900000];
+        const retryDelay = delays[Math.min(retryAttemptRef.current, delays.length - 1)];
+        if (transient && retryAttemptRef.current < delays.length) retryAttemptRef.current += 1;
+        await persistLocalSyncCommand({
+          id: batchId,
+          changes,
+          requestIds,
+          status: transient && retryAttemptRef.current <= delays.length ? "pending" : "error",
+          attempts: attempt,
+          nextAttemptAt: transient && retryAttemptRef.current <= delays.length ? Date.now() + retryDelay : Number.MAX_SAFE_INTEGER,
+          lastError: message,
+        });
+        logSyncEvent("save_error", { message, attempt, transient, localQueue: true });
+        setCloudError(message);
+        await postLocalSyncStatus(transient ? "pending" : "error");
+        requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+          type: "DBS_CONTROL_SAVE_ACK",
+          requestId: id,
+          ok: false,
+          error: message,
+          queuedLocally: transient,
+          retryAt: transient ? Date.now() + retryDelay : undefined,
+        }, "*"));
+        if (transient && retryAttemptRef.current <= delays.length) {
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            retryPendingSaveRef.current?.();
+          }, retryDelay);
+        }
+      } finally {
+        saveInFlightRef.current = false;
+      }
+    };
+
+    retryPendingSaveRef.current = (manual = false) => {
+      if (manual) {
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        retryAttemptRef.current = 0;
+        const batchId = pendingBatchIdRef.current;
+        if (batchId) {
+          void updateDbsControlLocalSyncCommand(batchId, {
+            status: "pending",
+            nextAttemptAt: Date.now(),
+            leaseUntil: null,
+            lastError: null,
+          });
+          const existing = localSyncCommandsRef.current.get(batchId);
+          if (existing) localSyncCommandsRef.current.set(batchId, { ...existing, status: "pending", nextAttemptAt: Date.now(), leaseUntil: null, lastError: null });
+        }
+      }
+      retryTimerRef.current = null;
+      saveQueueRef.current = saveQueueRef.current.then(persist, persist);
     };
 
     const handler = async (event: MessageEvent) => {
@@ -420,6 +766,7 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_READY") {
         sendDashboardSummary();
         try {
+          await hydrateLocalSyncQueue();
           const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
@@ -453,6 +800,7 @@ function DbsControlPage() {
               pendingCount: 0,
               updated_at: null,
             }, "*");
+            await postLocalSyncStatus("synced");
             setCloudError(null);
             return;
           }
@@ -478,12 +826,23 @@ function DbsControlPage() {
               "*",
             );
             // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
-            iframeRef.current?.contentWindow?.postMessage({
-              type: "DBS_CONTROL_SYNC_STATUS",
-              status: "synced",
-              pendingCount: 0,
-              updated_at: cloud?.updated_at ?? null,
-            }, "*");
+            await postLocalSyncStatus("synced");
+            const restoredCommand = (pendingBatchIdRef.current
+              ? localSyncCommandsRef.current.get(pendingBatchIdRef.current)
+              : null)
+              ?? [...localSyncCommandsRef.current.values()].find((command) => command.status === "conflict" && command.conflicts?.length)
+              ?? null;
+            if (restoredCommand?.status === "conflict" && restoredCommand.conflicts?.length) {
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_CONFLICT",
+                conflicts: restoredCommand.conflicts,
+                changes: restoredCommand.changes,
+                requestIds: restoredCommand.requestIds,
+                permanent: true,
+              }, "*");
+            } else if (restoredCommand?.status === "pending" || restoredCommand?.status === "sending") {
+              scheduleLocalSyncRetry(0);
+            }
           } else {
             // A recuperação local é explicitamente somente leitura e nunca é enviada à nuvem.
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
@@ -510,6 +869,7 @@ function DbsControlPage() {
             pendingCount: 0,
             error: message,
           }, "*");
+          await postLocalSyncStatus("error");
         }
         return;
       }
@@ -690,11 +1050,18 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_RECONCILE_CONFLICT") {
-        const draftChanges = pendingChangesRef.current;
+        const conflictCommand = [...localSyncCommandsRef.current.values()]
+          .find((command) => command.status === "conflict" && command.conflicts?.length);
+        const draftBatchId = pendingBatchIdRef.current ?? conflictCommand?.id ?? null;
+        const draftChanges = pendingChangesRef.current ?? conflictCommand?.changes ?? null;
         try {
           const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
           if (!latest?.state || typeof latest.state !== "object") {
             throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
+          }
+          if (draftBatchId) {
+            await deleteDbsControlLocalSyncCommand(draftBatchId);
+            localSyncCommandsRef.current.delete(draftBatchId);
           }
           pendingChangesRef.current = null;
           pendingBatchIdRef.current = null;
@@ -709,6 +1076,8 @@ function DbsControlPage() {
             conflicts: Array.isArray(msg.conflicts) ? msg.conflicts : [],
             updated_at: latest.updated_at ?? null,
           }, "*");
+          if (promoteQueuedCommandAfterCommit()) scheduleLocalSyncRetry(0);
+          await postLocalSyncStatus(pendingChangesRef.current ? "pending" : "synced");
         } catch (err) {
           const message = err instanceof Error ? err.message : "Não foi possível carregar a versão atual da OS.";
           setCloudError(message);
@@ -729,6 +1098,9 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_DISMISS_CONFLICT") {
         const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+        const dismissedBatchId = pendingBatchIdRef.current
+          ?? [...localSyncCommandsRef.current.values()].find((command) => command.status === "conflict" && command.conflicts?.length)?.id
+          ?? null;
         const conflictingChanges = dbsControlSelectConflictingChanges(pendingChangesRef.current, conflicts);
         if (pendingChangesRef.current === conflictingChanges || conflictingChanges === null) {
           pendingChangesRef.current = conflictingChanges ? null : pendingChangesRef.current;
@@ -736,10 +1108,15 @@ function DbsControlPage() {
           pendingChangesRef.current = dbsControlSubtractChanges(pendingChangesRef.current, conflictingChanges);
         }
         if (!pendingChangesRef.current) {
+          if (dismissedBatchId) {
+            await deleteDbsControlLocalSyncCommand(dismissedBatchId);
+            localSyncCommandsRef.current.delete(dismissedBatchId);
+          }
           pendingBatchIdRef.current = null;
           pendingSaveRequestIdsRef.current = [];
           if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
           retryTimerRef.current = null;
+          if (promoteQueuedCommandAfterCommit()) scheduleLocalSyncRetry(0);
         }
         try {
           const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
@@ -753,12 +1130,7 @@ function DbsControlPage() {
               baseState: latest.state,
             }, "*");
           }
-          iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_SYNC_STATUS",
-            status: pendingChangesRef.current ? "pending" : "synced",
-            pendingCount: pendingChangesRef.current ? 1 : 0,
-            updated_at: cloudUpdatedAtRef.current,
-          }, "*");
+          await postLocalSyncStatus(pendingChangesRef.current ? "pending" : "synced");
         } catch (error) {
           logSyncEvent("conflict_dismiss_refresh_error", {
             message: error instanceof Error ? error.message : "Falha ao atualizar a OS protegida.",
@@ -768,9 +1140,6 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_SAVE") {
-        // Every delta receives a stable request id.  Older iframe builds did
-        // not send one, which made each autosave look like a new command and
-        // made a network retry indistinguishable from a second user action.
         const requestId = typeof msg.requestId === "string" && msg.requestId.trim()
           ? msg.requestId.trim().slice(0, 160)
           : `autosave:${crypto.randomUUID()}`;
@@ -781,175 +1150,41 @@ function DbsControlPage() {
           }, "*");
           return;
         }
-        if (saveInFlightRef.current) pendingBatchIdRef.current = crypto.randomUUID();
-        if (!pendingBatchIdRef.current) pendingBatchIdRef.current = requestId ?? crypto.randomUUID();
-        pendingChangesRef.current = mergeDbsControlChanges(pendingChangesRef.current, msg.changes as Record<string, any[]>);
+        await hydrateLocalSyncQueue();
+        const incomingChanges = msg.changes as Record<string, any[]>;
+        if (saveInFlightRef.current) {
+          if (!queuedBatchIdRef.current) queuedBatchIdRef.current = requestId;
+          queuedChangesRef.current = mergeDbsControlChanges(queuedChangesRef.current, incomingChanges);
+          if (requestId && !queuedRequestIdsRef.current.includes(requestId)) queuedRequestIdsRef.current.push(requestId);
+          if (queuedBatchIdRef.current && queuedChangesRef.current) {
+            await persistLocalSyncCommand({
+              id: queuedBatchIdRef.current,
+              changes: queuedChangesRef.current,
+              requestIds: queuedRequestIdsRef.current,
+              status: "pending",
+            });
+          }
+          await postLocalSyncStatus("pending");
+          return;
+        }
+        if (!pendingBatchIdRef.current) pendingBatchIdRef.current = requestId;
+        pendingChangesRef.current = mergeDbsControlChanges(pendingChangesRef.current, incomingChanges);
         if (requestId && !pendingSaveRequestIdsRef.current.includes(requestId)) pendingSaveRequestIdsRef.current.push(requestId);
+        if (pendingBatchIdRef.current && pendingChangesRef.current) {
+          await persistLocalSyncCommand({
+            id: pendingBatchIdRef.current,
+            changes: pendingChangesRef.current,
+            requestIds: pendingSaveRequestIdsRef.current,
+            status: "pending",
+          });
+        }
         if (!cloudReadyRef.current) {
-          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_SYNC_STATUS", status: "pending", pendingCount: 1 }, "*");
+          await postLocalSyncStatus("pending");
         }
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
           saveTimerRef.current = null;
-          const persist = async () => {
-            const changes = pendingChangesRef.current;
-            if (!changes) return;
-            const batchId = pendingBatchIdRef.current ?? crypto.randomUUID();
-            const requestIds = [...pendingSaveRequestIdsRef.current];
-            saveInFlightRef.current = true;
-            try {
-              if (!cloudReadyRef.current) {
-                if (retryAttemptRef.current < 3) {
-                  const delays = [5000, 15000, 45000];
-                  const delay = delays[retryAttemptRef.current++];
-                  logSyncEvent("save_retry_waiting_for_cloud", { attempt: retryAttemptRef.current, delayMs: delay });
-                  if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-                  retryTimerRef.current = setTimeout(() => {
-                    retryTimerRef.current = null;
-                    retryPendingSaveRef.current?.();
-                  }, delay);
-                }
-                return;
-              }
-              // A RPC relacional é a confirmação da gravação. Não bloqueie o ACK
-              // esperando uma hidratação completa do estado (que pode consultar
-              // milhares de OS e storage). O técnico precisa saber imediatamente
-              // que a intenção foi aceita; a atualização visual vem em segundo
-              // plano e nunca transforma uma gravação confirmada em erro.
-              const result = await withDbsControlTransientRetry(() =>
-                applyDbsControlDelta({ data: { requestId: batchId, changes } }),
-              );
-              const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
-              const hasConflict = conflicts.length > 0;
-              const conflictingChanges = hasConflict
-                ? dbsControlSelectConflictingChanges(changes, conflicts)
-                : null;
-              const committedChanges = hasConflict
-                ? dbsControlSubtractChanges(changes, conflictingChanges)
-                : changes;
-              // Remove only what this batch committed. A second edit may have
-              // arrived while the RPC was in flight and must remain queued.
-              if (pendingChangesRef.current === changes) {
-                pendingChangesRef.current = conflictingChanges;
-              } else if (pendingChangesRef.current) {
-                pendingChangesRef.current = dbsControlSubtractChanges(pendingChangesRef.current, committedChanges);
-              }
-              pendingBatchIdRef.current = pendingChangesRef.current ? pendingBatchIdRef.current : null;
-              pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
-              // A version conflict is a deliberate stop for review, not a
-              // transient failure. Permanent validation/permission conflicts
-              // are also never retried automatically.
-              retryAttemptRef.current = 0;
-              if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-              retryTimerRef.current = null;
-              logSyncEvent(hasConflict ? "save_conflict" : "save_applied", {
-                requestCount: requestIds.length,
-                applied: Number(result.applied ?? 0),
-                conflicts: hasConflict ? result.conflicts.length : 0,
-              });
-              const autoResolvableConflict = hasConflict && conflicts.every(dbsControlConflictIsAutoResolvable);
-              const permanentConflict = conflicts.some(dbsControlConflictIsPermanent);
-              const resultMessage = hasConflict
-                ? autoResolvableConflict
-                  ? null
-                  : permanentConflict
-                  ? "A alteração ficou pendente de revisão. Nenhum dado foi descartado e não haverá novas tentativas automáticas."
-                  : `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
-                : null;
-              setCloudError(resultMessage);
-              const ackUpdatedAt = cloudUpdatedAtRef.current;
-              iframeRef.current?.contentWindow?.postMessage({
-                type: "DBS_CONTROL_SYNC_STATUS", status: hasConflict && !autoResolvableConflict ? "conflict" : (pendingChangesRef.current ? "pending" : "synced"),
-                pendingCount: pendingChangesRef.current ? 1 : 0, updated_at: ackUpdatedAt,
-                error: resultMessage,
-              }, "*");
-              requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
-                type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: !hasConflict,
-                updated_at: ackUpdatedAt, conflicts: result.conflicts ?? [],
-                appliedOrders: result.appliedOrders ?? [],
-                committedChanges,
-                pendingCount: pendingChangesRef.current ? 1 : 0,
-                error: resultMessage ?? undefined,
-              }, "*"));
-              if (hasConflict) {
-                iframeRef.current?.contentWindow?.postMessage({
-                  type: "DBS_CONTROL_SYNC_CONFLICT",
-                  conflicts: result.conflicts ?? [],
-                  changes,
-                  requestIds,
-                  permanent: permanentConflict,
-                  autoResolvable: autoResolvableConflict,
-                }, "*");
-              }
-
-              // Reconcilia o estado retornado pelo banco depois do ACK. Se essa
-              // leitura falhar ou demorar, a OS continua confirmada e o retry
-              // não é rearmado: a gravação já foi aplicada na transação.
-              if (!hasConflict) {
-                void (async () => {
-                  try {
-                    const latest = await Promise.race([
-                      getDbsControlCloudState(),
-                      new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
-                    ]);
-                    if (!latest?.state) {
-                      logSyncEvent("post_save_refresh_timeout");
-                      return;
-                    }
-                    cloudUpdatedAtRef.current = latest.updated_at ?? cloudUpdatedAtRef.current;
-                    if (!pendingChangesRef.current) {
-                      iframeRef.current?.contentWindow?.postMessage({
-                        type: "DBS_CONTROL_CLOUD_STATE", state: latest.state, baseState: latest.state,
-                      }, "*");
-                    }
-                  } catch (refreshError) {
-                    logSyncEvent("post_save_refresh_error", {
-                      message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a leitura após a gravação.",
-                    });
-                  }
-                })();
-              }
-            } catch (err) {
-              const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
-              logSyncEvent("save_error", { message, attempt: retryAttemptRef.current + 1 });
-              setCloudError(message);
-              iframeRef.current?.contentWindow?.postMessage({
-                type: "DBS_CONTROL_SYNC_STATUS", status: "error", pendingCount: pendingChangesRef.current ? 1 : 0, error: message,
-              }, "*");
-              requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
-                type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
-              }, "*"));
-              // Validation, permission and foreign-key errors are permanent for
-              // this intent. Retrying them only floods PostgREST and creates
-              // the impression that synchronization is unstable. Only network
-              // and gateway failures enter the backoff queue.
-              if (pendingChangesRef.current && isDbsControlTransientError(err)) {
-                const delays = [5000, 15000, 45000];
-                if (retryAttemptRef.current >= delays.length) return;
-                const delay = delays[retryAttemptRef.current++];
-                logSyncEvent("save_retry_scheduled", {
-                  attempt: retryAttemptRef.current,
-                  delayMs: delay,
-                  transient: isDbsControlTransientError(err),
-                  httpStatus: dbsControlHttpStatus(err) || null,
-                });
-                if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-                retryTimerRef.current = setTimeout(() => {
-                  retryTimerRef.current = null;
-                  retryPendingSaveRef.current?.();
-                }, delay);
-              }
-            } finally {
-              saveInFlightRef.current = false;
-            }
-          };
-          retryPendingSaveRef.current = (manual = false) => {
-            if (manual && retryTimerRef.current) clearTimeout(retryTimerRef.current);
-            if (manual) retryAttemptRef.current = 0;
-            retryTimerRef.current = null;
-            saveQueueRef.current = saveQueueRef.current.then(persist, persist);
-          };
-          retryPendingSaveRef.current();
+          retryPendingSaveRef.current?.();
         }, 450);
       }
     };
@@ -1100,6 +1335,7 @@ function DbsControlPage() {
       realtimeSubscriptionGeneration += 1;
       if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      if (localSyncRetryTimerRef.current) clearTimeout(localSyncRetryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);

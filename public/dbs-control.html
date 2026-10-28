@@ -3964,10 +3964,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             } catch (storageError) {
                 console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
             }
-            if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
+            if (window.parent !== window && !DBS_CONTROL_CLOUD_HYDRATING) {
                 // The optimistic base is advanced only from the ACK handler.
                 // Keeping the last confirmed version here is what makes a
                 // second edit use expected_version=2 instead of replaying 1.
+                if (!DBS_CONTROL_SYNC_BASE_STATE || typeof DBS_CONTROL_SYNC_BASE_STATE !== 'object') {
+                    const indicator = document.getElementById('dbs-sync-indicator');
+                    if (indicator) {
+                        indicator.textContent = 'Aguardando a base compartilhada';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    }
+                    return {};
+                }
                 const changes = dbsControlFilterBlockedChanges(buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState));
                 if (!dbsControlDeltaHasRows(changes)) return changes;
                 const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
@@ -3988,14 +3998,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             return {};
         }
 
-        // Conclusão de OS só é confirmada ao técnico depois da confirmação da nuvem.
+        // A conclusão de OS é confirmada na nuvem quando possível. Em perda
+        // temporária de conexão, a intenção/delta fica persistida no shell e o
+        // técnico recebe confirmação local explícita, sem reabrir a OS.
         async function saveStateAndConfirmCloud() {
-            if (!DBS_CONTROL_CLOUD_READY || window.parent === window) {
-                // Uma hidratação de leitura em segundo plano não pode bloquear uma
-                // conclusão. O delta usa a versão otimista e o ACK da RPC é a
-                // confirmação autoritativa; se houver concorrência, a API devolve
-                // conflito explícito para reconciliação.
-                throw new Error('A conexão com a nuvem não está pronta. A OS não foi confirmada; verifique a conexão e tente novamente.');
+            if (window.parent === window) {
+                throw new Error('O atendimento precisa estar aberto pelo ambiente autenticado do DBS CONTROL.');
             }
             registrarHistoricoOS();
             const persistableState = getPersistableState();
@@ -4007,6 +4015,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             } catch (storageError) {
                 console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
             }
+            if (!DBS_CONTROL_SYNC_BASE_STATE || typeof DBS_CONTROL_SYNC_BASE_STATE !== 'object') {
+                throw new Error('A base compartilhada ainda não foi carregada. A OS permanece no dispositivo; aguarde a conexão e tente novamente.');
+            }
             const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
             if (!dbsControlDeltaHasRows(changes)) return { ok: true, noop: true };
             // A confirmação síncrona é usada pelos fluxos críticos (concluir OS).
@@ -4017,6 +4028,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? window.crypto.randomUUID()
                 : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
+            const queueLocally = (reason) => {
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                    indicator.title = reason || 'A intenção foi preservada localmente e será reenviada automaticamente.';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
+                return { ok: true, queuedLocally: true, requestId, error: reason || undefined };
+            };
+            if (!DBS_CONTROL_CLOUD_READY || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                return queueLocally('A conexão com a nuvem está temporariamente indisponível.');
+            }
             const result = await new Promise((resolve, reject) => {
                 let settled = false;
                 const finish = (error, value) => {
@@ -4031,9 +4057,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const msg = event.data || {};
                     if (msg.type !== 'DBS_CONTROL_SAVE_ACK' || msg.requestId !== requestId) return;
                     if (msg.ok) finish(null, msg);
+                    else if (msg.queuedLocally) finish(null, { ...msg, ok: true, queuedLocally: true });
                     else finish(new Error(msg.error || 'A nuvem recusou a gravação da OS.'));
                 };
-                const timeout = setTimeout(() => finish(new Error('A nuvem não confirmou a gravação em 15 segundos. A OS permanece pendente de confirmação; atualize a conexão antes de tentar novamente.')), 15000);
+                const timeout = setTimeout(() => finish(null, {
+                    ok: true,
+                    queuedLocally: true,
+                    requestId,
+                    error: 'A nuvem demorou para responder. A intenção foi preservada localmente e será reenviada automaticamente.',
+                }), 15000);
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
             });
@@ -4041,6 +4073,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // delta to the optimistic base. Do not replace that base with the
             // whole live state: another mobile edit may have arrived while the
             // confirmation was in flight.
+            if (result?.queuedLocally) {
+                const indicator = document.getElementById('dbs-sync-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                    indicator.style.color = '#92400e';
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.borderColor = '#fde68a';
+                }
+            }
             return result;
         }
 
@@ -4321,8 +4362,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
                         if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
                     });
-                    DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    // A transient failure is not a rejection of the intent:
+                    // the shell already owns a durable local command and will
+                    // retry it with the same idempotency key. Keep the request
+                    // in the in-memory ledger until a later ACK removes it.
+                    if (!msg.queuedLocally) DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
                     DBS_CONTROL_HAS_PENDING_SAVE = true;
+                    const indicator = document.getElementById('dbs-sync-indicator');
+                    if (indicator && msg.queuedLocally) {
+                        indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
+                        indicator.title = msg.error || 'A intenção permanece na fila local e será reenviada automaticamente.';
+                        indicator.style.color = '#92400e';
+                        indicator.style.background = '#fffbeb';
+                        indicator.style.borderColor = '#fde68a';
+                    }
                 }
                 return;
             }
@@ -4375,7 +4428,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         indicator.style.background = '#f0fdfa';
                         indicator.style.borderColor = '#99f6e4';
                     } else if (msg.status === 'pending') {
-                        indicator.textContent = String(msg.pendingCount || 1) + ' alterações não enviadas';
+                        indicator.textContent = 'Salvo no dispositivo · ' + String(msg.pendingCount || 1) + ' pendente(s)';
                         indicator.style.color = '#92400e';
                         indicator.style.background = '#fffbeb';
                         indicator.style.borderColor = '#fde68a';
@@ -7227,9 +7280,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const beforeCompletion = JSON.parse(JSON.stringify(os));
 
             try {
-                if (!DBS_CONTROL_CLOUD_READY) {
-                    throw new Error('A conexão com a nuvem ainda não está pronta. Aguarde o indicador Sincronizado e tente novamente.');
-                }
                 setProgress('Capturando localização...');
                 const location = await capturarGeolocalizacaoOSMobile(osId);
                 const beforeFile = beforeInput?.files?.[0] || null;
@@ -7294,12 +7344,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     : null;
 
                 setProgress(atendimentoStatus === 'concluida' ? 'Confirmando OS na nuvem...' : 'Registrando resultado na nuvem...');
-                await saveStateAndConfirmCloud();
+                const saveResult = await saveStateAndConfirmCloud();
                 DBS_SIGNATURE_DRAFTS.delete(String(osId));
                 renderizarTudo();
-                alert(atendimentoStatus === 'concluida'
-                    ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`
-                    : `OS ${osId} registrada como "${atendimentoStatusLabel}" e confirmada na nuvem. A administração já pode acompanhar o próximo passo.`);
+                const queuedLocally = saveResult?.queuedLocally === true;
+                alert(queuedLocally
+                    ? `OS ${osId} registrada como "${atendimentoStatusLabel}" neste dispositivo. A sincronização será concluída automaticamente quando a conexão voltar.`
+                    : atendimentoStatus === 'concluida'
+                        ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`
+                        : `OS ${osId} registrada como "${atendimentoStatusLabel}" e confirmada na nuvem. A administração já pode acompanhar o próximo passo.`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 const currentIndex = ERP_STATE.ordens.findIndex(order => String(order?.id) === String(osId));

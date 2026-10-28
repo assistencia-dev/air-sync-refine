@@ -8,6 +8,7 @@ const worker = fs.readFileSync("supabase/functions/dbs-control-outbox-worker/ind
 const workflow = fs.readFileSync(".github/workflows/dbs-control-outbox-worker.yml", "utf8");
 const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf8");
 const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
+const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
@@ -27,6 +28,9 @@ assert.match(route, /removeChannel\(existing\)/, "Canais duplicados precisam ser
 assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em uma fila de retry.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
+assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
+assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar a mesma intenção simultaneamente.");
+assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
 assert.match(route, /Only network\n\s*\/\/ and gateway failures enter the backoff queue|Only network and gateway failures enter the backoff queue/, "Erros permanentes não podem entrar em retry infinito.");
 assert.match(iframe, /DBS_CONTROL_PENDING_SAVE_REQUESTS/, "O iframe precisa rastrear ACKs de cada delta.");
 assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pode avançar depois da confirmação relacional.");
@@ -36,6 +40,11 @@ assert.match(iframe, /dbsControlIsCompletedOrder/, "O delta não pode reenviar O
 assert.match(functions, /resolveDbsControlWorkOrderLegacyMap/, "OS legadas precisam ser resolvidas pelo vínculo legado→UUID antes do upsert.");
 assert.match(functions, /work_order_create:/, "Criação de OS nova precisa de uma idempotência estável por intenção local.");
 assert.match(functions, /entity_type: "work_order"/, "Novas OS precisam registrar o vínculo legado para evitar duplicação após reload.");
+assert.match(localSync, /dbs-control-local-sync/, "A fila local precisa ter um armazenamento nomeado e versionado.");
+assert.match(localSync, /requestIds/, "A fila local precisa preservar as chaves idempotentes da intenção.");
+assert.match(localSync, /recoverExpiredDbsControlLocalSyncCommands/, "Uma sessão interrompida precisa recuperar leases expirados sem descartar deltas.");
+assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação local explícita quando a nuvem estiver temporariamente indisponível.");
+assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));
