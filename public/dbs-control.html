@@ -3798,6 +3798,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 nextRows.forEach((row, index) => {
                     const identity = dbsControlDeltaIdentity(row, key, index);
                     const previousRow = previousById.get(identity);
+                    // OS assinada/concluída é imutável no banco. Diferenças de
+                    // hidratação entre o formato legado e o relacional não
+                    // podem transformar uma simples abertura da tela em uma
+                    // tentativa de regravar OS concluídas.
+                    if (key === 'ordens' && previousRow && dbsControlIsCompletedOrder(previousRow)) return;
                     if (!previousRow || dbsControlStableStringify(dbsControlDeltaRecord(previousRow, key)) !== dbsControlStableStringify(dbsControlDeltaRecord(row, key))) {
                         changedRows.push(dbsControlDeltaRecord(row, key));
                     }
@@ -3809,6 +3814,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function dbsControlDeltaHasRows(changes) {
             return changes && Object.values(changes).some(rows => Array.isArray(rows) && rows.length > 0);
+        }
+
+        function dbsControlIsCompletedOrder(row) {
+            const status = String(row?.status ?? row?.situacao ?? row?.statusOS ?? '')
+                .trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return ['concluida', 'concluido', 'completed', 'complete'].includes(status);
         }
 
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
@@ -4391,6 +4402,24 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
                     if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
                 });
+                const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+                const completedOnly = conflicts.length > 0 && conflicts.every(conflict =>
+                    String(conflict?.code || '').trim() === 'DBS_OS_COMPLETED_LOCKED');
+                if (completedOnly || msg.autoResolvable === true) {
+                    // A concluded/signed OS is intentionally immutable. There
+                    // is nothing for the operator to reconcile: discard only
+                    // this stale local intent and reload the canonical row.
+                    conflicts.forEach(conflict => {
+                        const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                        if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.delete(identity);
+                    });
+                    DBS_CONTROL_HAS_PENDING_SAVE = false;
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.clear();
+                    const banner = document.getElementById('dbs-control-conflict-banner');
+                    if (banner) banner.remove();
+                    window.parent.postMessage({ type: 'DBS_CONTROL_DISMISS_CONFLICT', conflicts }, '*');
+                    return;
+                }
                 showDbsControlConflictBanner(msg.conflicts || []);
                 return;
             }

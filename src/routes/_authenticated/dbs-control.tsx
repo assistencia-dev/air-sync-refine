@@ -56,6 +56,10 @@ function dbsControlConflictIsPermanent(conflict: unknown) {
   return DBS_CONTROL_PERMANENT_CONFLICT_CODES.has(dbsControlConflictCode(conflict));
 }
 
+function dbsControlConflictIsAutoResolvable(conflict: unknown) {
+  return dbsControlConflictCode(conflict) === "DBS_OS_COMPLETED_LOCKED";
+}
+
 function dbsControlRowIdentity(row: any) {
   return String(row?.id ?? row?.protocolo ?? row?.protocol ?? row?.numero ?? row?.codigo ?? row?.sku ?? row?.email ?? "").trim().toLocaleLowerCase("pt-BR");
 }
@@ -723,6 +727,46 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_DISMISS_CONFLICT") {
+        const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+        const conflictingChanges = dbsControlSelectConflictingChanges(pendingChangesRef.current, conflicts);
+        if (pendingChangesRef.current === conflictingChanges || conflictingChanges === null) {
+          pendingChangesRef.current = conflictingChanges ? null : pendingChangesRef.current;
+        } else {
+          pendingChangesRef.current = dbsControlSubtractChanges(pendingChangesRef.current, conflictingChanges);
+        }
+        if (!pendingChangesRef.current) {
+          pendingBatchIdRef.current = null;
+          pendingSaveRequestIdsRef.current = [];
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+        try {
+          const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          cloudReadyRef.current = true;
+          cloudUpdatedAtRef.current = latest?.updated_at ?? cloudUpdatedAtRef.current;
+          setCloudError(null);
+          if (latest?.state) {
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_CLOUD_STATE",
+              state: latest.state,
+              baseState: latest.state,
+            }, "*");
+          }
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SYNC_STATUS",
+            status: pendingChangesRef.current ? "pending" : "synced",
+            pendingCount: pendingChangesRef.current ? 1 : 0,
+            updated_at: cloudUpdatedAtRef.current,
+          }, "*");
+        } catch (error) {
+          logSyncEvent("conflict_dismiss_refresh_error", {
+            message: error instanceof Error ? error.message : "Falha ao atualizar a OS protegida.",
+          });
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_SAVE") {
         // Every delta receives a stable request id.  Older iframe builds did
         // not send one, which made each autosave look like a new command and
@@ -803,16 +847,19 @@ function DbsControlPage() {
                 applied: Number(result.applied ?? 0),
                 conflicts: hasConflict ? result.conflicts.length : 0,
               });
+              const autoResolvableConflict = hasConflict && conflicts.every(dbsControlConflictIsAutoResolvable);
               const permanentConflict = conflicts.some(dbsControlConflictIsPermanent);
               const resultMessage = hasConflict
-                ? permanentConflict
+                ? autoResolvableConflict
+                  ? null
+                  : permanentConflict
                   ? "A alteração ficou pendente de revisão. Nenhum dado foi descartado e não haverá novas tentativas automáticas."
                   : `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
                 : null;
               setCloudError(resultMessage);
               const ackUpdatedAt = cloudUpdatedAtRef.current;
               iframeRef.current?.contentWindow?.postMessage({
-                type: "DBS_CONTROL_SYNC_STATUS", status: hasConflict ? "conflict" : (pendingChangesRef.current ? "pending" : "synced"),
+                type: "DBS_CONTROL_SYNC_STATUS", status: hasConflict && !autoResolvableConflict ? "conflict" : (pendingChangesRef.current ? "pending" : "synced"),
                 pendingCount: pendingChangesRef.current ? 1 : 0, updated_at: ackUpdatedAt,
                 error: resultMessage,
               }, "*");
@@ -831,6 +878,7 @@ function DbsControlPage() {
                   changes,
                   requestIds,
                   permanent: permanentConflict,
+                  autoResolvable: autoResolvableConflict,
                 }, "*");
               }
 
