@@ -1326,7 +1326,11 @@ async function persistDbsControlMasterDeltas(
   return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied };
 }
 
-function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persistDbsControlMasterDeltas> extends Promise<infer T> ? T : never) {
+function buildDbsControlWorkOrderPatch(
+  order: any,
+  maps: ReturnType<typeof persistDbsControlMasterDeltas> extends Promise<infer T> ? T : never,
+  validEmployeeIds?: Set<string>,
+) {
   const status = normalizeDbsStatus(order?.status).replace(/\s+/g, "_");
   const normalizedStatus = status === "concluida" || status === "concluido" ? "concluida"
     : status === "concluida_com_pendencia" || status === "pendencia" ? "concluida_com_pendencia"
@@ -1339,7 +1343,22 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     : status || "aberta";
   const rawClientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
   const rawSiteId = String(order?.siteId ?? order?.localId ?? order?.site_id ?? "").trim();
-  const rawEmployeeId = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.tecnicoId ?? "").trim();
+  const rawEmployeeId = String(
+    order?.employeeId
+      ?? order?.employee_id
+      ?? order?.assignedEmployeeId
+      ?? order?.assigned_employee_id
+      ?? order?.tecnicoId
+      ?? "",
+  ).trim();
+  // A snapshot legado pode carregar um UUID de RH que já não existe nesta
+  // base. Nunca o envie cegamente para a FK: em uma OS nova isso vira uma OS
+  // sem responsável; em uma atualização, a ausência do campo preserva o
+  // responsável canônico que já está no banco.
+  const canonicalEmployeeId = isDbsControlUuid(rawEmployeeId)
+    && (!validEmployeeIds || validEmployeeIds.has(rawEmployeeId))
+    ? rawEmployeeId
+    : null;
   const rawServiceId = String(order?.servicoId ?? order?.service_id ?? "").trim();
   const signaturePath = String(order?.assinaturaStoragePath ?? order?.assinatura_path ?? order?.signature_path ?? "").trim();
   // O formulário legado usa string vazia para campos de data não preenchidos.
@@ -1359,7 +1378,7 @@ function buildDbsControlWorkOrderPatch(order: any, maps: ReturnType<typeof persi
     protocolo: String(order?.protocolo ?? order?.protocol ?? order?.numero ?? "").trim(),
     client_id: maps.clientMap.get(rawClientId) ?? (isDbsControlUuid(rawClientId) ? rawClientId : null),
     site_id: maps.siteMap.get(rawSiteId) ?? (isDbsControlUuid(rawSiteId) ? rawSiteId : null),
-    assigned_employee_id: isDbsControlUuid(rawEmployeeId) ? rawEmployeeId : null,
+    ...(canonicalEmployeeId ? { assigned_employee_id: canonicalEmployeeId } : {}),
     service_id: maps.serviceMap.get(rawServiceId) ?? (isDbsControlUuid(rawServiceId) ? rawServiceId : null),
     type: String(order?.tipo ?? order?.type ?? "corretiva").toLowerCase(),
     priority: String(order?.prioridade ?? order?.priority ?? "normal").toLowerCase(),
@@ -1432,6 +1451,27 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       }
     }
     const maps = await persistDbsControlMasterDeltas(changes, user);
+    const rawEmployeeIds = [...new Set(
+      (changes.ordens ?? [])
+        .map((order: any) => String(
+          order?.employeeId
+            ?? order?.employee_id
+            ?? order?.assignedEmployeeId
+            ?? order?.assigned_employee_id
+            ?? order?.tecnicoId
+            ?? "",
+        ).trim())
+        .filter((id) => isDbsControlUuid(id)),
+    )];
+    let validEmployeeIds = new Set<string>();
+    if (rawEmployeeIds.length) {
+      const employees = await supabaseAdmin
+        .from("rh_employees")
+        .select("id")
+        .in("id", rawEmployeeIds);
+      if (employees.error) throw new Error(employees.error.message);
+      validEmployeeIds = new Set((employees.data ?? []).map((row: any) => String(row.id)));
+    }
     if (user.role_key === "COLABORADOR" && collaboratorScope) {
       const collaboratorClientMap = await resolveCollaboratorClientIdMap(scope.scopeKey, changes);
       collaboratorClientMap.forEach((canonicalId, rawId) => maps.clientMap.set(rawId, canonicalId));
@@ -1478,7 +1518,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
           if (mergedObservation.observacao) orderForPatch = { ...order, observacao: mergedObservation.observacao };
         }
       }
-      const fullPatch = buildDbsControlWorkOrderPatch(orderForPatch, maps);
+      const fullPatch = buildDbsControlWorkOrderPatch(orderForPatch, maps, validEmployeeIds);
       const patch = user.role_key === "COLABORADOR"
         ? Object.fromEntries([
             "status", "started_at", "completed_at", "technical_opinion", "diagnostico",
