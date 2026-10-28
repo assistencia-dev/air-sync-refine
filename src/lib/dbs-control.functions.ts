@@ -1000,6 +1000,51 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
     return data ?? {};
   });
 
+/**
+ * Lightweight authoritative cursor used by the client fallback poller.
+ * Realtime is a latency optimization; this query is the correctness path when
+ * a mobile browser sleeps, a tab is suspended, or a websocket event is lost.
+ * It reads only one indexed row and never hydrates the full ERP state.
+ */
+export const getDbsControlSyncCursor = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsControlUser(context);
+    const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
+
+    let query = supabaseAdmin
+      .from("dbs_control_work_orders")
+      .select("id,updated_at,version")
+      .order("updated_at", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false })
+      .limit(1);
+
+    if (collaboratorEmployee) {
+      if (collaboratorScope?.baseId) {
+        const clientIds = collaboratorScope.baseActive === false
+          ? []
+          : (collaboratorScope.clientIds ?? []).map(String).filter(Boolean);
+        if (!clientIds.length) return { cursor: null, updated_at: null, version: null };
+        query = query.in("client_id", clientIds);
+      } else {
+        query = query.eq("assigned_employee_id", String(collaboratorEmployee.id));
+      }
+    }
+
+    const result = await query;
+    if (result.error) throw new Error(result.error.message);
+    const row = (result.data ?? [])[0] as { id?: string; updated_at?: string | null; version?: number | null } | undefined;
+    if (!row) return { cursor: null, updated_at: null, version: null };
+    const updatedAt = row.updated_at ?? null;
+    const version = Number(row.version ?? 0);
+    return {
+      cursor: `${String(updatedAt ?? "")}:${version}:${String(row.id ?? "")}`,
+      updated_at: updatedAt,
+      version,
+    };
+  });
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -1530,7 +1575,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     }
     const appliedOrderIds: string[] = [];
     const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
-    const conflicts: Array<{ protocol: string; message: string }> = [];
+    const conflicts: Array<{ code?: string; protocol: string; message: string }> = [];
     let applied = maps.applied;
 
     if (user.role_key === "COLABORADOR" && (changes.clientes?.length || changes.sites?.length || changes.locais?.length || changes.equipamentos?.length || changes.servicos?.length || changes.pecas?.length || changes.compras?.length || changes.orcamentos?.length)) {
@@ -1632,7 +1677,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       if (result.error) {
         const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
         if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND", "DBS_OS_ISSUE_FORBIDDEN", "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE", "DBS_OS_ISSUE_CLIENT_INACTIVE", "DBS_OS_ISSUE_BASE_INACTIVE", "DBS_OS_ISSUE_SITE_INVALID", "DBS_OS_ISSUE_COMPANY_MISMATCH"].includes(permanentCode)) {
-          conflicts.push({ protocol: orderLabel, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
+          conflicts.push({ code: permanentCode, protocol: orderLabel, message: permanentCode === "DBS_OS_COMPLETED_LOCKED"
             ? "A OS já foi concluída e seus dados assinados estão protegidos."
             : permanentCode === "DBS_OS_NOT_ASSIGNED"
               ? "A OS não está atribuída a este colaborador."
@@ -1654,7 +1699,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       const row: any = Array.isArray(result.data) ? result.data[0] : result.data;
       if (!row?.ok) {
         if (row?.status === "conflict") {
-          conflicts.push({ protocol: orderLabel, message: row.error_message || "Conflito de versão; recarregue para reconciliar." });
+          conflicts.push({ code: "DBS_OS_CONFLICT", protocol: orderLabel, message: row.error_message || "Conflito de versão; recarregue para reconciliar." });
           continue;
         }
         throw new Error(`Falha ao sincronizar a OS ${orderLabel}: ${row?.error_message || "operação rejeitada"}`);

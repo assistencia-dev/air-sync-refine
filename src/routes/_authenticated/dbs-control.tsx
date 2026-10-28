@@ -5,7 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -27,6 +27,79 @@ function isDbsControlTransientError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return [408, 425, 429, 502, 503, 504].includes(status)
     || /(timeout|timed out|timeout manager|gateway|failed to fetch|fetch failed|network|connection reset|temporarily unavailable|warp server error)/i.test(message);
+}
+
+const DBS_CONTROL_PERMANENT_CONFLICT_CODES = new Set([
+  "DBS_OS_CONFLICT",
+  "DBS_OS_COMPLETED_LOCKED",
+  "DBS_OS_FIELD_FORBIDDEN",
+  "DBS_OS_NOT_ASSIGNED",
+  "DBS_OS_STOCK_INSUFFICIENT",
+  "DBS_OS_PART_NOT_FOUND",
+  "DBS_OS_ISSUE_FORBIDDEN",
+  "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE",
+  "DBS_OS_ISSUE_CLIENT_INACTIVE",
+  "DBS_OS_ISSUE_BASE_INACTIVE",
+  "DBS_OS_ISSUE_SITE_INVALID",
+  "DBS_OS_ISSUE_COMPANY_MISMATCH",
+]);
+
+function dbsControlConflictCode(conflict: unknown) {
+  const item = conflict as { code?: unknown; error_code?: unknown; message?: unknown } | null;
+  const explicit = String(item?.code ?? item?.error_code ?? "").trim();
+  if (explicit) return explicit;
+  const message = String(item?.message ?? "");
+  return message.match(/DBS_OS_[A-Z_]+/)?.[0] ?? "DBS_OS_CONFLICT";
+}
+
+function dbsControlConflictIsPermanent(conflict: unknown) {
+  return DBS_CONTROL_PERMANENT_CONFLICT_CODES.has(dbsControlConflictCode(conflict));
+}
+
+function dbsControlRowIdentity(row: any) {
+  return String(row?.id ?? row?.protocolo ?? row?.protocol ?? row?.numero ?? row?.codigo ?? row?.sku ?? row?.email ?? "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function dbsControlOrderIdentity(row: any) {
+  return [row?.protocolo, row?.protocol, row?.numero, row?.id]
+    .map((value) => String(value ?? "").trim().toLocaleLowerCase("pt-BR"))
+    .find(Boolean) ?? "";
+}
+
+function dbsControlSelectConflictingChanges(changes: Record<string, any[]> | null, conflicts: any[]) {
+  if (!changes) return null;
+  const keys = new Set((conflicts ?? []).map((conflict) => String(conflict?.protocol ?? "").trim().toLocaleLowerCase("pt-BR")).filter(Boolean));
+  const selected: Record<string, any[]> = {};
+  for (const [key, rows] of Object.entries(changes)) {
+    if (!Array.isArray(rows)) continue;
+    if (key !== "ordens") {
+      // Master-data deltas are committed before an OS conflict is reported and
+      // must not be replayed with the same idempotency batch.
+      continue;
+    }
+    const matching = rows.filter((row) => {
+      const identity = dbsControlOrderIdentity(row);
+      return identity && keys.has(identity);
+    });
+    if (matching.length) selected[key] = matching;
+  }
+  return Object.keys(selected).length ? selected : null;
+}
+
+function dbsControlSubtractChanges(changes: Record<string, any[]> | null, excluded: Record<string, any[]> | null) {
+  if (!changes) return null;
+  if (!excluded) return changes;
+  const result: Record<string, any[]> = {};
+  for (const [key, rows] of Object.entries(changes)) {
+    if (!Array.isArray(rows)) continue;
+    const excludedRows = new Set((excluded[key] ?? []).map((row) => key === "ordens" ? dbsControlOrderIdentity(row) : dbsControlRowIdentity(row)).filter(Boolean));
+    const remaining = rows.filter((row) => {
+      const identity = key === "ordens" ? dbsControlOrderIdentity(row) : dbsControlRowIdentity(row);
+      return !identity || !excludedRows.has(identity);
+    });
+    if (remaining.length) result[key] = remaining;
+  }
+  return Object.keys(result).length ? result : null;
 }
 
 async function withDbsControlTransientRetry<T>(operation: () => Promise<T>) {
@@ -190,6 +263,7 @@ function DbsControlPage() {
   const retryPendingSaveRef = useRef<((manual?: boolean) => void) | null>(null);
   const cloudReadyRef = useRef(false);
   const cloudUpdatedAtRef = useRef<string | null>(null);
+  const syncCursorRef = useRef<string | null>(null);
   const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const employeeModeRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -650,9 +724,14 @@ function DbsControlPage() {
       }
 
       if (msg.type === "DBS_CONTROL_SAVE") {
-        const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
+        // Every delta receives a stable request id.  Older iframe builds did
+        // not send one, which made each autosave look like a new command and
+        // made a network retry indistinguishable from a second user action.
+        const requestId = typeof msg.requestId === "string" && msg.requestId.trim()
+          ? msg.requestId.trim().slice(0, 160)
+          : `autosave:${crypto.randomUUID()}`;
         if (!msg.changes || typeof msg.changes !== "object" || Array.isArray(msg.changes)) {
-          if (requestId) iframeRef.current?.contentWindow?.postMessage({
+          iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_SAVE_ACK", requestId, ok: false,
             error: "O cliente enviou um snapshot antigo. Atualize a tela para usar o salvamento relacional por deltas.",
           }, "*");
@@ -696,15 +775,26 @@ function DbsControlPage() {
               const result = await withDbsControlTransientRetry(() =>
                 applyDbsControlDelta({ data: { requestId: batchId, changes } }),
               );
-              const hasConflict = Array.isArray(result.conflicts) && result.conflicts.length > 0;
-              if (!hasConflict && pendingChangesRef.current === changes) {
-                pendingChangesRef.current = null;
-                pendingBatchIdRef.current = null;
-                pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
+              const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+              const hasConflict = conflicts.length > 0;
+              const conflictingChanges = hasConflict
+                ? dbsControlSelectConflictingChanges(changes, conflicts)
+                : null;
+              const committedChanges = hasConflict
+                ? dbsControlSubtractChanges(changes, conflictingChanges)
+                : changes;
+              // Remove only what this batch committed. A second edit may have
+              // arrived while the RPC was in flight and must remain queued.
+              if (pendingChangesRef.current === changes) {
+                pendingChangesRef.current = conflictingChanges;
+              } else if (pendingChangesRef.current) {
+                pendingChangesRef.current = dbsControlSubtractChanges(pendingChangesRef.current, committedChanges);
               }
-              // Em conflito, preserve the exact local delta in the parent queue until
-              // the operator explicitly reconciles it. This prevents the old version
-              // from being silently discarded after a rejected save.
+              pendingBatchIdRef.current = pendingChangesRef.current ? pendingBatchIdRef.current : null;
+              pendingSaveRequestIdsRef.current = pendingSaveRequestIdsRef.current.filter((id) => !requestIds.includes(id));
+              // A version conflict is a deliberate stop for review, not a
+              // transient failure. Permanent validation/permission conflicts
+              // are also never retried automatically.
               retryAttemptRef.current = 0;
               if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
               retryTimerRef.current = null;
@@ -713,8 +803,11 @@ function DbsControlPage() {
                 applied: Number(result.applied ?? 0),
                 conflicts: hasConflict ? result.conflicts.length : 0,
               });
+              const permanentConflict = conflicts.some(dbsControlConflictIsPermanent);
               const resultMessage = hasConflict
-                ? `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
+                ? permanentConflict
+                  ? "A alteração ficou pendente de revisão. Nenhum dado foi descartado e não haverá novas tentativas automáticas."
+                  : `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
                 : null;
               setCloudError(resultMessage);
               const ackUpdatedAt = cloudUpdatedAtRef.current;
@@ -727,6 +820,8 @@ function DbsControlPage() {
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: !hasConflict,
                 updated_at: ackUpdatedAt, conflicts: result.conflicts ?? [],
                 appliedOrders: result.appliedOrders ?? [],
+                committedChanges,
+                pendingCount: pendingChangesRef.current ? 1 : 0,
                 error: resultMessage ?? undefined,
               }, "*"));
               if (hasConflict) {
@@ -735,6 +830,7 @@ function DbsControlPage() {
                   conflicts: result.conflicts ?? [],
                   changes,
                   requestIds,
+                  permanent: permanentConflict,
                 }, "*");
               }
 
@@ -775,7 +871,11 @@ function DbsControlPage() {
               requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
                 type: "DBS_CONTROL_SAVE_ACK", requestId: id, ok: false, error: message,
               }, "*"));
-              if (pendingChangesRef.current && (isDbsControlTransientError(err) || retryAttemptRef.current < 3)) {
+              // Validation, permission and foreign-key errors are permanent for
+              // this intent. Retrying them only floods PostgREST and creates
+              // the impression that synchronization is unstable. Only network
+              // and gateway failures enter the backoff queue.
+              if (pendingChangesRef.current && isDbsControlTransientError(err)) {
                 const delays = [5000, 15000, 45000];
                 if (retryAttemptRef.current >= delays.length) return;
                 const delay = delays[retryAttemptRef.current++];
@@ -817,12 +917,12 @@ function DbsControlPage() {
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     let realtimeSubscriptionGeneration = 0;
     const refreshLatestCloudState = async (force = false) => {
-      if (disposed || saveTimerRef.current || refreshInFlight) return;
+      if (disposed || saveTimerRef.current || refreshInFlight) return false;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
         const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
-        if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
+        if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return false;
         // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
         // Para a administração, uma redução de contagem é reconciliada por identidade em vez de
         // bloquear a operação. Isso preserva OS locais e evita que um snapshot atrasado congele o despacho.
@@ -847,23 +947,28 @@ function DbsControlPage() {
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState, baseState: latestCloudState }, "*");
         }
         setCloudError(null);
+        return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.";
         logSyncEvent("realtime_recovery_error", { message });
         setCloudError(message);
+        return false;
       } finally {
         refreshInFlight = false;
       }
     };
     const subscribeToCanonicalTables = () => {
       if (disposed) return;
-      const channelName = "dbs-control-work-orders-realtime";
+      // Keep the topic owned by this mounted shell. Removing every channel with
+      // a shared name used to make a second tab/hot-reload disconnect the first.
+      const channelName = `dbs-control-work-orders-realtime:${crypto.randomUUID()}`;
       const subscriptionGeneration = ++realtimeSubscriptionGeneration;
       const previousChannel = realtimeChannel;
       realtimeChannel = null;
       if (previousChannel) void supabase.removeChannel(previousChannel);
+      const channelPrefix = "realtime:dbs-control-work-orders-realtime:";
       for (const existing of supabase.getChannels()) {
-        if (existing.topic === `realtime:${channelName}`) void supabase.removeChannel(existing);
+        if (existing.topic.startsWith(channelPrefix)) void supabase.removeChannel(existing);
       }
       realtimeChannel = supabase.channel(channelName)
         .on("postgres_changes", { event: "*", schema: "public", table: "dbs_control_work_orders" }, () => {
@@ -901,8 +1006,29 @@ function DbsControlPage() {
       // permanece false e o fallback nunca consegue recuperar a conexão sozinho.
       if (!disposed) void refreshLatestCloudState(true);
     }, 3000);
-    // Fallback periódico para eventos perdidos ou períodos sem conectividade.
-    const refreshTimer = setInterval(() => { void refreshLatestCloudState(true); }, 30000);
+    // Fallback periódico leve: primeiro lê um cursor indexado (1 linha). A
+    // hidratação completa só acontece quando o cursor mudou, evitando milhares
+    // de objetos e eliminando a dependência exclusiva do websocket.
+    let syncPollInFlight = false;
+    const pollSyncCursor = async () => {
+      if (disposed || syncPollInFlight) return;
+      syncPollInFlight = true;
+      try {
+        const cursorResult = await withDbsControlTransientRetry(() => getDbsControlSyncCursor());
+        const nextCursor = cursorResult?.cursor ?? null;
+        if (syncCursorRef.current === null) {
+          syncCursorRef.current = nextCursor;
+        } else if (nextCursor !== syncCursorRef.current) {
+          const refreshed = await refreshLatestCloudState(true);
+          if (refreshed) syncCursorRef.current = nextCursor;
+        }
+      } catch (err) {
+        logSyncEvent("sync_cursor_error", { message: err instanceof Error ? err.message : "Falha ao consultar o cursor de sincronização." });
+      } finally {
+        syncPollInFlight = false;
+      }
+    };
+    const refreshTimer = setInterval(() => { void pollSyncCursor(); }, 10000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refreshLatestCloudState();
     };
@@ -925,9 +1051,6 @@ function DbsControlPage() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       realtimeSubscriptionGeneration += 1;
       if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
-      for (const existing of supabase.getChannels()) {
-        if (existing.topic === "realtime:dbs-control-work-orders-realtime") void supabase.removeChannel(existing);
-      }
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };

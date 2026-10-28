@@ -6,6 +6,7 @@ const migration = fs.readFileSync("supabase/migrations/20261026170000_dbs_contro
 const worker = fs.readFileSync("supabase/functions/dbs-control-outbox-worker/index.ts", "utf8");
 const workflow = fs.readFileSync(".github/workflows/dbs-control-outbox-worker.yml", "utf8");
 const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf8");
+const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
@@ -24,6 +25,11 @@ assert.match(route, /dbs-control-work-orders-realtime/, "O cliente precisa mante
 assert.match(route, /removeChannel\(existing\)/, "Canais duplicados precisam ser removidos antes de assinar novamente.");
 assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em uma fila de retry.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
+assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
+assert.match(route, /Only network\n\s*\/\/ and gateway failures enter the backoff queue|Only network and gateway failures enter the backoff queue/, "Erros permanentes não podem entrar em retry infinito.");
+assert.match(iframe, /DBS_CONTROL_PENDING_SAVE_REQUESTS/, "O iframe precisa rastrear ACKs de cada delta.");
+assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pode avançar depois da confirmação relacional.");
+assert.match(iframe, /DBS_CONTROL_BLOCKED_SYNC_KEYS/, "Conflitos permanentes precisam ser bloqueados até a reconciliação explícita.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));

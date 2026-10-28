@@ -3758,6 +3758,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 : String(value).trim().toLocaleLowerCase('pt-BR');
         }
 
+        function dbsControlOrderSyncIdentity(item) {
+            const row = item && typeof item === 'object' ? item : {};
+            const value = row.protocolo ?? row.protocol ?? row.numero ?? row.id;
+            return value === null || value === undefined || String(value).trim() === ''
+                ? ''
+                : String(value).trim().toLocaleLowerCase('pt-BR');
+        }
+
         function dbsControlStableStringify(value) {
             if (Array.isArray(value)) return '[' + value.map(dbsControlStableStringify).join(',') + ']';
             if (value && typeof value === 'object') {
@@ -3804,6 +3812,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         let DBS_CONTROL_HAS_PENDING_SAVE = false;
+        // The shell acknowledges every delta with the same request id that was
+        // sent. Keeping this small in-memory ledger lets the iframe advance its
+        // optimistic base only after the relational transaction is confirmed.
+        // It also prevents a rejected version from being emitted again on every
+        // render/autosave cycle.
+        const DBS_CONTROL_PENDING_SAVE_REQUESTS = new Map();
+        const DBS_CONTROL_BLOCKED_SYNC_KEYS = new Set();
 
         function dbsControlClone(value) {
             try { return JSON.parse(JSON.stringify(value)); } catch (error) { return value; }
@@ -3821,6 +3836,68 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
             return persistableState;
+        }
+
+        function dbsControlFilterBlockedChanges(changes) {
+            if (!changes || typeof changes !== 'object') return changes;
+            const filtered = {};
+            Object.entries(changes).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const kept = key === 'ordens'
+                    ? rows.filter(row => !DBS_CONTROL_BLOCKED_SYNC_KEYS.has(dbsControlOrderSyncIdentity(row)))
+                    : rows;
+                if (kept.length) filtered[key] = kept;
+            });
+            return filtered;
+        }
+
+        function dbsControlApplyCommittedChanges(changes, appliedOrders) {
+            if (!changes || typeof changes !== 'object') return;
+            const committed = dbsControlClone(changes);
+            const applied = Array.isArray(appliedOrders) ? appliedOrders : [];
+            const base = dbsControlClone(DBS_CONTROL_SYNC_BASE_STATE || {});
+            Object.entries(committed).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const currentRows = Array.isArray(base[key]) ? base[key] : [];
+                const byIdentity = new Map(currentRows.map((row, index) => [dbsControlDeltaIdentity(row, key, index), row]));
+                rows.forEach(row => {
+                    const orderMatch = key === 'ordens'
+                        ? applied.find(item => String(item?.id || '') === String(row?.id || '')
+                            || (item?.protocol && String(item.protocol) === String(row?.protocolo || row?.protocol || row?.numero || '')))
+                        : null;
+                    const canonicalId = orderMatch?.id ? String(orderMatch.id) : String(row?.id || '');
+                    const canonicalProtocol = orderMatch?.protocol ? String(orderMatch.protocol) : '';
+                    const lookupKeys = [
+                        dbsControlDeltaIdentity(row, key, 0),
+                        canonicalId ? dbsControlDeltaIdentity({ id: canonicalId }, key, 0) : '',
+                        canonicalProtocol ? dbsControlDeltaIdentity({ protocolo: canonicalProtocol }, key, 0) : '',
+                    ].filter(Boolean);
+                    const existingKey = lookupKeys.find(identity => byIdentity.has(identity));
+                    const next = { ...(existingKey ? byIdentity.get(existingKey) : {}), ...(row || {}) };
+                    if (orderMatch) {
+                        next.id = canonicalId || next.id;
+                        if (canonicalProtocol) next.protocolo = canonicalProtocol;
+                        if (Number.isFinite(Number(orderMatch.version))) next.version = Number(orderMatch.version);
+                    }
+                    const nextKey = dbsControlDeltaIdentity(next, key, 0) || existingKey;
+                    if (existingKey && existingKey !== nextKey) byIdentity.delete(existingKey);
+                    if (nextKey) byIdentity.set(nextKey, next);
+                });
+                base[key] = Array.from(byIdentity.values());
+            });
+            DBS_CONTROL_SYNC_BASE_STATE = base;
+
+            // Keep the live form aligned with the canonical id/version returned
+            // by the RPC. Without this, the next autosave sends expected_version
+            // 1 forever even though the row is already at version 2+.
+            applied.forEach(item => {
+                const local = (ERP_STATE.ordens || []).find(order => String(order?.id || '') === String(item?.id || '')
+                    || (item?.protocol && String(order?.protocolo || order?.protocol || '') === String(item.protocol)));
+                if (!local) return;
+                if (item?.id) local.id = String(item.id);
+                if (item?.protocol) local.protocolo = String(item.protocol);
+                if (Number.isFinite(Number(item?.version))) local.version = Number(item.version);
+            });
         }
 
         function dbsControlDeleteLocator(os) {
@@ -3877,13 +3954,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
             }
             if (DBS_CONTROL_CLOUD_READY && !DBS_CONTROL_CLOUD_HYDRATING && window.parent !== window) {
-                const changes = buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState);
+                // The optimistic base is advanced only from the ACK handler.
+                // Keeping the last confirmed version here is what makes a
+                // second edit use expected_version=2 instead of replaying 1.
+                const changes = dbsControlFilterBlockedChanges(buildDbsControlDelta(DBS_CONTROL_SYNC_BASE_STATE, persistableState));
                 if (!dbsControlDeltaHasRows(changes)) return changes;
-                // Avança a base local de comparação somente depois de enfileirar o
-                // delta. Se a rede falhar, o pai mantém o lote e aplica retry idempotente.
-                DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(persistableState));
+                const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                    ? window.crypto.randomUUID()
+                    : 'autosave-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
                 DBS_CONTROL_HAS_PENDING_SAVE = true;
-                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes }, '*');
+                window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', requestId, changes }, '*');
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
                     indicator.textContent = 'Alterações não enviadas';
@@ -3924,6 +4005,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
                 ? window.crypto.randomUUID()
                 : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
             const result = await new Promise((resolve, reject) => {
                 let settled = false;
                 const finish = (error, value) => {
@@ -3944,16 +4026,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', changes, requestId }, '*');
             });
-            // O ACK já traz a versão retornada pela RPC. Atualize a cópia
-            // local antes de formar a próxima intenção para que uma segunda
-            // alteração não seja confundida com conflito por usar uma versão velha.
-            const appliedOrders = Array.isArray(result?.appliedOrders) ? result.appliedOrders : [];
-            appliedOrders.forEach(item => {
-                const localOrder = (ERP_STATE.ordens || []).find(order => String(order?.id) === String(item?.id));
-                if (localOrder && Number.isFinite(Number(item?.version))) localOrder.version = Number(item.version);
-            });
-            const confirmedState = getPersistableState();
-            DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(confirmedState));
+            // The global ACK handler has already applied only the committed
+            // delta to the optimistic base. Do not replace that base with the
+            // whole live state: another mobile edit may have arrived while the
+            // confirmation was in flight.
             return result;
         }
 
@@ -4203,6 +4279,43 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return { ...nextState, ordens: orders };
             };
 
+            if (msg.type === 'DBS_CONTROL_SAVE_ACK') {
+                const requestId = String(msg.requestId || '');
+                const pendingChanges = DBS_CONTROL_PENDING_SAVE_REQUESTS.get(requestId);
+                // A critical save has a dedicated promise listener as well; the
+                // global handler remains the single owner of the optimistic base.
+                if (msg.ok) {
+                    const committedChanges = msg.committedChanges || pendingChanges || {};
+                    dbsControlApplyCommittedChanges(committedChanges, msg.appliedOrders || []);
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    const hasMorePending = DBS_CONTROL_PENDING_SAVE_REQUESTS.size > 0 || Number(msg.pendingCount || 0) > 0;
+                    DBS_CONTROL_HAS_PENDING_SAVE = hasMorePending;
+                    if (!hasMorePending) {
+                        const indicator = document.getElementById('dbs-sync-indicator');
+                        if (indicator) {
+                            const time = msg.updated_at ? new Date(msg.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                            indicator.textContent = 'Sincronizado' + (time ? ' às ' + time : '');
+                            indicator.style.color = '#0f766e';
+                            indicator.style.background = '#f0fdfa';
+                            indicator.style.borderColor = '#99f6e4';
+                        }
+                    }
+                    persistDbsControlLocalStateOnly();
+                    renderizarTudo();
+                } else {
+                    // Keep the local intent for explicit reconciliation, but
+                    // block it from being emitted again on every autosave.
+                    const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+                    conflicts.forEach(conflict => {
+                        const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                        if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
+                    });
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    DBS_CONTROL_HAS_PENDING_SAVE = true;
+                }
+                return;
+            }
+
             if (msg.type === 'DBS_CONTROL_DELETE_WORK_ORDER_ACK') {
                 const requestId = String(msg.requestId || '');
                 const pending = DBS_CONTROL_PENDING_DELETES.get(requestId);
@@ -4239,7 +4352,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const retry = document.getElementById('dbs-sync-retry');
                 if (indicator) {
                     if (msg.status === 'synced') {
-                        DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        // A Realtime refresh can arrive while an ACK is still
+                        // in flight. Never let that read event erase a local
+                        // write that has not been acknowledged yet.
+                        if (DBS_CONTROL_PENDING_SAVE_REQUESTS.size === 0 && Number(msg.pendingCount || 0) === 0) {
+                            DBS_CONTROL_HAS_PENDING_SAVE = false;
+                        }
                         const time = msg.updated_at ? new Date(msg.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
                         indicator.textContent = 'Sincronizado' + (time ? ' às ' + time : '');
                         indicator.style.color = '#0f766e';
@@ -4269,18 +4387,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
             if (msg.type === 'DBS_CONTROL_SYNC_CONFLICT') {
+                (Array.isArray(msg.conflicts) ? msg.conflicts : []).forEach(conflict => {
+                    const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                    if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.add(identity);
+                });
                 showDbsControlConflictBanner(msg.conflicts || []);
                 return;
             }
             if (msg.type === 'DBS_CONTROL_CONFLICT_RECONCILED') {
                 const baseState = JSON.parse(JSON.stringify(msg.state && typeof msg.state === 'object' ? msg.state : {}));
                 const reconciledState = mergeDbsControlConflictState(baseState, msg.changes || {});
+                (Array.isArray(msg.conflicts) ? msg.conflicts : []).forEach(conflict => {
+                    const identity = String(conflict?.protocol || '').trim().toLocaleLowerCase('pt-BR');
+                    if (identity) DBS_CONTROL_BLOCKED_SYNC_KEYS.delete(identity);
+                });
                 const currentSession = ERP_STATE.sessionTecnicoLogado || null;
                 ERP_STATE = reconciledState;
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 DBS_CONTROL_CLOUD_READY = true;
                 DBS_CONTROL_HAS_PENDING_SAVE = false;
+                DBS_CONTROL_PENDING_SAVE_REQUESTS.clear();
                 // Compare the local draft with the fresh cloud version. The next
                 // save therefore uses the same intention with the new expected_version.
                 DBS_CONTROL_SYNC_BASE_STATE = baseState;
