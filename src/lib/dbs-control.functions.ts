@@ -136,7 +136,7 @@ async function getCollaboratorEmployee(userId: string) {
 
 async function getCollaboratorBaseScope(employee: any) {
   const baseId = String(employee?.dbs_control_base_id ?? "").trim();
-  if (!baseId) return { baseId: null, baseName: null, canIssueWorkOrders: false, clientIds: [] as string[] };
+  if (!baseId) return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[] };
   const [baseResult, linksResult] = await Promise.all([
     (supabaseAdmin as any).from("dbs_control_bases").select("id, company_id, name, status").eq("id", baseId).maybeSingle(),
     (supabaseAdmin as any).from("dbs_control_base_clients").select("client_id").eq("base_id", baseId),
@@ -144,7 +144,7 @@ async function getCollaboratorBaseScope(employee: any) {
   if (baseResult.error) throw new Error(baseResult.error.message);
   if (linksResult.error) throw new Error(linksResult.error.message);
   if (baseResult.data?.company_id && employee?.user_company_id && String(baseResult.data.company_id) !== String(employee.user_company_id)) {
-    return { baseId: null, baseName: null, canIssueWorkOrders: false, clientIds: [] as string[] };
+    return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[] };
   }
   // Status é normalizado para tolerar valores legados com caixa/espaços
   // diferentes sem relaxar a regra de base ativa.
@@ -155,8 +155,12 @@ async function getCollaboratorBaseScope(employee: any) {
       .filter(Boolean))]
     : [];
   return {
-    baseId: active ? baseId : null,
+    // Preserve the configured base ID even when it is inactive. The caller
+    // must be able to distinguish “no base configured” from “base disabled”
+    // and must not fall back to showing assigned OS from another scope.
+    baseId,
     baseName: active ? String(baseResult.data?.name ?? "").trim() : null,
+    baseActive: active,
     canIssueWorkOrders: Boolean(active && employee?.dbs_control_can_issue_work_orders),
     clientIds,
   };
@@ -177,7 +181,7 @@ function filterCollaboratorState(
   state: Record<string, unknown>,
   employeeId: string,
   loginEmail?: string | null,
-  scope: { clientIds?: string[]; canIssueWorkOrders?: boolean } = {},
+  scope: { baseId?: string | null; baseActive?: boolean; clientIds?: string[]; canIssueWorkOrders?: boolean } = {},
 ) {
   const normalized = normalizeState(state);
   const normalizedEmail = String(loginEmail ?? "").trim().toLowerCase();
@@ -189,6 +193,9 @@ function filterCollaboratorState(
 
   // employeeId é a referência canônica. tecnicoId continua sendo aceito para
   // preservar OS antigas que ainda não receberam o vínculo central do RH.
+  const hasBoundBase = Boolean(String(scope.baseId ?? "").trim());
+  const baseIsActive = scope.baseActive !== false;
+  const scopedClientIds = new Set((scope.clientIds ?? []).map((id) => String(id).trim()).filter(Boolean));
   const orders = (normalized.ordens as any[])
     .filter((order) =>
       !isWorkOrderHiddenFromCollaborator(order) && (
@@ -196,6 +203,14 @@ function filterCollaboratorState(
         technicianIds.has(String(order?.tecnicoId))
       )
     )
+    .filter((order) => {
+      // A collaborator with a configured base may only see OS whose client is
+      // explicitly linked to that base. An inactive base is an empty scope.
+      if (!hasBoundBase) return true;
+      if (!baseIsActive) return false;
+      const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+      return clientId.length > 0 && scopedClientIds.has(clientId);
+    })
     .map((order) => (
       String(order?.employeeId ?? "") === employeeId
         ? order
@@ -226,14 +241,22 @@ function filterCollaboratorState(
     tecnicos: technicians,
     ordens: orders,
     clientes: (normalized.clientes as any[]).filter((item) => clientIds.has(String(item?.id))),
-    equipamentos: (normalized.equipamentos as any[]).filter((item) =>
-      equipmentIds.has(String(item?.id)) || (scope.canIssueWorkOrders && clientIds.has(String(item?.clienteId ?? item?.client_id)))
-    ),
+    equipamentos: (normalized.equipamentos as any[]).filter((item) => {
+      const clientId = String(item?.clienteId ?? item?.client_id ?? "").trim();
+      if (hasBoundBase && (!baseIsActive || !scopedClientIds.has(clientId))) return false;
+      return equipmentIds.has(String(item?.id)) || (scope.canIssueWorkOrders && clientIds.has(clientId));
+    }),
     servicos: scope.canIssueWorkOrders
       ? (normalized.servicos as any[])
       : (normalized.servicos as any[]).filter((item) => serviceIds.has(String(item?.id))),
-    sites: (normalized.sites as any[]).filter((item) => clientIds.has(String(item?.clienteId ?? item?.client_id))),
-    locais: (normalized.locais as any[]).filter((item) => clientIds.has(String(item?.clienteId ?? item?.client_id))),
+    sites: (normalized.sites as any[]).filter((item) => {
+      const clientId = String(item?.clienteId ?? item?.client_id ?? "").trim();
+      return (!hasBoundBase || (baseIsActive && scopedClientIds.has(clientId))) && clientIds.has(clientId);
+    }),
+    locais: (normalized.locais as any[]).filter((item) => {
+      const clientId = String(item?.clienteId ?? item?.client_id ?? "").trim();
+      return (!hasBoundBase || (baseIsActive && scopedClientIds.has(clientId))) && clientIds.has(clientId);
+    }),
     pecas: (normalized.pecas as any[]).filter((item) => partsUsed.has(String(item?.id))),
     compras: [],
   };
@@ -293,6 +316,8 @@ function mergeDbsRecord(canonical: Record<string, unknown>, current: Record<stri
 
 type DbsControlHydrationScope = {
   employeeId?: string;
+  baseId?: string | null;
+  baseActive?: boolean;
   clientIds?: string[];
   canIssueWorkOrders?: boolean;
 };
@@ -313,6 +338,15 @@ async function fetchAllDbsControlWorkOrders(scope: DbsControlHydrationScope = {}
       .limit(pageSize);
 
     if (scope.employeeId) query = query.eq("assigned_employee_id", scope.employeeId);
+    if (scope.baseId) {
+      const scopedClientIds = (scope.baseActive === false ? [] : (scope.clientIds ?? []))
+        .map(String)
+        .filter(Boolean);
+      // The base scope is a server-side data boundary. Do not fetch an OS
+      // outside the linked client IDs and hope to hide it later in React.
+      if (!scopedClientIds.length) return { data: [], error: null };
+      query = query.in("client_id", scopedClientIds);
+    }
     if (cursor) query = query.gt("id", cursor);
 
     const { data, error } = await query;
@@ -347,14 +381,26 @@ async function hydrateDbsControlStateFromCanonicalDb(
   const scopedEmployeeId = String(collaboratorScope?.employeeId ?? "").trim();
   const isScopedCollaborator = Boolean(scopedEmployeeId);
   const ordersResult = await fetchAllDbsControlWorkOrders(
-    isScopedCollaborator ? { employeeId: scopedEmployeeId } : {},
+    isScopedCollaborator
+      ? {
+          employeeId: scopedEmployeeId,
+          baseId: collaboratorScope?.baseId ?? null,
+          baseActive: collaboratorScope?.baseActive,
+          clientIds: collaboratorScope?.clientIds ?? [],
+        }
+      : {},
   );
   if (ordersResult.error) throw new Error(ordersResult.error.message);
   const orderRows = ordersResult.data ?? [];
   const scopedClientIds = isScopedCollaborator
     ? [...new Set([
         ...(collaboratorScope?.clientIds ?? []).map(String),
-        ...orderRows.map((row: any) => String(row?.client_id ?? "")).filter(Boolean),
+        // Legacy collaborators without a configured base can still execute
+        // only their assigned OS. Once a base exists, never expand the scope
+        // from OS rows returned by the database.
+        ...(!collaboratorScope?.baseId
+          ? orderRows.map((row: any) => String(row?.client_id ?? "")).filter(Boolean)
+          : []),
       ])]
     : [];
   const scopedOrderIds = isScopedCollaborator ? orderRows.map((row: any) => String(row.id)) : [];
@@ -987,6 +1033,8 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       collaboratorEmployee
         ? {
             employeeId: String(collaboratorEmployee.id),
+            baseId: collaboratorScope?.baseId ?? null,
+            baseActive: collaboratorScope?.baseActive,
             clientIds: collaboratorScope?.clientIds ?? [],
             canIssueWorkOrders: collaboratorScope?.canIssueWorkOrders ?? false,
           }
@@ -1022,6 +1070,7 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       collaboratorScope: {
         baseId: collaboratorScope!.baseId,
         baseName: collaboratorScope!.baseName,
+        baseActive: collaboratorScope!.baseActive,
         canIssueWorkOrders: collaboratorScope!.canIssueWorkOrders,
         clientCount: collaboratorScope!.clientIds.length,
       },
@@ -1507,12 +1556,19 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         const localOrderId = isDbsControlUuid(order?.id) ? String(order.id) : null;
         const currentOrder = localOrderId || protocol
           ? await supabaseAdmin.from("dbs_control_work_orders")
-            .select("id, version, assigned_employee_id, observation,servico_executado")
+            .select("id, version, assigned_employee_id, client_id, observation,servico_executado")
             .eq(localOrderId ? "id" : "protocol", localOrderId ?? protocol)
             .maybeSingle()
           : { data: null, error: null };
         if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${orderLabel}: ${currentOrder.error.message}`);
         currentCanonicalOrder = currentOrder.data;
+        if (currentOrder.data && collaboratorScope?.baseId) {
+          const boundClientIds = new Set((collaboratorScope.clientIds ?? []).map((id: string) => String(id).trim()));
+          const currentClientId = String(currentOrder.data.client_id ?? "").trim();
+          if (collaboratorScope.baseActive === false || !currentClientId || !boundClientIds.has(currentClientId)) {
+            throw new Error("DBS_OS_CLIENT_OUT_OF_SCOPE: esta OS pertence a um cliente fora da base do colaborador.");
+          }
+        }
         if (currentOrder.data) {
           const mergedObservation = mergeAppendOnlyCollaboratorObservations(
             { observacao: currentOrder.data.observation ?? currentOrder.data.servico_executado ?? "" },
@@ -1637,7 +1693,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     };
   });
 
-/** 
+/**
  * Exclui uma OS da operação sem reutilizar o autosave de snapshot/delta completo.
  *
  * A exclusão é sempre lógica: o RPC relacional grava apenas \`deleted_at\`, cria o

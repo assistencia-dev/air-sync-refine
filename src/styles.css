@@ -433,3 +433,19 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
   main .flex > button, main .flex > a { max-width: 100%; }
   main [class*="px-"] { padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); }
 }
+
+/* Contrato de ergonomia mobile aplicado como última camada aos módulos React. */
+@media (max-width: 767px) {
+  main button, main [role="button"], main input[type="button"], main input[type="submit"], main input[type="reset"] {
+    min-height: 48px;
+  }
+  main input, main select, main textarea {
+    min-height: 48px;
+    font-size: 16px !important;
+    line-height: 1.4;
+  }
+  main button:focus-visible, main a:focus-visible, main input:focus-visible, main select:focus-visible, main textarea:focus-visible {
+    outline: 3px solid rgba(23,105,209,.28);
+    outline-offset: 2px;
+  }
+}
