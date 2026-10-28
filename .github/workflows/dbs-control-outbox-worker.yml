@@ -4,11 +4,11 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  # Also run immediately after a production commit. This gives us a safe
+  # recovery path when GitHub's scheduled runners are delayed, while the
+  # transactional claim function keeps concurrent executions idempotent.
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/dbs-control-outbox-worker.yml"
-      - "scripts/run-dbs-control-outbox-worker.mjs"
 
 permissions:
   contents: read
