@@ -324,8 +324,8 @@ function DbsControlPage() {
               ordens: Array.isArray(importedState.ordens) ? importedState.ordens : [],
             },
           } });
-          const cloud = await getDbsControlCloudState();
-          if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state }, "*");
+          const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
           sendDashboardSummary();
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_MASTER_REFRESH_RESULT", ok: true, result }, "*");
         } catch (err) {
@@ -342,7 +342,7 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_READY") {
         sendDashboardSummary();
         try {
-          const cloud = await getDbsControlCloudState();
+          const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
@@ -361,11 +361,12 @@ function DbsControlPage() {
               tecnicos: [], clientes: [], equipamentos: [], pecas: [],
               servicos: [], compras: [], ordens: [], osHistorico: [],
             };
+            const bootstrapState = localHasData && localState ? localState : initialState;
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = null;
-            localRecoveryStateRef.current = initialState;
+            localRecoveryStateRef.current = bootstrapState;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: initialState, allowEmptyBaseBootstrap: true },
+              { type: "DBS_CONTROL_CLOUD_STATE", state: bootstrapState, baseState: initialState, allowEmptyBaseBootstrap: true },
               "*",
             );
             iframeRef.current?.contentWindow?.postMessage({
@@ -395,7 +396,7 @@ function DbsControlPage() {
             cloudReadyRef.current = true;
             cloudUpdatedAtRef.current = cloud?.updated_at ?? null;
             iframeRef.current?.contentWindow?.postMessage(
-              { type: "DBS_CONTROL_CLOUD_STATE", state: reconciledInitialState },
+              { type: "DBS_CONTROL_CLOUD_STATE", state: reconciledInitialState, baseState: cloudState },
               "*",
             );
             // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
@@ -533,8 +534,8 @@ function DbsControlPage() {
                   ordens: Array.isArray(importedState.ordens) ? importedState.ordens : [],
                 },
               } });
-              const cloud = await getDbsControlCloudState();
-              if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state }, "*");
+              const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+              if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
               result.summary = { ...result.summary, visible_in_dbs_control: true };
             }
             iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_FIELDCONTROL_RESULT", action, ok: true, result }, "*");
@@ -582,9 +583,9 @@ function DbsControlPage() {
           // visual da nuvem é uma etapa posterior e não deve transformar uma
           // exclusão concluída em erro para o usuário.
           try {
-            const cloud = await getDbsControlCloudState();
+            const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
             if (cloud?.state) {
-              iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
             }
             sendDashboardSummary();
           } catch (refreshError) {
@@ -754,7 +755,7 @@ function DbsControlPage() {
                     cloudUpdatedAtRef.current = latest.updated_at ?? cloudUpdatedAtRef.current;
                     if (!pendingChangesRef.current) {
                       iframeRef.current?.contentWindow?.postMessage({
-                        type: "DBS_CONTROL_CLOUD_STATE", state: latest.state,
+                        type: "DBS_CONTROL_CLOUD_STATE", state: latest.state, baseState: latest.state,
                       }, "*");
                     }
                   } catch (refreshError) {
@@ -814,12 +815,13 @@ function DbsControlPage() {
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    let realtimeSubscriptionGeneration = 0;
     const refreshLatestCloudState = async (force = false) => {
       if (disposed || saveTimerRef.current || refreshInFlight) return;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
-        const latest = await getDbsControlCloudState();
+        const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return;
         // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
         // Para a administração, uma redução de contagem é reconciliada por identidade em vez de
@@ -842,7 +844,7 @@ function DbsControlPage() {
         if (force || latest.updated_at !== cloudUpdatedAtRef.current) {
           logSyncEvent("canonical_reconciled", { forced: force, changed: latest.updated_at !== cloudUpdatedAtRef.current });
           cloudUpdatedAtRef.current = latest.updated_at;
-          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState }, "*");
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState, baseState: latestCloudState }, "*");
         }
         setCloudError(null);
       } catch (err) {
@@ -856,6 +858,10 @@ function DbsControlPage() {
     const subscribeToCanonicalTables = () => {
       if (disposed) return;
       const channelName = "dbs-control-work-orders-realtime";
+      const subscriptionGeneration = ++realtimeSubscriptionGeneration;
+      const previousChannel = realtimeChannel;
+      realtimeChannel = null;
+      if (previousChannel) void supabase.removeChannel(previousChannel);
       for (const existing of supabase.getChannels()) {
         if (existing.topic === `realtime:${channelName}`) void supabase.removeChannel(existing);
       }
@@ -867,7 +873,7 @@ function DbsControlPage() {
           void refreshLatestCloudState(true);
         })
         .subscribe((status) => {
-          if (disposed) return;
+          if (disposed || subscriptionGeneration !== realtimeSubscriptionGeneration) return;
           logSyncEvent("realtime_status", { status });
           if (status === "SUBSCRIBED") {
             void refreshLatestCloudState();
@@ -877,7 +883,7 @@ function DbsControlPage() {
             setCloudError("Realtime desconectado. Recuperação automática em andamento.");
             if (reconnectTimer) clearTimeout(reconnectTimer);
             reconnectTimer = setTimeout(() => {
-              if (disposed) return;
+              if (disposed || subscriptionGeneration !== realtimeSubscriptionGeneration) return;
               const previous = realtimeChannel;
               realtimeChannel = null;
               if (previous) void supabase.removeChannel(previous);
@@ -917,7 +923,11 @@ function DbsControlPage() {
       clearInterval(refreshTimer);
       clearTimeout(realtimeInitialFallbackTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      realtimeSubscriptionGeneration += 1;
       if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
+      for (const existing of supabase.getChannels()) {
+        if (existing.topic === "realtime:dbs-control-work-orders-realtime") void supabase.removeChannel(existing);
+      }
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
@@ -956,8 +966,8 @@ function DbsControlPage() {
   const employeeMode = !access.data.administrative;
   employeeModeRef.current = employeeMode;
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261027-os-clean-1`
-    : "/dbs-control.html?v=20261027-os-clean-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261028-sync-clean-2`
+    : "/dbs-control.html?v=20261028-sync-clean-2"
 
   if (employeeMode) {
     return (
