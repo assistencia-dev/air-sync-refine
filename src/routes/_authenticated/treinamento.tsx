@@ -127,6 +127,103 @@ const trainingSections = [
     tip: "Se a confirmação não aparecer, pare e consulte o estado do lançamento. Repetir várias vezes pode dificultar a conciliação.",
   },
   {
+    id: "cadastros",
+    label: "Usuários e clientes",
+    eyebrow: "Cadastro e permissões",
+    title: "Cadastrar cliente ou colaborador com o vínculo correto",
+    description:
+      "Roteiro completo para criar o acesso, registrar a pessoa e liberar somente o escopo necessário.",
+    icon: BookOpen,
+    accent: "#0891B2",
+    steps: [
+      [
+        "Preparar",
+        "Confirme se você está usando um acesso SUPER_ADMIN e reúna nome, e-mail, documento, empresa e unidade.",
+      ],
+      [
+        "Cadastrar cliente",
+        "Use Admin → Usuários vinculados → + Novo Acesso. Escolha Cliente e vincule uma empresa existente ou crie uma nova.",
+      ],
+      [
+        "Cadastrar colaborador",
+        "Registre primeiro a pessoa em RH → Funcionários → Novo funcionário; depois crie o login com o papel Colaborador.",
+      ],
+      [
+        "Definir escopo",
+        "No cadastro do funcionário, selecione a Base DBS, vincule os clientes da base e marque Permitir emitir OS quando autorizado.",
+      ],
+      [
+        "Vincular login",
+        "Em Acesso do funcionário, selecione o login COLABORADOR criado em Usuários vinculados e confirme o vínculo.",
+      ],
+      [
+        "Validar",
+        "Faça um teste de entrada, confira o nome/base e valide que o usuário enxerga somente os clientes autorizados.",
+      ],
+    ],
+    details: [
+      {
+        title: "A · Usuário de cliente / gestor",
+        bullets: [
+          "Abra o Painel Administrativo e entre em Usuários vinculados.",
+          "Clique em + Novo Acesso e preencha Nome completo, E-mail, CPF opcional, Papel e Senha temporária.",
+          "Para uma empresa que já existe, escolha Vincular a uma Rede/Empresa já existente e selecione Empresa e Unidade / Loja.",
+          "Para uma empresa nova, escolha Cliente Novo, informe Nome da Empresa/Cliente, CNPJ e, se necessário, Nome da Unidade.",
+          "Use Cliente para acesso de cliente, Gestor de conta para o responsável da rede e Gestor regional para o escopo regional.",
+          "Clique em Criar Acesso, copie as credenciais exibidas uma única vez e entregue por canal seguro.",
+        ],
+      },
+      {
+        title: "B · Cadastro mestre do colaborador",
+        bullets: [
+          "Entre em Admin → RH → Funcionários e clique em Novo funcionário.",
+          "Preencha Nome completo e Unidade / setor; depois complete CPF, telefone, cargo, admissão, jornada, salário e observações conforme a necessidade do RH.",
+          "A ficha mestre alimenta ponto, DP, folha, benefícios e o vínculo operacional do DBS CONTROL.",
+          "Salve o funcionário antes de liberar o acesso. Não use apenas um login solto sem cadastro RH.",
+          "Se o colaborador já existir, edite o registro em vez de criar uma segunda ficha; isso evita duplicidade de histórico e de ponto.",
+        ],
+      },
+      {
+        title: "C · Login e permissão de emissão de OS",
+        bullets: [
+          "Em Usuários vinculados → + Novo Acesso, escolha o papel Colaborador, informe nome, e-mail e senha temporária e crie o login.",
+          "Volte ao RH → Funcionários, abra Acesso do funcionário e selecione o login criado em Usuários vinculados.",
+          "Marque Acesso à Folha de Ponto se ele usará o ponto e Liberar DBS CONTROL para habilitar o módulo de OS.",
+          "No cadastro do funcionário, selecione uma Base operacional ativa. Sem base ativa, a emissão de OS permanece bloqueada.",
+          "Marque Permitir emitir OS somente quando necessário. Essa permissão força o colaborador como responsável e limita os clientes à base.",
+        ],
+      },
+      {
+        title: "D · Base, clientes e conferência",
+        bullets: [
+          "No RH → Funcionários → Bases DBS, crie a base com nome e código opcional.",
+          "Selecione quantos clientes forem necessários, filtre por nome/CNPJ e clique em Salvar base e vínculos.",
+          "A base precisa estar ativa e os clientes precisam existir no cadastro relacional do DBS CONTROL.",
+          "Para cadastrar o cliente operacional usado na OS, abra DBS CONTROL → Clientes e informe Razão Social/Nome, CNPJ/CPF, Endereço Completo e Pessoa de Contato.",
+          "Depois de vincular a base, teste o login do colaborador: o menu deve mostrar Emitir OS e o seletor deve listar somente clientes daquela base.",
+        ],
+      },
+      {
+        title: "E · Segurança e manutenção",
+        bullets: [
+          "Nunca coloque senha, chave de integração ou credencial em observações, planilhas ou mensagens públicas.",
+          "Entregue a senha temporária por canal seguro e peça a troca no primeiro acesso quando essa política estiver habilitada.",
+          "Para alterar empresa, unidade ou papel, edite o usuário e registre a mudança; não crie outro login para contornar uma configuração.",
+          "Para suspender, bloqueie o acesso ou inative o vínculo. O histórico de OS, ponto e auditoria deve permanecer preservado.",
+          "Após qualquer mudança, saia e entre novamente no aparelho para renovar permissões e limpar o cache de sessão.",
+        ],
+      },
+    ],
+    checklist: [
+      "Nome e e-mail não podem pertencer a outro acesso ativo sem uma decisão administrativa.",
+      "Cliente de portal, cliente operacional e empresa/unidade são vínculos diferentes; confira cada um no módulo correto.",
+      "Colaborador emissor precisa de: ficha RH ativa, login COLABORADOR, vínculo de acesso, DBS CONTROL liberado, base ativa e clientes vinculados.",
+      "Faça um teste real de login e emissão antes de entregar o aparelho para o campo.",
+      "Se o menu não aparecer, atualize a sessão depois de conferir todos os seis vínculos acima.",
+    ],
+    tip: "A ordem correta evita o problema mais comum do sistema: login criado sem funcionário, funcionário sem base ou base sem cliente vinculado. Cada etapa deve ser salva e conferida antes da próxima.",
+  },
+  {
     id: "sincronizacao",
     label: "Sincronização",
     eyebrow: "Confiabilidade",
@@ -422,6 +519,38 @@ function TrainingPage() {
                       <h4 className="mt-3 text-sm font-extrabold text-[#0B2745]">{label}</h4>
                       <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
                     </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {"details" in activeSection && (
+              <section className="mt-6">
+                <div className="mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-[#0891B2]" />
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-[#0B2745]">
+                    Detalhamento por cenário
+                  </h3>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {activeSection.details.map((detail) => (
+                    <section
+                      key={detail.title}
+                      className="rounded-2xl border border-cyan-100 bg-cyan-50/35 p-4"
+                    >
+                      <h4 className="text-sm font-black text-[#0B2745]">{detail.title}</h4>
+                      <ul className="mt-3 space-y-2.5">
+                        {detail.bullets.map((bullet) => (
+                          <li
+                            key={bullet}
+                            className="flex gap-2.5 text-xs leading-5 text-slate-600"
+                          >
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0891B2]" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ))}
                 </div>
               </section>

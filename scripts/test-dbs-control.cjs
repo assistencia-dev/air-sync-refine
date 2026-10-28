@@ -41,6 +41,9 @@ assert.match(adminSurface, /GraduationCap[\s\S]*?Dúvidas \/ Treinamento/, "A ce
 assert.match(trainingRoute, /createFileRoute\(["']\/_authenticated\/treinamento["']\)/, "A central de treinamento precisa ter uma rota autenticada própria.");
 assert.match(trainingRoute, /POP operacional DBS Air/, "O POP operacional deve estar disponível na central de treinamento.");
 assert.match(trainingRoute, /Sincronização/, "A central de treinamento deve documentar o fluxo de sincronização.");
+assert.match(trainingRoute, /Cadastrar cliente ou colaborador/, "O POP deve explicar o cadastro de clientes e colaboradores.");
+assert.match(trainingRoute, /Usuário de cliente \/ gestor/, "O POP deve explicar a criação de acessos de clientes e gestores.");
+assert.match(trainingRoute, /Bases DBS/, "O POP deve explicar o vínculo entre base operacional e clientes.");
 
 
 let parsedInlineScripts = 0;
