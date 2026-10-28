@@ -977,30 +977,36 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
     if (user.role_key === "SUPER_ADMIN" || user.role_key === "ADMIN_OPERACIONAL") {
       return { enabled: true, employee: null, administrative: true };
     }
-    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+    const { data: employeeRows, error: employeeError } = await supabaseAdmin.from("rh_employees")
       .select("id, full_name, unit, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, is_active")
       .eq("ponto_portal_user_id", user.id)
       .eq("dbs_control_access_enabled", true)
       .eq("is_active", true)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .limit(1);
     if (employeeError) throw new Error(employeeError.message);
+    const employee = employeeRows?.[0] ?? null;
     let resolvedEmployee: any = employee;
     if (!resolvedEmployee) {
-      const { data: access, error: accessError } = await supabaseAdmin.from("rh_employee_access")
+      const { data: accessRows, error: accessError } = await supabaseAdmin.from("rh_employee_access")
         .select("employee_id")
         .eq("user_id", user.id)
         .eq("access_enabled", true)
-        .maybeSingle();
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1);
       if (accessError) throw new Error(accessError.message);
+      const access = accessRows?.[0] ?? null;
       if (access?.employee_id) {
-        const fallback = await supabaseAdmin.from("rh_employees")
+        const fallbackResult = await supabaseAdmin.from("rh_employees")
           .select("id, full_name, unit, dbs_control_access_enabled, dbs_control_base_id, dbs_control_can_issue_work_orders, is_active")
           .eq("id", access.employee_id)
           .eq("dbs_control_access_enabled", true)
           .eq("is_active", true)
-          .maybeSingle();
-        if (fallback.error) throw new Error(fallback.error.message);
-        resolvedEmployee = fallback.data;
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (fallbackResult.error) throw new Error(fallbackResult.error.message);
+        resolvedEmployee = fallbackResult.data?.[0] ?? null;
       }
     }
     let baseName: string | null = null;
@@ -1011,8 +1017,12 @@ export const hasMyDbsControlAccess = createServerFn({ method: "GET" })
         .eq("id", resolvedEmployee.dbs_control_base_id)
         .maybeSingle();
       if (baseError) throw new Error(baseError.message);
-      const baseStatus = String(base?.status ?? "").trim().toLocaleLowerCase("pt-BR");
-      baseActive = baseStatus === "ativo";
+      const baseStatus = String(base?.status ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLocaleLowerCase("pt-BR");
+      baseActive = baseStatus === "ativo" || baseStatus === "active";
       // O nome é somente apresentação. A autorização depende do ID vinculado,
       // da existência da base e do seu estado ativo; uma base sem nome não
       // pode esconder a ferramenta nem interromper o fluxo autorizado.
