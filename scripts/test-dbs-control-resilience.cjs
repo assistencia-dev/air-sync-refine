@@ -9,6 +9,7 @@ const workflow = fs.readFileSync(".github/workflows/dbs-control-outbox-worker.ym
 const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf8");
 const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
 const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
+const referenceMigration = fs.readFileSync("supabase/migrations/20261028191111_dbs_control_reference_validation.sql", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
@@ -46,6 +47,14 @@ assert.match(iframe, /DBS_CONTROL_BLOCKED_SYNC_KEYS/, "Conflitos permanentes pre
 assert.match(iframe, /DBS_CONTROL_DISMISS_CONFLICT/, "OS concluída não pode bloquear a emissão de uma nova OS por causa de uma intenção stale.");
 assert.match(iframe, /dbsControlIsCompletedOrder/, "O delta não pode reenviar OS concluídas por diferenças de hidratação.");
 assert.match(functions, /resolveDbsControlWorkOrderLegacyMap/, "OS legadas precisam ser resolvidas pelo vínculo legado→UUID antes do upsert.");
+assert.match(functions, /DBS_OS_EMPLOYEE_NOT_FOUND/, "Uma referência de técnico inválida precisa virar rejeição operacional controlada, não HTTP 500.");
+assert.match(route, /DBS_OS_EMPLOYEE_NOT_FOUND/, "O painel precisa tratar a referência de técnico inválida como conflito permanente, sem retry infinito.");
+assert.equal((referenceMigration.match(/CREATE OR REPLACE FUNCTION public\.dbs_control_apply_work_order_delta/gi) || []).length, 1, "A migração de referência deve substituir a RPC uma única vez, sem duplicar o corpo da função.");
+assert.equal((referenceMigration.match(/jsonb_populate_record\(v_current, v_patch\)/g) || []).length, 1, "A migração deve manter um único caminho de atualização da OS.");
+assert.equal((referenceMigration.match(/jsonb_populate_record\(null::public\.dbs_control_work_orders/g) || []).length, 1, "A migração deve manter um único caminho de criação da OS.");
+assert.match(referenceMigration, /assigned_employee_id[\s\S]*?DBS_OS_EMPLOYEE_NOT_FOUND/, "A migração deve validar o formato do UUID do técnico antes do cast relacional.");
+assert.match(referenceMigration, /not exists \(\s*select 1 from public\.rh_employees/i, "A migração deve validar a existência do técnico na tabela relacional.");
+assert.match(referenceMigration, /revoke all on function public\.dbs_control_apply_work_order_delta\(jsonb\)/i, "A RPC endurecida deve manter ACL explícita.");
 assert.match(functions, /work_order_create:/, "Criação de OS nova precisa de uma idempotência estável por intenção local.");
 assert.match(functions, /entity_type: "work_order"/, "Novas OS precisam registrar o vínculo legado para evitar duplicação após reload.");
 assert.match(localSync, /dbs-control-local-sync/, "A fila local precisa ter um armazenamento nomeado e versionado.");

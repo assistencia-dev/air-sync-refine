@@ -48,6 +48,7 @@ const DBS_CONTROL_PERMANENT_CONFLICT_CODES = new Set([
   "DBS_OS_COMPLETED_LOCKED",
   "DBS_OS_FIELD_FORBIDDEN",
   "DBS_OS_NOT_ASSIGNED",
+  "DBS_OS_EMPLOYEE_NOT_FOUND",
   "DBS_OS_STOCK_INSUFFICIENT",
   "DBS_OS_PART_NOT_FOUND",
   "DBS_OS_ISSUE_FORBIDDEN",
@@ -89,6 +90,9 @@ function dbsControlUserFacingSyncMessage(error: unknown) {
   }
   if (/DBS_OS_CONFLICT|conflito|alterada em outro/i.test(raw)) {
     return "Esta OS foi atualizada em outro dispositivo. A alteração ficou disponível para reconciliação.";
+  }
+  if (/DBS_OS_EMPLOYEE_NOT_FOUND|técnico.*(não existe|não possui|indisponível)|funcionário.*(não existe|não possui|indisponível)/i.test(raw)) {
+    return "O técnico selecionado não está disponível no cadastro. Atualize a lista de colaboradores e tente novamente.";
   }
   return "Não foi possível sincronizar agora. A alteração foi preservada; tente novamente em instantes.";
 }
@@ -569,9 +573,12 @@ function DbsControlPage() {
           : changes;
         const autoResolvableConflict = hasConflict && conflicts.every(dbsControlConflictIsAutoResolvable);
         const permanentConflict = conflicts.some(dbsControlConflictIsPermanent);
+        const employeeReferenceConflict = conflicts.some((conflict) => dbsControlConflictCode(conflict) === "DBS_OS_EMPLOYEE_NOT_FOUND");
         const resultMessage = hasConflict
           ? autoResolvableConflict
             ? null
+            : employeeReferenceConflict
+              ? "O técnico selecionado não está disponível no cadastro. Atualize a lista de colaboradores e tente novamente."
             : permanentConflict
               ? "A alteração ficou pendente de revisão. Nenhum dado foi descartado e não haverá novas tentativas automáticas."
               : `Conflito de versão em ${result.conflicts.length} OS. Recarregue a tela para reconciliar sem sobrescrever dados.`
