@@ -38,6 +38,9 @@
       const group=input&&input.closest ? input.closest(".form-group") : null;
       if(group) group.remove();
     });
+    document.getElementById("os-select-site")?.closest(".dbs-site-field")?.remove();
+    document.getElementById("os-select-site")?.remove();
+    document.querySelectorAll(".dbs-site-field").forEach(group=>group.remove());
     const block=document.getElementById("dbs-os-extra-fields");
     const title=block&&block.querySelector ? block.querySelector("div:first-child") : null;
     if(title) title.textContent="Operação e prazo";
