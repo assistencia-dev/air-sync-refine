@@ -66,7 +66,26 @@ function dbsControlConflictIsPermanent(conflict: unknown) {
 }
 
 function dbsControlConflictIsAutoResolvable(conflict: unknown) {
-  return dbsControlConflictCode(conflict) === "DBS_OS_COMPLETED_LOCKED";
+  const code = dbsControlConflictCode(conflict);
+  const message = String((conflict as { message?: unknown } | null)?.message ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+  return code === "DBS_OS_COMPLETED_LOCKED"
+    || /já foi conclu[ií]da|dados assinados.*protegidos|os conclu[ií]da.*protegida/.test(message);
+}
+
+function dbsControlUserFacingSyncMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  if (/invalid api key|missing supabase environment|jwt|unauthorized/i.test(raw)) {
+    return "A conexão do ambiente precisa ser revisada. Os dados locais continuam preservados.";
+  }
+  if (isDbsControlTransientError(error)) {
+    return "Conexão instável. A alteração foi preservada e será reenviada automaticamente.";
+  }
+  if (/DBS_OS_CONFLICT|conflito|alterada em outro/i.test(raw)) {
+    return "Esta OS foi atualizada em outro dispositivo. A alteração ficou disponível para reconciliação.";
+  }
+  return "Não foi possível sincronizar agora. A alteração foi preservada; tente novamente em instantes.";
 }
 
 function dbsControlRowIdentity(row: any) {
@@ -631,7 +650,7 @@ function DbsControlPage() {
           lastError: message,
         });
         logSyncEvent("save_error", { message, attempt, transient, localQueue: true });
-        setCloudError(message);
+        setCloudError(dbsControlUserFacingSyncMessage(err));
         await postLocalSyncStatus(transient ? "pending" : "error");
         requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
           type: "DBS_CONTROL_SAVE_ACK",
@@ -654,6 +673,15 @@ function DbsControlPage() {
     };
 
     retryPendingSaveRef.current = (manual = false) => {
+      const activeBatchId = pendingBatchIdRef.current;
+      const activeCommand = activeBatchId ? localSyncCommandsRef.current.get(activeBatchId) : null;
+      // A permanent conflict must wait for the operator's explicit choice. A
+      // focus/online event must never resurrect it as an automatic retry.
+      if (activeCommand?.status === "conflict") {
+        retryTimerRef.current = null;
+        void postLocalSyncStatus("conflict");
+        return;
+      }
       if (manual) {
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         retryAttemptRef.current = 0;
@@ -678,14 +706,14 @@ function DbsControlPage() {
       const msg = event.data || {};
       if (msg.type === "DBS_CONTROL_UPLOAD_ATTACHMENT") {
         try {
-          const attachment = await uploadDbsControlOsAttachment({ data: {
-            orderId: String(msg.orderId || ""),
-            attachmentType: msg.attachmentType,
-            fileName: String(msg.fileName || "evidencia"),
-            contentType: String(msg.contentType || ""),
-            dataBase64: String(msg.dataBase64 || ""),
-            requestId: String(msg.requestId || ""),
-          } });
+          const attachment = await withDbsControlTransientRetry(() => uploadDbsControlOsAttachment({ data: {
+              orderId: String(msg.orderId || ""),
+              attachmentType: msg.attachmentType,
+              fileName: String(msg.fileName || "evidencia"),
+              contentType: String(msg.contentType || ""),
+              dataBase64: String(msg.dataBase64 || ""),
+              requestId: String(msg.requestId || ""),
+            } }));
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: true, attachment,
           }, window.location.origin);
@@ -856,11 +884,7 @@ function DbsControlPage() {
           setCloudError(null);
         } catch (err) {
           console.error("DBS Control cloud load:", err);
-          const rawMessage = err instanceof Error ? err.message : "Falha ao sincronizar o DBS CONTROL.";
-          const connectionFailure = /missing supabase environment|failed to fetch|network|fetch failed|timeout|timed out|connection|invalid api key|jwt|unauthorized|not found/i.test(rawMessage);
-          const message = connectionFailure
-            ? `AMBIENTE DESCONECTADO / VERIFIQUE AS VARIÁVEIS DE AMBIENTE (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e SUPABASE_URL/segredo do servidor). Detalhe: ${rawMessage}`
-            : rawMessage;
+          const message = dbsControlUserFacingSyncMessage(err);
           setCloudError(message);
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_LOCAL_RECOVERY" }, "*");
           iframeRef.current?.contentWindow?.postMessage({
@@ -1080,7 +1104,7 @@ function DbsControlPage() {
           await postLocalSyncStatus(pendingChangesRef.current ? "pending" : "synced");
         } catch (err) {
           const message = err instanceof Error ? err.message : "Não foi possível carregar a versão atual da OS.";
-          setCloudError(message);
+          setCloudError(dbsControlUserFacingSyncMessage(err));
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_SYNC_STATUS",
             status: "error",
@@ -1234,7 +1258,7 @@ function DbsControlPage() {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Falha ao atualizar as OS atribuídas.";
         logSyncEvent("realtime_recovery_error", { message });
-        setCloudError(message);
+        setCloudError(dbsControlUserFacingSyncMessage(err));
         return false;
       } finally {
         refreshInFlight = false;
@@ -1313,7 +1337,10 @@ function DbsControlPage() {
     };
     const refreshTimer = setInterval(() => { void pollSyncCursor(); }, 10000);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refreshLatestCloudState();
+      if (document.visibilityState === "visible") {
+        retryPendingSaveRef.current?.();
+        void refreshLatestCloudState();
+      }
     };
     const handleOnline = () => {
       logSyncEvent("network_online");
@@ -1386,10 +1413,9 @@ function DbsControlPage() {
     return (
       <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#f4f8fc]">
         {cloudError && (
-          <section role="alert" aria-live="polite" className="pointer-events-none absolute inset-x-3 top-3 z-20 rounded-xl border border-rose-200 bg-white/95 p-4 shadow-lg backdrop-blur">
-            <p className="text-sm font-bold text-rose-700">A sincronização automática do DBS CONTROL encontrou uma falha</p>
-            <p className="mt-1 break-words text-xs leading-5 text-slate-700">{cloudError}</p>
-            <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
+          <section role="status" aria-live="polite" className="pointer-events-none absolute inset-x-3 top-3 z-20 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 shadow-sm backdrop-blur">
+            <p className="text-xs font-bold text-amber-800">Sincronização em recuperação</p>
+            <p className="mt-0.5 break-words text-[11px] text-amber-900">{cloudError}</p>
           </section>
         )}
         <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
@@ -1402,7 +1428,7 @@ function DbsControlPage() {
       <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
-          {cloudError && <span role="alert" title={cloudError} className="rounded-full bg-rose-50 px-2 py-1 text-[9px] font-bold text-rose-700">Erro de sincronização</span>}
+          {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
         </div>
         <button
           type="button"
@@ -1413,10 +1439,9 @@ function DbsControlPage() {
         </button>
       </div>
       {cloudError && (
-        <section role="alert" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-rose-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-bold text-rose-700">A sincronização automática do DBS CONTROL encontrou uma falha</p>
-          <p className="mt-1 break-words text-xs leading-5 text-slate-700">{cloudError}</p>
-          <p className="mt-2 text-[11px] text-slate-500">A sincronização deve se recuperar automaticamente. Não exclua nem recadastre OS.</p>
+        <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+          <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
+          <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
         </section>
       )}
       <iframe ref={iframeRef} title="DBS CONTROL" src={src} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />

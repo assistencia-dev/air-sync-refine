@@ -32,6 +32,10 @@ assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila 
 assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar a mesma intenção simultaneamente.");
 assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
 assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
+assert.match(route, /dbsControlConflictIsAutoResolvable/, "Conflitos de OS concluída precisam ser reconhecidos mesmo quando o código legado veio incompleto.");
+assert.match(route, /dbsControlUserFacingSyncMessage/, "Falhas de infraestrutura não devem despejar detalhes técnicos no painel operacional.");
+assert.match(route, /withDbsControlTransientRetry\(\(\) => uploadDbsControlOsAttachment/, "Uploads de evidência precisam de retry transitório antes de falhar a conclusão.");
+assert.match(route, /activeCommand\?\.status === "conflict"/, "Eventos de foco/online não podem reabrir um conflito permanente automaticamente.");
 assert.match(route, /Only network\n\s*\/\/ and gateway failures enter the backoff queue|Only network and gateway failures enter the backoff queue/, "Erros permanentes não podem entrar em retry infinito.");
 assert.match(iframe, /DBS_CONTROL_PENDING_SAVE_REQUESTS/, "O iframe precisa rastrear ACKs de cada delta.");
 assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pode avançar depois da confirmação relacional.");
@@ -46,6 +50,7 @@ assert.match(localSync, /requestIds/, "A fila local precisa preservar as chaves 
 assert.match(localSync, /recoverExpiredDbsControlLocalSyncCommands/, "Uma sessão interrompida precisa recuperar leases expirados sem descartar deltas.");
 assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação local explícita quando a nuvem estiver temporariamente indisponível.");
 assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
+assert.match(iframe, /dbsControlConflictIsCompletedLocked/, "Conflitos históricos de OS concluída não podem bloquear a operação.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));
