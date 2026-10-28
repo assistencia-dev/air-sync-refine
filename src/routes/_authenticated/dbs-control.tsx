@@ -1378,11 +1378,24 @@ function DbsControlPage() {
   }
 
   if (access.isError) {
+    const accessErrorMessage = access.error instanceof Error ? access.error.message : "";
+    const accessErrorIsTransient = isDbsControlTransientError(access.error)
+      || /invalid api key|jwt|unauthorized|network|fetch failed/i.test(accessErrorMessage);
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
         <section role="alert" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm">
           <h1 className="text-xl font-black text-slate-900">Não foi possível verificar o acesso ao DBS CONTROL</h1>
-          <p className="mt-3 break-words text-sm text-slate-600">{access.error instanceof Error ? access.error.message : "Falha de conexão com o serviço de acesso."}</p>
+          <p className="mt-3 break-words text-sm text-slate-600">
+            {accessErrorIsTransient
+              ? "A conexão está temporariamente indisponível. Tente novamente; seus dados operacionais não foram alterados."
+              : "O serviço de acesso não respondeu corretamente. Tente novamente ou volte ao painel."}
+          </p>
+          {accessErrorMessage && (
+            <details className="mt-3 text-left text-[11px] text-slate-400">
+              <summary className="cursor-pointer select-none">Detalhes técnicos</summary>
+              <code className="mt-2 block break-words rounded-lg bg-slate-50 p-2">{accessErrorMessage}</code>
+            </details>
+          )}
           <button onClick={() => void access.refetch()} className="mt-5 min-h-11 rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white">Tentar novamente</button>
           <button onClick={() => navigate({ to: "/admin" })} className="ml-3 mt-5 min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700">Voltar ao painel</button>
         </section>
