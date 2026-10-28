@@ -51,10 +51,29 @@
     return true;
   }
 
+  function syncIssueVisibility() {
+    const params = new URLSearchParams(window.location.search);
+    const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
+    const issueItems = document.querySelectorAll('aside .nav-item[data-employee-issue-visible="true"]');
+    issueItems.forEach(item => {
+      item.hidden = !canIssue;
+      item.setAttribute('aria-hidden', canIssue ? 'false' : 'true');
+      item.style.setProperty('display', canIssue ? 'flex' : 'none', 'important');
+    });
+    document.body.classList.toggle('dbs-control-can-issue-os', canIssue);
+    const issueCta = document.getElementById('dbs-employee-issue-cta');
+    if (issueCta) {
+      issueCta.hidden = true;
+      issueCta.setAttribute('aria-hidden', 'true');
+    }
+    return canIssue;
+  }
+
   function install() {
     if (window.__dbsEmployeeNavigationInstalled) return;
     if (!document.body.classList.contains('dbs-control-employee-mode')) return;
     window.__dbsEmployeeNavigationInstalled = true;
+    syncIssueVisibility();
     document.addEventListener('click', function(event) {
       const item = event.target && event.target.closest ? event.target.closest('aside .nav-item') : null;
       if (!item) return;
@@ -82,6 +101,7 @@
     }, true);
     const dashboardNav = document.querySelector('aside .nav-item[data-employee-dashboard-visible="true"]');
     if (dashboardNav) activate('tab-dashboard', dashboardNav);
+    window.setTimeout(syncIssueVisibility, 0);
   }
 
   if (document.readyState === 'loading') {
