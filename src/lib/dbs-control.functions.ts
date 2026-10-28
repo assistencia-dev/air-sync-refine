@@ -1174,6 +1174,33 @@ async function resolveCollaboratorClientIdMap(
   return resolved;
 }
 
+async function resolveDbsControlWorkOrderLegacyMap(
+  scopeKey: string,
+  orders: any[],
+) {
+  const keys = [...new Set(orders.flatMap((order) => [
+    order?.id,
+    order?.protocolo,
+    order?.protocol,
+    order?.numero,
+  ]).map((value) => String(value ?? "").trim()).filter((value) => value && !isDbsControlUuid(value)))];
+  const resolved = new Map<string, string>();
+  if (!keys.length || !scopeKey) return resolved;
+  const result = await supabaseAdmin
+    .from("dbs_control_legacy_id_map")
+    .select("legacy_key, canonical_id")
+    .eq("scope_key", scopeKey)
+    .eq("entity_type", "work_order")
+    .in("legacy_key", keys);
+  if (result.error) throw new Error(result.error.message);
+  for (const row of result.data ?? []) {
+    const legacy = String((row as any).legacy_key ?? "").trim();
+    const canonical = String((row as any).canonical_id ?? "").trim();
+    if (legacy && isDbsControlUuid(canonical)) resolved.set(legacy, canonical);
+  }
+  return resolved;
+}
+
 function isDbsControlUuid(value: unknown) {
   return DBS_CONTROL_UUID_RE.test(String(value ?? ""));
 }
@@ -1576,6 +1603,24 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     const appliedOrderIds: string[] = [];
     const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
     const conflicts: Array<{ code?: string; protocol: string; message: string }> = [];
+    const workOrderLegacyMap = await resolveDbsControlWorkOrderLegacyMap(scope.scopeKey, changes.ordens ?? []);
+    const mappedCanonicalIds = [...new Set([...workOrderLegacyMap.values()])];
+    const canonicalWorkOrders = new Map<string, { id: string; protocol: string | null; version: number; status: string | null }>();
+    if (mappedCanonicalIds.length) {
+      const canonicalResult = await supabaseAdmin
+        .from("dbs_control_work_orders")
+        .select("id,protocol,protocolo,version,status")
+        .in("id", mappedCanonicalIds);
+      if (canonicalResult.error) throw new Error(canonicalResult.error.message);
+      for (const row of canonicalResult.data ?? []) {
+        canonicalWorkOrders.set(String((row as any).id), {
+          id: String((row as any).id),
+          protocol: String((row as any).protocol ?? (row as any).protocolo ?? "").trim() || null,
+          version: Number((row as any).version ?? 1),
+          status: String((row as any).status ?? "").trim().toLocaleLowerCase("pt-BR") || null,
+        });
+      }
+    }
     let applied = maps.applied;
 
     if (user.role_key === "COLABORADOR" && (changes.clientes?.length || changes.sites?.length || changes.locais?.length || changes.equipamentos?.length || changes.servicos?.length || changes.pecas?.length || changes.compras?.length || changes.orcamentos?.length)) {
@@ -1595,7 +1640,33 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       // protocolo ainda não existe. Para mensagens e logs usamos o id local
       // como rótulo transitório, mas nunca o persistimos como protocolo.
       const orderLabel = protocol || String(order?.id ?? `nova-${index + 1}`).trim();
-      let orderForPatch = order;
+      const legacyOrderKey = [order?.id, order?.protocolo, order?.protocol, order?.numero]
+        .map((value) => String(value ?? "").trim())
+        .find((value) => value && !isDbsControlUuid(value)) ?? "";
+      const mappedCanonicalId = [order?.id, order?.protocolo, order?.protocol, order?.numero]
+        .map((value) => workOrderLegacyMap.get(String(value ?? "").trim()))
+        .find(Boolean) ?? null;
+      const mappedCanonical = mappedCanonicalId ? canonicalWorkOrders.get(mappedCanonicalId) : null;
+      const isCompletedStatus = ["concluida", "concluída", "concluido", "concluído", "completed", "complete"]
+        .includes(String(order?.status ?? "").trim().toLocaleLowerCase("pt-BR"));
+      // A legacy completed row is a historical record, not a new emission.
+      // Never recreate it when the old browser cache is reconciled.
+      if (isCompletedStatus && !isDbsControlUuid(order?.id) && !mappedCanonical) {
+        continue;
+      }
+      if (mappedCanonical?.status && ["concluida", "concluída", "concluido", "concluído", "completed", "complete"]
+        .includes(mappedCanonical.status)) {
+        continue;
+      }
+      let orderForPatch = mappedCanonical
+        ? {
+            ...order,
+            id: mappedCanonical.id,
+            protocolo: mappedCanonical.protocol ?? order?.protocolo,
+            protocol: mappedCanonical.protocol ?? order?.protocol,
+            version: Number.isFinite(Number(order?.version)) ? Number(order.version) : mappedCanonical.version,
+          }
+        : order;
       let currentCanonicalOrder: any = null;
       if (user.role_key === "COLABORADOR") {
         const localOrderId = isDbsControlUuid(order?.id) ? String(order.id) : null;
@@ -1648,7 +1719,11 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         }
       }
       if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${orderLabel} não possui cliente relacional válido.`);
-      const idempotencyKey = `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
+      const idempotencyKey = mappedCanonical
+        ? `${data.requestId}:work_order:${mappedCanonical.id}:${index}`.slice(0, 240)
+        : legacyOrderKey
+          ? `${scope.scopeKey}:work_order_create:${legacyOrderKey}`.slice(0, 240)
+          : `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
       const expectedVersion = Number(order?.version);
       const parts = Array.isArray(order?.pecasUsadas)
         ? order.pecasUsadas.map((part: any) => ({
@@ -1713,6 +1788,15 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
           protocol: row.protocol ? String(row.protocol) : null,
           version: Number(row.version ?? 1),
         });
+        if (!mappedCanonical && legacyOrderKey && isDbsControlUuid(appliedId)) {
+          const mapping = await supabaseAdmin.from("dbs_control_legacy_id_map").upsert({
+            scope_key: scope.scopeKey,
+            entity_type: "work_order",
+            legacy_key: legacyOrderKey,
+            canonical_id: appliedId,
+          }, { onConflict: "scope_key,entity_type,legacy_key" });
+          if (mapping.error) throw new Error(`Falha ao registrar o vínculo legado da OS ${orderLabel}: ${mapping.error.message}`);
+        }
       }
 
       const equipmentIds = Array.isArray(order?.equipamentosIds)

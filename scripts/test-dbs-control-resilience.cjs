@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
+const functions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20261026170000_dbs_control_observability_outbox_worker.sql", "utf8");
 const worker = fs.readFileSync("supabase/functions/dbs-control-outbox-worker/index.ts", "utf8");
 const workflow = fs.readFileSync(".github/workflows/dbs-control-outbox-worker.yml", "utf8");
@@ -32,6 +33,9 @@ assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pod
 assert.match(iframe, /DBS_CONTROL_BLOCKED_SYNC_KEYS/, "Conflitos permanentes precisam ser bloqueados até a reconciliação explícita.");
 assert.match(iframe, /DBS_CONTROL_DISMISS_CONFLICT/, "OS concluída não pode bloquear a emissão de uma nova OS por causa de uma intenção stale.");
 assert.match(iframe, /dbsControlIsCompletedOrder/, "O delta não pode reenviar OS concluídas por diferenças de hidratação.");
+assert.match(functions, /resolveDbsControlWorkOrderLegacyMap/, "OS legadas precisam ser resolvidas pelo vínculo legado→UUID antes do upsert.");
+assert.match(functions, /work_order_create:/, "Criação de OS nova precisa de uma idempotência estável por intenção local.");
+assert.match(functions, /entity_type: "work_order"/, "Novas OS precisam registrar o vínculo legado para evitar duplicação após reload.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));
