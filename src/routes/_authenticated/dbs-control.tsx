@@ -324,6 +324,7 @@ function DbsControlPage() {
   const syncCursorRef = useRef<string | null>(null);
   const localRecoveryStateRef = useRef<Record<string, unknown> | null>(null);
   const employeeModeRef = useRef(false);
+  const employeeFrameDocumentRef = useRef<Document | null>(null);
   const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
@@ -358,8 +359,45 @@ function DbsControlPage() {
       });
     };
 
-    if (frame.dataset.employeeUiBound !== "true") {
-      frame.dataset.employeeUiBound = "true";
+    // The iframe element survives route changes, while its document is
+    // replaced on every reload.  Bind against the document identity instead
+    // of a dataset flag on the iframe, otherwise a reload leaves the visible
+    // buttons with listeners attached to a dead document.
+    if (employeeFrameDocumentRef.current !== frameDocument) {
+      employeeFrameDocumentRef.current = frameDocument;
+      // Bind the session controls from the authenticated shell itself.  The
+      // legacy HTML keeps an inline fallback for standalone use, but relying
+      // only on postMessage made these controls appear clickable while doing
+      // nothing after a suspended tab/hot reload.  Removing the inline handler
+      // here avoids duplicate sign-out requests and makes the action direct,
+      // observable and keyboard accessible.
+      const backButton = frameDocument.querySelector<HTMLButtonElement>("[data-dbs-session-action=back]");
+      const logoutButton = frameDocument.querySelector<HTMLButtonElement>("[data-dbs-session-action=logout]");
+      if (backButton) {
+        backButton.removeAttribute("onclick");
+        backButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          backButton.setAttribute("aria-busy", "true");
+          navigate({ to: "/folha-ponto", replace: true });
+        });
+      }
+      if (logoutButton) {
+        logoutButton.removeAttribute("onclick");
+        logoutButton.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (logoutButton.getAttribute("aria-busy") === "true") return;
+          logoutButton.setAttribute("aria-busy", "true");
+          logoutButton.setAttribute("disabled", "true");
+          logoutButton.textContent = "Saindo…";
+          try {
+            await supabase.auth.signOut();
+          } finally {
+            navigate({ to: "/login", replace: true });
+          }
+        });
+      }
       frameDocument.addEventListener("click", () => window.setTimeout(syncEmployeeFrameUi, 0), true);
     }
     syncEmployeeFrameUi();
@@ -1432,6 +1470,7 @@ function DbsControlPage() {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (localSyncRetryTimerRef.current) clearTimeout(localSyncRetryTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      employeeFrameDocumentRef.current = null;
     };
   }, []);
 
