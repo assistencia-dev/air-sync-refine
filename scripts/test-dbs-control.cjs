@@ -183,7 +183,7 @@ assert.doesNotMatch(employeeDashboardSource, /＋ Emitir OS/, "O dashboard não 
 assert.doesNotMatch(employeeDashboardSource, /tab-nova-os|Emitir nova OS/, "O dashboard não deve duplicar a ação Emitir OS; ela fica no menu único do colaborador.");
 assert.match(html, /id=["']dbs-employee-bottom-nav["'][\s\S]*?data-employee-issue-nav=["']true["']/, "O menu móvel deve concentrar a emissão de OS em um único ponto.");
 assert.match(employeeNavigation, /issueBottomItems/, "A visibilidade de Emitir OS deve ser sincronizada também no menu móvel.");
-assert.match(html, /dbs-control-employee-nav\.js\?v=20261028-clean-menu-1/, "O menu móvel precisa invalidar o cache do script de navegação após a mudança visual.");
+assert.match(html, /dbs-control-employee-nav\.js\?v=20261029-ops-workspace-1/, "O menu móvel precisa invalidar o cache do script de navegação após a mudança operacional.");
 assert.match(employeeDashboardSource, /base_active/, "A emissão do colaborador deve exigir uma base ativa também no dashboard.");
 assert.doesNotMatch(employeeDashboardSource, /Meu dashboard/, "O colaborador deve ter um único rótulo consistente para o painel.");
 assert.match(html, /canIssueOs = params\.get\('can_issue_os'\) === '1'[\s\S]*?dbs-employee-issue-cta/, "A ação de emissão deve respeitar a flag de autorização recebida do servidor.");
