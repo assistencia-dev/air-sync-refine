@@ -15,6 +15,7 @@
       'dashboard principal': 'tab-dashboard',
       'meu painel': 'tab-dashboard',
       'minhas os': 'tab-pwa',
+      'atendimentos': 'tab-pwa',
       'emitir os': 'tab-nova-os'
     })[text] || '';
   }
@@ -38,7 +39,7 @@
     });
     const titleMap = {
       'tab-dashboard': ['Meu painel', 'Progresso e operação do colaborador'],
-      'tab-pwa': ['Minhas OS', 'Execução das Ordens de Serviço do colaborador'],
+      'tab-pwa': ['Atendimentos', 'Execução das ordens atribuídas ao colaborador'],
       'tab-nova-os': ['Emitir OS', 'Nova ordem dentro da base vinculada']
     };
     const meta = titleMap[id];
