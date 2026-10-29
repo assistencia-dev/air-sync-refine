@@ -12,6 +12,12 @@
   "theme_color": "#123B82",
   "icons": [
     {
+      "src": "/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg?v=20261029-logo-1",
+      "sizes": "447x447",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
       "src": "/pwa-icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
