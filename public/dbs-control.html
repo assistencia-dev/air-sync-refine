@@ -1753,6 +1753,148 @@
         }
 </style>
 
+<style id="dbs-control-front-quality-20261029">
+  /* Front quality pass: readable hierarchy, stable alignment and clear session controls. */
+  body { font-size:14px; }
+  body > aside .nav-item { min-height:44px; font-size:13px; }
+  body > aside .nav-section { font-size:10px; letter-spacing:.08em; }
+  main > header .page-title h1 { font-size:22px; line-height:1.2; }
+  main > header .page-title p { font-size:13px; line-height:1.35; }
+
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions {
+    display:flex !important;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button {
+    min-height:44px;
+    padding:0 14px;
+    border-radius:12px;
+    font-size:13px;
+    line-height:1;
+    letter-spacing:.005em;
+    box-shadow:0 2px 7px rgba(16,42,67,.06);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-back {
+    color:#075985;
+    border-color:#b9d8ed;
+    background:linear-gradient(180deg,#fff,#f2f9ff);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-back::first-letter { font-size:17px; }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-logout {
+    color:#b42318;
+    border-color:#f3b8b7;
+    background:#fff;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button:hover {
+    transform:translateY(-1px);
+    box-shadow:0 5px 12px rgba(16,42,67,.10);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button:focus-visible {
+    outline:3px solid rgba(37,99,235,.28);
+    outline-offset:2px;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button[disabled] {
+    cursor:wait;
+    opacity:.65;
+    transform:none;
+  }
+
+  /* The OS form is an operational surface: labels and controls cannot be
+     rendered at the tiny legacy density used by the old admin tables. */
+  #tab-nova-os.dbs-os-premium .os-premium-body { padding:30px 32px 26px; }
+  #tab-nova-os.dbs-os-premium .os-premium-top { min-height:96px; padding:22px 26px; }
+  #tab-nova-os.dbs-os-premium .os-premium-heading { gap:14px; }
+  #tab-nova-os.dbs-os-premium .os-premium-mark { width:40px; height:40px; border-radius:12px; font-size:10px; }
+  #tab-nova-os.dbs-os-premium .os-premium-heading span { font-size:10px; }
+  #tab-nova-os.dbs-os-premium .os-premium-heading h2 { font-size:24px; }
+  #tab-nova-os.dbs-os-premium .os-premium-field label,
+  #tab-nova-os.dbs-os-premium .os-premium-description label,
+  #tab-nova-os.dbs-os-premium .form-group > label {
+    margin-bottom:8px;
+    color:#173b61;
+    font-size:13px !important;
+    line-height:1.35;
+    letter-spacing:.015em;
+    text-transform:none;
+  }
+  #tab-nova-os.dbs-os-premium .os-premium-field input,
+  #tab-nova-os.dbs-os-premium .os-premium-field select,
+  #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+  #tab-nova-os.dbs-os-premium .form-group input,
+  #tab-nova-os.dbs-os-premium .form-group select,
+  #tab-nova-os.dbs-os-premium .form-group textarea {
+    min-height:50px;
+    padding:13px 14px;
+    border-radius:12px;
+    font-size:15px !important;
+    line-height:1.4;
+  }
+  #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+  #tab-nova-os.dbs-os-premium .form-group textarea { min-height:132px; }
+  #tab-nova-os.dbs-os-premium .os-premium-divider { margin:28px 0; }
+  #tab-nova-os.dbs-os-premium .os-premium-footer { min-height:78px; padding:16px 32px; }
+  #tab-nova-os.dbs-os-premium .os-premium-footer span { font-size:12px; line-height:1.45; }
+  #tab-nova-os.dbs-os-premium .os-premium-submit { min-height:50px; padding:12px 20px; font-size:14px; }
+
+  #tab-nova-os .dbs-os-type-heading label { font-size:13px !important; line-height:1.35; }
+  #tab-nova-os .dbs-os-type-helper { font-size:12px; line-height:1.45; }
+  #tab-nova-os .dbs-os-required-note { font-size:10px; }
+  #tab-nova-os .dbs-os-type-picker { gap:10px; }
+  #tab-nova-os .dbs-os-type-card {
+    min-height:78px;
+    padding:12px;
+    gap:11px;
+    border-radius:13px;
+    font-size:13px;
+  }
+  #tab-nova-os .dbs-os-type-icon { width:32px; height:32px; flex-basis:32px; border-radius:10px; font-size:17px; }
+  #tab-nova-os .dbs-os-type-card strong { font-size:12px; line-height:1.3; }
+  #tab-nova-os .dbs-os-type-card small { font-size:11px; line-height:1.3; }
+
+  @media (max-width:760px) {
+    body { font-size:15px; }
+    main > header { gap:12px; }
+    main > header .page-title h1 { font-size:22px; }
+    main > header .page-title p { font-size:13px; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions { gap:6px; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions button {
+      min-height:44px;
+      padding:0 12px;
+      font-size:12px;
+    }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout {
+      font-size:12px !important;
+      min-width:0;
+    }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back::before,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout::before { content:none; }
+    #tab-nova-os.dbs-os-premium .os-premium-body { padding:22px 18px 20px; }
+    #tab-nova-os.dbs-os-premium .os-premium-top { min-height:82px; padding:18px; }
+    #tab-nova-os.dbs-os-premium .os-premium-heading h2 { font-size:21px; }
+    #tab-nova-os.dbs-os-premium .os-premium-field input,
+    #tab-nova-os.dbs-os-premium .os-premium-field select,
+    #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+    #tab-nova-os.dbs-os-premium .form-group input,
+    #tab-nova-os.dbs-os-premium .form-group select,
+    #tab-nova-os.dbs-os-premium .form-group textarea { font-size:16px !important; }
+    #tab-nova-os .dbs-os-type-picker { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    #tab-nova-os .dbs-os-type-card { min-height:74px; padding:11px; }
+    #tab-nova-os .dbs-os-type-card strong { font-size:12px; }
+    #tab-nova-os .dbs-os-type-card small { font-size:10px; }
+    #tab-nova-os.dbs-os-premium .os-premium-footer { padding:15px 18px; }
+  }
+  @media (max-width:430px) {
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions button {
+      padding:0 10px;
+      font-size:11px;
+    }
+    #tab-nova-os .dbs-os-type-picker { grid-template-columns:1fr; }
+  }
+</style>
+
 <style id="dbs-control-operational-workspace-20261029">
   /* Filtros e filas usam a mesma linguagem visual: rótulo curto, campo limpo e
      ação explícita. Os dados continuam sendo os mesmos; muda apenas a leitura. */
@@ -2973,8 +3115,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
                 <div class="dbs-employee-session-actions" aria-label="Ações da sessão do colaborador">
-                    <button type="button" class="dbs-employee-session-action dbs-employee-session-back" onclick="voltarMenuPrincipalColaborador()" aria-label="Voltar ao menu principal">← Menu principal</button>
-                    <button type="button" class="dbs-employee-session-action dbs-employee-session-logout" onclick="solicitarLogoutColaborador()" aria-label="Sair do sistema">Sair</button>
+                    <button type="button" class="dbs-employee-session-action dbs-employee-session-back" data-dbs-session-action="back" onclick="voltarMenuPrincipalColaborador()" aria-label="Voltar ao menu principal" title="Voltar ao menu principal">← Menu principal</button>
+                    <button type="button" class="dbs-employee-session-action dbs-employee-session-logout" data-dbs-session-action="logout" onclick="solicitarLogoutColaborador()" aria-label="Sair do sistema" title="Sair do sistema">Sair</button>
                 </div>
                 <button id="dbs-employee-issue-cta" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
                 <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
@@ -9295,5 +9437,128 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     .dbs-os-type-card strong { font-size:10px; }
     #tab-nova-os .os-premium-footer { align-items:stretch; flex-direction:column; gap:10px; }
     #tab-nova-os .os-premium-footer .os-premium-submit { width:100%; min-height:50px; }
+  }
+</style>
+
+<style id="dbs-control-front-quality-final-20261029">
+  /* Final cascade: this block intentionally comes after legacy/mobile rules. */
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions {
+    display:flex !important;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button {
+    display:inline-flex !important;
+    min-height:44px !important;
+    min-width:0;
+    align-items:center;
+    justify-content:center;
+    padding:0 14px !important;
+    border-radius:12px;
+    font:800 13px/1 Inter,Roboto,system-ui,sans-serif !important;
+    box-shadow:0 2px 7px rgba(16,42,67,.06);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-back {
+    color:#075985;
+    border-color:#b9d8ed;
+    background:linear-gradient(180deg,#fff,#f2f9ff);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-logout {
+    color:#b42318;
+    border-color:#f3b8b7;
+    background:#fff;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button:hover {
+    transform:translateY(-1px);
+    box-shadow:0 5px 12px rgba(16,42,67,.10);
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button:focus-visible {
+    outline:3px solid rgba(37,99,235,.28);
+    outline-offset:2px;
+  }
+  body.dbs-control-employee-mode main > header .dbs-employee-session-actions button[disabled] {
+    cursor:wait;
+    opacity:.65;
+    transform:none;
+  }
+
+  body > aside .nav-item { min-height:44px; font-size:13px; }
+  main > header .page-title h1 { font-size:22px; line-height:1.2; }
+  main > header .page-title p { font-size:13px; line-height:1.35; }
+  #tab-nova-os.dbs-os-premium .os-premium-body { padding:30px 32px 26px; }
+  #tab-nova-os.dbs-os-premium .os-premium-top { min-height:96px; padding:22px 26px; }
+  #tab-nova-os.dbs-os-premium .os-premium-heading h2 { font-size:24px; }
+  #tab-nova-os.dbs-os-premium .os-premium-heading span { font-size:10px; }
+  #tab-nova-os.dbs-os-premium .os-premium-field label,
+  #tab-nova-os.dbs-os-premium .os-premium-description label,
+  #tab-nova-os.dbs-os-premium .form-group > label {
+    margin-bottom:8px;
+    color:#173b61;
+    font-size:13px !important;
+    line-height:1.35;
+    letter-spacing:.015em;
+    text-transform:none;
+  }
+  #tab-nova-os.dbs-os-premium .os-premium-field input,
+  #tab-nova-os.dbs-os-premium .os-premium-field select,
+  #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+  #tab-nova-os.dbs-os-premium .form-group input,
+  #tab-nova-os.dbs-os-premium .form-group select,
+  #tab-nova-os.dbs-os-premium .form-group textarea {
+    min-height:50px;
+    padding:13px 14px;
+    border-radius:12px;
+    font-size:15px !important;
+    line-height:1.4;
+  }
+  #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+  #tab-nova-os.dbs-os-premium .form-group textarea { min-height:132px; }
+  #tab-nova-os.dbs-os-premium .os-premium-divider { margin:28px 0; }
+  #tab-nova-os.dbs-os-premium .os-premium-footer { min-height:78px; padding:16px 32px; }
+  #tab-nova-os.dbs-os-premium .os-premium-footer span { font-size:12px; line-height:1.45; }
+  #tab-nova-os.dbs-os-premium .os-premium-submit { min-height:50px; padding:12px 20px; font-size:14px; }
+  #tab-nova-os .dbs-os-type-heading label { font-size:13px !important; line-height:1.35; }
+  #tab-nova-os .dbs-os-type-helper { font-size:12px; line-height:1.45; }
+  #tab-nova-os .dbs-os-required-note { font-size:10px; }
+  #tab-nova-os .dbs-os-type-picker { gap:10px; }
+  #tab-nova-os .dbs-os-type-card { min-height:78px; padding:12px; gap:11px; border-radius:13px; font-size:13px; }
+  #tab-nova-os .dbs-os-type-icon { width:32px; height:32px; flex-basis:32px; border-radius:10px; font-size:17px; }
+  #tab-nova-os .dbs-os-type-card strong { font-size:12px; line-height:1.3; }
+  #tab-nova-os .dbs-os-type-card small { font-size:11px; line-height:1.3; }
+
+  @media (max-width:760px) {
+    body { font-size:15px; }
+    main > header .page-title h1 { font-size:22px !important; }
+    main > header .page-title p { font-size:13px !important; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions { gap:6px; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions button {
+      min-height:44px !important;
+      padding:0 12px !important;
+      font-size:12px !important;
+    }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout {
+      min-width:0 !important;
+      font-size:12px !important;
+    }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back::before,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout::before { content:none !important; }
+    #tab-nova-os.dbs-os-premium .os-premium-body { padding:22px 18px 20px; }
+    #tab-nova-os.dbs-os-premium .os-premium-top { min-height:82px; padding:18px; }
+    #tab-nova-os.dbs-os-premium .os-premium-heading h2 { font-size:21px; }
+    #tab-nova-os.dbs-os-premium .os-premium-field input,
+    #tab-nova-os.dbs-os-premium .os-premium-field select,
+    #tab-nova-os.dbs-os-premium .os-premium-description textarea,
+    #tab-nova-os.dbs-os-premium .form-group input,
+    #tab-nova-os.dbs-os-premium .form-group select,
+    #tab-nova-os.dbs-os-premium .form-group textarea { font-size:16px !important; }
+    #tab-nova-os .dbs-os-type-picker { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    #tab-nova-os .dbs-os-type-card { min-height:74px; padding:11px; }
+    #tab-nova-os.dbs-os-premium .os-premium-footer { padding:15px 18px; }
+  }
+  @media (max-width:430px) {
+    body.dbs-control-employee-mode main > header .dbs-employee-session-actions button { padding:0 10px !important; font-size:11px !important; }
+    #tab-nova-os .dbs-os-type-picker { grid-template-columns:1fr; }
   }
 </style>
