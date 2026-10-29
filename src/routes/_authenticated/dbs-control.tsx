@@ -384,6 +384,10 @@ function DbsControlPage() {
           logSyncEvent("dashboard_summary_error", {
             message: error instanceof Error ? error.message : "Falha ao carregar os indicadores agregados.",
           });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DASHBOARD_SUMMARY_ERROR",
+            error: error instanceof Error ? error.message : "Não foi possível carregar os indicadores.",
+          }, "*");
         });
     };
 
@@ -660,6 +664,7 @@ function DbsControlPage() {
                   type: "DBS_CONTROL_CLOUD_STATE", state: latest.state, baseState: latest.state,
                 }, "*");
               }
+              sendDashboardSummary();
             } catch (refreshError) {
               logSyncEvent("post_save_refresh_error", {
                 message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a leitura após a gravação.",
@@ -1292,6 +1297,7 @@ function DbsControlPage() {
           logSyncEvent("canonical_reconciled", { forced: force, changed: latest.updated_at !== cloudUpdatedAtRef.current });
           cloudUpdatedAtRef.current = latest.updated_at;
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: reconciledLatestState, baseState: latestCloudState }, "*");
+          sendDashboardSummary();
         }
         setCloudError(null);
         return true;

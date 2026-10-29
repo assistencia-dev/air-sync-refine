@@ -993,11 +993,26 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const user = await requireDbsControlUser(context);
     const employee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
-    const { data, error } = await supabaseAdmin.rpc("dbs_control_dashboard_summary", {
+    const collaboratorScope = employee ? await getCollaboratorBaseScope(employee) : null;
+    const { data, error } = await supabaseAdmin.rpc("dbs_control_dashboard_summary_scoped", {
       p_employee_id: employee?.id ?? null,
+      p_base_id: collaboratorScope?.baseId ?? null,
+      p_company_id: user.company_id ?? employee?.user_company_id ?? null,
     });
     if (error) throw new Error(error.message);
-    return data ?? {};
+    const summary = data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : {};
+    // These fields are resolved on the server for display only. They never
+    // grant access; the RPC already limits the relational rows by scope.
+    return {
+      ...summary,
+      role_key: user.role_key,
+      employee_name: employee?.full_name ?? null,
+      base_name: collaboratorScope?.baseName ?? summary.base_name ?? null,
+      base_active: collaboratorScope?.baseActive ?? summary.base_active ?? null,
+      can_issue_work_orders: collaboratorScope?.canIssueWorkOrders ?? false,
+    };
   });
 
 /**

@@ -3628,6 +3628,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // Dashboard só exibe números depois da primeira hidratação autoritativa.
         let DBS_CONTROL_DASHBOARD_LOAD_STATUS = window.parent === window ? 'loaded' : 'loading';
         let DBS_CONTROL_DASHBOARD_SUMMARY = null;
+        // Os indicadores também aguardam a leitura agregada canônica. Não usar
+        // ERP_STATE/localStorage como fallback online evita divergência entre PC
+        // e celular enquanto a hidratação do estado completo ainda acontece.
+        let DBS_CONTROL_DASHBOARD_SUMMARY_STATUS = window.parent === window ? 'loaded' : 'loading';
 
 
         function criarSnapshotHistoricoOS(ordens) {
@@ -4597,7 +4601,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             if (msg.type === 'DBS_CONTROL_DASHBOARD_SUMMARY') {
                 DBS_CONTROL_DASHBOARD_SUMMARY = msg.summary && typeof msg.summary === 'object' ? msg.summary : null;
-                if (DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'loading' && DBS_CONTROL_DASHBOARD_LOAD_STATUS !== 'error') atualizarMetricas();
+                DBS_CONTROL_DASHBOARD_SUMMARY_STATUS = DBS_CONTROL_DASHBOARD_SUMMARY ? 'loaded' : 'error';
+                atualizarMetricas();
+                if (new URLSearchParams(window.location.search).get('mode') === 'employee') {
+                    renderizarAbaAtiva(document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+                }
+                return;
+            }
+            if (msg.type === 'DBS_CONTROL_DASHBOARD_SUMMARY_ERROR') {
+                DBS_CONTROL_DASHBOARD_SUMMARY = null;
+                DBS_CONTROL_DASHBOARD_SUMMARY_STATUS = 'error';
+                atualizarMetricas();
+                if (new URLSearchParams(window.location.search).get('mode') === 'employee') {
+                    renderizarAbaAtiva(document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
+                }
                 return;
             }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
@@ -5024,39 +5041,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const root = document.getElementById('employee-dashboard-root');
             if (!root) return;
             const params = new URLSearchParams(window.location.search);
-            const employeeName = String(params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
-            const baseName = String(params.get('base_name') || '').trim();
-            const canIssue = params.get('can_issue_os') === '1' && params.get('base_active') !== '0';
+            const aggregate = DBS_CONTROL_DASHBOARD_SUMMARY && typeof DBS_CONTROL_DASHBOARD_SUMMARY === 'object'
+                ? DBS_CONTROL_DASHBOARD_SUMMARY
+                : null;
+            const employeeName = String(aggregate?.employee_name || params.get('employee_name') || ERP_STATE.sessionTecnicoLogado?.nome || 'Colaborador').trim();
+            const baseName = String(aggregate?.base_name || params.get('base_name') || '').trim();
+            // A URL/iframe flag is only a visual hint. The server summary is
+            // the authority for whether this employee may issue an OS.
+            const canIssue = aggregate ? aggregate.can_issue_work_orders === true && aggregate.base_active !== false : false;
             const loadStatus = String(DBS_CONTROL_DASHBOARD_LOAD_STATUS || '');
-            const orders = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
-            const activeOrders = orders.filter(order => {
-                if (!order || order.deleted_at || order.deletedAt || order.excluidaEm || order.arquivadaEm) return false;
-                const status = String(order.status || order.situacao || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return !status.includes('cancelad') && !status.includes('arquivad') && !status.includes('excluid');
-            });
-            const isDone = order => typeof isOSConcluida === 'function'
-                ? isOSConcluida(order)
-                : /conclu[ií]d/.test(String(order.status || '').toLocaleLowerCase('pt-BR'));
-            const isPending = order => /aguardando|pendenc|peca|cliente/.test(String(order.status || order.situacao || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-            const completed = activeOrders.filter(isDone).length;
-            const pending = activeOrders.filter(order => !isDone(order) && isPending(order)).length;
-            const inProgress = Math.max(0, activeOrders.length - completed - pending);
-            const progress = activeOrders.length ? Math.round((completed / activeOrders.length) * 100) : 0;
-            const recent = activeOrders.slice().reverse().slice(0, 4);
-            const clientName = order => {
-                const client = (ERP_STATE.clientes || []).find(item => String(item.id) === String(order.clienteId));
-                return client ? (client.nome || client.nomeFantasia || client.razaoSocial || 'Cliente sem nome') : 'Cliente da OS';
-            };
-            const orderStatus = order => String(order.status || 'Em atendimento');
             const esc = value => typeof escDbsControl === 'function' ? escDbsControl(String(value || '')) : String(value || '');
-            if (loadStatus === 'loading' && !activeOrders.length) {
+            if (loadStatus === 'loading' || DBS_CONTROL_DASHBOARD_SUMMARY_STATUS === 'loading') {
                 root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Sincronizando sua base operacional…</div></section>';
                 return;
             }
-            if (loadStatus === 'error' && !activeOrders.length) {
+            if (loadStatus === 'error' || DBS_CONTROL_DASHBOARD_SUMMARY_STATUS === 'error' || !aggregate) {
                 root.innerHTML = '<section class="employee-dashboard-section"><div class="employee-dashboard-empty">Aguardando a sincronização da base. Quando a conexão voltar, seu progresso aparecerá aqui.</div></section>';
                 return;
             }
+            const number = key => Number(aggregate[key] || 0).toLocaleString('pt-BR');
+            const progress = Number(aggregate.progress_percent || 0);
+            const recent = Array.isArray(aggregate.recent_orders) ? aggregate.recent_orders : [];
             root.innerHTML =
                 '<section class="employee-dashboard-hero">' +
                     '<div><div class="employee-dashboard-kicker">DBS CONTROL · Meu painel</div>' +
@@ -5069,15 +5074,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     '<button type="button" class="primary" onclick="switchTab(&quot;tab-pwa&quot;)">Ver minhas OS</button>' +
                 '</div>' +
                 '<section class="employee-dashboard-kpis">' +
-                    '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + activeOrders.length.toLocaleString('pt-BR') + '</strong><span>Ordens ativas atribuídas</span></div>' +
-                    '<div class="employee-dashboard-kpi"><small>Em atendimento</small><strong>' + inProgress.toLocaleString('pt-BR') + '</strong><span>Execuções em andamento</span></div>' +
-                    '<div class="employee-dashboard-kpi"><small>Com pendência</small><strong>' + pending.toLocaleString('pt-BR') + '</strong><span>Peça, cliente ou retorno</span></div>' +
-                    '<div class="employee-dashboard-kpi"><small>Concluídas</small><strong>' + completed.toLocaleString('pt-BR') + '</strong><span>Confirmadas no banco</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>OS no meu fluxo</small><strong>' + number('orders_active') + '</strong><span>Ordens ativas atribuídas</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Em atendimento</small><strong>' + number('orders_in_service') + '</strong><span>Execuções em andamento</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Com pendência</small><strong>' + number('orders_pending') + '</strong><span>Peça, cliente ou retorno</span></div>' +
+                    '<div class="employee-dashboard-kpi"><small>Concluídas</small><strong>' + number('orders_completed') + '</strong><span>Confirmadas no banco</span></div>' +
                 '</section>' +
                 '<section class="employee-dashboard-progress"><div class="employee-dashboard-progress-head"><span>Progresso do seu atendimento</span><b>' + progress + '%</b></div><div class="employee-dashboard-progress-track" aria-label="Progresso de OS concluídas"><span style="width:' + progress + '%"></span></div></section>' +
                 '<section class="employee-dashboard-section"><div class="employee-dashboard-section-head"><h3>Próximas OS para acompanhar</h3><span>' + recent.length + ' exibida(s)</span></div>' +
                     (recent.length ? '<div class="employee-dashboard-recent">' + recent.map(order =>
-                        '<div class="employee-dashboard-order"><b>' + esc(order.protocolo || order.id || 'OS sem protocolo') + '</b><small>' + esc(clientName(order)) + ' · ' + esc(orderStatus(order)) + '</small></div>'
+                        '<div class="employee-dashboard-order"><b>' + esc(order.protocol || order.id || 'OS sem protocolo') + '</b><small>' + esc(order.client_name || 'Cliente sem nome') + ' · ' + esc(order.status_code || 'Em atendimento') + '</small></div>'
                     ).join('') + '</div>' : '<div class="employee-dashboard-empty">Nenhuma OS ativa no momento. Abra “Minhas OS” para atualizar.</div>') +
                 '</section>';
         }
@@ -7552,7 +7557,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // Enquanto a primeira leitura compartilhada não termina, nunca apresentar zeros/cache como se fossem dados atuais.
             const metricIds = ['dash-client-count', 'dash-equip-count', 'dash-os-andamento', 'dash-os-concluidas'];
             const metricValues = metricIds.map(id => document.getElementById(id));
-            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'loading') {
+            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'loading' || DBS_CONTROL_DASHBOARD_SUMMARY_STATUS === 'loading') {
                 if (!document.getElementById('dbs-dashboard-loading-style')) {
                     const style = document.createElement('style');
                     style.id = 'dbs-dashboard-loading-style';
@@ -7562,49 +7567,22 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 metricValues.forEach(el => { if (el) { el.classList.add('dbs-metric-loading'); el.classList.remove('dbs-metric-unavailable'); el.textContent = ' '; el.setAttribute('aria-label', 'Carregando dados'); } });
                 return;
             }
-            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error') {
+            if (DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error' || DBS_CONTROL_DASHBOARD_SUMMARY_STATUS === 'error') {
                 metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading'); el.classList.add('dbs-metric-unavailable'); el.textContent = '—'; el.setAttribute('aria-label', 'Dados indisponíveis: falha de sincronização'); } });
                 return;
             }
             metricValues.forEach(el => { if (el) { el.classList.remove('dbs-metric-loading', 'dbs-metric-unavailable'); el.removeAttribute('aria-label'); } });
-            // Os KPIs usam somente o estado central carregado e normalizam variações de status.
-            const clientes = Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : [];
-            const equipamentos = Array.isArray(ERP_STATE.equipamentos) ? ERP_STATE.equipamentos : [];
-            const ordens = Array.isArray(ERP_STATE.ordens) ? ERP_STATE.ordens : [];
-            const normalizarStatusKpi = value => String(value ?? '')
-                .trim()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .toLocaleLowerCase('pt-BR')
-                .replace(/[_-]+/g, ' ')
-                .replace(/\s+/g, ' ');
-            const statusKpi = order => normalizarStatusKpi(order.status ?? order.situacao ?? order.statusOS);
             const aggregate = DBS_CONTROL_DASHBOARD_SUMMARY;
-            if (aggregate && typeof aggregate === 'object') {
-                const metric = (key, fallback) => Number.isFinite(Number(aggregate[key])) ? Number(aggregate[key]) : fallback;
-                document.getElementById('dash-client-count').innerText = metric('clients_count', clientes.length).toLocaleString('pt-BR');
-                document.getElementById('dash-equip-count').innerText = metric('equipment_count', equipamentos.length).toLocaleString('pt-BR');
-                document.getElementById('dash-os-andamento').innerText = metric('orders_in_service', 0).toLocaleString('pt-BR');
-                document.getElementById('dash-os-concluidas').innerText = metric('orders_completed', 0).toLocaleString('pt-BR');
+            if (!aggregate || typeof aggregate !== 'object' || aggregate.source !== 'canonical_relational_db') {
+                metricValues.forEach(el => { if (el) { el.classList.add('dbs-metric-unavailable'); el.textContent = '—'; el.setAttribute('aria-label', 'Aguardando a leitura relacional do dashboard'); } });
                 return;
             }
-
-            // Arquivadas, excluídas e canceladas não entram nos indicadores da operação ativa.
-            const ordensOperacionais = ordens.filter(order =>
-                !order.arquivadaEm &&
-                !order.excluidaEm &&
-                !order.deletedAt &&
-                !order.deleted_at &&
-                !/^(arquivad[ao]|excluid[ao]|deletad[ao]|cancelad[ao])$/.test(statusKpi(order))
-            );
-            const emAtendimento = ordensOperacionais.filter(order =>
-                /^(em atendimento|em execucao|em andamento|em atendimento tecnico)$/.test(statusKpi(order))
-            ).length;
-            const concluidas = ordensOperacionais.filter(order => isOSConcluida(order)).length;
-            document.getElementById('dash-client-count').innerText = clientes.length.toLocaleString('pt-BR');
-            document.getElementById('dash-equip-count').innerText = equipamentos.length.toLocaleString('pt-BR');
-            document.getElementById('dash-os-andamento').innerText = emAtendimento.toLocaleString('pt-BR');
-            document.getElementById('dash-os-concluidas').innerText = concluidas.toLocaleString('pt-BR');
+            // Todos os números vêm da mesma RPC relacional em desktop e mobile.
+            const metric = key => Number.isFinite(Number(aggregate[key])) ? Number(aggregate[key]) : 0;
+            document.getElementById('dash-client-count').innerText = metric('clients_count').toLocaleString('pt-BR');
+            document.getElementById('dash-equip-count').innerText = metric('equipment_count').toLocaleString('pt-BR');
+            document.getElementById('dash-os-andamento').innerText = metric('orders_in_service').toLocaleString('pt-BR');
+            document.getElementById('dash-os-concluidas').innerText = metric('orders_completed').toLocaleString('pt-BR');
         }
         // O portal autenticado do Air Sync pode abrir este módulo sem segundo login.
         (function bootDbsControlEmployeeMode(){

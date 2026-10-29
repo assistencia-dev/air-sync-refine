@@ -3529,6 +3529,14 @@ export type Database = {
         Args: { p_employee_id?: string | null }
         Returns: Json
       }
+      dbs_control_dashboard_summary_scoped: {
+        Args: {
+          p_base_id?: string | null
+          p_company_id?: string | null
+          p_employee_id?: string | null
+        }
+        Returns: Json
+      }
       dbs_control_apply_work_order_delta: {
         Args: { p_payload: Json }
         Returns: {
