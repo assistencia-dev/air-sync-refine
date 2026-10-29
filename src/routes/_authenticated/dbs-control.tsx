@@ -742,6 +742,10 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_REFRESH_DASHBOARD_SUMMARY") {
+        sendDashboardSummary();
+        return;
+      }
       if (msg.type === "DBS_CONTROL_UPLOAD_ATTACHMENT") {
         try {
           const attachment = await withDbsControlTransientRetry(() => uploadDbsControlOsAttachment({ data: {

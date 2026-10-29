@@ -18,6 +18,9 @@ assert.match(functions, /\.gt\("id", cursor\)/, "Listagens operacionais precisam
 assert.match(functions, /rpc\("dbs_control_dashboard_summary_scoped"/, "Dashboard precisa usar o contrato relacional com escopo.");
 assert.match(shell, /source !== 'canonical_relational_db'/, "Dashboard não pode aceitar KPIs locais como fallback online.");
 assert.match(shell, /aggregate\.recent_orders/, "Painel do colaborador precisa receber a lista resumida do servidor.");
+assert.match(shell, /renderizarDashboardRecentOrders/, "Dashboard administrativo precisa usar a lista recente do contrato relacional.");
+assert.match(shell, /orders_unassigned/, "Fila operacional precisa usar o contador canônico de OS sem técnico.");
+assert.match(shell, /orders_execution_pending/, "Fila operacional precisa usar o contador canônico de pendência.");
 assert.match(indexes, /idx_hardening_work_orders_active_id/, "Índice de cursor ativo ausente.");
 assert.match(indexes, /idx_hardening_work_orders_assignee_id/, "Índice de cursor por colaborador ausente.");
 assert.match(indexes, /treasury_entries_company_fk_idx/, "Índice de FK do ledger ausente.");
