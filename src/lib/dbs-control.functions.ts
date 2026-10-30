@@ -32,9 +32,28 @@ async function requireDbsControlUser(context: { userId: string }) {
   return data as DbsControlUser;
 }
 
-async function resolveDbsControlScope(user: DbsControlUser) {
+type CollaboratorBaseScope = {
+  baseId: string | null;
+  baseName: string | null;
+  baseActive: boolean;
+  canIssueWorkOrders: boolean;
+  clientIds: string[];
+  companyId: string | null;
+};
+
+async function resolveDbsControlScope(user: DbsControlUser, collaboratorScope?: Pick<CollaboratorBaseScope, "companyId"> | null) {
   if (user.company_id) return { scopeKey: `company:${user.company_id}`, ownerUserId: user.id, companyId: user.company_id };
   if (user.role_key !== "COLABORADOR") return { scopeKey: `user:${user.id}`, ownerUserId: user.id, companyId: null as string | null };
+  // A collaborator can legitimately have users.company_id NULL while the RH
+  // employee is bound to an active operational base. The base is the canonical
+  // scope in that case; do not fall back to an arbitrary snapshot/admin.
+  if (collaboratorScope?.companyId) {
+    return {
+      scopeKey: `company:${collaboratorScope.companyId}`,
+      ownerUserId: user.created_by ?? user.id,
+      companyId: collaboratorScope.companyId,
+    };
+  }
   if (user.created_by) {
     const { data: creator, error } = await supabaseAdmin.from("users").select("id, company_id, role_key, status").eq("id", user.created_by).maybeSingle();
     if (error) throw new Error(error.message);
@@ -136,7 +155,7 @@ async function getCollaboratorEmployee(userId: string) {
 
 async function getCollaboratorBaseScope(employee: any) {
   const baseId = String(employee?.dbs_control_base_id ?? "").trim();
-  if (!baseId) return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[] };
+  if (!baseId) return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[], companyId: employee?.user_company_id ?? null };
   const [baseResult, linksResult] = await Promise.all([
     (supabaseAdmin as any).from("dbs_control_bases").select("id, company_id, name, status").eq("id", baseId).maybeSingle(),
     (supabaseAdmin as any).from("dbs_control_base_clients").select("client_id").eq("base_id", baseId),
@@ -144,7 +163,7 @@ async function getCollaboratorBaseScope(employee: any) {
   if (baseResult.error) throw new Error(baseResult.error.message);
   if (linksResult.error) throw new Error(linksResult.error.message);
   if (baseResult.data?.company_id && employee?.user_company_id && String(baseResult.data.company_id) !== String(employee.user_company_id)) {
-    return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[] };
+    return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[], companyId: null };
   }
   // Status é normalizado para tolerar valores legados com caixa/espaços
   // diferentes sem relaxar a regra de base ativa.
@@ -163,6 +182,7 @@ async function getCollaboratorBaseScope(employee: any) {
     baseActive: active,
     canIssueWorkOrders: Boolean(active && employee?.dbs_control_can_issue_work_orders),
     clientIds,
+    companyId: (baseResult.data?.company_id ?? employee?.user_company_id ?? null) as string | null,
   };
 }
 
@@ -892,7 +912,12 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
-    const scope = await resolveDbsControlScope(user);
+    const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    if (user.role_key === "COLABORADOR" && !collaboratorEmployee) {
+      throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+    }
+    const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
+    const scope = await resolveDbsControlScope(user, collaboratorScope);
     let state: Record<string, unknown> | null = null;
     let order: any = null;
     let canonicalOrderId: string | null = null;
@@ -929,7 +954,7 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     }
     if (!order) throw new Error("OS não encontrada na base compartilhada.");
     if (user.role_key === "COLABORADOR") {
-      const employee = await getCollaboratorEmployee(user.id);
+      const employee = collaboratorEmployee;
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
       const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? "") === String(employee.id);
       const techs = Array.isArray(state?.tecnicos) ? state!.tecnicos as any[] : [];
@@ -997,7 +1022,7 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin.rpc("dbs_control_dashboard_summary_scoped", {
       p_employee_id: employee?.id ?? null,
       p_base_id: collaboratorScope?.baseId ?? null,
-      p_company_id: user.company_id ?? employee?.user_company_id ?? null,
+      p_company_id: user.company_id ?? collaboratorScope?.companyId ?? employee?.user_company_id ?? null,
     });
     if (error) throw new Error(error.message);
     const summary = data && typeof data === "object" && !Array.isArray(data)
@@ -1064,12 +1089,12 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsControlUser(context);
-    const scope = await resolveDbsControlScope(user);
     const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
     if (user.role_key === "COLABORADOR" && !collaboratorEmployee) {
       throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
     }
     const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
+    const scope = await resolveDbsControlScope(user, collaboratorScope);
 
     const { data, error } = await supabaseAdmin
       .from("dbs_control_snapshots")
@@ -1567,12 +1592,12 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsControlUser(context);
-    const scope = await resolveDbsControlScope(user);
     const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
     const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
     if (user.role_key === "COLABORADOR" && !collaboratorEmployee) {
       throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
     }
+    const scope = await resolveDbsControlScope(user, collaboratorScope);
     let changes = data.changes;
     // Apenas para compatibilidade de IDs legados: se uma OS ainda referencia um
     // cliente local não-UUID, recuperamos o cadastro legado por leitura e o
