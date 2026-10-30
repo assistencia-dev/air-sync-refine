@@ -11,6 +11,7 @@
     line: [226, 232, 240],
     soft: [248, 250, 252],
     blueSoft: [239, 246, 255],
+    green: [34, 197, 94],
     white: [255, 255, 255],
   };
   const fallbackLogo = '/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg';
@@ -200,7 +201,23 @@
     const contentBottom = 276;
     const protocol = first(order.protocolo, order.protocol, order.id);
     const company = st.company || st.empresa || st.config?.company || {};
-    const companyName = first(company.name, company.nome, company.trade_name, 'DBS AIR / DBS Control');
+    const companyLegalName = first(company.legal_name, company.razaoSocial, company.name, company.nome, company.trade_name, 'DBS AIR REFRIGERACAO LTDA - ME');
+    const companyDocument = maskDocument(first(company.cnpj, company.cnpj_cpf, company.document, company.tax_id, '13.352.707/0001-09'));
+    const companyEmail = first(company.email, company.emailAddress, company.contatoEmail, company.contact_email, 'assistencia@dbsair.com.br');
+    const companyPhone = first(company.phone, company.telefone, company.contact_phone, company.whatsapp, '(21) 99825-6991');
+    const companyAddress = address(company.address_json || company.endereco || company.address) || unique([
+      company.logradouro,
+      company.numero,
+      company.complemento,
+      company.bairro,
+      company.cidade,
+      company.uf,
+      has(company.cep) ? maskCep(company.cep) : '',
+    ]) || 'Rua Nabor do Rego, 481 (ou nº 2908), Ramos, Rio de Janeiro - RJ · CEP 21031-720';
+    const issuerTitle = uniqueValues([
+      companyLegalName,
+      companyDocument !== '—' ? `CNPJ ${companyDocument}` : '',
+    ]).join(' · ');
     const status = first(order.status, order.situacao, 'Em atendimento');
     const statusNorm = normalize(status);
     const statusFill = /conclu/.test(statusNorm) ? [220, 252, 231] : /cancel/.test(statusNorm) ? [254, 226, 226] : /atendimento|andamento|aberta/.test(statusNorm) ? [219, 234, 254] : [241, 245, 249];
@@ -238,27 +255,43 @@
       });
       return lines.length ? lines : ['—'];
     };
-    const safeCompanyName = wrapText(companyName, 54, 6.4)[0];
-
     const drawHeader = firstPage => {
       const y = 10;
-      const height = firstPage ? 23 : 20;
-      doc.setFillColor(...theme.white); doc.setDrawColor(...theme.line); doc.setLineWidth(0.3); doc.roundedRect(M, y, W, height, 1.5, 1.5, 'FD');
-      doc.setFillColor(...theme.blue); doc.roundedRect(M, y, 1.6, height, 1, 1, 'F');
-      if (resources.logo) {
-        const scale = Math.min(31 / resources.logo.width, 10 / resources.logo.height);
-        const lw = resources.logo.width * scale, lh = resources.logo.height * scale;
-        doc.addImage(resources.logo.data, 'PNG', M + 5, y + (height - lh) / 2 - 1, lw, lh, undefined, 'FAST');
-      } else {
-        font(10, 'bold', theme.navy); doc.text('DBS AIR', M + 5, y + 10);
+      if (!firstPage) {
+        doc.setFillColor(...theme.blue); doc.rect(M, 11, W, 1, 'F');
+        doc.setFillColor(...theme.green); doc.rect(M, 11, 16, 1, 'F');
+        font(7.8, 'bold', theme.navy); doc.text('DBS AIR · ORDEM DE SERVIÇO', M, 18);
+        font(7.5, 'bold', theme.navy); doc.text(`OS ${protocol}`, M + W, 18, { align: 'right' });
+        doc.setDrawColor(...theme.line); doc.setLineWidth(0.2); doc.line(M, 23, M + W, 23);
+        return 30;
       }
-      font(6.2, 'bold', theme.navy); doc.text(safeCompanyName, M + 5, y + height - 3.5);
-      font(firstPage ? 9.4 : 8.3, 'bold', theme.navy); doc.text(firstPage ? 'ORDEM DE SERVIÇO' : 'ORDEM DE SERVIÇO · CONTINUAÇÃO', M + W - 5, y + 7, { align: 'right' });
-      font(8, 'bold', theme.blue); doc.text(`Nº ${protocol}`, M + W - 5, y + 13.2, { align: 'right' });
-      const badgeWidth = Math.min(53, Math.max(25, doc.getTextWidth(text(status).toUpperCase()) + 8));
-      doc.setFillColor(...statusFill); doc.roundedRect(M + W - 5 - badgeWidth, y + 15, badgeWidth, 5.4, 1.5, 1.5, 'F');
-      font(5.7, 'bold', statusInk); doc.text(text(status).toUpperCase(), M + W - 8, y + 18.7, { align: 'right' });
-      return y + height + 8;
+      const height = 34;
+      doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.35); doc.rect(M, y, W, height, 'FD');
+      doc.setFillColor(...theme.blue); doc.rect(M, y, 1.5, height, 'F');
+      doc.setFillColor(...theme.green); doc.rect(M + 1.5, y, 0.7, height, 'F');
+      if (resources.logo) {
+        const scale = Math.min(48 / resources.logo.width, 22 / resources.logo.height);
+        const lw = resources.logo.width * scale, lh = resources.logo.height * scale;
+        doc.addImage(resources.logo.data, 'PNG', M + 6, y + (height - lh) / 2, lw, lh, undefined, 'FAST');
+      } else {
+        font(14, 'bold', theme.navy); doc.text('DBS AIR', M + 7, y + 20);
+        font(6.5, 'bold', theme.blue); doc.text('REFRIGERAÇÃO', M + 7, y + 25);
+      }
+      font(7.2, 'bold', theme.blue); doc.text('ORDEM DE SERVIÇO', M + W - 5, y + 7, { align: 'right' });
+      font(10, 'bold', theme.navy); doc.text(`Nº ${protocol}`, M + W - 5, y + 15, { align: 'right' });
+      const badgeWidth = Math.min(68, Math.max(29, doc.getTextWidth(text(status).toUpperCase()) + 10));
+      doc.setFillColor(...statusFill); doc.roundedRect(M + W - 5 - badgeWidth, y + 19, badgeWidth, 8, 2, 2, 'F');
+      font(7.1, 'bold', statusInk); doc.text(text(status).toUpperCase(), M + W - 9, y + 24.2, { align: 'right', maxWidth: badgeWidth - 8 });
+
+      const ruleY = y + height + 6;
+      doc.setDrawColor(...theme.blue); doc.setLineWidth(0.25); doc.line(M, ruleY, M + W, ruleY);
+      const issuerY = ruleY + 8;
+      const issuerHeight = 18;
+      doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.25); doc.rect(M, issuerY, W, issuerHeight, 'FD');
+      font(7.1, 'bold', theme.navy); doc.text(issuerTitle, M + 4, issuerY + 4.5, { maxWidth: W - 8 });
+      font(6.8, 'normal', theme.muted); doc.text(unique([companyEmail, companyPhone]) || '—', M + 4, issuerY + 9, { maxWidth: W - 8 });
+      doc.text(companyAddress || '—', M + 4, issuerY + 13.5, { maxWidth: W - 8 });
+      return issuerY + issuerHeight + 6;
     };
 
     const addPage = () => {
@@ -327,11 +360,14 @@
       let offset = 0;
       let firstChunk = true;
       while (offset < lines.length) {
-        const available = Math.max(1, Math.floor((contentBottom - page.y - 5) / lineHeight));
-        if (available < 1) { addPage(); continue; }
-        const take = Math.min(available, lines.length - offset);
+        const remaining = lines.length - offset;
+        const available = Math.floor((contentBottom - page.y - 5) / lineHeight);
+        // Nunca deixe uma única linha órfã no rodapé; leve o bloco para a
+        // próxima página e aproveite a área útil de forma contínua.
+        if (available < Math.min(remaining, 3)) { addPage(); continue; }
+        const take = Math.min(available, remaining);
         const h = labelHeight + take * lineHeight + 4;
-        ensureSpace(h);
+        if (page.y + h > contentBottom) { addPage(); continue; }
         font(6.1, 'bold', theme.muted); doc.text(`${text(label).toUpperCase()}${firstChunk ? '' : ' (CONT.)'}`, M + 4, page.y + 3.4);
         font(size, 'normal', theme.ink); doc.text(lines.slice(offset, offset + take), M + 4, page.y + 7, { lineHeightFactor: 1.08 });
         page.y += h;
