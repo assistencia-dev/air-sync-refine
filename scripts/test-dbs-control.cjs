@@ -153,6 +153,9 @@ assert.match(route, /pendingChangesRef/, "A fila de salvamento deve transportar 
 assert.match(route, /scope: \"dbs-control-sync\"/, "Falhas, retries e reconciliações precisam gerar logs estruturados sem payload operacional.");
 assert.match(route, /realtime_status/, "O estado do canal Realtime precisa ser observável no navegador.");
 assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
+assert.match(route, /collaboratorVersionConflict/, "Conflito de versão durante a execução do colaborador deve ter caminho de rebase seguro.");
+assert.match(route, /DBS_CONTROL_CONFLICT_RECONCILED/, "O rebase do colaborador deve hidratar a versão canônica antes de reenviar o delta.");
+assert.match(route, /dbsControlStateOrderIsCompleted/, "O rebase automático nunca pode atravessar a proteção de OS concluída.");
 assert.match(cloudFunctions, /export const deleteDbsControlWorkOrder/, "A exclusão de OS deve usar uma intenção relacional própria, sem autosave de snapshot.");
 assert.match(cloudFunctions, /event_type: "work_order_deleted"/, "A exclusão deve gerar evento auditável na mesma transação da OS.");
 assert.match(cloudFunctions, /patch: \{ deleted_at: deletedAt \}/, "A exclusão deve ser lógica e enviar somente deleted_at.");
