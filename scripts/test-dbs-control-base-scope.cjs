@@ -23,6 +23,8 @@ const required = [
   ['employee issue tab guard', /dbs-control-can-issue-os/i],
   ['legacy client canonicalization', /resolveCollaboratorClientIdMap[\s\S]*dbs_control_legacy_id_map/i],
   ['normalized active base', /normalizeDbsStatus\(baseResult\.data\?\.status\) === "ativo"/i],
+  ['company scope from base', /if \(collaboratorScope\?\.companyId\)[\s\S]*scopeKey: `company:\$\{collaboratorScope\.companyId\}`/i],
+  ['scope resolved after employee base', /const collaboratorScope = collaboratorEmployee \? await getCollaboratorBaseScope\(collaboratorEmployee\) : null;[\s\S]*const scope = await resolveDbsControlScope\(user, collaboratorScope\)/i],
 ];
 
 for (const [name, pattern] of required) {
