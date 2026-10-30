@@ -12,6 +12,7 @@ const healthMigration = fs.readFileSync('supabase/migrations/20261027162135_trea
 const securityMigration = fs.readFileSync('supabase/migrations/20261027162711_treasury_ledger_security_grants.sql', 'utf8');
 const fkMigration = fs.readFileSync('supabase/migrations/20261027162717_treasury_ledger_fk_indexes.sql', 'utf8');
 const aclMigration = fs.readFileSync('supabase/migrations/20261030115938_treasury_server_bridge_acl_hardening.sql', 'utf8');
+const maintenanceAclMigration = fs.readFileSync('supabase/migrations/20261030121053_snapshot_maintenance_acl_hardening.sql', 'utf8');
 const healthScript = fs.readFileSync('scripts/check-treasury-ledger-health.mjs', 'utf8');
 const healthWorkflow = fs.readFileSync('.github/workflows/treasury-ledger-health.yml', 'utf8');
 
@@ -43,6 +44,7 @@ assert.match(fkMigration, /treasury_outbox_entry_fk_idx/);
 assert.match(aclMigration, /revoke all privileges on table[\s\S]*treasury_ledger_outbox[\s\S]*from anon, authenticated/i);
 assert.match(aclMigration, /revoke insert, update, delete, truncate, references, trigger[\s\S]*treasury_snapshots from authenticated/i);
 assert.match(aclMigration, /revoke insert, update, delete, truncate, references, trigger[\s\S]*dbs_control_snapshots from authenticated/i);
+assert.match(maintenanceAclMigration, /revoke maintain on table[\s\S]*treasury_snapshots[\s\S]*dbs_control_snapshots[\s\S]*from anon, authenticated/i);
 
 // Catch syntax regressions in the inline HTML script without executing browser APIs.
 const inlineScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((match) => match[1]);
