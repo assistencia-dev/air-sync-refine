@@ -4058,9 +4058,66 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         function getPersistableState() {
-            const snapshot = JSON.parse(JSON.stringify(ERP_STATE));
+            // Nunca serializar base64 de evidências junto com as 1.700+ OS do
+            // estado operacional. Os arquivos já têm o fluxo próprio de
+            // Storage; a cópia relacional carrega apenas os caminhos.
+            const source = { ...ERP_STATE };
+            if (Array.isArray(source.ordens)) {
+                source.ordens = source.ordens.map(order => {
+                    if (!order || typeof order !== 'object') return order;
+                    const next = { ...order };
+                    if (next.assinaturaStoragePath || next.assinatura_path || next.signature_path
+                        || (typeof next.assinatura === 'string' && next.assinatura.startsWith('data:'))) next.assinatura = null;
+                    if (next.fotoAntesStoragePath || (typeof next.fotoAntes === 'string' && next.fotoAntes.startsWith('data:'))) next.fotoAntes = null;
+                    if (next.fotoDepoisStoragePath || (typeof next.fotoDepois === 'string' && next.fotoDepois.startsWith('data:'))) next.fotoDepois = null;
+                    return next;
+                });
+            }
+            const snapshot = JSON.parse(JSON.stringify(source));
             delete snapshot.sessionTecnicoLogado;
             return snapshot;
+        }
+
+        // O cache local é uma cópia de recuperação, não o transporte das
+        // evidências. Fotos, assinaturas e URLs assinadas podem multiplicar o
+        // tamanho do estado e estourar o localStorage justamente no celular,
+        // no momento de concluir uma OS. O delta enviado ao banco continua
+        // usando o estado completo; somente a cópia local é compactada.
+        function dbsControlCompactLocalState(state) {
+            const compact = dbsControlClone(state || {});
+            if (!compact || !Array.isArray(compact.ordens)) return compact;
+            compact.ordens = compact.ordens.map(order => {
+                if (!order || typeof order !== 'object') return order;
+                const next = { ...order };
+                const attachmentFields = [
+                    ['assinatura', 'assinaturaStoragePath', 'assinatura_path', 'signature_path'],
+                    ['fotoAntes', 'fotoAntesStoragePath'],
+                    ['fotoDepois', 'fotoDepoisStoragePath'],
+                ];
+                attachmentFields.forEach(([valueField, ...pathFields]) => {
+                    const hasStoredPath = pathFields.some(field => String(next[field] || '').trim() !== '');
+                    const value = next[valueField];
+                    const isDataUrl = typeof value === 'string' && value.startsWith('data:');
+                    const isOversized = typeof value === 'string' && value.length > 180000;
+                    if (hasStoredPath || isDataUrl || isOversized) next[valueField] = null;
+                });
+                return next;
+            });
+            return compact;
+        }
+
+        function persistDbsControlLocalSnapshot(state, key = 'DBS_AIR_ERP_STATE') {
+            const compactState = dbsControlCompactLocalState(state);
+            try {
+                localStorage.setItem(key, JSON.stringify({
+                    version: DBS_CONTROL_STATE_VERSION,
+                    data: compactState
+                }));
+                return true;
+            } catch (storageError) {
+                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
+                return false;
+            }
         }
 
         const DBS_CONTROL_DELTA_ARRAY_KEYS = [
@@ -4097,9 +4154,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // Evidências binárias são enviadas pelo fluxo de Storage. Se já existe
             // um caminho, nunca duplicar a base64 dentro do delta relacional.
             if (key === 'ordens') {
-                if (copy.assinaturaStoragePath || copy.assinatura_path || copy.signature_path) copy.assinatura = null;
-                if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
-                if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+                if (copy.assinaturaStoragePath || copy.assinatura_path || copy.signature_path
+                    || (typeof copy.assinatura === 'string' && copy.assinatura.startsWith('data:'))) copy.assinatura = null;
+                if (copy.fotoAntesStoragePath || (typeof copy.fotoAntes === 'string' && copy.fotoAntes.startsWith('data:'))) copy.fotoAntes = null;
+                if (copy.fotoDepoisStoragePath || (typeof copy.fotoDepois === 'string' && copy.fotoDepois.startsWith('data:'))) copy.fotoDepois = null;
             }
             return copy;
         }
@@ -4148,6 +4206,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // render/autosave cycle.
         const DBS_CONTROL_PENDING_SAVE_REQUESTS = new Map();
         const DBS_CONTROL_BLOCKED_SYNC_KEYS = new Set();
+        const DBS_PENDING_EXECUTION_DRAFT_REQUESTS = new Map();
+        const DBS_PENDING_ISSUE_DRAFT_REQUESTS = new Map();
+        let DBS_ACTIVE_EXECUTION_DRAFT_ID = null;
+        let DBS_ACTIVE_ISSUE_DRAFT_ID = null;
 
         function dbsControlClone(value) {
             try { return JSON.parse(JSON.stringify(value)); } catch (error) { return value; }
@@ -4155,14 +4217,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function persistDbsControlLocalStateOnly() {
             const persistableState = getPersistableState();
-            try {
-                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                    version: DBS_CONTROL_STATE_VERSION,
-                    data: persistableState
-                }));
-            } catch (storageError) {
-                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
-            }
+            persistDbsControlLocalSnapshot(persistableState);
             DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
             return persistableState;
         }
@@ -4274,14 +4329,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const persistableState = getPersistableState();
             // O cache local é apenas uma cópia de segurança. Se o navegador ficar sem
             // espaço (principalmente por fotos), o salvamento na nuvem ainda deve ocorrer.
-            try {
-                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                    version: DBS_CONTROL_STATE_VERSION,
-                    data: persistableState
-                }));
-            } catch (storageError) {
-                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
-            }
+            persistDbsControlLocalSnapshot(persistableState);
             if (window.parent !== window && !DBS_CONTROL_CLOUD_HYDRATING) {
                 // The optimistic base is advanced only from the ACK handler.
                 // Keeping the last confirmed version here is what makes a
@@ -4325,14 +4373,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             registrarHistoricoOS();
             const persistableState = getPersistableState();
-            try {
-                localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                    version: DBS_CONTROL_STATE_VERSION,
-                    data: persistableState
-                }));
-            } catch (storageError) {
-                console.warn('Cache local do DBS CONTROL não pôde ser atualizado:', storageError);
-            }
+            persistDbsControlLocalSnapshot(persistableState);
             if (!DBS_CONTROL_SYNC_BASE_STATE || typeof DBS_CONTROL_SYNC_BASE_STATE !== 'object') {
                 throw new Error('A base compartilhada ainda não foi carregada. A OS permanece no dispositivo; aguarde a conexão e tente novamente.');
             }
@@ -4346,6 +4387,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? window.crypto.randomUUID()
                 : 'os-save-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, dbsControlClone(changes));
+            if (DBS_ACTIVE_EXECUTION_DRAFT_ID) {
+                DBS_PENDING_EXECUTION_DRAFT_REQUESTS.set(requestId, String(DBS_ACTIVE_EXECUTION_DRAFT_ID));
+            }
+            if (DBS_ACTIVE_ISSUE_DRAFT_ID) {
+                DBS_PENDING_ISSUE_DRAFT_REQUESTS.set(requestId, String(DBS_ACTIVE_ISSUE_DRAFT_ID));
+            }
             const queueLocally = (reason) => {
                 const indicator = document.getElementById('dbs-sync-indicator');
                 if (indicator) {
@@ -4682,9 +4729,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 // A critical save has a dedicated promise listener as well; the
                 // global handler remains the single owner of the optimistic base.
                 if (msg.ok) {
+                    const executionDraftId = DBS_PENDING_EXECUTION_DRAFT_REQUESTS.get(requestId);
+                    const issueDraftId = DBS_PENDING_ISSUE_DRAFT_REQUESTS.get(requestId);
                     const committedChanges = msg.committedChanges || pendingChanges || {};
                     dbsControlApplyCommittedChanges(committedChanges, msg.appliedOrders || []);
                     DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                    DBS_PENDING_EXECUTION_DRAFT_REQUESTS.delete(requestId);
+                    DBS_PENDING_ISSUE_DRAFT_REQUESTS.delete(requestId);
+                    if (executionDraftId) clearExecutionDraft(executionDraftId);
+                    if (issueDraftId) {
+                        const applied = Array.isArray(msg.appliedOrders) ? msg.appliedOrders[0] : null;
+                        removePendingIssueDraft(issueDraftId, applied?.protocol || '');
+                    }
                     const hasMorePending = DBS_CONTROL_PENDING_SAVE_REQUESTS.size > 0 || Number(msg.pendingCount || 0) > 0;
                     DBS_CONTROL_HAS_PENDING_SAVE = hasMorePending;
                     if (!hasMorePending) {
@@ -4698,7 +4754,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         }
                     }
                     persistDbsControlLocalStateOnly();
-                    renderizarTudo();
+                    renderizarDbsControlCurrentMode();
                 } else {
                     // Keep the local intent for explicit reconciliation, but
                     // block it from being emitted again on every autosave.
@@ -4997,18 +5053,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const localRecordCount = Object.keys(localBeforeCloud).reduce((total, key) =>
                         total + (Array.isArray(localBeforeCloud[key]) ? localBeforeCloud[key].length : 0), 0);
                     if (localRecordCount > 0) {
-                        localStorage.setItem('DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION', JSON.stringify({
-                            version: DBS_CONTROL_STATE_VERSION,
-                            data: localBeforeCloud,
-                            backedUpAt: new Date().toISOString(),
-                            reason: 'Cópia de segurança automática antes da sincronização com a nuvem'
-                        }));
+                        if (typeof persistDbsControlLocalSnapshot === 'function') {
+                            persistDbsControlLocalSnapshot(localBeforeCloud, 'DBS_AIR_ERP_STATE_PRE_CLOUD_HYDRATION');
+                        }
                     }
                 } catch (backupError) {
                     console.warn('Não foi possível gravar a cópia pré-sincronização local:', backupError);
                 }
 
-                ERP_STATE = JSON.parse(JSON.stringify(mergeCollaboratorCloudState(stateForHydration)));
+                const hydratedState = typeof mergePendingIssueDrafts === 'function'
+                    ? mergePendingIssueDrafts(mergeCollaboratorCloudState(stateForHydration))
+                    : mergeCollaboratorCloudState(stateForHydration);
+                ERP_STATE = JSON.parse(JSON.stringify(hydratedState));
                 DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
                 DBS_CONTROL_LOCAL_RECOVERY_MODE = false;
                 // Release the filtered view before rendering it in the same message turn.
@@ -5017,15 +5073,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (currentSession) ERP_STATE.sessionTecnicoLogado = currentSession;
                 DBS_CONTROL_SYNC_BASE_STATE = JSON.parse(JSON.stringify(cloudBaseState));
                 DBS_CONTROL_LAST_OS_SNAPSHOT = criarSnapshotHistoricoOS(ERP_STATE.ordens);
-                try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                        version: DBS_CONTROL_STATE_VERSION,
-                        data: getPersistableState()
-                    }));
-                } catch (cacheError) {
-                    console.warn('Cache local indisponível; estado compartilhado mantido em memória.', cacheError);
-                }
-                renderizarTudo();
+                if (typeof persistDbsControlLocalSnapshot === 'function') persistDbsControlLocalSnapshot(getPersistableState());
+                if (typeof renderizarDbsControlCurrentMode === 'function') renderizarDbsControlCurrentMode();
+                else renderizarTudo();
                 if (cloudReturnedFewerRecords && !collaboratorSession) {
                     // Segurança de integridade: nunca transforme uma diferença
                     // de contagem em escrita automática. O estado local já foi
@@ -7193,7 +7243,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? String(session.id && session.id !== '__rh__' ? session.id : assignedEmployeeId)
                 : selectedTecId;
             const novaOS = {
-                id: (() => { let n = 4891 + ERP_STATE.ordens.length; const ids = new Set(ERP_STATE.ordens.map(o => String(o.id))); while (ids.has('OS-0' + n)) n++; return 'OS-0' + n; })(),
+                // O banco gera o protocolo. Este UUID local é apenas a chave
+                // idempotente do rascunho e nunca é usado como protocolo.
+                id: 'draft-' + ((window.crypto && typeof window.crypto.randomUUID === 'function')
+                    ? window.crypto.randomUUID()
+                    : Date.now() + '-' + Math.random().toString(36).slice(2)),
                 protocolo: null,
                 data: new Date().toLocaleDateString('pt-BR'),
                 clienteId: cliId,
@@ -7222,6 +7276,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             };
 
             ERP_STATE.ordens.push(novaOS);
+            const localDraftId = String(novaOS.id);
+            if (employeeMode) {
+                // A cópia local permanece disponível mesmo se a aba for
+                // atualizada enquanto a requisição estiver em trânsito.
+                registerPendingIssueDraft(novaOS);
+            }
             const submit = form?.querySelector('button[type="submit"]') || document.querySelector('#form-nova-os button[type="submit"]');
             const originalSubmitText = submit?.textContent || 'Criar OS';
             if (submit) {
@@ -7231,9 +7291,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
 
             try {
+                if (employeeMode) DBS_ACTIVE_ISSUE_DRAFT_ID = String(novaOS.id);
                 const confirmation = employeeMode
                     ? await saveStateAndConfirmCloud()
                     : (saveState(), { ok: true });
+                DBS_ACTIVE_ISSUE_DRAFT_ID = null;
                 if (employeeMode) {
                     const applied = Array.isArray(confirmation?.appliedOrders) ? confirmation.appliedOrders[0] : null;
                     // A emissão usa um id temporário apenas no formulário. Assim
@@ -7242,27 +7304,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (applied?.id) novaOS.id = String(applied.id);
                     if (applied?.protocol) novaOS.protocolo = String(applied.protocol);
                     if (Number.isFinite(Number(applied?.version))) novaOS.version = Number(applied.version);
-                    DBS_CONTROL_SYNC_BASE_STATE = getPersistableState();
+                    if (confirmation?.queuedLocally !== true) {
+                        removePendingIssueDraft(localDraftId, applied?.protocol || novaOS.protocolo);
+                    }
                 }
-                renderizarTudo();
+                renderizarDbsControlCurrentMode();
                 switchTab(employeeMode ? 'tab-pwa' : 'tab-ordens');
                 if (employeeMode) {
-                    alert('OS ' + (novaOS.protocolo || novaOS.id) + ' criada e confirmada na nuvem.');
+                    alert(confirmation?.queuedLocally
+                        ? 'A OS foi salva neste dispositivo e está aguardando sincronização automática.'
+                        : 'OS ' + (novaOS.protocolo || novaOS.id) + ' criada e confirmada na nuvem.');
                 }
             } catch (error) {
-                // O draft só fica visível enquanto a gravação relacional é
-                // aceita. Em caso de recusa, removemos somente o draft local;
-                // nenhum registro do banco é apagado.
-                ERP_STATE.ordens = ERP_STATE.ordens.filter(order => order !== novaOS && String(order.id) !== String(novaOS.id));
-                try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                        version: DBS_CONTROL_STATE_VERSION,
-                        data: getPersistableState()
-                    }));
-                } catch (_) {}
-                renderizarTudo();
+                DBS_ACTIVE_ISSUE_DRAFT_ID = null;
+                // Nunca remover uma OS recém-preenchida por causa de timeout,
+                // reload ou rejeição transitória. Ela fica como rascunho local
+                // identificado e pode ser reenviada sem recadastrar nada.
+                if (employeeMode) registerPendingIssueDraft(novaOS);
+                persistDbsControlLocalSnapshot(getPersistableState());
+                renderizarDbsControlCurrentMode();
                 const message = error instanceof Error ? error.message : 'A OS não foi confirmada na nuvem.';
-                alert('A OS não foi criada: ' + message + ' Nenhum dado existente foi removido.');
+                alert('A OS ficou salva como rascunho neste dispositivo. ' + message + ' Nenhum dado foi removido; tente sincronizar novamente.');
             } finally {
                 if (submit) {
                     submit.disabled = false;
@@ -7350,6 +7412,172 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         // Mantém o traço local quando a lista de OS é re-renderizada por realtime,
         // troca de aba ou retorno do celular. O rascunho só é descartado após ACK.
         const DBS_SIGNATURE_DRAFTS = window.__DBS_SIGNATURE_DRAFTS || (window.__DBS_SIGNATURE_DRAFTS = new Map());
+        const DBS_EXECUTION_DRAFT_PREFIX = 'DBS_AIR_EXECUTION_DRAFT_';
+        const DBS_EXECUTION_DRAFT_TIMERS = new Map();
+        const DBS_PENDING_ISSUE_DRAFTS_KEY = 'DBS_AIR_PENDING_ISSUE_DRAFTS';
+
+        function executionDraftStorageKey(osId) {
+            return DBS_EXECUTION_DRAFT_PREFIX + String(osId || '').trim();
+        }
+
+        function readExecutionDraft(osId) {
+            try {
+                const raw = localStorage.getItem(executionDraftStorageKey(osId));
+                if (!raw) return null;
+                const draft = JSON.parse(raw);
+                return draft && typeof draft === 'object' ? draft : null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function saveExecutionDraft(osId) {
+            const key = String(osId || '').trim();
+            if (!key) return false;
+            const read = id => document.getElementById(id);
+            const result = read(`dbs-mob-result-${key}`);
+            const pendingNote = read(`dbs-mob-pending-note-${key}`);
+            const relato = read(`dbs-mob-relato-${key}`);
+            const observacao = read(`dbs-mob-observacao-${key}`);
+            const noParts = read(`dbs-mob-no-parts-${key}`);
+            const signature = DBS_SIGNATURE_DRAFTS.get(key) || null;
+            const draft = {
+                version: 1,
+                osId: key,
+                updatedAt: new Date().toISOString(),
+                result: result?.value || '',
+                pendingNote: pendingNote?.value || '',
+                relato: relato?.value || '',
+                observacao: observacao?.value || '',
+                noParts: Boolean(noParts?.checked),
+                signature: typeof signature === 'string' && signature.length < 500000 ? signature : null,
+            };
+            try {
+                localStorage.setItem(executionDraftStorageKey(key), JSON.stringify(draft));
+                return true;
+            } catch (error) {
+                console.warn('Rascunho da execução não pôde ser persistido:', error);
+                return false;
+            }
+        }
+
+        function agendarRascunhoExecucaoMobile(osId) {
+            const key = String(osId || '').trim();
+            if (!key) return;
+            const existing = DBS_EXECUTION_DRAFT_TIMERS.get(key);
+            if (existing) clearTimeout(existing);
+            DBS_EXECUTION_DRAFT_TIMERS.set(key, setTimeout(() => {
+                DBS_EXECUTION_DRAFT_TIMERS.delete(key);
+                saveExecutionDraft(key);
+            }, 180));
+        }
+
+        function restoreExecutionDraft(osId) {
+            const key = String(osId || '').trim();
+            const draft = readExecutionDraft(key);
+            if (!draft) return;
+            const setValue = (field, value) => {
+                const element = document.getElementById(`dbs-mob-${field}-${key}`);
+                if (element && Object.prototype.hasOwnProperty.call(draft, field)) element.value = String(value ?? '');
+            };
+            if (draft.result) {
+                const result = document.getElementById(`dbs-mob-result-${key}`);
+                if (result) {
+                    result.value = draft.result;
+                    atualizarResultadoAtendimentoMobile(key, draft.result);
+                }
+            }
+            setValue('pending-note', draft.pendingNote);
+            setValue('relato', draft.relato);
+            setValue('observacao', draft.observacao);
+            const noParts = document.getElementById(`dbs-mob-no-parts-${key}`);
+            if (noParts && Object.prototype.hasOwnProperty.call(draft, 'noParts')) noParts.checked = Boolean(draft.noParts);
+            if (draft.signature && !DBS_SIGNATURE_DRAFTS.has(key)) DBS_SIGNATURE_DRAFTS.set(key, draft.signature);
+        }
+
+        function clearExecutionDraft(osId) {
+            const key = String(osId || '').trim();
+            const timer = DBS_EXECUTION_DRAFT_TIMERS.get(key);
+            if (timer) clearTimeout(timer);
+            DBS_EXECUTION_DRAFT_TIMERS.delete(key);
+            DBS_SIGNATURE_DRAFTS.delete(key);
+            try { localStorage.removeItem(executionDraftStorageKey(key)); } catch (_) {}
+        }
+
+        function readPendingIssueDrafts() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(DBS_PENDING_ISSUE_DRAFTS_KEY) || '[]');
+                return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function writePendingIssueDrafts(drafts) {
+            try {
+                localStorage.setItem(DBS_PENDING_ISSUE_DRAFTS_KEY, JSON.stringify(drafts.slice(-40)));
+                return true;
+            } catch (error) {
+                console.warn('Fila local de novas OS não pôde ser atualizada:', error);
+                return false;
+            }
+        }
+
+        function registerPendingIssueDraft(order) {
+            if (!order || !order.id) return;
+            const drafts = readPendingIssueDrafts();
+            const copy = dbsControlCompactLocalState({ ordens: [order] })?.ordens?.[0] || { ...order };
+            const index = drafts.findIndex(item => String(item.id) === String(order.id));
+            if (index >= 0) drafts[index] = copy;
+            else drafts.push(copy);
+            writePendingIssueDrafts(drafts);
+        }
+
+        function removePendingIssueDraft(orderId, protocol) {
+            const id = String(orderId || '').trim();
+            const canonicalProtocol = String(protocol || '').trim();
+            const remaining = readPendingIssueDrafts().filter(item =>
+                (id && String(item.id || '').trim() === id)
+                || (canonicalProtocol && String(item.protocolo || item.protocol || '').trim() === canonicalProtocol)
+                    ? false
+                    : true
+            );
+            writePendingIssueDrafts(remaining);
+        }
+
+        function mergePendingIssueDrafts(state) {
+            const drafts = readPendingIssueDrafts();
+            if (!drafts.length) return state;
+            const next = dbsControlClone(state || {});
+            const orders = Array.isArray(next.ordens) ? next.ordens : [];
+            const knownIds = new Set(orders.map(order => String(order?.id || '').trim()).filter(Boolean));
+            const knownProtocols = new Set(orders.map(order => String(order?.protocolo || order?.protocol || '').trim()).filter(Boolean));
+            drafts.forEach(draft => {
+                const id = String(draft?.id || '').trim();
+                const protocol = String(draft?.protocolo || draft?.protocol || '').trim();
+                if ((id && knownIds.has(id)) || (protocol && knownProtocols.has(protocol))) return;
+                orders.push(draft);
+                if (id) knownIds.add(id);
+                if (protocol) knownProtocols.add(protocol);
+            });
+            next.ordens = orders;
+            return next;
+        }
+
+        function renderizarDbsControlCurrentMode(force = false) {
+            const employeeMode = new URLSearchParams(window.location.search).get('mode') === 'employee';
+            // Realtime/ACK de outra operação não pode desmontar o formulário
+            // que o técnico está preenchendo. Os campos já têm rascunho
+            // durável; aqui preservamos também o DOM para evitar tremor.
+            if (employeeMode && !force && document.querySelector('.employee-execution-body:focus-within')) {
+                const focused = document.activeElement?.id || '';
+                const match = focused.match(/^dbs-mob-(?:result|pending-note|relato|observacao|no-parts)-(.+)$/);
+                if (match) agendarRascunhoExecucaoMobile(match[1]);
+                return;
+            }
+            if (employeeMode) renderizarPWAScreen();
+            else renderizarTudo();
+        }
 
         function renderizarPWAScreen() {
             const area = document.getElementById('pwa-content-area');
@@ -7499,7 +7727,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               <section class="employee-result-card" aria-labelledby="employee-result-title-${o.id}">
                                 <div class="employee-result-title" id="employee-result-title-${o.id}"><span class="employee-step-badge employee-step-badge-result">RESULTADO</span><strong>Como ficou este atendimento?</strong></div>
                                 <label>Resultado da visita
-                                  <select id="dbs-mob-result-${o.id}" onchange="atualizarResultadoAtendimentoMobile('${o.id}', this.value)">
+                                  <select id="dbs-mob-result-${o.id}" onchange="atualizarResultadoAtendimentoMobile('${o.id}', this.value);agendarRascunhoExecucaoMobile('${o.id}')">
                                     <option value="concluida" ${normalizedOrderStatus === 'concluida' ? 'selected' : ''}>Atendimento concluído</option>
                                     <option value="concluida_com_pendencia" ${normalizedOrderStatus === 'concluida com pendencia' ? 'selected' : ''}>Concluída com pendência</option>
                                     <option value="aguardando_peca" ${normalizedOrderStatus === 'aguardando peca' ? 'selected' : ''}>Aguardando peça</option>
@@ -7510,7 +7738,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 </label>
                                 <div id="dbs-mob-pending-${o.id}" class="employee-pending-fields" ${isPending ? '' : 'hidden'}>
                                   <label>O que ficou pendente? <span class="field-required">Obrigatório</span>
-                                    <textarea id="dbs-mob-pending-note-${o.id}" rows="3" placeholder="Ex.: compressor aguardando substituição; retornar com peça e concluir testes."></textarea>
+                                    <textarea id="dbs-mob-pending-note-${o.id}" rows="3" placeholder="Ex.: compressor aguardando substituição; retornar com peça e concluir testes." oninput="agendarRascunhoExecucaoMobile('${o.id}')"></textarea>
                                   </label>
                                   <small>Essa informação ficará visível para a administração acompanhar o retorno.</small>
                                 </div>
@@ -7533,10 +7761,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               </details>
                               <label>Peça / insumo <span class="field-required">Registre o uso ou confirme que não houve</span></label>
                               <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
-                              <label class="employee-parts-ack"><input type="checkbox" id="dbs-mob-no-parts-${o.id}" ${hasPartsUsed ? 'disabled' : ''}> Confirmo que não houve peça ou insumo utilizado nesta visita.</label>
+                              <label class="employee-parts-ack"><input type="checkbox" id="dbs-mob-no-parts-${o.id}" onchange="agendarRascunhoExecucaoMobile('${o.id}')" ${hasPartsUsed ? 'disabled' : ''}> Confirmo que não houve peça ou insumo utilizado nesta visita.</label>
                               <div class="employee-fields employee-fields-single">
                                 <label>Relato técnico do atendimento <span class="field-required">Obrigatório</span>
-                                  <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado...">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
+                                  <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado..." oninput="agendarRascunhoExecucaoMobile('${o.id}')">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
                                 </label>
                               </div>
                               ${(() => {
@@ -7544,7 +7772,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Novas notas serão anexadas ao histórico.</small></div>` : '';
                               })()}
                               <label class="employee-observation-field">Observação complementar do técnico <span class="field-required">Obrigatória · acrescentada ao histórico</span>
-                                <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas."></textarea>
+                                <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas." oninput="agendarRascunhoExecucaoMobile('${o.id}')"></textarea>
                               </label>
                               ${tipoPermiteChecklist(o.tipo) ? `
                                 <section class="pmoc-result-card">
@@ -7579,6 +7807,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 initCanvas('sig-canvas-' + o.id);
                 const initialStatus = normalizarStatusAtendimentoMobile(o.completionStatusCode || String(o.status || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, '_'));
                 atualizarResultadoAtendimentoMobile(o.id, initialStatus);
+                restoreExecutionDraft(o.id);
+                const restored = readExecutionDraft(o.id);
+                if (restored?.signature) initCanvas('sig-canvas-' + o.id);
               }, 50);
             });
         }
@@ -7657,6 +7888,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             function captureDraft() {
                 try {
                     if (canvas.dataset.dbsDirty === 'true') DBS_SIGNATURE_DRAFTS.set(osId, canvas.toDataURL('image/png'));
+                    agendarRascunhoExecucaoMobile(osId);
                 } catch (_) {}
             }
             canvas.onpointerdown = function(e) {
@@ -7695,6 +7927,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 canvas.dataset.dbsDirty = 'false';
             }
             DBS_SIGNATURE_DRAFTS.delete(String(osId));
+            agendarRascunhoExecucaoMobile(osId);
         }
 
         function adicionarPecaMobile(osId) {
@@ -7711,7 +7944,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 os.pecasUsadas.push({ id: peca.id, nome: peca.nome, venda: peca.venda, qtd: 1 });
                 os.employeeId = os.employeeId || ERP_STATE.sessionTecnicoLogado?.employeeId || null;
                 saveState();
-                renderizarTudo();
+                agendarRascunhoExecucaoMobile(osId);
+                renderizarDbsControlCurrentMode();
                 alert(`Peça ${peca.nome} adicionada com sucesso!`);
             }
         }
@@ -7952,10 +8186,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     : null;
 
                 setProgress(atendimentoStatus === 'concluida' ? 'Confirmando OS na nuvem...' : 'Registrando resultado na nuvem...');
+                DBS_ACTIVE_EXECUTION_DRAFT_ID = String(osId);
                 const saveResult = await saveStateAndConfirmCloud();
-                DBS_SIGNATURE_DRAFTS.delete(String(osId));
-                renderizarTudo();
+                DBS_ACTIVE_EXECUTION_DRAFT_ID = null;
                 const queuedLocally = saveResult?.queuedLocally === true;
+                if (!queuedLocally) clearExecutionDraft(osId);
+                renderizarDbsControlCurrentMode(true);
                 alert(queuedLocally
                     ? `OS ${osId} registrada como "${atendimentoStatusLabel}" neste dispositivo. A sincronização será concluída automaticamente quando a conexão voltar.`
                     : atendimentoStatus === 'concluida'
@@ -7965,13 +8201,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 console.error('Falha ao concluir OS', err);
                 const currentIndex = ERP_STATE.ordens.findIndex(order => String(order?.id) === String(osId));
                 if (currentIndex >= 0) ERP_STATE.ordens[currentIndex] = beforeCompletion;
-                try {
-                    localStorage.setItem('DBS_AIR_ERP_STATE', JSON.stringify({
-                        version: DBS_CONTROL_STATE_VERSION,
-                        data: getPersistableState()
-                    }));
-                } catch (_) {}
-                renderizarTudo();
+                DBS_ACTIVE_EXECUTION_DRAFT_ID = null;
+                saveExecutionDraft(osId);
+                persistDbsControlLocalSnapshot(getPersistableState());
+                // Não re-renderizar a tela inteira aqui: isso desmontava o
+                // canvas e os inputs, causando o fechamento/“pulo” do app no
+                // celular e obrigando o técnico a recomeçar o atendimento.
                 alert(err instanceof Error ? err.message : 'Não foi possível confirmar o atendimento na nuvem.');
                 if (progressNode) progressNode.textContent = 'Não confirmado — a OS foi restaurada; revise a conexão e tente novamente.';
                 if (finishButton) {

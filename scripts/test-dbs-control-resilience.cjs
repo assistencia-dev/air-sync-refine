@@ -10,6 +10,7 @@ const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf
 const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
 const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
 const referenceMigration = fs.readFileSync("supabase/migrations/20261028191111_dbs_control_reference_validation.sql", "utf8");
+const workOrderDefaultsMigration = fs.readFileSync("supabase/migrations/20261030110000_dbs_control_work_order_defaults.sql", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
@@ -55,6 +56,9 @@ assert.equal((referenceMigration.match(/jsonb_populate_record\(null::public\.dbs
 assert.match(referenceMigration, /assigned_employee_id[\s\S]*?DBS_OS_EMPLOYEE_NOT_FOUND/, "A migração deve validar o formato do UUID do técnico antes do cast relacional.");
 assert.match(referenceMigration, /not exists \(\s*select 1 from public\.rh_employees/i, "A migração deve validar a existência do técnico na tabela relacional.");
 assert.match(referenceMigration, /revoke all on function public\.dbs_control_apply_work_order_delta\(jsonb\)/i, "A RPC endurecida deve manter ACL explícita.");
+assert.match(workOrderDefaultsMigration, /trg_dbs_control_work_order_defaults/i, "A criação de OS precisa preencher o checklist obrigatório sem exigir campos artificiais no formulário.");
+assert.match(workOrderDefaultsMigration, /new\.execution_checklist := case/i, "O guard de criação não pode deixar execution_checklist nulo.");
+assert.match(workOrderDefaultsMigration, /when tg_op = 'UPDATE' then old\.execution_checklist/i, "Uma atualização sem checklist não pode apagar o checklist existente.");
 assert.match(functions, /work_order_create:/, "Criação de OS nova precisa de uma idempotência estável por intenção local.");
 assert.match(functions, /entity_type: "work_order"/, "Novas OS precisam registrar o vínculo legado para evitar duplicação após reload.");
 assert.match(localSync, /dbs-control-local-sync/, "A fila local precisa ter um armazenamento nomeado e versionado.");
