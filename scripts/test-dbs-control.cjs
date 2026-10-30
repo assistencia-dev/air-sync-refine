@@ -298,6 +298,9 @@ assert.match(timestampMigration, /v_raw := nullif\(btrim\(v_patch->>v_key\), ''\
 assert.match(timestampMigration, /exception when others then/, "Timestamp inválido não pode bloquear a sincronização da OS.");
 assert.match(pdf, /const M = 10, W = 190/, "O PDF da OS deve usar margem de 10 mm e área A4 compacta.");
 assert.match(pdf, /company\.logo_url/, "O PDF deve buscar dinamicamente a logo da empresa.");
+assert.match(pdf, /const issuerTitle =/, "O cabeçalho deve apresentar o emissor e o CNPJ.");
+assert.match(pdf, /theme\.green/, "O cabeçalho deve preservar a faixa visual azul e verde.");
+assert.match(pdf, /Rua Nabor do Rego/, "O cabeçalho deve manter os dados institucionais de fallback.");
 assert.match(pdf, /const maskDocument = value =>/, "O PDF deve aplicar máscara de CNPJ/CPF.");
 assert.match(pdf, /const maskCep = value =>/, "O PDF deve aplicar máscara de CEP.");
 assert.match(pdf, /const equipmentLabel = value =>/, "O PDF deve higienizar placeholders genéricos de equipamentos.");
