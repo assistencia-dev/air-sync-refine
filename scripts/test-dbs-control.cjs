@@ -233,6 +233,17 @@ assert.match(html, /if \(employeeMode && !force && document\.querySelector\('\.e
 assert.match(html, /const beforeCompletion = JSON\.parse\(JSON\.stringify\(os\)\)/, "A conclusão deve guardar o estado anterior para rollback seguro.");
 assert.match(html, /ERP_STATE\.ordens\[currentIndex\] = beforeCompletion/, "Uma conclusão sem ACK deve restaurar a OS anterior.");
 assert.match(html, /mergeCollaboratorCloudState\(stateForHydration\)/, "Leitura atrasada não pode reabrir visualmente uma OS concluída.");
+assert.match(html, /somente o relato técnico é obrigatório/, "O encerramento do colaborador deve declarar uma única exigência operacional.");
+assert.doesNotMatch(html, /if \(!observationText\)/, "Observação complementar não pode bloquear a conclusão da OS.");
+assert.doesNotMatch(html, /if \(technicalChecklistTotal > 0 && technicalChecklistDone < technicalChecklistTotal\)/, "Checklist técnico não pode bloquear a conclusão da OS.");
+assert.doesNotMatch(html, /if \(!hasParts && !noPartsConfirmed\)/, "Peças ou confirmação de ausência de peças não podem bloquear a conclusão da OS.");
+assert.doesNotMatch(html, /if \(!beforeFile && !os\.fotoAntes\)/, "Foto antes deve ser opcional.");
+assert.doesNotMatch(html, /if \(!afterFile && !os\.fotoDepois\)/, "Foto depois deve ser opcional.");
+assert.doesNotMatch(html, /Registre a assinatura do cliente antes de concluir/, "Assinatura não pode bloquear o registro do relatório técnico.");
+assert.match(html, /const hasSignature = Boolean\(canvas/, "A assinatura deve ser detectada sem exigir que o canvas seja preenchido.");
+assert.match(html, /catch\(error => \(\{ field: 'fotoAntes'/, "Falha de upload de foto deve ser tratada sem perder a conclusão da OS.");
+assert.match(html, /Fotos, assinatura, checklist, observações, peças e localização são opcionais/, "A interface deve informar ao técnico quais evidências são opcionais.");
+
 
 assert.match(html, /switchTab\('tab-dashboard', dashboardNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente o dashboard de progresso.");
 assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
