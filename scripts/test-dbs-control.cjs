@@ -73,6 +73,19 @@ const firstPartyScripts = [
   "public/dbs-control-pdf.js",
   "public/dbs-control-observations.js",
 ];
+
+// A previous corrupted deployment inserted a model-output truncation marker
+// into the static HTML. The browser then rendered the shell but stopped before
+// declaring ERP_STATE/DBS_CONTROL_READY, leaving the operation stuck at
+// "Sincronização aguardando". Keep this artifact-level guard in CI so a bad
+// publication can never silently replace a working operational build.
+for (const [file, source] of [
+  ["public/dbs-control.html", html],
+  ...firstPartyScripts.map((file) => [file, fs.readFileSync(file, "utf8")]),
+]) {
+  assert.doesNotMatch(source, /(?:Warning: truncated output|…\d+ tokens truncated…)/, `${file} contém marcador de truncamento de publicação.`);
+}
+
 for (const file of firstPartyScripts) {
   const source = fs.readFileSync(file, "utf8");
   try {
