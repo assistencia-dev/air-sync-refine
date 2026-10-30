@@ -208,6 +208,7 @@ assert.doesNotMatch(adminSurface, /<p className="text-sm font-bold text-slate-90
 assert.doesNotMatch(rhWorkspace, /Acesso rápido[\s\S]*Cadastrar funcionário[\s\S]*Tratar solicitações/, "O RH não deve repetir o mesmo bloco de ações rápidas duas vezes.");
 assert.match(html, /function renderizarEmployeeDashboard\(\)/, "O colaborador precisa de um dashboard próprio de progresso.");
 assert.match(html, /await saveStateAndConfirmCloud\(\)/, "A criação da OS do colaborador deve aguardar ACK relacional antes de sair do formulário.");
+assert.doesNotMatch(html, /const confirmation = employeeMode\s*\?\s*await saveStateAndConfirmCloud\(\)\s*:\s*\(saveState\(\), \{ ok: true \}\)/, "A emissão administrativa também deve aguardar ACK relacional; não pode confirmar apenas o cache local.");
 assert.match(html, /registerPendingIssueDraft\(novaOS\)/, "Falha ou perda de conexão na criação deve preservar o draft local da OS.");
 assert.match(html, /id: 'draft-' \+/, "A emissão do colaborador deve usar uma chave local idempotente, nunca um protocolo sequencial fabricado no frontend.");
 assert.match(html, /mergePendingIssueDrafts\(mergeCollaboratorCloudState\(stateForHydration\)\)/, "Um rascunho de OS não confirmado deve sobreviver à hidratação após recarregar a página.");
