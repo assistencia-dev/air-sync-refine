@@ -10,7 +10,7 @@ const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf
 const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
 const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
 const referenceMigration = fs.readFileSync("supabase/migrations/20261028191111_dbs_control_reference_validation.sql", "utf8");
-const workOrderDefaultsMigration = fs.readFileSync("supabase/migrations/20261030110000_dbs_control_work_order_defaults.sql", "utf8");
+const workOrderDefaultsMigration = fs.readFileSync("supabase/migrations/20261030041711_dbs_control_work_order_defaults.sql", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
