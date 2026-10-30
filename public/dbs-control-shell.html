@@ -179,6 +179,7 @@
         .employee-fields-single label { display:block; }
         .employee-fields-single textarea { min-height:118px; resize:vertical; line-height:1.55; }
         .field-required { display:inline-flex; margin-left:6px; padding:2px 6px; border-radius:999px; background:#eff6ff; color:#2563eb; font-size:8px; letter-spacing:.04em; vertical-align:middle; }
+        .field-optional { display:inline-flex; margin-left:6px; padding:2px 6px; border-radius:999px; background:#f8fafc; color:#64748b; font-size:8px; letter-spacing:.04em; vertical-align:middle; }
         .field-check-card { padding:12px; border:1px solid #dbe7f3; border-radius:14px; background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.035); }
         .field-check-title { display:block; color:#0f172a; font-size:11px; font-weight:900; }
         .field-check-summary small { display:block; margin-top:3px; color:#64748b; font-size:9px; font-weight:600; }
@@ -6934,7 +6935,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const checked = Boolean(data[group] && data[group][label]);
                 return '<label class="field-check-item"><input type="checkbox" ' + (checked ? 'checked ' : '') + 'onchange="salvarChecklistTecnicoOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',\'' + group.replace(/'/g,"\\'") + '\',\'' + label.replace(/'/g,"\\'") + '\',this.checked)"><span>' + escDbsControl(label) + '</span></label>';
             }).join('') + '</div></div>').join('');
-            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Checklist técnico do atendimento</span><small>Obrigatório no encerramento. Marque cada verificação realmente executada no atendimento.</small></div><span class="field-check-badge ' + (done ? 'done' : 'pending') + '" id="dbs-checklist-tecnico-count-' + escDbsControl(os.id) + '">' + done + ' itens conferidos</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">' + groups + '</div></section>';
+            return '<section class="field-check-card" style="margin-top:12px"><div class="field-check-summary"><div><span class="field-check-title">Checklist técnico do atendimento</span><small>Opcional. Marque somente as verificações realmente executadas.</small></div><span class="field-check-badge ' + (done ? 'done' : 'pending') + '" id="dbs-checklist-tecnico-count-' + escDbsControl(os.id) + '">' + done + ' itens conferidos</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px">' + groups + '</div></section>';
         }
 
         function renderizarParametrosOperacionaisOS(os) {
@@ -6952,10 +6953,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const concluidos = checklist.filter(i => i.concluido).length;
             const itens = checklist.map((item, index) => '<label class="field-check-item"><input type="checkbox" ' + (item.concluido ? 'checked' : '') + ' onchange="marcarChecklistOS(\'' + String(os.id).replace(/'/g,"\\'") + '\',' + index + ',this.checked)"><span>' + escDbsControl(item.titulo) + '</span></label>').join('');
             return '<section class="field-check-card">' +
-                '<div class="field-check-summary"><div><span class="field-check-title">Checklist da preventiva / PMOC</span><small>Obrigatório quando houver itens aplicáveis · entra no relatório operacional</small></div>' +
+                '<div class="field-check-summary"><div><span class="field-check-title">Checklist da preventiva / PMOC</span><small>Opcional · entra no relatório operacional quando preenchido</small></div>' +
                 '<span class="field-check-badge ' + (concluidos > 0 && concluidos === total ? 'done' : 'pending') + '" data-checklist-badge="' + escDbsControl(os.id) + '">' + concluidos + '/' + total + ' conferidos</span></div>' +
                 '<div class="field-checklist">' + itens + '</div>' +
-                '<div class="field-check-note">Conclua todos os itens aplicáveis antes de registrar o atendimento.</div></section>';
+                '<div class="field-check-note">Preencha somente os itens aplicáveis ao atendimento.</div></section>';
         }
         // IMPORTAÇÃO DE PLANILHAS — clientes e equipamentos
         let DBS_CONTROL_IMPORT_ROWS = [];
@@ -7493,7 +7494,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                             <div class="employee-execution-body">
                               <div class="employee-execution-intro" role="note">
                                 <div class="employee-execution-intro-title"><span class="employee-step-badge">EXECUÇÃO</span><strong>Registre o atendimento com clareza</strong></div>
-                                <p>Preencha o relato técnico, registre as evidências e só então confirme a conclusão. O salvamento é confirmado na nuvem antes de fechar esta OS.</p>
+                                <p>Preencha o relato técnico para registrar o atendimento. Fotos, assinatura, checklist, observações, peças e localização são opcionais e podem ser adicionados quando disponíveis.</p>
                                 <div class="employee-execution-roadmap" aria-label="Etapas do atendimento"><span><b>1</b> Relato</span><span><b>2</b> Evidências</span><span><b>3</b> Assinatura</span><span><b>4</b> Confirmar</span></div>
                               </div>
                               <section class="employee-result-card" aria-labelledby="employee-result-title-${o.id}">
@@ -7509,10 +7510,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                   </select>
                                 </label>
                                 <div id="dbs-mob-pending-${o.id}" class="employee-pending-fields" ${isPending ? '' : 'hidden'}>
-                                  <label>O que ficou pendente? <span class="field-required">Obrigatório</span>
+                                  <label>O que ficou pendente? <span class="field-optional">Opcional</span>
                                     <textarea id="dbs-mob-pending-note-${o.id}" rows="3" placeholder="Ex.: compressor aguardando substituição; retornar com peça e concluir testes."></textarea>
                                   </label>
-                                  <small>Essa informação ficará visível para a administração acompanhar o retorno.</small>
+                                  <small>Essa informação ajuda a administração a acompanhar o retorno, mas não bloqueia o registro.</small>
                                 </div>
                               </section>
                               <details class="employee-register-equipment" style="margin:0 0 14px;padding:12px;border:1px solid #cbdced;border-radius:12px;background:#f7fbff;">
@@ -7531,7 +7532,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <button type="button" class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="cadastrarEquipamentoNaOS('${o.id}')">Salvar equipamento e vincular à OS</button>
                                 <div id="pwa-eq-feedback-${o.id}" role="status" style="font-size:12px;margin-top:8px;"></div>
                               </details>
-                              <label>Peça / insumo <span class="field-required">Registre o uso ou confirme que não houve</span></label>
+                              <label>Peças / insumos utilizados <span class="field-optional">Opcional</span></label>
                               <div class="employee-inline"><select id="pwa-peca-select-${o.id}">${ERP_STATE.pecas.length ? ERP_STATE.pecas.map(p => `<option value="${p.id}">${escHtml(p.nome)} · estoque ${p.qtd}</option>`).join('') : '<option value="">Nenhuma peça cadastrada</option>'}</select><button class="btn btn-secondary btn-sm" onclick="adicionarPecaMobile('${o.id}')">Adicionar</button></div>
                               <label class="employee-parts-ack"><input type="checkbox" id="dbs-mob-no-parts-${o.id}" ${hasPartsUsed ? 'disabled' : ''}> Confirmo que não houve peça ou insumo utilizado nesta visita.</label>
                               <div class="employee-fields employee-fields-single">
@@ -7543,7 +7544,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 const savedObservations = [...new Set([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation].map(value => String(value ?? '').trim()).filter(Boolean))];
                                 return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Novas notas serão anexadas ao histórico.</small></div>` : '';
                               })()}
-                              <label class="employee-observation-field">Observação complementar do técnico <span class="field-required">Obrigatória · acrescentada ao histórico</span>
+                              <label class="employee-observation-field">Observação complementar do técnico <span class="field-optional">Opcional · acrescentada ao histórico</span>
                                 <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas."></textarea>
                               </label>
                               ${tipoPermiteChecklist(o.tipo) ? `
@@ -7560,10 +7561,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               <div style="margin-top:2px;">${renderizarChecklistExecucao(o)}</div>
                               <div id="dbs-mob-geo-${o.id}" class="employee-geo-status" role="status">Localização do atendimento: será capturada ao confirmar.</div>
                               <div class="employee-photo-grid">
-                                <label>Foto antes <span class="field-required">Obrigatória</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}" required></label>
-                                <label>Foto depois <span class="field-required">Obrigatória</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}" required></label>
+                                <label>Foto antes <span class="field-optional">Opcional</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-before-${o.id}"></label>
+                                <label>Foto depois <span class="field-optional">Opcional</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}"></label>
                               </div>
-                              <label>Assinatura do cliente <span class="field-required">Obrigatória</span></label>
+                              <label>Assinatura do cliente <span class="field-optional">Opcional</span></label>
                               <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
                               <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
                             </div>
@@ -7761,7 +7762,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (!msg.ok || !msg.attachment) { finish(new Error(msg.error || 'Não foi possível enviar o anexo para a nuvem.')); return; }
                     finish(null, msg.attachment);
                 };
-                const timeout = setTimeout(() => finish(new Error('O upload não foi confirmado em 30 segundos. A OS não foi concluída.')), 30000);
+                const timeout = setTimeout(() => finish(new Error('O upload do anexo excedeu o tempo limite; o atendimento continuará sem este anexo.')), 8000);
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_UPLOAD_ATTACHMENT', requestId, orderId: String(osId),
                     attachmentType, fileName: String(fileName || attachmentType), contentType, dataBase64 }, window.location.origin);
@@ -7853,24 +7854,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const technicalChecklistDone = Object.entries(DBS_CHECKLIST_TECNICO || {}).reduce((sum, [group, labels]) => sum + labels.filter(label => Boolean(technicalChecklist[group] && technicalChecklist[group][label] === true)).length, 0);
             const hasParts = Array.isArray(os.pecasUsadas) && os.pecasUsadas.some(part => Number(part?.qtd ?? part?.quantity ?? 0) > 0);
             const finishLabel = atendimentoStatus === 'concluida' ? 'Concluir atendimento' : 'Registrar ' + atendimentoStatusLabel.toLocaleLowerCase('pt-BR');
+            // Regra operacional: somente o relato técnico é obrigatório para
+            // encerrar a OS. Evidências complementares não podem impedir o
+            // técnico de registrar um atendimento já realizado.
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
-            if (!observationText) { alert('Registre uma observação do atendimento antes de concluir a OS.'); observationInput?.focus(); return; }
-            if (technicalChecklistTotal > 0 && technicalChecklistDone < technicalChecklistTotal) { alert('Conclua todos os itens do checklist técnico antes de registrar o atendimento.'); return; }
-            if (!hasParts && !noPartsConfirmed) { alert('Adicione as peças utilizadas ou confirme que não houve peça/insumo nesta visita.'); noPartsInput?.focus(); return; }
-            if (atendimentoStatus !== 'concluida' && !pendingReason) {
-                alert('Descreva a pendência técnica antes de registrar este atendimento.');
-                pendingNoteInput?.focus();
-                return;
-            }
-            if (!canvas) { alert('A assinatura do cliente não foi carregada.'); return; }
+            const hasSignature = Boolean(canvas && (canvas.dataset.dbsDirty === 'true' || DBS_SIGNATURE_DRAFTS.has(String(osId))));
+            const signature = hasSignature ? canvas.toDataURL('image/png') : null;
 
-            const signature = canvas.toDataURL('image/png');
-            if (!signature || signature.length < 200) {
-                alert('Registre a assinatura do cliente antes de concluir a OS.');
-                return;
-            }
-
-            const executionBody = canvas.closest('.employee-execution-body');
+            const executionBody = canvas?.closest('.employee-execution-body');
             const finishButton = executionBody?.querySelector('.employee-finish');
             const progressNode = executionBody?.querySelector('.employee-save-status');
             const setProgress = (message) => {
@@ -7888,26 +7879,54 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const beforeCompletion = JSON.parse(JSON.stringify(os));
 
             try {
-                setProgress('Capturando localização...');
-                const location = await capturarGeolocalizacaoOSMobile(osId);
+                setProgress('Salvando atendimento...');
+                // A localização é complementar: aguarde no máximo 1,5 s para
+                // aproveitar um ponto já disponível, sem prender o encerramento
+                // quando o GPS estiver indisponível ou o navegador pedir permissão.
+                let location = null;
+                try {
+                    location = await Promise.race([
+                        capturarGeolocalizacaoOSMobile(osId),
+                        new Promise(resolve => setTimeout(() => resolve(null), 1500)),
+                    ]);
+                    if (!location && geoFeedback) geoFeedback.textContent = 'Localização não capturada; o atendimento continuará sem ela.';
+                } catch (locationError) {
+                    if (geoFeedback) geoFeedback.textContent = 'Localização não capturada; o atendimento continuará sem ela.';
+                }
                 const beforeFile = beforeInput?.files?.[0] || null;
                 const afterFile = afterInput?.files?.[0] || null;
-                if (!beforeFile && !os.fotoAntes) throw new Error('Registre a foto antes do atendimento.');
-                if (!afterFile && !os.fotoDepois) throw new Error('Registre a foto depois do atendimento.');
+                const photoReadWarnings = [];
+                const photoReadFailures = new Set();
+                const readOptionalPhoto = async (file, field, label, fallback) => {
+                    if (!file) return fallback;
+                    try {
+                        return await readExecutionPhoto(file);
+                    } catch (photoError) {
+                        photoReadFailures.add(field);
+                        photoReadWarnings.push(`${label} não processada`);
+                        return fallback;
+                    }
+                };
                 const [fotoAntes, fotoDepois] = await Promise.all([
-                    beforeFile ? readExecutionPhoto(beforeFile) : Promise.resolve(os.fotoAntes || null),
-                    afterFile ? readExecutionPhoto(afterFile) : Promise.resolve(os.fotoDepois || null),
+                    readOptionalPhoto(beforeFile, 'fotoAntes', 'foto antes', os.fotoAntes || null),
+                    readOptionalPhoto(afterFile, 'fotoDepois', 'foto depois', os.fotoDepois || null),
                 ]);
-                // A OS só é concluída depois de confirmar cada upload necessário.
+                // Fotos e assinatura são uploads opcionais. Uma falha no Storage
+                // não pode bloquear a gravação do relatório técnico.
                 const uploadJobs = [];
                 if (beforeFile && fotoAntes) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_antes', fotoAntes, beforeFile.name)
-                    .then(result => ({ field: 'fotoAntes', pathField: 'fotoAntesStoragePath', result })));
+                    .then(result => ({ field: 'fotoAntes', pathField: 'fotoAntesStoragePath', result }))
+                    .catch(error => ({ field: 'fotoAntes', pathField: 'fotoAntesStoragePath', error })));
                 if (afterFile && fotoDepois) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_depois', fotoDepois, afterFile.name)
-                    .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result })));
-                uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
-                    .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result })));
+                    .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result }))
+                    .catch(error => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', error })));
+                if (signature) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
+                    .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result }))
+                    .catch(error => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', error })));
                 setProgress('Enviando evidências...');
                 const uploadedAttachments = await Promise.all(uploadJobs);
+                const attachmentWarnings = photoReadWarnings.concat(uploadedAttachments.filter(item => item.error).map(item => item.field === 'assinatura' ? 'assinatura não enviada' : `${item.field === 'fotoAntes' ? 'foto antes' : 'foto depois'} não enviada`));
+                const attachmentFailed = field => uploadedAttachments.some(item => item.field === field && item.error);
 
                 if (observationText) {
                     const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
@@ -7932,14 +7951,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 os.relatoTecnico = relatoTecnico;
                 os.diagnostico = relatoTecnico;
                 os.trabalhoExecutado = relatoTecnico;
-                os.fotoAntes = fotoAntes;
-                os.fotoDepois = fotoDepois;
-                os.assinatura = signature;
-                os.latitude = location.latitude;
-                os.longitude = location.longitude;
-                os.geolocationCapturedAt = location.capturedAt;
+                if (!photoReadFailures.has('fotoAntes') && (!beforeFile || !attachmentFailed('fotoAntes'))) os.fotoAntes = fotoAntes;
+                if (!photoReadFailures.has('fotoDepois') && (!afterFile || !attachmentFailed('fotoDepois'))) os.fotoDepois = fotoDepois;
+                if (signature && !attachmentFailed('assinatura')) os.assinatura = signature;
+                if (location) {
+                    os.latitude = location.latitude;
+                    os.longitude = location.longitude;
+                    os.geolocationCapturedAt = location.capturedAt;
+                }
                 os.completionStatusCode = atendimentoStatus;
-                uploadedAttachments.forEach(item => {
+                uploadedAttachments.filter(item => !item.error && item.result).forEach(item => {
                     os[item.pathField] = item.result.storagePath;
                     os[item.field] = item.result.signedUrl;
                 });
@@ -7956,11 +7977,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 DBS_SIGNATURE_DRAFTS.delete(String(osId));
                 renderizarTudo();
                 const queuedLocally = saveResult?.queuedLocally === true;
+                const evidenceNote = attachmentWarnings.length ? ` ${attachmentWarnings.join(' e ')}; você pode anexar depois.` : '';
                 alert(queuedLocally
                     ? `OS ${osId} registrada como "${atendimentoStatusLabel}" neste dispositivo. A sincronização será concluída automaticamente quando a conexão voltar.`
                     : atendimentoStatus === 'concluida'
-                        ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.`
-                        : `OS ${osId} registrada como "${atendimentoStatusLabel}" e confirmada na nuvem. A administração já pode acompanhar o próximo passo.`);
+                        ? `OS ${osId} concluída e confirmada na nuvem. A administração já pode consultar o atendimento.${evidenceNote}`
+                        : `OS ${osId} registrada como "${atendimentoStatusLabel}" e confirmada na nuvem. A administração já pode acompanhar o próximo passo.${evidenceNote}`);
             } catch (err) {
                 console.error('Falha ao concluir OS', err);
                 const currentIndex = ERP_STATE.ordens.findIndex(order => String(order?.id) === String(osId));
