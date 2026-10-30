@@ -301,8 +301,11 @@ assert.match(pdf, /company\.logo_url/, "O PDF deve buscar dinamicamente a logo d
 assert.match(pdf, /const maskDocument = value =>/, "O PDF deve aplicar máscara de CNPJ/CPF.");
 assert.match(pdf, /const maskCep = value =>/, "O PDF deve aplicar máscara de CEP.");
 assert.match(pdf, /const equipmentLabel = value =>/, "O PDF deve higienizar placeholders genéricos de equipamentos.");
-assert.match(pdf, /Página 1 de 1/, "O rodapé deve declarar a paginação única.");
-assert.doesNotMatch(pdf, /doc\.addPage\(/, "O renderer da OS não pode abrir uma segunda página.");
+assert.match(pdf, /Página ${pageNumber} de ${totalPages}/, "O rodapé deve declarar a paginação real do documento.");
+assert.match(pdf, /doc\.addPage\(/, "O renderer da OS deve abrir páginas de continuação quando a informação não couber.");
+assert.doesNotMatch(pdf, /slice\(0, 3\)/, "O PDF da OS não pode limitar a lista de equipamentos a três itens.");
+assert.doesNotMatch(pdf, /não exibido|nao exibido/i, "O PDF não pode anunciar que omitiu informações do atendimento.");
+assert.match(pdf, /breakLongLine/, "Textos longos devem quebrar linha sem serem truncados.");
 assert.match(observations, /Nenhuma observação registrada\./, "O detalhe administrativo deve exibir um estado vazio explícito.");
 
 const appendHelper = cloudFunctions.match(/function mergeAppendOnlyCollaboratorObservations\(currentOrder: any, incomingOrder: any\) \{[\s\S]*?\n\}\n(?=\nfunction normalizeDbsStatus)/)?.[0];
@@ -429,7 +432,7 @@ const osUx = fs.readFileSync("public/dbs-control-ux.js", "utf8");
 assert.match(osPdf, /statusFill[\s\S]*?statusInk/, "O PDF da OS deve padronizar o status com destaque visual sem alterar o status gravado.");
 assert.match(osPdf, /badgeWidth[\s\S]*?roundedRect/, "O cabeçalho do PDF deve apresentar status em selo visual consistente.");
 assert.doesNotMatch(osPdf, /const place = first\(order\.localAtendimento/, "O PDF não deve duplicar o local de atendimento quando o equipamento já identifica o ativo.");
-assert.strictEqual((osPdf.match(/'Tipo de atendimento'/g) || []).length, 1, "O PDF deve exibir o tipo de atendimento uma única vez.");
+assert.strictEqual((osPdf.match(/'Tipo de OS'/g) || []).length, 1, "O PDF deve exibir o tipo de OS uma única vez.");
 assert.match(osUx, /removeRedundantOsFields/, "A emissão deve remover os campos duplicados de local, sintoma e orientação.");
 assert.match(osUx, /wrapOsDetailWithoutDuplicateLocation/, "A visão administrativa da OS não deve repetir o local físico do equipamento.");
 assert.match(html, /dbs-os-clean-layout-20261027/, "A emissão deve usar o layout limpo e responsivo da OS.");
