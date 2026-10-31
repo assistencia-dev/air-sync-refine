@@ -437,6 +437,9 @@ async function hydrateDbsControlStateFromCanonicalDb(
     employeesResult,
     orderEquipmentResult,
     orderPartsResult,
+    purchasesResult,
+    purchaseItemsResult,
+    workOrderFinancialsResult,
     legacyRecordsResult,
     legacyMapResult,
   ] = await Promise.all([
@@ -493,10 +496,26 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = supabaseAdmin.from("dbs_control_work_order_parts")
-        .select("work_order_id,part_id,quantity,unit_cents");
+        .select("work_order_id,part_id,quantity,unit_cents,cost_cents,consumption_status");
       return isScopedCollaborator
         ? (inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows)
         : query;
+    })(),
+    (() => {
+      const query = (supabaseAdmin as any).from("dbs_control_purchases")
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
+      return isScopedCollaborator ? noRows : query.eq("scope_key", scopeKey);
+    })(),
+    (() => {
+      const query = (supabaseAdmin as any).from("dbs_control_purchase_items")
+        .select("purchase_id,part_id,quantity,unit_cost_cents,total_cents");
+      return isScopedCollaborator ? noRows : query;
+    })(),
+    (() => {
+      const query = (supabaseAdmin as any).from("dbs_control_work_order_financials")
+        .select("work_order_id,revenue_cents,parts_cost_cents,status,revenue_entry_id,revenue_reversal_entry_id,updated_at");
+      if (!isScopedCollaborator) return query;
+      return inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows;
     })(),
     scopeKey
       ? supabaseAdmin.from("dbs_control_entity_records")
@@ -521,6 +540,9 @@ async function hydrateDbsControlStateFromCanonicalDb(
     ordersResult,
     orderEquipmentResult,
     orderPartsResult,
+    purchasesResult,
+    purchaseItemsResult,
+    workOrderFinancialsResult,
     legacyRecordsResult,
     legacyMapResult,
   ];
@@ -698,8 +720,29 @@ async function hydrateDbsControlStateFromCanonicalDb(
     stock_quantity: Number(row.stock_quantity || 0),
     custo: Number(row.cost_cents || 0) / 100,
     venda: Number(row.sale_cents || 0) / 100,
+    stock_source: "relational",
     status: row.status || "ativo",
   }));
+
+  const canonicalPartById = new Map(canonicalParts.map((part: any) => [String(part.id), part]));
+  const purchaseItemsByPurchaseId = new Map<string, any[]>();
+  for (const item of (purchaseItemsResult as any).data ?? []) {
+    const purchaseId = String(item?.purchase_id ?? "").trim();
+    if (!purchaseId) continue;
+    const partId = String(item?.part_id ?? "").trim();
+    const part = canonicalPartById.get(partId);
+    const list = purchaseItemsByPurchaseId.get(purchaseId) ?? [];
+    list.push({
+      part_id: partId,
+      sku: part?.sku || "",
+      item: part?.nome || part?.name || "Peça",
+      qtd: Number(item?.quantity || 0),
+      quantity: Number(item?.quantity || 0),
+      unit_cost_cents: Number(item?.unit_cost_cents || 0),
+      total_cents: Number(item?.total_cents || 0),
+    });
+    purchaseItemsByPurchaseId.set(purchaseId, list);
+  }
 
   const canonicalTechnicians = (employeesResult.data ?? [])
     .filter((row: any) => row.is_active !== false)
@@ -759,12 +802,23 @@ async function hydrateDbsControlStateFromCanonicalDb(
       quantity: Number((link as any).quantity || 0),
       venda: Number((link as any).unit_cents || 0) / 100,
       unit_cents: (link as any).unit_cents ?? null,
+      custo: Number((link as any).cost_cents || 0) / 100,
+      cost_cents: (link as any).cost_cents ?? 0,
+      consumption_status: (link as any).consumption_status || 'consumed',
     });
     partLinks.set(orderId, list);
   }
 
+  const financialsByOrderId = new Map<string, any>();
+  for (const financial of (workOrderFinancialsResult as any).data ?? []) {
+    financialsByOrderId.set(String(financial?.work_order_id), financial);
+  }
+
   const canonicalOrders = (ordersResult.data ?? []).map((row: any) => {
     const equipmentIds = equipmentLinks.get(String(row.id)) ?? [];
+    const financial = financialsByOrderId.get(String(row.id));
+    const revenueCents = financial ? Number(financial.revenue_cents || 0) : 0;
+    const partsCostCents = financial ? Number(financial.parts_cost_cents || 0) : 0;
     const assignedEmployeeId = row.assigned_employee_id ? String(row.assigned_employee_id) : null;
     const mappedStatus = statusMap[String(row.status || "").trim().toLowerCase()] || row.status || "Em Atendimento";
     return {
@@ -807,6 +861,13 @@ async function hydrateDbsControlStateFromCanonicalDb(
       version: Number(row.version || 1),
       idempotency_key: row.idempotency_key || null,
       valor: Number(row.total_cents || 0) / 100,
+      revenue_cents: revenueCents,
+      parts_cost_cents: partsCostCents,
+      custoPecas: partsCostCents / 100,
+      lucroBruto: (revenueCents - partsCostCents) / 100,
+      financial_status: financial?.status || "pending",
+      revenue_entry_id: financial?.revenue_entry_id || null,
+      revenue_reversal_entry_id: financial?.revenue_reversal_entry_id || null,
     };
   });
 
@@ -844,6 +905,28 @@ async function hydrateDbsControlStateFromCanonicalDb(
   const legacyCompras = (legacyRecordsResult.data ?? [])
     .filter((row: any) => row.entity_type === "compra")
     .map((row: any) => ({ ...(row.payload && typeof row.payload === "object" ? row.payload : {}), version: row.version }));
+  const relationalCompras = ((purchasesResult as any).data ?? []).map((row: any) => ({
+    ...(() => {
+      const items = purchaseItemsByPurchaseId.get(String(row.id)) ?? [];
+      const first = items[0] ?? null;
+      return {
+        part_id: first?.part_id || null,
+        itens: items,
+        qtd: items.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0),
+      };
+    })(),
+    id: String(row.id),
+    fornecedor: row.supplier_name || "Fornecedor",
+    item: purchaseItemsByPurchaseId.get(String(row.id))?.[0]?.item || row.document_number || "Compra de peças",
+    valor: Number(row.total_cents || 0) / 100,
+    status: row.status || "received",
+    payment_status: row.payment_status || "unpaid",
+    purchase_date: row.purchase_date || null,
+    ledger_entry_id: row.ledger_entry_id || null,
+    idempotency_key: row.idempotency_key || null,
+    legacy_key: row.legacy_key || null,
+    version: 1,
+  }));
   const legacyOrcamentos = (legacyRecordsResult.data ?? [])
     .filter((row: any) => row.entity_type === "orcamento")
     .map((row: any) => ({ ...(row.payload && typeof row.payload === "object" ? row.payload : {}), version: row.version }));
@@ -869,7 +952,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     pecas: mergeArray(current.pecas as unknown[], canonicalParts),
     tecnicos: mergedTechnicians,
     ordens: mergedOrders,
-    compras: mergeArray(current.compras as unknown[], legacyCompras),
+    compras: mergeArray(current.compras as unknown[], [...legacyCompras, ...relationalCompras]),
     orcamentos: mergeArray(Array.isArray((current as any).orcamentos) ? (current as any).orcamentos : [], legacyOrcamentos),
     sites,
     locais,
@@ -1147,6 +1230,8 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
       hydratedState.sites,
       hydratedState.locais,
       hydratedState.servicos,
+      hydratedState.pecas,
+      hydratedState.compras,
     ].some((items) => Array.isArray(items) && items.length > 0);
 
     if (!data && !hasCanonicalRecords) return null;
@@ -1368,9 +1453,126 @@ async function persistDbsControlLegacyEntityDeltas(
   return applied;
 }
 
+function dbsControlPartPayload(record: any, userId: string, requestId: string) {
+  const rawId = String(record?.id ?? '').trim();
+  const costRaw = record?.cost_cents ?? record?.custo;
+  const saleRaw = record?.sale_cents ?? record?.venda;
+  const cost = Number(costRaw ?? 0);
+  const sale = Number(saleRaw ?? 0);
+  return {
+    actor_user_id: userId,
+    id: isDbsControlUuid(rawId) ? rawId : undefined,
+    sku: String(record?.sku ?? '').trim(),
+    name: String(record?.name ?? record?.nome ?? '').trim(),
+    description: String(record?.description ?? record?.descricao ?? '').trim(),
+    cost_cents: Number.isFinite(cost)
+      ? (record?.cost_cents !== undefined ? Math.round(cost) : Math.round(cost * 100))
+      : 0,
+    sale_cents: Number.isFinite(sale)
+      ? (record?.sale_cents !== undefined ? Math.round(sale) : Math.round(sale * 100))
+      : 0,
+    status: String(record?.status ?? 'ativo').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo',
+    idempotency_key: `${requestId}:part:${rawId || record?.sku || crypto.randomUUID()}`.slice(0, 240),
+  };
+}
+
+async function persistDbsControlPartDelta(
+  record: any,
+  userId: string,
+  requestId: string,
+  scope: { scopeKey: string; companyId: string | null },
+) {
+  const payload = dbsControlPartPayload(record, userId, requestId);
+  if (!payload.sku || !payload.name) throw new Error('Peça sem SKU ou nome; o registro não foi gravado.');
+  const result = await (supabaseAdmin as any).rpc('dbs_control_upsert_part', { p_payload: payload });
+  if (result.error) throw new Error(result.error.message);
+  const data = result.data as Record<string, unknown> | null;
+  const partId = String(data?.part_id ?? '').trim();
+  if (!partId) throw new Error('A peça foi processada, mas o banco não retornou o identificador relacional.');
+
+  // Importações antigas podem trazer saldo no campo `opening_quantity`. Esse
+  // saldo não é descartado e também não é escrito diretamente na tabela de
+  // peças: entra como ajuste imutável, com Ledger e Outbox, protegido pela
+  // mesma chave de idempotência em todos os retries.
+  const legacyOpeningQuantity = record?.opening_quantity ?? record?.saldoInicial
+    ?? (record?.stock_source === undefined && record?.stock_quantity === undefined ? record?.qtd : 0);
+  const openingQuantity = Number(legacyOpeningQuantity ?? 0);
+  if (Number.isFinite(openingQuantity) && openingQuantity > 0) {
+    const openingCostRaw = Number(record?.opening_unit_cost_cents ?? record?.custoInicial ?? record?.cost_cents ?? record?.custo ?? 0);
+    const openingUnitCostCents = Number.isFinite(openingCostRaw)
+      ? (record?.opening_unit_cost_cents !== undefined || record?.cost_cents !== undefined
+          ? Math.round(openingCostRaw)
+          : Math.round(openingCostRaw * 100))
+      : 0;
+    const opening = await (supabaseAdmin as any).rpc('dbs_control_apply_opening_balance', {
+      p_payload: {
+        actor_user_id: userId,
+        company_id: scope.companyId,
+        scope_key: scope.scopeKey,
+        part_id: partId,
+        quantity: openingQuantity,
+        unit_cost_cents: Math.max(0, openingUnitCostCents),
+        idempotency_key: `opening-balance:${scope.scopeKey}:${partId}`.slice(0, 240),
+      },
+    });
+    if (opening.error) throw new Error(opening.error.message);
+  }
+  return { ...data, part_id: partId };
+}
+
+function purchasePartId(record: any, partMap?: Map<string, string>) {
+  const raw = String(record?.part_id ?? record?.partId ?? record?.pecaId ?? '').trim();
+  if (!raw) return '';
+  return partMap?.get(raw) ?? raw;
+}
+
+async function persistDbsControlPurchaseDelta(
+  record: any,
+  user: DbsControlUser,
+  scope: { scopeKey: string; companyId: string | null },
+  requestId: string,
+  partMap?: Map<string, string>,
+) {
+  const partId = purchasePartId(record, partMap);
+  if (!isDbsControlUuid(partId)) return null;
+  const quantity = Number(record?.quantity ?? record?.qtd ?? 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('A quantidade da compra precisa ser maior que zero.');
+  const totalRaw = Number(record?.total_cents ?? record?.valor ?? 0);
+  const totalCents = Number.isFinite(totalRaw)
+    ? (record?.total_cents !== undefined ? Math.round(totalRaw) : Math.round(totalRaw * 100))
+    : 0;
+  const unitRaw = Number(record?.unit_cost_cents ?? record?.unitCost ?? record?.custoUnitario ?? 0);
+  const unitCostCents = Number.isFinite(unitRaw) && unitRaw > 0
+    ? (record?.unit_cost_cents !== undefined ? Math.round(unitRaw) : Math.round(unitRaw * 100))
+    : Math.round(totalCents / quantity);
+  const purchaseDate = String(record?.purchase_date ?? record?.data ?? record?.date ?? '').trim();
+  const normalizedDate = purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)
+    ? purchaseDate
+    : new Date().toISOString().slice(0, 10);
+  const paymentStatus = String(record?.payment_status ?? record?.statusPagamento ?? 'unpaid').trim().toLowerCase();
+  const result = await (supabaseAdmin as any).rpc('dbs_control_receive_purchase', {
+    p_payload: {
+      actor_user_id: user.id,
+      company_id: scope.companyId,
+      scope_key: scope.scopeKey,
+      supplier_name: String(record?.supplier_name ?? record?.fornecedor ?? '').trim(),
+      document_number: String(record?.document_number ?? record?.nota ?? record?.numeroNota ?? '').trim() || null,
+      purchase_date: normalizedDate,
+      payment_status: ['paid', 'partial'].includes(paymentStatus) ? paymentStatus : 'unpaid',
+      idempotency_key: `${requestId}:purchase:${String(record?.id ?? partId)}`.slice(0, 240),
+      legacy_key: String(record?.id ?? '').trim() || null,
+      items: [{ part_id: partId, quantity, unit_cost_cents: Math.max(0, unitCostCents) }],
+    },
+  });
+  if (result.error) throw new Error(result.error.message);
+  return result.data as Record<string, unknown>;
+}
+
 async function persistDbsControlMasterDeltas(
   changes: DbsControlDeltaChanges,
   user: DbsControlUser,
+  requestId = `master:${user.id}`,
+  scope: { scopeKey: string; companyId: string | null },
 ) {
   const clientMap = new Map<string, string>();
   const siteMap = new Map<string, string>();
@@ -1493,23 +1695,9 @@ async function persistDbsControlMasterDeltas(
 
   for (const part of changes.pecas ?? []) {
     const rawId = String(part?.id ?? "").trim();
-    const price = Number(part?.venda ?? part?.sale_cents ?? 0);
-    const cost = Number(part?.custo ?? part?.cost_cents ?? 0);
-    const payload: any = {
-      name: String(part?.nome ?? part?.name ?? "Peça").trim() || "Peça",
-      description: String(part?.descricao ?? part?.description ?? "").trim() || null,
-      sku: String(part?.sku ?? "").trim() || null,
-      sale_cents: Number.isFinite(price) ? (part?.sale_cents ? Math.round(price) : Math.round(price * 100)) : 0,
-      cost_cents: Number.isFinite(cost) ? (part?.cost_cents ? Math.round(cost) : Math.round(cost * 100)) : 0,
-      stock_quantity: Number(part?.qtd ?? part?.stock_quantity ?? 0) || 0,
-      status: String(part?.status ?? "ativo"),
-      updated_at: new Date().toISOString(),
-    };
-    if (isDbsControlUuid(rawId)) payload.id = rawId;
-    const saved = await supabaseAdmin.from("dbs_control_parts").upsert(payload).select("id").single();
-    if (saved.error || !saved.data) throw new Error(saved.error?.message ?? "Peça não retornada.");
-    if (rawId) partMap.set(rawId, String(saved.data.id));
-    partMap.set(String(saved.data.id), String(saved.data.id));
+    const saved = await persistDbsControlPartDelta(part, user.id, requestId, scope);
+    if (rawId) partMap.set(rawId, String(saved.part_id));
+    partMap.set(String(saved.part_id), String(saved.part_id));
     applied += 1;
   }
 
@@ -1633,7 +1821,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         };
       }
     }
-    const maps = await persistDbsControlMasterDeltas(changes, user);
+    const maps = await persistDbsControlMasterDeltas(changes, user, data.requestId, scope);
     const rawEmployeeIds = [...new Set(
       (changes.ordens ?? [])
         .map((order: any) => getDbsControlEmployeeId(order))
@@ -1681,7 +1869,18 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     }
 
     if (user.role_key !== "COLABORADOR") {
-      applied += await persistDbsControlLegacyEntityDeltas(scope.scopeKey, user.id, "compra", changes.compras ?? [], data.requestId);
+      const legacyPurchases: any[] = [];
+      for (const purchase of changes.compras ?? []) {
+        const relational = await persistDbsControlPurchaseDelta(purchase, user, scope, data.requestId, maps.partMap);
+        if (relational) {
+          applied += 1;
+        } else {
+          // Compras antigas sem part_id continuam preservadas na entidade
+          // legada para reconciliação explícita; não inventamos estoque.
+          legacyPurchases.push(purchase);
+        }
+      }
+      applied += await persistDbsControlLegacyEntityDeltas(scope.scopeKey, user.id, "compra", legacyPurchases, data.requestId);
       applied += await persistDbsControlLegacyEntityDeltas(scope.scopeKey, user.id, "orcamento", changes.orcamentos ?? [], data.requestId);
     }
 
