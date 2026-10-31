@@ -11,6 +11,7 @@ const fkIndexes = fs.readFileSync('supabase/migrations/20261031042042_dbs_contro
 const openingBalance = fs.readFileSync('supabase/migrations/20261031042508_dbs_control_inventory_opening_balance.sql', 'utf8');
 const openingBalanceHardening = fs.readFileSync('supabase/migrations/20261031042732_dbs_control_inventory_opening_balance_zero_cost.sql', 'utf8');
 const purchaseFkIndex = fs.readFileSync('supabase/migrations/20261031042759_dbs_control_inventory_purchase_fk_index.sql', 'utf8');
+const partCostGuard = fs.readFileSync('supabase/migrations/20261031043439_dbs_control_part_cost_guard.sql', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -41,6 +42,10 @@ assert.match(openingBalanceHardening, /if v_unit_cost > 0 then/i);
 assert.match(fkIndexes, /dbs_control_inventory_movements_company_fk_idx/);
 assert.match(fkIndexes, /dbs_control_work_order_financials_reversal_entry_fk_idx/);
 assert.match(purchaseFkIndex, /dbs_control_purchase_items_purchase_idx/);
+assert.match(partCostGuard, /v_has_movements/i);
+assert.match(partCostGuard, /v_existing\.cost_cents/i);
+assert.match(partCostGuard, /coalesce\(v_existing\.stock_quantity, 0\) = 0/i);
+assert.doesNotMatch(partCostGuard, /drop\s+(table|schema|column)\b/i);
 
 assert.match(functions, /dbs_control_receive_purchase/);
 assert.match(functions, /dbs_control_upsert_part/);
