@@ -9584,3 +9584,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     #tab-nova-os .dbs-os-type-picker { grid-template-columns:1fr; }
   }
 </style>
+<!-- O shell permanece compatível com a página principal: a camada CRUD
+     administrativa é carregada do mesmo artefato versionado, sem duplicar
+     regras de negócio nem criar uma segunda fonte de dados. -->
+<script id="dbs-admin-catalog-crud-shell-loader-20261031">
+(function () {
+  function loadCrudLayer() {
+    if (document.getElementById('dbs-admin-catalog-crud-20261031')) return;
+    fetch('/dbs-control.html', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (response) { if (!response.ok) throw new Error('CRUD layer unavailable'); return response.text(); })
+      .then(function (html) {
+        var parsed = new DOMParser().parseFromString(html, 'text/html');
+        var source = parsed.getElementById('dbs-admin-catalog-crud-20261031');
+        if (!source) return;
+        var script = document.createElement('script');
+        script.id = 'dbs-admin-catalog-crud-20261031';
+        script.text = source.textContent || '';
+        document.body.appendChild(script);
+      })
+      .catch(function (error) { console.warn('Camada administrativa do shell não carregada:', error); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCrudLayer, { once: true });
+  else loadCrudLayer();
+})();
+</script>

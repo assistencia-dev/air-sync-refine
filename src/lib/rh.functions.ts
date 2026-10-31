@@ -685,6 +685,261 @@ export const saveRhEmployeeRecord = createServerFn({ method: "POST" })
     await supabaseAdmin.from("rh_audit_log").insert({ employee_id: employee.id, actor_user_id: actor.id, action: "CADASTRO_FUNCIONARIO_CRIADO", entity_type: "rh_employees", entity_id: employee.id, before_data: null, after_data: employee });
     return employee;
   });
+
+/**
+ * Atualiza somente os campos operacionais exibidos no cadastro de técnicos do
+ * DBS CONTROL. O cadastro central do RH continua sendo a fonte de verdade; a
+ * alteração é auditada e nunca recria uma cópia de colaborador no snapshot.
+ */
+export const updateDbsControlTechnician = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    employee_id: string;
+    full_name: string;
+    email: string;
+    position?: string | null;
+    phone?: string | null;
+    password?: string | null;
+  }) => {
+    if (!input?.employee_id?.trim()) throw new Error("Técnico inválido.");
+    if (!input.full_name?.trim()) throw new Error("Informe o nome completo.");
+    if (!input.email?.trim() || !input.email.includes("@")) throw new Error("E-mail inválido.");
+    if (input.password && input.password.length < 8) throw new Error("A senha deve ter no mínimo 8 caracteres.");
+    return {
+      ...input,
+      employee_id: input.employee_id.trim(),
+      full_name: input.full_name.trim(),
+      email: input.email.trim().toLowerCase(),
+      position: String(input.position ?? "").trim(),
+      phone: String(input.phone ?? "").trim(),
+      password: input.password?.trim() || null,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, full_name, unit, is_active, registration_data, ponto_portal_user_id, dbs_control_access_enabled")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Técnico não encontrado no cadastro central.");
+
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? { ...(employee.registration_data as Record<string, unknown>) }
+      : {};
+    registration.email = data.email;
+    registration.phone = data.phone;
+    registration.telefone = data.phone;
+    registration.position = data.position || registration.position || registration.cargo || "Técnico";
+    registration.cargo = registration.position;
+    delete registration.__dbs_control_archived_at;
+
+    const linkedUserId = String(employee.ponto_portal_user_id ?? "").trim();
+    let linkedUser: { id: string; auth_id: string | null; role_key: string | null; email: string | null } | null = null;
+    if (linkedUserId) {
+      const { data: user, error: userError } = await supabaseAdmin
+        .from("users")
+        .select("id, auth_id, role_key, email")
+        .eq("id", linkedUserId)
+        .maybeSingle();
+      if (userError) throw new Error(userError.message);
+      linkedUser = user;
+    }
+
+    if (linkedUser && linkedUser.id) {
+      const duplicate = await supabaseAdmin.from("users")
+        .select("id")
+        .ilike("email", data.email)
+        .neq("id", linkedUser.id)
+        .limit(1)
+        .maybeSingle();
+      if (duplicate.error) throw new Error(duplicate.error.message);
+      if (duplicate.data) throw new Error("Já existe outro login com este e-mail.");
+
+      if (linkedUser.auth_id) {
+        const authPatch: { email: string; user_metadata: { full_name: string }; password?: string } = {
+          email: data.email,
+          user_metadata: { full_name: data.full_name },
+        };
+        if (data.password) authPatch.password = data.password;
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(linkedUser.auth_id, authPatch);
+        if (authError) throw new Error(authError.message);
+      }
+      const { error: userUpdateError } = await supabaseAdmin.from("users").update({
+        full_name: data.full_name,
+        email: data.email,
+      }).eq("id", linkedUser.id);
+      if (userUpdateError) throw new Error(userUpdateError.message);
+      const { error: accessUpdateError } = await supabaseAdmin.from("rh_employee_access")
+        .update({ login_identifier: data.email })
+        .eq("employee_id", data.employee_id)
+        .eq("access_enabled", true);
+      if (accessUpdateError) throw new Error(accessUpdateError.message);
+    }
+
+    const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees")
+      .update({ full_name: data.full_name, registration_data: registration as any })
+      .eq("id", data.employee_id)
+      .select("id, full_name, unit, registration_data, is_active, ponto_portal_user_id, dbs_control_access_enabled")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id,
+      actor_user_id: actor.id,
+      action: "DBS_CONTROL_TECNICO_ATUALIZADO",
+      entity_type: "rh_employees",
+      entity_id: data.employee_id,
+      before_data: employee,
+      after_data: updated,
+    });
+    if (auditError) throw new Error(`Técnico atualizado, mas a auditoria falhou: ${auditError.message}`);
+    return updated;
+  });
+
+/** Arquivamento lógico: remove o técnico das listas operacionais sem apagar OS. */
+export const archiveDbsControlTechnician = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { employee_id: string; confirmation: string }) => {
+    if (!input?.employee_id?.trim() || input.confirmation !== "ARQUIVAR TECNICO") {
+      throw new Error("Confirmação de arquivamento inválida.");
+    }
+    return { employee_id: input.employee_id.trim() };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, registration_data, is_active, dbs_control_access_enabled")
+      .eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Técnico não encontrado.");
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? { ...(employee.registration_data as Record<string, unknown>) }
+      : {};
+    registration.__dbs_control_archived_at = new Date().toISOString();
+    registration.__dbs_control_archived_by = actor.id;
+    const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees").update({
+      is_active: false,
+      dbs_control_access_enabled: false,
+      registration_data: registration as any,
+    }).eq("id", data.employee_id)
+      .select("id, full_name, unit, registration_data, is_active, ponto_portal_user_id, dbs_control_access_enabled")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+    const { error: accessError } = await supabaseAdmin.from("rh_employee_access")
+      .update({ access_enabled: false }).eq("employee_id", data.employee_id);
+    if (accessError) throw new Error(`Técnico arquivado, mas o acesso não foi revogado: ${accessError.message}`);
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id,
+      actor_user_id: actor.id,
+      action: "DBS_CONTROL_TECNICO_ARQUIVADO",
+      entity_type: "rh_employees",
+      entity_id: data.employee_id,
+      before_data: employee,
+      after_data: updated,
+    });
+    if (auditError) throw new Error(`Técnico arquivado, mas a auditoria falhou: ${auditError.message}`);
+    return updated;
+  });
+
+/** Exclusão lógica com confirmação forte; referências históricas permanecem. */
+export const deleteDbsControlTechnician = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { employee_id: string; confirmation: string }) => {
+    if (!input?.employee_id?.trim() || input.confirmation !== "EXCLUIR TECNICO") {
+      throw new Error("Confirmação de exclusão inválida.");
+    }
+    return { employee_id: input.employee_id.trim() };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, registration_data, is_active, ponto_portal_user_id, dbs_control_access_enabled")
+      .eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Técnico não encontrado.");
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? { ...(employee.registration_data as Record<string, unknown>) }
+      : {};
+    const deletedAt = new Date().toISOString();
+    registration.__deleted_at = deletedAt;
+    registration.__deleted_by = actor.id;
+    registration.__dbs_control_deleted = true;
+    const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees").update({
+      is_active: false,
+      dbs_control_access_enabled: false,
+      ponto_access_enabled: false,
+      registration_data: registration as any,
+    }).eq("id", data.employee_id)
+      .select("id, full_name, unit, registration_data, is_active, ponto_portal_user_id, dbs_control_access_enabled")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+    const { error: accessError } = await supabaseAdmin.from("rh_employee_access")
+      .update({ access_enabled: false }).eq("employee_id", data.employee_id);
+    if (accessError) throw new Error(`Técnico removido, mas o acesso não foi revogado: ${accessError.message}`);
+    if (employee.ponto_portal_user_id) {
+      const { error: userError } = await supabaseAdmin.from("users")
+        .update({ status: "bloqueado" }).eq("id", employee.ponto_portal_user_id).eq("role_key", "COLABORADOR");
+      if (userError) throw new Error(`Técnico removido, mas o login não foi bloqueado: ${userError.message}`);
+    }
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id,
+      actor_user_id: actor.id,
+      action: "DBS_CONTROL_TECNICO_EXCLUIDO_LOGICAMENTE",
+      entity_type: "rh_employees",
+      entity_id: data.employee_id,
+      before_data: employee,
+      after_data: { ...updated, history_preserved: true, deleted_at: deletedAt },
+    });
+    if (auditError) throw new Error(`Técnico removido, mas a auditoria falhou: ${auditError.message}`);
+    return { ...updated, deleted_at: deletedAt, history_preserved: true };
+  });
+
+/** Restauração administrativa do cadastro arquivado/excluído logicamente. */
+export const restoreDbsControlTechnician = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { employee_id: string; confirmation: string }) => {
+    if (!input?.employee_id?.trim() || input.confirmation !== "RESTAURAR TECNICO") {
+      throw new Error("Confirmação de restauração inválida.");
+    }
+    return { employee_id: input.employee_id.trim() };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireNativeOperator(context);
+    const { data: employee, error: employeeError } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, registration_data, is_active")
+      .eq("id", data.employee_id).maybeSingle();
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee) throw new Error("Técnico não encontrado.");
+    const registration = employee.registration_data && typeof employee.registration_data === "object"
+      ? { ...(employee.registration_data as Record<string, unknown>) }
+      : {};
+    delete registration.__dbs_control_archived_at;
+    delete registration.__dbs_control_archived_by;
+    delete registration.__deleted_at;
+    delete registration.__deleted_by;
+    delete registration.__dbs_control_deleted;
+    const { data: updated, error: updateError } = await supabaseAdmin.from("rh_employees").update({
+      is_active: true,
+      registration_data: registration as any,
+    }).eq("id", data.employee_id)
+      .select("id, full_name, unit, registration_data, is_active, ponto_portal_user_id, dbs_control_access_enabled")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      employee_id: data.employee_id,
+      actor_user_id: actor.id,
+      action: "DBS_CONTROL_TECNICO_RESTAURADO",
+      entity_type: "rh_employees",
+      entity_id: data.employee_id,
+      before_data: employee,
+      after_data: updated,
+    });
+    if (auditError) throw new Error(`Técnico restaurado, mas a auditoria falhou: ${auditError.message}`);
+    return updated;
+  });
+
 export const getRhDashboardAlerts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

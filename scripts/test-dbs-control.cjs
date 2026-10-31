@@ -246,8 +246,6 @@ assert.doesNotMatch(html, /Registre a assinatura do cliente antes de concluir/, 
 assert.match(html, /const hasSignature = Boolean\(canvas/, "A assinatura deve ser detectada sem exigir que o canvas seja preenchido.");
 assert.match(html, /catch\(error => \(\{ field: 'fotoAntes'/, "Falha de upload de foto deve ser tratada sem perder a conclusão da OS.");
 assert.match(html, /Fotos, assinatura, checklist, observações, peças e localização são opcionais/, "A interface deve informar ao técnico quais evidências são opcionais.");
-
-
 assert.match(html, /switchTab\('tab-dashboard', dashboardNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente o dashboard de progresso.");
 assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
 assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
@@ -304,7 +302,7 @@ assert.match(pdf, /Rua Nabor do Rego/, "O cabeçalho deve manter os dados instit
 assert.match(pdf, /const maskDocument = value =>/, "O PDF deve aplicar máscara de CNPJ/CPF.");
 assert.match(pdf, /const maskCep = value =>/, "O PDF deve aplicar máscara de CEP.");
 assert.match(pdf, /const equipmentLabel = value =>/, "O PDF deve higienizar placeholders genéricos de equipamentos.");
-assert.match(pdf, /Página ${pageNumber} de ${totalPages}/, "O rodapé deve declarar a paginação real do documento.");
+assert.match(pdf, /Página \$\{pageNumber\} de \$\{totalPages\}/, "O rodapé deve declarar a paginação real do documento.");
 assert.match(pdf, /doc\.addPage\(/, "O renderer da OS deve abrir páginas de continuação quando a informação não couber.");
 assert.doesNotMatch(pdf, /slice\(0, 3\)/, "O PDF da OS não pode limitar a lista de equipamentos a três itens.");
 assert.doesNotMatch(pdf, /não exibido|nao exibido/i, "O PDF não pode anunciar que omitiu informações do atendimento.");
@@ -604,4 +602,30 @@ assert.doesNotMatch(treasuryRoute, /onLoad=\{\(\) => setLoading\(false\)\}/, "O 
 
 assert.match(treasuryRoute, /DBS_TREASURY_ADMIN_PASSWORD_RESULT/, "O portal deve devolver o resultado de reautenticação ao iframe esperado.");
 console.log("Financeiro/Auth: senha, reautenticação e bloqueio de acesso direto verificados.");
+
+// Cadastros administrativos: editar, arquivar e excluir são intenções
+// explícitas; nenhuma delas pode remover fisicamente o histórico operacional.
+assert.match(html, /dbs-admin-catalog-crud-20261031/, "O DBS CONTROL deve carregar a camada de gestão segura dos cadastros.");
+assert.match(html, /window\.editarTecnico[\s\S]*?DBS_CONTROL_UPDATE_TECHNICIAN/, "Técnicos devem poder ser editados pelo cadastro administrativo.");
+assert.match(html, /DBS_CONTROL_ARCHIVE_TECHNICIAN[\s\S]*?DBS_CONTROL_DELETE_TECHNICIAN/, "O técnico deve ter arquivamento e exclusão lógica com confirmação.");
+assert.match(html, /window\.editarPeca[\s\S]*?window\.arquivarPeca[\s\S]*?window\.excluirPeca/, "Peças devem ter edição, arquivamento e exclusão lógica.");
+assert.match(html, /window\.editarServico[\s\S]*?window\.arquivarServico[\s\S]*?window\.excluirServico/, "Serviços devem ter edição, arquivamento e exclusão lógica.");
+assert.match(html, /window\.editarCompra[\s\S]*?window\.arquivarCompra[\s\S]*?window\.excluirCompra/, "Compras devem ter edição, arquivamento e exclusão lógica.");
+assert.match(html, /row\.deleted = true[\s\S]*?persistLocalOnly/, "A exclusão de cadastro deve preservar o registro e enviar somente a intenção delta.");
+assert.match(cloudFunctions, /const mergedTechnicians = mergeArray[\s\S]*?technicianActiveById/, "A hidratação deve ocultar técnicos inativos sem apagar referências históricas.");
+assert.match(rhFunctions, /export const updateDbsControlTechnician/, "O backend deve validar e auditar a edição do técnico.");
+/*
+assert.match(rhFunctions, /export const archiveDbsControlTechnician[s\S]*?is_active: false[s\S]*?DBS_CONTROL_TECNICO_ARQUIVADO/, "O arquivamento do técnico deve ser lógico e auditável.");
+assert.match(rhFunctions, /export const deleteDbsControlTechnician[s\S]*?__deleted_at[s\S]*?history_preserved: true/, "A exclusão do técnico deve bloquear o acesso, mas preservar o histórico.");
+assert.match(route, /DBS_CONTROL_UPDATE_TECHNICIAN[s\S]*?updateDbsControlTechnician/, "A rota autenticada deve encaminhar a edição do técnico ao servidor.");
+assert.match(route, /DBS_CONTROL_DELETE_TECHNICIAN[s\S]*?deleteDbsControlTechnician/, "A rota autenticada deve encaminhar a exclusão lógica do técnico.");
+console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e auditoria verificados.");
+*/
+assert.match(rhFunctions, /export const archiveDbsControlTechnician/, "O backend deve expor o arquivamento lógico do técnico.");
+assert.match(rhFunctions, /DBS_CONTROL_TECNICO_ARQUIVADO/, "O arquivamento do técnico deve ser auditável.");
+assert.match(rhFunctions, /export const deleteDbsControlTechnician/, "O backend deve expor a exclusão lógica do técnico.");
+assert.match(rhFunctions, /__deleted_at/, "A exclusão do técnico deve gravar um tombstone lógico.");
+assert.match(route, /DBS_CONTROL_UPDATE_TECHNICIAN/, "A rota autenticada deve encaminhar a edição do técnico ao servidor.");
+assert.match(route, /DBS_CONTROL_DELETE_TECHNICIAN/, "A rota autenticada deve encaminhar a exclusão lógica do técnico.");
+console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e auditoria verificados.");
 

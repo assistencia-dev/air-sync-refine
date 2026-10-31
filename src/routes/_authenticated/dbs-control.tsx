@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { createClientUser } from "@/lib/admin.functions";
-import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess } from "@/lib/rh.functions";
+import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
@@ -1180,6 +1180,60 @@ function DbsControlPage() {
             { type: "DBS_CONTROL_TECHNICIAN_SYNCED", ok: false, error: err instanceof Error ? err.message : "Falha ao criar acesso." },
             "*",
           );
+        }
+        return;
+      }
+
+      if ([
+        "DBS_CONTROL_UPDATE_TECHNICIAN",
+        "DBS_CONTROL_ARCHIVE_TECHNICIAN",
+        "DBS_CONTROL_DELETE_TECHNICIAN",
+        "DBS_CONTROL_RESTORE_TECHNICIAN",
+      ].includes(String(msg.type))) {
+        const action = String(msg.type).replace("DBS_CONTROL_", "").replace("_TECHNICIAN", "").toLowerCase();
+        const employeeId = String(msg.employee_id || "").trim();
+        try {
+          if (!employeeId) throw new Error("Técnico inválido.");
+          let result: any;
+          if (msg.type === "DBS_CONTROL_UPDATE_TECHNICIAN") {
+            result = await updateDbsControlTechnician({
+              data: {
+                employee_id: employeeId,
+                full_name: String(msg.name || ""),
+                email: String(msg.email || ""),
+                position: String(msg.position || ""),
+                phone: String(msg.phone || ""),
+                password: msg.password ? String(msg.password) : null,
+              },
+            } as any);
+          } else if (msg.type === "DBS_CONTROL_ARCHIVE_TECHNICIAN") {
+            result = await archiveDbsControlTechnician({
+              data: { employee_id: employeeId, confirmation: "ARQUIVAR TECNICO" },
+            } as any);
+          } else if (msg.type === "DBS_CONTROL_DELETE_TECHNICIAN") {
+            result = await deleteDbsControlTechnician({
+              data: { employee_id: employeeId, confirmation: "EXCLUIR TECNICO" },
+            } as any);
+          } else {
+            result = await restoreDbsControlTechnician({
+              data: { employee_id: employeeId, confirmation: "RESTAURAR TECNICO" },
+            } as any);
+          }
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_TECHNICIAN_MUTATED",
+            ok: true,
+            action,
+            employee_id: employeeId,
+            technician: result,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_TECHNICIAN_MUTATED",
+            ok: false,
+            action,
+            employee_id: employeeId,
+            error: err instanceof Error ? err.message : "Não foi possível atualizar o técnico.",
+          }, "*");
         }
         return;
       }

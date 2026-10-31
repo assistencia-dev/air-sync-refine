@@ -848,13 +848,26 @@ async function hydrateDbsControlStateFromCanonicalDb(
     .filter((row: any) => row.entity_type === "orcamento")
     .map((row: any) => ({ ...(row.payload && typeof row.payload === "object" ? row.payload : {}), version: row.version }));
 
+  const technicianActiveById = new Map(
+    (employeesResult.data ?? []).map((row: any) => [String(row.id), row.is_active !== false]),
+  );
+  const mergedTechnicians = mergeArray(current.tecnicos as unknown[], canonicalTechnicians)
+    // O snapshot legado pode continuar contendo um técnico que acabou de ser
+    // arquivado. Se existe vínculo com o cadastro central, o estado ativo do
+    // RH prevalece; linhas legadas sem employeeId continuam preservadas para
+    // auditoria e migração explícita.
+    .filter((technician: any) => {
+      const employeeId = String(technician?.employeeId ?? technician?.employee_id ?? "").trim();
+      return !employeeId || !technicianActiveById.has(employeeId) || technicianActiveById.get(employeeId) === true;
+    });
+
   return {
     ...current,
     clientes: mergeArray(current.clientes as unknown[], canonicalClients),
     equipamentos: mergeArray(current.equipamentos as unknown[], canonicalEquipment),
     servicos: mergeArray(current.servicos as unknown[], canonicalServices),
     pecas: mergeArray(current.pecas as unknown[], canonicalParts),
-    tecnicos: mergeArray(current.tecnicos as unknown[], canonicalTechnicians),
+    tecnicos: mergedTechnicians,
     ordens: mergedOrders,
     compras: mergeArray(current.compras as unknown[], legacyCompras),
     orcamentos: mergeArray(Array.isArray((current as any).orcamentos) ? (current as any).orcamentos : [], legacyOrcamentos),

@@ -1753,6 +1753,441 @@
           button, .btn { min-height:44px; }
         }
 </style>
+<script id="dbs-admin-catalog-crud-20261031">
+(function () {
+  'use strict';
+
+  // Cadastros administrativos usam exclusão lógica. O registro continua no
+  // estado relacional para preservar OS, estoque, compras e auditoria.
+  var catalogConfig = {
+    tecnicos: { tab: 'tab-tecnicos', table: 'tec-table-body', form: 'form-tecnico', title: 'Técnicos', empty: 'Nenhum técnico ativo neste cadastro.' },
+    pecas: { tab: 'tab-pecas', table: 'peca-table-body', form: 'form-peca', title: 'Peças', empty: 'Nenhuma peça ativa neste estoque.' },
+    servicos: { tab: 'tab-servicos', table: 'serv-table-body', form: 'form-servico', title: 'Serviços', empty: 'Nenhum serviço ativo neste catálogo.' },
+    compras: { tab: 'tab-compras', table: 'comp-table-body', form: 'form-compra', title: 'Compras', empty: 'Nenhuma compra ativa neste cadastro.' }
+  };
+  var showArchived = { tecnicos: false, pecas: false, servicos: false, compras: false };
+  function appState() {
+    return typeof ERP_STATE !== 'undefined' ? ERP_STATE : (window.ERP_STATE || {});
+  }
+
+  function esc(value) {
+    return typeof window.escDbsControl === 'function'
+      ? window.escDbsControl(String(value == null ? '' : value))
+      : String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+      });
+  }
+  function norm(value) {
+    return String(value == null ? '' : value).trim().toLocaleLowerCase('pt-BR')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  function encoded(value) { return encodeURIComponent(String(value == null ? '' : value)); }
+  function decoded(value) { try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); } }
+  function rowId(kind, row) {
+    if (!row) return '';
+    if (kind === 'tecnicos') return String(row.employeeId || row.employee_id || row.id || '');
+    return String(row.id || row.codigo || row.numero || row.sku || '');
+  }
+  function rows(kind) {
+    var state = appState();
+    return Array.isArray(state[kind]) ? state[kind] : [];
+  }
+  function findRow(kind, id) {
+    var key = String(id || '');
+    return rows(kind).find(function (row) {
+      return [row.id, row.employeeId, row.employee_id, row.codigo, row.numero, row.sku]
+        .filter(function (value) { return value != null && String(value) !== ''; })
+        .some(function (value) { return String(value) === key; });
+    });
+  }
+  function isDeleted(row) {
+    return Boolean(row && (row.deleted || row.deleted_at || row.deletedAt || row.excluidoEm || row.__deleted_at || row.__dbs_control_deleted));
+  }
+  function isArchived(row) {
+    var state = norm(row && (row.status || row.situacao || row.state || ''));
+    return isDeleted(row) || row && (row.is_active === false || row.active === false || row.archivedAt || row.archived_at || row.__dbs_control_archived_at)
+      || ['arquivado', 'arquivada', 'inativo', 'inativa', 'excluido', 'excluida', 'cancelado', 'cancelada'].includes(state);
+  }
+  function statusText(row) {
+    if (isDeleted(row)) return 'Excluído';
+    if (isArchived(row)) return 'Arquivado';
+    return 'Ativo';
+  }
+  function visible(kind, row) { return showArchived[kind] || !isArchived(row); }
+  function safeName(kind, row) {
+    if (kind === 'tecnicos') return row.nome || row.full_name || row.email || 'Técnico';
+    if (kind === 'pecas') return row.nome || row.name || row.sku || 'Peça';
+    if (kind === 'servicos') return row.nome || row.name || 'Serviço';
+    return row.fornecedor || row.item || row.id || 'Compra';
+  }
+
+  function ensureTableActionHeader(kind) {
+    var cfg = catalogConfig[kind];
+    var table = document.getElementById(cfg.table);
+    var header = table && table.closest('table') && table.closest('table').querySelector('thead tr');
+    if (header && !header.querySelector('[data-dbs-action-header="' + kind + '"]')) {
+      var th = document.createElement('th');
+      th.textContent = 'Ações';
+      th.setAttribute('data-dbs-action-header', kind);
+      header.appendChild(th);
+    }
+  }
+  function ensureToolbar(kind) {
+    var cfg = catalogConfig[kind];
+    var tab = document.getElementById(cfg.tab);
+    if (!tab) return;
+    var headers = tab.querySelectorAll('.data-header');
+    var header = headers.length ? headers[headers.length - 1] : null;
+    if (!header || header.querySelector('[data-dbs-catalog-toolbar="' + kind + '"]')) return;
+    var toolbar = document.createElement('div');
+    toolbar.setAttribute('data-dbs-catalog-toolbar', kind);
+    toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto;';
+    toolbar.innerHTML = '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;font-weight:700;cursor:pointer;white-space:nowrap;">'
+      + '<input type="checkbox" data-dbs-show-archived="' + kind + '" style="width:16px;height:16px;accent-color:#2563eb;"> Mostrar arquivados</label>';
+    header.appendChild(toolbar);
+    toolbar.querySelector('input').addEventListener('change', function (event) {
+      showArchived[kind] = Boolean(event.target.checked);
+      render(kind);
+    });
+  }
+  function ensureCancelButton(kind) {
+    var form = document.getElementById(catalogConfig[kind].form);
+    if (!form || form.querySelector('[data-dbs-catalog-cancel]')) return;
+    var submit = form.querySelector('button[type="submit"]');
+    var host = submit && submit.parentElement;
+    if (!host) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-secondary';
+    button.textContent = 'Cancelar edição';
+    button.setAttribute('data-dbs-catalog-cancel', kind);
+    button.style.display = 'none';
+    button.addEventListener('click', function () { clearEdit(kind); });
+    host.insertBefore(button, submit);
+  }
+  function setupCatalogUi() {
+    Object.keys(catalogConfig).forEach(function (kind) {
+      ensureToolbar(kind);
+      ensureTableActionHeader(kind);
+      ensureCancelButton(kind);
+    });
+  }
+  function updateFormMode(kind, editing) {
+    var cfg = catalogConfig[kind];
+    var form = document.getElementById(cfg.form);
+    if (!form) return;
+    var card = form.closest('.data-card');
+    var title = card && card.querySelector('h3');
+    var submit = form.querySelector('button[type="submit"]');
+    var cancel = form.querySelector('[data-dbs-catalog-cancel]');
+    if (title) title.textContent = editing ? 'Editar ' + cfg.title.slice(0, -1) : (kind === 'tecnicos' ? 'Cadastrar Técnico (Credenciais de Acesso Mobile)' : title.textContent.replace(/^Editar /, 'Cadastrar '));
+    if (submit) submit.textContent = editing ? 'Salvar alterações' : (kind === 'tecnicos' ? 'Cadastrar Credenciais Técnico' : kind === 'pecas' ? 'Salvar Peça' : kind === 'servicos' ? 'Salvar Serviço' : 'Registrar Compra');
+    if (cancel) cancel.style.display = editing ? 'inline-flex' : 'none';
+    if (kind === 'tecnicos') {
+      var password = document.getElementById('tec-senha');
+      if (password) {
+        password.required = !editing;
+        password.placeholder = editing ? 'Deixe vazio para manter a senha atual' : '';
+      }
+    }
+  }
+  function beginEdit(kind, id) {
+    var row = findRow(kind, decoded(id));
+    var form = document.getElementById(catalogConfig[kind].form);
+    if (!row || !form) return;
+    form.dataset.dbsEditId = rowId(kind, row);
+    if (kind === 'tecnicos') {
+      document.getElementById('tec-nome').value = row.nome || row.full_name || '';
+      document.getElementById('tec-email').value = row.email || '';
+      document.getElementById('tec-senha').value = '';
+      document.getElementById('tec-posicao').value = row.posicao || row.position || 'Técnico HVAC Titular';
+      document.getElementById('tec-fone').value = row.fone || row.telefone || row.phone || '';
+    } else if (kind === 'pecas') {
+      document.getElementById('peca-sku').value = row.sku || '';
+      document.getElementById('peca-nome').value = row.nome || row.name || '';
+      document.getElementById('peca-qtd').value = Number(row.qtd ?? row.stock_quantity ?? 0);
+      document.getElementById('peca-custo').value = Number(row.custo ?? (Number(row.cost_cents || 0) / 100)).toFixed(2);
+      document.getElementById('peca-venda').value = Number(row.venda ?? (Number(row.sale_cents || 0) / 100)).toFixed(2);
+    } else if (kind === 'servicos') {
+      document.getElementById('serv-nome').value = row.nome || row.name || '';
+      document.getElementById('serv-horas').value = Number(row.horas ?? row.horasEstimadas ?? row.estimated_hours ?? 0);
+      document.getElementById('serv-valor').value = Number(row.valor ?? row.valorTabela ?? (Number(row.table_value_cents || 0) / 100)).toFixed(2);
+    } else {
+      document.getElementById('comp-fornecedor').value = row.fornecedor || '';
+      document.getElementById('comp-item').value = row.item || '';
+      document.getElementById('comp-qtd').value = Number(row.qtd || 0);
+      document.getElementById('comp-valor').value = Number(row.valor || 0).toFixed(2);
+    }
+    updateFormMode(kind, true);
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function clearEdit(kind) {
+    var form = document.getElementById(catalogConfig[kind].form);
+    if (!form) return;
+    delete form.dataset.dbsEditId;
+    form.reset();
+    updateFormMode(kind, false);
+  }
+  function findDuplicate(kind, value, id) {
+    var target = norm(value);
+    return rows(kind).some(function (row) {
+      if (rowId(kind, row) === String(id || '')) return false;
+      return norm(kind === 'pecas' ? row.sku : row.nome || row.name) === target && target;
+    });
+  }
+  function sendTechnicianMutation(type, row, password) {
+    window.parent.postMessage({
+      type: type,
+      employee_id: rowId('tecnicos', row),
+      name: row.nome,
+      email: row.email,
+      position: row.posicao,
+      phone: row.fone,
+      password: password || null,
+    }, '*');
+  }
+
+  window.editarTecnico = function (id) { beginEdit('tecnicos', id); };
+  window.editarPeca = function (id) { beginEdit('pecas', id); };
+  window.editarServico = function (id) { beginEdit('servicos', id); };
+  window.editarCompra = function (id) { beginEdit('compras', id); };
+
+  window.salvarTecnico = function (event) {
+    event.preventDefault();
+    var form = document.getElementById('form-tecnico');
+    var editId = form && form.dataset.dbsEditId || '';
+    var value = {
+      nome: document.getElementById('tec-nome').value.trim(),
+      email: document.getElementById('tec-email').value.trim().toLowerCase(),
+      senha: document.getElementById('tec-senha').value,
+      posicao: document.getElementById('tec-posicao').value,
+      fone: document.getElementById('tec-fone').value.trim()
+    };
+    if (!value.nome || !value.email || (!editId && !value.senha)) return;
+    if (findDuplicate('tecnicos', value.email, editId)) { alert('Já existe outro técnico com este e-mail.'); return; }
+    if (editId) {
+      var existing = findRow('tecnicos', editId);
+      if (!existing) { alert('Técnico não encontrado no cadastro local. Atualize a tela e tente novamente.'); return; }
+      if (window.parent !== window) {
+        sendTechnicianMutation('DBS_CONTROL_UPDATE_TECHNICIAN', Object.assign({}, value, { employeeId: rowId('tecnicos', existing) }), value.senha);
+        return;
+      }
+      Object.assign(existing, value, { employeeId: existing.employeeId || existing.employee_id || existing.id });
+      clearEdit('tecnicos');
+      persistLocalOnly();
+      render('tecnicos');
+      return;
+    }
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'DBS_CONTROL_REGISTER_TECHNICIAN', name: value.nome, email: value.email, password: value.senha, position: value.posicao, phone: value.fone }, '*');
+      return;
+    }
+    var state = appState();
+    (state.tecnicos || (state.tecnicos = [])).push({ id: Date.now(), employeeId: null, ...value, is_active: true });
+    clearEdit('tecnicos');
+    persistLocalOnly();
+    render('tecnicos');
+  };
+  window.salvarPeca = function (event) {
+    event.preventDefault();
+    var form = document.getElementById('form-peca');
+    var id = form && form.dataset.dbsEditId || '';
+    var value = { sku: document.getElementById('peca-sku').value.trim(), nome: document.getElementById('peca-nome').value.trim(), qtd: Number(document.getElementById('peca-qtd').value || 0), custo: Number(document.getElementById('peca-custo').value || 0), venda: Number(document.getElementById('peca-venda').value || 0) };
+    if (!value.sku || !value.nome) return;
+    if (findDuplicate('pecas', value.sku, id)) { alert('Já existe uma peça com este SKU.'); return; }
+    var row = id ? findRow('pecas', id) : null;
+    if (row) Object.assign(row, value);
+    else { var state = appState(); (state.pecas || (state.pecas = [])).push({ id: crypto.randomUUID(), ...value, status: 'ativo' }); }
+    clearEdit('pecas');
+    persistLocalOnly();
+    render('pecas');
+  };
+  window.salvarServico = function (event) {
+    event.preventDefault();
+    var form = document.getElementById('form-servico');
+    var id = form && form.dataset.dbsEditId || '';
+    var value = { nome: document.getElementById('serv-nome').value.trim(), horas: Number(document.getElementById('serv-horas').value || 0), valor: Number(document.getElementById('serv-valor').value || 0) };
+    if (!value.nome) return;
+    if (findDuplicate('servicos', value.nome, id)) { alert('Já existe um serviço com este nome.'); return; }
+    var row = id ? findRow('servicos', id) : null;
+    if (row) Object.assign(row, value);
+    else { var state = appState(); (state.servicos || (state.servicos = [])).push({ id: crypto.randomUUID(), ...value, status: 'ativo' }); }
+    clearEdit('servicos');
+    persistLocalOnly();
+    render('servicos');
+  };
+  window.salvarCompra = function (event) {
+    event.preventDefault();
+    var form = document.getElementById('form-compra');
+    var id = form && form.dataset.dbsEditId || '';
+    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim(), qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0) };
+    if (!value.fornecedor || !value.item) return;
+    var row = id ? findRow('compras', id) : null;
+    if (row) Object.assign(row, value);
+    else { var state = appState(); (state.compras || (state.compras = [])).push({ id: crypto.randomUUID(), ...value, status: 'Enviado', deleted: false }); }
+    clearEdit('compras');
+    persistLocalOnly();
+    render('compras');
+  };
+
+  function persistLocalOnly() {
+    if (typeof window.persistDbsControlLocalStateOnly === 'function') window.persistDbsControlLocalStateOnly();
+    else if (typeof window.saveState === 'function') window.saveState();
+  }
+  function mutateCatalog(kind, id, action) {
+    var row = findRow(kind, decoded(id));
+    if (!row) { alert('Registro não encontrado. Atualize a tela e tente novamente.'); return; }
+    var name = safeName(kind, row);
+    var messages = {
+      archive: 'Arquivar “' + name + '”? Ele sairá das listas ativas, mas continuará preservado para histórico e auditoria.',
+      delete: 'Excluir logicamente “' + name + '”? Nenhuma OS, compra ou histórico será apagado.',
+      restore: 'Restaurar “' + name + '” para as listas ativas?'
+    };
+    if (!window.confirm(messages[action])) return;
+    var now = new Date().toISOString();
+    if (kind === 'compras') {
+      if (action === 'archive') { row.status = 'Arquivado'; row.archivedAt = now; row.deleted = false; }
+      if (action === 'delete') { row.status = 'Excluída'; row.deleted = true; row.deletedAt = now; }
+      if (action === 'restore') { row.status = 'Enviado'; row.deleted = false; delete row.deletedAt; delete row.archivedAt; }
+    } else {
+      if (action === 'archive') { row.status = 'arquivado'; row.archivedAt = now; row.deleted = false; }
+      if (action === 'delete') { row.status = 'excluido'; row.deleted = true; row.deletedAt = now; }
+      if (action === 'restore') { row.status = 'ativo'; row.deleted = false; delete row.deletedAt; delete row.archivedAt; }
+    }
+    persistLocalOnly();
+    render(kind);
+  }
+  window.arquivarPeca = function (id) { mutateCatalog('pecas', id, 'archive'); };
+  window.excluirPeca = function (id) { mutateCatalog('pecas', id, 'delete'); };
+  window.restaurarPeca = function (id) { mutateCatalog('pecas', id, 'restore'); };
+  window.arquivarServico = function (id) { mutateCatalog('servicos', id, 'archive'); };
+  window.excluirServico = function (id) { mutateCatalog('servicos', id, 'delete'); };
+  window.restaurarServico = function (id) { mutateCatalog('servicos', id, 'restore'); };
+  window.arquivarCompra = function (id) { mutateCatalog('compras', id, 'archive'); };
+  window.excluirCompra = function (id) { mutateCatalog('compras', id, 'delete'); };
+  window.restaurarCompra = function (id) { mutateCatalog('compras', id, 'restore'); };
+
+  window.alternarArquivamentoTecnico = function (id) {
+    var row = findRow('tecnicos', decoded(id));
+    if (!row) return;
+    var archived = isArchived(row);
+    var action = archived ? 'restore' : 'archive';
+    var message = archived ? 'Restaurar “' + safeName('tecnicos', row) + '” para a lista ativa?' : 'Arquivar “' + safeName('tecnicos', row) + '”? O histórico de OS será preservado.';
+    if (!window.confirm(message)) return;
+    if (window.parent !== window && rowId('tecnicos', row)) {
+      window.parent.postMessage({ type: archived ? 'DBS_CONTROL_RESTORE_TECHNICIAN' : 'DBS_CONTROL_ARCHIVE_TECHNICIAN', employee_id: rowId('tecnicos', row) }, '*');
+      return;
+    }
+    row.is_active = archived;
+    row.status = archived ? 'ativo' : 'arquivado';
+    if (archived) { delete row.archivedAt; } else row.archivedAt = new Date().toISOString();
+    persistLocalOnly();
+    render('tecnicos');
+  };
+  window.excluirTecnico = function (id) {
+    var row = findRow('tecnicos', decoded(id));
+    if (!row) return;
+    if (!window.confirm('Excluir logicamente “' + safeName('tecnicos', row) + '”? O login será bloqueado, mas OS, documentos e auditoria permanecerão preservados.')) return;
+    if (window.parent !== window && rowId('tecnicos', row)) {
+      window.parent.postMessage({ type: 'DBS_CONTROL_DELETE_TECHNICIAN', employee_id: rowId('tecnicos', row) }, '*');
+      return;
+    }
+    row.is_active = false; row.deleted = true; row.deletedAt = new Date().toISOString(); row.status = 'excluido';
+    persistLocalOnly();
+    render('tecnicos');
+  };
+
+  function actionButtons(kind, row) {
+    var id = encoded(rowId(kind, row));
+    var archived = isArchived(row);
+    var html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'
+      + '<button type="button" class="btn btn-secondary btn-sm" onclick="editar' + kind.charAt(0).toUpperCase() + kind.slice(1, -1) + '(\'' + id + '\')">Editar</button>';
+    if (kind === 'tecnicos') {
+      html += '<button type="button" class="btn btn-secondary btn-sm" onclick="alternarArquivamentoTecnico(\'' + id + '\')">' + (archived ? 'Restaurar' : 'Arquivar') + '</button>'
+        + '<button type="button" class="btn btn-danger btn-sm" onclick="excluirTecnico(\'' + id + '\')">Excluir</button>';
+      if (row.employeeId) html += '<button type="button" class="btn btn-secondary btn-sm" onclick="abrirFichaRH(decodeURIComponent(\'' + encoded(row.employeeId) + '\'))">Ficha RH</button>';
+    } else {
+      var label = kind === 'pecas' ? 'Peca' : kind === 'servicos' ? 'Servico' : 'Compra';
+      html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'
+        + '<button type="button" class="btn btn-secondary btn-sm" onclick="editar' + label + '(\'' + id + '\')">Editar</button>'
+        + '<button type="button" class="btn btn-secondary btn-sm" onclick="' + (archived ? 'restaurar' : 'arquivar') + label + '(\'' + id + '\')">' + (archived ? 'Restaurar' : 'Arquivar') + '</button>'
+        + '<button type="button" class="btn btn-danger btn-sm" onclick="excluir' + label + '(\'' + id + '\')">Excluir</button>';
+    }
+    return html + '</div>';
+  }
+  function render(kind) {
+    var cfg = catalogConfig[kind];
+    var body = document.getElementById(cfg.table);
+    if (!body) return;
+    setupCatalogUi();
+    var active = rows(kind).filter(function (row) { return visible(kind, row); });
+    if (!active.length) {
+      body.innerHTML = '<tr><td colspan="8" style="padding:22px;text-align:center;color:#64748b;">' + esc(showArchived[kind] ? cfg.empty : cfg.empty + ' Use “Mostrar arquivados” para consultar o histórico.') + '</td></tr>';
+      return;
+    }
+    if (kind === 'tecnicos') body.innerHTML = active.map(function (t) {
+      return '<tr><td><strong>' + esc(t.nome || t.full_name) + '</strong></td><td>' + esc(t.email) + '</td><td><span class="badge badge-cargo">' + esc(t.posicao || t.position || 'Técnico') + '</span></td><td>' + esc(t.fone || t.telefone || '') + '</td><td><span class="badge ' + (isArchived(t) ? 'badge-andamento' : 'badge-concluido') + '">' + esc(statusText(t)) + '</span></td><td>' + actionButtons(kind, t) + '</td></tr>';
+    }).join('');
+    if (kind === 'pecas') body.innerHTML = active.map(function (p) {
+      return '<tr><td><strong>' + esc(p.sku) + '</strong></td><td>' + esc(p.nome || p.name) + '</td><td>' + esc(Number(p.qtd ?? p.stock_quantity ?? 0)) + ' UN</td><td>R$ ' + Number(p.custo ?? Number(p.cost_cents || 0) / 100).toFixed(2) + '</td><td>R$ ' + Number(p.venda ?? Number(p.sale_cents || 0) / 100).toFixed(2) + '</td><td>' + actionButtons(kind, p) + '</td></tr>';
+    }).join('');
+    if (kind === 'servicos') body.innerHTML = active.map(function (s) {
+      return '<tr><td><strong>' + esc(s.nome || s.name) + '</strong></td><td>' + esc(s.horas ?? s.horasEstimadas ?? s.estimated_hours ?? 0) + 'h</td><td>R$ ' + Number(s.valor ?? s.valorTabela ?? Number(s.table_value_cents || 0) / 100).toFixed(2) + '</td><td>' + actionButtons(kind, s) + '</td></tr>';
+    }).join('');
+    if (kind === 'compras') body.innerHTML = active.map(function (c) {
+      return '<tr><td><strong>' + esc(c.fornecedor) + '</strong></td><td>' + esc(c.item) + '</td><td>' + esc(c.qtd) + '</td><td>R$ ' + Number(c.valor || 0).toFixed(2) + '</td><td><span class="badge badge-andamento">' + esc(c.status || 'Enviado') + '</span></td><td>' + actionButtons(kind, c) + '</td></tr>';
+    }).join('');
+  }
+  window.renderizarTecnicos = function () { render('tecnicos'); };
+  window.renderizarPecas = function () { render('pecas'); };
+  window.renderizarServicos = function () { render('servicos'); };
+  window.renderizarCompras = function () { render('compras'); };
+
+  function handleTechnicianMutation(message) {
+    var row = findRow('tecnicos', message.employee_id);
+    if (!message.ok) { alert(message.error || 'Não foi possível atualizar o técnico.'); return; }
+    var action = String(message.action || '');
+    if (!row && message.technician) {
+      row = { id: message.employee_id, employeeId: message.employee_id };
+      var state = appState();
+      (state.tecnicos || (state.tecnicos = [])).push(row);
+    }
+    if (row) {
+      var payload = message.technician || {};
+      var registration = payload.registration_data && typeof payload.registration_data === 'object' ? payload.registration_data : {};
+      Object.assign(row, {
+        employeeId: payload.id || row.employeeId || message.employee_id,
+        nome: payload.full_name || row.nome,
+        email: registration.email || row.email,
+        fone: registration.phone || registration.telefone || row.fone || '',
+        posicao: registration.position || registration.cargo || row.posicao || 'Técnico',
+        is_active: action === 'restore' ? true : action === 'update' ? payload.is_active !== false : false,
+        status: action === 'delete' ? 'excluido' : action === 'archive' ? 'arquivado' : action === 'restore' ? 'ativo' : row.status,
+      });
+      if (action === 'delete') { row.deleted = true; row.deletedAt = new Date().toISOString(); }
+      if (action === 'archive') { row.archivedAt = new Date().toISOString(); }
+      if (action === 'restore') { delete row.deleted; delete row.deletedAt; delete row.archivedAt; }
+    }
+    clearEdit('tecnicos');
+    persistLocalOnly();
+    render('tecnicos');
+    alert(action === 'update' ? 'Técnico atualizado com segurança.' : action === 'restore' ? 'Técnico restaurado.' : action === 'archive' ? 'Técnico arquivado. O histórico foi preservado.' : 'Técnico excluído logicamente. O histórico foi preservado.');
+  }
+  window.addEventListener('message', function (event) {
+    if (event && event.data && event.data.type === 'DBS_CONTROL_TECHNICIAN_MUTATED') handleTechnicianMutation(event.data);
+  });
+
+  var previousOnload = window.onload;
+  window.onload = function () {
+    if (typeof previousOnload === 'function') previousOnload.apply(this, arguments);
+    setupCatalogUi();
+    render('tecnicos'); render('pecas'); render('servicos'); render('compras');
+  };
+  if (document.readyState !== 'loading') {
+    setTimeout(function () { setupCatalogUi(); render('tecnicos'); render('pecas'); render('servicos'); render('compras'); }, 0);
+  }
+})();
+</script>
 
 <style id="dbs-control-front-quality-20261029">
   /* Front quality pass: readable hierarchy, stable alignment and clear session controls. */
@@ -9821,3 +10256,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     #tab-nova-os .dbs-os-type-picker { grid-template-columns:1fr; }
   }
 </style>
+<script id="dbs-admin-catalog-crud-loader-20261031">
+(function () {
+  function reinstall() {
+    if (window.__dbsAdminCatalogCrudReinstalled) return;
+    var source = document.getElementById('dbs-admin-catalog-crud-20261031');
+    if (!source) return;
+    window.__dbsAdminCatalogCrudReinstalled = true;
+    var clone = document.createElement('script');
+    clone.text = source.textContent || '';
+    document.body.appendChild(clone);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', reinstall, { once: true });
+  else reinstall();
+})();
+</script>
