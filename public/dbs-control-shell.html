@@ -4757,8 +4757,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
 
             if (msg.type === 'DBS_CONTROL_SYNC_STATUS') {
-                if (msg.status === 'error') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error';
-                else if (msg.status === 'synced') DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'loaded';
+                // A fila de gravação e a leitura do dashboard são estados
+                // diferentes. Uma intenção local com falha fica visível para
+                // nova tentativa, mas não pode apagar os KPIs canônicos.
                 atualizarMetricas();
                 const indicator = document.getElementById('dbs-sync-indicator');
                 const retry = document.getElementById('dbs-sync-retry');

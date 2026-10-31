@@ -167,6 +167,7 @@ assert.match(route, /if \(!employeeModeRef\.current && dbsControlStateIsSmallerT
 assert.match(route, /pendingChangesRef/, "A fila de salvamento deve transportar somente alterações por registro.");
 assert.match(route, /scope: \"dbs-control-sync\"/, "Falhas, retries e reconciliações precisam gerar logs estruturados sem payload operacional.");
 assert.match(route, /realtime_status/, "O estado do canal Realtime precisa ser observável no navegador.");
+assert.doesNotMatch(html, /if \\(msg\\.status === 'error'\\) DBS_CONTROL_DASHBOARD_LOAD_STATUS = 'error'/, "Uma falha de gravação local não pode apagar os KPIs canônicos do dashboard.");
 assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
 assert.match(route, /collaboratorVersionConflict/, "Conflito de versão durante a execução do colaborador deve ter caminho de rebase seguro.");
 assert.match(route, /DBS_CONTROL_CONFLICT_RECONCILED/, "O rebase do colaborador deve hidratar a versão canônica antes de reenviar o delta.");

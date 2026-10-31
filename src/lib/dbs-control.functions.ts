@@ -1715,12 +1715,25 @@ async function persistDbsControlMasterDeltas(
   for (const service of changes.servicos ?? []) {
     const rawId = String(service?.id ?? "").trim();
     const amount = Number(service?.valor ?? service?.valorTabela ?? service?.table_value_cents ?? 0);
+    // O formulário legado e importações antigas usam variações como
+    // "Ativo", "ATIVO" ou "Arquivado". A tabela relacional aceita somente
+    // os códigos minúsculos ativo/inativo; normalizar aqui evita um 23514
+    // interromper o lote inteiro e deixar peças/compras pendentes no cache.
+    const normalizedServiceStatus = String(service?.status ?? "ativo")
+      .trim()
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\\u0300-\\u036f]/g, "");
+    const serviceStatus = ["inativo", "inativa", "arquivado", "arquivada", "excluido", "excluida", "deleted"]
+      .includes(normalizedServiceStatus)
+      ? "inativo"
+      : "ativo";
     const payload: any = {
       name: String(service?.nome ?? service?.name ?? "Serviço").trim() || "Serviço",
       description: String(service?.descricao ?? service?.description ?? "").trim() || null,
       estimated_hours: service?.horasEstimadas ?? service?.estimated_hours ?? null,
       table_value_cents: Number.isFinite(amount) ? (service?.table_value_cents ? Math.round(amount) : Math.round(amount * 100)) : 0,
-      status: String(service?.status ?? "ativo"),
+      status: serviceStatus,
       updated_at: new Date().toISOString(),
     };
     if (isDbsControlUuid(rawId)) payload.id = rawId;

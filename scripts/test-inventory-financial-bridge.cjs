@@ -65,6 +65,8 @@ assert.match(functions, /purchaseItemsResult/);
 assert.match(functions, /workOrderFinancialsResult/);
 assert.match(functions, /lucroBruto/);
 assert.match(functions, /relationalCompras/);
+assert.match(functions, /normalizedServiceStatus/);
+assert.match(functions, /status: serviceStatus/);
 assert.doesNotMatch(functions, /from\(["']dbs_control_parts["']\)\.upsert\(/);
 assert.doesNotMatch(functions, /from\(["']dbs_control_snapshots["']\)\.(?:insert|update|upsert)\(/);
 assert.match(importScript, /opening_quantity/);
