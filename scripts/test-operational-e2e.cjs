@@ -13,6 +13,7 @@ const checks = [
   "scripts/test-rh-collaborator-scale.cjs",
   "scripts/test-data-protection.cjs",
   "scripts/test-treasury-ledger.cjs",
+  "scripts/test-inventory-financial-bridge.cjs",
 ];
 
 for (const script of checks) {
