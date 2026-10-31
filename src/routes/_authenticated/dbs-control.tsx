@@ -1820,7 +1820,7 @@ function DbsControlPage() {
 
   return (
     <main className="flex min-h-[100dvh] flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
-      <div className="flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
+      <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
           {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
@@ -1839,7 +1839,7 @@ function DbsControlPage() {
           <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
         </section>
       )}
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+      <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
       <MobileAdminNavigation active="operation" />
     </main>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -37,6 +37,20 @@ const primaryItems: Array<{ id: AdminArea; label: string; icon: typeof LayoutDas
 export function MobileAdminNavigation({ active = "home", financePath = "/treasury" }: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   const goHome = () => {
     setOpen(false);
@@ -90,17 +104,18 @@ export function MobileAdminNavigation({ active = "home", financePath = "/treasur
     <>
       {open && (
         <div
-          className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
+          className="admin-mobile-menu-backdrop fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
           role="presentation"
           onClick={() => setOpen(false)}
         >
           <section
-            className="absolute inset-x-3 bottom-[calc(4.8rem+env(safe-area-inset-bottom))] max-h-[min(78dvh,620px)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl"
+            className="admin-mobile-menu-sheet absolute inset-x-3 bottom-[calc(4.8rem+env(safe-area-inset-bottom))] max-h-[min(78dvh,620px)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label="Mais áreas administrativas"
             onClick={(event) => event.stopPropagation()}
           >
+            <span className="admin-mobile-menu-handle" aria-hidden="true" />
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-700">DBS AIR</p>
