@@ -36,6 +36,7 @@ import {
 import { HrWorkspace } from "@/components/HrWorkspace";
 import { BrandLogo } from "@/components/BrandLogo";
 import { TicketAttachments } from "@/components/TicketAttachments";
+import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   validateSearch: (search: Record<string, unknown>): { tab?: "tickets" | "users" | "passage" } => ({
@@ -111,7 +112,7 @@ function AdminPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#f4f7f6]"
+      className="admin-mobile-shell min-h-screen bg-[#f4f7f6]"
       style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
     >
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-[#0B2745] px-5 py-6 text-white shadow-[12px_0_36px_rgba(16,43,59,.16)] lg:flex">
@@ -208,52 +209,7 @@ function AdminPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 border-b border-slate-200 px-4 pt-4 pb-2 lg:hidden">
-        <TabBtn
-          active={tab === "tickets"}
-          onClick={() => setTab("tickets")}
-          icon={<Ticket className="w-3.5 h-3.5" />}
-          label="Chamados"
-        />
-        <TabBtn
-          active={tab === "users"}
-          onClick={() => setTab("users")}
-          icon={<Users className="w-3.5 h-3.5" />}
-          label="Usuários Vinculados"
-        />
-        {canAccessRh && (
-          <TabBtn
-            active={tab === "passage"}
-            onClick={() => setTab("passage")}
-            icon={<WalletCards className="w-3.5 h-3.5" />}
-            label="RH"
-          />
-        )}
-        <TabBtn
-          active={false}
-          onClick={() => navigate({ to: "/dbs-control" })}
-          icon={<Wrench className="w-3.5 h-3.5" />}
-          label="DBS CONTROL"
-        />
-        {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
-          <TabBtn
-            active={false}
-            onClick={() => navigate({ to: "/treasury" })}
-            icon={<Landmark className="w-3.5 h-3.5" />}
-            label="Financeiro"
-          />
-        )}
-        {(profile.data?.role_key === "SUPER_ADMIN" || profile.data?.role_key === "ADMIN_OPERACIONAL" || NATIVE_ADMIN_USERNAMES.has(profile.data?.username ?? "")) && (
-          <TabBtn
-            active={false}
-            onClick={() => navigate({ to: "/treinamento" })}
-            icon={<GraduationCap className="w-3.5 h-3.5" />}
-            label="Dúvidas / Treinamento"
-          />
-        )}
-      </div>
-
-      <main className="mx-auto max-w-7xl px-4 py-8 lg:pl-72 lg:pr-8">
+      <main className="mx-auto max-w-7xl px-4 py-5 lg:pl-72 lg:pr-8 lg:py-8">
         {tab === "tickets" ? (
           <TicketsPanel />
         ) : tab === "users" ? (
@@ -262,28 +218,8 @@ function AdminPage() {
           <HrWorkspace embedded />
         )}
       </main>
+      <MobileAdminNavigation active={requestedTab === "passage" ? "people" : requestedTab === "users" ? "more" : "home"} />
     </div>
-  );
-}
-
-function TabBtn({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-t-md border-b-2 -mb-px transition ${active ? "border-blue-600 text-blue-700 bg-white" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-    >
-      {icon} {label}
-    </button>
   );
 }
 

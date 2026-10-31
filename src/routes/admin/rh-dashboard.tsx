@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, CreditCard, Utensils, Clock3, BriefcaseBusiness } from 'lucide-react';
 import { RhPontoWorkspace } from '@/components/RhPontoWorkspace';
 import { RhDpCenter } from '@/components/RhDpCenter';
+import { MobileAdminNavigation } from '@/components/MobileAdminNavigation';
 
 import { TabGestaoColaboradores } from './rh-dashboard/TabGestaoColaboradores';
 import { TabValePassagem } from './rh-dashboard/TabValePassagem';
@@ -46,7 +47,7 @@ function RHDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: '#090D16' }}>
+    <div className="admin-mobile-shell min-h-screen pb-20 lg:pb-0" style={{ background: '#090D16' }}>
       {/* Header */}
       <div className="border-b border-slate-800/80 sticky top-0 z-40" style={{ background: '#0F172A' }}>
         <div className="container max-w-7xl mx-auto px-4 py-5">
@@ -155,6 +156,7 @@ function RHDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+      <MobileAdminNavigation active="people" />
     </div>
   );
 }

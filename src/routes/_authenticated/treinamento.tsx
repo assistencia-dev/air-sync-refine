@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { BrandLogo } from "@/components/BrandLogo";
+import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 
 export const Route = createFileRoute("/_authenticated/treinamento")({
@@ -335,7 +336,7 @@ function TrainingPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#f4f8fc] text-[#102a43]"
+      className="admin-mobile-shell min-h-screen bg-[#f4f8fc] pb-20 text-[#102a43] lg:pb-0"
       style={{ fontFamily: "'Inter',system-ui,sans-serif" }}
     >
       <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/95 shadow-sm backdrop-blur">
@@ -602,6 +603,7 @@ function TrainingPage() {
           </article>
         </div>
       </main>
+      <MobileAdminNavigation active="more" />
     </div>
   );
 }

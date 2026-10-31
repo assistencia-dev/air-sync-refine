@@ -10,6 +10,10 @@ const authenticatedRoute = fs.readFileSync("src/routes/_authenticated/route.tsx"
 const folhaPontoRoute = fs.readFileSync("src/routes/_authenticated/folha-ponto.tsx", "utf8");
 const rhFunctions = fs.readFileSync("src/lib/rh.functions.ts", "utf8");
 const adminSurface = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8");
+const mobileAdminNavigation = fs.readFileSync("src/components/MobileAdminNavigation.tsx", "utf8");
+const treasuryRouteSource = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
+const financeViewerRoute = fs.readFileSync("src/routes/_authenticated/financeiro-acompanhamento.tsx", "utf8");
+const rhDashboardRoute = fs.readFileSync("src/routes/admin/rh-dashboard.tsx", "utf8");
 const trainingRoute = fs.readFileSync("src/routes/_authenticated/treinamento.tsx", "utf8");
 const rhWorkspace = fs.readFileSync("src/components/HrWorkspace.tsx", "utf8");
 const html = fs.readFileSync("public/dbs-control.html", "utf8");
@@ -38,6 +42,15 @@ assert.match(folhaPontoRoute, /collaborator-topbar/, "O portal do colaborador pr
 assert.match(folhaPontoRoute, /aria-current="page"/, "A navegação mobile deve indicar a área ativa.");
 assert.match(adminSurface, /navigate\(\{ to: ["']\/treinamento["'] \}\)/, "O painel administrativo deve oferecer a central de Dúvidas / Treinamento.");
 assert.match(adminSurface, /GraduationCap[\s\S]*?Dúvidas \/ Treinamento/, "A central de treinamento deve aparecer com identidade própria no menu.");
+assert.match(mobileAdminNavigation, /aria-label="Navegação administrativa"/, "O Super Admin mobile deve ter uma navegação única e acessível.");
+assert.match(mobileAdminNavigation, /Dúvidas e treinamento[\s\S]*?Encerrar sessão/, "O menu mobile deve concentrar treinamento e saída sem duplicar a navegação desktop.");
+assert.match(adminSurface, /MobileAdminNavigation active=\{requestedTab === "passage"/, "O painel administrativo deve usar o shell mobile unificado.");
+assert.match(route, /MobileAdminNavigation active="operation"/, "O DBS CONTROL deve usar a mesma navegação mobile administrativa.");
+assert.match(rhDashboardRoute, /MobileAdminNavigation active="people"/, "O RH deve usar a mesma navegação mobile administrativa.");
+assert.match(treasuryRouteSource, /MobileAdminNavigation active="finance"/, "O Treasury deve usar a mesma navegação mobile administrativa.");
+assert.match(financeViewerRoute, /MobileAdminNavigation active="finance"/, "A visão financeira deve usar a mesma navegação mobile administrativa.");
+assert.match(trainingRoute, /MobileAdminNavigation active="more"/, "A central de treinamento deve retornar ao menu mobile unificado.");
+assert.match(treasuryRouteSource, /className="admin-mobile-iframe"/, "O iframe financeiro deve reservar espaço para a navegação inferior no celular.");
 assert.match(trainingRoute, /createFileRoute\(["']\/_authenticated\/treinamento["']\)/, "A central de treinamento precisa ter uma rota autenticada própria.");
 assert.match(trainingRoute, /POP operacional DBS Air/, "O POP operacional deve estar disponível na central de treinamento.");
 assert.match(trainingRoute, /Sincronização/, "A central de treinamento deve documentar o fluxo de sincronização.");
