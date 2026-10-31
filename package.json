@@ -17,6 +17,7 @@
     "test:dbs-50-sessions": "node scripts/test-dbs-control-50-sessions.cjs",
     "test:rh-point": "node scripts/test-rh-point-integrity.cjs",
     "test:treasury-ledger": "node scripts/test-treasury-ledger.cjs",
+    "test:inventory-financial": "node scripts/test-inventory-financial-bridge.cjs",
     "test:data-protection": "node scripts/test-data-protection.cjs",
     "test:performance": "node scripts/test-performance-contracts.cjs",
     "test:operational": "node scripts/test-operational-e2e.cjs",
