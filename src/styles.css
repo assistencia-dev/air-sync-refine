@@ -469,7 +469,7 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
   line-height: 1.1;
   transition: color 180ms ease, background-color 180ms ease, transform 180ms ease;
 }
-.admin-mobile-nav { display: block; overflow: visible; }
+.admin-mobile-nav { display: none; overflow: visible; }
 .admin-mobile-iframe { display: block; }
 .admin-mobile-nav-item:active { transform: scale(.96); }
 .admin-mobile-nav-item.is-active { background: #eaf3ff; color: #1769d1; }
@@ -497,6 +497,7 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
 .admin-mobile-menu-icon { display: grid; min-width: 42px; min-height: 42px; place-items: center; border-radius: 14px; }
 
 @media (max-width: 767px) {
+  .admin-mobile-nav { display: block; }
   .admin-mobile-shell { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
   .admin-mobile-shell > main { padding-top: 18px !important; }
   .admin-mobile-shell h1 { font-size: clamp(1.35rem, 6vw, 1.8rem) !important; line-height: 1.15 !important; }
