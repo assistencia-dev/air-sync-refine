@@ -1453,7 +1453,12 @@ async function persistDbsControlLegacyEntityDeltas(
   return applied;
 }
 
-function dbsControlPartPayload(record: any, userId: string, requestId: string) {
+function dbsControlPartPayload(
+  record: any,
+  userId: string,
+  requestId: string,
+  scopeKey: string,
+) {
   const rawId = String(record?.id ?? '').trim();
   const costRaw = record?.cost_cents ?? record?.custo;
   const saleRaw = record?.sale_cents ?? record?.venda;
@@ -1471,7 +1476,15 @@ function dbsControlPartPayload(record: any, userId: string, requestId: string) {
     sale_cents: Number.isFinite(sale)
       ? (record?.sale_cents !== undefined ? Math.round(sale) : Math.round(sale * 100))
       : 0,
-    status: String(record?.status ?? 'ativo').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo',
+    // The UI uses both "arquivado" and "inativo" while the relational
+    // catalogue intentionally has only active/inactive states. Never turn an
+    // archived/deleted row back into an active part during a retry or
+    // hydration.
+    status: ['inativo', 'inativa', 'arquivado', 'arquivada', 'excluido', 'excluida', 'deleted']
+      .includes(String(record?.status ?? 'ativo').trim().toLocaleLowerCase('pt-BR'))
+      ? 'inativo'
+      : 'ativo',
+    scope_key: scopeKey,
     idempotency_key: `${requestId}:part:${rawId || record?.sku || crypto.randomUUID()}`.slice(0, 240),
   };
 }
@@ -1482,9 +1495,13 @@ async function persistDbsControlPartDelta(
   requestId: string,
   scope: { scopeKey: string; companyId: string | null },
 ) {
-  const payload = dbsControlPartPayload(record, userId, requestId);
+  const payload = dbsControlPartPayload(record, userId, requestId, scope.scopeKey);
   if (!payload.sku || !payload.name) throw new Error('Peça sem SKU ou nome; o registro não foi gravado.');
-  const result = await (supabaseAdmin as any).rpc('dbs_control_upsert_part', { p_payload: payload });
+  // The safe wrapper records the request hash and replays the original result
+  // on retries. Calling the legacy function directly used to increment the
+  // part version on every network retry, making a successful purchase look
+  // like a disappearing/duplicated catalogue change.
+  const result = await (supabaseAdmin as any).rpc('dbs_control_upsert_part_safe', { p_payload: payload });
   if (result.error) throw new Error(result.error.message);
   const data = result.data as Record<string, unknown> | null;
   const partId = String(data?.part_id ?? '').trim();
@@ -1526,6 +1543,30 @@ function purchasePartId(record: any, partMap?: Map<string, string>) {
   return partMap?.get(raw) ?? raw;
 }
 
+function purchaseLineItems(record: any, partMap?: Map<string, string>) {
+  const source = Array.isArray(record?.itens) && record.itens.length > 0
+    ? record.itens
+    : [record];
+  const fallbackPartId = purchasePartId(record, partMap);
+  return source.map((line: any) => {
+    const partId = purchasePartId(line, partMap) || fallbackPartId;
+    const quantity = Number(line?.quantity ?? line?.qtd ?? record?.quantity ?? record?.qtd ?? 0);
+    const unitRaw = Number(line?.unit_cost_cents ?? line?.unitCost ?? line?.custoUnitario
+      ?? record?.unit_cost_cents ?? record?.unitCost ?? record?.custoUnitario ?? 0);
+    const totalRaw = Number(line?.total_cents ?? line?.valor ?? record?.total_cents ?? record?.valor ?? 0);
+    const unitCostCents = Number.isFinite(unitRaw) && unitRaw > 0
+      ? (line?.unit_cost_cents !== undefined || record?.unit_cost_cents !== undefined
+        ? Math.round(unitRaw)
+        : Math.round(unitRaw * 100))
+      : (Number.isFinite(totalRaw) ? Math.round((line?.total_cents !== undefined || record?.total_cents !== undefined ? totalRaw : totalRaw * 100) / Math.max(quantity, 1)) : 0);
+    return {
+      part_id: partId,
+      quantity,
+      unit_cost_cents: Math.max(0, unitCostCents),
+    };
+  }).filter((line: any) => line.part_id && Number.isFinite(line.quantity) && line.quantity > 0);
+}
+
 async function persistDbsControlPurchaseDelta(
   record: any,
   user: DbsControlUser,
@@ -1533,24 +1574,20 @@ async function persistDbsControlPurchaseDelta(
   requestId: string,
   partMap?: Map<string, string>,
 ) {
-  const partId = purchasePartId(record, partMap);
-  if (!isDbsControlUuid(partId)) return null;
-  const quantity = Number(record?.quantity ?? record?.qtd ?? 0);
+  const items = purchaseLineItems(record, partMap);
+  if (!items.length || items.some((line: any) => !isDbsControlUuid(line.part_id))) return null;
+  const quantity = items.reduce((sum: number, line: any) => sum + Number(line.quantity || 0), 0);
   if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('A quantidade da compra precisa ser maior que zero.');
   const totalRaw = Number(record?.total_cents ?? record?.valor ?? 0);
   const totalCents = Number.isFinite(totalRaw)
     ? (record?.total_cents !== undefined ? Math.round(totalRaw) : Math.round(totalRaw * 100))
     : 0;
-  const unitRaw = Number(record?.unit_cost_cents ?? record?.unitCost ?? record?.custoUnitario ?? 0);
-  const unitCostCents = Number.isFinite(unitRaw) && unitRaw > 0
-    ? (record?.unit_cost_cents !== undefined ? Math.round(unitRaw) : Math.round(unitRaw * 100))
-    : Math.round(totalCents / quantity);
   const purchaseDate = String(record?.purchase_date ?? record?.data ?? record?.date ?? '').trim();
   const normalizedDate = purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)
     ? purchaseDate
     : new Date().toISOString().slice(0, 10);
   const paymentStatus = String(record?.payment_status ?? record?.statusPagamento ?? 'unpaid').trim().toLowerCase();
-  const result = await (supabaseAdmin as any).rpc('dbs_control_receive_purchase', {
+  const result = await (supabaseAdmin as any).rpc('dbs_control_receive_purchase_safe', {
     p_payload: {
       actor_user_id: user.id,
       company_id: scope.companyId,
@@ -1559,9 +1596,9 @@ async function persistDbsControlPurchaseDelta(
       document_number: String(record?.document_number ?? record?.nota ?? record?.numeroNota ?? '').trim() || null,
       purchase_date: normalizedDate,
       payment_status: ['paid', 'partial'].includes(paymentStatus) ? paymentStatus : 'unpaid',
-      idempotency_key: `${requestId}:purchase:${String(record?.id ?? partId)}`.slice(0, 240),
+      idempotency_key: `${requestId}:purchase:${String(record?.id ?? items[0].part_id)}`.slice(0, 240),
       legacy_key: String(record?.id ?? '').trim() || null,
-      items: [{ part_id: partId, quantity, unit_cost_cents: Math.max(0, unitCostCents) }],
+      items,
     },
   });
   if (result.error) throw new Error(result.error.message);
@@ -1580,8 +1617,9 @@ async function persistDbsControlMasterDeltas(
   const serviceMap = new Map<string, string>();
   const partMap = new Map<string, string>();
   const isAdmin = user.role_key !== "COLABORADOR";
-  if (!isAdmin) return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied: 0 };
+  if (!isAdmin) return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied: 0, appliedParts: [] };
   let applied = 0;
+  const appliedParts: Array<{ local_id: string | null; part_id: string; sku: string }> = [];
 
   for (const client of changes.clientes ?? []) {
     const rawId = String(client?.id ?? "").trim();
@@ -1698,10 +1736,15 @@ async function persistDbsControlMasterDeltas(
     const saved = await persistDbsControlPartDelta(part, user.id, requestId, scope);
     if (rawId) partMap.set(rawId, String(saved.part_id));
     partMap.set(String(saved.part_id), String(saved.part_id));
+    appliedParts.push({
+      local_id: rawId || null,
+      part_id: String(saved.part_id),
+      sku: String(saved.sku ?? part?.sku ?? '').trim(),
+    });
     applied += 1;
   }
 
-  return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied };
+  return { clientMap, siteMap, equipmentMap, serviceMap, partMap, applied, appliedParts };
 }
 
 function buildDbsControlWorkOrderPatch(
@@ -1868,11 +1911,16 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       throw new Error("Colaborador só pode enviar deltas de execução das OS atribuídas.");
     }
 
+    const appliedPurchases: Array<{ purchase_id: string | null; idempotency_key: string | null }> = [];
     if (user.role_key !== "COLABORADOR") {
       const legacyPurchases: any[] = [];
       for (const purchase of changes.compras ?? []) {
         const relational = await persistDbsControlPurchaseDelta(purchase, user, scope, data.requestId, maps.partMap);
         if (relational) {
+          appliedPurchases.push({
+            purchase_id: relational.purchase_id ? String(relational.purchase_id) : null,
+            idempotency_key: relational.idempotency_key ? String(relational.idempotency_key) : null,
+          });
           applied += 1;
         } else {
           // Compras antigas sem part_id continuam preservadas na entidade
@@ -2080,6 +2128,10 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       appliedOrderIds,
       appliedOrders,
       conflicts,
+      inventory: {
+        parts: maps.appliedParts ?? [],
+        purchases: appliedPurchases,
+      },
       requestId: data.requestId,
       sourceOfTruth: "relational_delta",
     };

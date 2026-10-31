@@ -155,9 +155,11 @@ assert.doesNotMatch(fieldControl, /from\("treasury_snapshots"\)\.insert\(/, "O v
 assert.match(fieldControl, /await preserveUserScopedSnapshotsBeforeCompanyLink\(String\(data\.id\), String\(companyId\)\)/, "A preservação deve acontecer antes de atualizar company_id do administrador.");
 assert.match(route, /const reconciledInitialState = cloudState/, "Quando existe snapshot compartilhado, a hidratação deve usar somente o estado canônico da nuvem.");
 assert.match(route, /if \(!cloudState && !employeeModeRef\.current\) \{[\s\S]*?A base compartilhada não retornou dados[\s\S]*?type: "DBS_CONTROL_CLOUD_STATE", state: initialState, baseState: initialState, allowEmptyBaseBootstrap: true/, "Quando não há dados canônicos, um cache local com dados não pode ser promovido silenciosamente a fonte compartilhada.");
-assert.match(html, /const cloudBaseState = msg\.baseState[\s\S]*?const stateForHydration = msg\.state/, "Uma resposta menor da nuvem deve hidratar somente o estado canônico, sem transformar o cache local em fonte de escrita.");
-assert.match(html, /if \(cloudReturnedFewerRecords\)[\s\S]*?Base confirmada · cópia local preservada/, "Uma resposta menor da nuvem deve preservar a cópia local para auditoria sem regravar dados automaticamente.");
-assert.doesNotMatch(html, /requestId: 'reconcile:' \+ Date\.now\(\),[\s\S]*?changes: reconciliationChanges/, "Uma diferença de contagem nunca pode disparar regravação automática do cache local.");
+assert.match(html, /const cloudBaseState = msg\.baseState[\s\S]*?let stateForHydration = msg\.state/, "Uma resposta menor da nuvem deve partir do estado canônico e só incorporar linhas de inventário identificadas para recuperação.");
+assert.match(html, /dbsControlCollectMissingMasterDeltas/, "A hidratação deve identificar peças/compras locais ausentes antes de renderizar a nuvem.");
+assert.match(html, /requestId = 'recovery:inventory:'/, "A recuperação de inventário deve enviar somente deltas idempotentes, nunca o snapshot completo.");
+assert.match(html, /Base confirmada · cópia local preservada/, "Uma redução sem linha de inventário recuperável deve preservar a cópia local para auditoria.");
+assert.match(html, /dbsControlSubtractCommittedChanges/, "Um lote parcial deve consolidar peças/compras confirmadas mesmo quando outra OS gerar conflito.");
 assert.match(route, /function dbsControlStateIsSmallerThan\(/, "A inicialização deve detectar quando a nuvem tem menos registros que a cópia local.");
 assert.match(route, /if \(!employeeModeRef\.current && localHasData && dbsControlStateIsSmallerThan\(localState, cloudState\)\)/, "A inicialização deve detectar uma redução administrativa sem comparar o recorte filtrado do colaborador.");
 assert.match(route, /const reconciledLatestState = latestCloudState/, "O Realtime deve hidratar somente o estado canônico, sem misturar cache local.");

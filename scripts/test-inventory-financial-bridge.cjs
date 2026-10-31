@@ -12,6 +12,7 @@ const openingBalance = fs.readFileSync('supabase/migrations/20261031042508_dbs_c
 const openingBalanceHardening = fs.readFileSync('supabase/migrations/20261031042732_dbs_control_inventory_opening_balance_zero_cost.sql', 'utf8');
 const purchaseFkIndex = fs.readFileSync('supabase/migrations/20261031042759_dbs_control_inventory_purchase_fk_index.sql', 'utf8');
 const partCostGuard = fs.readFileSync('supabase/migrations/20261031043439_dbs_control_part_cost_guard.sql', 'utf8');
+const idempotencyGuard = fs.readFileSync('supabase/migrations/20261031051656_dbs_control_inventory_idempotency_guard.sql', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -46,9 +47,19 @@ assert.match(partCostGuard, /v_has_movements/i);
 assert.match(partCostGuard, /v_existing\.cost_cents/i);
 assert.match(partCostGuard, /coalesce\(v_existing\.stock_quantity, 0\) = 0/i);
 assert.doesNotMatch(partCostGuard, /drop\s+(table|schema|column)\b/i);
+assert.doesNotMatch(idempotencyGuard, /drop\s+(table|schema|column)\b/i);
+assert.match(idempotencyGuard, /dbs_control_inventory_commands/i);
+assert.match(idempotencyGuard, /dbs_control_upsert_part_safe/i);
+assert.match(idempotencyGuard, /dbs_control_receive_purchase_safe/i);
+assert.match(idempotencyGuard, /payload_hash/i);
+assert.match(idempotencyGuard, /pg_advisory_xact_lock/i);
 
 assert.match(functions, /dbs_control_receive_purchase/);
 assert.match(functions, /dbs_control_upsert_part/);
+assert.match(functions, /dbs_control_receive_purchase_safe/);
+assert.match(functions, /dbs_control_upsert_part_safe/);
+assert.match(functions, /appliedParts/);
+assert.match(functions, /purchaseLineItems/);
 assert.match(functions, /dbs_control_apply_opening_balance/);
 assert.match(functions, /purchaseItemsResult/);
 assert.match(functions, /workOrderFinancialsResult/);

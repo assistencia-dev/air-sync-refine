@@ -1988,7 +1988,7 @@
     persistLocalOnly();
     render('tecnicos');
   };
-  window.salvarPeca = function (event) {
+  window.salvarPeca = async function (event) {
     event.preventDefault();
     var form = document.getElementById('form-peca');
     var id = form && form.dataset.dbsEditId || '';
@@ -1999,14 +1999,22 @@
     if (findDuplicate('pecas', value.sku, id)) { alert('Já existe uma peça com este SKU.'); return; }
     var row = id ? findRow('pecas', id) : null;
     if (row) Object.assign(row, value);
-    else { var state = appState(); (state.pecas || (state.pecas = [])).push({ id: crypto.randomUUID(), ...value, status: 'ativo' }); }
+    else {
+      var state = appState();
+      row = { id: crypto.randomUUID(), ...value, status: 'ativo' };
+      (state.pecas || (state.pecas = [])).push(row);
+    }
     clearEdit('pecas');
     // Peças de catálogo são delta relacional; o estoque não é alterado aqui.
     // A entrada física acontece exclusivamente pelo fluxo de Compras.
-    saveState();
+    try {
+      await confirmCatalogMutation('pecas', row);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'A peça foi preservada, mas aguarda confirmação da nuvem.');
+    }
     render('pecas');
   };
-  window.salvarServico = function (event) {
+  window.salvarServico = async function (event) {
     event.preventDefault();
     var form = document.getElementById('form-servico');
     var id = form && form.dataset.dbsEditId || '';
@@ -2015,12 +2023,20 @@
     if (findDuplicate('servicos', value.nome, id)) { alert('Já existe um serviço com este nome.'); return; }
     var row = id ? findRow('servicos', id) : null;
     if (row) Object.assign(row, value);
-    else { var state = appState(); (state.servicos || (state.servicos = [])).push({ id: crypto.randomUUID(), ...value, status: 'ativo' }); }
+    else {
+      var state = appState();
+      row = { id: crypto.randomUUID(), ...value, status: 'ativo' };
+      (state.servicos || (state.servicos = [])).push(row);
+    }
     clearEdit('servicos');
-    persistLocalOnly();
+    try {
+      await confirmCatalogMutation('servicos', row);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'O serviço foi preservado, mas aguarda confirmação da nuvem.');
+    }
     render('servicos');
   };
-  window.salvarCompra = function (event) {
+  window.salvarCompra = async function (event) {
     event.preventDefault();
     var form = document.getElementById('form-compra');
     var id = form && form.dataset.dbsEditId || '';
@@ -2033,9 +2049,17 @@
     if (existing && existing.ledger_entry_id) { alert('Esta compra já entrou no estoque e no Financeiro; faça uma devolução/estorno para corrigir.'); return; }
     var row = existing;
     if (row) Object.assign(row, value);
-    else { var state = appState(); (state.compras || (state.compras = [])).push({ id: crypto.randomUUID(), ...value, status: 'Enviado', deleted: false }); }
+    else {
+      var state = appState();
+      row = { id: crypto.randomUUID(), ...value, status: 'Enviado', deleted: false };
+      (state.compras || (state.compras = [])).push(row);
+    }
     clearEdit('compras');
-    saveState();
+    try {
+      await confirmCatalogMutation('compras', row);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'A compra foi preservada, mas aguarda confirmação da nuvem.');
+    }
     render('compras');
   };
 
@@ -2043,10 +2067,50 @@
     if (typeof window.persistDbsControlLocalStateOnly === 'function') window.persistDbsControlLocalStateOnly();
     else if (typeof window.saveState === 'function') window.saveState();
   }
-  function mutateCatalog(kind, id, action) {
+  // O cadastro só é considerado concluído depois do ACK relacional. Em caso
+  // de rede indisponível, a linha fica marcada como pendente e permanece no
+  // cache de recuperação; nunca damos feedback falso de sucesso.
+  function markCatalogRowsPending(kind, targetRow) {
+    var targets = targetRow ? [targetRow] : rows(kind);
+    targets.forEach(function (row) {
+      if (!row || isArchived(row)) return;
+      row.__dbs_control_sync_state = 'pending';
+      row.__dbs_control_pending_at = row.__dbs_control_pending_at || new Date().toISOString();
+    });
+  }
+  async function confirmCatalogMutation(kind, targetRow) {
+    if (window.parent === window) {
+      persistLocalOnly();
+      return { ok: true, localOnly: true };
+    }
+    if (typeof window.saveStateAndConfirmCloud !== 'function') {
+      markCatalogRowsPending(kind, targetRow);
+      persistLocalOnly();
+      throw new Error('A confirmação relacional ainda não está disponível. A alteração foi preservada neste dispositivo.');
+    }
+    try {
+      const result = await window.saveStateAndConfirmCloud();
+      if (result && result.queuedLocally) markCatalogRowsPending(kind, targetRow);
+      return result || { ok: true };
+    } catch (error) {
+      markCatalogRowsPending(kind, targetRow);
+      persistLocalOnly();
+      throw error instanceof Error ? error : new Error('A alteração ficou pendente de confirmação.');
+    }
+  }
+  async function mutateCatalog(kind, id, action) {
     var row = findRow(kind, decoded(id));
     if (!row) { alert('Registro não encontrado. Atualize a tela e tente novamente.'); return; }
     var name = safeName(kind, row);
+    if (kind === 'compras') {
+      // Compra recebida já movimentou estoque e Ledger. Um archive/delete
+      // local aqui criava uma divergência: a linha sumia até a próxima
+      // hidratação, quando o banco corretamente a devolvia. O caminho seguro
+      // é uma devolução/estorno relacional dedicado, nunca uma exclusão de
+      // interface.
+      alert('Compras recebidas são imutáveis para preservar estoque e Financeiro. Use o fluxo de devolução/estorno; nenhum dado foi alterado.');
+      return;
+    }
     var messages = {
       archive: 'Arquivar “' + name + '”? Ele sairá das listas ativas, mas continuará preservado para histórico e auditoria.',
       delete: 'Excluir logicamente “' + name + '”? Nenhuma OS, compra ou histórico será apagado.',
@@ -2063,7 +2127,11 @@
       if (action === 'delete') { row.status = 'excluido'; row.deleted = true; row.deletedAt = now; }
       if (action === 'restore') { row.status = 'ativo'; row.deleted = false; delete row.deletedAt; delete row.archivedAt; }
     }
-    persistLocalOnly();
+    try {
+      await confirmCatalogMutation(kind, row);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'A alteração ficou pendente de confirmação da nuvem.');
+    }
     render(kind);
   }
   window.arquivarPeca = function (id) { mutateCatalog('pecas', id, 'archive'); };
@@ -4818,6 +4886,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
+        function dbsControlSubtractCommittedChanges(changes, committed) {
+            if (!changes || typeof changes !== 'object' || !committed || typeof committed !== 'object') return changes;
+            const remaining = {};
+            Object.entries(changes).forEach(([key, rows]) => {
+                if (!Array.isArray(rows)) return;
+                const committedKeys = new Set((Array.isArray(committed[key]) ? committed[key] : [])
+                    .map((row, index) => dbsControlDeltaIdentity(row, key, index))
+                    .filter(Boolean));
+                const next = rows.filter((row, index) => !committedKeys.has(dbsControlDeltaIdentity(row, key, index)));
+                if (next.length) remaining[key] = next;
+            });
+            return dbsControlDeltaHasRows(remaining) ? remaining : null;
+        }
+
         function dbsControlDeleteLocator(os) {
             const rawId = String(os?.id ?? '').trim();
             const workOrderId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawId)
@@ -5216,6 +5298,61 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             window.parent.postMessage({ type: 'DBS_CONTROL_READY', state: getPersistableState() }, '*');
         }
 
+        function dbsControlMasterRowIdentities(row, kind) {
+            const value = row && typeof row === 'object' ? row : {};
+            if (kind === 'pecas') {
+                return [value.id, value.sku, value.codigo]
+                    .map(item => String(item ?? '').trim().toLocaleLowerCase('pt-BR'))
+                    .filter(Boolean)
+                    .map(item => 'part:' + item);
+            }
+            return [value.id, value.legacy_key, value.legacyKey]
+                .map(item => String(item ?? '').trim().toLocaleLowerCase('pt-BR'))
+                .filter(Boolean)
+                .map(item => 'purchase:' + item);
+        }
+
+        // Se uma versão antiga gravou apenas no cache local, a hidratação de uma
+        // nuvem vazia não pode fazer a peça/compra desaparecer da tela. Mantemos
+        // a linha marcada como recuperação e enviamos somente esses deltas —
+        // nunca o snapshot inteiro — para a fila transacional do shell.
+        function dbsControlCollectMissingMasterDeltas(localState, cloudState) {
+            const changes = {};
+            ['pecas', 'compras'].forEach(kind => {
+                const localRows = Array.isArray(localState?.[kind]) ? localState[kind] : [];
+                const cloudRows = Array.isArray(cloudState?.[kind]) ? cloudState[kind] : [];
+                const cloudKeys = new Set(cloudRows.flatMap(row => dbsControlMasterRowIdentities(row, kind)));
+                const missing = localRows.filter(row => {
+                    if (!row || typeof row !== 'object') return false;
+                    // Uma compra já marcada como excluída não pode ser
+                    // ressuscitada como entrada financeira durante a recuperação.
+                    if (kind === 'compras' && (row.deleted || row.deleted_at || row.deletedAt)) return false;
+                    const identities = dbsControlMasterRowIdentities(row, kind);
+                    return identities.length > 0 && !identities.some(identity => cloudKeys.has(identity));
+                }).map(row => ({
+                    ...row,
+                    __dbs_control_sync_state: 'recovery_pending',
+                    __dbs_control_pending_at: row.__dbs_control_pending_at || new Date().toISOString(),
+                }));
+                if (missing.length) changes[kind] = missing;
+            });
+            return changes;
+        }
+
+        function dbsControlMarkMasterRowsCommitted(changes) {
+            if (!changes || typeof changes !== 'object') return;
+            ['pecas', 'compras'].forEach(kind => {
+                const rows = Array.isArray(changes[kind]) ? changes[kind] : [];
+                const identities = new Set(rows.flatMap(row => dbsControlMasterRowIdentities(row, kind)));
+                if (!identities.size || !Array.isArray(ERP_STATE?.[kind])) return;
+                ERP_STATE[kind].forEach(row => {
+                    if (!dbsControlMasterRowIdentities(row, kind).some(identity => identities.has(identity))) return;
+                    delete row.__dbs_control_sync_state;
+                    delete row.__dbs_control_pending_at;
+                });
+            });
+        }
+
         window.addEventListener('message', function(event) {
             if (event.source !== window.parent) return;
             const msg = event.data || {};
@@ -5267,6 +5404,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const issueDraftId = DBS_PENDING_ISSUE_DRAFT_REQUESTS.get(requestId);
                     const committedChanges = msg.committedChanges || pendingChanges || {};
                     dbsControlApplyCommittedChanges(committedChanges, msg.appliedOrders || []);
+                    dbsControlMarkMasterRowsCommitted(committedChanges);
                     DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
                     DBS_PENDING_EXECUTION_DRAFT_REQUESTS.delete(requestId);
                     DBS_PENDING_ISSUE_DRAFT_REQUESTS.delete(requestId);
@@ -5290,6 +5428,23 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     persistDbsControlLocalStateOnly();
                     renderizarDbsControlCurrentMode();
                 } else {
+                    // A lote pode conter cadastro de estoque + OS. O backend
+                    // aplica os cadastros antes de devolver um conflito de OS;
+                    // portanto um ACK negativo ainda pode trazer deltas
+                    // confirmados. Consolidar apenas essa parte impede que uma
+                    // peça/compra já gravada seja reenviada infinitamente ou
+                    // pareça perdida na próxima hidratação.
+                    const partiallyCommitted = msg.committedChanges && typeof msg.committedChanges === 'object'
+                        ? msg.committedChanges
+                        : null;
+                    if (partiallyCommitted && dbsControlDeltaHasRows(partiallyCommitted)) {
+                        dbsControlApplyCommittedChanges(partiallyCommitted, msg.appliedOrders || []);
+                        dbsControlMarkMasterRowsCommitted(partiallyCommitted);
+                        const remaining = dbsControlSubtractCommittedChanges(pendingChanges, partiallyCommitted);
+                        if (remaining) DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, remaining);
+                        else DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
+                        persistDbsControlLocalStateOnly();
+                    }
                     // Keep the local intent for explicit reconciliation, but
                     // block it from being emitted again on every autosave.
                     const conflicts = Array.isArray(msg.conflicts) ? msg.conflicts : [];
@@ -5529,7 +5684,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // reconciliação automática. A base relacional é a única fonte de
             // verdade: hidratar somente o estado canônico e manter a cópia
             // local separada para auditoria/recuperação explícita.
-            const stateForHydration = msg.state;
+            let stateForHydration = msg.state;
+            const recoveryChanges = !collaboratorSession && cloudReturnedFewerRecords
+                ? dbsControlCollectMissingMasterDeltas(localRecoveryState, cloudBaseState)
+                : {};
+            const recoveryRows = Object.values(recoveryChanges).reduce((total, rows) => total + (Array.isArray(rows) ? rows.length : 0), 0);
+            if (recoveryRows > 0) {
+                stateForHydration = {
+                    ...stateForHydration,
+                    pecas: [...(Array.isArray(stateForHydration.pecas) ? stateForHydration.pecas : []), ...(recoveryChanges.pecas || [])],
+                    compras: [...(Array.isArray(stateForHydration.compras) ? stateForHydration.compras : []), ...(recoveryChanges.compras || [])],
+                };
+            }
             if (cloudReturnedFewerRecords) {
                 // A resposta menor é sinalizada somente para diagnóstico. O
                 // cache local continua preservado e nenhum delta implícito é
@@ -5561,10 +5727,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // Realtime pode reenviar o mesmo snapshot várias vezes. Re-renderizar o
             // iframe inteiro em cada evento causa tremor e interrompe a assinatura.
             // A assinatura abaixo considera somente campos que mudam a operação.
-            const renderSignature = ['ordens', 'clientes', 'equipamentos', 'tecnicos'].map(key => {
+            const renderSignature = ['ordens', 'clientes', 'equipamentos', 'tecnicos', 'pecas', 'compras'].map(key => {
                 const rows = Array.isArray(msg.state[key]) ? msg.state[key] : [];
                 return [key, rows.map(row => [
-                    row?.id, row?.protocolo, row?.version, row?.updated_at, row?.status,
+                    row?.id, row?.legacy_key, row?.sku, row?.version, row?.updated_at, row?.status,
                     row?.deleted_at, row?.deletedAt, row?.concluidoEm, row?.assinaturaEm,
                 ]).sort((a, b) => String(a[0] ?? '').localeCompare(String(b[0] ?? '')) )];
             });
@@ -5618,12 +5784,27 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     // explícita, após identificar os registros.
                     const indicator = document.getElementById('dbs-sync-indicator');
                     if (indicator) {
-                        indicator.textContent = 'Base confirmada · cópia local preservada';
-                        indicator.title = 'A nuvem retornou uma visão menor. Nenhum dado local foi enviado nem descartado; a cópia anterior está preservada para auditoria.';
+                        indicator.textContent = recoveryRows > 0 ? 'Recuperando cadastros locais…' : 'Base confirmada · cópia local preservada';
+                        indicator.title = recoveryRows > 0
+                            ? 'A nuvem retornou menos peças/compras. As linhas locais foram mantidas e reenviadas como deltas idempotentes.'
+                            : 'A nuvem retornou uma visão menor. Nenhum dado local foi enviado nem descartado; a cópia anterior está preservada para auditoria.';
                         indicator.style.color = '#92400e';
                         indicator.style.background = '#fffbeb';
                         indicator.style.borderColor = '#fde68a';
                     }
+                }
+                if (recoveryRows > 0 && window.parent !== window) {
+                    const recoveryPayload = JSON.parse(JSON.stringify(recoveryChanges));
+                    const recoveryIdentity = ['pecas', 'compras']
+                        .flatMap(kind => (Array.isArray(recoveryPayload[kind]) ? recoveryPayload[kind] : [])
+                            .flatMap(row => dbsControlMasterRowIdentities(row, kind)))
+                        .sort()
+                        .join('|')
+                        .slice(0, 120);
+                    const requestId = 'recovery:inventory:' + (recoveryIdentity || Date.now());
+                    DBS_CONTROL_PENDING_SAVE_REQUESTS.set(requestId, recoveryPayload);
+                    DBS_CONTROL_HAS_PENDING_SAVE = true;
+                    window.parent.postMessage({ type: 'DBS_CONTROL_SAVE', requestId, changes: recoveryPayload }, '*');
                 }
             } finally {
                 DBS_CONTROL_CLOUD_HYDRATING = false;
@@ -10385,5 +10566,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', reinstall, { once: true });
   else reinstall();
+})();
+</script>
+<script id="dbs-inventory-confirmation-bridge-20261031">
+(function () {
+  // Expose the critical confirmation function explicitly. Inline form
+  // handlers run in the legacy shell and must not depend on browser-specific
+  // global-function binding semantics.
+  if (typeof saveStateAndConfirmCloud === 'function') {
+    window.saveStateAndConfirmCloud = saveStateAndConfirmCloud;
+  }
 })();
 </script>

@@ -764,6 +764,7 @@ function DbsControlPage() {
           updated_at: ackUpdatedAt,
           conflicts: result.conflicts ?? [],
           appliedOrders: result.appliedOrders ?? [],
+          inventory: result.inventory ?? { parts: [], purchases: [] },
           committedChanges,
           pendingCount: pendingChangesRef.current ? 1 : 0,
           error: resultMessage ?? undefined,
