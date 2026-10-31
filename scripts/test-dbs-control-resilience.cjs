@@ -38,6 +38,8 @@ assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar 
 assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
 assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
 assert.match(route, /dbsControlConflictIsAutoResolvable/, "Conflitos de OS concluída precisam ser reconhecidos mesmo quando o código legado veio incompleto.");
+assert.match(route, /dbsControlConflictAlreadyApplied/, "Conflitos antigos já refletidos na versão canônica precisam sair da fila ativa sem regravar a OS.");
+assert.match(route, /status: "quarantined"[\s\S]*A intenção original foi preservada para auditoria/, "A intenção stale deve ser preservada em quarentena, nunca apagada.");
 assert.match(route, /dbsControlUserFacingSyncMessage/, "Falhas de infraestrutura não devem despejar detalhes técnicos no painel operacional.");
 assert.match(route, /withDbsControlTransientRetry\(\(\) => uploadDbsControlOsAttachment/, "Uploads de evidência precisam de retry transitório antes de falhar a conclusão.");
 assert.match(route, /activeCommand\?\.status === "conflict"/, "Eventos de foco/online não podem reabrir um conflito permanente automaticamente.");
@@ -67,6 +69,7 @@ assert.match(localSync, /recoverExpiredDbsControlLocalSyncCommands/, "Uma sessã
 assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação local explícita quando a nuvem estiver temporariamente indisponível.");
 assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
 assert.match(iframe, /dbsControlConflictIsCompletedLocked/, "Conflitos históricos de OS concluída não podem bloquear a operação.");
+assert.match(iframe, /DBS_CONTROL_SYNC_CONFLICT_CLEARED/, "A limpeza de conflito stale deve remover somente o alerta visual, sem disparar uma nova reconciliação.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));

@@ -134,6 +134,62 @@ function dbsControlStateOrderIsCompleted(state: unknown, conflict: unknown) {
   return ["concluida", "concluido", "completed", "complete"].includes(status);
 }
 
+function dbsControlComparableStatus(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
+}
+
+function dbsControlConflictChangeForOrder(command: Pick<DbsControlLocalSyncCommand, "changes">, conflict: unknown) {
+  const candidate = conflict as { protocol?: unknown; work_order_id?: unknown; id?: unknown } | null;
+  const protocol = String(candidate?.protocol ?? "").trim().toLocaleLowerCase("pt-BR");
+  const id = String(candidate?.work_order_id ?? candidate?.id ?? "").trim().toLocaleLowerCase("pt-BR");
+  const rows = command.changes && Array.isArray(command.changes.ordens) ? command.changes.ordens : [];
+  return rows.find((row: any) => {
+    const rowId = String(row?.id ?? "").trim().toLocaleLowerCase("pt-BR");
+    const rowProtocol = String(row?.protocolo ?? row?.protocol ?? row?.numero ?? "").trim().toLocaleLowerCase("pt-BR");
+    return (protocol && rowProtocol === protocol) || (id && rowId === id);
+  }) ?? null;
+}
+
+/**
+ * A conflict can survive a browser reload even after another device has
+ * already committed the same status (or completed the OS).  It is safe to
+ * stop presenting that stale intent as a live blocker only when the
+ * canonical row exists, its version is newer than the local expected version,
+ * and its status matches the status that the local command requested.  The
+ * command is quarantined, never deleted, so the original payload remains
+ * available for audit without being replayed over newer data.
+ */
+function dbsControlConflictAlreadyApplied(state: unknown, command: Pick<DbsControlLocalSyncCommand, "changes" | "conflicts">) {
+  const conflicts = Array.isArray(command.conflicts) ? command.conflicts : [];
+  if (!conflicts.length) return false;
+  return conflicts.every((conflict) => {
+    const canonical = dbsControlStateOrderForConflict(state, conflict) as any;
+    if (!canonical) return false;
+    if (dbsControlStateOrderIsCompleted(state, conflict)) return true;
+
+    const local = dbsControlConflictChangeForOrder(command, conflict) as any;
+    if (!local) return false;
+    const canonicalVersion = Number(canonical?.version);
+    const expectedVersion = Number(
+      local?.expected_version
+      ?? local?.expectedVersion
+      ?? local?.version
+      ?? (conflict as any)?.expected_version
+      ?? (conflict as any)?.version,
+    );
+    if (!Number.isFinite(canonicalVersion) || !Number.isFinite(expectedVersion) || canonicalVersion <= expectedVersion) return false;
+
+    const requestedStatus = dbsControlComparableStatus(local?.status ?? local?.situacao ?? local?.statusOS);
+    const canonicalStatus = dbsControlComparableStatus(canonical?.status ?? canonical?.situacao ?? canonical?.statusOS);
+    return Boolean(requestedStatus && canonicalStatus && requestedStatus === canonicalStatus);
+  });
+}
+
 function dbsControlSelectConflictingChanges(changes: Record<string, any[]> | null, conflicts: any[]) {
   if (!changes) return null;
   const keys = new Set((conflicts ?? []).map((conflict) => String(conflict?.protocol ?? "").trim().toLocaleLowerCase("pt-BR")).filter(Boolean));
@@ -1050,38 +1106,83 @@ function DbsControlPage() {
               ?? [...localSyncCommandsRef.current.values()].find((command) => command.status === "conflict" && command.conflicts?.length)
               ?? null;
             if (restoredCommand?.status === "conflict" && restoredCommand.conflicts?.length) {
-              const canRebaseCollaboratorCommand = employeeModeRef.current
-                && restoredCommand.conflicts.every((conflict) => dbsControlConflictCode(conflict) === "DBS_OS_CONFLICT")
-                && restoredCommand.conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(cloudState, conflict)))
-                && !restoredCommand.conflicts.some((conflict) => dbsControlStateOrderIsCompleted(cloudState, conflict));
-              if (canRebaseCollaboratorCommand) {
-                // O conflito antigo fica preservado na tabela de auditoria, mas
-                // não deve bloquear o colaborador depois que a versão canônica
-                // já foi carregada. O iframe mescla o rascunho na leitura atual
-                // e gera uma nova intenção com expected_version atualizado.
-                await deleteDbsControlLocalSyncCommand(restoredCommand.id);
-                localSyncCommandsRef.current.delete(restoredCommand.id);
+              const conflictAlreadyApplied = dbsControlConflictAlreadyApplied(cloudState, restoredCommand);
+              if (conflictAlreadyApplied) {
+                const quarantineMessage = "Conflito antigo encerrado pela versão canônica. A intenção original foi preservada para auditoria; nenhuma alteração foi reaplicada.";
+                await persistLocalSyncCommand({
+                  id: restoredCommand.id,
+                  changes: restoredCommand.changes,
+                  requestIds: restoredCommand.requestIds,
+                  status: "quarantined",
+                  attempts: restoredCommand.attempts,
+                  nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                  leaseUntil: null,
+                  lastError: quarantineMessage,
+                  conflicts: restoredCommand.conflicts,
+                });
+                const quarantinedCommand = localSyncCommandsRef.current.get(restoredCommand.id);
+                if (quarantinedCommand) {
+                  localSyncCommandsRef.current.set(restoredCommand.id, {
+                    ...quarantinedCommand,
+                    status: "quarantined",
+                    nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                    leaseUntil: null,
+                    lastError: quarantineMessage,
+                  });
+                }
                 if (pendingBatchIdRef.current === restoredCommand.id) {
                   pendingBatchIdRef.current = null;
                   pendingChangesRef.current = null;
                   pendingSaveRequestIdsRef.current = [];
                 }
+                setCloudError(null);
+                // Remove a banner left by the previous browser session without
+                // invoking the normal dismiss flow, which could accidentally
+                // target a different command arriving concurrently.
                 iframeRef.current?.contentWindow?.postMessage({
-                  type: "DBS_CONTROL_CONFLICT_RECONCILED",
-                  state: cloudState,
-                  changes: restoredCommand.changes,
+                  type: "DBS_CONTROL_SYNC_CONFLICT_CLEARED",
                   conflicts: restoredCommand.conflicts,
-                  updated_at: cloud?.updated_at ?? null,
                 }, "*");
-                await postLocalSyncStatus("pending");
+                logSyncEvent("stale_conflict_quarantined", {
+                  commandId: restoredCommand.id,
+                  conflicts: restoredCommand.conflicts.length,
+                  reason: "canonical_version_already_applied",
+                });
+                await postLocalSyncStatus("synced");
               } else {
-                iframeRef.current?.contentWindow?.postMessage({
-                  type: "DBS_CONTROL_SYNC_CONFLICT",
-                  conflicts: restoredCommand.conflicts,
-                  changes: restoredCommand.changes,
-                  requestIds: restoredCommand.requestIds,
-                  permanent: true,
-                }, "*");
+                const canRebaseCollaboratorCommand = employeeModeRef.current
+                  && restoredCommand.conflicts.every((conflict) => dbsControlConflictCode(conflict) === "DBS_OS_CONFLICT")
+                  && restoredCommand.conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(cloudState, conflict)))
+                  && !restoredCommand.conflicts.some((conflict) => dbsControlStateOrderIsCompleted(cloudState, conflict));
+                if (canRebaseCollaboratorCommand) {
+                  // O conflito antigo fica preservado na tabela de auditoria, mas
+                  // não deve bloquear o colaborador depois que a versão canônica
+                  // já foi carregada. O iframe mescla o rascunho na leitura atual
+                  // e gera uma nova intenção com expected_version atualizado.
+                  await deleteDbsControlLocalSyncCommand(restoredCommand.id);
+                  localSyncCommandsRef.current.delete(restoredCommand.id);
+                  if (pendingBatchIdRef.current === restoredCommand.id) {
+                    pendingBatchIdRef.current = null;
+                    pendingChangesRef.current = null;
+                    pendingSaveRequestIdsRef.current = [];
+                  }
+                  iframeRef.current?.contentWindow?.postMessage({
+                    type: "DBS_CONTROL_CONFLICT_RECONCILED",
+                    state: cloudState,
+                    changes: restoredCommand.changes,
+                    conflicts: restoredCommand.conflicts,
+                    updated_at: cloud?.updated_at ?? null,
+                  }, "*");
+                  await postLocalSyncStatus("pending");
+                } else {
+                  iframeRef.current?.contentWindow?.postMessage({
+                    type: "DBS_CONTROL_SYNC_CONFLICT",
+                    conflicts: restoredCommand.conflicts,
+                    changes: restoredCommand.changes,
+                    requestIds: restoredCommand.requestIds,
+                    permanent: true,
+                  }, "*");
+                }
               }
             } else if (restoredCommand?.status === "pending" || restoredCommand?.status === "sending") {
               scheduleLocalSyncRetry(0);
