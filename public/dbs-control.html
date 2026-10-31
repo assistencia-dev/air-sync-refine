@@ -10659,6 +10659,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body:not(.dbs-control-employee-mode) .metric-card { padding:10px !important; }
     body.dbs-control-employee-mode main > header .page-title h1 { font-size:18px !important; }
     body.dbs-control-employee-mode main > header .dbs-employee-session-actions button { padding-inline:8px !important; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout { font-size:0 !important; min-width:48px !important; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back::before,
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout::before { font:800 11px/1 Inter,Roboto,system-ui,sans-serif; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-back::before { content:'Menu'; }
+    body.dbs-control-employee-mode main > header .dbs-employee-session-logout::before { content:'Sair'; }
   }
 </style>
 <script id="dbs-admin-catalog-crud-loader-20261031">
