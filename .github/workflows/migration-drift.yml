@@ -1,0 +1,69 @@
+name: Migration drift (read-only)
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL_READONLY: ${{ secrets.SUPABASE_DB_URL_READONLY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check migration drift (database read-only)
+        id: drift
+        continue-on-error: true
+        run: |
+          set +e
+          node scripts/check-migration-drift.mjs > migration-drift.json 2>&1
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish drift report
+        if: always()
+        run: |
+          {
+            echo "## Migration drift (somente leitura)"
+            echo ""
+            echo "Fonte: `supabase_migrations.schema_migrations` via `SUPABASE_DB_URL_READONLY`."
+            echo "Nenhum comando de repair, migration ou escrita foi executado."
+            echo ""
+            if [ -f migration-drift.json ]; then
+              echo '```json'
+              cat migration-drift.json
+              echo '```'
+            else
+              echo "O relatório não foi gerado."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-drift-${{ github.run_id }}
+          path: migration-drift.json
+          if-no-files-found: warn
+
+      - name: Fail when migration drift exists
+        if: steps.drift.outputs.exit_code != '0'
+        run: |
+          echo "Migration drift detectado ou auditoria somente leitura não pôde ser executada."
+          exit 1
