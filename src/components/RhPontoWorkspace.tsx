@@ -149,7 +149,7 @@ function PontoRh() {
   const exportMonthlyCsv = () => {
     const rows = [["Funcionário","Unidade","Horas previstas","Horas trabalhadas (corrigidas)","Ajustes aprovados","Horas extras","Atrasos","Saídas antecipadas","Faltas","Atestados","Ponto incompleto","Outras ocorrências"]];
     for (const item of monthlySummary) rows.push([item.employee.full_name,item.employee.unit,timeText(item.expected),timeText(item.worked),timeText(item.adjustments),timeText(item.overtime),timeText(item.late),timeText(item.early),String(item.absences),String(item.attestados),String(item.incomplete),String(item.justified)]);
-    const csv = rows.map(row=>row.map(v=>"\"" + String(v??"").replace(/\"/g,'\"\"') + "\"").join(";")).join("\n");
+    const csv = rows.map(row=>row.map(v=>"\"" + String(v??"").replace(/"/g,'""') + "\"").join(";")).join("\n");
     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="espelho_rh_"+reportDate+".csv";a.click();URL.revokeObjectURL(url);
   };
 

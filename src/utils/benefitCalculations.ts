@@ -169,7 +169,7 @@ export function estimateRechargeDurability(
   const estimated_duration_days = Math.floor(rechargeAmountBrl / daily_cost);
 
   // Calculate coverage end date by counting business days (respecting RJ calendar)
-  let coverageDate = typeof startDate === 'string' ? new Date(startDate) : startDate;
+  const coverageDate = typeof startDate === 'string' ? new Date(startDate) : startDate;
   let daysRemaining = estimated_duration_days;
 
   while (daysRemaining > 0) {
