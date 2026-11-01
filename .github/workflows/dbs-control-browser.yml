@@ -13,8 +13,11 @@ on:
       - "public/dbs-control*"
       - "package.json"
       - "package-lock.json"
+      - "pnpm-lock.yaml"
       - "bun.lock"
       - "vite.config.ts"
+      - "playwright.config.ts"
+      - "tests/e2e/**"
 
 permissions:
   contents: read
@@ -42,3 +45,95 @@ jobs:
           DBS_E2E_IDENTIFIER: ${{ secrets.DBS_E2E_IDENTIFIER || secrets.DBS_E2E_EMAIL }}
           DBS_E2E_PASSWORD: ${{ secrets.DBS_E2E_PASSWORD }}
         run: node scripts/dbs-control-browser-smoke.cjs
+
+  offline-e2e-preflight:
+    name: Offline E2E preflight (test environment only)
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check isolated test credentials
+        id: check
+        env:
+          E2E_BASE_URL: ${{ secrets.DBS_E2E_BASE_URL || vars.DBS_E2E_BASE_URL }}
+          E2E_EMAIL: ${{ secrets.DBS_E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.DBS_E2E_PASSWORD }}
+          E2E_EMAIL_B: ${{ secrets.DBS_E2E_EMAIL_B }}
+          E2E_PASSWORD_B: ${{ secrets.DBS_E2E_PASSWORD_B }}
+        shell: bash
+        run: |
+          enabled=true
+          reasons=()
+          if [[ -z "$E2E_BASE_URL" ]]; then
+            enabled=false
+            reasons+=("DBS_E2E_BASE_URL não configurada")
+          elif [[ "$E2E_BASE_URL" =~ air-sync-refine\.lovable\.app ]]; then
+            enabled=false
+            reasons+=("DBS_E2E_BASE_URL aponta para produção")
+          fi
+          if [[ -z "$E2E_EMAIL" || -z "$E2E_PASSWORD" ]]; then
+            enabled=false
+            reasons+=("DBS_E2E_EMAIL/DBS_E2E_PASSWORD ausentes")
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Fase 3 · Playwright offline E2E"
+            if [[ "$enabled" == "true" ]]; then
+              echo "✅ Credenciais e URL de teste isolada configuradas; o job será executado."
+            else
+              echo "⚠️ **Job pulado:** ${reasons[*]}\n"
+              echo "Nenhum teste E2E foi considerado aprovado. Configure os secrets/variável de uma base de teste (nunca produção) para habilitar a execução."
+            fi
+            if [[ -n "$E2E_EMAIL_B" && -n "$E2E_PASSWORD_B" ]]; then
+              echo "✅ Credenciais do colaborador B configuradas; o teste de isolamento será executado."
+            else
+              echo "⚠️ Teste de isolamento A/B ficará pulado até configurar DBS_E2E_EMAIL_B/DBS_E2E_PASSWORD_B."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  offline-e2e:
+    name: Playwright offline OS flow (isolated test base)
+    needs: offline-e2e-preflight
+    if: needs.offline-e2e-preflight.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run offline E2E and isolation tests
+        env:
+          DBS_E2E_BASE_URL: ${{ secrets.DBS_E2E_BASE_URL || vars.DBS_E2E_BASE_URL }}
+          DBS_E2E_EMAIL: ${{ secrets.DBS_E2E_EMAIL }}
+          DBS_E2E_PASSWORD: ${{ secrets.DBS_E2E_PASSWORD }}
+          DBS_E2E_EMAIL_B: ${{ secrets.DBS_E2E_EMAIL_B }}
+          DBS_E2E_PASSWORD_B: ${{ secrets.DBS_E2E_PASSWORD_B }}
+        run: pnpm exec playwright test tests/e2e/os-offline.spec.ts
+      - name: Publish Playwright result summary
+        if: always()
+        run: |
+          {
+            echo "## Fase 3 · resultado do navegador"
+            echo "✅ O fluxo foi executado contra a URL isolada configurada em DBS_E2E_BASE_URL."
+            echo "O relatório HTML, vídeos e traces ficam anexados ao job."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Playwright report, video and trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbs-control-playwright-offline
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
