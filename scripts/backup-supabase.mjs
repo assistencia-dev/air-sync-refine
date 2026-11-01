@@ -96,6 +96,19 @@ const tables = [
   "dbs_control_legacy_id_map",
   "dbs_control_sync_metrics",
   "dbs_control_backup_manifests",
+  // Inventory/Finance bridge: these tables are the relational source of
+  // truth for parts, purchases, stock movements and the double-entry links.
+  // Keep them in the same logical backup as the OS so a restore cannot leave
+  // a purchase without its stock or Ledger trail.
+  "dbs_control_purchases",
+  "dbs_control_purchase_items",
+  "dbs_control_inventory_movements",
+  "dbs_control_inventory_commands",
+  "dbs_control_work_order_financials",
+  "treasury_accounts",
+  "treasury_ledger_entries",
+  "treasury_ledger_lines",
+  "treasury_ledger_outbox",
 ];
 
 async function request(path, options = {}) {

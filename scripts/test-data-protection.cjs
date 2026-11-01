@@ -19,6 +19,19 @@ assert.match(backup, /dbs_control_backup_manifests/);
 assert.match(backup, /relationalDocumentsByBucket/);
 assert.match(backup, /documentBuckets/);
 assert.match(backup, /metadataRows\.length \|\| !String\(error\.message\)\.includes\("\(404\)"\)/);
+for (const table of [
+  "dbs_control_purchases",
+  "dbs_control_purchase_items",
+  "dbs_control_inventory_movements",
+  "dbs_control_inventory_commands",
+  "dbs_control_work_order_financials",
+  "treasury_accounts",
+  "treasury_ledger_entries",
+  "treasury_ledger_lines",
+  "treasury_ledger_outbox",
+]) {
+  assert.match(backup, new RegExp(`"${table}"`), `Backup must include relational table ${table}.`);
+}
 assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
 assert.match(retention, /dbs_control_work_order_revisions/);
 assert.match(integrity, /rh_ponto_records_employee_date_type_uq/);

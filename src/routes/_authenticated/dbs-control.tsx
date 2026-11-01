@@ -492,8 +492,28 @@ function DbsControlPage() {
       if (event.includes("error") || event.includes("conflict") || event.includes("retry")) console.warn(entry);
       else console.info(entry);
     };
+    // One browser tab can receive a realtime event, regain focus and finish a
+    // save at practically the same time.  Share one authoritative read across
+    // those paths instead of opening one PostgREST fan-out per trigger.  This
+    // is a request coalescer only; the server-side relational read remains the
+    // source of truth and writes are never merged into the response.
+    let cloudStateRequestInFlight: Promise<any> | null = null;
+    const getCloudStateSingleFlight = (): Promise<any> => {
+      if (cloudStateRequestInFlight) return cloudStateRequestInFlight;
+      const request = withDbsControlTransientRetry(() => getDbsControlCloudState());
+      cloudStateRequestInFlight = request.finally(() => {
+        cloudStateRequestInFlight = null;
+      });
+      return cloudStateRequestInFlight;
+    };
+    let dashboardSummaryInFlight: ReturnType<typeof getDbsControlDashboardSummary> | null = null;
     const sendDashboardSummary = () => {
-      void getDbsControlDashboardSummary()
+      if (dashboardSummaryInFlight) return;
+      const request = getDbsControlDashboardSummary();
+      dashboardSummaryInFlight = request.finally(() => {
+        dashboardSummaryInFlight = null;
+      });
+      void dashboardSummaryInFlight
         .then((summary) => {
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_DASHBOARD_SUMMARY",
@@ -721,10 +741,55 @@ function DbsControlPage() {
           && conflicts.every((conflict) => dbsControlConflictCode(conflict) === "DBS_OS_CONFLICT");
         if (collaboratorVersionConflict && attempt <= 3) {
           try {
-            const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+            const latest = await getCloudStateSingleFlight();
             const latestState = latest?.state && typeof latest.state === "object" && !Array.isArray(latest.state)
               ? latest.state as Record<string, unknown>
               : null;
+            // A duplicate submit can arrive after the first completion has
+            // already committed.  Treat that response as an idempotent
+            // acknowledgement, quarantine the original intent for audit and
+            // clear the operator banner; never replay data over a signed OS.
+            if (latestState && dbsControlConflictAlreadyApplied(latestState, { changes, conflicts })) {
+              const protectedMessage = "A versão canônica já confirmou esta OS. A intenção repetida foi preservada para auditoria.";
+              await persistLocalSyncCommand({
+                id: batchId,
+                changes,
+                requestIds,
+                status: "quarantined",
+                attempts: attempt,
+                nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                leaseUntil: null,
+                lastError: protectedMessage,
+                conflicts,
+              });
+              pendingChangesRef.current = null;
+              pendingBatchIdRef.current = null;
+              pendingSaveRequestIdsRef.current = [];
+              promoteQueuedCommandAfterCommit();
+              retryAttemptRef.current = 0;
+              setCloudError(null);
+              requestIds.forEach((id) => iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SAVE_ACK",
+                requestId: id,
+                ok: true,
+                reconciled: true,
+                protected: true,
+                updated_at: latest.updated_at ?? null,
+                committedChanges,
+                appliedOrders: result.appliedOrders ?? [],
+                pendingCount: pendingChangesRef.current ? 1 : 0,
+              }, "*"));
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_SYNC_CONFLICT_CLEARED",
+                conflicts,
+              }, "*");
+              logSyncEvent("completed_conflict_quarantined", {
+                requestCount: requestIds.length,
+                conflicts: conflicts.length,
+              });
+              await postLocalSyncStatus("synced");
+              return;
+            }
             const completedInLatest = conflicts.some((conflict) => dbsControlStateOrderIsCompleted(latestState, conflict));
             const visibleInLatest = conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(latestState, conflict)));
             if (latestState && visibleInLatest && !completedInLatest) {
@@ -842,7 +907,7 @@ function DbsControlPage() {
           void (async () => {
             try {
               const latest = await Promise.race([
-                getDbsControlCloudState(),
+                getCloudStateSingleFlight(),
                 new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
               ]);
               if (!latest?.state) {
@@ -1021,7 +1086,7 @@ function DbsControlPage() {
               ordens: Array.isArray(importedState.ordens) ? importedState.ordens : [],
             },
           } });
-          const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          const cloud = await getCloudStateSingleFlight();
           if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
           sendDashboardSummary();
           iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_MASTER_REFRESH_RESULT", ok: true, result }, "*");
@@ -1043,7 +1108,7 @@ function DbsControlPage() {
         sendDashboardSummary();
         try {
           await hydrateLocalSyncQueue();
-          const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          const cloud = await getCloudStateSingleFlight();
           const cloudState = cloud?.state && typeof cloud.state === "object" && !Array.isArray(cloud.state)
             ? cloud.state as Record<string, unknown>
             : null;
@@ -1368,7 +1433,7 @@ function DbsControlPage() {
                   ordens: Array.isArray(importedState.ordens) ? importedState.ordens : [],
                 },
               } });
-              const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+              const cloud = await getCloudStateSingleFlight();
               if (cloud?.state) iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
               result.summary = { ...result.summary, visible_in_dbs_control: true };
             }
@@ -1417,7 +1482,7 @@ function DbsControlPage() {
           // visual da nuvem é uma etapa posterior e não deve transformar uma
           // exclusão concluída em erro para o usuário.
           try {
-            const cloud = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+            const cloud = await getCloudStateSingleFlight();
             if (cloud?.state) {
               iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CLOUD_STATE", state: cloud.state, baseState: cloud.state }, "*");
             }
@@ -1451,7 +1516,7 @@ function DbsControlPage() {
         const draftBatchId = pendingBatchIdRef.current ?? conflictCommand?.id ?? null;
         const draftChanges = pendingChangesRef.current ?? conflictCommand?.changes ?? null;
         try {
-          const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          const latest = await getCloudStateSingleFlight();
           if (!latest?.state || typeof latest.state !== "object") {
             throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
           }
@@ -1515,7 +1580,7 @@ function DbsControlPage() {
           if (promoteQueuedCommandAfterCommit()) scheduleLocalSyncRetry(0);
         }
         try {
-          const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+          const latest = await getCloudStateSingleFlight();
           cloudReadyRef.current = true;
           cloudUpdatedAtRef.current = latest?.updated_at ?? cloudUpdatedAtRef.current;
           setCloudError(null);
@@ -1603,12 +1668,21 @@ function DbsControlPage() {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
     let realtimeSubscriptionGeneration = 0;
+    let realtimeOwnerId: string = crypto.randomUUID();
+    try {
+      const existingOwnerId = window.sessionStorage.getItem("dbs-control-realtime-owner");
+      realtimeOwnerId = existingOwnerId || realtimeOwnerId;
+      window.sessionStorage.setItem("dbs-control-realtime-owner", realtimeOwnerId);
+    } catch {
+      // sessionStorage can be unavailable in a restricted/private context;
+      // the per-effect UUID still gives this mounted shell a unique topic.
+    }
     const refreshLatestCloudState = async (force = false) => {
       if (disposed || saveTimerRef.current || refreshInFlight) return false;
       refreshInFlight = true;
       const generation = ++refreshGeneration;
       try {
-        const latest = await withDbsControlTransientRetry(() => getDbsControlCloudState());
+        const latest = await getCloudStateSingleFlight();
         if (disposed || generation !== refreshGeneration || !latest?.state || !latest.updated_at) return false;
         // O payload do colaborador é filtrado no servidor; o cache local pode conter arrays maiores por design.
         // A leitura remota é canônica em todos os modos: uma resposta menor é
@@ -1646,12 +1720,14 @@ function DbsControlPage() {
       if (disposed) return;
       // Keep the topic owned by this mounted shell. Removing every channel with
       // a shared name used to make a second tab/hot-reload disconnect the first.
-      const channelName = `dbs-control-work-orders-realtime:${crypto.randomUUID()}`;
+      const channelName = `dbs-control-work-orders-realtime:${realtimeOwnerId}:${crypto.randomUUID()}`;
       const subscriptionGeneration = ++realtimeSubscriptionGeneration;
       const previousChannel = realtimeChannel;
       realtimeChannel = null;
       if (previousChannel) void supabase.removeChannel(previousChannel);
-      const channelPrefix = "realtime:dbs-control-work-orders-realtime:";
+      // Only remove channels owned by this browser tab.  The old global sweep
+      // disconnected an active second tab whenever one shell reconnected.
+      const channelPrefix = `realtime:dbs-control-work-orders-realtime:${realtimeOwnerId}:`;
       for (const existing of supabase.getChannels()) {
         if (existing.topic.startsWith(channelPrefix)) void supabase.removeChannel(existing);
       }
@@ -1801,8 +1877,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261031-shell-fix-1`
-    : "/dbs-control.html?v=20261031-shell-fix-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261031-stability-2`
+    : "/dbs-control.html?v=20261031-stability-2"
 
   if (employeeMode) {
     return (

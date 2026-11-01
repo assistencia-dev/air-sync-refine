@@ -994,6 +994,41 @@ async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
   return next;
 }
 
+// A realtime burst, a focus event and a post-save refresh can arrive in the
+// same event loop turn.  Hydrating the complete relational read model for
+// each request would fan out into a dozen PostgREST requests and exhaust the
+// gateway even when every individual SQL query is fast.  This short-lived
+// server cache is only a coalescing layer: writes invalidate it, failures are
+// never cached, and the TTL is deliberately below the UI refresh interval.
+type DbsControlHydrationCacheEntry = {
+  snapshotUpdatedAt: string | null;
+  state: Record<string, unknown>;
+  hasCanonicalRecords: boolean;
+  expiresAt: number;
+};
+
+const DBS_CONTROL_HYDRATION_CACHE_TTL_MS = 1500;
+const dbsControlHydrationCache = new Map<string, DbsControlHydrationCacheEntry>();
+
+function invalidateDbsControlHydrationCache() {
+  dbsControlHydrationCache.clear();
+}
+
+function dbsControlHydrationCacheKey(
+  user: DbsControlUser,
+  scope: { scopeKey: string },
+  collaboratorEmployee: any,
+  collaboratorScope: any,
+) {
+  return [
+    user.role_key,
+    user.id,
+    scope.scopeKey,
+    String(collaboratorEmployee?.id ?? ""),
+    String(collaboratorScope?.baseId ?? ""),
+  ].join(":");
+}
+
 export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
@@ -1104,6 +1139,7 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
         await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
         throw new Error("Falha ao registrar o anexo da OS: " + attachmentError.message);
       }
+      invalidateDbsControlHydrationCache();
     }
     return { storagePath: path, signedUrl: signed.signedUrl, fileName: data.fileName.slice(0, 180),
       contentType: data.contentType, attachmentType: data.attachmentType };
@@ -1181,6 +1217,32 @@ export const getDbsControlSyncCursor = createServerFn({ method: "GET" })
     };
   });
 
+type DbsControlSerializableState = {
+  tecnicos: any[];
+  ordens: any[];
+  clientes: any[];
+  equipamentos: any[];
+  servicos: any[];
+  sites: any[];
+  locais: any[];
+  pecas: any[];
+  compras: any[];
+};
+
+type DbsControlCloudStatePayload = {
+  state: DbsControlSerializableState;
+  state_version: number;
+  updated_at: string;
+  fallback_source?: string;
+  collaboratorScope?: {
+    baseId: string | null;
+    baseName: string | null;
+    baseActive: boolean;
+    canIssueWorkOrders: boolean;
+    clientCount: number;
+  };
+};
+
 export const getDbsControlCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -1207,49 +1269,63 @@ export const getDbsControlCloudState = createServerFn({ method: "GET" })
     const snapshotState = data?.state && typeof data.state === "object" && !Array.isArray(data.state)
       ? data.state as Record<string, unknown>
       : {};
-    const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
-      snapshotState,
-      scope.companyId,
-      scope.scopeKey,
-      collaboratorEmployee
-        ? {
-            employeeId: String(collaboratorEmployee.id),
-            baseId: collaboratorScope?.baseId ?? null,
-            baseActive: collaboratorScope?.baseActive,
-            clientIds: collaboratorScope?.clientIds ?? [],
-            canIssueWorkOrders: collaboratorScope?.canIssueWorkOrders ?? false,
-          }
-        : undefined,
-    );
-    const hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
-    const hasCanonicalRecords = [
-      hydratedState.clientes,
-      hydratedState.equipamentos,
-      hydratedState.tecnicos,
-      hydratedState.ordens,
-      hydratedState.sites,
-      hydratedState.locais,
-      hydratedState.servicos,
-      hydratedState.pecas,
-      hydratedState.compras,
-    ].some((items) => Array.isArray(items) && items.length > 0);
+    const cacheKey = dbsControlHydrationCacheKey(user, scope, collaboratorEmployee, collaboratorScope);
+    const now = Date.now();
+    const cached = dbsControlHydrationCache.get(cacheKey);
+    let hydratedState: Record<string, unknown>;
+    let hasCanonicalRecords: boolean;
+    if (cached && cached.expiresAt > now && cached.snapshotUpdatedAt === (data?.updated_at ?? null)) {
+      hydratedState = cached.state;
+      hasCanonicalRecords = cached.hasCanonicalRecords;
+    } else {
+      const canonicalHydratedState = await hydrateDbsControlStateFromCanonicalDb(
+        snapshotState,
+        scope.companyId,
+        scope.scopeKey,
+        collaboratorEmployee
+          ? {
+              employeeId: String(collaboratorEmployee.id),
+              baseId: collaboratorScope?.baseId ?? null,
+              baseActive: collaboratorScope?.baseActive,
+              clientIds: collaboratorScope?.clientIds ?? [],
+              canIssueWorkOrders: collaboratorScope?.canIssueWorkOrders ?? false,
+            }
+          : undefined,
+      );
+      hydratedState = await hydrateStoredAttachmentUrls(canonicalHydratedState);
+      hasCanonicalRecords = [
+        hydratedState.clientes,
+        hydratedState.equipamentos,
+        hydratedState.tecnicos,
+        hydratedState.ordens,
+        hydratedState.sites,
+        hydratedState.locais,
+        hydratedState.servicos,
+        hydratedState.pecas,
+        hydratedState.compras,
+      ].some((items) => Array.isArray(items) && items.length > 0);
+      dbsControlHydrationCache.set(cacheKey, {
+        snapshotUpdatedAt: data?.updated_at ?? null,
+        state: hydratedState,
+        hasCanonicalRecords,
+        expiresAt: Date.now() + DBS_CONTROL_HYDRATION_CACHE_TTL_MS,
+      });
+    }
 
     if (!data && !hasCanonicalRecords) return null;
 
-    const hydrated = data
-      ? { ...data, state: hydratedState }
-      : {
-          state: hydratedState,
-          state_version: 1,
-          updated_at: new Date().toISOString(),
-          fallback_source: "canonical_tables",
-        };
+    const hydrated: DbsControlCloudStatePayload = {
+      state: hydratedState as DbsControlSerializableState,
+      state_version: Number(data?.state_version ?? 1),
+      updated_at: data?.updated_at ?? new Date().toISOString(),
+      ...(data ? {} : { fallback_source: "canonical_tables" }),
+    };
 
     if (user.role_key !== "COLABORADOR") return hydrated;
 
     return {
       ...hydrated,
-      state: filterCollaboratorState(hydratedState, collaboratorEmployee!.id, collaboratorEmployee!.login_email, collaboratorScope!),
+      state: filterCollaboratorState(hydratedState, collaboratorEmployee!.id, collaboratorEmployee!.login_email, collaboratorScope!) as DbsControlSerializableState,
       collaboratorScope: {
         baseId: collaboratorScope!.baseId,
         baseName: collaboratorScope!.baseName,
@@ -1723,7 +1799,7 @@ async function persistDbsControlMasterDeltas(
       .trim()
       .toLocaleLowerCase("pt-BR")
       .normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "");
+      .replace(/[\u0300-\u036f]/g, "");
     const serviceStatus = ["inativo", "inativa", "arquivado", "arquivada", "excluido", "excluida", "deleted"]
       .includes(normalizedServiceStatus)
       ? "inativo"
@@ -1752,7 +1828,7 @@ async function persistDbsControlMasterDeltas(
     appliedParts.push({
       local_id: rawId || null,
       part_id: String(saved.part_id),
-      sku: String(saved.sku ?? part?.sku ?? '').trim(),
+      sku: String((saved as any).sku ?? part?.sku ?? '').trim(),
     });
     applied += 1;
   }
@@ -2135,6 +2211,10 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       }
     }
 
+    // A successful relational delta changes the canonical read model. Drop
+    // any short-lived hydration entries before the next realtime/read request;
+    // this is an in-memory cache invalidation only and never touches data.
+    invalidateDbsControlHydrationCache();
     return {
       ok: conflicts.length === 0,
       applied,
@@ -2174,6 +2254,10 @@ export const deleteDbsControlWorkOrder = createServerFn({ method: "POST" })
     if (!data.workOrderId && !data.protocol) {
       throw new Error("Não foi possível identificar a OS para exclusão.");
     }
+    // The delete RPC is idempotent; invalidate the short-lived read cache even
+    // when the row was already deleted so another tab cannot keep displaying a
+    // stale operational list after the request completes.
+    invalidateDbsControlHydrationCache();
 
     const readCanonicalOrder = async () => {
       if (data.workOrderId) {
