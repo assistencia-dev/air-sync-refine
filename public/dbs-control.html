@@ -3713,15 +3713,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 <p id="view-subtitle">Controle Avançado de Ordens de Serviço, Ativos e Exportações</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-<span id="dbs-sync-indicator" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span>
+<span id="dbs-sync-indicator" data-testid="sync-status" role="status" aria-live="polite" style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dbe5ef;border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:700;">Sincronização aguardando</span><span id="dbs-sync-pending-count" data-testid="pending-changes-count" aria-label="Alterações pendentes" hidden>0</span>
                 <div class="dbs-employee-session-actions" aria-label="Ações da sessão do colaborador">
                     <button type="button" class="dbs-employee-session-action dbs-employee-session-back" data-dbs-session-action="back" onclick="voltarMenuPrincipalColaborador()" aria-label="Voltar ao menu principal" title="Voltar ao menu principal">← Menu principal</button>
                     <button type="button" class="dbs-employee-session-action dbs-employee-session-logout" data-dbs-session-action="logout" onclick="solicitarLogoutColaborador()" aria-label="Sair do sistema" title="Sair do sistema">Sair</button>
                 </div>
-                <button id="dbs-employee-issue-cta" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
-                <button id="dbs-sync-retry" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
+                <button id="dbs-employee-issue-cta" data-testid="create-os" type="button" class="btn dbs-employee-issue-cta" aria-label="Emitir nova ordem de serviço" onclick="switchTab('tab-nova-os')">＋ Emitir OS</button>
+                <button id="dbs-sync-retry" data-testid="retry-sync" class="btn btn-secondary btn-sm" style="display:none;" onclick="window.parent.postMessage({type:'DBS_CONTROL_RETRY_SAVE'}, '*')">Tentar novamente</button>
                 <details class="dbs-secondary-menu" style="position:relative;"><summary class="btn btn-secondary btn-sm" style="min-height:36px;cursor:pointer;list-style:none;">Mais opções ▾</summary><div style="position:absolute;right:0;top:calc(100% + 6px);z-index:1000;min-width:190px;padding:8px;background:#fff;border:1px solid #dbe5ef;border-radius:10px;box-shadow:0 8px 24px rgba(16,42,67,.14);"><button class="btn btn-secondary btn-sm" style="min-height:44px;width:100%;white-space:normal;" onclick="resetarDadosPadrao()">Limpar dados locais</button></div></details>
-                <button class="btn btn-primary" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
+                <button class="btn btn-primary" data-testid="create-os-admin" onclick="switchTab('tab-nova-os')">Emitir Nova OS</button>
             </div>
         </header>
 
@@ -3989,6 +3989,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                             <div class="form-group os-premium-field os-premium-client">
                                 <label for="os-client-search">Cliente</label>
                                 <input id="os-client-search"
+                                       data-testid="os-client"
                                        type="text"
                                        list="os-client-options"
                                        autocomplete="off"
@@ -4004,6 +4005,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <div class="dbs-equipment-picker" id="dbs-equipment-picker">
                                     <div class="dbs-equipment-input-shell">
                                         <input id="os-equipment-search"
+                                               data-testid="os-equipment"
                                                class="dbs-equipment-search"
                                                type="text"
                                                autocomplete="off"
@@ -4098,7 +4100,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
                     <div class="os-premium-footer">
                         <span>Cliente, equipamento e tipo de OS são obrigatórios. O serviço detalhado pode ser incluído depois.</span>
-                        <button type="submit" class="btn btn-primary os-premium-submit">
+                        <button type="submit" data-testid="save-new-os" class="btn btn-primary os-premium-submit">
                             Emitir OS <b>→</b>
                         </button>
                     </div>
@@ -5415,6 +5417,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     }
                     const hasMorePending = DBS_CONTROL_PENDING_SAVE_REQUESTS.size > 0 || Number(msg.pendingCount || 0) > 0;
                     DBS_CONTROL_HAS_PENDING_SAVE = hasMorePending;
+                    const pendingIndicator = document.getElementById('dbs-sync-pending-count');
+                    if (pendingIndicator) {
+                        const pendingValue = hasMorePending ? Math.max(1, Number(msg.pendingCount || 0)) : 0;
+                        pendingIndicator.textContent = String(pendingValue);
+                        pendingIndicator.hidden = pendingValue <= 0;
+                    }
                     if (!hasMorePending) {
                         const indicator = document.getElementById('dbs-sync-indicator');
                         if (indicator) {
@@ -5459,6 +5467,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (!msg.queuedLocally) DBS_CONTROL_PENDING_SAVE_REQUESTS.delete(requestId);
                     DBS_CONTROL_HAS_PENDING_SAVE = true;
                     const indicator = document.getElementById('dbs-sync-indicator');
+                    const pendingIndicator = document.getElementById('dbs-sync-pending-count');
+                    if (pendingIndicator && msg.queuedLocally) {
+                        pendingIndicator.textContent = String(Math.max(1, Number(msg.pendingCount || 0)));
+                        pendingIndicator.hidden = false;
+                    }
                     if (indicator && msg.queuedLocally) {
                         indicator.textContent = 'Salvo no dispositivo · aguardando sincronização';
                         indicator.title = msg.error || 'A intenção permanece na fila local e será reenviada automaticamente.';
@@ -5504,7 +5517,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 // nova tentativa, mas não pode apagar os KPIs canônicos.
                 atualizarMetricas();
                 const indicator = document.getElementById('dbs-sync-indicator');
+                const pendingCount = document.getElementById('dbs-sync-pending-count');
                 const retry = document.getElementById('dbs-sync-retry');
+                if (pendingCount) {
+                    const count = Number(msg.pendingCount || 0);
+                    pendingCount.textContent = String(Number.isFinite(count) ? Math.max(0, count) : 0);
+                    pendingCount.hidden = count <= 0;
+                }
                 if (indicator) {
                     if (msg.status === 'synced') {
                         // A Realtime refresh can arrive while an ACK is still
@@ -8332,7 +8351,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 // first authenticated snapshot is still being requested. Only
                 // the explicit error status should switch the copy to retry.
                 const disconnected = DBS_CONTROL_DASHBOARD_LOAD_STATUS === 'error';
-                area.innerHTML = `<div class="employee-empty employee-sync-state" role="status" aria-live="polite"><div class="employee-icon">${disconnected ? '⚠' : '⟳'}</div><h3>${disconnected ? 'Não foi possível carregar suas OS' : 'Carregando suas OS'}</h3><p>${disconnected ? 'A conexão segura com a base de operações não foi confirmada. Tente atualizar a tela; nenhum dado local será exibido neste modo.' : 'Validando sua sessão e buscando somente as ordens atribuídas a você.'}</p>${disconnected ? '<button type="button" class="btn btn-primary" onclick="window.location.reload()">Tentar novamente</button>' : ''}</div>`;
+                area.innerHTML = `<div class="employee-empty employee-sync-state" role="status" aria-live="polite"><div class="employee-icon">${disconnected ? '⚠' : '⟳'}</div><h3>${disconnected ? 'Não foi possível carregar suas OS' : 'Carregando suas OS'}</h3><p>${disconnected ? 'A conexão segura com a base de operações não foi confirmada. Tente atualizar a tela; nenhum dado local será exibido neste modo.' : 'Validando sua sessão e buscando somente as ordens atribuídas a você.'}</p>${disconnected ? '<button type="button" data-testid="retry-sync-page" class="btn btn-primary" onclick="window.location.reload()">Tentar novamente</button>' : ''}</div>`;
                 return;
             }
 
@@ -8494,7 +8513,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               <label class="employee-parts-ack"><input type="checkbox" id="dbs-mob-no-parts-${o.id}" onchange="agendarRascunhoExecucaoMobile('${o.id}')" ${hasPartsUsed ? 'disabled' : ''}> Confirmo que não houve peça ou insumo utilizado nesta visita.</label>
                               <div class="employee-fields employee-fields-single">
                                 <label>Relato técnico do atendimento <span class="field-required">Obrigatório</span>
-                                  <textarea id="dbs-mob-relato-${o.id}" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado..." oninput="agendarRascunhoExecucaoMobile('${o.id}')">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
+                                  <textarea id="dbs-mob-relato-${o.id}" data-testid="technical-report" rows="5" placeholder="Descreva o que foi encontrado e o que foi realizado. Ex.: causa identificada, procedimento executado, testes e resultado..." oninput="agendarRascunhoExecucaoMobile('${o.id}')">${escHtml(o.relatoTecnico || o.diagnostico || o.trabalhoExecutado || '')}</textarea>
                                 </label>
                               </div>
                               ${(() => {
@@ -8522,8 +8541,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <label>Foto depois <span class="field-optional">Opcional</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}"></label>
                               </div>
                               <label>Assinatura do cliente <span class="field-optional">Opcional</span></label>
-                              <canvas id="sig-canvas-${o.id}" class="sig-canvas"></canvas>
-                              <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
+                              <canvas id="sig-canvas-${o.id}" data-testid="sign-os" class="sig-canvas" aria-label="Assinatura do cliente"></canvas>
+                              <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" data-testid="save-os" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
                             </div>
                           </details>
                         `}
