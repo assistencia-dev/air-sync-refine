@@ -61,6 +61,8 @@ async function openNewOrder(frame: FrameLocator) {
   await expect(order).toBeVisible({ timeout: 60_000 });
   const protocol = String((await order.locator(".employee-protocol").textContent()) || "").trim();
   if (!protocol) throw new Error("A OS criada não exibiu protocolo no workspace do colaborador.");
+  await expect(frame.getByTestId("sync-status")).toContainText(/sincronizado|confirmado/i, { timeout: 60_000 });
+  await expect(frame.getByTestId("pending-changes-count")).toHaveText("0", { timeout: 30_000 });
   return { order, protocol, clientName };
 }
 
