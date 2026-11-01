@@ -111,6 +111,10 @@ const tables = [
   "treasury_ledger_outbox",
 ];
 
+if (tables.length !== 78 || new Set(tables).size !== tables.length) {
+  throw new Error(`Lista de backup inválida: esperadas 78 tabelas únicas, encontradas ${tables.length}.`);
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
@@ -200,7 +204,17 @@ async function ensureBucket() {
 async function readTable(table) {
   const rows = [];
   for (let offset = 0; ; offset += pageSize) {
-    const page = await request(`/rest/v1/${table}?select=*&limit=${pageSize}&offset=${offset}`);
+    let page;
+    try {
+      page = await request(`/rest/v1/${table}?select=*&limit=${pageSize}&offset=${offset}`);
+    } catch (error) {
+      throw new Error(`Falha ao ler a tabela obrigatória "${table}" (offset ${offset}): ${error.message}`, {
+        cause: error,
+      });
+    }
+    if (!Array.isArray(page)) {
+      throw new Error(`Falha ao ler a tabela obrigatória "${table}" (offset ${offset}): a API não retornou uma lista.`);
+    }
     rows.push(...page);
     if (page.length < pageSize) return rows;
   }
@@ -276,6 +290,7 @@ const manifest = {
   generated_at: snapshot.generated_at,
   object_path: path,
   sha256,
+  snapshot_size_bytes: payload.byteLength,
   tables: Object.fromEntries(Object.entries(snapshot.tables).map(([name, rows]) => [name, rows.length])),
   // Keep the old scalar field for readers already deployed, while the array
   // makes the source coverage explicit for all document buckets.
@@ -287,6 +302,10 @@ const manifest = {
   verified_at: new Date().toISOString(),
 };
 
+if (Object.keys(manifest.tables).length !== tables.length) {
+  throw new Error(`Manifesto incompleto: esperadas ${tables.length} tabelas, encontradas ${Object.keys(manifest.tables).length}.`);
+}
+
 await request(`/storage/v1/object/${bucket}/${path}`, {
   method: "POST",
   headers: { "x-upsert": "false", "Content-Type": "application/json" },
@@ -295,6 +314,11 @@ await request(`/storage/v1/object/${bucket}/${path}`, {
 const verifiedSnapshot = await requestBinary(storageObjectPath(bucket, path));
 const verifiedSnapshotSha256 = crypto.createHash("sha256").update(verifiedSnapshot).digest("hex");
 if (verifiedSnapshotSha256 !== sha256) throw new Error("Checksum divergente no snapshot principal; backup interrompido.");
+if (verifiedSnapshot.byteLength !== payload.byteLength) {
+  throw new Error(
+    `Tamanho divergente no snapshot principal: esperado ${payload.byteLength}, recebido ${verifiedSnapshot.byteLength}.`,
+  );
+}
 
 const manifestPath = `daily/${stamp}/manifest.json`;
 await request(storageObjectPath(bucket, manifestPath), {
@@ -304,7 +328,12 @@ await request(storageObjectPath(bucket, manifestPath), {
 });
 const verifiedManifest = await requestBinary(storageObjectPath(bucket, manifestPath));
 const parsedManifest = JSON.parse(verifiedManifest.toString("utf8"));
-if (parsedManifest.sha256 !== sha256 || parsedManifest.document_count !== documentManifest.length) {
+if (
+  parsedManifest.sha256 !== sha256 ||
+  parsedManifest.snapshot_size_bytes !== payload.byteLength ||
+  parsedManifest.document_count !== documentManifest.length ||
+  Object.keys(parsedManifest.tables || {}).length !== tables.length
+) {
   throw new Error("Manifesto de backup não confere com os objetos verificados.");
 }
 

@@ -1,4 +1,4 @@
-name: Backup restore verification
+name: Backup restore drill
 
 on:
   schedule:
@@ -11,23 +11,78 @@ permissions:
 jobs:
   restore-drill:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: backup_drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d backup_drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_BACKUP_BUCKET: db-backups
+      SUPABASE_REQUIRE_DOCUMENT_BACKUP: "true"
+      RESTORE_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/backup_drill
+      RESTORE_SCHEMA: backup_restore
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun run verify:backup-restore
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_BACKUP_BUCKET: db-backups
-          SUPABASE_REQUIRE_DOCUMENT_BACKUP: "true"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Restore latest JSON backup into isolated PostgreSQL
+        run: bun scripts/restore-backup-json.mjs | tee restore-output.json
+
+      - name: Compare manifest counts with restored tables
+        run: psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/backup-parity.sql | tee parity-output.txt
+
+      - name: Publish drill summary
+        if: always()
+        run: |
+          {
+            echo "## Backup restore drill"
+            echo ""
+            echo "Ambiente: PostgreSQL 16 efêmero (backup_drill, schema backup_restore)"
+            echo "Produção: somente leitura para download do manifesto, snapshot e documentos"
+            echo ""
+            echo "### Restauração"
+            if [ -f restore-output.json ]; then cat restore-output.json; else echo "restore-output.json não foi gerado."; fi
+            echo ""
+            echo "### Paridade"
+            if [ -f parity-output.txt ]; then cat parity-output.txt; else echo "parity-output.txt não foi gerado."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drill logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-restore-drill-${{ github.run_id }}
+          path: |
+            restore-output.json
+            parity-output.txt
+          if-no-files-found: warn
+
       - name: Failure summary
         if: failure()
         run: |
           {
             echo "## Backup restore drill: falha"
             echo ""
-            echo "O manifesto, snapshot ou algum documento não passou na verificação de checksum/tamanho."
+            echo "A restauração isolada ou a paridade de contagens falhou. Nenhuma escrita foi feita no Supabase de produção."
           } >> "$GITHUB_STEP_SUMMARY"
