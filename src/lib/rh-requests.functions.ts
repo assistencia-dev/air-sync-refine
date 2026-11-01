@@ -7,7 +7,6 @@ type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 const BUCKET = "rh-files";
 // As tabelas de solicitações são acessadas apenas pelo servidor; tipos gerados podem
 // ainda não incluí-las, por isso usamos um acesso destipado controlado.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabaseAdmin as any;
 const MAX_BYTES = 15 * 1024 * 1024;
 
@@ -435,7 +434,7 @@ export const uploadRequestAttachment = createServerFn({ method: "POST" })
     if (binary.byteLength === 0) throw new Error("Arquivo vazio.");
     if (binary.byteLength > MAX_BYTES) throw new Error("Arquivo acima do limite de 15 MB.");
 
-    const safeName = data.file_name.replace(/[^\w.\-]+/g, "_");
+    const safeName = data.file_name.replace(/[^\w.-]+/g, "_");
     const path = `benefit-requests/${data.request_id}/${Date.now()}-${safeName}`;
     const { error: upErr } = await supabaseAdmin.storage
       .from(BUCKET)

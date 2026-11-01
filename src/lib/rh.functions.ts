@@ -624,7 +624,7 @@ export const listRhEmployeeRegistry = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const registry = (data ?? []).filter((employee: any) =>
       (employee.registry_employee_id === employee.id || (!employee.registry_employee_id && !employee.benefit_configured)) &&
-      !Boolean(employee.registration_data && (employee.registration_data as any).__deleted_at)
+      !(employee.registration_data && (employee.registration_data as any).__deleted_at)
     );
     const userIds = [...new Set(registry.map((e: any) => e.ponto_portal_user_id).filter(Boolean))];
     const users = userIds.length ? (((await supabaseAdmin.from("users").select("id, username, email, cpf, full_name, status, role_key").in("id", userIds)).data ?? []) as any[]) : [];
@@ -1323,7 +1323,7 @@ export const uploadRhEmployeeFicha = createServerFn({ method: "POST" })
     const binary = Buffer.from(data.data_base64, "base64");
     if (!binary.length || binary.length > 15 * 1024 * 1024)
       throw new Error("A ficha deve ter entre 1 byte e 15 MB.");
-    const safeName = data.file_name.replace(/[^\w.\-]+/g, "_");
+    const safeName = data.file_name.replace(/[^\w.-]+/g, "_");
     const path = `rh-employees/${data.employee_id}/${Date.now()}-${safeName}`;
     const { error: uploadError } = await supabaseAdmin.storage
       .from("rh-files")
