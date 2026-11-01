@@ -122,7 +122,7 @@
       var action = '<button class="btn btn-secondary btn-sm" onclick="window.quoteStatus(\'' + o.id + '\',\'Aprovado\')">Aprovar</button>';
       if (o.status === "Aprovado") action = '<button class="btn btn-success btn-sm" onclick="window.quoteToOs(\'' + o.id + '\')">Gerar OS</button>';
       if (o.status === "Convertido em OS") action = '<span class="badge badge-concluido">' + (o.osId || "OS") + "</span>";
-      return "<tr><td><strong>" + o.id + "</strong></td><td>" + o.data + "</td><td>" + (c.nome || "-") + "</td><td>" + (s.nome || "-") + "</td><td>" + money(o.total) + "</td><td>" + o.validade + "</td><td><span class=\"badge \" + (o.status === "Aprovado" ? "badge-concluido" : "badge-andamento") + "\">" + o.status + "</span></td><td>" + action + "</td></tr>";
+      return "<tr><td><strong>" + o.id + "</strong></td><td>" + o.data + "</td><td>" + (c.nome || "-") + "</td><td>" + (s.nome || "-") + "</td><td>" + money(o.total) + "</td><td>" + o.validade + "</td><td><span class=\"badge " + (o.status === "Aprovado" ? "badge-concluido" : "badge-andamento") + "\">" + o.status + "</span></td><td>" + action + "</td></tr>";
     }).join("");
     body.innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:20px;">Nenhum orçamento registrado.</td></tr>';
   }

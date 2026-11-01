@@ -118,7 +118,7 @@ export const uploadTicketAttachment = createServerFn({ method: "POST" })
     if (binary.byteLength === 0) throw new Error("Arquivo vazio.");
     if (binary.byteLength > MAX_BYTES) throw new Error("Arquivo acima do limite de 15 MB.");
 
-    const safeName = data.file_name.replace(/[^\w.\-]+/g, "_");
+    const safeName = data.file_name.replace(/[^\w.-]+/g, "_");
     const path = `${data.ticket_id}/${Date.now()}-${safeName}`;
 
     const { error: upErr } = await supabaseAdmin.storage
