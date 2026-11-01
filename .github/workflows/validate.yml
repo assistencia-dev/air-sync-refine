@@ -15,6 +15,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - name: Validate migration filenames and duplicate versions
+        run: node scripts/check-migration-drift.mjs --local-only
       - run: node scripts/test-module-recovery.cjs
       - run: node scripts/test-auth-boundary.cjs
       - run: node scripts/test-runtime-loader.cjs
