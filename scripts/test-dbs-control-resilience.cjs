@@ -28,6 +28,10 @@ assert.match(runner, /authorization: `Bearer \$\{serviceRoleKey\}`/, "A chave pr
 assert.match(route, /dbs-control-work-orders-realtime/, "O cliente precisa manter um canal Realtime estável.");
 assert.match(route, /removeChannel\(existing\)/, "Canais duplicados precisam ser removidos antes de assinar novamente.");
 assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em uma fila de retry.");
+assert.match(route, /status: transient \? "pending" : "error"/, "Falhas transitórias não podem virar erro terminal após um número fixo de tentativas.");
+assert.match(route, /promoteNextLocalSyncCommand\(true\)/, "O retry manual precisa promover comandos error persistidos após reload.");
+assert.match(route, /document\.visibilityState !== "visible" \|\| navigator\.onLine === false/, "O polling de cursor não deve executar em aba oculta ou offline.");
+assert.match(route, /setInterval\(\(\) => \{ void pollSyncCursor\(\); \}, 30000\)/, "O fallback de cursor deve respeitar intervalo de 30 segundos para não saturar o pool.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
