@@ -36,8 +36,14 @@ function isDbsControlTransientError(error: unknown) {
   const status = dbsControlHttpStatus(error);
   const message = error instanceof Error ? error.message : String(error ?? "");
   return [408, 425, 429, 502, 503, 504].includes(status)
-    || /(timeout|timed out|timeout manager|gateway|failed to fetch|fetch failed|network|connection reset|temporarily unavailable|warp server error)/i.test(message);
+    || /(timeout|timed out|timeout manager|gateway|failed to fetch|fetch failed|network|connection reset|connection closed|temporarily unavailable|warp server error|request aborted|aborterror|econnreset|socket hang up|upstream)/i.test(message);
 }
+
+// A temporary gateway outage must not turn a durable local intent into a
+// permanent error after a fixed number of attempts.  The delay is capped at
+// 15 minutes so a device can recover without hammering PostgREST while still
+// retrying automatically until the operator receives an ACK.
+const DBS_CONTROL_SYNC_RETRY_DELAYS_MS = [5000, 15000, 45000, 120000, 300000, 900000];
 
 function isLegacyAutomaticReconcileCommand(command: Pick<DbsControlLocalSyncCommand, "id" | "requestIds">) {
   return String(command.id).startsWith("reconcile:")
@@ -597,16 +603,24 @@ function DbsControlPage() {
       return command;
     };
 
-    const findNextRetryableLocalCommand = () => {
+    const findNextRetryableLocalCommand = (force = false) => {
       const now = Date.now();
       return [...localSyncCommandsRef.current.values()]
-        .filter((command) => (command.status === "pending" || command.status === "sending") && Number(command.nextAttemptAt ?? 0) <= now)
+        .filter((command) => {
+          if (command.status === "conflict" || command.status === "quarantined") return false;
+          // A live lease belongs to another tab/session. Never force a second
+          // request for it; recoverExpiredDbsControlLocalSyncCommands() is the
+          // only path allowed to reclaim a sending command.
+          if (command.status === "sending" && Number(command.leaseUntil ?? 0) > now) return false;
+          if (force) return command.status === "pending" || command.status === "error" || command.status === "sending";
+          return (command.status === "pending" || command.status === "sending") && Number(command.nextAttemptAt ?? 0) <= now;
+        })
         .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0] ?? null;
     };
 
-    const promoteNextLocalSyncCommand = () => {
+    const promoteNextLocalSyncCommand = (force = false) => {
       if (pendingChangesRef.current || saveInFlightRef.current) return false;
-      const next = findNextRetryableLocalCommand();
+      const next = findNextRetryableLocalCommand(force);
       if (!next) return false;
       pendingChangesRef.current = dbsControlClone(next.changes);
       pendingBatchIdRef.current = next.id;
@@ -684,8 +698,7 @@ function DbsControlPage() {
 
       try {
         if (!cloudReadyRef.current) {
-          const delays = [5000, 15000, 45000, 120000, 300000, 900000];
-          const delay = delays[Math.min(retryAttemptRef.current, delays.length - 1)];
+          const delay = DBS_CONTROL_SYNC_RETRY_DELAYS_MS[Math.min(retryAttemptRef.current, DBS_CONTROL_SYNC_RETRY_DELAYS_MS.length - 1)];
           retryAttemptRef.current += 1;
           await persistLocalSyncCommand({
             id: batchId,
@@ -931,16 +944,18 @@ function DbsControlPage() {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
         const transient = isDbsControlTransientError(err) || /Outra aba está sincronizando/i.test(message);
-        const delays = [5000, 15000, 45000, 120000, 300000, 900000];
-        const retryDelay = delays[Math.min(retryAttemptRef.current, delays.length - 1)];
-        if (transient && retryAttemptRef.current < delays.length) retryAttemptRef.current += 1;
+        const retryDelay = DBS_CONTROL_SYNC_RETRY_DELAYS_MS[Math.min(retryAttemptRef.current, DBS_CONTROL_SYNC_RETRY_DELAYS_MS.length - 1)];
+        if (transient) retryAttemptRef.current += 1;
         await persistLocalSyncCommand({
           id: batchId,
           changes,
           requestIds,
-          status: transient && retryAttemptRef.current <= delays.length ? "pending" : "error",
+          // A transient gateway/network error is never terminal. Keep the
+          // intent pending with the same idempotency key until the server ACKs
+          // it. Non-transient errors remain visible for manual review.
+          status: transient ? "pending" : "error",
           attempts: attempt,
-          nextAttemptAt: transient && retryAttemptRef.current <= delays.length ? Date.now() + retryDelay : Number.MAX_SAFE_INTEGER,
+          nextAttemptAt: transient ? Date.now() + retryDelay : Number.MAX_SAFE_INTEGER,
           lastError: message,
         });
         logSyncEvent("save_error", { message, attempt, transient, localQueue: true });
@@ -954,7 +969,7 @@ function DbsControlPage() {
           queuedLocally: transient,
           retryAt: transient ? Date.now() + retryDelay : undefined,
         }, "*"));
-        if (transient && retryAttemptRef.current <= delays.length) {
+        if (transient) {
           if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
           retryTimerRef.current = setTimeout(() => {
             retryTimerRef.current = null;
@@ -967,6 +982,22 @@ function DbsControlPage() {
     };
 
     retryPendingSaveRef.current = (manual = false) => {
+      // A command that exhausted the old finite retry window is persisted as
+      // `error`.  After a reload there is no in-memory pendingChangesRef, so
+      // the old retry button used to do nothing.  Explicit retry now promotes
+      // that durable command back into the send pipeline without changing its
+      // idempotency key or payload.
+      if (manual && !pendingChangesRef.current && localSyncCommandsRef.current.size === 0 && !localSyncHydrationRef.current) {
+        void hydrateLocalSyncQueue().then(() => {
+          // Do not recurse when the durable store is empty (for example after
+          // a clean session or a command already acknowledged in another tab).
+          // The old implementation could keep scheduling the same manual
+          // retry forever in that case.
+          if (localSyncCommandsRef.current.size > 0) retryPendingSaveRef.current?.(true);
+        });
+        return;
+      }
+      if (manual && !pendingChangesRef.current) promoteNextLocalSyncCommand(true);
       const activeBatchId = pendingBatchIdRef.current;
       const activeCommand = activeBatchId ? localSyncCommandsRef.current.get(activeBatchId) : null;
       // A permanent conflict must wait for the operator's explicit choice. A
@@ -1772,7 +1803,10 @@ function DbsControlPage() {
     // de objetos e eliminando a dependência exclusiva do websocket.
     let syncPollInFlight = false;
     const pollSyncCursor = async () => {
-      if (disposed || syncPollInFlight) return;
+      // Realtime is the fast path. The cursor poll is only a correctness
+      // fallback for an active tab; polling hidden/offline tabs multiplies
+      // auth + scope lookups and was saturating the PostgREST pool on mobile.
+      if (disposed || syncPollInFlight || document.visibilityState !== "visible" || navigator.onLine === false) return;
       syncPollInFlight = true;
       try {
         const cursorResult = await withDbsControlTransientRetry(() => getDbsControlSyncCursor());
@@ -1789,7 +1823,7 @@ function DbsControlPage() {
         syncPollInFlight = false;
       }
     };
-    const refreshTimer = setInterval(() => { void pollSyncCursor(); }, 10000);
+    const refreshTimer = setInterval(() => { void pollSyncCursor(); }, 30000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         retryPendingSaveRef.current?.();
@@ -1877,8 +1911,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261031-phase-playwright-3`
-    : "/dbs-control.html?v=20261031-phase-playwright-3"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261031-sync-recovery-4`
+    : "/dbs-control.html?v=20261031-sync-recovery-4"
 
   if (employeeMode) {
     return (
