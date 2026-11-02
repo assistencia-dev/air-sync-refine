@@ -1196,10 +1196,64 @@ function DbsControlPage() {
             );
             // Remove o estado inicial "aguardando" assim que a leitura autoritativa da nuvem termina.
             await postLocalSyncStatus("synced");
+            // Uma sessão pode ter acumulado mais de um conflito antigo (por
+            // exemplo, vários autosaves da mesma OS durante uma queda). O
+            // código anterior examinava somente o primeiro comando e deixava
+            // os demais mantendo o banner de sincronização para sempre. Cada
+            // intenção é preservada como quarentena, mas todas as que já foram
+            // refletidas na versão canônica precisam sair da fila ativa na
+            // mesma hidratação.
+            const persistedConflictCommands = [...localSyncCommandsRef.current.values()]
+              .filter((command) => command.status === "conflict" && command.conflicts?.length);
+            const staleConflictCommands = persistedConflictCommands
+              .filter((command) => dbsControlConflictAlreadyApplied(cloudState, command));
+            if (staleConflictCommands.length > 0) {
+              const quarantineMessage = "Conflito antigo encerrado pela versão canônica. A intenção original foi preservada para auditoria; nenhuma alteração foi reaplicada.";
+              for (const staleCommand of staleConflictCommands) {
+                await persistLocalSyncCommand({
+                  id: staleCommand.id,
+                  changes: staleCommand.changes,
+                  requestIds: staleCommand.requestIds,
+                  status: "quarantined",
+                  attempts: staleCommand.attempts,
+                  nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                  leaseUntil: null,
+                  lastError: quarantineMessage,
+                  conflicts: staleCommand.conflicts,
+                });
+                const quarantinedCommand = localSyncCommandsRef.current.get(staleCommand.id);
+                if (quarantinedCommand) {
+                  localSyncCommandsRef.current.set(staleCommand.id, {
+                    ...quarantinedCommand,
+                    status: "quarantined",
+                    nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                    leaseUntil: null,
+                    lastError: quarantineMessage,
+                  });
+                }
+                if (pendingBatchIdRef.current === staleCommand.id) {
+                  pendingBatchIdRef.current = null;
+                  pendingChangesRef.current = null;
+                  pendingSaveRequestIdsRef.current = [];
+                }
+                iframeRef.current?.contentWindow?.postMessage({
+                  type: "DBS_CONTROL_SYNC_CONFLICT_CLEARED",
+                  conflicts: staleCommand.conflicts,
+                }, "*");
+                logSyncEvent("stale_conflict_quarantined", {
+                  commandId: staleCommand.id,
+                  conflicts: staleCommand.conflicts?.length ?? 0,
+                  reason: "canonical_version_already_applied",
+                });
+              }
+              setCloudError(null);
+              await postLocalSyncStatus("synced");
+            }
+            const staleConflictIds = new Set(staleConflictCommands.map((command) => command.id));
             const restoredCommand = (pendingBatchIdRef.current
               ? localSyncCommandsRef.current.get(pendingBatchIdRef.current)
               : null)
-              ?? [...localSyncCommandsRef.current.values()].find((command) => command.status === "conflict" && command.conflicts?.length)
+              ?? [...localSyncCommandsRef.current.values()].find((command) => command.status === "conflict" && command.conflicts?.length && !staleConflictIds.has(command.id))
               ?? null;
             if (restoredCommand?.status === "conflict" && restoredCommand.conflicts?.length) {
               const conflictAlreadyApplied = dbsControlConflictAlreadyApplied(cloudState, restoredCommand);
