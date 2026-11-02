@@ -32,6 +32,8 @@ assert.match(route, /status: transient \? "pending" : "error"/, "Falhas transit�
 assert.match(route, /promoteNextLocalSyncCommand\(true\)/, "O retry manual precisa promover comandos error persistidos após reload.");
 assert.match(route, /document\.visibilityState !== "visible" \|\| navigator\.onLine === false/, "O polling de cursor não deve executar em aba oculta ou offline.");
 assert.match(route, /setInterval\(\(\) => \{ void pollSyncCursor\(\); \}, 30000\)/, "O fallback de cursor deve respeitar intervalo de 30 segundos para não saturar o pool.");
+assert.match(route, /const staleConflictCommands = persistedConflictCommands/, "A hidratação precisa localizar todos os conflitos antigos já refletidos na versão canônica.");
+assert.match(route, /for \(const staleCommand of staleConflictCommands\)/, "Conflitos antigos múltiplos precisam ser isolados em uma única hidratação.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
