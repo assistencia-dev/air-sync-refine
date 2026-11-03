@@ -22,7 +22,7 @@ Status: camada relacional e ações seguras de backend implementadas na branch i
 ### Venda avulsa de peças
 - Cabeçalho, itens e liquidações de venda em tabelas separadas.
 - RPC de venda bloqueia peças em ordem determinística, valida estoque livre (físico menos reservado), captura CMP, baixa estoque e registra movimentos.
-- Receita: Dr Contas a Receber (1.1.02) / Cr Receita de venda de peças (4.1.02).
+- Receita: Dr Contas a Receber (1.1.02) / Cr Receita de venda de peças (4.1.02). A existência/mapeamento dessa conta no plano de contas da instância precisa ser confirmada no Sandbox antes de aplicar a migration.
 - COGS: Dr Custo de peças vendidas (5.1.01) / Cr Estoque (1.1.03).
 - Liquidação parcial/total separada: Dr Caixa e bancos (1.1.01) / Cr Contas a Receber (1.1.02).
 - Ações de backend protegidas por sessão e perfil administrativo.
