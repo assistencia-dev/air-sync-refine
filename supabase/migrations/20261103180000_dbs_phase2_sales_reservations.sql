@@ -13,6 +13,19 @@ create table if not exists public.dbs_control_reservation_batches (
   unique(scope_key,idempotency_key)
 );
 
+create table if not exists public.dbs_control_reservation_consumptions (
+  id uuid primary key default gen_random_uuid(),
+  scope_key text not null,
+  work_order_id uuid not null references public.dbs_control_work_orders(id) on delete restrict,
+  idempotency_key text not null check (char_length(trim(idempotency_key)) between 8 and 240),
+  total_cost_cents bigint not null default 0 check (total_cost_cents >= 0),
+  ledger_entry_id uuid references public.treasury_ledger_entries(id) on delete restrict,
+  created_by uuid references public.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique(work_order_id),
+  unique(scope_key,idempotency_key)
+);
+
 create table if not exists public.dbs_control_work_order_reservations (
   id uuid primary key default gen_random_uuid(),
   batch_id uuid not null references public.dbs_control_reservation_batches(id) on delete restrict,
@@ -100,11 +113,13 @@ alter table public.dbs_control_sales enable row level security;
 alter table public.dbs_control_sale_items enable row level security;
 alter table public.dbs_control_sale_settlements enable row level security;
 
-revoke all on public.dbs_control_reservation_batches,public.dbs_control_work_order_reservations,
-  public.dbs_control_sales,public.dbs_control_sale_items,public.dbs_control_sale_settlements
+revoke all on public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
+  public.dbs_control_work_order_reservations,public.dbs_control_sales,
+  public.dbs_control_sale_items,public.dbs_control_sale_settlements
   from public,anon,authenticated;
-grant all on public.dbs_control_reservation_batches,public.dbs_control_work_order_reservations,
-  public.dbs_control_sales,public.dbs_control_sale_items,public.dbs_control_sale_settlements
+grant all on public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
+  public.dbs_control_work_order_reservations,public.dbs_control_sales,
+  public.dbs_control_sale_items,public.dbs_control_sale_settlements
   to service_role;
 
 create or replace function public.dbs_control_reserve_work_order_parts(p_payload jsonb)
@@ -272,6 +287,8 @@ declare
   v_ledger jsonb;
   v_ledger_id uuid;
   v_result jsonb:='[]'::jsonb;
+  v_consumption public.dbs_control_reservation_consumptions%rowtype;
+  v_consumed_count integer:=0;
 begin
   if p_actor_user_id is null or not public.dbs_control_is_admin_actor(p_actor_user_id) then
     raise exception 'DBS_RESERVATION_FORBIDDEN' using errcode='42501';
@@ -282,9 +299,15 @@ begin
   select * into v_scope from public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
   if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
   perform pg_advisory_xact_lock(hashtextextended(v_scope.scope_key||':consume-reservations:'||p_work_order_id::text,0));
-  if exists(select 1 from public.dbs_control_inventory_movements
-    where scope_key=v_scope.scope_key and idempotency_key=left(v_key||':consume-reservations',240)) then
-    return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id);
+  select * into v_consumption from public.dbs_control_reservation_consumptions
+    where work_order_id=p_work_order_id for update;
+  if found then
+    if v_consumption.idempotency_key<>v_key then
+      return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,
+        'cost_cents',v_consumption.total_cost_cents,'ledger_entry_id',v_consumption.ledger_entry_id);
+    end if;
+    return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,
+      'cost_cents',v_consumption.total_cost_cents,'ledger_entry_id',v_consumption.ledger_entry_id);
   end if;
   for v_r in select * from public.dbs_control_work_order_reservations
     where work_order_id=p_work_order_id and status='reserved' order by part_id,id for update
@@ -307,6 +330,7 @@ begin
       jsonb_build_object('reservation_id',v_r.id,'source','reserved_work_order_parts'));
     v_total_cost:=v_total_cost+round(v_r.quantity*v_r.unit_cost_cents)::bigint;
     v_result:=v_result||jsonb_build_array(jsonb_build_object('reservation_id',v_r.id,'status','consumed'));
+    v_consumed_count:=v_consumed_count+1;
   end loop;
   if v_total_cost>0 then
     v_ledger:=public.post_treasury_ledger_entry(
@@ -322,20 +346,15 @@ begin
     );
     v_ledger_id:=nullif(v_ledger->>'entry_id','')::uuid;
   end if;
+  insert into public.dbs_control_reservation_consumptions(
+    scope_key,work_order_id,idempotency_key,total_cost_cents,ledger_entry_id,created_by
+  ) values(v_scope.scope_key,p_work_order_id,v_key,v_total_cost,v_ledger_id,p_actor_user_id);
+
   insert into public.dbs_control_work_order_financials(work_order_id,company_id,scope_key,parts_cost_cents)
   values(p_work_order_id,v_scope.company_id,v_scope.scope_key,v_total_cost)
   on conflict(work_order_id) do update set
     parts_cost_cents=dbs_control_work_order_financials.parts_cost_cents+excluded.parts_cost_cents,
     updated_at=now(),version=dbs_control_work_order_financials.version+1;
-  insert into public.dbs_control_inventory_movements(
-    company_id,scope_key,part_id,movement_type,quantity_delta,unit_cost_cents,
-    balance_after,work_order_id,idempotency_key,created_by,metadata
-  ) select v_scope.company_id,v_scope.scope_key,
-    (select id from public.dbs_control_parts order by id limit 1), 'adjustment', 1, 0, 0,
-    p_work_order_id,left(v_key||':consume-reservations',240),p_actor_user_id,
-    jsonb_build_object('marker','reservation_batch_consumed','ledger_entry_id',v_ledger_id)
-  where not exists(select 1 from public.dbs_control_work_order_reservations
-    where work_order_id=p_work_order_id and status='reserved');
   return jsonb_build_object('ok',true,'replayed',false,'work_order_id',p_work_order_id,
     'cost_cents',v_total_cost,'ledger_entry_id',v_ledger_id,'reservations',v_result);
 end;
@@ -373,8 +392,15 @@ begin
     raise exception 'DBS_SALE_INPUT_INVALID' using errcode='22023';
   end if;
   select company_id into v_company from public.users where id=v_actor and status='ativo';
-  v_company:=coalesce(v_company,nullif(p_payload->>'company_id','')::uuid);
-  v_scope:=coalesce(v_scope,case when v_company is not null then 'company:'||v_company::text else 'user:'||v_actor::text end);
+  if nullif(p_payload->>'company_id','') is not null
+     and nullif(p_payload->>'company_id','')::uuid is distinct from v_company then
+    raise exception 'DBS_SALE_COMPANY_SCOPE_MISMATCH' using errcode='42501';
+  end if;
+  v_scope:=case when v_company is not null then 'company:'||v_company::text else 'user:'||v_actor::text end;
+  if nullif(p_payload->>'scope_key','') is not null
+     and nullif(p_payload->>'scope_key','') is distinct from v_scope then
+    raise exception 'DBS_SALE_SCOPE_MISMATCH' using errcode='42501';
+  end if;
   if v_client is not null and not exists(select 1 from public.dbs_control_clients where id=v_client and status='ativo') then
     raise exception 'DBS_SALE_CLIENT_INVALID' using errcode='23503';
   end if;
@@ -422,7 +448,6 @@ begin
     ) q group by part_id order by part_id
   loop
     v_qty:=(v_item->>'quantity')::numeric(12,3);
-    v_part_id:=null; -- assigned below after row lock
     select * into v_part from public.dbs_control_parts
       where id=(v_item->>'part_id')::uuid for update;
     v_sale_unit:=coalesce(nullif(v_item->>'unit_sale_cents','')::integer,v_part.sale_cents);
@@ -498,6 +523,10 @@ begin
   select * into v_sale from public.dbs_control_sales where id=p_sale_id for update;
   if not found then raise exception 'DBS_SALE_NOT_FOUND' using errcode='23503'; end if;
   perform pg_advisory_xact_lock(hashtextextended(v_sale.scope_key||':sale-settlement:'||v_key,0));
+  if exists(select 1 from public.dbs_control_sale_settlements
+      where scope_key=v_sale.scope_key and idempotency_key=v_key and sale_id<>v_sale.id) then
+    raise exception 'DBS_SALE_SETTLEMENT_IDEMPOTENCY_CONFLICT' using errcode='23505';
+  end if;
   if exists(select 1 from public.dbs_control_sale_settlements where scope_key=v_sale.scope_key and idempotency_key=v_key) then
     return jsonb_build_object('ok',true,'replayed',true,'sale_id',v_sale.id,
       'received_cents',v_sale.received_cents,'status',v_sale.status);
