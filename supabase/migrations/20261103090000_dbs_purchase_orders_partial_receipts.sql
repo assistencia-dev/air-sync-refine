@@ -124,7 +124,7 @@ begin
   if v_order_id is null or v_key is null or char_length(v_key) not between 8 and 200 then
     raise exception 'DBS_PURCHASE_RECEIPT_INPUT_INVALID' using errcode='22023';
   end if;
-  if jsonb_typeof(v_items)<>'array' or jsonb_array_length(v_items)=0 then
+  if jsonb_typeof(v_items) is distinct from 'array' or jsonb_array_length(v_items)=0 then
     raise exception 'DBS_PURCHASE_RECEIPT_ITEMS_REQUIRED' using errcode='22023';
   end if;
   if exists (
@@ -156,6 +156,10 @@ begin
   select * into v_existing from public.dbs_inventory_receipts
    where scope_key=v_order.scope_key and idempotency_key=v_key;
   if found then
+    if v_existing.purchase_order_id is distinct from v_order_id then
+      raise exception 'DBS_PURCHASE_RECEIPT_IDEMPOTENCY_CONFLICT'
+        using errcode='23505';
+    end if;
     return jsonb_build_object('ok',true,'replayed',true,'receipt_id',v_existing.id,
       'purchase_order_id',v_order_id,'total_cents',v_existing.total_cents,
       'ledger_entry_id',v_existing.ledger_entry_id,'status',v_order.status);
