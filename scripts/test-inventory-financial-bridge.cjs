@@ -14,6 +14,8 @@ const purchaseFkIndex = fs.readFileSync('supabase/migrations/20261031042759_dbs_
 const partCostGuard = fs.readFileSync('supabase/migrations/20261031043439_dbs_control_part_cost_guard.sql', 'utf8');
 const idempotencyGuard = fs.readFileSync('supabase/migrations/20261031051656_dbs_control_inventory_idempotency_guard.sql', 'utf8');
 const phase2 = fs.readFileSync('supabase/migrations/20261103180000_dbs_phase2_sales_reservations.sql', 'utf8');
+const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
+const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -113,6 +115,20 @@ assert.doesNotMatch(phase2, /delete\s+from\s+public\.dbs_control_(?:parts|work_o
 assert.doesNotMatch(phase2, /dbs_control_outbox|dbs_control_snapshots/i);
 assert.match(phase2, /grant execute on function public\.dbs_control_create_part_sale\(jsonb\) to service_role/i);
 assert.match(phase2, /grant execute on function public\.dbs_control_reserve_work_order_parts\(jsonb\) to service_role/i);
+
+assert.match(phase2, /dbs_control_apply_work_order_delta_with_reservations/i);
+assert.match(phase2, /v_payload:=v_payload-'parts'/i);
+assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
+assert.match(phase2, /atendimento com pendência/i);
+assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
+assert.match(phase2Ui, /Vendas avulsas/);
+assert.match(phase2Ui, /Reservas de OS/);
+assert.match(phase2Ui, /createDbsPartSale/);
+assert.match(phase2Ui, /reserveDbsWorkOrderParts/);
+assert.match(ledgerRpc, /insert into public\.treasury_accounts/i);
+assert.match(ledgerRpc, /on conflict \(scope_key, code\) do update/i);
+assert.match(phase2, /'4\.1\.02'/);
+
 assert.match(functions, /export const reserveDbsWorkOrderParts/);
 assert.match(functions, /export const releaseDbsWorkOrderReservation/);
 assert.match(functions, /export const consumeDbsWorkOrderReservations/);
