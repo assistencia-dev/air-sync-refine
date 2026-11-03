@@ -128,6 +128,19 @@ begin
   if jsonb_typeof(v_items)<>'array' or jsonb_array_length(v_items)=0 then
     raise exception 'DBS_PURCHASE_RECEIPT_ITEMS_REQUIRED' using errcode='22023';
   end if;
+  if exists (
+    select 1 from jsonb_array_elements(v_items) payload(value)
+     where jsonb_typeof(payload.value)<>'object'
+        or nullif(payload.value->>'purchase_order_item_id','') is null
+        or nullif(payload.value->>'quantity_received','') is null
+  ) or jsonb_array_length(v_items) <> (
+    select count(*) from jsonb_array_elements(v_items) payload(value)
+    join public.dbs_purchase_order_items poi
+      on poi.id=nullif(payload.value->>'purchase_order_item_id','')::uuid
+     and poi.purchase_order_id=v_order_id
+  ) then
+    raise exception 'DBS_PURCHASE_RECEIPT_ITEM_REFERENCE_INVALID' using errcode='22023';
+  end if;
 
   select company_id into v_company from public.users
    where id=v_actor and status='ativo';
