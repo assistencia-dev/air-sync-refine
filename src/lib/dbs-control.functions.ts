@@ -2137,7 +2137,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       };
       const result = isNewCollaboratorOrder
         ? await (supabaseAdmin as any).rpc("dbs_control_issue_work_order", { p_payload: { ...payload, patch: fullPatch } })
-        : await supabaseAdmin.rpc("dbs_control_apply_work_order_delta_with_reservations", { p_payload: payload as any });
+        : await (supabaseAdmin as any).rpc("dbs_control_apply_work_order_delta_with_reservations", { p_payload: payload as any });
       if (result.error) {
         const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
         if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_EMPLOYEE_NOT_FOUND", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND", "DBS_OS_ISSUE_FORBIDDEN", "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE", "DBS_OS_ISSUE_CLIENT_INACTIVE", "DBS_OS_ISSUE_BASE_INACTIVE", "DBS_OS_ISSUE_SITE_INVALID", "DBS_OS_ISSUE_COMPANY_MISMATCH"].includes(permanentCode)) {
