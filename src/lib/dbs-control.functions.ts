@@ -2870,13 +2870,18 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     if (!user.company_id) return { parts: [], workOrders: [], reservations: [], sales: [], saleSettlements: [] };
     const companyId = user.company_id;
     const scopeKey = "company:" + companyId;
+    const scopedUsers = await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo");
+    if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
+    const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     const [parts, workOrders, reservations, sales, saleSettlements] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,company_id")
-        .eq("company_id", companyId).order("name").limit(500),
-      (supabaseAdmin as any).from("dbs_control_work_orders")
-        .select("id,protocol,status,client_id,company_id")
-        .eq("company_id", companyId).is("deleted_at", null).order("created_at", { ascending: false }).limit(500),
+        .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
+        .order("name").limit(500),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,client_id,created_by_user_id")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null).order("created_at", { ascending: false }).limit(500)
+        : Promise.resolve({ data: [], error: null }),
       (supabaseAdmin as any).from("dbs_control_work_order_reservations")
         .select("id,work_order_id,part_id,quantity,unit_cost_cents,status,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
