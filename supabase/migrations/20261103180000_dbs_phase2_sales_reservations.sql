@@ -186,6 +186,16 @@ begin
      or jsonb_typeof(v_items) is distinct from 'array' or jsonb_array_length(v_items)=0 then
     raise exception 'DBS_RESERVATION_INPUT_INVALID' using errcode='22023';
   end if;
+  if exists(select 1 from jsonb_array_elements(v_items) e(value)
+    where jsonb_typeof(e.value)<>'object'
+      or nullif(e.value->>'part_id','') is null
+      or nullif(e.value->>'quantity','') is null
+      or nullif(e.value->>'quantity','')::numeric<=0)
+    or (select count(distinct nullif(e.value->>'part_id','')::uuid) from jsonb_array_elements(v_items) e(value))
+       <> (select count(distinct p.id) from jsonb_array_elements(v_items) e(value)
+           join public.dbs_control_parts p on p.id=nullif(e.value->>'part_id','')::uuid) then
+    raise exception 'DBS_RESERVATION_ITEM_REFERENCE_INVALID' using errcode='22023';
+  end if;
   select * into v_scope from public.dbs_control_inventory_scope_for_work_order(v_work_order);
   if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
   if not exists(select 1 from public.dbs_control_work_orders where id=v_work_order and coalesce(deleted_at,null) is null) then
@@ -254,14 +264,14 @@ begin
       batch_id,scope_key,company_id,work_order_id,part_id,quantity,unit_cost_cents,
       idempotency_key,created_by
     ) values(v_batch.id,v_scope.scope_key,v_scope.company_id,v_work_order,v_part.id,v_qty,
-      coalesce(v_part.cost_cents,0),left(v_key||':part:'||v_part.id::text,240),v_actor)
+      coalesce(v_part.cost_cents,0),left(v_key,180)||':part:'||v_part.id::text,v_actor)
     returning id into v_reservation;
     insert into public.dbs_control_inventory_movements(
       company_id,scope_key,part_id,movement_type,quantity_delta,unit_cost_cents,
       balance_after,work_order_id,idempotency_key,created_by,metadata
     ) values(v_scope.company_id,v_scope.scope_key,v_part.id,'reserve',-v_qty,
       coalesce(v_part.cost_cents,0),coalesce(v_part.stock_quantity,0),v_work_order,
-      left(v_key||':reserve-move:'||v_part.id::text,240),v_actor,
+      left(v_key,170)||':reserve-move:'||v_part.id::text,v_actor,
       jsonb_build_object('reservation_id',v_reservation,'batch_id',v_batch.id));
     v_result:=v_result||jsonb_build_array(jsonb_build_object(
       'reservation_id',v_reservation,'part_id',v_part.id,'quantity',v_qty,'status','reserved'));
@@ -278,6 +288,7 @@ create or replace function public.dbs_control_release_work_order_reservation(
 declare
   v_r public.dbs_control_work_order_reservations%rowtype;
   v_part public.dbs_control_parts%rowtype;
+  v_actor_company uuid;
   v_key text:=nullif(btrim(p_idempotency_key),'');
 begin
   if p_actor_user_id is null or not public.dbs_control_is_admin_actor(p_actor_user_id) then
@@ -289,6 +300,10 @@ begin
   select * into v_r from public.dbs_control_work_order_reservations
     where id=p_reservation_id for update;
   if not found then raise exception 'DBS_RESERVATION_NOT_FOUND' using errcode='23503'; end if;
+  select company_id into v_actor_company from public.users where id=p_actor_user_id and status='ativo';
+  if v_actor_company is not null and v_actor_company is distinct from v_r.company_id then
+    raise exception 'DBS_RESERVATION_SCOPE_MISMATCH' using errcode='42501';
+  end if;
   perform pg_advisory_xact_lock(hashtextextended(v_r.scope_key||':release:'||v_key,0));
   if exists(select 1 from public.dbs_control_inventory_movements
     where scope_key=v_r.scope_key and idempotency_key=v_key) then
@@ -322,6 +337,7 @@ declare
   v_scope record;
   v_r record;
   v_part public.dbs_control_parts%rowtype;
+  v_actor_company uuid;
   v_key text:=nullif(btrim(p_idempotency_key),'');
   v_total_cost bigint:=0;
   v_ledger jsonb;
@@ -338,6 +354,10 @@ begin
   end if;
   select * into v_scope from public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
   if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
+  select company_id into v_actor_company from public.users where id=p_actor_user_id and status='ativo';
+  if v_actor_company is not null and v_actor_company is distinct from v_scope.company_id then
+    raise exception 'DBS_RESERVATION_SCOPE_MISMATCH' using errcode='42501';
+  end if;
   perform pg_advisory_xact_lock(hashtextextended(v_scope.scope_key||':consume-reservations:'||p_work_order_id::text,0));
   select * into v_consumption from public.dbs_control_reservation_consumptions
     where work_order_id=p_work_order_id for update;
@@ -435,6 +455,16 @@ begin
      jsonb_typeof(v_items) is distinct from 'array' or jsonb_array_length(v_items)=0 then
     raise exception 'DBS_SALE_INPUT_INVALID' using errcode='22023';
   end if;
+  if exists(select 1 from jsonb_array_elements(v_items) e(value)
+    where jsonb_typeof(e.value)<>'object'
+      or nullif(e.value->>'part_id','') is null
+      or nullif(e.value->>'quantity','') is null
+      or nullif(e.value->>'quantity','')::numeric<=0)
+    or (select count(distinct nullif(e.value->>'part_id','')::uuid) from jsonb_array_elements(v_items) e(value))
+       <> (select count(distinct p.id) from jsonb_array_elements(v_items) e(value)
+           join public.dbs_control_parts p on p.id=nullif(e.value->>'part_id','')::uuid) then
+    raise exception 'DBS_SALE_ITEM_REFERENCE_INVALID' using errcode='22023';
+  end if;
   select company_id into v_company from public.users where id=v_actor and status='ativo';
   if nullif(p_payload->>'company_id','') is not null
      and nullif(p_payload->>'company_id','')::uuid is distinct from v_company then
@@ -508,7 +538,7 @@ begin
     insert into public.dbs_control_inventory_movements(company_id,scope_key,part_id,movement_type,
       quantity_delta,unit_cost_cents,balance_after,idempotency_key,created_by,metadata)
     values(v_company,v_scope,v_part.id,'consume',-v_qty,coalesce(v_part.cost_cents,0),
-      v_part.stock_quantity-v_qty,left(v_key||':sale:'||v_part.id::text,240),v_actor,
+      v_part.stock_quantity-v_qty,left(v_key,180)||':sale:'||v_part.id::text,v_actor,
       jsonb_build_object('sale_id',v_sale.id,'source','counter_sale'));
     v_total:=v_total+v_line;
     v_total_cost:=v_total_cost+v_cost;
@@ -552,6 +582,7 @@ create or replace function public.dbs_control_settle_part_sale(
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare
   v_sale public.dbs_control_sales%rowtype;
+  v_actor_company uuid;
   v_key text:=nullif(btrim(p_idempotency_key),'');
   v_ledger jsonb;
   v_entry uuid;
@@ -566,6 +597,10 @@ begin
   end if;
   select * into v_sale from public.dbs_control_sales where id=p_sale_id for update;
   if not found then raise exception 'DBS_SALE_NOT_FOUND' using errcode='23503'; end if;
+  select company_id into v_actor_company from public.users where id=p_actor_user_id and status='ativo';
+  if v_actor_company is not null and v_actor_company is distinct from v_sale.company_id then
+    raise exception 'DBS_SALE_SCOPE_MISMATCH' using errcode='42501';
+  end if;
   perform pg_advisory_xact_lock(hashtextextended(v_sale.scope_key||':sale-settlement:'||v_key,0));
   if exists(select 1 from public.dbs_control_sale_settlements
       where scope_key=v_sale.scope_key and idempotency_key=v_key and sale_id<>v_sale.id) then
