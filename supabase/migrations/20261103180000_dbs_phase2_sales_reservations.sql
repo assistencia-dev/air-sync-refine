@@ -108,6 +108,7 @@ create index if not exists dbs_control_sale_settlements_sale_idx
   on public.dbs_control_sale_settlements(sale_id,received_at desc);
 
 alter table public.dbs_control_reservation_batches enable row level security;
+alter table public.dbs_control_reservation_consumptions enable row level security;
 alter table public.dbs_control_work_order_reservations enable row level security;
 alter table public.dbs_control_sales enable row level security;
 alter table public.dbs_control_sale_items enable row level security;
@@ -332,6 +333,10 @@ begin
     v_result:=v_result||jsonb_build_array(jsonb_build_object('reservation_id',v_r.id,'status','consumed'));
     v_consumed_count:=v_consumed_count+1;
   end loop;
+  if v_consumed_count=0 then
+    return jsonb_build_object('ok',true,'replayed',false,'work_order_id',p_work_order_id,
+      'cost_cents',0,'reservations',v_result);
+  end if;
   if v_total_cost>0 then
     v_ledger:=public.post_treasury_ledger_entry(
       v_scope.scope_key,v_scope.company_id,current_date,current_date,
