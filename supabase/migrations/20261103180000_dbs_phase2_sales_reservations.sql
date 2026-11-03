@@ -203,8 +203,9 @@ begin
     raise exception 'DBS_OS_UNAVAILABLE' using errcode='23514';
   end if;
   if exists(select 1 from public.dbs_control_work_orders where id=v_work_order
-    and lower(replace(coalesce(status,''),'á','a')) in
-      ('concluida','concluida com pendencia','completed','complete','cancelada','cancelado','cancelled')) then
+    and lower(coalesce(status,'')) in
+      ('concluida','concluída','concluida com pendencia','concluída com pendência',
+       'completed','complete','cancelada','cancelado','cancelled')) then
     raise exception 'DBS_OS_RESERVATION_STATUS_LOCKED' using errcode='23514';
   end if;
   if not exists(select 1 from public.users where id=v_actor and status='ativo'
