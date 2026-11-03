@@ -2741,7 +2741,7 @@ export const reserveDbsWorkOrderParts = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reserve_work_order_parts", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reserve_work_order_parts_serialized", {
       p_payload: {
         actor_user_id: user.id,
         work_order_id: data.workOrderId,
@@ -2766,7 +2766,7 @@ export const releaseDbsWorkOrderReservation = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_release_work_order_reservation", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_release_work_order_reservation_serialized", {
       p_reservation_id: data.reservationId,
       p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
@@ -2789,7 +2789,7 @@ export const consumeDbsWorkOrderReservations = createServerFn({ method: "POST" }
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_consume_work_order_reservations", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_consume_work_order_reservations_serialized", {
       p_work_order_id: data.workOrderId,
       p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
