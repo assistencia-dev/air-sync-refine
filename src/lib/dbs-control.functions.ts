@@ -2137,7 +2137,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       };
       const result = isNewCollaboratorOrder
         ? await (supabaseAdmin as any).rpc("dbs_control_issue_work_order", { p_payload: { ...payload, patch: fullPatch } })
-        : await supabaseAdmin.rpc("dbs_control_apply_work_order_delta", { p_payload: payload as any });
+        : await supabaseAdmin.rpc("dbs_control_apply_work_order_delta_with_reservations", { p_payload: payload as any });
       if (result.error) {
         const permanentCode = String(result.error.message).match(/DBS_OS_[A-Z_]+/)?.[0];
         if (permanentCode && ["DBS_OS_CONFLICT", "DBS_OS_COMPLETED_LOCKED", "DBS_OS_FIELD_FORBIDDEN", "DBS_OS_NOT_ASSIGNED", "DBS_OS_EMPLOYEE_NOT_FOUND", "DBS_OS_STOCK_INSUFFICIENT", "DBS_OS_PART_NOT_FOUND", "DBS_OS_ISSUE_FORBIDDEN", "DBS_OS_ISSUE_CLIENT_OUT_OF_SCOPE", "DBS_OS_ISSUE_CLIENT_INACTIVE", "DBS_OS_ISSUE_BASE_INACTIVE", "DBS_OS_ISSUE_SITE_INVALID", "DBS_OS_ISSUE_COMPANY_MISMATCH"].includes(permanentCode)) {
@@ -2860,4 +2860,41 @@ export const settleDbsPartSale = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return result;
+  });
+
+
+export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    if (!user.company_id) return { parts: [], workOrders: [], reservations: [], sales: [], saleSettlements: [] };
+    const companyId = user.company_id;
+    const scopeKey = "company:" + companyId;
+    const [parts, workOrders, reservations, sales, saleSettlements] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,company_id")
+        .eq("company_id", companyId).order("name").limit(500),
+      (supabaseAdmin as any).from("dbs_control_work_orders")
+        .select("id,protocol,status,client_id,company_id")
+        .eq("company_id", companyId).is("deleted_at", null).order("created_at", { ascending: false }).limit(500),
+      (supabaseAdmin as any).from("dbs_control_work_order_reservations")
+        .select("id,work_order_id,part_id,quantity,unit_cost_cents,status,created_at,scope_key")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
+      (supabaseAdmin as any).from("dbs_control_sales")
+        .select("id,client_id,status,total_cents,created_at,scope_key")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100),
+      (supabaseAdmin as any).from("dbs_control_sale_settlements")
+        .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
+    ]);
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements]) {
+      if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
+    }
+    return {
+      parts: parts.data ?? [],
+      workOrders: workOrders.data ?? [],
+      reservations: reservations.data ?? [],
+      sales: sales.data ?? [],
+      saleSettlements: saleSettlements.data ?? [],
+    };
   });
