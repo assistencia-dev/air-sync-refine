@@ -2867,10 +2867,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryAdmin(context);
-    if (!user.company_id) return { parts: [], workOrders: [], reservations: [], sales: [], saleSettlements: [] };
     const companyId = user.company_id;
-    const scopeKey = "company:" + companyId;
-    const scopedUsers = await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo");
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const scopedUsers = companyId
+      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
+      : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     const [parts, workOrders, reservations, sales, saleSettlements] = await Promise.all([
