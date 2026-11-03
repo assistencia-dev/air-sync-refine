@@ -399,7 +399,7 @@ begin
       balance_after,work_order_id,idempotency_key,created_by,metadata
     ) values(v_r.company_id,v_r.scope_key,v_r.part_id,'consume',-v_r.quantity,
       v_r.unit_cost_cents,v_part.stock_quantity-v_r.quantity,p_work_order_id,
-      left(v_key||':consume:'||v_r.id::text,240),p_actor_user_id,
+      left(v_key,160)||':consume:'||v_r.id::text,p_actor_user_id,
       jsonb_build_object('reservation_id',v_r.id,'source','reserved_work_order_parts'));
     v_total_cost:=v_total_cost+round(v_r.quantity*v_r.unit_cost_cents)::bigint;
     v_result:=v_result||jsonb_build_array(jsonb_build_object('reservation_id',v_r.id,'status','consumed'));
@@ -413,7 +413,7 @@ begin
     v_ledger:=public.post_treasury_ledger_entry(
       v_scope.scope_key,v_scope.company_id,current_date,current_date,
       'work_order_reserved_parts_cogs','Consumo de peças reservadas · OS '||p_work_order_id::text,
-      left(v_key||':cogs',200),'work-order-reserved-cogs:'||p_work_order_id::text||':'||v_key,
+      left(v_key,150)||':'||md5(v_scope.scope_key||':'||v_key||':cogs'),'work-order-reserved-cogs:'||p_work_order_id::text||':'||v_key,
       p_actor_user_id,'posted',
       jsonb_build_object('source','dbs_control_work_order_reservations','work_order_id',p_work_order_id),
       jsonb_build_array(
@@ -561,7 +561,7 @@ begin
 
   v_ledger:=public.post_treasury_ledger_entry(
     v_scope,v_company,current_date,current_date,'part_sale_revenue','Venda avulsa de peças · '||v_sale.id::text,
-    left(v_key||':revenue',200),'part-sale-revenue:'||v_sale.id::text,v_actor,'posted',
+    left(v_key,150)||':'||md5(v_scope||':'||v_key||':revenue'),'part-sale-revenue:'||v_sale.id::text,v_actor,'posted',
     jsonb_build_object('source','dbs_control_sales','sale_id',v_sale.id),
     jsonb_build_array(
       jsonb_build_object('account_code','1.1.02','account_name','Contas a receber','account_type','asset','debit_cents',v_total,'credit_cents',0),
@@ -605,7 +605,7 @@ begin
     raise exception 'DBS_SALE_SETTLEMENT_FORBIDDEN' using errcode='42501';
   end if;
   if v_key is null or char_length(v_key) not between 8 and 240 or p_amount_cents<=0 or
-    p_payment_method not in ('cash','pix','bank_transfer','card','other') then
+    (p_payment_method is null or p_payment_method not in ('cash','pix','bank_transfer','card','other')) then
     raise exception 'DBS_SALE_SETTLEMENT_INPUT_INVALID' using errcode='22023';
   end if;
   select * into v_sale from public.dbs_control_sales where id=p_sale_id for update;
@@ -628,8 +628,8 @@ begin
   end if;
   v_ledger:=public.post_treasury_ledger_entry(
     v_sale.scope_key,v_sale.company_id,current_date,current_date,'part_sale_settlement',
-    'Recebimento de venda avulsa · '||v_sale.id::text,left(v_key||':ledger',200),
-    'part-sale-settlement:'||v_sale.id::text||':'||v_key,p_actor_user_id,'posted',
+    'Recebimento de venda avulsa · '||v_sale.id::text,left(v_key,150)||':'||md5(v_sale.scope_key||':'||v_key||':settlement'),
+    'part-sale-settlement:'||v_sale.id::text||':'||md5(v_sale.scope_key||':'||v_key),p_actor_user_id,'posted',
     jsonb_build_object('source','dbs_control_sale_settlements','sale_id',v_sale.id,'payment_method',p_payment_method),
     jsonb_build_array(
       jsonb_build_object('account_code','1.1.01','account_name','Caixa e bancos','account_type','asset','debit_cents',p_amount_cents,'credit_cents',0),
@@ -642,7 +642,7 @@ begin
   insert into public.dbs_control_inventory_outbox(
     scope_key,idempotency_key,aggregate_type,aggregate_id,event_type,payload
   ) values(
-    v_sale.scope_key,left('sale-settlement:'||v_sale.scope_key||':'||v_key,240),
+    v_sale.scope_key,'sale-settlement:'||md5(v_sale.scope_key||':'||v_key),
     'part_sale',v_sale.id,'part_sale.settled',
     jsonb_build_object('sale_id',v_sale.id,'amount_cents',p_amount_cents,
       'payment_method',p_payment_method,'ledger_entry_id',v_entry)
