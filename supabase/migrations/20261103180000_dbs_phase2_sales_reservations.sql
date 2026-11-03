@@ -358,6 +358,7 @@ declare
   v_result jsonb:='[]'::jsonb;
   v_consumption public.dbs_control_reservation_consumptions%rowtype;
   v_consumed_count integer:=0;
+  v_work_order_part public.dbs_control_work_order_parts%rowtype;
 begin
   if p_actor_user_id is null then
     raise exception 'DBS_RESERVATION_FORBIDDEN' using errcode='42501';
@@ -406,11 +407,28 @@ begin
       where id=v_part.id;
     update public.dbs_control_work_order_reservations set status='consumed',
       consumed_at=now(),version=version+1,updated_at=now() where id=v_r.id;
+    select * into v_work_order_part from public.dbs_control_work_order_parts
+      where work_order_id=p_work_order_id and part_id=v_r.part_id
+      order by created_at,id limit 1 for update;
+    if found then
+      update public.dbs_control_work_order_parts
+        set quantity=quantity+v_r.quantity,
+            cost_cents=coalesce(cost_cents,v_r.unit_cost_cents),
+            consumption_status='consumed',idempotency_key=v_key
+        where id=v_work_order_part.id
+        returning * into v_work_order_part;
+    else
+      insert into public.dbs_control_work_order_parts(
+        work_order_id,part_id,quantity,unit_cents,cost_cents,consumption_status,idempotency_key
+      ) values(p_work_order_id,v_r.part_id,v_r.quantity,coalesce(v_part.sale_cents,0),
+        v_r.unit_cost_cents,'consumed',v_key)
+      returning * into v_work_order_part;
+    end if;
     insert into public.dbs_control_inventory_movements(
       company_id,scope_key,part_id,movement_type,quantity_delta,unit_cost_cents,
-      balance_after,work_order_id,idempotency_key,created_by,metadata
+      balance_after,work_order_id,work_order_part_id,idempotency_key,created_by,metadata
     ) values(v_r.company_id,v_r.scope_key,v_r.part_id,'consume',-v_r.quantity,
-      v_r.unit_cost_cents,v_part.stock_quantity-v_r.quantity,p_work_order_id,
+      v_r.unit_cost_cents,v_part.stock_quantity-v_r.quantity,p_work_order_id,v_work_order_part.id,
       left(v_key,160)||':consume:'||v_r.id::text,p_actor_user_id,
       jsonb_build_object('reservation_id',v_r.id,'source','reserved_work_order_parts'));
     v_total_cost:=v_total_cost+round(v_r.quantity*v_r.unit_cost_cents)::bigint;
