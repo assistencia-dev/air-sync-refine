@@ -5,6 +5,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20261103200000_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
 );
+const reservationGuard = fs.readFileSync(
+  "supabase/migrations/20261103210000_dbs_phase2_reservation_sync_guard.sql",
+  "utf8",
+);
 
 for (const view of [
   "treasury_vw_dre_competence_by_account",
@@ -31,5 +35,13 @@ assert.match(migration, /grant select on public\.treasury_vw_dre_competence_by_a
 assert.doesNotMatch(migration, /dbs_control_|dbs_purchase_|dbs_control_work_orders/i);
 assert.doesNotMatch(migration, /\b(drop|truncate)\s+(table|view|schema|column)\b/i);
 assert.doesNotMatch(migration, /\b(insert|update|delete)\s+into?\s+public\./i);
+
+assert.match(reservationGuard, /dbs_control_apply_work_order_delta_with_reservations/i);
+assert.match(reservationGuard, /where work_order_id=v_order_id and status='reserved'/i);
+assert.match(reservationGuard, /coalesce\(r\.reserved_qty,0\)/i);
+assert.match(reservationGuard, /dbs_control_consume_work_order_reservations/i);
+assert.match(reservationGuard, /v_status in/i);
+assert.doesNotMatch(reservationGuard, /drop\s+(table|view|function)|truncate\s/i);
+
 
 console.log("Phase 3 Ledger reporting: DRE by competence, cash flow by document date, security_invoker and read-only source invariants verified.");
