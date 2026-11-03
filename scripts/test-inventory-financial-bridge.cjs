@@ -84,13 +84,13 @@ for (const html of [mainHtml, shellHtml]) {
 }
 
 
-assert.match(phase2, /create table if not exists public\\.dbs_control_work_order_reservations/i);
-assert.match(phase2, /create table if not exists public\\.dbs_control_reservation_consumptions/i);
-assert.match(phase2, /create table if not exists public\\.dbs_control_sales/i);
-assert.match(phase2, /create table if not exists public\\.dbs_control_sale_items/i);
-assert.match(phase2, /create table if not exists public\\.dbs_control_sale_settlements/i);
+assert.match(phase2, /create table if not exists public\.dbs_control_work_order_reservations/i);
+assert.match(phase2, /create table if not exists public\.dbs_control_reservation_consumptions/i);
+assert.match(phase2, /create table if not exists public\.dbs_control_sales/i);
+assert.match(phase2, /create table if not exists public\.dbs_control_sale_items/i);
+assert.match(phase2, /create table if not exists public\.dbs_control_sale_settlements/i);
 assert.match(phase2, /reserved_quantity=reserved_quantity\\+v_qty/i);
-assert.match(phase2, /stock_quantity-v_part\\.reserved_quantity<v_part\\.requested_qty/i);
+assert.match(phase2, /stock_quantity-v_part\.reserved_quantity<v_part\.requested_qty/i);
 assert.match(phase2, /dbs_control_reserve_work_order_parts/i);
 assert.match(phase2, /dbs_control_release_work_order_reservation/i);
 assert.match(phase2, /dbs_control_consume_work_order_reservations/i);
@@ -98,20 +98,20 @@ assert.match(phase2, /dbs_control_create_part_sale/i);
 assert.match(phase2, /dbs_control_settle_part_sale/i);
 assert.match(phase2, /pg_advisory_xact_lock/i);
 assert.match(phase2, /for update/i);
-assert.match(phase2, /unique\\(scope_key,idempotency_key\\)/i);
+assert.match(phase2, /unique\(scope_key,idempotency_key\)/i);
 assert.match(phase2, /post_treasury_ledger_entry/i);
-assert.match(phase2, /'1\\.1\\.02'/);
-assert.match(phase2, /'4\\.1\\.02'/);
-assert.match(phase2, /'5\\.1\\.01'/);
-assert.match(phase2, /'1\\.1\\.03'/);
-assert.match(phase2, /'1\\.1\\.01'/);
+assert.match(phase2, /'1\.1\.02'/);
+assert.match(phase2, /'4\.1\.02'/);
+assert.match(phase2, /'5\.1\.01'/);
+assert.match(phase2, /'1\.1\.03'/);
+assert.match(phase2, /'1\.1\.01'/);
 assert.match(phase2, /dbs_control_inventory_outbox/i);
-assert.match(phase2, /after insert on public\\.dbs_control_inventory_movements/i);
-assert.doesNotMatch(phase2, /drop\\s+(table|schema|column|function)\\b/i);
-assert.doesNotMatch(phase2, /truncate\\s/i);
-assert.doesNotMatch(phase2, /delete\\s+from\\s+public\\.dbs_control_(?:parts|work_orders|inventory_movements|treasury)/i);
+assert.match(phase2, /after insert on public\.dbs_control_inventory_movements/i);
+assert.doesNotMatch(phase2, /drop\s+(table|schema|column|function)\b/i);
+assert.doesNotMatch(phase2, /truncate\s/i);
+assert.doesNotMatch(phase2, /delete\s+from\s+public\.dbs_control_(?:parts|work_orders|inventory_movements|treasury)/i);
 assert.doesNotMatch(phase2, /dbs_control_outbox|dbs_control_snapshots/i);
-assert.match(phase2, /grant execute on function public\\.dbs_control_create_part_sale\\(jsonb\\) to service_role/i);
-assert.match(phase2, /grant execute on function public\\.dbs_control_reserve_work_order_parts\\(jsonb\\) to service_role/i);
+assert.match(phase2, /grant execute on function public\.dbs_control_create_part_sale\(jsonb\) to service_role/i);
+assert.match(phase2, /grant execute on function public\.dbs_control_reserve_work_order_parts\(jsonb\) to service_role/i);
 
 console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle and inline UI syntax verified.');
