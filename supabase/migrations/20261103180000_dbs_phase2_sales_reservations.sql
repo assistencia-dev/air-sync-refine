@@ -29,7 +29,7 @@ begin
     scope_key,idempotency_key,aggregate_type,aggregate_id,event_type,payload
   ) values(
     new.scope_key,
-    left('movement:'||new.scope_key||':'||new.idempotency_key,240),
+    'movement:'||md5(new.scope_key||':'||new.idempotency_key),
     'inventory_part',new.part_id,'inventory.'||new.movement_type,to_jsonb(new)
   ) on conflict(idempotency_key) do nothing;
   return new;
@@ -122,7 +122,8 @@ create table if not exists public.dbs_control_sale_items (
   unit_cost_cents integer not null check (unit_cost_cents >= 0),
   total_cents bigint not null check (total_cents > 0),
   cost_total_cents bigint not null check (cost_total_cents >= 0),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique(sale_id,part_id)
 );
 
 create table if not exists public.dbs_control_sale_settlements (
@@ -198,8 +199,13 @@ begin
   end if;
   select * into v_scope from public.dbs_control_inventory_scope_for_work_order(v_work_order);
   if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
-  if not exists(select 1 from public.dbs_control_work_orders where id=v_work_order and coalesce(deleted_at,null) is null) then
+  if not exists(select 1 from public.dbs_control_work_orders where id=v_work_order and deleted_at is null) then
     raise exception 'DBS_OS_UNAVAILABLE' using errcode='23514';
+  end if;
+  if exists(select 1 from public.dbs_control_work_orders where id=v_work_order
+    and lower(replace(coalesce(status,''),'á','a')) in
+      ('concluida','concluida com pendencia','completed','complete','cancelada','cancelado','cancelled')) then
+    raise exception 'DBS_OS_RESERVATION_STATUS_LOCKED' using errcode='23514';
   end if;
   if not exists(select 1 from public.users where id=v_actor and status='ativo'
       and (company_id is null or v_scope.company_id is null or company_id=v_scope.company_id)) then
@@ -306,7 +312,13 @@ begin
   end if;
   perform pg_advisory_xact_lock(hashtextextended(v_r.scope_key||':release:'||v_key,0));
   if exists(select 1 from public.dbs_control_inventory_movements
-    where scope_key=v_r.scope_key and idempotency_key=v_key) then
+    where scope_key=v_r.scope_key and idempotency_key=v_key
+      and coalesce(metadata->>'reservation_id','')<>v_r.id::text) then
+    raise exception 'DBS_RESERVATION_RELEASE_IDEMPOTENCY_CONFLICT' using errcode='23505';
+  end if;
+  if exists(select 1 from public.dbs_control_inventory_movements
+    where scope_key=v_r.scope_key and idempotency_key=v_key
+      and metadata->>'reservation_id'=v_r.id::text) then
     return jsonb_build_object('ok',true,'replayed',true,'reservation_id',v_r.id,'status',v_r.status);
   end if;
   if v_r.status<>'reserved' then
@@ -644,6 +656,7 @@ begin
 end;
 $$;
 
+revoke all on function public.dbs_control_enqueue_inventory_outbox() from public,anon,authenticated;
 revoke all on function public.dbs_control_reserve_work_order_parts(jsonb) from public,anon,authenticated;
 revoke all on function public.dbs_control_release_work_order_reservation(uuid,uuid,text) from public,anon,authenticated;
 revoke all on function public.dbs_control_consume_work_order_reservations(uuid,uuid,text) from public,anon,authenticated;
