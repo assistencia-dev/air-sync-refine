@@ -2702,3 +2702,162 @@ export const getDbsControlProductivity = createServerFn({ method: "GET" })
       })),
     };
   });
+
+
+type DbsInventoryAdminContext = { userId: string };
+const DBS_INVENTORY_ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"] as const;
+
+async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
+  const user = await requireDbsControlUser(context);
+  if (!DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number])) {
+    throw new Error("Operação de estoque restrita à administração.");
+  }
+  return user;
+}
+
+function requireInventoryId(value: string, label: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(label + " inválido.");
+  }
+  return value;
+}
+
+export const reserveDbsWorkOrderParts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { workOrderId: string; idempotencyKey: string; items: Array<{ partId: string; quantity: number }> }) => {
+    if (!input || !input.workOrderId || !input.idempotencyKey || input.idempotencyKey.length < 8 ||
+      !Array.isArray(input.items) || input.items.length === 0 ||
+      input.items.some((item) => !item.partId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      throw new Error("Dados de reserva inválidos.");
+    }
+    return {
+      workOrderId: requireInventoryId(input.workOrderId, "OS"),
+      idempotencyKey: input.idempotencyKey.trim(),
+      items: input.items.map((item) => ({
+        part_id: requireInventoryId(item.partId, "Peça"),
+        quantity: item.quantity,
+      })),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reserve_work_order_parts", {
+      p_payload: {
+        actor_user_id: user.id,
+        work_order_id: data.workOrderId,
+        idempotency_key: data.idempotencyKey,
+        items: data.items,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const releaseDbsWorkOrderReservation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { reservationId: string; idempotencyKey: string }) => {
+    if (!input?.reservationId || !input.idempotencyKey || input.idempotencyKey.length < 8) {
+      throw new Error("Dados de liberação inválidos.");
+    }
+    return {
+      reservationId: requireInventoryId(input.reservationId, "Reserva"),
+      idempotencyKey: input.idempotencyKey.trim(),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_release_work_order_reservation", {
+      p_reservation_id: data.reservationId,
+      p_actor_user_id: user.id,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+/** Deve ser chamado pelo fluxo de conclusão da OS antes de gravar o status concluído. */
+export const consumeDbsWorkOrderReservations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { workOrderId: string; idempotencyKey: string }) => {
+    if (!input?.workOrderId || !input.idempotencyKey || input.idempotencyKey.length < 8) {
+      throw new Error("Dados de consumo inválidos.");
+    }
+    return {
+      workOrderId: requireInventoryId(input.workOrderId, "OS"),
+      idempotencyKey: input.idempotencyKey.trim(),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_consume_work_order_reservations", {
+      p_work_order_id: data.workOrderId,
+      p_actor_user_id: user.id,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const createDbsPartSale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { clientId?: string | null; idempotencyKey: string; items: Array<{ partId: string; quantity: number; unitSaleCents?: number }> }) => {
+    if (!input || !input.idempotencyKey || input.idempotencyKey.length < 8 ||
+      !Array.isArray(input.items) || input.items.length === 0 ||
+      input.items.some((item) => !item.partId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
+        (item.unitSaleCents !== undefined && (!Number.isInteger(item.unitSaleCents) || item.unitSaleCents <= 0)))) {
+      throw new Error("Dados da venda inválidos.");
+    }
+    return {
+      clientId: input.clientId ? requireInventoryId(input.clientId, "Cliente") : null,
+      idempotencyKey: input.idempotencyKey.trim(),
+      items: input.items.map((item) => ({
+        part_id: requireInventoryId(item.partId, "Peça"),
+        quantity: item.quantity,
+        ...(item.unitSaleCents === undefined ? {} : { unit_sale_cents: item.unitSaleCents }),
+      })),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_create_part_sale", {
+      p_payload: {
+        actor_user_id: user.id,
+        company_id: user.company_id,
+        scope_key: scopeKey,
+        client_id: data.clientId,
+        idempotency_key: data.idempotencyKey,
+        items: data.items,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const settleDbsPartSale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { saleId: string; amountCents: number; paymentMethod: "cash" | "pix" | "bank_transfer" | "card" | "other"; idempotencyKey: string }) => {
+    if (!input?.saleId || !Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 ||
+      !input.idempotencyKey || input.idempotencyKey.length < 8 ||
+      !["cash", "pix", "bank_transfer", "card", "other"].includes(input.paymentMethod)) {
+      throw new Error("Dados de recebimento inválidos.");
+    }
+    return {
+      saleId: requireInventoryId(input.saleId, "Venda"),
+      amountCents: input.amountCents,
+      paymentMethod: input.paymentMethod,
+      idempotencyKey: input.idempotencyKey.trim(),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_part_sale", {
+      p_sale_id: data.saleId,
+      p_actor_user_id: user.id,
+      p_amount_cents: data.amountCents,
+      p_payment_method: data.paymentMethod,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
