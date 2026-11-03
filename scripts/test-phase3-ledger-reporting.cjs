@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
+const fns = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const migration = fs.readFileSync(
   "supabase/migrations/20261103200000_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
@@ -40,6 +41,13 @@ assert.match(reservationGuard, /dbs_control_apply_work_order_delta_with_reservat
 assert.match(reservationGuard, /where work_order_id=v_order_id and status='reserved'/i);
 assert.match(reservationGuard, /coalesce\(r\.reserved_qty,0\)/i);
 assert.match(reservationGuard, /dbs_control_consume_work_order_reservations/i);
+assert.match(reservationGuard, /dbs_control_reserve_work_order_parts_serialized/i);
+assert.match(reservationGuard, /dbs_control_release_work_order_reservation_serialized/i);
+assert.match(reservationGuard, /dbs_control_consume_work_order_reservations_serialized/i);
+assert.match(reservationGuard, /dbs-os-reservations:/i);
+assert.match(fns, /dbs_control_reserve_work_order_parts_serialized/);
+assert.match(fns, /dbs_control_release_work_order_reservation_serialized/);
+
 assert.match(reservationGuard, /v_status in/i);
 assert.doesNotMatch(reservationGuard, /drop\s+(table|view|function)|truncate\s/i);
 
