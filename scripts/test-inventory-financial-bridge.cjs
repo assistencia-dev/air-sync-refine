@@ -123,7 +123,7 @@ assert.match(phase2, /work_order_part_id/i);
 assert.match(phase2, /quantity=quantity\+v_r\.quantity/i);
 assert.match(phase2, /v_work_order_part/i);
 
-assert.match(phase2, /v_payload:=v_payload-'parts'/i);
+assert.match(phase2, /jsonb_set\(v_payload,'\{parts\}'/i);
 assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
 assert.match(phase2, /atendimento com pendência/i);
 assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
