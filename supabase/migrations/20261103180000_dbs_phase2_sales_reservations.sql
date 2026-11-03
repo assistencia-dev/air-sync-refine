@@ -2,6 +2,44 @@
 -- Aditiva: não altera snapshots, sincronização, Outbox operacional ou funções legadas.
 begin;
 
+create table if not exists public.dbs_control_inventory_outbox (
+  id uuid primary key default gen_random_uuid(),
+  scope_key text not null,
+  idempotency_key text not null unique,
+  aggregate_type text not null,
+  aggregate_id uuid,
+  event_type text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'pending' check (status in ('pending','processing','published','failed')),
+  attempts integer not null default 0 check (attempts >= 0),
+  available_at timestamptz not null default now(),
+  locked_at timestamptz,
+  locked_by text,
+  published_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now()
+);
+create index if not exists dbs_control_inventory_outbox_pending_idx
+  on public.dbs_control_inventory_outbox(status,available_at,created_at);
+
+create or replace function public.dbs_control_enqueue_inventory_outbox()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+begin
+  insert into public.dbs_control_inventory_outbox(
+    scope_key,idempotency_key,aggregate_type,aggregate_id,event_type,payload
+  ) values(
+    new.scope_key,
+    left('movement:'||new.scope_key||':'||new.idempotency_key,240),
+    'inventory_part',new.part_id,'inventory.'||new.movement_type,to_jsonb(new)
+  ) on conflict(idempotency_key) do nothing;
+  return new;
+end;
+$;
+drop trigger if exists trg_dbs_control_inventory_outbox on public.dbs_control_inventory_movements;
+create trigger trg_dbs_control_inventory_outbox
+after insert on public.dbs_control_inventory_movements
+for each row execute function public.dbs_control_enqueue_inventory_outbox();
+
 create table if not exists public.dbs_control_reservation_batches (
   id uuid primary key default gen_random_uuid(),
   scope_key text not null,
@@ -107,6 +145,7 @@ create index if not exists dbs_control_sale_items_part_idx
 create index if not exists dbs_control_sale_settlements_sale_idx
   on public.dbs_control_sale_settlements(sale_id,received_at desc);
 
+alter table public.dbs_control_inventory_outbox enable row level security;
 alter table public.dbs_control_reservation_batches enable row level security;
 alter table public.dbs_control_reservation_consumptions enable row level security;
 alter table public.dbs_control_work_order_reservations enable row level security;
@@ -114,11 +153,11 @@ alter table public.dbs_control_sales enable row level security;
 alter table public.dbs_control_sale_items enable row level security;
 alter table public.dbs_control_sale_settlements enable row level security;
 
-revoke all on public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
+revoke all on public.dbs_control_inventory_outbox,public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
   public.dbs_control_work_order_reservations,public.dbs_control_sales,
   public.dbs_control_sale_items,public.dbs_control_sale_settlements
   from public,anon,authenticated;
-grant all on public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
+grant all on public.dbs_control_inventory_outbox,public.dbs_control_reservation_batches,public.dbs_control_reservation_consumptions,
   public.dbs_control_work_order_reservations,public.dbs_control_sales,
   public.dbs_control_sale_items,public.dbs_control_sale_settlements
   to service_role;
@@ -552,6 +591,14 @@ begin
   v_entry:=nullif(v_ledger->>'entry_id','')::uuid;
   insert into public.dbs_control_sale_settlements(sale_id,scope_key,amount_cents,payment_method,ledger_entry_id,idempotency_key,received_by)
   values(v_sale.id,v_sale.scope_key,p_amount_cents,p_payment_method,v_entry,v_key,p_actor_user_id);
+  insert into public.dbs_control_inventory_outbox(
+    scope_key,idempotency_key,aggregate_type,aggregate_id,event_type,payload
+  ) values(
+    v_sale.scope_key,left('sale-settlement:'||v_sale.scope_key||':'||v_key,240),
+    'part_sale',v_sale.id,'part_sale.settled',
+    jsonb_build_object('sale_id',v_sale.id,'amount_cents',p_amount_cents,
+      'payment_method',p_payment_method,'ledger_entry_id',v_entry)
+  ) on conflict(idempotency_key) do nothing;
   v_received:=v_sale.received_cents+p_amount_cents;
   update public.dbs_control_sales set received_cents=v_received,
     status=case when v_received=v_sale.total_cents then 'paid' else 'partially_paid' end,
