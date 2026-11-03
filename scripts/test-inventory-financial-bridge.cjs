@@ -113,5 +113,12 @@ assert.doesNotMatch(phase2, /delete\s+from\s+public\.dbs_control_(?:parts|work_o
 assert.doesNotMatch(phase2, /dbs_control_outbox|dbs_control_snapshots/i);
 assert.match(phase2, /grant execute on function public\.dbs_control_create_part_sale\(jsonb\) to service_role/i);
 assert.match(phase2, /grant execute on function public\.dbs_control_reserve_work_order_parts\(jsonb\) to service_role/i);
+assert.match(functions, /export const reserveDbsWorkOrderParts/);
+assert.match(functions, /export const releaseDbsWorkOrderReservation/);
+assert.match(functions, /export const consumeDbsWorkOrderReservations/);
+assert.match(functions, /export const createDbsPartSale/);
+assert.match(functions, /export const settleDbsPartSale/);
+assert.match(functions, /requireDbsInventoryAdmin/);
 
-console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle and inline UI syntax verified.');
+
+console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle, phase 2 RPC contracts and inline UI syntax verified.');
