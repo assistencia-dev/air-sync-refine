@@ -28,6 +28,8 @@ declare
   v_order uuid;
   v_item uuid;
   v_result jsonb;
+  v_replay jsonb;
+  v_payload jsonb;
   v_receipt uuid;
   v_ledger uuid;
   v_status text;
@@ -51,14 +53,19 @@ begin
     purchase_order_id,part_id,line_no,quantity_ordered,unit_cost_cents,total_ordered_cents
   ) values(v_order,ctx.part_id,1,10,1000,10000) returning id into v_item;
 
-  v_result:=public.dbs_process_purchase_receipt(jsonb_build_object(
+  v_payload:=jsonb_build_object(
     'actor_user_id',ctx.actor_id,
     'purchase_order_id',v_order,
     'idempotency_key','test-partial-receipt-'||gen_random_uuid()::text,
     'items',jsonb_build_array(jsonb_build_object(
       'purchase_order_item_id',v_item,'quantity_received',4
     ))
-  ));
+  );
+  v_result:=public.dbs_process_purchase_receipt(v_payload);
+  v_replay:=public.dbs_process_purchase_receipt(v_payload);
+  if coalesce((v_replay->>'replayed')::boolean,false) is not true then
+    raise exception 'FAIL retry deveria retornar replayed=true';
+  end if;
   v_receipt:=(v_result->>'receipt_id')::uuid;
   v_ledger:=(v_result->>'ledger_entry_id')::uuid;
 
@@ -84,6 +91,7 @@ begin
   if v_debits-v_credits<>0 then raise exception 'FAIL Ledger não balanceado'; end if;
 
   raise notice 'PASS | pedido: 10 un | recebido: 4 un | pendente: 6 un';
+  raise notice 'PASS | repetição idempotente: estoque e Ledger não duplicados';
   raise notice 'PASS | estoque físico: +4 un (antes %, depois %)',ctx.before_stock,v_stock;
   raise notice 'PASS | contas a pagar: R$ 40,00 (crédito Fornecedores 2.1.01)';
   raise notice 'PASS | estoque: R$ 40,00 (débito Estoque 1.1.03)';
