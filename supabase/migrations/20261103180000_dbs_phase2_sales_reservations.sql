@@ -713,7 +713,9 @@ begin
   end if;
 
   if v_order_id is not null and v_status in
-    ('concluida','concluída','concluido','concluído','completed','complete','finalizada','finalizado') then
+    ('concluida','concluída','concluido','concluído','concluida com pendencia',
+     'concluída com pendência','atendimento com pendencia','atendimento com pendência',
+     'completed','complete','finalizada','finalizado') then
     perform pg_advisory_xact_lock(hashtextextended('dbs-os-reservation-finalize:'||v_order_id::text,0));
     select exists(select 1 from public.dbs_control_work_order_reservations
       where work_order_id=v_order_id and status='reserved') into v_has_reservations;
