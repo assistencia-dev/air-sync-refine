@@ -740,7 +740,20 @@ begin
     select exists(select 1 from public.dbs_control_work_order_reservations
       where work_order_id=v_order_id and status='reserved') into v_has_reservations;
     if v_has_reservations then
-      v_payload:=v_payload-'parts';
+      v_payload:=jsonb_set(v_payload,'{parts}',coalesce((
+        select jsonb_agg(jsonb_set(i.value,'{quantity}',to_jsonb(greatest(0,
+          coalesce(nullif(i.value->>'quantity','')::numeric,nullif(i.value->>'qtd','')::numeric,0)
+          -coalesce(r.reserved_qty,0))),true))
+        from jsonb_array_elements(coalesce(p_payload->'parts','[]'::jsonb)) i(value)
+        left join (
+          select part_id,sum(quantity) as reserved_qty
+          from public.dbs_control_work_order_reservations
+          where work_order_id=v_order_id and status='reserved'
+          group by part_id
+        ) r on r.part_id=nullif(coalesce(i.value->>'part_id',i.value->>'id'),'')::uuid
+        where coalesce(nullif(i.value->>'quantity','')::numeric,nullif(i.value->>'qtd','')::numeric,0)
+          > coalesce(r.reserved_qty,0)
+      ),'[]'::jsonb),true);
     end if;
   end if;
 
