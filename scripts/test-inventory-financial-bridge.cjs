@@ -117,6 +117,12 @@ assert.match(phase2, /grant execute on function public\.dbs_control_create_part_
 assert.match(phase2, /grant execute on function public\.dbs_control_reserve_work_order_parts\(jsonb\) to service_role/i);
 
 assert.match(phase2, /dbs_control_apply_work_order_delta_with_reservations/i);
+assert.match(phase2, /jsonb_array_elements\(coalesce\(p_payload->'parts'/i);
+assert.match(phase2, /coalesce\(r\.reserved_qty,0\)/i);
+assert.match(phase2, /work_order_part_id/i);
+assert.match(phase2, /quantity=quantity\+v_r\.quantity/i);
+assert.match(phase2, /v_work_order_part/i);
+
 assert.match(phase2, /v_payload:=v_payload-'parts'/i);
 assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
 assert.match(phase2, /atendimento com pendência/i);
