@@ -60,21 +60,21 @@ function DbsInventoryPage() {
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!partId || !workOrderId || Number(quantity) <= 0) return;
-    await runAction(() => reserveDbsWorkOrderParts({
+    await runAction(() => reserveDbsWorkOrderParts({ data: {
       workOrderId,
       idempotencyKey: "reserve:" + crypto.randomUUID(),
       items: [{ partId, quantity: Number(quantity) }],
-    }), "Reserva registrada com sucesso.");
+    } }), "Reserva registrada com sucesso.");
   }
 
   async function createSale(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!partId || Number(quantity) <= 0 || Number(salePrice) <= 0) return;
-    await runAction(() => createDbsPartSale({
+    await runAction(() => createDbsPartSale({ data: {
       clientId: clientId.trim() || null,
       idempotencyKey: "sale:" + crypto.randomUUID(),
       items: [{ partId, quantity: Number(quantity), unitSaleCents: Math.round(Number(salePrice) * 100) }],
-    }), "Venda avulsa registrada. Estoque e Ledger atualizados.");
+    } }), "Venda avulsa registrada. Estoque e Ledger atualizados.");
   }
 
   return (
@@ -127,7 +127,7 @@ function DbsInventoryPage() {
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Venda</th><th className="p-3">Data</th><th className="p-3">Total</th><th className="p-3">Status</th><th className="p-3">Receber</th></tr></thead>
                 <tbody>{sales.map((sale: any) => <tr key={sale.id} className="border-t border-slate-100">
                   <td className="p-3 font-mono text-xs">{String(sale.id).slice(0, 8)}</td><td className="p-3">{sale.created_at ? new Date(sale.created_at).toLocaleDateString("pt-BR") : "—"}</td><td className="p-3 font-bold">{money(sale.total_cents)}</td><td className="p-3">{sale.status}</td>
-                  <td className="p-3"><div className="flex gap-2"><input aria-label="Valor recebido em reais" type="number" min="0.01" step="0.01" value={settlementAmounts[sale.id] ?? ""} onChange={e => setSettlementAmounts(prev => ({ ...prev, [sale.id]: e.target.value }))} className="w-24 rounded-lg border border-slate-200 px-2 py-1" placeholder="R$" /><button disabled={busy || Number(settlementAmounts[sale.id]) <= 0} onClick={() => void runAction(() => settleDbsPartSale({ saleId: sale.id, amountCents: Math.round(Number(settlementAmounts[sale.id]) * 100), paymentMethod: "pix", idempotencyKey: "settle:" + crypto.randomUUID() }), "Recebimento registrado.")} className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white disabled:opacity-50">Receber</button></div></td>
+                  <td className="p-3"><div className="flex gap-2"><input aria-label="Valor recebido em reais" type="number" min="0.01" step="0.01" value={settlementAmounts[sale.id] ?? ""} onChange={e => setSettlementAmounts(prev => ({ ...prev, [sale.id]: e.target.value }))} className="w-24 rounded-lg border border-slate-200 px-2 py-1" placeholder="R$" /><button disabled={busy || Number(settlementAmounts[sale.id]) <= 0} onClick={() => void runAction(() => settleDbsPartSale({ data: { saleId: sale.id, amountCents: Math.round(Number(settlementAmounts[sale.id]) * 100), paymentMethod: "pix", idempotencyKey: "settle:" + crypto.randomUUID() } }), "Recebimento registrado.")} className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white disabled:opacity-50">Receber</button></div></td>
                 </tr>)}</tbody>
               </table></div>
             </div>
@@ -154,7 +154,7 @@ function DbsInventoryPage() {
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
                 <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">
                   <td className="p-3 font-mono text-xs">{String(reservation.id).slice(0, 8)}</td><td className="p-3 font-mono text-xs">{String(reservation.work_order_id).slice(0, 8)}</td><td className="p-3">{reservation.quantity}</td><td className="p-3">{money(Number(reservation.quantity) * Number(reservation.unit_cost_cents))}</td><td className="p-3">{reservation.status}</td>
-                  <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => releaseDbsWorkOrderReservation({ reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
+                  <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => releaseDbsWorkOrderReservation({ data: { reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() } }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
                 </tr>)}</tbody>
               </table></div>
             </div>
