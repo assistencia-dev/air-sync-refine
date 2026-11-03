@@ -137,7 +137,7 @@ begin
    where id=v_order_id for update;
   if not found then raise exception 'DBS_PURCHASE_ORDER_NOT_FOUND' using errcode='23503'; end if;
   if v_order.status='cancelled' then raise exception 'DBS_PURCHASE_ORDER_CANCELLED' using errcode='23514'; end if;
-  if v_order.company_id is distinct from v_company then
+  if v_company is not null and v_order.company_id is distinct from v_company then
     raise exception 'DBS_PURCHASE_COMPANY_SCOPE_MISMATCH' using errcode='42501';
   end if;
 
@@ -159,8 +159,12 @@ begin
 
   -- Ordem estável de bloqueio: pedido -> itens -> peças por UUID.
   for v_item in
-    select value from jsonb_array_elements(v_items)
-    order by (value->>'purchase_order_item_id')
+    select payload.value
+      from jsonb_array_elements(v_items) payload(value)
+      join public.dbs_purchase_order_items poi
+        on poi.id=nullif(payload.value->>'purchase_order_item_id','')::uuid
+       and poi.purchase_order_id=v_order_id
+     order by poi.part_id,poi.id
   loop
     select * into v_order_item from public.dbs_purchase_order_items
      where id=nullif(v_item->>'purchase_order_item_id','')::uuid
