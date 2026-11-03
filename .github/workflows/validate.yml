@@ -24,6 +24,7 @@ jobs:
       - run: bun run lint -- --max-warnings=0
       - run: bun run test:performance
       - run: bun run test:operational
+      - run: bun run test:inventory-financial
       - run: bun run test:dbs-base-scope
       - run: bun run test:rh-scale
       - run: bun run build

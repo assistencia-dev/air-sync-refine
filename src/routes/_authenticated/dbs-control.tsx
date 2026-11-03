@@ -1987,6 +1987,7 @@ function DbsControlPage() {
       <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
+          <button type="button" onClick={() => navigate({ to: "/dbs-inventory" })} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Estoque & Vendas</button>
           {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
         </div>
         <button

@@ -1,0 +1,166 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import {
+  createDbsPartSale,
+  getDbsPhase2InventoryOverview,
+  releaseDbsWorkOrderReservation,
+  reserveDbsWorkOrderParts,
+  settleDbsPartSale,
+} from "@/lib/dbs-control.functions";
+
+export const Route = createFileRoute("/_authenticated/dbs-inventory")({
+  component: DbsInventoryPage,
+});
+
+function money(cents: unknown) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+    .format(Number(cents ?? 0) / 100);
+}
+
+function DbsInventoryPage() {
+  const overview = useQuery({
+    queryKey: ["dbs-phase2-inventory-overview"],
+    queryFn: () => getDbsPhase2InventoryOverview(),
+    retry: 1,
+  });
+  const [tab, setTab] = useState<"sales" | "reservations">("sales");
+  const [partId, setPartId] = useState("");
+  const [workOrderId, setWorkOrderId] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [clientId, setClientId] = useState("");
+  const [salePrice, setSalePrice] = useState("");
+  const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const data = overview.data;
+  const parts = data?.parts ?? [];
+  const workOrders = data?.workOrders ?? [];
+  const reservations = data?.reservations ?? [];
+  const sales = data?.sales ?? [];
+  const availableParts = parts.filter((part: any) =>
+    Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
+  );
+
+  async function runAction(action: () => Promise<unknown>, success: string) {
+    setBusy(true);
+    setMessage("");
+    try {
+      await action();
+      setMessage(success);
+      await overview.refetch();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!partId || !workOrderId || Number(quantity) <= 0) return;
+    await runAction(() => reserveDbsWorkOrderParts({ data: {
+      workOrderId,
+      idempotencyKey: "reserve:" + crypto.randomUUID(),
+      items: [{ partId, quantity: Number(quantity) }],
+    } }), "Reserva registrada com sucesso.");
+  }
+
+  async function createSale(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!partId || Number(quantity) <= 0 || Number(salePrice) <= 0) return;
+    await runAction(() => createDbsPartSale({ data: {
+      clientId: clientId.trim() || null,
+      idempotencyKey: "sale:" + crypto.randomUUID(),
+      items: [{ partId, quantity: Number(quantity), unitSaleCents: Math.round(Number(salePrice) * 100) }],
+    } }), "Venda avulsa registrada. Estoque e Ledger atualizados.");
+  }
+
+  return (
+    <main className="min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · FASE 2</p>
+            <h1 className="mt-1 text-2xl font-black">Estoque, vendas e reservas</h1>
+            <p className="mt-1 text-sm text-slate-500">Operações administrativas com baixa transacional e trilha contábil.</p>
+          </div>
+          <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>
+        </header>
+
+        {message && <div role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">{message}</div>}
+        {overview.isLoading && <p className="rounded-xl bg-white p-5 text-sm text-slate-500">Carregando dados do estoque...</p>}
+        {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</div>}
+
+        {data && <>
+          <section className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Vendas registradas</p><p className="mt-1 text-2xl font-black">{sales.length}</p></div>
+          </section>
+
+          <div className="mb-5 flex gap-2">
+            <button type="button" onClick={() => setTab("sales")} className={tab === "sales" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Vendas avulsas</button>
+            <button type="button" onClick={() => setTab("reservations")} className={tab === "reservations" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Reservas de OS</button>
+          </div>
+
+          {tab === "sales" ? <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
+            <form onSubmit={createSale} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-black">Nova venda avulsa</h2>
+              <label className="mt-4 block text-xs font-bold text-slate-600">Peça</label>
+              <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <option value="">Selecione uma peça</option>
+                {availableParts.map((part: any) => <option key={part.id} value={part.id}>{part.name ?? part.description ?? part.id} · disponível {Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)}</option>)}
+              </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Cliente (UUID, opcional)</label>
+              <input value={clientId} onChange={e => setClientId(e.target.value)} placeholder="ID relacional do cliente" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+                <label className="text-xs font-bold text-slate-600">Preço unitário (R$)<input type="number" min="0.01" step="0.01" required value={salePrice} onChange={e => setSalePrice(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+              </div>
+              <button disabled={busy || !availableParts.length} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Registrar venda"}</button>
+            </form>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Vendas recentes</h2></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Venda</th><th className="p-3">Data</th><th className="p-3">Total</th><th className="p-3">Status</th><th className="p-3">Receber</th></tr></thead>
+                <tbody>{sales.map((sale: any) => <tr key={sale.id} className="border-t border-slate-100">
+                  <td className="p-3 font-mono text-xs">{String(sale.id).slice(0, 8)}</td><td className="p-3">{sale.created_at ? new Date(sale.created_at).toLocaleDateString("pt-BR") : "—"}</td><td className="p-3 font-bold">{money(sale.total_cents)}</td><td className="p-3">{sale.status}</td>
+                  <td className="p-3"><div className="flex gap-2"><input aria-label="Valor recebido em reais" type="number" min="0.01" step="0.01" value={settlementAmounts[sale.id] ?? ""} onChange={e => setSettlementAmounts(prev => ({ ...prev, [sale.id]: e.target.value }))} className="w-24 rounded-lg border border-slate-200 px-2 py-1" placeholder="R$" /><button disabled={busy || Number(settlementAmounts[sale.id]) <= 0} onClick={() => void runAction(() => settleDbsPartSale({ data: { saleId: sale.id, amountCents: Math.round(Number(settlementAmounts[sale.id]) * 100), paymentMethod: "pix", idempotencyKey: "settle:" + crypto.randomUUID() } }), "Recebimento registrado.")} className="rounded-lg bg-emerald-700 px-3 py-1 text-xs font-bold text-white disabled:opacity-50">Receber</button></div></td>
+                </tr>)}</tbody>
+              </table></div>
+            </div>
+          </section> : <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
+            <form onSubmit={reserveParts} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-black">Reservar peças para OS</h2>
+              <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
+              <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <option value="">Selecione uma OS</option>
+                {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
+              </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
+              <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <option value="">Selecione uma peça</option>
+                {availableParts.map((part: any) => <option key={part.id} value={part.id}>{part.name ?? part.description ?? part.id} · disponível {Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)}</option>)}
+              </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+              <button disabled={busy || !availableParts.length || !workOrders.length} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
+              <p className="mt-3 text-xs text-slate-500">A reserva bloqueia a disponibilidade, mas não baixa o estoque físico. A baixa ocorre ao concluir a OS.</p>
+            </form>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Reservas recentes</h2></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
+                <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">
+                  <td className="p-3 font-mono text-xs">{String(reservation.id).slice(0, 8)}</td><td className="p-3 font-mono text-xs">{String(reservation.work_order_id).slice(0, 8)}</td><td className="p-3">{reservation.quantity}</td><td className="p-3">{money(Number(reservation.quantity) * Number(reservation.unit_cost_cents))}</td><td className="p-3">{reservation.status}</td>
+                  <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => releaseDbsWorkOrderReservation({ data: { reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() } }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
+                </tr>)}</tbody>
+              </table></div>
+            </div>
+          </section>}
+        </>}
+      </div>
+    </main>
+  );
+}
