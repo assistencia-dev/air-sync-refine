@@ -412,8 +412,10 @@ begin
       order by created_at,id limit 1 for update;
     if found then
       update public.dbs_control_work_order_parts
-        set quantity=quantity+v_r.quantity,
-            cost_cents=coalesce(cost_cents,v_r.unit_cost_cents),
+        set cost_cents=case when quantity+v_r.quantity>0
+              then round((coalesce(cost_cents,v_r.unit_cost_cents)*quantity+v_r.unit_cost_cents*v_r.quantity)
+                /(quantity+v_r.quantity))::integer else v_r.unit_cost_cents end,
+            quantity=quantity+v_r.quantity,
             consumption_status='consumed',idempotency_key=v_key
         where id=v_work_order_part.id
         returning * into v_work_order_part;
