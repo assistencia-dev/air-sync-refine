@@ -89,7 +89,7 @@ assert.match(phase2, /create table if not exists public\.dbs_control_reservation
 assert.match(phase2, /create table if not exists public\.dbs_control_sales/i);
 assert.match(phase2, /create table if not exists public\.dbs_control_sale_items/i);
 assert.match(phase2, /create table if not exists public\.dbs_control_sale_settlements/i);
-assert.match(phase2, /reserved_quantity\\s*=\\s*reserved_quantity\\s*\\+\\s*v_qty/i);
+assert.ok(phase2.includes("reserved_quantity=reserved_quantity+v_qty"));
 assert.match(phase2, /stock_quantity-v_part\.reserved_quantity<v_part\.requested_qty/i);
 assert.match(phase2, /dbs_control_reserve_work_order_parts/i);
 assert.match(phase2, /dbs_control_release_work_order_reservation/i);
