@@ -35,6 +35,8 @@ declare
   v_received bigint;
   v_debits bigint;
   v_credits bigint;
+  v_inventory_debit bigint;
+  v_supplier_credit bigint;
   v_qty numeric;
 begin
   select * into strict ctx from _purchase_test_context;
@@ -63,9 +65,12 @@ begin
   select status into v_status from public.dbs_purchase_orders where id=v_order;
   select stock_quantity into v_stock from public.dbs_control_parts where id=ctx.part_id;
   select quantity_received into v_qty from public.dbs_purchase_order_items where id=v_item;
-  select coalesce(sum(l.debit_cents),0),coalesce(sum(l.credit_cents),0)
-    into v_debits,v_credits
+  select coalesce(sum(l.debit_cents),0),coalesce(sum(l.credit_cents),0),
+         coalesce(sum(l.debit_cents) filter(where a.code='1.1.03'),0),
+         coalesce(sum(l.credit_cents) filter(where a.code='2.1.01'),0)
+    into v_debits,v_credits,v_inventory_debit,v_supplier_credit
     from public.treasury_ledger_lines l
+    join public.treasury_accounts a on a.id=l.account_id
    where l.entry_id=v_ledger;
 
   if v_stock-ctx.before_stock<>4 then
@@ -73,14 +78,15 @@ begin
   end if;
   if v_qty<>4 then raise exception 'FAIL recebido esperado 4; obtido %',v_qty; end if;
   if v_status<>'partially_received' then raise exception 'FAIL status esperado partially_received; obtido %',v_status; end if;
-  if v_debits<>4000 or v_credits<>4000 then
+  if v_debits<>4000 or v_credits<>4000 or v_inventory_debit<>4000 or v_supplier_credit<>4000 then
     raise exception 'FAIL AP/Ledger esperado R$40,00; débito %, crédito %',v_debits,v_credits;
   end if;
   if v_debits-v_credits<>0 then raise exception 'FAIL Ledger não balanceado'; end if;
 
   raise notice 'PASS | pedido: 10 un | recebido: 4 un | pendente: 6 un';
   raise notice 'PASS | estoque físico: +4 un (antes %, depois %)',ctx.before_stock,v_stock;
-  raise notice 'PASS | contas a pagar: R$ 40,00 (4 x R$ 10,00)';
+  raise notice 'PASS | contas a pagar: R$ 40,00 (crédito Fornecedores 2.1.01)';
+  raise notice 'PASS | estoque: R$ 40,00 (débito Estoque 1.1.03)';
   raise notice 'PASS | status: %',v_status;
   raise notice 'PASS | Ledger: débito R$ 40,00 - crédito R$ 40,00 = R$ 0,00';
   raise notice 'PASS | receipt_id=% | ledger_entry_id=%',v_receipt,v_ledger;
