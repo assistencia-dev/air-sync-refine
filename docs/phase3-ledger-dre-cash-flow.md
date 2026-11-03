@@ -36,3 +36,7 @@ Views criadas:
 `test:phase3-ledger-reporting` verifica estaticamente as quatro views, a fonte Ledger exclusiva, competência/data documental, contas caixa, janelas de saldo, RLS por security invoker e ausência de DDL/DML destrutivo.
 
 A validação estática não substitui parser PostgreSQL, execução em Sandbox, conferência dos saldos contra amostras do Ledger nem advisors Supabase. O único projeto Supabase conectado atualmente é o oficial, que permanece intocado.
+
+## Hardening complementar da Fase 2
+
+A migration `20261103210000_dbs_phase2_reservation_sync_guard.sql` corrige o ciclo de reserva da OS: em autosaves não terminais, quantidades reservadas também são subtraídas do payload legado, evitando que o autosave faça baixa física antes da conclusão. A baixa da reserva ocorre apenas no estado terminal. Reserva, liberação, autosave e conclusão compartilham advisory lock por OS para serializar concorrência.
