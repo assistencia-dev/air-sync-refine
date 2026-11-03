@@ -117,7 +117,6 @@ declare
   v_received_all boolean;
   v_received_any boolean;
   v_item_count integer := 0;
-  v_outbox_key text;
 begin
   if v_actor is null or not public.dbs_control_is_admin_actor(v_actor) then
     raise exception 'DBS_PURCHASE_RECEIPT_FORBIDDEN' using errcode='42501';
@@ -256,13 +255,7 @@ begin
     version=version+1,updated_at=now()
    where id=v_order_id;
 
-  v_outbox_key:=left('inventory:purchase-order-receipt:'||v_order.scope_key||':'||v_key,240);
-  insert into public.dbs_control_outbox(
-    idempotency_key,company_id,aggregate_type,aggregate_id,event_type,aggregate_version,payload
-  ) values(v_outbox_key,v_order.company_id,'purchase_order',v_order_id,
-    'inventory.purchase_order.received',v_order.version+1,
-    jsonb_build_object('purchase_order_id',v_order_id,'receipt_id',v_receipt_id,'total_cents',v_total))
-  on conflict(idempotency_key) do nothing;
+  -- Esta fase não escreve no Outbox nem altera a infraestrutura de sincronização.
 
   return jsonb_build_object('ok',true,'replayed',false,'receipt_id',v_receipt_id,
     'purchase_order_id',v_order_id,'received_value_cents',v_total,'ledger_entry_id',v_ledger_id,
