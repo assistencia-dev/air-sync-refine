@@ -1984,6 +1984,15 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
     const conflicts: Array<{ code?: string; protocol: string; message: string }> = [];
     const workOrderLegacyMap = await resolveDbsControlWorkOrderLegacyMap(scope.scopeKey, changes.ordens ?? []);
+    // Drafts created by the collaborator form are new issuance intents, not
+    // legacy aliases for an existing canonical OS. A stale legacy mapping from
+    // an interrupted earlier attempt must never turn a fresh draft into UPDATE.
+    if (user.role_key === "COLABORADOR") {
+      for (const order of changes.ordens ?? []) {
+        const localId = String(order?.id ?? "").trim();
+        if (/^draft-[0-9a-f-]{36}$/i.test(localId)) workOrderLegacyMap.delete(localId);
+      }
+    }
     const mappedCanonicalIds = [...new Set([...workOrderLegacyMap.values()])];
     const canonicalWorkOrders = new Map<string, { id: string; protocol: string | null; version: number; status: string | null }>();
     if (mappedCanonicalIds.length) {
@@ -2115,11 +2124,13 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         }
       }
       if (user.role_key !== "COLABORADOR" && !patch.client_id) throw new Error(`A OS ${orderLabel} não possui cliente relacional válido.`);
-      const idempotencyKey = mappedCanonical
-        ? `${data.requestId}:work_order:${mappedCanonical.id}:${index}`.slice(0, 240)
-        : legacyOrderKey
-          ? `${scope.scopeKey}:work_order_create:${legacyOrderKey}`.slice(0, 240)
-          : `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
+      const idempotencyKey = isNewCollaboratorOrder
+        ? `${data.requestId}:work_order_create:${String(order?.id ?? protocol)}:${index}`.slice(0, 240)
+        : mappedCanonical
+          ? `${data.requestId}:work_order:${mappedCanonical.id}:${index}`.slice(0, 240)
+          : legacyOrderKey
+            ? `${scope.scopeKey}:work_order_create:${legacyOrderKey}`.slice(0, 240)
+            : `${data.requestId}:work_order:${String(order?.id ?? protocol)}:${index}`.slice(0, 240);
       const expectedVersion = Number(order?.version);
       const parts = Array.isArray(order?.pecasUsadas)
         ? order.pecasUsadas.map((part: any) => ({
