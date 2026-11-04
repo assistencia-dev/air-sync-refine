@@ -13,15 +13,6 @@ async function requireRh(context: { userId: string }) {
   return data;
 }
 
-function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const rad = (v: number) => (v * Math.PI) / 180;
-  const earth = 6371000;
-  const dLat = rad(lat2 - lat1);
-  const dLng = rad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * earth * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 async function getEmployee(contextUserId: string) {
   const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", contextUserId).maybeSingle();
   if (!user) throw new Error("Usuário não encontrado.");
