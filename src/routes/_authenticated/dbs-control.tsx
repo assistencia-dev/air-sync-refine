@@ -1718,8 +1718,20 @@ function DbsControlPage() {
             throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
           }
           if (draftBatchId) {
-            await deleteDbsControlLocalSyncCommand(draftBatchId);
-            localSyncCommandsRef.current.delete(draftBatchId);
+            const originalCommand = localSyncCommandsRef.current.get(draftBatchId);
+            if (originalCommand) {
+              await persistLocalSyncCommand({
+                id: draftBatchId,
+                changes: originalCommand.changes,
+                requestIds: originalCommand.requestIds,
+                status: "quarantined",
+                attempts: originalCommand.attempts,
+                nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                leaseUntil: null,
+                lastError: "Intenção preservada em quarentena antes da reconciliação manual; a nova gravação usará a versão canônica.",
+                conflicts: originalCommand.conflicts,
+              });
+            }
           }
           pendingChangesRef.current = null;
           pendingBatchIdRef.current = null;
@@ -1767,8 +1779,20 @@ function DbsControlPage() {
         }
         if (!pendingChangesRef.current) {
           if (dismissedBatchId) {
-            await deleteDbsControlLocalSyncCommand(dismissedBatchId);
-            localSyncCommandsRef.current.delete(dismissedBatchId);
+            const dismissedCommand = localSyncCommandsRef.current.get(dismissedBatchId);
+            if (dismissedCommand) {
+              await persistLocalSyncCommand({
+                id: dismissedBatchId,
+                changes: dismissedCommand.changes,
+                requestIds: dismissedCommand.requestIds,
+                status: "quarantined",
+                attempts: dismissedCommand.attempts,
+                nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                leaseUntil: null,
+                lastError: "Conflito dispensado da fila ativa pelo operador; payload original preservado em quarentena.",
+                conflicts: dismissedCommand.conflicts,
+              });
+            }
           }
           pendingBatchIdRef.current = null;
           pendingSaveRequestIdsRef.current = [];
