@@ -7,6 +7,7 @@ const ponto = fs.readFileSync(path.join(root, "src/lib/ponto.functions.ts"), "ut
 const dp = fs.readFileSync(path.join(root, "src/lib/rh.dp.functions.ts"), "utf8");
 const workspace = fs.readFileSync(path.join(root, "src/components/RhPontoWorkspace.tsx"), "utf8");
 const exportsSource = fs.readFileSync(path.join(root, "src/lib/rh.exports.ts"), "utf8");
+const geo = fs.readFileSync(path.join(root, "src/lib/ponto-geo.ts"), "utf8");
 
 assert.match(ponto, /export function minutesFromTime/);
 assert.match(ponto, /America\/Sao_Paulo/);
@@ -20,6 +21,10 @@ assert.match(workspace, /adjusted_worked_minutes/);
 assert.match(workspace, /Trabalhado corrigido/);
 assert.match(exportsSource, /win\.document\.open\(\)/);
 assert.match(exportsSource, /pointLabels/);
+assert.match(ponto, /validatePontoGps\(data, employee, data\.punch_type\)/, "o backend deve validar o GPS no servidor");
+assert.match(ponto, /distance_m: gps\.distance_m, inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
+assert.match(geo, /punchType === "entrada" && !hasBaseLat/, "a Entrada deve exigir base GPS cadastrada");
+assert.match(workspace, /navigator\.geolocation\.getCurrentPosition/, "o cliente deve capturar a localização do dispositivo");
 
 function parseTime(value) {
   const raw = String(value || "").trim();
