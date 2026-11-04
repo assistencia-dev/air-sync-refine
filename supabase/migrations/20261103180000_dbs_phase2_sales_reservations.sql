@@ -23,7 +23,7 @@ create index if not exists dbs_control_inventory_outbox_pending_idx
   on public.dbs_control_inventory_outbox(status,available_at,created_at);
 
 create or replace function public.dbs_control_enqueue_inventory_outbox()
-returns trigger language plpgsql security definer set search_path=public,pg_temp as $
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $ 
 begin
   insert into public.dbs_control_inventory_outbox(
     scope_key,idempotency_key,aggregate_type,aggregate_id,event_type,payload
@@ -713,7 +713,7 @@ notify pgrst,'reload schema';
 -- de peças e consome a reserva na mesma transação que conclui a OS.
 create or replace function public.dbs_control_apply_work_order_delta_with_reservations(p_payload jsonb)
 returns table(ok boolean,status text,work_order_id uuid,protocol text,version bigint,command_id uuid,idempotency_key text,error_code text,error_message text,changed_at timestamptz)
-language plpgsql security definer set search_path=public,pg_temp as $
+language plpgsql security definer set search_path=public,pg_temp as $ 
 declare
   v_payload jsonb:=p_payload;
   v_order_id uuid;
