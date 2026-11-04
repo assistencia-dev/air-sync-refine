@@ -1185,20 +1185,19 @@ export const getDbsControlSyncCursor = createServerFn({ method: "GET" })
     const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
     const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
 
-    // The cursor must describe the same tenant scope as the canonical data.
-    // A global MAX(updated_at) lets writes from another company mask local
-    // changes: the local company's latest row can remain older than the global
-    // cursor forever, so the fallback poll never emits a refresh.
-    const cursorCompanyId = user.company_id ?? collaboratorScope?.companyId ?? null;
-
+    // dbs_control_work_orders has no company_id column in the active
+    // production schema. Admin cursor polling therefore uses the global
+    // monotonic work-order cursor; every new OS update advances it and causes
+    // the caller to rehydrate its own already-scoped canonical state. Applying
+    // a company_id filter here returns Postgres 42703 / HTTP 400 and breaks
+    // synchronization. Collaborators are still narrowed below by their base
+    // client IDs (or assigned employee when no base is configured).
     let query = supabaseAdmin
       .from("dbs_control_work_orders")
       .select("id,updated_at,version")
       .order("updated_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
       .limit(1);
-
-    if (cursorCompanyId) query = query.filter("company_id", "eq", cursorCompanyId);
 
     if (collaboratorEmployee) {
       if (collaboratorScope?.baseId) {
