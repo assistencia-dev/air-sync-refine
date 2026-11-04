@@ -82,11 +82,21 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS rh_ponto_evidence_immutable ON public.rh_ponto_records;
-CREATE TRIGGER rh_ponto_evidence_immutable
-  BEFORE UPDATE ON public.rh_ponto_records
-  FOR EACH ROW
-  EXECUTE FUNCTION public.rh_ponto_protect_evidence();
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.rh_ponto_records'::regclass
+      AND tgname = 'rh_ponto_evidence_immutable'
+      AND NOT tgisinternal
+  ) THEN
+    CREATE TRIGGER rh_ponto_evidence_immutable
+      BEFORE UPDATE ON public.rh_ponto_records
+      FOR EACH ROW
+      EXECUTE FUNCTION public.rh_ponto_protect_evidence();
+  END IF;
+END
+$;
 
 COMMENT ON FUNCTION public.rh_ponto_protect_evidence() IS
   'Impede alteração de evidências da batida por sessões que não sejam service_role; revisão permanece editável.';
