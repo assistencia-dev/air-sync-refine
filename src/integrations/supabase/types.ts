@@ -474,36 +474,6 @@ export type Database = {
           },
         ]
       }
-      dbs_control_snapshot_history: {
-        Row: {
-          archived_at: string
-          archived_by: string | null
-          id: number
-          scope_key: string
-          source_updated_at: string
-          state: Json
-          state_version: number
-        }
-        Insert: {
-          archived_at?: string
-          archived_by?: string | null
-          id?: never
-          scope_key: string
-          source_updated_at: string
-          state: Json
-          state_version?: number
-        }
-        Update: {
-          archived_at?: string
-          archived_by?: string | null
-          id?: never
-          scope_key?: string
-          source_updated_at?: string
-          state?: Json
-          state_version?: number
-        }
-        Relationships: []
-      }
       dbs_control_snapshots: {
         Row: {
           company_id: string | null
@@ -701,7 +671,6 @@ export type Database = {
           details: Json
           event_type: string
           id: string
-          idempotency_key: string | null
           new_status: string | null
           old_status: string | null
           work_order_id: string
@@ -712,7 +681,6 @@ export type Database = {
           details?: Json
           event_type: string
           id?: string
-          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id: string
@@ -723,7 +691,6 @@ export type Database = {
           details?: Json
           event_type?: string
           id?: string
-          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id?: string
@@ -838,16 +805,11 @@ export type Database = {
           assinatura_path: string | null
           client_id: string
           completed_at: string | null
-          completion_status_code: string | null
           created_at: string
           created_by_user_id: string | null
-          deleted_at: string | null
           description: string | null
           diagnostico: string | null
-          execution_checklist: Json
           id: string
-          idempotency_key: string | null
-          geolocation_captured_at: string | null
           latitude: number | null
           longitude: number | null
           observation: string | null
@@ -875,16 +837,11 @@ export type Database = {
           assinatura_path?: string | null
           client_id: string
           completed_at?: string | null
-          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
-          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
-          execution_checklist?: Json
           id?: string
-          idempotency_key?: string | null
-          geolocation_captured_at?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -912,16 +869,11 @@ export type Database = {
           assinatura_path?: string | null
           client_id?: string
           completed_at?: string | null
-          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
-          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
-          execution_checklist?: Json
           id?: string
-          idempotency_key?: string | null
-          geolocation_captured_at?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -981,197 +933,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      dbs_control_outbox: {
-        Row: {
-          aggregate_id: string | null
-          aggregate_type: string
-          aggregate_version: number
-          attempts: number
-          available_at: string
-          command_id: string | null
-          company_id: string | null
-          created_at: string
-          event_type: string
-          id: string
-          idempotency_key: string
-          last_error: string | null
-          locked_at: string | null
-          locked_by: string | null
-          payload: Json
-          published_at: string | null
-          status: string
-        }
-        Insert: {
-          aggregate_id?: string | null
-          aggregate_type: string
-          aggregate_version: number
-          attempts?: number
-          available_at?: string
-          command_id?: string | null
-          company_id?: string | null
-          created_at?: string
-          event_type: string
-          id?: string
-          idempotency_key: string
-          last_error?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          payload?: Json
-          published_at?: string | null
-          status?: string
-        }
-        Update: {
-          aggregate_id?: string | null
-          aggregate_type?: string
-          aggregate_version?: number
-          attempts?: number
-          available_at?: string
-          command_id?: string | null
-          company_id?: string | null
-          created_at?: string
-          event_type?: string
-          id?: string
-          idempotency_key?: string
-          last_error?: string | null
-          locked_at?: string | null
-          locked_by?: string | null
-          payload?: Json
-          published_at?: string | null
-          status?: string
-        }
-        Relationships: []
-      }
-      dbs_control_entity_records: {
-        Row: {
-          created_at: string
-          deleted_at: string | null
-          entity_type: string
-          id: string
-          idempotency_key: string | null
-          payload: Json
-          record_key: string
-          scope_key: string
-          updated_at: string
-          updated_by: string | null
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          deleted_at?: string | null
-          entity_type: string
-          id?: string
-          idempotency_key?: string | null
-          payload?: Json
-          record_key: string
-          scope_key: string
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          deleted_at?: string | null
-          entity_type?: string
-          id?: string
-          idempotency_key?: string | null
-          payload?: Json
-          record_key?: string
-          scope_key?: string
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dbs_control_entity_records_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      dbs_control_sync_metrics: {
-        Row: {
-          claimed_count: number
-          created_at: string
-          details: Json
-          duration_ms: number | null
-          failure_count: number
-          id: string
-          metric_name: string
-          retry_count: number
-          status: string
-          success_count: number
-          worker_id: string
-        }
-        Insert: {
-          claimed_count?: number
-          created_at?: string
-          details?: Json
-          duration_ms?: number | null
-          failure_count?: number
-          id?: string
-          metric_name: string
-          retry_count?: number
-          status: string
-          success_count?: number
-          worker_id: string
-        }
-        Update: {
-          claimed_count?: number
-          created_at?: string
-          details?: Json
-          duration_ms?: number | null
-          failure_count?: number
-          id?: string
-          metric_name?: string
-          retry_count?: number
-          status?: string
-          success_count?: number
-          worker_id?: string
-        }
-        Relationships: []
-      }
-      dbs_control_legacy_id_map: {
-        Row: {
-          canonical_id: string
-          created_at: string
-          entity_type: string
-          legacy_key: string
-          scope_key: string
-        }
-        Insert: {
-          canonical_id: string
-          created_at?: string
-          entity_type: string
-          legacy_key: string
-          scope_key: string
-        }
-        Update: {
-          canonical_id?: string
-          created_at?: string
-          entity_type?: string
-          legacy_key?: string
-          scope_key?: string
-        }
-        Relationships: []
-      }
-      project: {
-        Row: {
-          created_at: string
-          id: number
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-        }
-        Update: {
-          created_at?: string
-          id?: number
-        }
-        Relationships: []
       }
       rh_admission_processes: {
         Row: {
@@ -1473,7 +1234,6 @@ export type Database = {
           employee_id: string
           id: string
           notes: string | null
-          source_request_id: string | null
           status: string
           updated_at: string
         }
@@ -1488,7 +1248,6 @@ export type Database = {
           employee_id: string
           id?: string
           notes?: string | null
-          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1503,7 +1262,6 @@ export type Database = {
           employee_id?: string
           id?: string
           notes?: string | null
-          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1520,13 +1278,6 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rh_employee_advances_source_request_id_fkey"
-            columns: ["source_request_id"]
-            isOneToOne: false
-            referencedRelation: "rh_employee_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1857,8 +1608,6 @@ export type Database = {
           benefit_type: string
           created_at: string
           dbs_control_access_enabled: boolean
-          dbs_control_base_id: string | null
-          dbs_control_can_issue_work_orders: boolean
           fare_cents: number
           ficha_file_name: string | null
           ficha_storage_path: string | null
@@ -1887,8 +1636,6 @@ export type Database = {
           benefit_type: string
           created_at?: string
           dbs_control_access_enabled?: boolean
-          dbs_control_base_id?: string | null
-          dbs_control_can_issue_work_orders?: boolean
           fare_cents: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
@@ -1917,8 +1664,6 @@ export type Database = {
           benefit_type?: string
           created_at?: string
           dbs_control_access_enabled?: boolean
-          dbs_control_base_id?: string | null
-          dbs_control_can_issue_work_orders?: boolean
           fare_cents?: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
@@ -1951,7 +1696,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rh_employees_registry_employee_fk"
+            foreignKeyName: "rh_employees_registry_employee_id_fkey"
             columns: ["registry_employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
@@ -3120,198 +2865,6 @@ export type Database = {
           },
         ]
       }
-      treasury_accounts: {
-        Row: {
-          id: string
-          company_id: string | null
-          scope_key: string
-          code: string
-          name: string
-          account_type: string
-          currency_code: string
-          is_active: boolean
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          company_id?: string | null
-          scope_key: string
-          code: string
-          name: string
-          account_type: string
-          currency_code?: string
-          is_active?: boolean
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string | null
-          scope_key?: string
-          code?: string
-          name?: string
-          account_type?: string
-          currency_code?: string
-          is_active?: boolean
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      treasury_ledger_entries: {
-        Row: {
-          id: string
-          company_id: string | null
-          scope_key: string
-          competence_date: string
-          document_date: string | null
-          entry_type: string
-          status: string
-          description: string
-          source_module: string
-          external_key: string | null
-          idempotency_key: string
-          reversed_entry_id: string | null
-          created_by: string | null
-          posted_by: string | null
-          posted_at: string | null
-          version: number
-          metadata: Json
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          company_id?: string | null
-          scope_key: string
-          competence_date: string
-          document_date?: string | null
-          entry_type?: string
-          status?: string
-          description: string
-          source_module?: string
-          external_key?: string | null
-          idempotency_key: string
-          reversed_entry_id?: string | null
-          created_by?: string | null
-          posted_by?: string | null
-          posted_at?: string | null
-          version?: number
-          metadata?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string | null
-          scope_key?: string
-          competence_date?: string
-          document_date?: string | null
-          entry_type?: string
-          status?: string
-          description?: string
-          source_module?: string
-          external_key?: string | null
-          idempotency_key?: string
-          reversed_entry_id?: string | null
-          created_by?: string | null
-          posted_by?: string | null
-          posted_at?: string | null
-          version?: number
-          metadata?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      treasury_ledger_lines: {
-        Row: {
-          id: string
-          entry_id: string
-          account_id: string
-          line_no: number
-          debit_cents: number
-          credit_cents: number
-          memo: string | null
-          metadata: Json
-        }
-        Insert: {
-          id?: string
-          entry_id: string
-          account_id: string
-          line_no: number
-          debit_cents?: number
-          credit_cents?: number
-          memo?: string | null
-          metadata?: Json
-        }
-        Update: {
-          id?: string
-          entry_id?: string
-          account_id?: string
-          line_no?: number
-          debit_cents?: number
-          credit_cents?: number
-          memo?: string | null
-          metadata?: Json
-        }
-        Relationships: []
-      }
-      treasury_ledger_outbox: {
-        Row: {
-          id: string
-          company_id: string | null
-          scope_key: string
-          entry_id: string
-          event_type: string
-          idempotency_key: string
-          payload: Json
-          status: string
-          attempts: number
-          available_at: string
-          locked_at: string | null
-          published_at: string | null
-          last_error: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          company_id?: string | null
-          scope_key: string
-          entry_id: string
-          event_type: string
-          idempotency_key: string
-          payload?: Json
-          status?: string
-          attempts?: number
-          available_at?: string
-          locked_at?: string | null
-          published_at?: string | null
-          last_error?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string | null
-          scope_key?: string
-          entry_id?: string
-          event_type?: string
-          idempotency_key?: string
-          payload?: Json
-          status?: string
-          attempts?: number
-          available_at?: string
-          locked_at?: string | null
-          published_at?: string | null
-          last_error?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
       treasury_snapshots: {
         Row: {
           company_id: string | null
@@ -3525,62 +3078,6 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["role_key"]
       }
-      dbs_control_dashboard_summary: {
-        Args: { p_employee_id?: string | null }
-        Returns: Json
-      }
-      dbs_control_dashboard_summary_scoped: {
-        Args: {
-          p_base_id?: string | null
-          p_company_id?: string | null
-          p_employee_id?: string | null
-        }
-        Returns: Json
-      }
-      dbs_control_apply_work_order_delta: {
-        Args: { p_payload: Json }
-        Returns: {
-          changed_at: string
-          command_id: string
-          error_code: string | null
-          error_message: string | null
-          idempotency_key: string
-          ok: boolean
-          protocol: string | null
-          status: string
-          version: number | null
-          work_order_id: string | null
-        }[]
-      }
-      dbs_control_claim_outbox: {
-        Args: { p_limit?: number; p_worker_id: string }
-        Returns: Database["public"]["Tables"]["dbs_control_outbox"]["Row"][]
-      }
-      dbs_control_complete_outbox: {
-        Args: { p_error?: string; p_outbox_id: string; p_retry_seconds?: number; p_success: boolean; p_worker_id: string }
-        Returns: boolean
-      }
-      dbs_control_sync_health: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      post_treasury_ledger_entry: {
-        Args: {
-          p_scope_key: string
-          p_company_id: string | null
-          p_competence_date: string
-          p_document_date: string | null
-          p_entry_type: string
-          p_description: string
-          p_idempotency_key: string
-          p_external_key: string | null
-          p_created_by: string
-          p_status: string
-          p_metadata: Json
-          p_lines: Json
-        }
-        Returns: Json
-      }
       current_unit_id: { Args: never; Returns: string }
       dbs_control_save_snapshot_safe: {
         Args: { p_payload: Json }
@@ -3590,29 +3087,8 @@ export type Database = {
           updated_at: string
         }[]
       }
-      dbs_control_save_snapshot_safe_v2: {
-        Args: { p_payload: Json }
-        Returns: {
-          state: Json
-          state_version: number
-          updated_at: string
-        }[]
-      }
-      process_work_order_update: {
-        Args: { p_payload: Json }
-        Returns: {
-          changed_at: string
-          command_id: string
-          error_code: string | null
-          error_message: string | null
-          idempotency_key: string
-          ok: boolean
-          protocol: string | null
-          status: string
-          version: number | null
-          work_order_id: string | null
-        }[]
-      }
+      dbs_my_employee_ids: { Args: never; Returns: string[] }
+      dbs_my_work_order_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
       usuario_esta_ativo: { Args: never; Returns: boolean }
     }
