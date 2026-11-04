@@ -68,18 +68,18 @@ grant execute on function public.dbs_control_apply_work_order_delta_with_reserva
 
 -- Um único advisory lock por OS serializa reserva, liberação, autosave e conclusão.
 create or replace function public.dbs_control_reserve_work_order_parts_serialized(p_payload jsonb)
-returns jsonb language plpgsql security definer set search_path=public,pg_temp as $ 
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ 
 declare v_work_order_id uuid:=nullif(p_payload->>'work_order_id','')::uuid;
 begin
   if v_work_order_id is null then raise exception 'DBS_OS_ID_REQUIRED' using errcode='22023'; end if;
   perform pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||v_work_order_id::text,0));
   return public.dbs_control_reserve_work_order_parts(p_payload);
 end;
-$;
+$$;
 
 create or replace function public.dbs_control_release_work_order_reservation_serialized(
   p_reservation_id uuid,p_actor_user_id uuid,p_idempotency_key text
-) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $ 
+) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ 
 declare v_work_order_id uuid;
 begin
   select work_order_id into v_work_order_id
@@ -88,17 +88,17 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||v_work_order_id::text,0));
   return public.dbs_control_release_work_order_reservation(p_reservation_id,p_actor_user_id,p_idempotency_key);
 end;
-$;
+$$;
 
 create or replace function public.dbs_control_consume_work_order_reservations_serialized(
   p_work_order_id uuid,p_actor_user_id uuid,p_idempotency_key text
-) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $ 
+) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ 
 begin
   if p_work_order_id is null then raise exception 'DBS_OS_ID_REQUIRED' using errcode='22023'; end if;
   perform pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||p_work_order_id::text,0));
   return public.dbs_control_consume_work_order_reservations(p_work_order_id,p_actor_user_id,p_idempotency_key);
 end;
-$;
+$$;
 
 revoke all on function public.dbs_control_reserve_work_order_parts_serialized(jsonb) from public,anon,authenticated;
 revoke all on function public.dbs_control_release_work_order_reservation_serialized(uuid,uuid,text) from public,anon,authenticated;
