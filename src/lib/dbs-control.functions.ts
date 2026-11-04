@@ -2134,7 +2134,10 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         idempotency_key: idempotencyKey,
         actor_user_id: user.id,
         company_id: scope.companyId,
-        work_order_id: isDbsControlUuid(order?.id) ? String(order.id) : undefined,
+        // A emissão de colaborador é sempre CREATE: o UUID local do formulário
+        // não é um ID canônico e a RPC dbs_control_issue_work_order rejeita
+        // qualquer work_order_id para impedir que uma emissão vire atualização.
+        work_order_id: !isNewCollaboratorOrder && isDbsControlUuid(order?.id) ? String(order.id) : undefined,
         protocol: protocol || undefined,
         operation: "upsert",
         expected_version: Number.isFinite(expectedVersion) && expectedVersion > 0 ? expectedVersion : undefined,
