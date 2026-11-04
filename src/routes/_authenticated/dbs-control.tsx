@@ -560,21 +560,22 @@ function DbsControlPage() {
 
     const postLocalSyncStatus = async (fallbackStatus?: "synced" | "pending" | "conflict" | "error") => {
       const summary = await getDbsControlLocalSyncSummary();
-      const pendingCount = summary.pending + summary.sending;
+      const pendingCount = summary.pending + summary.sending + summary.error;
+      const failedCommand = [...localSyncCommandsRef.current.values()]
+        .filter((command) => command.status === "error")
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const status = summary.conflict > 0
         ? "conflict"
-        : summary.error > 0
-          ? "error"
-          : pendingCount > 0
-            ? "pending"
-            : (fallbackStatus ?? "synced");
+        : pendingCount > 0
+          ? "pending"
+          : (fallbackStatus ?? "synced");
       iframeRef.current?.contentWindow?.postMessage({
         type: "DBS_CONTROL_SYNC_STATUS",
         status,
         pendingCount,
         localQueue: summary,
-        error: status === "error"
-          ? "Há uma intenção local que precisa de nova tentativa. Nenhum dado foi descartado."
+        error: failedCommand?.lastError
+          ? `Nova tentativa pendente: ${String(failedCommand.lastError).slice(0, 500)}. A intenção local foi preservada.`
           : undefined,
       }, "*");
     };
@@ -963,16 +964,17 @@ function DbsControlPage() {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Falha ao salvar o DBS CONTROL.";
-        const transient = isDbsControlTransientError(err) || /Outra aba está sincronizando/i.test(message);
+        // Keep the original intent and idempotency key. Unknown wrapped
+        // transport/server errors retry by default; explicit authorization,
+        // validation and business conflicts remain visible for review.
+        const explicitPermanent = /invalid api key|missing supabase environment|unauthorized|forbidden|não autorizado|acesso não autorizado|DBS_OS_[A-Z_]+|invalid input syntax|violates .* constraint|not-null constraint/i.test(message);
+        const transient = !explicitPermanent || isDbsControlTransientError(err) || /Outra aba está sincronizando/i.test(message);
         const retryDelay = DBS_CONTROL_SYNC_RETRY_DELAYS_MS[Math.min(retryAttemptRef.current, DBS_CONTROL_SYNC_RETRY_DELAYS_MS.length - 1)];
         if (transient) retryAttemptRef.current += 1;
         await persistLocalSyncCommand({
           id: batchId,
           changes,
           requestIds,
-          // A transient gateway/network error is never terminal. Keep the
-          // intent pending with the same idempotency key until the server ACKs
-          // it. Non-transient errors remain visible for manual review.
           status: transient ? "pending" : "error",
           attempts: attempt,
           nextAttemptAt: transient ? Date.now() + retryDelay : Number.MAX_SAFE_INTEGER,
