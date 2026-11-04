@@ -81,6 +81,9 @@ assert.doesNotMatch(localSync, /MAX_COMMANDS|const removable = commands\.find/, 
 assert.match(localSync, /A fila é um registro durável de intenções/, "A fila deve tratar conflitos e erros como registros preservados, não cache descartável.");
 assert.match(route, /Preserve the original conflicted intent as an immutable audit/, "O rebase online deve colocar a intenção anterior em quarentena antes de criar outra.");
 assert.match(route, /Conflito preservado em quarentena antes do rebase/, "A hidratação de conflito deve preservar a intenção original antes de reconciliar.");
+assert.match(route, /Intenção preservada em quarentena antes da reconciliação manual/, "A reconciliação manual deve arquivar a intenção antes de reemitir o delta.");
+assert.match(route, /Conflito dispensado da fila ativa pelo operador; payload original preservado em quarentena/, "Dispensar um conflito não pode apagar o payload original.");
+assert.equal((route.match(/deleteDbsControlLocalSyncCommand\(/g) || []).length, 1, "A fila local só pode excluir uma intenção depois de ACK de gravação sem conflito.");
 assert.match(route, /A versão canônica já encerrou esta OS; a intenção repetida foi preservada sem reenvio/, "Uma repetição contra OS terminal deve ser preservada em quarentena, não apagada.");
 assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação local explícita quando a nuvem estiver temporariamente indisponível.");
 assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
