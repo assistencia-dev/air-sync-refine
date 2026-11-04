@@ -29,6 +29,8 @@ assert.match(route, /dbs-control-work-orders-realtime/, "O cliente precisa mante
 assert.match(route, /removeChannel\(existing\)/, "Canais duplicados precisam ser removidos antes de assinar novamente.");
 assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em uma fila de retry.");
 assert.match(route, /status: transient \? "pending" : "error"/, "Falhas transitórias não podem virar erro terminal após um número fixo de tentativas.");
+assert.match(route, /candidate\?\.context\?\.status/, "Erros HTTP encapsulados no context do Supabase precisam expor o status real.");
+assert.match(route, /status === 500 \|\| \(status >= 502 && status <= 599\)/, "Erros de servidor 5xx precisam permanecer retryable na fila local.");
 assert.match(route, /promoteNextLocalSyncCommand\(true\)/, "O retry manual precisa promover comandos error persistidos após reload.");
 assert.match(route, /document\.visibilityState !== "visible" \|\| navigator\.onLine === false/, "O polling de cursor não deve executar em aba oculta ou offline.");
 assert.match(route, /setInterval\(\(\) => \{ void pollSyncCursor\(\); \}, 30000\)/, "O fallback de cursor deve respeitar intervalo de 30 segundos para não saturar o pool.");
@@ -55,6 +57,8 @@ assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pod
 assert.match(iframe, /DBS_CONTROL_BLOCKED_SYNC_KEYS/, "Conflitos permanentes precisam ser bloqueados até a reconciliação explícita.");
 assert.match(iframe, /DBS_CONTROL_DISMISS_CONFLICT/, "OS concluída não pode bloquear a emissão de uma nova OS por causa de uma intenção stale.");
 assert.match(iframe, /dbsControlIsCompletedOrder/, "O delta não pode reenviar OS concluídas por diferenças de hidratação.");
+assert.match(functions, /const cursorCompanyId = user\.company_id \?\? collaboratorScope\?\.companyId \?\? null/, "O cursor de sincronização precisa usar o escopo da empresa/base, sem comparar alterações de outros tenants.");
+assert.match(functions, /if \(cursorCompanyId\) query = query\.filter\("company_id", "eq", cursorCompanyId\)/, "O polling de fallback precisa detectar alterações dentro da empresa correta sem depender de tipos gerados desatualizados.");
 assert.match(functions, /resolveDbsControlWorkOrderLegacyMap/, "OS legadas precisam ser resolvidas pelo vínculo legado→UUID antes do upsert.");
 assert.match(functions, /DBS_OS_EMPLOYEE_NOT_FOUND/, "Uma referência de técnico inválida precisa virar rejeição operacional controlada, não HTTP 500.");
 assert.match(route, /DBS_OS_EMPLOYEE_NOT_FOUND/, "O painel precisa tratar a referência de técnico inválida como conflito permanente, sem retry infinito.");

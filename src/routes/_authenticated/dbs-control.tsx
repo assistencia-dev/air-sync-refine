@@ -28,15 +28,35 @@ import {
 // DBS CONTROL production hardening: collaborator mode remains backed by the canonical RH employee link.
 
 function dbsControlHttpStatus(error: unknown) {
-  const candidate = error as { status?: unknown; statusCode?: unknown; cause?: { status?: unknown } } | null;
-  return Number(candidate?.status ?? candidate?.statusCode ?? candidate?.cause?.status ?? 0);
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    context?: { status?: unknown };
+    response?: { status?: unknown };
+    cause?: { status?: unknown; statusCode?: unknown; context?: { status?: unknown }; response?: { status?: unknown } };
+  } | null;
+  return Number(
+    candidate?.status
+      ?? candidate?.statusCode
+      ?? candidate?.context?.status
+      ?? candidate?.response?.status
+      ?? candidate?.cause?.status
+      ?? candidate?.cause?.statusCode
+      ?? candidate?.cause?.context?.status
+      ?? candidate?.cause?.response?.status
+      ?? 0,
+  );
 }
 
 function isDbsControlTransientError(error: unknown) {
   const status = dbsControlHttpStatus(error);
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return [408, 425, 429, 502, 503, 504].includes(status)
-    || /(timeout|timed out|timeout manager|gateway|failed to fetch|fetch failed|network|connection reset|connection closed|temporarily unavailable|warp server error|request aborted|aborterror|econnreset|socket hang up|upstream)/i.test(message);
+  // Supabase may wrap the HTTP response under context; gateway/server 5xx
+  // must stay retryable or a durable local intent becomes a terminal error.
+  const retryableServerError = status === 500 || (status >= 502 && status <= 599);
+  return retryableServerError
+    || [408, 425, 429].includes(status)
+    || /(timeout|timed out|timeout manager|gateway|internal server error|server error|failed to fetch|fetch failed|network|connection reset|connection closed|temporarily unavailable|warp server error|request aborted|aborterror|econnreset|socket hang up|upstream)/i.test(message);
 }
 
 // A temporary gateway outage must not turn a durable local intent into a
