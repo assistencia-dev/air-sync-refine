@@ -1198,7 +1198,7 @@ export const getDbsControlSyncCursor = createServerFn({ method: "GET" })
       .order("id", { ascending: false })
       .limit(1);
 
-    if (cursorCompanyId) query = query.eq("company_id", cursorCompanyId);
+    if (cursorCompanyId) query = query.filter("company_id", "eq", cursorCompanyId);
 
     if (collaboratorEmployee) {
       if (collaboratorScope?.baseId) {
