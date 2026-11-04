@@ -24,6 +24,8 @@ assert.match(exportsSource, /pointLabels/);
 assert.match(ponto, /validatePontoGps\(data, employee, data\.punch_type\)/, "o backend deve validar o GPS no servidor");
 assert.match(ponto, /distance_m: gps\.distance_m, inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
 assert.match(geo, /punchType === "entrada" && !hasBaseLat/, "a Entrada deve exigir base GPS cadastrada");
+assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
+assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS capturado"/, "a interface deve distinguir captura GPS de geocerca validada");
 assert.match(workspace, /navigator\.geolocation\.getCurrentPosition/, "o cliente deve capturar a localização do dispositivo");
 
 function parseTime(value) {
