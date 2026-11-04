@@ -2311,6 +2311,11 @@ export type Database = {
       }
       rh_ponto_records: {
         Row: {
+          address_components: Json | null
+          address_provider: string | null
+          address_resolved_at: string | null
+          address_status: string
+          address_text: string | null
           created_at: string
           created_by: string | null
           distance_m: number | null
@@ -2324,9 +2329,19 @@ export type Database = {
           photo_data: string | null
           punch_type: string
           punched_at: string
+          review_note: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          risk_flags: string[]
           work_date: string
         }
         Insert: {
+          address_components?: Json | null
+          address_provider?: string | null
+          address_resolved_at?: string | null
+          address_status?: string
+          address_text?: string | null
           created_at?: string
           created_by?: string | null
           distance_m?: number | null
@@ -2340,9 +2355,19 @@ export type Database = {
           photo_data?: string | null
           punch_type: string
           punched_at?: string
+          review_note?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_flags?: string[]
           work_date: string
         }
         Update: {
+          address_components?: Json | null
+          address_provider?: string | null
+          address_resolved_at?: string | null
+          address_status?: string
+          address_text?: string | null
           created_at?: string
           created_by?: string | null
           distance_m?: number | null
@@ -2356,6 +2381,11 @@ export type Database = {
           photo_data?: string | null
           punch_type?: string
           punched_at?: string
+          review_note?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_flags?: string[]
           work_date?: string
         }
         Relationships: [
@@ -2371,6 +2401,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_ponto_records_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
