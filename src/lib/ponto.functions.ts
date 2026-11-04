@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { validatePontoGps } from "@/lib/ponto-geo";
 
 const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
@@ -115,15 +116,8 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   const next = TYPES[Math.min(last ? TYPES.indexOf(last) + 1 : 0, TYPES.length)];
   if (!next || data.punch_type !== next) throw new Error(`A próxima marcação deve ser ${next ?? "nenhuma"}.`);
 
-  let distance = data.distance_m ?? null;
-  let inside = data.inside_radius ?? null;
-  if (data.latitude != null && data.longitude != null && employee.ponto_base_lat != null && employee.ponto_base_lng != null) {
-    distance = distanceMeters(Number(employee.ponto_base_lat), Number(employee.ponto_base_lng), data.latitude, data.longitude);
-    inside = distance <= Number(employee.ponto_raio_m ?? 150);
-  }
-  if (data.punch_type === "entrada" && (inside !== true)) throw new Error("Marcação bloqueada: é necessário estar dentro do raio permitido pelo RH.");
-
-  const payload = { ...data, employee_id: employee.id, distance_m: distance, inside_radius: inside };
+  const gps = validatePontoGps(data, employee, data.punch_type);
+  const payload = { ...data, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
   const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });
