@@ -690,8 +690,15 @@ function DbsControlPage() {
         }
         localSyncCommandsRef.current = new Map(commands.map((command) => [command.id, command]));
         if (!pendingChangesRef.current) promoteNextLocalSyncCommand();
+        // Retoma também comandos que já estavam aguardando o próximo backoff
+        // antes de um reload. Sem este wake-up, nextAttemptAt futuro ficava
+        // estacionado indefinidamente até foco/rede/uma nova edição.
+        scheduleNextLocalSyncQueueWake();
       })().catch((error) => {
-        console.warn("DBS CONTROL: fila local não pôde ser carregada; a sessão seguirá com retry em memória.", error);
+        // Não manter uma Promise rejeitada/engolida como hidratação concluída:
+        // falhas temporárias ao abrir IndexedDB precisam permitir nova leitura.
+        localSyncHydrationRef.current = null;
+        console.warn("DBS CONTROL: fila local não pôde ser carregada; nova hidratação será tentada.", error);
       });
       return localSyncHydrationRef.current;
     };
@@ -700,8 +707,37 @@ function DbsControlPage() {
       if (localSyncRetryTimerRef.current) clearTimeout(localSyncRetryTimerRef.current);
       localSyncRetryTimerRef.current = setTimeout(() => {
         localSyncRetryTimerRef.current = null;
-        retryPendingSaveRef.current?.();
+        // Releia o IndexedDB no vencimento do backoff, recupere leases órfãos
+        // e só então promova a intenção mais antiga. O payload e requestId
+        // permanecem inalterados durante toda a recuperação.
+        void recoverExpiredDbsControlLocalSyncCommands()
+          .then((commands) => {
+            localSyncCommandsRef.current = new Map(commands.map((command) => [command.id, command]));
+            if (!pendingChangesRef.current) promoteNextLocalSyncCommand();
+            if (pendingChangesRef.current) retryPendingSaveRef.current?.();
+            else scheduleNextLocalSyncQueueWake();
+          })
+          .catch((error) => {
+            logSyncEvent("local_sync_wakeup_error", {
+              message: error instanceof Error ? error.message : "Falha ao retomar a fila local.",
+            });
+            scheduleLocalSyncRetry(15000);
+          });
       }, Math.max(0, delayMs));
+    };
+
+    const scheduleNextLocalSyncQueueWake = () => {
+      const now = Date.now();
+      const nextWakeAt = [...localSyncCommandsRef.current.values()]
+        .filter((command) => command.status === "pending" || command.status === "sending")
+        .map((command) => command.status === "sending"
+          ? Number(command.leaseUntil ?? now + 15000)
+          : Number(command.nextAttemptAt ?? now))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .sort((a, b) => a - b)[0];
+      if (nextWakeAt !== undefined) {
+        scheduleLocalSyncRetry(Math.max(250, nextWakeAt - now));
+      }
     };
 
     const promoteQueuedCommandAfterCommit = () => {
