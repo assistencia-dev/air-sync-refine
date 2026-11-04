@@ -52,6 +52,8 @@ export const setRhPontoAccess = createServerFn({ method: "POST" }).middleware([r
   if (!input?.employee_id) throw new Error("Colaborador inválido.");
   if (input.enabled && !input.portal_identifier?.trim()) throw new Error("Informe o usuário, e-mail ou CPF usado no login do colaborador.");
   if (input.enabled && ((input.base_lat == null) !== (input.base_lng == null))) throw new Error("Informe latitude e longitude da base juntas.");
+  if (input.enabled && (input.base_lat == null || input.base_lng == null)) throw new Error("Cadastre latitude e longitude da base para habilitar a geocerca GPS.");
+  if (input.enabled && (!Number.isFinite(input.base_lat) || input.base_lat! < -90 || input.base_lat! > 90 || !Number.isFinite(input.base_lng) || input.base_lng! < -180 || input.base_lng! > 180)) throw new Error("Coordenadas da base inválidas.");
   if (input.radius_m !== undefined && (!Number.isInteger(input.radius_m) || input.radius_m < 20 || input.radius_m > 5000)) throw new Error("Raio permitido: 20 a 5.000 metros.");
   return input;
 }).handler(async ({ context, data }) => {
