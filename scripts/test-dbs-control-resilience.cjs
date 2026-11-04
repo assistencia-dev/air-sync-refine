@@ -29,6 +29,8 @@ assert.match(route, /dbs-control-work-orders-realtime/, "O cliente precisa mante
 assert.match(route, /removeChannel\(existing\)/, "Canais duplicados precisam ser removidos antes de assinar novamente.");
 assert.match(route, /retryAttemptRef/, "Falhas temporárias precisam entrar em uma fila de retry.");
 assert.match(route, /status: transient \? "pending" : "error"/, "Falhas transitórias não podem virar erro terminal após um número fixo de tentativas.");
+assert.match(route, /candidate\?\.context\?\.status/, "Erros HTTP encapsulados no context do Supabase precisam expor o status real.");
+assert.match(route, /status === 500 \|\| \(status >= 502 && status <= 599\)/, "Erros de servidor 5xx precisam permanecer retryable na fila local.");
 assert.match(route, /promoteNextLocalSyncCommand\(true\)/, "O retry manual precisa promover comandos error persistidos após reload.");
 assert.match(route, /document\.visibilityState !== "visible" \|\| navigator\.onLine === false/, "O polling de cursor não deve executar em aba oculta ou offline.");
 assert.match(route, /setInterval\(\(\) => \{ void pollSyncCursor\(\); \}, 30000\)/, "O fallback de cursor deve respeitar intervalo de 30 segundos para não saturar o pool.");
