@@ -1185,12 +1185,20 @@ export const getDbsControlSyncCursor = createServerFn({ method: "GET" })
     const collaboratorEmployee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
     const collaboratorScope = collaboratorEmployee ? await getCollaboratorBaseScope(collaboratorEmployee) : null;
 
+    // The cursor must describe the same tenant scope as the canonical data.
+    // A global MAX(updated_at) lets writes from another company mask local
+    // changes: the local company's latest row can remain older than the global
+    // cursor forever, so the fallback poll never emits a refresh.
+    const cursorCompanyId = user.company_id ?? collaboratorScope?.companyId ?? null;
+
     let query = supabaseAdmin
       .from("dbs_control_work_orders")
       .select("id,updated_at,version")
       .order("updated_at", { ascending: false, nullsFirst: false })
       .order("id", { ascending: false })
       .limit(1);
+
+    if (cursorCompanyId) query = query.eq("company_id", cursorCompanyId);
 
     if (collaboratorEmployee) {
       if (collaboratorScope?.baseId) {
