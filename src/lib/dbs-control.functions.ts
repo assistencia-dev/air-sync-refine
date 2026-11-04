@@ -1165,8 +1165,8 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
     return {
       ...summary,
       role_key: user.role_key,
-      employee_name: employee?.full_name ?? null,
-      base_name: collaboratorScope?.baseName ?? summary.base_name ?? null,
+      employee_name: employee?.full_name ?? undefined,
+      base_name: collaboratorScope?.baseName ?? (typeof summary.base_name === "string" ? summary.base_name : undefined),
       base_active: collaboratorScope?.baseActive ?? summary.base_active ?? null,
       can_issue_work_orders: collaboratorScope?.canIssueWorkOrders ?? false,
     };
