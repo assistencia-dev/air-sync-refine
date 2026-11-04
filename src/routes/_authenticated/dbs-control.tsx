@@ -884,8 +884,20 @@ function DbsControlPage() {
             const visibleInLatest = conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(latestState, conflict)));
             if (latestState && visibleInLatest && !completedInLatest) {
               const replayChanges = mergeDbsControlChanges(changes, queuedChangesRef.current ?? {});
-              await deleteDbsControlLocalSyncCommand(batchId);
-              localSyncCommandsRef.current.delete(batchId);
+              // Preserve the original conflicted intent as an immutable audit
+              // record before handing the rebased delta back to the iframe.
+              // A page close between rebase and the next save must not erase it.
+              await persistLocalSyncCommand({
+                id: batchId,
+                changes,
+                requestIds,
+                status: "quarantined",
+                attempts: attempt,
+                nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                leaseUntil: null,
+                lastError: "Intenção original preservada em quarentena; uma nova intenção será criada sobre a versão canônica.",
+                conflicts,
+              });
               pendingChangesRef.current = null;
               pendingBatchIdRef.current = null;
               pendingSaveRequestIdsRef.current = [];
@@ -942,6 +954,20 @@ function DbsControlPage() {
             attempts: attempt,
             nextAttemptAt: Number.MAX_SAFE_INTEGER,
             lastError: resultMessage,
+            conflicts,
+          });
+        } else if (hasConflict && autoResolvableConflict) {
+          // A terminal canonical state can make replay unnecessary, but the
+          // original request remains available for audit and support.
+          await persistLocalSyncCommand({
+            id: batchId,
+            changes,
+            requestIds,
+            status: "quarantined",
+            attempts: attempt,
+            nextAttemptAt: Number.MAX_SAFE_INTEGER,
+            leaseUntil: null,
+            lastError: "A versão canônica já encerrou esta OS; a intenção repetida foi preservada sem reenvio.",
             conflicts,
           });
         } else {
@@ -1383,12 +1409,20 @@ function DbsControlPage() {
                   && restoredCommand.conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(cloudState, conflict)))
                   && !restoredCommand.conflicts.some((conflict) => dbsControlStateOrderIsCompleted(cloudState, conflict));
                 if (canRebaseCollaboratorCommand) {
-                  // O conflito antigo fica preservado na tabela de auditoria, mas
-                  // não deve bloquear o colaborador depois que a versão canônica
-                  // já foi carregada. O iframe mescla o rascunho na leitura atual
-                  // e gera uma nova intenção com expected_version atualizado.
-                  await deleteDbsControlLocalSyncCommand(restoredCommand.id);
-                  localSyncCommandsRef.current.delete(restoredCommand.id);
+                  // Preserve o payload original em quarentena antes do rebase.
+                  // O iframe cria uma nova intenção usando a versão canônica; a
+                  // tentativa anterior nunca é apagada nem volta a ser enviada.
+                  await persistLocalSyncCommand({
+                    id: restoredCommand.id,
+                    changes: restoredCommand.changes,
+                    requestIds: restoredCommand.requestIds,
+                    status: "quarantined",
+                    attempts: restoredCommand.attempts,
+                    nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                    leaseUntil: null,
+                    lastError: "Conflito preservado em quarentena antes do rebase sobre a versão canônica.",
+                    conflicts: restoredCommand.conflicts,
+                  });
                   if (pendingBatchIdRef.current === restoredCommand.id) {
                     pendingBatchIdRef.current = null;
                     pendingChangesRef.current = null;
