@@ -28,7 +28,6 @@ export interface DbsControlLocalSyncSummary {
 const DB_NAME = "dbs-control-local-sync";
 const DB_VERSION = 1;
 const STORE_NAME = "sync_commands";
-const MAX_COMMANDS = 200;
 const memoryFallback = new Map<string, DbsControlLocalSyncCommand>();
 
 function canUseIndexedDb() {
@@ -147,18 +146,9 @@ export async function getDbsControlLocalSyncSummary(): Promise<DbsControlLocalSy
 export async function putDbsControlLocalSyncCommand(command: DbsControlLocalSyncCommand) {
   const safeCommand = clone(command);
   try {
-    const commands = await listDbsControlLocalSyncCommands();
-    const exists = commands.some((item) => item.id === safeCommand.id);
-    if (!exists && commands.length >= MAX_COMMANDS) {
-      const removable = commands.find(
-        (item) => item.status === "error" || item.status === "conflict",
-      );
-      if (!removable)
-        throw new Error(
-          "A fila local atingiu o limite seguro; a sincronização precisa ser revisada.",
-        );
-      await deleteDbsControlLocalSyncCommand(removable.id);
-    }
+    // A fila é um registro durável de intenções, não um cache com capacidade
+    // descartável. Nunca remova comandos antigos para abrir espaço: conflitos
+    // e erros também são evidência operacional e precisam de decisão explícita.
     await idbWrite((store) => store.put(safeCommand));
     memoryFallback.delete(safeCommand.id);
   } catch (error) {
