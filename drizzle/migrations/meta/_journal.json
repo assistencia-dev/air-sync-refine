@@ -22,6 +22,13 @@
       "when": 1790823863672,
       "tag": "0002_dbs_control_core_and_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793795656577,
+      "tag": "0003_apply_pending_batch_00",
+      "breakpoints": true
     }
   ]
 }
