@@ -1152,8 +1152,8 @@ export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
     const employee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
     const collaboratorScope = employee ? await getCollaboratorBaseScope(employee) : null;
     const { data, error } = await supabaseAdmin.rpc("dbs_control_dashboard_summary_scoped", {
-      p_employee_id: employee?.id ?? null,
-      p_base_id: collaboratorScope?.baseId ?? null,
+      p_employee_id: employee?.id ?? undefined,
+      p_base_id: collaboratorScope?.baseId ?? undefined,
       p_company_id: user.company_id ?? collaboratorScope?.companyId ?? employee?.user_company_id ?? null,
     });
     if (error) throw new Error(error.message);
