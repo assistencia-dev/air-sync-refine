@@ -16,6 +16,7 @@ import { Route as SiteRouteImport } from './routes/site'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedChamadosRouteImport } from './routes/_authenticated/chamados'
 import { Route as AuthenticatedDbsControlRouteImport } from './routes/_authenticated/dbs-control'
+import { Route as AuthenticatedDbsInventoryRouteImport } from './routes/_authenticated/dbs-inventory'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedFinanceiroAcessoRouteImport } from './routes/_authenticated/financeiro-acesso'
 import { Route as AuthenticatedFinanceiroAcompanhamentoRouteImport } from './routes/_authenticated/financeiro-acompanhamento'
@@ -62,6 +63,12 @@ const AuthenticatedDbsControlRoute = AuthenticatedDbsControlRouteImport.update({
   path: '/dbs-control',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDbsInventoryRoute =
+  AuthenticatedDbsInventoryRouteImport.update({
+    id: '/dbs-inventory',
+    path: '/dbs-inventory',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
@@ -128,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/chamados': typeof AuthenticatedChamadosRoute
   '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/dbs-inventory': typeof AuthenticatedDbsInventoryRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/chamados': typeof AuthenticatedChamadosRoute
   '/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/dbs-inventory': typeof AuthenticatedDbsInventoryRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
@@ -168,6 +177,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/chamados': typeof AuthenticatedChamadosRoute
   '/_authenticated/dbs-control': typeof AuthenticatedDbsControlRoute
+  '/_authenticated/dbs-inventory': typeof AuthenticatedDbsInventoryRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/financeiro-acesso': typeof AuthenticatedFinanceiroAcessoRoute
   '/_authenticated/financeiro-acompanhamento': typeof AuthenticatedFinanceiroAcompanhamentoRoute
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chamados'
     | '/dbs-control'
+    | '/dbs-inventory'
     | '/financeiro'
     | '/financeiro-acesso'
     | '/financeiro-acompanhamento'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chamados'
     | '/dbs-control'
+    | '/dbs-inventory'
     | '/financeiro'
     | '/financeiro-acesso'
     | '/financeiro-acompanhamento'
@@ -228,6 +240,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/chamados'
     | '/_authenticated/dbs-control'
+    | '/_authenticated/dbs-inventory'
     | '/_authenticated/financeiro'
     | '/_authenticated/financeiro-acesso'
     | '/_authenticated/financeiro-acompanhamento'
@@ -298,6 +311,13 @@ declare module '@tanstack/react-router' {
       path: '/dbs-control'
       fullPath: '/dbs-control'
       preLoaderRoute: typeof AuthenticatedDbsControlRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dbs-inventory': {
+      id: '/_authenticated/dbs-inventory'
+      path: '/dbs-inventory'
+      fullPath: '/dbs-inventory'
+      preLoaderRoute: typeof AuthenticatedDbsInventoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro': {
@@ -384,6 +404,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedChamadosRoute: typeof AuthenticatedChamadosRoute
   AuthenticatedDbsControlRoute: typeof AuthenticatedDbsControlRoute
+  AuthenticatedDbsInventoryRoute: typeof AuthenticatedDbsInventoryRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedFinanceiroAcessoRoute: typeof AuthenticatedFinanceiroAcessoRoute
   AuthenticatedFinanceiroAcompanhamentoRoute: typeof AuthenticatedFinanceiroAcompanhamentoRoute
@@ -400,6 +421,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedChamadosRoute: AuthenticatedChamadosRoute,
   AuthenticatedDbsControlRoute: AuthenticatedDbsControlRoute,
+  AuthenticatedDbsInventoryRoute: AuthenticatedDbsInventoryRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedFinanceiroAcessoRoute: AuthenticatedFinanceiroAcessoRoute,
   AuthenticatedFinanceiroAcompanhamentoRoute:
