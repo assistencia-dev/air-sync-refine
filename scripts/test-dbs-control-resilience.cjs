@@ -77,6 +77,11 @@ assert.match(functions, /entity_type: "work_order"/, "Novas OS precisam registra
 assert.match(localSync, /dbs-control-local-sync/, "A fila local precisa ter um armazenamento nomeado e versionado.");
 assert.match(localSync, /requestIds/, "A fila local precisa preservar as chaves idempotentes da intenção.");
 assert.match(localSync, /recoverExpiredDbsControlLocalSyncCommands/, "Uma sessão interrompida precisa recuperar leases expirados sem descartar deltas.");
+assert.doesNotMatch(localSync, /MAX_COMMANDS|const removable = commands\.find/, "A fila local nunca pode excluir comandos antigos para liberar capacidade.");
+assert.match(localSync, /A fila é um registro durável de intenções/, "A fila deve tratar conflitos e erros como registros preservados, não cache descartável.");
+assert.match(route, /Preserve the original conflicted intent as an immutable audit/, "O rebase online deve colocar a intenção anterior em quarentena antes de criar outra.");
+assert.match(route, /Conflito preservado em quarentena antes do rebase/, "A hidratação de conflito deve preservar a intenção original antes de reconciliar.");
+assert.match(route, /A versão canônica já encerrou esta OS; a intenção repetida foi preservada sem reenvio/, "Uma repetição contra OS terminal deve ser preservada em quarentena, não apagada.");
 assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação local explícita quando a nuvem estiver temporariamente indisponível.");
 assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
 assert.match(iframe, /dbsControlConflictIsCompletedLocked/, "Conflitos históricos de OS concluída não podem bloquear a operação.");
