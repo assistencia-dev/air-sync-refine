@@ -562,7 +562,7 @@ function DbsControlPage() {
       const summary = await getDbsControlLocalSyncSummary();
       const pendingCount = summary.pending + summary.sending + summary.error;
       const failedCommand = [...localSyncCommandsRef.current.values()]
-        .filter((command) => command.status === "error")
+        .filter((command) => ["pending", "sending", "error"].includes(command.status) && Boolean(command.lastError))
         .sort((a, b) => b.updatedAt - a.updatedAt)[0];
       const status = summary.conflict > 0
         ? "conflict"
