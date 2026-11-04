@@ -55,6 +55,8 @@ assert.match(iframe, /dbsControlApplyCommittedChanges/, "A base otimista só pod
 assert.match(iframe, /DBS_CONTROL_BLOCKED_SYNC_KEYS/, "Conflitos permanentes precisam ser bloqueados até a reconciliação explícita.");
 assert.match(iframe, /DBS_CONTROL_DISMISS_CONFLICT/, "OS concluída não pode bloquear a emissão de uma nova OS por causa de uma intenção stale.");
 assert.match(iframe, /dbsControlIsCompletedOrder/, "O delta não pode reenviar OS concluídas por diferenças de hidratação.");
+assert.match(functions, /const cursorCompanyId = user\.company_id \?\? collaboratorScope\?\.companyId \?\? null/, "O cursor de sincronização precisa usar o escopo da empresa/base, sem comparar alterações de outros tenants.");
+assert.match(functions, /if \(cursorCompanyId\) query = query\.eq\("company_id", cursorCompanyId\)/, "O polling de fallback precisa detectar alterações dentro da empresa correta.");
 assert.match(functions, /resolveDbsControlWorkOrderLegacyMap/, "OS legadas precisam ser resolvidas pelo vínculo legado→UUID antes do upsert.");
 assert.match(functions, /DBS_OS_EMPLOYEE_NOT_FOUND/, "Uma referência de técnico inválida precisa virar rejeição operacional controlada, não HTTP 500.");
 assert.match(route, /DBS_OS_EMPLOYEE_NOT_FOUND/, "O painel precisa tratar a referência de técnico inválida como conflito permanente, sem retry infinito.");
