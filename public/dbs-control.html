@@ -2052,7 +2052,7 @@
     var partSelect = document.getElementById('comp-peca');
     var partId = partSelect && partSelect.value || '';
     var selectedPart = partId ? (ERP_STATE.pecas || []).find(function (part) { return String(part.id) === String(partId); }) : null;
-    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), status: document.getElementById('comp-status').value === 'received' ? 'received' : 'draft' };
+    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, part_sku: selectedPart && selectedPart.sku ? String(selectedPart.sku).trim() : '', qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), status: document.getElementById('comp-status').value === 'received' ? 'received' : 'draft' };
     if (!value.fornecedor || !value.part_id || !value.qtd || value.qtd <= 0 || !Number.isFinite(value.valor) || value.valor <= 0) return;
     var existing = id ? findRow('compras', id) : null;
     if (existing && existing.ledger_entry_id) { alert('Esta compra já entrou no estoque e no Financeiro; faça uma devolução/estorno para corrigir.'); return; }
