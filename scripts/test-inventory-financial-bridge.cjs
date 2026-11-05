@@ -21,6 +21,7 @@ const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_f
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
 const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
+const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105140000_dbs_inventory_scope_sku_and_financial_reconciliation.sql', 'utf8');
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
@@ -213,5 +214,16 @@ assert.match(mainHtml, /document\.getElementById\('comp-status'\)\.value === 're
 
 assert.match(functions, /requireDbsInventoryAdmin/);
 
+
+assert.match(scopeSkuMigration, /dbs_control_parts_sku_normalized_uidx/i);
+assert.match(scopeSkuMigration, /dbs_control_normalize_part_sku/i);
+assert.match(scopeSkuMigration, /admin_count = 1/i);
+assert.match(scopeSkuMigration, /dbs_control_reconcile_work_order_financials/i);
+assert.match(scopeSkuMigration, /completed_without_source_value/i);
+assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 35801/i);
+assert.match(integrationSql, /v_part2/i);
+assert.match(integrationSql, /TEST_OS_REVENUE/i);
+assert.match(integrationSql, /gross_margin_pct/);
+assert.match(integrationSql, /rollback;/i);
 
 console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle, phase 2 RPC contracts and inline UI syntax verified.');
