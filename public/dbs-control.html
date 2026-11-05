@@ -1908,6 +1908,7 @@
       document.getElementById('peca-qtd').value = Number(row.qtd ?? row.stock_quantity ?? 0);
       document.getElementById('peca-custo').value = Number(row.custo ?? (Number(row.cost_cents || 0) / 100)).toFixed(2);
       document.getElementById('peca-venda').value = Number(row.venda ?? (Number(row.sale_cents || 0) / 100)).toFixed(2);
+      document.getElementById('peca-status').value = ['inativo','inativa','arquivado','arquivada','excluido','excluida','deleted'].includes(String(row.status || 'ativo').toLowerCase()) ? 'inativo' : 'ativo';
     } else if (kind === 'servicos') {
       document.getElementById('serv-nome').value = row.nome || row.name || '';
       document.getElementById('serv-horas').value = Number(row.horas ?? row.horasEstimadas ?? row.estimated_hours ?? 0);
@@ -1994,14 +1995,14 @@
     var id = form && form.dataset.dbsEditId || '';
     var existingPart = id ? findRow('pecas', id) : null;
     var currentStock = existingPart ? Number(existingPart.qtd ?? existingPart.stock_quantity ?? 0) : 0;
-    var value = { sku: document.getElementById('peca-sku').value.trim(), nome: document.getElementById('peca-nome').value.trim(), qtd: id ? currentStock : 0, custo: Number(document.getElementById('peca-custo').value || 0), venda: Number(document.getElementById('peca-venda').value || 0) };
+    var value = { sku: document.getElementById('peca-sku').value.trim(), nome: document.getElementById('peca-nome').value.trim(), qtd: id ? currentStock : 0, custo: Number(document.getElementById('peca-custo').value || 0), venda: Number(document.getElementById('peca-venda').value || 0), status: document.getElementById('peca-status').value === 'inativo' ? 'inativo' : 'ativo' };
     if (!value.sku || !value.nome) return;
     if (findDuplicate('pecas', value.sku, id)) { alert('Já existe uma peça com este SKU.'); return; }
     var row = id ? findRow('pecas', id) : null;
     if (row) Object.assign(row, value);
     else {
       var state = appState();
-      row = { id: crypto.randomUUID(), ...value, status: 'ativo' };
+      row = { id: crypto.randomUUID(), ...value };
       (state.pecas || (state.pecas = [])).push(row);
     }
     clearEdit('pecas');
@@ -2051,7 +2052,7 @@
     if (row) Object.assign(row, value);
     else {
       var state = appState();
-      row = { id: crypto.randomUUID(), ...value, status: 'Enviado', deleted: false };
+      row = { id: crypto.randomUUID(), ...value, status: 'Recebido', deleted: false };
       (state.compras || (state.compras = [])).push(row);
     }
     clearEdit('compras');
@@ -4361,6 +4362,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <div class="form-group"><label>Saldo atual (somente leitura)</label><input type="number" id="peca-qtd" value="0" readonly title="O estoque entra por Compras e baixa ao aplicar a peça em uma OS"></div>
                         <div class="form-group"><label>Preço Custo (R$)</label><input type="number" id="peca-custo" value="22.00" step="0.01" required></div>
                         <div class="form-group"><label>Preço Venda (R$)</label><input type="number" id="peca-venda" value="65.00" step="0.01" required></div>
+                        <div class="form-group"><label>Status do catálogo</label><select id="peca-status"><option value="ativo">Ativa para compras e estoque</option><option value="inativo">Inativa</option></select></div>
                     </div>
                     <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Salvar Peça</button></div>
                 </form>
@@ -4399,7 +4401,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         <!-- COMPRAS -->
         <div id="tab-compras" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Registrar Pedido de Compra</h3>
+                <h3 style="margin-bottom: 14px;">Registrar compra recebida</h3>
                 <form id="form-compra" onsubmit="salvarCompra(event)">
                     <div class="form-grid">
                         <div class="form-group"><label>Fornecedor</label><input type="text" id="comp-fornecedor" required></div>
@@ -4407,7 +4409,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <div class="form-group"><label>Descrição complementar</label><input type="text" id="comp-item" placeholder="NF, lote ou observação"></div>
                         <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" required></div>
                         <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="comp-valor" value="450.00" step="0.01" required></div>
-                        <div class="form-group"><label>Pagamento</label><select id="comp-pagamento"><option value="unpaid">A pagar</option><option value="paid">Pago</option><option value="partial">Parcial</option></select></div>
+                        <div class="form-group"><label>Financeiro</label><div style="padding:10px 12px;border:1px solid #dbe3ee;border-radius:10px;font-size:12px;color:#475569;">A compra gera Contas a Pagar. Registre a quitação no DBS Treasury para atualizar o caixa.</div></div>
                     </div>
                     <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Registrar Compra</button></div>
                 </form>
