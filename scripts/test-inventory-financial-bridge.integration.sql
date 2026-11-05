@@ -24,6 +24,7 @@ declare
   v_payment_ledger uuid;
   v_total bigint;
   v_paid bigint;
+  v_remaining bigint;
   v_status text;
   v_movement_count integer;
   v_debits bigint;
@@ -164,6 +165,11 @@ begin
   if v_paid <> 10000 or v_status <> 'partial' then
     raise exception 'TEST_PAYMENT_BALANCE: esperado 10000/partial; recebido %/%', v_paid, v_status;
   end if;
+  select total_cents-paid_cents into v_remaining
+    from public.dbs_control_purchases where id=v_purchase;
+  if v_remaining <> 14690 then
+    raise exception 'TEST_ACCOUNTS_PAYABLE: saldo esperado 14690, recebido %.',v_remaining;
+  end if;
 
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
     into v_debits, v_credits
@@ -181,6 +187,11 @@ begin
       and v_overview ? 'gross_profit_cents'
       and v_overview ? 'gross_margin_pct') then
     raise exception 'TEST_OVERVIEW: painel não retornou todas as métricas: %', v_overview;
+  end if;
+  if (v_overview->>'accounts_payable_cents')::bigint < v_remaining
+    or (v_overview->>'purchases_month_cents')::bigint < v_total
+    or (v_overview->>'stock_value_cents')::bigint < 24690 then
+    raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem compra/estoque/contas a pagar: %',v_overview;
   end if;
 
   raise notice 'PASS: purchase registration -> AP without stock -> explicit receipt exactly once -> weighted average -> balanced AP/stock reclassification -> partial payment -> balanced cash Ledger -> management metrics.';
