@@ -1133,6 +1133,10 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE") {
+        navigate({ to: "/dbs-inventory" });
+        return;
+      }
       if (msg.type === "DBS_CONTROL_BACK_TO_MAIN") {
         navigate({ to: "/folha-ponto", replace: true });
         return;
