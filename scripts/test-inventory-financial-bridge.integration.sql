@@ -156,3 +156,4 @@ end;
 $test$;
 
 rollback;
+select 'PASS'::text as integration_test_status;
