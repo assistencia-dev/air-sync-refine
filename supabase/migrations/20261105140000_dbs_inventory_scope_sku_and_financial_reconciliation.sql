@@ -110,13 +110,13 @@ before insert or update of sku on public.dbs_control_parts
 for each row execute function public.dbs_control_normalize_part_sku();
 
 create unique index if not exists dbs_control_parts_sku_normalized_uidx
-on public.dbs_control_parts (
+on public.dbs_control_parts ((
   case
     when btrim(sku) ~ '^[0-9]+$'
       then coalesce(nullif(ltrim(btrim(sku), '0'), ''), '0')
     else upper(btrim(sku))
   end
-)
+))
 where sku is not null and btrim(sku) <> '';
 
 -- Imported FieldControl OSs may not have an actor. Attribute their operational
