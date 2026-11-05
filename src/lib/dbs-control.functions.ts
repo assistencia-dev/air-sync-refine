@@ -3020,6 +3020,64 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
     return result;
   });
 
+
+export const createDbsPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    supplierName: string;
+    documentNumber?: string;
+    purchaseDate: string;
+    idempotencyKey: string;
+    items: Array<{ partId: string; quantity: number; unitCostCents: number }>;
+  }) => {
+    const supplierName = String(input?.supplierName ?? "").trim();
+    const purchaseDate = String(input?.purchaseDate ?? "").trim();
+    const items = Array.isArray(input?.items) ? input.items : [];
+    if (!supplierName || supplierName.length > 180) throw new Error("Informe um fornecedor válido.");
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(purchaseDate) || Number.isNaN(Date.parse(purchaseDate + "T12:00:00Z"))) {
+      throw new Error("Informe uma data de compra válida.");
+    }
+    if (!input?.idempotencyKey || input.idempotencyKey.trim().length < 8) throw new Error("Chave de segurança da compra inválida.");
+    if (!items.length || items.length > 100) throw new Error("A compra precisa ter entre 1 e 100 itens.");
+    return {
+      supplierName,
+      documentNumber: String(input.documentNumber ?? "").trim().slice(0, 100) || null,
+      purchaseDate,
+      idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
+      items: items.map((item) => {
+        if (!item?.partId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
+            !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0) {
+          throw new Error("Cada item precisa ter peça cadastrada, quantidade e custo unitário maiores que zero.");
+        }
+        return {
+          part_id: requireInventoryId(item.partId, "Peça"),
+          quantity: item.quantity,
+          unit_cost_cents: item.unitCostCents,
+        };
+      }),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const companyId = user.company_id;
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase", {
+      p_payload: {
+        actor_user_id: user.id,
+        company_id: companyId,
+        scope_key: scopeKey,
+        supplier_name: data.supplierName,
+        document_number: data.documentNumber,
+        purchase_date: data.purchaseDate,
+        payment_status: "unpaid",
+        idempotency_key: data.idempotencyKey,
+        items: data.items,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -3068,9 +3126,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
@@ -3089,8 +3147,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_purchases")
         .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
+      (supabaseAdmin as any).from("dbs_control_work_order_financials")
+        .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")
+        .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     return {
@@ -3100,5 +3161,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       sales: sales.data ?? [],
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
+      workOrderFinancials: workOrderFinancials.data ?? [],
     };
   });

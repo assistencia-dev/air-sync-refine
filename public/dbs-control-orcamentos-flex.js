@@ -46,6 +46,28 @@
     if (typeof ERP_STATE === "undefined" || !Array.isArray(ERP_STATE.orcamentos)) {
       if (typeof ERP_STATE !== "undefined") ERP_STATE.orcamentos = ERP_STATE.orcamentos || [];
     }
+    var nav = document.querySelector(".nav-menu");
+    if (nav && !document.getElementById("dbs-smart-purchases-nav")) {
+      var purchaseSection = document.createElement("div");
+      purchaseSection.className = "nav-section";
+      purchaseSection.textContent = "Gestão integrada";
+      var purchaseItem = document.createElement("li");
+      purchaseItem.id = "dbs-smart-purchases-nav";
+      purchaseItem.className = "nav-item";
+      purchaseItem.setAttribute("role", "link");
+      purchaseItem.setAttribute("tabindex", "0");
+      purchaseItem.innerHTML = '<span aria-hidden="true">▣</span><span>Compras & Custos</span>';
+      var openPurchases = function () {
+        var target = new URL("/dbs-inventory", window.location.origin);
+        window.open(target.toString(), "_blank", "noopener");
+      };
+      purchaseItem.addEventListener("click", openPurchases);
+      purchaseItem.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPurchases(); }
+      });
+      nav.appendChild(purchaseSection);
+      nav.appendChild(purchaseItem);
+    }
     var tab = $("tab-orcamentos");
     if (!tab || tab.dataset.flexReady === "1") return;
     tab.dataset.flexReady = "1";
@@ -251,7 +273,9 @@
     }).map(function (q) {
       var c = clients().find(function (x) { return String(x.id) === String(q.clienteId); }) || {};
       var items = quoteItems(q); var label = items.map(function (x) { return x.descricao || "Item"; }).join(", ");
+      var hasParts = items.some(function (item) { return item.tipo === "peca"; });
       var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> <button type="button" class="btn btn-secondary btn-sm" data-accept="' + esc(q.id) + '">Aceite Web</button> ';
+      if (hasParts) actions += '<button type="button" class="btn btn-primary btn-sm" data-purchase="' + esc(q.id) + '">Comprar peças</button> ';
       if (q.status === "Rascunho") actions += '<button type="button" class="btn btn-secondary btn-sm" data-status="Aprovado" data-id="' + esc(q.id) + '">Aprovar</button>';
       if (q.status === "Aprovado") actions += '<button type="button" class="btn btn-success btn-sm" data-os="' + esc(q.id) + '">Gerar OS</button>';
       return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td><span class="oq-status" data-status="' + esc(q.status || "Rascunho") + '">' + esc(q.status || "Rascunho") + '</span></td><td class="oq-row-actions">' + actions + '</td></tr>';
@@ -260,11 +284,34 @@
     body.onclick = function (ev) {
       var b = ev.target.closest("button"); if (!b) return;
       if (b.dataset.pdf) return pdf(b.dataset.pdf);
+      if (b.dataset.purchase) return sendQuotePartsToPurchase(b.dataset.purchase);
       if (b.dataset.accept) return openAcceptance(b.dataset.accept);
       if (b.dataset.status && typeof window.quoteStatus === "function") return window.quoteStatus(b.dataset.id, b.dataset.status);
       if (b.dataset.os && typeof window.quoteToOs === "function") return window.quoteToOs(b.dataset.os);
     };
   }
+
+  function sendQuotePartsToPurchase(id) {
+    var quote = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
+    if (!quote) return;
+    var items = quoteItems(quote).filter(function (item) { return item.tipo === "peca"; }).map(function (item) {
+      var catalogItem = catalog().find(function (entry) { return entry.tipo === "peca" && String(entry.id) === String(item.catalogoId); }) || {};
+      return {
+        sku: String(catalogItem.sku || item.sku || item.codigo || ""),
+        description: String(item.descricao || catalogItem.descricao || "Peça"),
+        quantity: Number(item.quantidade || 1)
+      };
+    }).filter(function (item) { return Number.isFinite(item.quantity) && item.quantity > 0; });
+    if (!items.length) {
+      alert("Esta cotação não possui peças para enviar à compra.");
+      return;
+    }
+    var target = new URL("/dbs-inventory", window.location.origin);
+    target.searchParams.set("quote_id", String(quote.id));
+    target.searchParams.set("purchase_items", JSON.stringify(items));
+    window.open(target.toString(), "_blank", "noopener,noreferrer");
+  }
+
   function pdf(id) {
     if (window.DbsControlQuotePdf && typeof window.DbsControlQuotePdf.generate === "function") {
       var quoteToExport = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });

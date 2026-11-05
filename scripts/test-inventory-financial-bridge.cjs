@@ -27,6 +27,17 @@ const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_l
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
 const controlRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
+const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
+assert.match(phase2Ui, /createDbsPurchase/);
+assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
+assert.match(phase2Ui, /purchase_items/);
+assert.match(functions, /export const createDbsPurchase/);
+assert.match(functions, /dbs_control_register_purchase/);
+assert.match(quoteBuilder, /data-purchase=/);
+assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
+assert.match(quoteBuilder, /Compras & Custos/);
+assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261105-purchase-handoff-1/);
+
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
   assert.doesNotMatch(migration, /drop\s+(table|schema|column)\b/i);
@@ -67,9 +78,9 @@ assert.match(idempotencyGuard, /dbs_control_receive_purchase_safe/i);
 assert.match(idempotencyGuard, /payload_hash/i);
 assert.match(idempotencyGuard, /pg_advisory_xact_lock/i);
 
-assert.match(functions, /dbs_control_receive_purchase/);
+assert.match(functions, /dbs_control_receive_registered_purchase/);
 assert.match(functions, /dbs_control_upsert_part/);
-assert.match(functions, /dbs_control_receive_purchase_safe/);
+assert.match(functions, /export const receiveDbsPurchase/);
 assert.match(functions, /dbs_control_upsert_part_safe/);
 assert.match(functions, /appliedParts/);
 assert.match(functions, /purchaseLineItems/);
@@ -78,9 +89,9 @@ assert.match(functions, /purchaseItemsResult/);
 assert.match(functions, /workOrderFinancialsResult/);
 assert.match(functions, /lucroBruto/);
 assert.match(functions, /relationalCompras/);
-assert.match(functions, /dbs_control_receive_registered_purchase/);
+assert.match(functions, /normalizedServiceStatus/);
 assert.match(functions, /status: serviceStatus/);
-assert.match(functions, /export const receiveDbsPurchase/);
+assert.doesNotMatch(functions, /from\(["']dbs_control_parts["']\)\.upsert\(/);
 assert.doesNotMatch(functions, /from\(["']dbs_control_snapshots["']\)\.(?:insert|update|upsert)\(/);
 assert.match(importScript, /opening_quantity/);
 assert.match(importScript, /opening_unit_cost_cents/);
@@ -193,6 +204,9 @@ assert.match(functions, /export const getDbsInventoryFinancialOverview/);
 assert.match(functions, /payment_status: 'unpaid'/);
 assert.match(functions, /paid_cents/);
 assert.match(phase2Ui, /Compras e contas a pagar/);
+assert.match(phase2Ui, /Custos por ordem de serviço/);
+assert.match(functions, /workOrderFinancials: workOrderFinancials\.data/);
+assert.match(functions, /dbs_control_work_order_financials/);
 assert.match(phase2Ui, /settleDbsPurchase/);
 assert.match(phase2Ui, /gross_margin_pct/);
 assert.match(mainHtml, /id="peca-status"/);
