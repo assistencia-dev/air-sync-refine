@@ -503,7 +503,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,receipt_ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
       return isScopedCollaborator ? noRows : query.eq("scope_key", scopeKey);
     })(),
     (() => {
@@ -1662,16 +1662,13 @@ async function persistDbsControlPurchaseDelta(
   if (!items.length || items.some((line: any) => !isDbsControlUuid(line.part_id))) return null;
   const quantity = items.reduce((sum: number, line: any) => sum + Number(line.quantity || 0), 0);
   if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('A quantidade da compra precisa ser maior que zero.');
-  const totalRaw = Number(record?.total_cents ?? record?.valor ?? 0);
-  const totalCents = Number.isFinite(totalRaw)
-    ? (record?.total_cents !== undefined ? Math.round(totalRaw) : Math.round(totalRaw * 100))
-    : 0;
   const purchaseDate = String(record?.purchase_date ?? record?.data ?? record?.date ?? '').trim();
   const normalizedDate = purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)
     ? purchaseDate
     : new Date().toISOString().slice(0, 10);
-  const paymentStatus = String(record?.payment_status ?? record?.statusPagamento ?? 'unpaid').trim().toLowerCase();
-  const result = await (supabaseAdmin as any).rpc('dbs_control_receive_purchase_safe', {
+  const legacyKey = String(record?.legacy_key ?? record?.id ?? '').trim() || null;
+  const idempotencyKey = `${requestId}:purchase:${legacyKey ?? items[0].part_id}`.slice(0, 240);
+  const registered = await (supabaseAdmin as any).rpc('dbs_control_register_purchase', {
     p_payload: {
       actor_user_id: user.id,
       company_id: scope.companyId,
@@ -1679,18 +1676,30 @@ async function persistDbsControlPurchaseDelta(
       supplier_name: String(record?.supplier_name ?? record?.fornecedor ?? '').trim(),
       document_number: String(record?.document_number ?? record?.nota ?? record?.numeroNota ?? '').trim() || null,
       purchase_date: normalizedDate,
-      // Registrar a compra cria a obrigação integral com o fornecedor.
-      // Pagamentos parciais/totais são movimentos separados no Treasury.
       payment_status: 'unpaid',
-      idempotency_key: `${requestId}:purchase:${String(record?.legacy_key ?? record?.id ?? items[0].part_id)}`.slice(0, 240),
-      // Preserve the original browser-side key after canonical hydration;
-      // otherwise a later edit could be interpreted as a second purchase.
-      legacy_key: String(record?.legacy_key ?? record?.id ?? '').trim() || null,
+      idempotency_key: idempotencyKey,
+      legacy_key: legacyKey,
       items,
     },
   });
-  if (result.error) throw new Error(result.error.message);
-  return result.data as Record<string, unknown>;
+  if (registered.error) throw new Error(registered.error.message);
+  const purchase = registered.data as Record<string, unknown>;
+  const purchaseId = String(purchase?.purchase_id ?? '').trim();
+  if (!isDbsControlUuid(purchaseId)) throw new Error('Compra registrada sem identificador relacional válido.');
+
+  const requestedStatus = String(record?.status ?? '').trim().toLocaleLowerCase('pt-BR')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const shouldReceive = ['received', 'recebido', 'recebida'].includes(requestedStatus)
+    || String(purchase?.status ?? '').trim().toLowerCase() === 'received';
+  if (!shouldReceive) return purchase;
+
+  const received = await (supabaseAdmin as any).rpc('dbs_control_receive_registered_purchase', {
+    p_purchase_id: purchaseId,
+    p_actor_user_id: user.id,
+    p_idempotency_key: `${requestId}:purchase-receive:${purchaseId}`.slice(0, 240),
+  });
+  if (received.error) throw new Error(received.error.message);
+  return { ...purchase, ...(received.data as Record<string, unknown>), purchase_id: purchaseId };
 }
 
 async function persistDbsControlMasterDeltas(
@@ -2916,6 +2925,28 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
       p_actor_user_id: user.id,
       p_amount_cents: data.amountCents,
       p_payment_method: data.paymentMethod,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const receiveDbsPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { purchaseId: string; idempotencyKey: string }) => {
+    if (!input?.purchaseId || !input.idempotencyKey || input.idempotencyKey.trim().length < 8) {
+      throw new Error("Dados de recebimento da compra inválidos.");
+    }
+    return {
+      purchaseId: requireInventoryId(input.purchaseId, "Compra"),
+      idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_registered_purchase", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
     });
     if (error) throw new Error(error.message);
