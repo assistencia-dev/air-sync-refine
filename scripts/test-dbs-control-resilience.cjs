@@ -10,6 +10,7 @@ const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf
 const iframe = fs.readFileSync("public/dbs-control.html", "utf8");
 const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
 const referenceMigration = fs.readFileSync("supabase/migrations/20261028191111_dbs_control_reference_validation.sql", "utf8");
+const syncConflictMigration = fs.readFileSync("supabase/migrations/20261105160000_dbs_control_sync_conflict_classification.sql", "utf8");
 const workOrderDefaultsMigration = fs.readFileSync("supabase/migrations/20261030041711_dbs_control_work_order_defaults.sql", "utf8");
 
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
@@ -69,6 +70,13 @@ assert.equal((referenceMigration.match(/jsonb_populate_record\(null::public\.dbs
 assert.match(referenceMigration, /assigned_employee_id[\s\S]*?DBS_OS_EMPLOYEE_NOT_FOUND/, "A migração deve validar o formato do UUID do técnico antes do cast relacional.");
 assert.match(referenceMigration, /not exists \(\s*select 1 from public\.rh_employees/i, "A migração deve validar a existência do técnico na tabela relacional.");
 assert.match(referenceMigration, /revoke all on function public\.dbs_control_apply_work_order_delta\(jsonb\)/i, "A RPC endurecida deve manter ACL explícita.");
+assert.match(syncConflictMigration, /aggregate_id = v_current\.id/, "Todo conflito deve manter vínculo relacional direto com a OS.");
+assert.match(syncConflictMigration, /DBS_OS_PROTOCOL_EXISTS/, "Uma emissão com protocolo já existente deve ser rejeitada como duplicidade, não como conflito de versão.");
+assert.match(syncConflictMigration, /DBS_OS_VERSION_REQUIRED/, "Uma atualização sem expected_version deve ser rejeitada sem sobrescrever a OS.");
+assert.match(syncConflictMigration, /operation', 'create'/, "O wrapper de emissão deve declarar explicitamente a intenção CREATE.");
+assert.doesNotMatch(syncConflictMigration, /\b(drop|truncate)\s+(table|view|schema|column)\b/i, "A correção não pode remover estruturas operacionais.");
+assert.match(functions, /DBS_OS_PROTOCOL_EXISTS/, "O cliente precisa reconhecer duplicidade de protocolo como rejeição permanente.");
+assert.match(functions, /DBS_OS_VERSION_REQUIRED/, "O cliente precisa reconhecer ausência de versão sem entrar em retry infinito.");
 assert.match(workOrderDefaultsMigration, /trg_dbs_control_work_order_defaults/i, "A criação de OS precisa preencher o checklist obrigatório sem exigir campos artificiais no formulário.");
 assert.match(workOrderDefaultsMigration, /new\.execution_checklist := case/i, "O guard de criação não pode deixar execution_checklist nulo.");
 assert.match(workOrderDefaultsMigration, /when tg_op = 'UPDATE' then old\.execution_checklist/i, "Uma atualização sem checklist não pode apagar o checklist existente.");
