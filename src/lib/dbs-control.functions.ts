@@ -503,7 +503,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
       return isScopedCollaborator ? noRows : query.eq("scope_key", scopeKey);
     })(),
     (() => {
@@ -921,6 +921,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     valor: Number(row.total_cents || 0) / 100,
     status: row.status || "received",
     payment_status: row.payment_status || "unpaid",
+    paid_cents: Number(row.paid_cents || 0),
     purchase_date: row.purchase_date || null,
     ledger_entry_id: row.ledger_entry_id || null,
     idempotency_key: row.idempotency_key || null,
@@ -1681,8 +1682,10 @@ async function persistDbsControlPurchaseDelta(
       // Registrar a compra cria a obrigação integral com o fornecedor.
       // Pagamentos parciais/totais são movimentos separados no Treasury.
       payment_status: 'unpaid',
-      idempotency_key: `${requestId}:purchase:${String(record?.id ?? items[0].part_id)}`.slice(0, 240),
-      legacy_key: String(record?.id ?? '').trim() || null,
+      idempotency_key: `${requestId}:purchase:${String(record?.legacy_key ?? record?.id ?? items[0].part_id)}`.slice(0, 240),
+      // Preserve the original browser-side key after canonical hydration;
+      // otherwise a later edit could be interpreted as a second purchase.
+      legacy_key: String(record?.legacy_key ?? record?.id ?? '').trim() || null,
       items,
     },
   });
