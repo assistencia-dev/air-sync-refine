@@ -2,40 +2,54 @@ const supabaseUrl = String(process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
 
 if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios para consumir a outbox.");
+  throw new Error("Secrets obrigatórios ausentes: configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY em Settings > Secrets and variables > Actions.");
 }
 
-const response = await fetch(`${supabaseUrl}/functions/v1/dbs-control-outbox-worker`, {
-  method: "POST",
-  headers: {
-    apikey: serviceRoleKey,
-    authorization: `Bearer ${serviceRoleKey}`,
-    "content-type": "application/json",
-  },
-  body: JSON.stringify({ limit: 200 }),
-  signal: AbortSignal.timeout(60_000),
-});
+const expectedOrigin = "https://gdglototcrehvhkvcqsq.supabase.co";
+let parsedUrl;
+try { parsedUrl = new URL(supabaseUrl); } catch { throw new Error("SUPABASE_URL inválida."); }
+if (parsedUrl.origin !== expectedOrigin) {
+  throw new Error(`SUPABASE_URL aponta para projeto diferente do Supabase oficial: esperado ${expectedOrigin}.`);
+}
 
-const text = await response.text();
+async function fetchWithRetry(url, init, label, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(45_000) });
+      if (response.ok || (response.status < 500 && response.status !== 429)) return response;
+      lastError = new Error(`${label}: HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+  }
+  throw new Error(`${label} falhou após ${attempts} tentativas: ${lastError?.message ?? "erro desconhecido"}`);
+}
+
+const headers = {
+  apikey: serviceRoleKey,
+  authorization: `Bearer ${serviceRoleKey}`,
+  "content-type": "application/json",
+};
+
+const response = await fetchWithRetry(
+  `${expectedOrigin}/functions/v1/dbs-control-outbox-worker`,
+  { method: "POST", headers, body: JSON.stringify({ limit: 200 }) },
+  "Execução do worker",
+);
+const responseText = await response.text();
 let payload;
-try {
-  payload = JSON.parse(text);
-} catch {
-  throw new Error(`Worker retornou resposta inválida (${response.status}).`);
+try { payload = JSON.parse(responseText); } catch {
+  throw new Error(`Worker retornou resposta inválida (HTTP ${response.status}).`);
 }
 
-const healthResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/dbs_control_sync_health`, {
-  method: "POST",
-  headers: {
-    apikey: serviceRoleKey,
-    authorization: `Bearer ${serviceRoleKey}`,
-    "content-type": "application/json",
-  },
-  body: "{}",
-  signal: AbortSignal.timeout(30_000),
-});
+const healthResponse = await fetchWithRetry(
+  `${expectedOrigin}/rest/v1/rpc/dbs_control_sync_health`,
+  { method: "POST", headers, body: "{}" },
+  "Leitura da saúde da outbox",
+);
 const healthText = await healthResponse.text();
-if (!healthResponse.ok) throw new Error(`Não foi possível ler a saúde da outbox (${healthResponse.status}).`);
 let healthRaw;
 try { healthRaw = JSON.parse(healthText); } catch { throw new Error("Saúde da outbox retornou JSON inválido."); }
 const health = (Array.isArray(healthRaw) ? healthRaw[0] : healthRaw)?.dbs_control_sync_health
@@ -62,6 +76,6 @@ console.log(JSON.stringify({
   backlogAlert,
 }));
 
-if (!response.ok || Number(payload.failed ?? 0) > 0 || backlogAlert) {
+if (!response.ok || payload.ok !== true || Number(payload.failed ?? 0) > 0 || backlogAlert) {
   process.exitCode = 2;
 }
