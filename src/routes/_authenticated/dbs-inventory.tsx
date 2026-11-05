@@ -8,6 +8,7 @@ import {
   reserveDbsWorkOrderParts,
   settleDbsPartSale,
   settleDbsPurchase,
+  receiveDbsPurchase,
   getDbsInventoryFinancialOverview,
 } from "@/lib/dbs-control.functions";
 
@@ -139,7 +140,7 @@ function DbsInventoryPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
-                  <th className="p-3">Fornecedor</th><th className="p-3">Data</th><th className="p-3">Compra</th><th className="p-3">Pago</th><th className="p-3">Saldo</th><th className="p-3">Pagamento</th><th className="p-3">Ação</th>
+                  <th className="p-3">Fornecedor</th><th className="p-3">Data</th><th className="p-3">Compra</th><th className="p-3">Recebimento</th><th className="p-3">Pago</th><th className="p-3">Saldo</th><th className="p-3">Pagamento</th><th className="p-3">Ação</th>
                 </tr></thead>
                 <tbody>{(data?.purchases ?? []).map((purchase: any) => {
                   const remaining = Math.max(0, Number(purchase.total_cents ?? 0) - Number(purchase.paid_cents ?? 0));
@@ -147,6 +148,13 @@ function DbsInventoryPage() {
                     <td className="p-3 font-bold">{purchase.supplier_name}</td>
                     <td className="p-3">{purchase.purchase_date ? new Date(purchase.purchase_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="p-3">{money(purchase.total_cents)}</td>
+                    <td className="p-3">
+                      {purchase.status === "received" ? <span className="font-bold text-emerald-700">Recebido</span> :
+                        <button type="button" disabled={busy} onClick={() => void runAction(() => receiveDbsPurchase({ data: {
+                          purchaseId: purchase.id,
+                          idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
+                        } }), "Recebimento confirmado: estoque e Ledger atualizados.")} className="min-h-9 rounded-lg bg-sky-700 px-3 text-xs font-black text-white disabled:opacity-40">Receber no estoque</button>}
+                    </td>
                     <td className="p-3">{money(purchase.paid_cents)}</td>
                     <td className="p-3 font-bold">{money(remaining)}</td>
                     <td className="p-3">
