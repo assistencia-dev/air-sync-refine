@@ -20,6 +20,7 @@ const purchaseLifecycle = fs.readFileSync('supabase/migrations/20261105125808_db
 const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_fix_dbs_control_purchase_receipt_status_lock.sql', 'utf8');
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
+const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
@@ -158,6 +159,10 @@ assert.match(purchaseOutboxFix, /dbs_control_inventory_outbox/i);
 assert.match(purchaseOutboxFix, /Purchase registration outbox block was not found/i);
 assert.match(inventoryValueFix, /dbs_control_inventory_financial_overview/i);
 assert.match(inventoryValueFix, /Expected active-only stock valuation filter/i);
+assert.match(workOrderScopeFix, /coalesce\(u\.company_id,v_scope\.company_id\)=v_scope\.company_id/i);
+assert.match(integrationSql, /TEST_OS_CONSUMPTION/i);
+assert.match(integrationSql, /TEST_OS_COST/i);
+assert.match(integrationSql, /TEST_OS_IDEMPOTENCY/i);
 assert.match(integrationSql, /TEST_DRAFT_MOVEMENT/i);
 assert.match(integrationSql, /dbs_control_register_purchase/);
 assert.match(integrationSql, /dbs_control_receive_registered_purchase/);
