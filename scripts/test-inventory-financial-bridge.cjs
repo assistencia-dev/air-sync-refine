@@ -205,6 +205,9 @@ assert.match(functions, /export const settleDbsPartSale/);
 assert.match(functions, /async function resolveDbsPurchasePartIds/);
 assert.match(functions, /A compra não foi integrada: a peça/);
 assert.match(functions, /part_sku: partSku/);
+assert.match(functions, /id: String\(row\.legacy_key \|\| row\.id\)/);
+assert.match(functions, /purchase_id: String\(row\.id\)/);
+
 assert.match(mainHtml, /part_sku: selectedPart && selectedPart\.sku/);
 assert.match(mainHtml, /document\.getElementById\('comp-status'\)\.value === 'received'/);
 
