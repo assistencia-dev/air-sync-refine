@@ -379,7 +379,7 @@ begin
   return query select true, v_status, v_current.id, v_current.protocol, v_current.version,
     v_command.id, v_key, null::text, null::text, v_changed_at;
 end;
-$function$
+$function$;
 
 revoke all on function public.dbs_control_apply_work_order_delta(jsonb) from public, anon, authenticated;
 grant execute on function public.dbs_control_apply_work_order_delta(jsonb) to service_role;
