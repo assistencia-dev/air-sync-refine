@@ -4,22 +4,35 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
-  # Also run immediately after a production commit. This gives us a safe
-  # recovery path when GitHub's scheduled runners are delayed, while the
-  # transactional claim function keeps concurrent executions idempotent.
   push:
     branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: dbs-control-outbox-worker
+  cancel-in-progress: false
+
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate production secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL" || { echo "::error::Secret SUPABASE_URL ausente"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::Secret SUPABASE_SERVICE_ROLE_KEY ausente"; exit 1; }
+          test "$SUPABASE_URL" = "https://gdglototcrehvhkvcqsq.supabase.co" || { echo "::error::SUPABASE_URL não aponta para o projeto oficial"; exit 1; }
 
       - name: Drain transactional outbox
         env:
@@ -33,5 +46,5 @@ jobs:
           {
             echo "## DBS Control outbox: alerta"
             echo ""
-            echo "Falha no worker, backlog acima do SLA ou DLQ não vazia. Verifique pending, idade e retries no painel de observabilidade."
+            echo "Falha no worker, secrets ausentes/incorretos, backlog acima do SLA ou DLQ não vazia. Verifique os logs desta execução."
           } >> "$GITHUB_STEP_SUMMARY"
