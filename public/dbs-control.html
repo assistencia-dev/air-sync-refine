@@ -1953,6 +1953,13 @@
   window.editarServico = function (id) { beginEdit('servicos', id); };
   window.editarCompra = function (id) { beginEdit('compras', id); };
 
+  window.abrirFinanceiroEstoque = function () {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_INVENTORY_FINANCE' }, '*');
+      return;
+    }
+    window.location.href = '/dbs-inventory';
+  };
   window.salvarTecnico = function (event) {
     event.preventDefault();
     var form = document.getElementById('form-tecnico');
@@ -4368,7 +4375,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 </form>
             </div>
             <div class="data-card">
-                <div class="data-header"><h3>Insumos e Peças no Estoque Matriz</h3></div>
+                <div class="data-header"><h3>Insumos e Peças no Estoque Matriz</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Ver custos e financeiro</button></div>
                 <table>
                     <thead><tr><th>SKU</th><th>Descrição</th><th>Estoque</th><th>Custo</th><th>Venda</th></tr></thead>
                     <tbody id="peca-table-body"></tbody>
@@ -4415,7 +4422,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 </form>
             </div>
             <div class="data-card">
-                <div class="data-header"><h3>Pedidos de Compra Registrados</h3></div>
+                <div class="data-header"><h3>Pedidos de Compra Registrados</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Contas a pagar e balanço</button></div>
                 <table>
                     <thead><tr><th>Fornecedor</th><th>Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr></thead>
                     <tbody id="comp-table-body"></tbody>
