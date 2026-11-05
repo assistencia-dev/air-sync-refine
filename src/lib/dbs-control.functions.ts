@@ -3128,7 +3128,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     const [parts, workOrders, reservations, sales, saleSettlements, purchases] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
