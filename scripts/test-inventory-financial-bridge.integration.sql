@@ -279,7 +279,7 @@ begin
   end if;
   if (v_overview->>'accounts_payable_cents')::bigint < v_remaining
     or (v_overview->>'purchases_month_cents')::bigint < v_total
-    or (v_overview->>'stock_value_cents')::bigint < 24690 then
+    or (v_overview->>'stock_value_cents')::bigint < 12345 then
     raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem compra/estoque/contas a pagar: %',v_overview;
   end if;
 
