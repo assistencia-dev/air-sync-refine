@@ -168,7 +168,7 @@ declare
   v_new_stock numeric;
   v_old_cost integer;
   v_new_cost integer;
-  v_unit_cost integer;
+  v_part_status text;
   v_total bigint := 0;
   v_ledger jsonb;
   v_ledger_id uuid;
@@ -202,6 +202,9 @@ begin
 
   perform pg_advisory_xact_lock(hashtextextended(v_purchase.scope_key||':purchase-receive:'||p_purchase_id::text,0));
 
+  select coalesce(sum(total_cents),0)::bigint into v_total
+    from public.dbs_control_purchase_items where purchase_id=p_purchase_id;
+
   for v_item in
     select pi.part_id,
            sum(pi.quantity)::numeric as quantity,
@@ -212,17 +215,14 @@ begin
      order by pi.part_id
   loop
     select stock_quantity,cost_cents,status
-      into v_stock,v_old_cost,v_unit_cost
+      into v_stock,v_old_cost,v_part_status
       from public.dbs_control_parts
      where id=v_item.part_id
      for update;
     if not found then
       raise exception 'DBS_PART_NOT_FOUND: peça % não existe.',v_item.part_id using errcode='23503';
     end if;
-    if v_unit_cost::text is null then
-      raise exception 'DBS_PART_INACTIVE: peça % indisponível.',v_item.part_id using errcode='23514';
-    end if;
-    if not exists(select 1 from public.dbs_control_parts where id=v_item.part_id and status='ativo') then
+    if v_part_status<>'ativo' then
       raise exception 'DBS_PART_INACTIVE: ative a peça % antes do recebimento.',v_item.part_id using errcode='23514';
     end if;
     v_new_stock := coalesce(v_stock,0)+v_item.quantity;
@@ -241,13 +241,12 @@ begin
       left('purchase:'||p_purchase_id::text||':receipt:'||v_item.part_id::text,240),
       p_actor_user_id,jsonb_build_object('source','purchase_receive','purchase_id',p_purchase_id,'receipt_request',v_key)
     ) on conflict(scope_key,idempotency_key) do nothing;
-    v_total := v_total+round(v_item.quantity*v_item.unit_cost_cents)::bigint;
     v_movement_count := v_movement_count+1;
   end loop;
   if v_movement_count=0 then
     raise exception 'DBS_PURCHASE_ITEMS_EMPTY: compra sem itens para receber.' using errcode='22023';
   end if;
-  if v_total<>v_purchase.total_cents then
+  if v_total<=0 or v_total<>v_purchase.total_cents then
     raise exception 'DBS_PURCHASE_TOTAL_MISMATCH: total dos itens difere do total registrado.' using errcode='23514';
   end if;
   v_ledger := public.post_treasury_ledger_entry(
