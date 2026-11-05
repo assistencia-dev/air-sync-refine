@@ -78,9 +78,9 @@ assert.match(idempotencyGuard, /dbs_control_receive_purchase_safe/i);
 assert.match(idempotencyGuard, /payload_hash/i);
 assert.match(idempotencyGuard, /pg_advisory_xact_lock/i);
 
-assert.match(functions, /dbs_control_receive_purchase/);
+assert.match(functions, /dbs_control_receive_registered_purchase/);
 assert.match(functions, /dbs_control_upsert_part/);
-assert.match(functions, /dbs_control_receive_purchase_safe/);
+assert.match(functions, /export const receiveDbsPurchase/);
 assert.match(functions, /dbs_control_upsert_part_safe/);
 assert.match(functions, /appliedParts/);
 assert.match(functions, /purchaseLineItems/);
