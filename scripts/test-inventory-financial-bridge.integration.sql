@@ -9,10 +9,15 @@ declare
   v_company uuid;
   v_scope text;
   v_part uuid;
+  v_part2 uuid;
   v_before_stock numeric;
   v_before_cost integer;
+  v_before_stock2 numeric;
+  v_before_cost2 integer;
   v_after_stock numeric;
   v_after_cost integer;
+  v_after_stock2 numeric;
+  v_after_cost2 integer;
   v_key text := 'integration-test:' || gen_random_uuid()::text;
   v_payload jsonb;
   v_result jsonb;
@@ -20,6 +25,8 @@ declare
   v_purchase uuid;
   v_ledger uuid;
   v_receipt_ledger uuid;
+  v_revenue_entry uuid;
+  v_revenue_cents bigint;
   v_work_order uuid;
   v_batch uuid;
   v_os_result jsonb;
@@ -60,10 +67,18 @@ begin
   if v_part is null then
     raise exception 'TEST_SETUP: cadastre ao menos uma peça para executar o teste transacional.';
   end if;
+  select id, stock_quantity, cost_cents
+    into v_part2, v_before_stock2, v_before_cost2
+    from public.dbs_control_parts
+   where id <> v_part
+   order by created_at, id
+   limit 1;
+  if v_part2 is null then
+    raise exception 'TEST_SETUP: são necessárias duas peças distintas para testar uma compra com dois itens.';
+  end if;
 
-  -- The current catalog contains inactive legacy parts. Reactivation is local
-  -- to this transaction and is rolled back after the assertions.
-  update public.dbs_control_parts set status = 'ativo' where id = v_part;
+  -- Reactivation is transaction-local; the full test rolls back.
+  update public.dbs_control_parts set status = 'ativo' where id in (v_part, v_part2);
 
   v_payload := jsonb_build_object(
     'actor_user_id', v_actor,
@@ -75,11 +90,10 @@ begin
     'payment_status', 'unpaid',
     'idempotency_key', v_key,
     'legacy_key', v_key,
-    'items', jsonb_build_array(jsonb_build_object(
-      'part_id', v_part,
-      'quantity', 2,
-      'unit_cost_cents', 12345
-    ))
+    'items', jsonb_build_array(
+      jsonb_build_object('part_id', v_part, 'quantity', 2, 'unit_cost_cents', 12345),
+      jsonb_build_object('part_id', v_part2, 'quantity', 1, 'unit_cost_cents', 11111)
+    )
   );
 
   v_result := public.dbs_control_register_purchase(v_payload);
@@ -133,17 +147,24 @@ begin
       v_after_cost;
   end if;
 
+  select stock_quantity, cost_cents into v_after_stock2, v_after_cost2
+    from public.dbs_control_parts where id = v_part2;
+  if v_after_stock2 <> coalesce(v_before_stock2, 0) + 1
+     or v_after_cost2 <> round(((coalesce(v_before_stock2, 0) * coalesce(v_before_cost2, 0)) + 11111) / (coalesce(v_before_stock2, 0) + 1))::integer then
+    raise exception 'TEST_SECOND_ITEM_STOCK: saldo/custo médio incorreto para o segundo item: %, %.', v_after_stock2, v_after_cost2;
+  end if;
+
   select count(*) into v_movement_count
     from public.dbs_control_inventory_movements
    where purchase_id = v_purchase and movement_type = 'receipt';
-  if v_movement_count <> 1 then
-    raise exception 'TEST_MOVEMENT_IDEMPOTENCY: esperada exatamente 1 entrada; encontradas %.', v_movement_count;
+  if v_movement_count <> 2 then
+    raise exception 'TEST_MOVEMENT_IDEMPOTENCY: esperadas exatamente 2 entradas (uma por item); encontradas %.', v_movement_count;
   end if;
 
   select total_cents into v_total
     from public.dbs_control_purchases where id = v_purchase;
-  if v_total <> 24690 then
-    raise exception 'TEST_PURCHASE_TOTAL: esperado 24690 centavos, recebido %.', v_total;
+  if v_total <> 35801 then
+    raise exception 'TEST_PURCHASE_TOTAL: esperado 35801 centavos, recebido %.', v_total;
   end if;
 
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
@@ -175,8 +196,8 @@ begin
   end if;
   select total_cents-paid_cents into v_remaining
     from public.dbs_control_purchases where id=v_purchase;
-  if v_remaining <> 14690 then
-    raise exception 'TEST_ACCOUNTS_PAYABLE: saldo esperado 14690, recebido %.',v_remaining;
+  if v_remaining <> 25801 then
+    raise exception 'TEST_ACCOUNTS_PAYABLE: saldo esperado 25801, recebido %.',v_remaining;
   end if;
 
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
@@ -190,7 +211,9 @@ begin
   -- rollback-only transaction: stock decreases once and parts COGS is posted.
   select w.id into v_work_order
     from public.dbs_control_work_orders w
-   where w.created_by_user_id = v_actor
+    cross join lateral public.dbs_control_inventory_scope_for_work_order(w.id) s
+   where s.scope_key = v_scope
+     and lower(trim(coalesce(w.status,''))) not in ('concluida','concluída','concluido','concluído','cancelada','cancelado','cancelled','canceled')
      and w.deleted_at is null
      and not exists(select 1 from public.dbs_control_reservation_consumptions rc where rc.work_order_id=w.id)
      and not exists(select 1 from public.dbs_control_work_order_reservations rr where rr.work_order_id=w.id)
@@ -267,6 +290,26 @@ begin
     raise exception 'TEST_OS_IDEMPOTENCY: replay duplicou baixa de estoque.';
   end if;
 
+  -- Close the OS with an explicit service amount; the revenue trigger must
+  -- post receivable/revenue to the Ledger exactly once.
+  update public.dbs_control_work_orders
+     set status = 'concluida', total_cents = 50000, completed_at = now()
+   where id = v_work_order;
+
+  select revenue_entry_id, revenue_cents
+    into v_revenue_entry, v_revenue_cents
+    from public.dbs_control_work_order_financials
+   where work_order_id = v_work_order;
+  if v_revenue_entry is null or v_revenue_cents <> 50000 then
+    raise exception 'TEST_OS_REVENUE: fechamento da OS não reconheceu receita: %, %.', v_revenue_entry, v_revenue_cents;
+  end if;
+  select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
+    into v_debits, v_credits
+    from public.treasury_ledger_lines where entry_id = v_revenue_entry;
+  if v_debits <> 50000 or v_credits <> 50000 then
+    raise exception 'TEST_OS_REVENUE_LEDGER: lançamento de receita não balanceado (%, %).', v_debits, v_credits;
+  end if;
+
   v_overview := public.dbs_control_inventory_financial_overview(v_actor);
   if not (v_overview ? 'stock_value_cents'
       and v_overview ? 'purchases_month_cents'
@@ -279,8 +322,12 @@ begin
   end if;
   if (v_overview->>'accounts_payable_cents')::bigint < v_remaining
     or (v_overview->>'purchases_month_cents')::bigint < v_total
-    or (v_overview->>'stock_value_cents')::bigint < 12345 then
-    raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem compra/estoque/contas a pagar: %',v_overview;
+    or (v_overview->>'stock_value_cents')::bigint <= 0
+    or (v_overview->>'operating_cost_cents')::bigint <= 0
+    or (v_overview->>'revenue_cents')::bigint <= 0
+    or (v_overview->>'gross_profit_cents')::bigint <= 0
+    or (v_overview->>'gross_margin_pct')::numeric <= 0 then
+    raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem todos os fluxos com valores positivos: %',v_overview;
   end if;
 
   raise notice 'PASS: purchase registration -> AP without stock -> explicit receipt once -> weighted average -> balanced reclassification -> partial supplier payment -> OS stock consumption once -> parts COGS -> balanced Ledger -> management metrics.';
