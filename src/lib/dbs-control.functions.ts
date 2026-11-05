@@ -3126,7 +3126,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
         .order("name").limit(500),
@@ -3147,8 +3147,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_purchases")
         .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
+      (supabaseAdmin as any).from("dbs_control_work_order_financials")
+        .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")
+        .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     return {
@@ -3158,5 +3161,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       sales: sales.data ?? [],
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
+      workOrderFinancials: workOrderFinancials.data ?? [],
     };
   });
