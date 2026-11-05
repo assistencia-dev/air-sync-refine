@@ -215,6 +215,8 @@ assert.match(mainHtml, /document\.getElementById\('comp-status'\)\.value === 're
 assert.match(functions, /requireDbsInventoryAdmin/);
 
 
+assert.match(functions, /export const reconcileDbsWorkOrderFinancials/);
+assert.match(functions, /dbs_control_reconcile_work_order_financials/);
 assert.match(scopeSkuMigration, /dbs_control_parts_sku_normalized_uidx/i);
 assert.match(scopeSkuMigration, /dbs_control_normalize_part_sku/i);
 assert.match(scopeSkuMigration, /admin_count = 1/i);
