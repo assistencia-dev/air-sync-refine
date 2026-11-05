@@ -7,6 +7,8 @@ import {
   releaseDbsWorkOrderReservation,
   reserveDbsWorkOrderParts,
   settleDbsPartSale,
+  settleDbsPurchase,
+  getDbsInventoryFinancialOverview,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -24,6 +26,11 @@ function DbsInventoryPage() {
     queryFn: () => getDbsPhase2InventoryOverview(),
     retry: 1,
   });
+  const financial = useQuery({
+    queryKey: ["dbs-inventory-financial-overview"],
+    queryFn: () => getDbsInventoryFinancialOverview(),
+    retry: 1,
+  });
   const [tab, setTab] = useState<"sales" | "reservations">("sales");
   const [partId, setPartId] = useState("");
   const [workOrderId, setWorkOrderId] = useState("");
@@ -31,6 +38,8 @@ function DbsInventoryPage() {
   const [clientId, setClientId] = useState("");
   const [salePrice, setSalePrice] = useState("");
   const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
+  const [purchasePaymentAmounts, setPurchasePaymentAmounts] = useState<Record<string, string>>({});
+  const [purchasePaymentMethods, setPurchasePaymentMethods] = useState<Record<string, "cash" | "pix" | "bank_transfer" | "card" | "other">>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -49,7 +58,7 @@ function DbsInventoryPage() {
     try {
       await action();
       setMessage(success);
-      await overview.refetch();
+      await Promise.all([overview.refetch(), financial.refetch()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
     } finally {
@@ -94,6 +103,23 @@ function DbsInventoryPage() {
         {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</div>}
 
         {data && <>
+          {financial.data && <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Valor em estoque", financial.data.stock_value_cents],
+              ["Compras do mês", financial.data.purchases_month_cents],
+              ["Contas a pagar", financial.data.accounts_payable_cents],
+              ["Custo operacional", financial.data.operating_cost_cents],
+              ["Receita de OS", financial.data.revenue_cents],
+              ["Lucro bruto", financial.data.gross_profit_cents],
+            ].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-bold text-slate-500">{label}</p>
+              <p className="mt-1 text-xl font-black">{money(value)}</p>
+            </div>)}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-bold text-slate-500">Margem bruta</p>
+              <p className="mt-1 text-xl font-black">{Number(financial.data.gross_margin_pct ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</p>
+            </div>
+          </section>}
           <section className="mb-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
@@ -105,6 +131,46 @@ function DbsInventoryPage() {
             <button type="button" onClick={() => setTab("reservations")} className={tab === "reservations" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Reservas de OS</button>
           </div>
 
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 p-5">
+              <h2 className="text-lg font-black">Compras e contas a pagar</h2>
+              <p className="mt-1 text-sm text-slate-500">Cada compra recebida gera a obrigação no Ledger. Os pagamentos baixam fornecedores e caixa com partidas dobradas.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
+                  <th className="p-3">Fornecedor</th><th className="p-3">Data</th><th className="p-3">Compra</th><th className="p-3">Pago</th><th className="p-3">Saldo</th><th className="p-3">Pagamento</th><th className="p-3">Ação</th>
+                </tr></thead>
+                <tbody>{(data?.purchases ?? []).map((purchase: any) => {
+                  const remaining = Math.max(0, Number(purchase.total_cents ?? 0) - Number(purchase.paid_cents ?? 0));
+                  return <tr key={purchase.id} className="border-t border-slate-100">
+                    <td className="p-3 font-bold">{purchase.supplier_name}</td>
+                    <td className="p-3">{purchase.purchase_date ? new Date(purchase.purchase_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
+                    <td className="p-3">{money(purchase.total_cents)}</td>
+                    <td className="p-3">{money(purchase.paid_cents)}</td>
+                    <td className="p-3 font-bold">{money(remaining)}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <input aria-label={"Valor a pagar para " + purchase.supplier_name} type="number" min="0.01" step="0.01" max={(remaining / 100).toFixed(2)} value={purchasePaymentAmounts[purchase.id] ?? ""} onChange={e => setPurchasePaymentAmounts(prev => ({ ...prev, [purchase.id]: e.target.value }))} className="w-24 rounded-lg border border-slate-200 px-2 py-1" placeholder="R$" />
+                        <select aria-label="Meio de pagamento" value={purchasePaymentMethods[purchase.id] ?? "pix"} onChange={e => setPurchasePaymentMethods(prev => ({ ...prev, [purchase.id]: e.target.value as any }))} className="rounded-lg border border-slate-200 px-2 py-1">
+                          <option value="pix">Pix</option><option value="bank_transfer">Transferência</option><option value="cash">Dinheiro</option><option value="card">Cartão</option><option value="other">Outro</option>
+                        </select>
+                      </div>
+                    </td>
+                    <td className="p-3"><button type="button" disabled={busy || remaining <= 0 || Number(purchasePaymentAmounts[purchase.id]) <= 0} onClick={() => {
+                      const amountCents = Math.round(Number(purchasePaymentAmounts[purchase.id]) * 100);
+                      void runAction(() => settleDbsPurchase({ data: {
+                        purchaseId: purchase.id,
+                        amountCents,
+                        paymentMethod: purchasePaymentMethods[purchase.id] ?? "pix",
+                        idempotencyKey: "purchase-payment:" + purchase.id + ":" + crypto.randomUUID(),
+                      } }), "Pagamento contabilizado no DBS Treasury.");
+                    }} className="min-h-9 rounded-lg bg-sky-700 px-3 text-xs font-black text-white disabled:opacity-40">Baixar</button></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </div>
           {tab === "sales" ? <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
             <form onSubmit={createSale} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-black">Nova venda avulsa</h2>
