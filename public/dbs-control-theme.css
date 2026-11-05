@@ -596,3 +596,30 @@ body:not(.dbs-control-employee-mode) > aside .brand-title {
   }
 
 }
+
+/* ==== DBS AIR unified visual layer (2026-11) — presentation only ==== */
+:root{--dbs-ui-blue:#1769d1;--dbs-ui-navy:#0b2745;--dbs-ui-line:#e2e8f0;--dbs-ui-soft:#f6f9fc;--dbs-ui-text:#0f172a;--dbs-ui-muted:#64748b;--dbs-ui-radius:12px;--dbs-ui-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -16px rgba(11,39,69,.18)}
+body{color:var(--dbs-ui-text);text-rendering:optimizeLegibility}
+.data-card,.metric-card,.card{border-radius:var(--dbs-ui-radius);box-shadow:var(--dbs-ui-shadow)}
+.data-header h2,.data-header h3,.tab-view>h2{letter-spacing:-.01em;font-weight:800}
+.btn,button{transition:background-color .15s ease,box-shadow .15s ease,transform .1s ease}
+.btn:active,button:active{transform:translateY(1px)}
+button:disabled,.btn:disabled,.btn[disabled],input:disabled,select:disabled,textarea:disabled{opacity:.55;cursor:not-allowed;transform:none}
+:where(a,button,.btn,.nav-item,[role="button"],input,select,textarea,summary):focus-visible{outline:3px solid rgba(23,105,209,.35)!important;outline-offset:2px}
+input,select,textarea{border-radius:8px}
+input:focus,select:focus,textarea:focus{border-color:var(--dbs-ui-blue)!important;box-shadow:0 0 0 3px rgba(23,105,209,.14)!important}
+table th{color:#475569;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase}
+table td{vertical-align:middle}
+.empty-state,td[colspan]{color:var(--dbs-ui-muted)}
+.table-responsive{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+@media (max-width:760px){
+  .tab-view{min-width:0;max-width:100%}
+  .data-card{padding:14px!important}
+  .data-card>table,.tab-view table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .form-grid,.grid-2,.grid-3,.form-row{grid-template-columns:minmax(0,1fr)!important}
+  .btn,button:not(.dbs-icon-only),select,input:not([type=checkbox]):not([type=radio]),.nav-item{min-height:44px}
+  input,select,textarea{font-size:16px!important}
+  .filter-bar{display:flex;flex-wrap:wrap;gap:8px}
+  .filter-bar>*{flex:1 1 140px;min-width:0}
+}
+@media (prefers-reduced-motion:reduce){.btn,button{transition:none}}

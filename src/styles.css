@@ -562,3 +562,13 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
 @media (prefers-reduced-motion: reduce) {
   .admin-mobile-nav-item, .admin-mobile-menu-item { transition: none !important; }
 }
+
+/* ==== DBS AIR unified visual layer (2026-11) — presentation only ==== */
+:where(a,button,[role="button"],input,select,textarea,summary):focus-visible{outline:3px solid color-mix(in oklab,var(--primary) 40%,transparent);outline-offset:2px}
+button:disabled,input:disabled,select:disabled,textarea:disabled{cursor:not-allowed}
+table{font-variant-numeric:tabular-nums}
+@media (max-width:767px){
+  main table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  main button,main select,main input:not([type=checkbox]):not([type=radio]),main a[role="button"]{min-height:44px}
+  main input,main select,main textarea{font-size:16px}
+}
