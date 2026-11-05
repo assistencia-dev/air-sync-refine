@@ -20,6 +20,14 @@ declare
   v_purchase uuid;
   v_ledger uuid;
   v_receipt_ledger uuid;
+  v_work_order uuid;
+  v_batch uuid;
+  v_os_result jsonb;
+  v_os_replay jsonb;
+  v_os_ledger uuid;
+  v_os_cost_before bigint := 0;
+  v_os_cost_after bigint := 0;
+  v_os_movement_count integer := 0;
   v_payment jsonb;
   v_payment_ledger uuid;
   v_total bigint;
@@ -178,6 +186,87 @@ begin
     raise exception 'TEST_PAYMENT_LEDGER: baixa não balanceada (débito %, crédito %).', v_debits, v_credits;
   end if;
 
+  -- Exercise the existing OS reservation consumption RPC in the same
+  -- rollback-only transaction: stock decreases once and parts COGS is posted.
+  select w.id into v_work_order
+    from public.dbs_control_work_orders w
+   where w.created_by_user_id = v_actor
+     and w.deleted_at is null
+     and not exists(select 1 from public.dbs_control_reservation_consumptions rc where rc.work_order_id=w.id)
+     and not exists(select 1 from public.dbs_control_work_order_reservations rr where rr.work_order_id=w.id)
+   order by w.created_at desc
+   limit 1;
+  if v_work_order is null then
+    raise exception 'TEST_OS_SETUP: não foi encontrada OS de teste sem consumo anterior.';
+  end if;
+
+  insert into public.dbs_control_reservation_batches(
+    scope_key,company_id,work_order_id,idempotency_key,created_by
+  ) values(
+    v_scope,v_company,v_work_order,v_key||':os-batch',v_actor
+  ) returning id into v_batch;
+
+  update public.dbs_control_parts
+     set reserved_quantity=coalesce(reserved_quantity,0)+1
+   where id=v_part;
+
+  insert into public.dbs_control_work_order_reservations(
+    batch_id,scope_key,company_id,work_order_id,part_id,quantity,unit_cost_cents,
+    status,idempotency_key,created_by
+  ) values(
+    v_batch,v_scope,v_company,v_work_order,v_part,1,12345,
+    'reserved',v_key||':os-reservation',v_actor
+  );
+
+  select coalesce(parts_cost_cents,0) into v_os_cost_before
+    from public.dbs_control_work_order_financials where work_order_id=v_work_order;
+  v_os_cost_before := coalesce(v_os_cost_before,0);
+
+  v_os_result := public.dbs_control_consume_work_order_reservations(
+    v_work_order,v_actor,v_key||':os-consume'
+  );
+  v_os_ledger := nullif(v_os_result->>'ledger_entry_id','')::uuid;
+  if (v_os_result->>'cost_cents')::bigint <> 12345 or v_os_ledger is null then
+    raise exception 'TEST_OS_CONSUMPTION: consumo não lançou custo/ledger corretamente: %',v_os_result;
+  end if;
+
+  select stock_quantity into v_after_stock from public.dbs_control_parts where id=v_part;
+  if v_after_stock <> coalesce(v_before_stock,0)+1 then
+    raise exception 'TEST_OS_STOCK: esperado saldo após consumo %, recebido %.',coalesce(v_before_stock,0)+1,v_after_stock;
+  end if;
+  select count(*) into v_os_movement_count
+    from public.dbs_control_inventory_movements
+   where work_order_id=v_work_order and part_id=v_part and movement_type='consume';
+  if v_os_movement_count <> 1 then
+    raise exception 'TEST_OS_MOVEMENT: esperado 1 movimento de consumo, encontrados %.',v_os_movement_count;
+  end if;
+
+  select parts_cost_cents into v_os_cost_after
+    from public.dbs_control_work_order_financials where work_order_id=v_work_order;
+  if coalesce(v_os_cost_after,0) <> v_os_cost_before+12345 then
+    raise exception 'TEST_OS_COST: custo operacional esperado %, recebido %.',v_os_cost_before+12345,v_os_cost_after;
+  end if;
+
+  select coalesce(sum(debit_cents),0),coalesce(sum(credit_cents),0)
+    into v_debits,v_credits
+    from public.treasury_ledger_lines where entry_id=v_os_ledger;
+  if v_debits<>v_credits or v_debits<>12345 then
+    raise exception 'TEST_OS_LEDGER: COGS não balanceado (débito %, crédito %).',v_debits,v_credits;
+  end if;
+
+  v_os_replay := public.dbs_control_consume_work_order_reservations(
+    v_work_order,v_actor,v_key||':os-consume-retry'
+  );
+  if coalesce((v_os_replay->>'replayed')::boolean,false) is not true then
+    raise exception 'TEST_OS_IDEMPOTENCY: repetição do consumo não foi reconhecida como replay.';
+  end if;
+  select count(*) into v_os_movement_count
+    from public.dbs_control_inventory_movements
+   where work_order_id=v_work_order and part_id=v_part and movement_type='consume';
+  if v_os_movement_count <> 1 then
+    raise exception 'TEST_OS_IDEMPOTENCY: replay duplicou baixa de estoque.';
+  end if;
+
   v_overview := public.dbs_control_inventory_financial_overview(v_actor);
   if not (v_overview ? 'stock_value_cents'
       and v_overview ? 'purchases_month_cents'
@@ -194,7 +283,7 @@ begin
     raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem compra/estoque/contas a pagar: %',v_overview;
   end if;
 
-  raise notice 'PASS: purchase registration -> AP without stock -> explicit receipt exactly once -> weighted average -> balanced AP/stock reclassification -> partial payment -> balanced cash Ledger -> management metrics.';
+  raise notice 'PASS: purchase registration -> AP without stock -> explicit receipt once -> weighted average -> balanced reclassification -> partial supplier payment -> OS stock consumption once -> parts COGS -> balanced Ledger -> management metrics.';
 end;
 $test$;
 
