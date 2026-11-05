@@ -157,7 +157,7 @@ function DbsInventoryPage() {
                         </select>
                       </div>
                     </td>
-                    <td className="p-3"><button type="button" disabled={busy || remaining <= 0 || Number(purchasePaymentAmounts[purchase.id]) <= 0} onClick={() => {
+                    <td className="p-3"><button type="button" disabled={busy || remaining <= 0 || !(Number(purchasePaymentAmounts[purchase.id]) > 0)} onClick={() => {
                       const amountCents = Math.round(Number(purchasePaymentAmounts[purchase.id]) * 100);
                       void runAction(() => settleDbsPurchase({ data: {
                         purchaseId: purchase.id,
