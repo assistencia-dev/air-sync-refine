@@ -194,10 +194,10 @@ function DbsInventoryPage() {
             </div>
           </section>}
           <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Custos por ordem de serviço</h2><p className="mt-1 text-sm text-slate-500">Custo de peças efetivamente consumidas, receita registrada e contribuição bruta por OS.</p></div>
+            <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Custos por ordem de serviço</h2><p className="mt-1 text-sm text-slate-500">Custo de peças consumidas e receita registrada por OS. A margem exibida considera peças, não mão de obra.</p></div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Status financeiro</th><th className="p-3">Custo de peças</th><th className="p-3">Receita</th><th className="p-3">Contribuição bruta</th><th className="p-3">Margem</th></tr></thead>
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Status financeiro</th><th className="p-3">Custo de peças</th><th className="p-3">Receita</th><th className="p-3">Receita menos peças</th><th className="p-3">Margem após peças</th></tr></thead>
                 <tbody>{workOrderFinancials.map((row: any) => {
                   const order = workOrders.find((entry: any) => String(entry.id) === String(row.work_order_id));
                   const revenue = Number(row.revenue_cents ?? 0);
