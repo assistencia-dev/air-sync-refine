@@ -69,6 +69,7 @@ function DbsInventoryPage() {
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
   const sales = data?.sales ?? [];
+  const workOrderFinancials = data?.workOrderFinancials ?? [];
 
   useEffect(() => {
     if (!parts.length || !quoteImport.items.length) return;
