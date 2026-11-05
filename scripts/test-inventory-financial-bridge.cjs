@@ -14,6 +14,7 @@ const purchaseFkIndex = fs.readFileSync('supabase/migrations/20261031042759_dbs_
 const partCostGuard = fs.readFileSync('supabase/migrations/20261031043439_dbs_control_part_cost_guard.sql', 'utf8');
 const idempotencyGuard = fs.readFileSync('supabase/migrations/20261031051656_dbs_control_inventory_idempotency_guard.sql', 'utf8');
 const phase2 = fs.readFileSync('supabase/migrations/20261103180000_dbs_phase2_sales_reservations.sql', 'utf8');
+const settlement = fs.readFileSync('supabase/migrations/20261105103000_dbs_control_purchase_settlement_and_financial_overview.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
@@ -139,6 +140,26 @@ assert.match(functions, /export const reserveDbsWorkOrderParts/);
 assert.match(functions, /export const releaseDbsWorkOrderReservation/);
 assert.match(functions, /export const consumeDbsWorkOrderReservations/);
 assert.match(functions, /export const createDbsPartSale/);
+assert.match(settlement, /create table if not exists public\\.dbs_control_purchase_payments/i);
+assert.match(settlement, /create or replace function public\\.dbs_control_settle_purchase/i);
+assert.match(settlement, /create or replace function public\\.dbs_control_inventory_financial_overview/i);
+assert.match(settlement, /pg_advisory_xact_lock/i);
+assert.match(settlement, /payload_hash/i);
+assert.match(settlement, /'2\\.1\\.01'/);
+assert.match(settlement, /'1\\.1\\.01'/);
+assert.match(settlement, /revoke all on function public\\.dbs_control_settle_purchase/i);
+assert.match(settlement, /grant execute on function public\\.dbs_control_settle_purchase.*to service_role/i);
+assert.match(functions, /export const settleDbsPurchase/);
+assert.match(functions, /export const getDbsInventoryFinancialOverview/);
+assert.match(functions, /payment_status: 'unpaid'/);
+assert.match(functions, /paid_cents/);
+assert.match(phase2Ui, /Compras e contas a pagar/);
+assert.match(phase2Ui, /settleDbsPurchase/);
+assert.match(phase2Ui, /gross_margin_pct/);
+assert.match(mainHtml, /id="peca-status"/);
+assert.match(mainHtml, /status: document\\.getElementById\\('peca-status'\\)/);
+assert.match(mainHtml, /status: 'Recebido'/);
+
 assert.match(functions, /export const settleDbsPartSale/);
 assert.match(functions, /requireDbsInventoryAdmin/);
 
