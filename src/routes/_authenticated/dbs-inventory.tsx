@@ -161,8 +161,8 @@ function DbsInventoryPage() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · FASE 2</p>
-            <h1 className="mt-1 text-2xl font-black">Estoque, vendas e reservas</h1>
-            <p className="mt-1 text-sm text-slate-500">Operações administrativas com baixa transacional e trilha contábil.</p>
+            <h1 className="mt-1 text-2xl font-black">Compras, estoque e balanço de custos</h1>
+            <p className="mt-1 text-sm text-slate-500">Cotações convertidas em pedidos, custos por OS, recebimentos e obrigações do Ledger.</p>
           </div>
           <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>
         </header>
@@ -172,7 +172,11 @@ function DbsInventoryPage() {
         {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</div>}
 
         {data && <>
-          {financial.data && <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {financial.isLoading && <p className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Carregando balanço de custos e rentabilidade...</p>}
+          {financial.error && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Não foi possível carregar o balanço financeiro: {financial.error instanceof Error ? financial.error.message : "Falha ao consultar os indicadores."}</div>}
+          {financial.data && <section className="mb-5">
+            <div className="mb-3"><h2 className="text-lg font-black">Balanço de custos e rentabilidade</h2><p className="text-xs text-slate-500">Valores consolidados do Ledger e do estoque relacional.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Valor em estoque", financial.data.stock_value_cents],
               ["Compras do mês", financial.data.purchases_month_cents],
@@ -189,6 +193,30 @@ function DbsInventoryPage() {
               <p className="mt-1 text-xl font-black">{Number(financial.data.gross_margin_pct ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</p>
             </div>
           </section>}
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Custos por ordem de serviço</h2><p className="mt-1 text-sm text-slate-500">Custo de peças efetivamente consumidas, receita registrada e contribuição bruta por OS.</p></div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Status financeiro</th><th className="p-3">Custo de peças</th><th className="p-3">Receita</th><th className="p-3">Contribuição bruta</th><th className="p-3">Margem</th></tr></thead>
+                <tbody>{workOrderFinancials.map((row: any) => {
+                  const order = workOrders.find((entry: any) => String(entry.id) === String(row.work_order_id));
+                  const revenue = Number(row.revenue_cents ?? 0);
+                  const cost = Number(row.parts_cost_cents ?? 0);
+                  const contribution = revenue - cost;
+                  const margin = revenue > 0 ? (contribution / revenue) * 100 : null;
+                  return <tr key={row.work_order_id} className="border-t border-slate-100">
+                    <td className="p-3 font-bold">{order?.protocol || String(row.work_order_id).slice(0, 8)}</td>
+                    <td className="p-3">{row.status || "pending"}</td>
+                    <td className="p-3">{money(cost)}</td>
+                    <td className="p-3">{money(revenue)}</td>
+                    <td className={"p-3 font-bold " + (contribution < 0 ? "text-rose-700" : "text-emerald-700")}>{money(contribution)}</td>
+                    <td className="p-3">{margin === null ? "Sem receita registrada" : margin.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + "%"}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+              {!workOrderFinancials.length && <p className="p-5 text-sm text-slate-500">Ainda não há custos por OS conciliados neste escopo. Os valores aparecerão conforme as peças forem consumidas e a receita for registrada.</p>}
+            </div>
+          </section>
           <section className="mb-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
