@@ -202,6 +202,12 @@ assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(integrationSql, /integration_test_status/);
 
 assert.match(functions, /export const settleDbsPartSale/);
+assert.match(functions, /async function resolveDbsPurchasePartIds/);
+assert.match(functions, /A compra não foi integrada: a peça/);
+assert.match(functions, /part_sku: partSku/);
+assert.match(mainHtml, /part_sku: selectedPart && selectedPart\.sku/);
+assert.match(mainHtml, /document\.getElementById\('comp-status'\)\.value === 'received'/);
+
 assert.match(functions, /requireDbsInventoryAdmin/);
 
 
