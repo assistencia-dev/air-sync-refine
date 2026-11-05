@@ -309,10 +309,7 @@
     var target = new URL("/dbs-inventory", window.location.origin);
     target.searchParams.set("quote_id", String(quote.id));
     target.searchParams.set("purchase_items", JSON.stringify(items));
-    var opened = window.open(target.toString(), "_blank", "noopener");
-    if (!opened) {
-      alert("O navegador bloqueou a nova aba. Libere pop-ups para abrir Compras Inteligentes.");
-    }
+    window.open(target.toString(), "_blank", "noopener,noreferrer");
   }
 
   function pdf(id) {
