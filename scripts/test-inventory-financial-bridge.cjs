@@ -205,7 +205,7 @@ assert.match(functions, /payment_status: 'unpaid'/);
 assert.match(functions, /paid_cents/);
 assert.match(phase2Ui, /Compras e contas a pagar/);
 assert.match(phase2Ui, /Custos por ordem de serviço/);
-assert.match(functions, /workOrderFinancials: workOrderFinancials\\.data/);
+assert.match(functions, /workOrderFinancials: workOrderFinancials\.data/);
 assert.match(functions, /dbs_control_work_order_financials/);
 assert.match(phase2Ui, /settleDbsPurchase/);
 assert.match(phase2Ui, /gross_margin_pct/);
