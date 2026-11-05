@@ -202,7 +202,7 @@ assert.match(route, /msg\.type === ["']DBS_CONTROL_READY["']/, "A rota deve sinc
 assert.match(route, /const persist = async \(\) => \{[\s\S]*?applyDbsControlDelta/, "O salvamento na nuvem precisa ser processado por deltas.");
 assert.match(route, /saveQueueRef = useRef<Promise<void>>\(Promise\.resolve\(\)\)/, "Os salvamentos em um mesmo dispositivo devem ser serializados para evitar gravações fora de ordem.");
 assert.match(route, /saveQueueRef\.current = saveQueueRef\.current\.then\(persist, persist\)/, "Cada gravação deve aguardar a anterior mesmo quando a anterior falhar.");
-assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
+assert.match(route, /v=2026\\d{4}-[a-z-]+-\\d+/, "A tela do DBS Control deve usar uma versão de URL nova para evitar HTML antigo em cache no celular.");
 assert.match(html, /dbs-employee-issue-cta/, "O colaborador autorizado precisa ter uma ação de emissão visível mesmo com o menu lateral recolhido.");
 assert.match(html, /dbs-employee-menu-final-20261026/, "O colaborador precisa de um menu único e preenchido, sem uma segunda navegação no cabeçalho.");
 assert.match(html, /data-employee-visible=["']true["']/, "O menu do colaborador precisa conter Dashboard e Minhas OS.");
@@ -383,7 +383,7 @@ const quoteBuilder = fs.readFileSync("public/dbs-control-orcamentos-flex.js", "u
 const quotePdf = fs.readFileSync("public/dbs-control-orcamentos-pdf.js", "utf8");
 assert.match(html, /dbs-control-orcamentos-flex\.js\?v=/, "O montador flexível de propostas deve estar carregado com versão de cache.");
 assert.match(html, /dbs-control-orcamentos-pdf\.js\?v=20261014-pdf-standard-1/, "O renderer comercial padronizado deve estar carregado antes do módulo flexível.");
-assert.match(html, /dbs-control-orcamentos-flex\.js\?v=20261026-quote-ack-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
+assert.match(html, /dbs-control-orcamentos-flex\\.js\\?v=20261105-purchase-handoff-1/, "O módulo comercial precisa invalidar o cache após conectar o novo renderer.");
 assert.match(quoteBuilder, /function readItems\(/, "A proposta deve suportar uma lista de itens.");
 assert.match(quoteBuilder, /function pdf\(/, "A proposta deve oferecer exportação PDF.");
 assert.match(quoteBuilder, /ERP_STATE\.orcamentos\.push\(q\)/, "A proposta nova deve ser salva no estado compartilhado.");
@@ -435,7 +435,7 @@ assert.match(quotePdf, /doc\.line\(margin, 285, pageWidth - margin, 285\)/, "O r
 assert.match(quotePdf, /Hash do conteúdo aceito/, "O PDF deve identificar o hash do conteúdo congelado no aceite web.");
 assert.match(quotePdf, /doc\.rect\(totalBoxX, y - 3\.8, contentWidth, 11, "F"\)/, "O total deve ter uma faixa larga sem sobrepor o rótulo ao valor.");
 assert.doesNotMatch(quotePdf, /ERP_STATE|localStorage|saveState/, "O renderer de PDF não deve ler nem gravar o estado comercial.");
-assert.match(route, /v=202610\d+-[a-z-]+-\d+/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
+assert.match(route, /v=2026\\d{4}-[a-z-]+-\\d+/, "A rota autenticada deve invalidar o cache dos documentos no mobile e no desktop.");
 assert.match(collaboratorIndependentAccessMigration, /create or replace function public\.dbs_my_employee_ids/, "O vínculo DBS do colaborador deve ser independente da Folha de Ponto.");
 assert.doesNotMatch(collaboratorIndependentAccessMigration, /where e\.ponto_portal_user_id = public\.current_app_user_id\(\)[\s\S]*?and e\.ponto_access_enabled = true/, "A política DBS não pode exigir a flag da Folha de Ponto.");
 assert.match(collaboratorIndependentAccessMigration, /dbs_control_can_issue_work_orders = true/, "A leitura de clientes para emissão deve continuar limitada à permissão explícita.");
