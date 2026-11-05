@@ -915,7 +915,10 @@ async function hydrateDbsControlStateFromCanonicalDb(
         qtd: items.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0),
       };
     })(),
-    id: String(row.id),
+    // Keep the local legacy key as the UI identity so the canonical
+    // relational row replaces (rather than duplicates) the optimistic row.
+    id: String(row.legacy_key || row.id),
+    purchase_id: String(row.id),
     fornecedor: row.supplier_name || "Fornecedor",
     item: purchaseItemsByPurchaseId.get(String(row.id))?.[0]?.item || row.document_number || "Compra de peças",
     valor: Number(row.total_cents || 0) / 100,
