@@ -127,6 +127,145 @@ export type Database = {
         }
         Relationships: []
       }
+      dbs_control_backup_manifests: {
+        Row: {
+          created_at: string
+          document_buckets: string[]
+          document_count: number
+          document_manifest: Json
+          generated_at: string
+          id: string
+          manifest_path: string
+          object_path: string
+          snapshot_sha256: string
+          status: string
+          table_counts: Json
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_buckets?: string[]
+          document_count?: number
+          document_manifest?: Json
+          generated_at: string
+          id?: string
+          manifest_path: string
+          object_path: string
+          snapshot_sha256: string
+          status?: string
+          table_counts?: Json
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_buckets?: string[]
+          document_count?: number
+          document_manifest?: Json
+          generated_at?: string
+          id?: string
+          manifest_path?: string
+          object_path?: string
+          snapshot_sha256?: string
+          status?: string
+          table_counts?: Json
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      dbs_control_base_clients: {
+        Row: {
+          base_id: string
+          client_id: string
+          created_at: string
+          created_by_user_id: string | null
+        }
+        Insert: {
+          base_id: string
+          client_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+        }
+        Update: {
+          base_id?: string
+          client_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_base_clients_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_base_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_base_clients_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_bases: {
+        Row: {
+          address_json: Json
+          code: string | null
+          company_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_json?: Json
+          code?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_json?: Json
+          code?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_bases_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_bases_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dbs_control_clients: {
         Row: {
           cnpj: string | null
@@ -168,6 +307,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      dbs_control_entity_records: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          entity_type: string
+          id: string
+          idempotency_key: string | null
+          payload: Json
+          record_key: string
+          scope_key: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_type: string
+          id?: string
+          idempotency_key?: string | null
+          payload?: Json
+          record_key: string
+          scope_key: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_type?: string
+          id?: string
+          idempotency_key?: string | null
+          payload?: Json
+          record_key?: string
+          scope_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_entity_records_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dbs_control_equipment: {
         Row: {
@@ -352,6 +541,370 @@ export type Database = {
           },
         ]
       }
+      dbs_control_inventory_commands: {
+        Row: {
+          actor_user_id: string | null
+          command_type: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          payload_hash: string
+          result: Json
+          scope_key: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          command_type: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          payload_hash: string
+          result: Json
+          scope_key: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          command_type?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          payload_hash?: string
+          result?: Json
+          scope_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_inventory_commands_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_inventory_movements: {
+        Row: {
+          balance_after: number
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          movement_type: string
+          part_id: string
+          purchase_id: string | null
+          purchase_item_id: string | null
+          quantity_delta: number
+          scope_key: string
+          unit_cost_cents: number
+          work_order_id: string | null
+          work_order_part_id: string | null
+        }
+        Insert: {
+          balance_after?: number
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          movement_type: string
+          part_id: string
+          purchase_id?: string | null
+          purchase_item_id?: string | null
+          quantity_delta: number
+          scope_key: string
+          unit_cost_cents?: number
+          work_order_id?: string | null
+          work_order_part_id?: string | null
+        }
+        Update: {
+          balance_after?: number
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          movement_type?: string
+          part_id?: string
+          purchase_id?: string | null
+          purchase_item_id?: string | null
+          quantity_delta?: number
+          scope_key?: string
+          unit_cost_cents?: number
+          work_order_id?: string | null
+          work_order_part_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_inventory_movements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_purchase_item_id_fkey"
+            columns: ["purchase_item_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_purchase_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_inventory_movements_work_order_part_id_fkey"
+            columns: ["work_order_part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_order_parts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_inventory_outbox: {
+        Row: {
+          aggregate_id: string | null
+          aggregate_type: string
+          attempts: number
+          available_at: string
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          payload: Json
+          published_at: string | null
+          scope_key: string
+          status: string
+        }
+        Insert: {
+          aggregate_id?: string | null
+          aggregate_type: string
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          scope_key: string
+          status?: string
+        }
+        Update: {
+          aggregate_id?: string | null
+          aggregate_type?: string
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          scope_key?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      dbs_control_legacy_id_map: {
+        Row: {
+          canonical_id: string
+          created_at: string
+          entity_type: string
+          legacy_key: string
+          scope_key: string
+        }
+        Insert: {
+          canonical_id: string
+          created_at?: string
+          entity_type: string
+          legacy_key: string
+          scope_key: string
+        }
+        Update: {
+          canonical_id?: string
+          created_at?: string
+          entity_type?: string
+          legacy_key?: string
+          scope_key?: string
+        }
+        Relationships: []
+      }
+      dbs_control_outbox: {
+        Row: {
+          aggregate_id: string | null
+          aggregate_type: string
+          aggregate_version: number
+          attempts: number
+          available_at: string
+          command_id: string | null
+          company_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          payload: Json
+          published_at: string | null
+          status: string
+        }
+        Insert: {
+          aggregate_id?: string | null
+          aggregate_type: string
+          aggregate_version: number
+          attempts?: number
+          available_at?: string
+          command_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          status?: string
+        }
+        Update: {
+          aggregate_id?: string | null
+          aggregate_type?: string
+          aggregate_version?: number
+          attempts?: number
+          available_at?: string
+          command_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          payload?: Json
+          published_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_outbox_aggregate_id_fkey"
+            columns: ["aggregate_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_outbox_command_id_fkey"
+            columns: ["command_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_sync_commands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_outbox_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_outbox_dlq: {
+        Row: {
+          aggregate_id: string | null
+          aggregate_type: string
+          attempts: number
+          created_at: string
+          event_type: string
+          failed_at: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          outbox_id: string
+          payload: Json
+          resolution_note: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          aggregate_id?: string | null
+          aggregate_type: string
+          attempts?: number
+          created_at?: string
+          event_type: string
+          failed_at?: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          outbox_id: string
+          payload?: Json
+          resolution_note?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          aggregate_id?: string | null
+          aggregate_type?: string
+          attempts?: number
+          created_at?: string
+          event_type?: string
+          failed_at?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          outbox_id?: string
+          payload?: Json
+          resolution_note?: string | null
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_outbox_dlq_outbox_id_fkey"
+            columns: ["outbox_id"]
+            isOneToOne: true
+            referencedRelation: "dbs_control_outbox"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dbs_control_parts: {
         Row: {
           cost_cents: number | null
@@ -359,11 +912,13 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          reserved_quantity: number
           sale_cents: number | null
           sku: string | null
           status: string
           stock_quantity: number
           updated_at: string
+          version: number
         }
         Insert: {
           cost_cents?: number | null
@@ -371,11 +926,13 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          reserved_quantity?: number
           sale_cents?: number | null
           sku?: string | null
           status?: string
           stock_quantity?: number
           updated_at?: string
+          version?: number
         }
         Update: {
           cost_cents?: number | null
@@ -383,13 +940,470 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          reserved_quantity?: number
           sale_cents?: number | null
           sku?: string | null
           status?: string
           stock_quantity?: number
           updated_at?: string
+          version?: number
         }
         Relationships: []
+      }
+      dbs_control_purchase_items: {
+        Row: {
+          created_at: string
+          id: string
+          line_no: number
+          metadata: Json
+          part_id: string
+          purchase_id: string
+          quantity: number
+          total_cents: number
+          unit_cost_cents: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_no: number
+          metadata?: Json
+          part_id: string
+          purchase_id: string
+          quantity: number
+          total_cents: number
+          unit_cost_cents: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_no?: number
+          metadata?: Json
+          part_id?: string
+          purchase_id?: string
+          quantity?: number
+          total_cents?: number
+          unit_cost_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_purchase_items_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_purchase_items_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_purchases: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          document_number: string | null
+          id: string
+          idempotency_key: string
+          ledger_entry_id: string | null
+          legacy_key: string | null
+          metadata: Json
+          payment_status: string
+          purchase_date: string
+          received_by: string | null
+          scope_key: string
+          status: string
+          supplier_name: string
+          total_cents: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_number?: string | null
+          id?: string
+          idempotency_key: string
+          ledger_entry_id?: string | null
+          legacy_key?: string | null
+          metadata?: Json
+          payment_status?: string
+          purchase_date?: string
+          received_by?: string | null
+          scope_key: string
+          status?: string
+          supplier_name: string
+          total_cents?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_number?: string | null
+          id?: string
+          idempotency_key?: string
+          ledger_entry_id?: string | null
+          legacy_key?: string | null
+          metadata?: Json
+          payment_status?: string
+          purchase_date?: string
+          received_by?: string | null
+          scope_key?: string
+          status?: string
+          supplier_name?: string
+          total_cents?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_purchases_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_purchases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_purchases_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_purchases_received_by_fkey"
+            columns: ["received_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_reservation_batches: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          scope_key: string
+          work_order_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          scope_key: string
+          work_order_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          scope_key?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_reservation_batches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_reservation_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_reservation_batches_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_reservation_consumptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          ledger_entry_id: string | null
+          scope_key: string
+          total_cost_cents: number
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          ledger_entry_id?: string | null
+          scope_key: string
+          total_cost_cents?: number
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          ledger_entry_id?: string | null
+          scope_key?: string
+          total_cost_cents?: number
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_reservation_consumptions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_reservation_consumptions_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_reservation_consumptions_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: true
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_sale_items: {
+        Row: {
+          cost_total_cents: number
+          created_at: string
+          id: string
+          part_id: string
+          quantity: number
+          sale_id: string
+          total_cents: number
+          unit_cost_cents: number
+          unit_sale_cents: number
+        }
+        Insert: {
+          cost_total_cents: number
+          created_at?: string
+          id?: string
+          part_id: string
+          quantity: number
+          sale_id: string
+          total_cents: number
+          unit_cost_cents: number
+          unit_sale_cents: number
+        }
+        Update: {
+          cost_total_cents?: number
+          created_at?: string
+          id?: string
+          part_id?: string
+          quantity?: number
+          sale_id?: string
+          total_cents?: number
+          unit_cost_cents?: number
+          unit_sale_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sale_items_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_sale_settlements: {
+        Row: {
+          amount_cents: number
+          id: string
+          idempotency_key: string
+          ledger_entry_id: string | null
+          payment_method: string
+          received_at: string
+          received_by: string | null
+          sale_id: string
+          scope_key: string
+        }
+        Insert: {
+          amount_cents: number
+          id?: string
+          idempotency_key: string
+          ledger_entry_id?: string | null
+          payment_method: string
+          received_at?: string
+          received_by?: string | null
+          sale_id: string
+          scope_key: string
+        }
+        Update: {
+          amount_cents?: number
+          id?: string
+          idempotency_key?: string
+          ledger_entry_id?: string | null
+          payment_method?: string
+          received_at?: string
+          received_by?: string | null
+          sale_id?: string
+          scope_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sale_settlements_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sale_settlements_received_by_fkey"
+            columns: ["received_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sale_settlements_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_sales: {
+        Row: {
+          client_id: string | null
+          cogs_entry_id: string | null
+          company_id: string | null
+          cost_cents: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          received_cents: number
+          revenue_entry_id: string | null
+          sale_number: string | null
+          scope_key: string
+          status: string
+          total_cents: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          client_id?: string | null
+          cogs_entry_id?: string | null
+          company_id?: string | null
+          cost_cents?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          received_cents?: number
+          revenue_entry_id?: string | null
+          sale_number?: string | null
+          scope_key: string
+          status?: string
+          total_cents?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          client_id?: string | null
+          cogs_entry_id?: string | null
+          company_id?: string | null
+          cost_cents?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          received_cents?: number
+          revenue_entry_id?: string | null
+          sale_number?: string | null
+          scope_key?: string
+          status?: string
+          total_cents?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sales_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sales_cogs_entry_id_fkey"
+            columns: ["cogs_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sales_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sales_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sales_revenue_entry_id_fkey"
+            columns: ["revenue_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dbs_control_service_catalog: {
         Row: {
@@ -474,6 +1488,36 @@ export type Database = {
           },
         ]
       }
+      dbs_control_snapshot_history: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          id: number
+          scope_key: string
+          source_updated_at: string
+          state: Json
+          state_version: number
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          id?: never
+          scope_key: string
+          source_updated_at: string
+          state: Json
+          state_version?: number
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          id?: never
+          scope_key?: string
+          source_updated_at?: string
+          state?: Json
+          state_version?: number
+        }
+        Relationships: []
+      }
       dbs_control_snapshots: {
         Row: {
           company_id: string | null
@@ -531,6 +1575,127 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dbs_control_sync_commands: {
+        Row: {
+          actor_user_id: string | null
+          aggregate_id: string | null
+          aggregate_type: string
+          applied_at: string | null
+          company_id: string | null
+          conflict_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          expected_version: number | null
+          id: string
+          idempotency_key: string
+          payload: Json
+          payload_hash: string
+          result: Json
+          status: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          aggregate_id?: string | null
+          aggregate_type?: string
+          applied_at?: string | null
+          company_id?: string | null
+          conflict_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          expected_version?: number | null
+          id?: string
+          idempotency_key: string
+          payload?: Json
+          payload_hash: string
+          result?: Json
+          status?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          aggregate_id?: string | null
+          aggregate_type?: string
+          applied_at?: string | null
+          company_id?: string | null
+          conflict_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          expected_version?: number | null
+          id?: string
+          idempotency_key?: string
+          payload?: Json
+          payload_hash?: string
+          result?: Json
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_sync_commands_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sync_commands_aggregate_id_fkey"
+            columns: ["aggregate_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_sync_commands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_sync_metrics: {
+        Row: {
+          claimed_count: number
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          failure_count: number
+          id: string
+          metric_name: string
+          retry_count: number
+          status: string
+          success_count: number
+          worker_id: string
+        }
+        Insert: {
+          claimed_count?: number
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_count?: number
+          id?: string
+          metric_name: string
+          retry_count?: number
+          status: string
+          success_count?: number
+          worker_id: string
+        }
+        Update: {
+          claimed_count?: number
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failure_count?: number
+          id?: string
+          metric_name?: string
+          retry_count?: number
+          status?: string
+          success_count?: number
+          worker_id?: string
+        }
+        Relationships: []
       }
       dbs_control_sync_runs: {
         Row: {
@@ -671,6 +1836,7 @@ export type Database = {
           details: Json
           event_type: string
           id: string
+          idempotency_key: string | null
           new_status: string | null
           old_status: string | null
           work_order_id: string
@@ -681,6 +1847,7 @@ export type Database = {
           details?: Json
           event_type: string
           id?: string
+          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id: string
@@ -691,6 +1858,7 @@ export type Database = {
           details?: Json
           event_type?: string
           id?: string
+          idempotency_key?: string | null
           new_status?: string | null
           old_status?: string | null
           work_order_id?: string
@@ -712,26 +1880,112 @@ export type Database = {
           },
         ]
       }
-      dbs_control_work_order_parts: {
+      dbs_control_work_order_financials: {
         Row: {
+          company_id: string | null
           created_at: string
           id: string
+          metadata: Json
+          parts_cost_cents: number
+          revenue_cents: number
+          revenue_entry_id: string | null
+          revenue_reversal_entry_id: string | null
+          scope_key: string
+          status: string
+          updated_at: string
+          version: number
+          work_order_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          parts_cost_cents?: number
+          revenue_cents?: number
+          revenue_entry_id?: string | null
+          revenue_reversal_entry_id?: string | null
+          scope_key: string
+          status?: string
+          updated_at?: string
+          version?: number
+          work_order_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          parts_cost_cents?: number
+          revenue_cents?: number
+          revenue_entry_id?: string | null
+          revenue_reversal_entry_id?: string | null
+          scope_key?: string
+          status?: string
+          updated_at?: string
+          version?: number
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_financial_revenue_reversal_entry_id_fkey"
+            columns: ["revenue_reversal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_financials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_financials_revenue_entry_id_fkey"
+            columns: ["revenue_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_financials_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: true
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_parts: {
+        Row: {
+          consumption_status: string
+          cost_cents: number
+          created_at: string
+          id: string
+          idempotency_key: string | null
           part_id: string
           quantity: number
           unit_cents: number | null
           work_order_id: string
         }
         Insert: {
+          consumption_status?: string
+          cost_cents?: number
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           part_id: string
           quantity: number
           unit_cents?: number | null
           work_order_id: string
         }
         Update: {
+          consumption_status?: string
+          cost_cents?: number
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           part_id?: string
           quantity?: number
           unit_cents?: number | null
@@ -747,6 +2001,99 @@ export type Database = {
           },
           {
             foreignKeyName: "dbs_control_work_order_parts_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dbs_control_work_order_reservations: {
+        Row: {
+          batch_id: string
+          company_id: string | null
+          consumed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          part_id: string
+          quantity: number
+          released_at: string | null
+          scope_key: string
+          status: string
+          unit_cost_cents: number
+          updated_at: string
+          version: number
+          work_order_id: string
+        }
+        Insert: {
+          batch_id: string
+          company_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          part_id: string
+          quantity: number
+          released_at?: string | null
+          scope_key: string
+          status?: string
+          unit_cost_cents: number
+          updated_at?: string
+          version?: number
+          work_order_id: string
+        }
+        Update: {
+          batch_id?: string
+          company_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          part_id?: string
+          quantity?: number
+          released_at?: string | null
+          scope_key?: string
+          status?: string
+          unit_cost_cents?: number
+          updated_at?: string
+          version?: number
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dbs_control_work_order_reservations_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_reservation_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_reservations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_reservations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_reservations_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dbs_control_work_order_reservations_work_order_id_fkey"
             columns: ["work_order_id"]
             isOneToOne: false
             referencedRelation: "dbs_control_work_orders"
@@ -799,17 +2146,49 @@ export type Database = {
           },
         ]
       }
+      dbs_control_work_order_status_catalog: {
+        Row: {
+          code: string
+          created_at: string
+          is_active: boolean
+          is_terminal: boolean
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          is_active?: boolean
+          is_terminal?: boolean
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          is_active?: boolean
+          is_terminal?: boolean
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       dbs_control_work_orders: {
         Row: {
           assigned_employee_id: string | null
           assinatura_path: string | null
           client_id: string
           completed_at: string | null
+          completion_status_code: string | null
           created_at: string
           created_by_user_id: string | null
+          deleted_at: string | null
           description: string | null
           diagnostico: string | null
+          execution_checklist: Json
+          geolocation_captured_at: string | null
           id: string
+          idempotency_key: string | null
           latitude: number | null
           longitude: number | null
           observation: string | null
@@ -837,11 +2216,16 @@ export type Database = {
           assinatura_path?: string | null
           client_id: string
           completed_at?: string | null
+          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
+          execution_checklist?: Json
+          geolocation_captured_at?: string | null
           id?: string
+          idempotency_key?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -869,11 +2253,16 @@ export type Database = {
           assinatura_path?: string | null
           client_id?: string
           completed_at?: string | null
+          completion_status_code?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          deleted_at?: string | null
           description?: string | null
           diagnostico?: string | null
+          execution_checklist?: Json
+          geolocation_captured_at?: string | null
           id?: string
+          idempotency_key?: string | null
           latitude?: number | null
           longitude?: number | null
           observation?: string | null
@@ -933,6 +2322,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      project: {
+        Row: {
+          created_at: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+        }
+        Relationships: []
       }
       rh_admission_processes: {
         Row: {
@@ -1234,6 +2638,7 @@ export type Database = {
           employee_id: string
           id: string
           notes: string | null
+          source_request_id: string | null
           status: string
           updated_at: string
         }
@@ -1248,6 +2653,7 @@ export type Database = {
           employee_id: string
           id?: string
           notes?: string | null
+          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1262,6 +2668,7 @@ export type Database = {
           employee_id?: string
           id?: string
           notes?: string | null
+          source_request_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1278,6 +2685,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_employee_advances_source_request_id_fkey"
+            columns: ["source_request_id"]
+            isOneToOne: false
+            referencedRelation: "rh_employee_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1608,6 +3022,8 @@ export type Database = {
           benefit_type: string
           created_at: string
           dbs_control_access_enabled: boolean
+          dbs_control_base_id: string | null
+          dbs_control_can_issue_work_orders: boolean
           fare_cents: number
           ficha_file_name: string | null
           ficha_storage_path: string | null
@@ -1636,6 +3052,8 @@ export type Database = {
           benefit_type: string
           created_at?: string
           dbs_control_access_enabled?: boolean
+          dbs_control_base_id?: string | null
+          dbs_control_can_issue_work_orders?: boolean
           fare_cents: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
@@ -1664,6 +3082,8 @@ export type Database = {
           benefit_type?: string
           created_at?: string
           dbs_control_access_enabled?: boolean
+          dbs_control_base_id?: string | null
+          dbs_control_can_issue_work_orders?: boolean
           fare_cents?: number
           ficha_file_name?: string | null
           ficha_storage_path?: string | null
@@ -1689,6 +3109,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "rh_employees_dbs_control_base_id_fkey"
+            columns: ["dbs_control_base_id"]
+            isOneToOne: false
+            referencedRelation: "dbs_control_bases"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "rh_employees_ponto_portal_user_id_fkey"
             columns: ["ponto_portal_user_id"]
             isOneToOne: false
@@ -1696,7 +3123,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rh_employees_registry_employee_id_fkey"
+            foreignKeyName: "rh_employees_registry_employee_fk"
             columns: ["registry_employee_id"]
             isOneToOne: false
             referencedRelation: "rh_employees"
@@ -2865,6 +4292,272 @@ export type Database = {
           },
         ]
       }
+      treasury_accounts: {
+        Row: {
+          account_type: string
+          code: string
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          currency_code: string
+          id: string
+          is_active: boolean
+          name: string
+          scope_key: string
+          updated_at: string
+        }
+        Insert: {
+          account_type: string
+          code: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency_code?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          scope_key: string
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          code?: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency_code?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          scope_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_accounts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_ledger_entries: {
+        Row: {
+          company_id: string | null
+          competence_date: string
+          created_at: string
+          created_by: string | null
+          description: string
+          document_date: string | null
+          entry_type: string
+          external_key: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          posted_at: string | null
+          posted_by: string | null
+          reversed_entry_id: string | null
+          scope_key: string
+          source_module: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          company_id?: string | null
+          competence_date: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          document_date?: string | null
+          entry_type?: string
+          external_key?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          posted_at?: string | null
+          posted_by?: string | null
+          reversed_entry_id?: string | null
+          scope_key: string
+          source_module?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          company_id?: string | null
+          competence_date?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          document_date?: string | null
+          entry_type?: string
+          external_key?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          posted_at?: string | null
+          posted_by?: string | null
+          reversed_entry_id?: string | null
+          scope_key?: string
+          source_module?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_ledger_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_ledger_entries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_ledger_entries_posted_by_fkey"
+            columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_ledger_entries_reversed_entry_id_fkey"
+            columns: ["reversed_entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_ledger_lines: {
+        Row: {
+          account_id: string
+          credit_cents: number
+          debit_cents: number
+          entry_id: string
+          id: string
+          line_no: number
+          memo: string | null
+          metadata: Json
+        }
+        Insert: {
+          account_id: string
+          credit_cents?: number
+          debit_cents?: number
+          entry_id: string
+          id?: string
+          line_no: number
+          memo?: string | null
+          metadata?: Json
+        }
+        Update: {
+          account_id?: string
+          credit_cents?: number
+          debit_cents?: number
+          entry_id?: string
+          id?: string
+          line_no?: number
+          memo?: string | null
+          metadata?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_ledger_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_ledger_lines_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_ledger_outbox: {
+        Row: {
+          attempts: number
+          available_at: string
+          company_id: string | null
+          created_at: string
+          entry_id: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          payload: Json
+          published_at: string | null
+          scope_key: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          company_id?: string | null
+          created_at?: string
+          entry_id: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload?: Json
+          published_at?: string | null
+          scope_key: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          company_id?: string | null
+          created_at?: string
+          entry_id?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload?: Json
+          published_at?: string | null
+          scope_key?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_ledger_outbox_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_ledger_outbox_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "treasury_ledger_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       treasury_snapshots: {
         Row: {
           company_id: string | null
@@ -3079,6 +4772,172 @@ export type Database = {
         Returns: Database["public"]["Enums"]["role_key"]
       }
       current_unit_id: { Args: never; Returns: string }
+      dbs_control_apply_opening_balance: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      dbs_control_apply_work_order_delta: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string
+          error_message: string
+          idempotency_key: string
+          ok: boolean
+          protocol: string
+          status: string
+          version: number
+          work_order_id: string
+        }[]
+      }
+      dbs_control_apply_work_order_delta_with_reservations: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string
+          error_message: string
+          idempotency_key: string
+          ok: boolean
+          protocol: string
+          status: string
+          version: number
+          work_order_id: string
+        }[]
+      }
+      dbs_control_apply_work_order_parts_in_tx: {
+        Args: { p_parts: Json; p_work_order_id: string }
+        Returns: undefined
+      }
+      dbs_control_claim_outbox: {
+        Args: { p_limit?: number; p_worker_id: string }
+        Returns: {
+          aggregate_id: string | null
+          aggregate_type: string
+          aggregate_version: number
+          attempts: number
+          available_at: string
+          command_id: string | null
+          company_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          payload: Json
+          published_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "dbs_control_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      dbs_control_complete_outbox: {
+        Args: {
+          p_error?: string
+          p_outbox_id: string
+          p_retry_seconds?: number
+          p_success: boolean
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
+      dbs_control_consume_work_order_reservations: {
+        Args: {
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_work_order_id: string
+        }
+        Returns: Json
+      }
+      dbs_control_consume_work_order_reservations_serialized: {
+        Args: {
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_work_order_id: string
+        }
+        Returns: Json
+      }
+      dbs_control_create_part_sale: { Args: { p_payload: Json }; Returns: Json }
+      dbs_control_dashboard_summary: {
+        Args: { p_employee_id?: string }
+        Returns: Json
+      }
+      dbs_control_dashboard_summary_scoped: {
+        Args: {
+          p_base_id?: string
+          p_company_id?: string
+          p_employee_id?: string
+        }
+        Returns: Json
+      }
+      dbs_control_inventory_health: { Args: never; Returns: Json }
+      dbs_control_inventory_scope_for_work_order: {
+        Args: { p_work_order_id: string }
+        Returns: {
+          company_id: string
+          owner_user_id: string
+          scope_key: string
+        }[]
+      }
+      dbs_control_is_admin_actor: {
+        Args: { p_actor: string }
+        Returns: boolean
+      }
+      dbs_control_issue_work_order: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string
+          error_message: string
+          idempotency_key: string
+          ok: boolean
+          protocol: string
+          status: string
+          version: number
+          work_order_id: string
+        }[]
+      }
+      dbs_control_normalize_work_order_timestamps: {
+        Args: { p_patch: Json }
+        Returns: Json
+      }
+      dbs_control_receive_purchase: { Args: { p_payload: Json }; Returns: Json }
+      dbs_control_receive_purchase_safe: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      dbs_control_release_work_order_reservation: {
+        Args: {
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_reservation_id: string
+        }
+        Returns: Json
+      }
+      dbs_control_release_work_order_reservation_serialized: {
+        Args: {
+          p_actor_user_id: string
+          p_idempotency_key: string
+          p_reservation_id: string
+        }
+        Returns: Json
+      }
+      dbs_control_reserve_work_order_parts: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      dbs_control_reserve_work_order_parts_serialized: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       dbs_control_save_snapshot_safe: {
         Args: { p_payload: Json }
         Returns: {
@@ -3087,9 +4946,62 @@ export type Database = {
           updated_at: string
         }[]
       }
+      dbs_control_save_snapshot_safe_v2: {
+        Args: { p_payload: Json }
+        Returns: {
+          state: Json
+          state_version: number
+          updated_at: string
+        }[]
+      }
+      dbs_control_settle_part_sale: {
+        Args: {
+          p_actor_user_id: string
+          p_amount_cents: number
+          p_idempotency_key: string
+          p_payment_method: string
+          p_sale_id: string
+        }
+        Returns: Json
+      }
+      dbs_control_sync_health: { Args: never; Returns: Json }
+      dbs_control_upsert_part: { Args: { p_payload: Json }; Returns: Json }
+      dbs_control_upsert_part_safe: { Args: { p_payload: Json }; Returns: Json }
       dbs_my_employee_ids: { Args: never; Returns: string[] }
-      dbs_my_work_order_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
+      post_treasury_ledger_entry: {
+        Args: {
+          p_company_id: string
+          p_competence_date: string
+          p_created_by: string
+          p_description: string
+          p_document_date: string
+          p_entry_type: string
+          p_external_key: string
+          p_idempotency_key: string
+          p_lines: Json
+          p_metadata: Json
+          p_scope_key: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      process_work_order_update: {
+        Args: { p_payload: Json }
+        Returns: {
+          changed_at: string
+          command_id: string
+          error_code: string
+          error_message: string
+          idempotency_key: string
+          ok: boolean
+          protocol: string
+          status: string
+          version: number
+          work_order_id: string
+        }[]
+      }
+      treasury_ledger_health: { Args: never; Returns: Json }
       usuario_esta_ativo: { Args: never; Returns: boolean }
     }
     Enums: {
