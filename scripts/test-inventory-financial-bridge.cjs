@@ -36,7 +36,7 @@ assert.match(functions, /dbs_control_register_purchase/);
 assert.match(quoteBuilder, /data-purchase=/);
 assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /Compras & Custos/);
-assert.match(mainHtml, /dbs-control-orcamentos-flex\\.js\\?v=20261105-purchase-handoff-1/);
+assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261105-purchase-handoff-1/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
