@@ -46,6 +46,28 @@
     if (typeof ERP_STATE === "undefined" || !Array.isArray(ERP_STATE.orcamentos)) {
       if (typeof ERP_STATE !== "undefined") ERP_STATE.orcamentos = ERP_STATE.orcamentos || [];
     }
+    var nav = document.querySelector(".nav-menu");
+    if (nav && !document.getElementById("dbs-smart-purchases-nav")) {
+      var purchaseSection = document.createElement("div");
+      purchaseSection.className = "nav-section";
+      purchaseSection.textContent = "Gestão integrada";
+      var purchaseItem = document.createElement("li");
+      purchaseItem.id = "dbs-smart-purchases-nav";
+      purchaseItem.className = "nav-item";
+      purchaseItem.setAttribute("role", "link");
+      purchaseItem.setAttribute("tabindex", "0");
+      purchaseItem.innerHTML = '<span aria-hidden="true">▣</span><span>Compras & Custos</span>';
+      var openPurchases = function () {
+        var target = new URL("/dbs-inventory", window.location.origin);
+        window.open(target.toString(), "_blank", "noopener");
+      };
+      purchaseItem.addEventListener("click", openPurchases);
+      purchaseItem.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPurchases(); }
+      });
+      nav.appendChild(purchaseSection);
+      nav.appendChild(purchaseItem);
+    }
     var tab = $("tab-orcamentos");
     if (!tab || tab.dataset.flexReady === "1") return;
     tab.dataset.flexReady = "1";
