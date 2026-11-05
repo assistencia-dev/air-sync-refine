@@ -1918,6 +1918,7 @@
       document.getElementById('comp-item').value = row.item || '';
       document.getElementById('comp-qtd').value = Number(row.qtd || 0);
       document.getElementById('comp-valor').value = Number(row.valor || 0).toFixed(2);
+      document.getElementById('comp-status').value = String(row.status || 'draft').toLowerCase() === 'received' ? 'received' : 'draft';
     }
     updateFormMode(kind, true);
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2051,7 +2052,7 @@
     var partSelect = document.getElementById('comp-peca');
     var partId = partSelect && partSelect.value || '';
     var selectedPart = partId ? (ERP_STATE.pecas || []).find(function (part) { return String(part.id) === String(partId); }) : null;
-    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), payment_status: document.getElementById('comp-pagamento')?.value || 'unpaid' };
+    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), status: document.getElementById('comp-status').value === 'received' ? 'received' : 'draft' };
     if (!value.fornecedor || !value.part_id || !value.qtd || value.qtd <= 0 || !Number.isFinite(value.valor) || value.valor <= 0) return;
     var existing = id ? findRow('compras', id) : null;
     if (existing && existing.ledger_entry_id) { alert('Esta compra já entrou no estoque e no Financeiro; faça uma devolução/estorno para corrigir.'); return; }
@@ -2059,7 +2060,7 @@
     if (row) Object.assign(row, value);
     else {
       var state = appState();
-      row = { id: crypto.randomUUID(), ...value, status: 'Recebido', deleted: false };
+      row = { id: crypto.randomUUID(), ...value, deleted: false };
       (state.compras || (state.compras = [])).push(row);
     }
     clearEdit('compras');
@@ -2183,6 +2184,12 @@
   };
 
   function actionButtons(kind, row) {
+    if (kind === 'compras') {
+      var isReceived = String(row.status || 'draft').toLowerCase() === 'received';
+      return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'
+        + '<button type="button" class="btn btn-secondary btn-sm" onclick="abrirFinanceiroEstoque()">'
+        + (isReceived ? 'Ver pagamento' : 'Receber / contas a pagar') + '</button></div>';
+    }
     var id = encoded(rowId(kind, row));
     var archived = isArchived(row);
     var html = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">'
@@ -2228,7 +2235,8 @@
       return '<tr><td><strong>' + esc(s.nome || s.name) + '</strong></td><td>' + esc(s.horas ?? s.horasEstimadas ?? s.estimated_hours ?? 0) + 'h</td><td>R$ ' + Number(s.valor ?? s.valorTabela ?? Number(s.table_value_cents || 0) / 100).toFixed(2) + '</td><td>' + actionButtons(kind, s) + '</td></tr>';
     }).join('');
     if (kind === 'compras') { renderPurchasePartOptions(); body.innerHTML = active.map(function (c) {
-      return '<tr><td><strong>' + esc(c.fornecedor) + '</strong></td><td>' + esc(c.item) + '</td><td>' + esc(c.qtd) + '</td><td>R$ ' + Number(c.valor || 0).toFixed(2) + '</td><td><span class="badge badge-andamento">' + esc(c.status || 'Enviado') + '</span></td><td>' + actionButtons(kind, c) + '</td></tr>';
+      var purchaseStatus = String(c.status || 'draft').toLowerCase() === 'received' ? 'Recebido' : 'Aguardando recebimento';
+      return '<tr><td><strong>' + esc(c.fornecedor) + '</strong></td><td>' + esc(c.item) + '</td><td>' + esc(c.qtd) + '</td><td>R$ ' + Number(c.valor || 0).toFixed(2) + '</td><td><span class="badge badge-andamento">' + purchaseStatus + '</span></td><td>' + actionButtons(kind, c) + '</td></tr>';
     }).join(''); }
   }
   window.renderizarTecnicos = function () { render('tecnicos'); };
@@ -4408,13 +4416,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         <!-- COMPRAS -->
         <div id="tab-compras" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Registrar compra recebida</h3>
+                <h3 style="margin-bottom: 14px;">Registrar compra</h3>
                 <form id="form-compra" onsubmit="salvarCompra(event)">
                     <div class="form-grid">
                         <div class="form-group"><label>Fornecedor</label><input type="text" id="comp-fornecedor" required></div>
                         <div class="form-group"><label>Peça do estoque</label><select id="comp-peca" required><option value="">Selecione a peça que entrou no estoque</option></select></div>
                         <div class="form-group"><label>Descrição complementar</label><input type="text" id="comp-item" placeholder="NF, lote ou observação"></div>
-                        <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" required></div>
+                        <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" min="0.001" step="0.001" required></div>
+                        <div class="form-group"><label>Status da compra</label><select id="comp-status"><option value="draft" selected>Pedido enviado · aguardando recebimento</option><option value="received">Recebido · lançar no estoque</option></select></div>
                         <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="comp-valor" value="450.00" step="0.01" required></div>
                         <div class="form-group"><label>Financeiro</label><div style="padding:10px 12px;border:1px solid #dbe3ee;border-radius:10px;font-size:12px;color:#475569;">A compra gera Contas a Pagar. Registre a quitação no DBS Treasury para atualizar o caixa.</div></div>
                     </div>
