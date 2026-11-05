@@ -1634,6 +1634,8 @@ function purchaseLineItems(record: any, partMap?: Map<string, string>) {
   const fallbackPartId = purchasePartId(record, partMap);
   return source.map((line: any) => {
     const partId = purchasePartId(line, partMap) || fallbackPartId;
+    const partSku = String(line?.part_sku ?? line?.partSku ?? line?.sku
+      ?? record?.part_sku ?? record?.partSku ?? record?.sku ?? '').trim();
     const quantity = Number(line?.quantity ?? line?.qtd ?? record?.quantity ?? record?.qtd ?? 0);
     const unitRaw = Number(line?.unit_cost_cents ?? line?.unitCost ?? line?.custoUnitario
       ?? record?.unit_cost_cents ?? record?.unitCost ?? record?.custoUnitario ?? 0);
@@ -1645,10 +1647,53 @@ function purchaseLineItems(record: any, partMap?: Map<string, string>) {
       : (Number.isFinite(totalRaw) ? Math.round((line?.total_cents !== undefined || record?.total_cents !== undefined ? totalRaw : totalRaw * 100) / Math.max(quantity, 1)) : 0);
     return {
       part_id: partId,
+      part_sku: partSku,
       quantity,
       unit_cost_cents: Math.max(0, unitCostCents),
     };
-  }).filter((line: any) => line.part_id && Number.isFinite(line.quantity) && line.quantity > 0);
+  }).filter((line: any) => Number.isFinite(line.quantity) && line.quantity > 0);
+}
+
+async function resolveDbsPurchasePartIds(items: any[], partMap?: Map<string, string>) {
+  const candidateIds = [...new Set(items
+    .map((line: any) => partMap?.get(String(line.part_id ?? '').trim()) ?? String(line.part_id ?? '').trim())
+    .filter((id: string) => isDbsControlUuid(id)))];
+  const skus = [...new Set(items.map((line: any) => String(line.part_sku ?? '').trim()).filter(Boolean))];
+  const [byIdResult, bySkuResult] = await Promise.all([
+    candidateIds.length
+      ? supabaseAdmin.from('dbs_control_parts').select('id').in('id', candidateIds)
+      : Promise.resolve({ data: [], error: null } as any),
+    skus.length
+      ? supabaseAdmin.from('dbs_control_parts').select('id,sku').in('sku', skus)
+      : Promise.resolve({ data: [], error: null } as any),
+  ]);
+  if (byIdResult.error) throw new Error(byIdResult.error.message);
+  if (bySkuResult.error) throw new Error(bySkuResult.error.message);
+  const validIds = new Set((byIdResult.data ?? []).map((row: any) => String(row.id)));
+  const skuMatches = new Map<string, string>();
+  const ambiguousSkus = new Set<string>();
+  for (const row of bySkuResult.data ?? []) {
+    const sku = String(row.sku ?? '').trim();
+    const id = String(row.id ?? '').trim();
+    if (!sku || !id) continue;
+    const existing = skuMatches.get(sku);
+    if (existing && existing !== id) ambiguousSkus.add(sku);
+    else skuMatches.set(sku, id);
+  }
+  return items.map((line: any) => {
+    const rawId = String(partMap?.get(String(line.part_id ?? '').trim()) ?? line.part_id ?? '').trim();
+    const sku = String(line.part_sku ?? '').trim();
+    let partId = isDbsControlUuid(rawId) && validIds.has(rawId) ? rawId : '';
+    if (!partId && sku) {
+      if (ambiguousSkus.has(sku)) throw new Error(`SKU ${sku} está duplicado no catálogo; selecione a peça pelo identificador correto.`);
+      partId = skuMatches.get(sku) ?? '';
+    }
+    if (!partId) {
+      const reference = sku || rawId || 'sem SKU/ID';
+      throw new Error(`A compra não foi integrada: a peça ${reference} não foi encontrada no catálogo relacional. Atualize o cadastro da peça e tente novamente.`);
+    }
+    return { ...line, part_id: partId };
+  });
 }
 
 async function persistDbsControlPurchaseDelta(
@@ -1659,8 +1704,13 @@ async function persistDbsControlPurchaseDelta(
   partMap?: Map<string, string>,
 ) {
   const items = purchaseLineItems(record, partMap);
-  if (!items.length || items.some((line: any) => !isDbsControlUuid(line.part_id))) return null;
-  const quantity = items.reduce((sum: number, line: any) => sum + Number(line.quantity || 0), 0);
+  if (!items.length) return null;
+  // Historical rows without any part reference remain in the legacy read model.
+  // A purchase that does reference a part must never silently fall back: it is
+  // either resolved to the canonical relational UUID or fails visibly.
+  if (!items.some((line: any) => String(line.part_id ?? '').trim() || String(line.part_sku ?? '').trim())) return null;
+  const resolvedItems = await resolveDbsPurchasePartIds(items, partMap);
+  const quantity = resolvedItems.reduce((sum: number, line: any) => sum + Number(line.quantity || 0), 0);
   if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('A quantidade da compra precisa ser maior que zero.');
   const purchaseDate = String(record?.purchase_date ?? record?.data ?? record?.date ?? '').trim();
   const normalizedDate = purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)
@@ -1679,7 +1729,7 @@ async function persistDbsControlPurchaseDelta(
       payment_status: 'unpaid',
       idempotency_key: idempotencyKey,
       legacy_key: legacyKey,
-      items,
+      items: resolvedItems.map(({ part_sku: _partSku, ...line }: any) => line),
     },
   });
   if (registered.error) throw new Error(registered.error.message);
