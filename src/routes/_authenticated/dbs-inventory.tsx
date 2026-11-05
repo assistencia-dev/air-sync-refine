@@ -193,6 +193,7 @@ function DbsInventoryPage() {
               <p className="text-xs font-bold text-slate-500">Margem bruta</p>
               <p className="mt-1 text-xl font-black">{Number(financial.data.gross_margin_pct ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</p>
             </div>
+            </div>
           </section>}
           <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Custos por ordem de serviço</h2><p className="mt-1 text-sm text-slate-500">Custo de peças consumidas e receita registrada por OS. A margem exibida considera peças, não mão de obra.</p></div>
