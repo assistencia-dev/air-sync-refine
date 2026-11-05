@@ -27,6 +27,17 @@ const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_l
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
 const controlRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
+const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
+assert.match(phase2Ui, /createDbsPurchase/);
+assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
+assert.match(phase2Ui, /purchase_items/);
+assert.match(functions, /export const createDbsPurchase/);
+assert.match(functions, /dbs_control_register_purchase/);
+assert.match(quoteBuilder, /data-purchase=/);
+assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
+assert.match(quoteBuilder, /Compras & Custos/);
+assert.match(html, /dbs-control-orcamentos-flex\\.js\\?v=20261105-purchase-handoff-1/);
+
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
   assert.doesNotMatch(migration, /drop\s+(table|schema|column)\b/i);
