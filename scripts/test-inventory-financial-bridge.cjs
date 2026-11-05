@@ -19,6 +19,7 @@ const settlementIndexes = fs.readFileSync('supabase/migrations/20261105125435_db
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
+const controlRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -167,6 +168,9 @@ assert.match(phase2Ui, /gross_margin_pct/);
 assert.match(mainHtml, /id="peca-status"/);
 assert.match(mainHtml, /status: document\.getElementById\('peca-status'\)/);
 assert.match(mainHtml, /status: 'Recebido'/);
+assert.match(mainHtml, /abrirFinanceiroEstoque/);
+assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
+assert.match(integrationSql, /integration_test_status/);
 
 assert.match(functions, /export const settleDbsPartSale/);
 assert.match(functions, /requireDbsInventoryAdmin/);
