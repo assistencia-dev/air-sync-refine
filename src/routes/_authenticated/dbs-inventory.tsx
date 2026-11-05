@@ -85,15 +85,17 @@ function DbsInventoryPage() {
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
   );
 
-  async function runAction(action: () => Promise<unknown>, success: string) {
+  async function runAction(action: () => Promise<unknown>, success: string): Promise<boolean> {
     setBusy(true);
     setMessage("");
     try {
       await action();
       setMessage(success);
       await Promise.all([overview.refetch(), financial.refetch()]);
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -115,16 +117,18 @@ function DbsInventoryPage() {
       setMessage("Confira cada peça, quantidade e custo unitário. Peças cotadas sem SKU correspondente precisam ser vinculadas manualmente ao catálogo.");
       return;
     }
-    await runAction(() => createDbsPurchase({ data: {
+    const saved = await runAction(() => createDbsPurchase({ data: {
       supplierName: supplierName.trim(),
       documentNumber: purchaseDocument.trim() || undefined,
       purchaseDate,
       idempotencyKey: "purchase-register:" + crypto.randomUUID(),
       items,
     } }), "Compra registrada. Contas a pagar foram lançadas; o estoque só será atualizado após o recebimento.");
-    setSupplierName("");
-    setPurchaseDocument("");
-    setPurchaseLines([{ partId: "", sku: "", description: "", quantity: "1", unitCost: "" }]);
+    if (saved) {
+      setSupplierName("");
+      setPurchaseDocument("");
+      setPurchaseLines([{ partId: "", sku: "", description: "", quantity: "1", unitCost: "" }]);
+    }
   }
 
   function updatePurchaseLine(index: number, patch: Partial<(typeof purchaseLines)[number]>) {
