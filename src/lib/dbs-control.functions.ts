@@ -3006,6 +3006,23 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
     return result;
   });
 
+export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_reconcile_work_order_financials", {
+      p_actor_user_id: user.id,
+    });
+    if (error) throw new Error(error.message);
+    return data as {
+      ok: boolean;
+      cost_rows_reconciled: number;
+      revenue_rows_posted: number;
+      completed_without_source_value: number;
+      as_of: string;
+    };
+  });
+
 export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
