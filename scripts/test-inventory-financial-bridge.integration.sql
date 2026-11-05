@@ -330,7 +330,7 @@ begin
     raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem todos os fluxos com valores positivos: %',v_overview;
   end if;
 
-  raise notice 'PASS: purchase registration -> AP without stock -> explicit receipt once -> weighted average -> balanced reclassification -> partial supplier payment -> OS stock consumption once -> parts COGS -> balanced Ledger -> management metrics.';
+  raise notice 'PASS: two-item purchase -> AP -> exactly two receipt movements -> weighted average -> partial supplier payment -> one OS part consumption -> parts COGS -> OS closure/revenue Ledger -> all seven overview metrics.';
 end;
 $test$;
 
