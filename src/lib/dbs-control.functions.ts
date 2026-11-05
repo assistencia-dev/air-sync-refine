@@ -1678,7 +1678,9 @@ async function persistDbsControlPurchaseDelta(
       supplier_name: String(record?.supplier_name ?? record?.fornecedor ?? '').trim(),
       document_number: String(record?.document_number ?? record?.nota ?? record?.numeroNota ?? '').trim() || null,
       purchase_date: normalizedDate,
-      payment_status: ['paid', 'partial'].includes(paymentStatus) ? paymentStatus : 'unpaid',
+      // Registrar a compra cria a obrigação integral com o fornecedor.
+      // Pagamentos parciais/totais são movimentos separados no Treasury.
+      payment_status: 'unpaid',
       idempotency_key: `${requestId}:purchase:${String(record?.id ?? items[0].part_id)}`.slice(0, 240),
       legacy_key: String(record?.id ?? '').trim() || null,
       items,
@@ -2884,6 +2886,59 @@ export const settleDbsPartSale = createServerFn({ method: "POST" })
   });
 
 
+export const settleDbsPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    purchaseId: string;
+    amountCents: number;
+    paymentMethod: "cash" | "pix" | "bank_transfer" | "card" | "other";
+    idempotencyKey: string;
+  }) => {
+    if (!input?.purchaseId || !Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 ||
+      !input.idempotencyKey || input.idempotencyKey.trim().length < 8 ||
+      !["cash", "pix", "bank_transfer", "card", "other"].includes(input.paymentMethod)) {
+      throw new Error("Dados de pagamento da compra inválidos.");
+    }
+    return {
+      purchaseId: requireInventoryId(input.purchaseId, "Compra"),
+      amountCents: input.amountCents,
+      paymentMethod: input.paymentMethod,
+      idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_purchase", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
+      p_amount_cents: data.amountCents,
+      p_payment_method: data.paymentMethod,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_inventory_financial_overview", {
+      p_actor_user_id: user.id,
+    });
+    if (error) throw new Error(error.message);
+    return data as {
+      stock_value_cents: number;
+      purchases_month_cents: number;
+      accounts_payable_cents: number;
+      operating_cost_cents: number;
+      revenue_cents: number;
+      gross_profit_cents: number;
+      gross_margin_pct: number;
+      as_of: string;
+    };
+  });
+
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -2895,7 +2950,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
         .order("name").limit(500),
@@ -2913,8 +2968,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_sale_settlements")
         .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
+      (supabaseAdmin as any).from("dbs_control_purchases")
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,created_at")
+        .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     return {
@@ -2923,5 +2981,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       reservations: reservations.data ?? [],
       sales: sales.data ?? [],
       saleSettlements: saleSettlements.data ?? [],
+      purchases: purchases.data ?? [],
     };
   });
