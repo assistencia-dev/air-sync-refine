@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { randomBytes } from "node:crypto";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAdmin as typedSupabaseAdmin } from "@/integrations/supabase/client.server";
+
+// Loosely typed on purpose: the generated types.ts is regenerated from the connected Cloud
+// backend, which lacks tables/RPCs of the official schema. Runtime errors are still surfaced
+// explicitly by each query's `error` result, so typing drift never breaks the build.
+const supabaseAdmin = typedSupabaseAdmin as unknown as SupabaseClient<any, any, any>;
 
 export type RhBenefitType = "passagem" | "alimentacao";
 
