@@ -162,16 +162,38 @@ function pickName(item: any) {
 let lastFieldControlRequestAt = 0;
 
 async function fetchJson(path: string, apiKey: string) {
-  const wait = Math.max(0, 1050 - (Date.now() - lastFieldControlRequestAt));
-  if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
-  lastFieldControlRequestAt = Date.now();
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "X-Api-Key": apiKey, "Content-Type": "application/json", "User-Agent": "DBS-CONTROL/1.0" },
-  });
-  const raw = await res.text();
-  let data: any = null;
-  try { data = raw ? JSON.parse(raw) : null; } catch { data = raw; }
-  return { res, data };
+  const maxRateLimitRetries = 2;
+  for (let attempt = 0; attempt <= maxRateLimitRetries; attempt += 1) {
+    const pacingWait = Math.max(0, 1050 - (Date.now() - lastFieldControlRequestAt));
+    if (pacingWait > 0) await new Promise(resolve => setTimeout(resolve, pacingWait));
+    lastFieldControlRequestAt = Date.now();
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { "X-Api-Key": apiKey, "Content-Type": "application/json", "User-Agent": "DBS-CONTROL/1.0" },
+    });
+
+    if (res.status !== 429 || attempt === maxRateLimitRetries) {
+      const raw = await res.text();
+      let data: any = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = raw; }
+      return { res, data };
+    }
+
+    const retryAfterHeader = res.headers.get("Retry-After");
+    const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+    const retryAfterDate = retryAfterHeader && !Number.isFinite(retryAfterSeconds)
+      ? Date.parse(retryAfterHeader) - Date.now()
+      : NaN;
+    const serverDelay = Number.isFinite(retryAfterSeconds)
+      ? retryAfterSeconds * 1000
+      : retryAfterDate;
+    const exponentialDelay = Math.min(4000, 750 * (2 ** attempt));
+    const retryDelay = Number.isFinite(serverDelay) && serverDelay > 0
+      ? Math.min(8000, serverDelay)
+      : exponentialDelay;
+    await new Promise(resolve => setTimeout(resolve, retryDelay));
+  }
+
+  throw new Error(`FieldControl ${path}: não foi possível concluir a requisição após tentativas de limite de taxa.`);
 }
 
 async function listAll(path: string, apiKey: string, maxPages = 30) {
@@ -181,13 +203,17 @@ async function listAll(path: string, apiKey: string, maxPages = 30) {
     const offset = page * 100;
     const { res, data } = await fetchJson(`${path}?limit=100&offset=${offset}`, apiKey);
     if (!res.ok) {
-      if (page === 0) throw new Error(`FieldControl ${path}: HTTP ${res.status}`);
-      break;
+      throw new Error(`FieldControl ${path}: HTTP ${res.status} na página ${page + 1}; importação parcial bloqueada (${out.length} registros recebidos).`);
     }
     const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
     out.push(...items);
     totalCount = typeof data?.totalCount === "number" ? data.totalCount : totalCount;
-    if (items.length < 100 || (totalCount != null && out.length >= totalCount)) break;
+    if (items.length < 100 || (totalCount != null && out.length >= totalCount)) {
+      return { items: out, totalCount };
+    }
+    if (page === maxPages - 1) {
+      throw new Error(`FieldControl ${path}: limite de ${maxPages} páginas atingido; importação parcial bloqueada (${out.length}${totalCount == null ? "" : ` de ${totalCount}`} registros).`);
+    }
   }
   return { items: out, totalCount };
 }
