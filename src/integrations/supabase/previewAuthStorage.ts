@@ -45,10 +45,9 @@ export function brokeredPreviewStorage(): PreviewAuthStorage | undefined {
   const onPreviewZone = PREVIEW_ZONES.some((z) => host === z || host.endsWith('.' + z));
   // Read the id only from non-user-controlled host positions, so a user-named
   // preview--<name> host can't smuggle another project's id.
-  const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
   const projectId = onPreviewZone
     ? (new RegExp('^(?:id-preview(?:-[a-z0-9]+)?|project)--(' + UUID + ')(?:-dev)?(?=\\.|$)', 'i').exec(host)?.[1]
-        ?? new RegExp('^live--(' + UUID + ')(?:-thr_[a-z0-9]+)?(?=\\.|$)', 'i').exec(host)?.[1]
         ?? new RegExp('^(' + UUID + ')(?=[.-])', 'i').exec(host)?.[1])
     : undefined;
   // lib.dom types window.parent and location.ancestorOrigins as always set, but a
@@ -61,8 +60,8 @@ export function brokeredPreviewStorage(): PreviewAuthStorage | undefined {
   // session token can never reach an untrusted embedder.
   const dev = host.endsWith('.lovableproject-dev.com') || host.endsWith('.gpt-eng.com');
   const EDITOR = dev
-    ? /^https:\/\/([a-z0-9-]+\.)*(lovable\.dev|gptengineer\.app)$|^http:\/\/localhost:3000$/
-    : /^https:\/\/([a-z0-9-]+\.)*(lovable\.dev|gptengineer\.app)$/;
+    ? /^https:\/\/([a-z0-9-]+\\.)*(lovable\\.dev|gptengineer\\.app)$|^http:\/\/localhost:3000$/
+    : /^https:\/\/([a-z0-9-]+\\.)*(lovable\\.dev|gptengineer\\.app)$/;
   const ancestorOrigins = location.ancestorOrigins as DOMStringList | undefined;
   const ancestor = ancestorOrigins?.[0] ?? (document.referrer ? new URL(document.referrer).origin : '');
   const editorOrigins = ancestor && EDITOR.test(ancestor)
