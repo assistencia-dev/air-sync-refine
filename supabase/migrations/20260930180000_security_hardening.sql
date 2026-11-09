@@ -11,14 +11,7 @@ REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.usuario_esta_ativo() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.usuario_esta_ativo() TO authenticated;
-DO $
-BEGIN
-  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN
-    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC';
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.rls_auto_enable() TO service_role';
-  END IF;
-END
-$;
+DO LANGUAGE plpgsql 'BEGIN IF to_regprocedure(''public.rls_auto_enable()'') IS NOT NULL THEN EXECUTE ''REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC''; EXECUTE ''GRANT EXECUTE ON FUNCTION public.rls_auto_enable() TO service_role''; END IF; END';
 ALTER FUNCTION public.set_treasury_snapshot_updated_at() SET search_path = public;
 CREATE POLICY project_authenticated_select
   ON public.project FOR SELECT TO authenticated USING (true);
