@@ -21,8 +21,8 @@ with ranked as (
           select count(*)
           from jsonb_object_keys(
             case
-              when jsonb_typeof(coalesce(registration_data, '{}'::json)::jsonb) = 'object'
-                then coalesce(registration_data, '{}'::json)::jsonb
+              when jsonb_typeof(coalesce(registration_data::jsonb, '{}'::jsonb)) = 'object'
+                then coalesce(registration_data::jsonb, '{}'::jsonb)
               else '{}'::jsonb
             end
           )
