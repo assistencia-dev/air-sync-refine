@@ -84,10 +84,10 @@ export const listRhVtTopups = createServerFn({ method: "GET" })
     const actor = await requireVtOperator(context);
     let query = db.from("rh_vt_topups").select("*").order("paid_at", { ascending: false });
     if (data.employee_id) query = query.eq("employee_id", data.employee_id);
-    if (data.competence_year && data.competence_month) {
-      const month = String(data.competence_month).padStart(2, "0");
-      const start = `${data.competence_year}-${month}-01`;
-      const endDate = new Date(data.competence_year, data.competence_month, 1);
+    if (data.competence_year) {
+      const month = data.competence_month ?? 0;
+      const start = month > 0 ? `${data.competence_year}-${String(month).padStart(2, "0")}-01` : `${data.competence_year}-01-01`;
+      const endDate = month > 0 ? new Date(data.competence_year, month, 1) : new Date(data.competence_year + 1, 0, 1);
       const end = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,"0")}-01`;
       query = query.gte("competence_month", start).lt("competence_month", end);
     }
@@ -97,9 +97,15 @@ export const listRhVtTopups = createServerFn({ method: "GET" })
     const { data: employees, error: employeeError } = ids.length
       ? await db.from("rh_employees").select("id, full_name, unit").in("id", ids)
       : { data: [], error: null };
+    const companyIds = [...new Set((rows ?? []).map((r: any) => r.company_id).filter(Boolean))];
+    const { data: companies, error: companyError } = companyIds.length
+      ? await db.from("companies").select("id, legal_name, trade_name").in("id", companyIds)
+      : { data: [], error: null };
+    if (companyError) throw new Error(companyError.message);
+    const companyNames = new Map((companies ?? []).map((co: any) => [co.id, co.trade_name || co.legal_name]));
     if (employeeError) throw new Error(employeeError.message);
     const names = new Map((employees ?? []).map((e: any) => [e.id, e]));
-    return (rows ?? []).map((row: any) => ({ ...row, employee: names.get(row.employee_id) ?? null }));
+    return (rows ?? []).map((row: any) => ({ ...row, employee: names.get(row.employee_id) ?? null, company_name: row.company_id ? (companyNames.get(row.company_id) ?? "Empresa") : "Histórico legado sem empresa vinculada" }));
   });
 
 export const createRhVtTopupsBatch = createServerFn({ method: "POST" })
@@ -179,4 +185,24 @@ export const listRhVtTopupAudit = createServerFn({ method: "GET" })
       .select("*").eq("topup_id", data.topup_id).order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return rows ?? [];
+  });
+
+export const uploadRhVtReceipt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { file_name: string; content_type: string; base64: string }) => {
+    const allowed = ["application/pdf", "image/jpeg", "image/png"];
+    if (!input.file_name?.trim() || !allowed.includes(input.content_type) || !input.base64)
+      throw new Error("Comprovante inválido. Envie PDF, JPG ou PNG.");
+    if (input.base64.length > 14_000_000) throw new Error("O comprovante excede o limite de 10 MB.");
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireVtOperator(context);
+    const safeName = data.file_name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100);
+    const path = `vale-transporte/${actor.id}/${randomUUID()}-${safeName}`;
+    const { error } = await db.storage.from("rh-files").upload(path, Buffer.from(data.base64, "base64"), {
+      contentType: data.content_type, upsert: false,
+    });
+    if (error) throw new Error(error.message);
+    return { path };
   });
