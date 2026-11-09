@@ -118,9 +118,8 @@ begin
 
   select * into v_existing
     from public.treasury_ledger_entries where id = v_entry_id;
-  if v_existing.source_module not in ('treasury','rh')
-     or (v_existing.metadata ? 'rh_vt_topup_id'
-         and v_existing.metadata->>'rh_vt_topup_id' <> p_topup_id::text) then
+  if v_existing.metadata->>'rh_vt_topup_id' is distinct from p_topup_id::text
+     or v_existing.idempotency_key <> p_idempotency_key then
     raise exception 'RH_VT_IDEMPOTENCY_COLLISION';
   end if;
 
