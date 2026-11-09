@@ -45,6 +45,24 @@ async function requireStaff(context: { userId: string }) {
   return me as { id: string; role_key: string; status: string };
 }
 
+async function requirePdfWorkOrder(supabase: any, ticketId: string) {
+  const { data: attachments, error } = await supabase
+    .from("ticket_attachments")
+    .select("id, file_type, file_url")
+    .eq("ticket_id", ticketId)
+    .limit(100);
+  if (error) throw new Error(error.message);
+
+  const hasPdf = (attachments ?? []).some((attachment: any) => {
+    const type = String(attachment.file_type ?? "").toLowerCase().split(";", 1)[0].trim();
+    const path = String(attachment.file_url ?? "").split("?", 1)[0].toLowerCase();
+    return type === "application/pdf" || path.endsWith(".pdf");
+  });
+  if (!hasPdf) {
+    throw new Error("Anexe a OS em PDF antes de concluir este chamado.");
+  }
+}
+
 /** Admin assume o chamado (somente se ainda estiver aberto). */
 export const assumeTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -83,6 +101,8 @@ export const completeTicket = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const me = await requireStaff(context);
+
+    await requirePdfWorkOrder(context.supabase, data.id);
 
     const now = new Date().toISOString();
     const { data: updated, error } = await context.supabase
@@ -196,7 +216,11 @@ export const updateTicketStatus = createServerFn({ method: "POST" })
     return { id: input.id, status: input.status };
   })
   .handler(async ({ context, data }) => {
-    await requireStaff(context);
+    const me = await requireStaff(context);
+
+    if (data.status === "concluido") {
+      await requirePdfWorkOrder(context.supabase, data.id);
+    }
 
     // Closed/cancelled tickets are immutable; UI disabling is not an authorization boundary.
     const { data: updated, error } = await context.supabase
@@ -213,6 +237,13 @@ export const updateTicketStatus = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     if (!updated) throw new Error("Este chamado já foi encerrado ou não pode mais ser alterado.");
+    await context.supabase.from("ticket_timeline").insert({
+      ticket_id: data.id,
+      author_user_id: me.id,
+      role_label: "Sistema",
+      note_text: `Status alterado para ${data.status}.`,
+      status_change: data.status,
+    });
     return { ok: true };
   });
 

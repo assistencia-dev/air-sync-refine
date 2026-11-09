@@ -512,6 +512,10 @@ assert.match(ticketFunctions, /const allowed = \["aberto", "atribuido", "em_rota
 assert.match(ticketFunctions, /\.neq\("status", "concluido"\)[\s\S]*?\.neq\("status", "cancelado"\)[\s\S]*?Este chamado já foi encerrado/, "Chamados encerrados não podem ser reabertos por uma chamada direta à API.");
 assert.match(ticketFunctions, /data\.status === "concluido" \|\| data\.status === "cancelado" \? new Date\(\)\.toISOString\(\) : null/, "Conclusão e cancelamento devem gravar a data de encerramento.");
 
+assert.match(ticketFunctions, /async function requirePdfWorkOrder[\s\S]*?ticket_attachments[\s\S]*?application\/pdf[\s\S]*?Anexe a OS em PDF/, "A conclusão deve exigir uma OS em PDF persistida no chamado.");
+assert.match(ticketFunctions, /export const completeTicket = createServerFn[\s\S]*?requirePdfWorkOrder\(context\.supabase, data\.id\)/, "A conclusão dedicada deve validar a OS antes de alterar o chamado.");
+assert.match(ticketFunctions, /export const updateTicketStatus = createServerFn[\s\S]*?if \(data\.status === "concluido"\) \{[\s\S]*?requirePdfWorkOrder\(context\.supabase, data\.id\)/, "A API genérica de status também deve bloquear conclusão sem OS.");
+assert.match(ticketFunctions, /ticket_timeline[\s\S]*?Status alterado para \$\{data\.status\}/, "Mudanças de status devem entrar na timeline do chamado.");
 assert.equal(authFunctions.includes("unit:unit_id("), false, "O perfil não pode tratar a coluna unit_id como tabela relacionada.");
 assert.equal(authFunctions.includes("company:company_id("), false, "O perfil não pode tratar a coluna company_id como tabela relacionada.");
 assert.equal(adminFunctions.includes("unit:unit_id("), false, "A lista de acessos não pode usar uma coluna como tabela relacionada.");
@@ -644,4 +648,3 @@ assert.match(rhFunctions, /__deleted_at/, "A exclusão do técnico deve gravar u
 assert.match(route, /DBS_CONTROL_UPDATE_TECHNICIAN/, "A rota autenticada deve encaminhar a edição do técnico ao servidor.");
 assert.match(route, /DBS_CONTROL_DELETE_TECHNICIAN/, "A rota autenticada deve encaminhar a exclusão lógica do técnico.");
 console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e auditoria verificados.");
-
