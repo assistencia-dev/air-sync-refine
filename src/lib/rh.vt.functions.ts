@@ -104,6 +104,7 @@ export const listRhVtTopups = createServerFn({ method: "GET" })
   });
 
 export const createRhVtTopupsBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .validator((input: { rows: Array<{
     employee_id: string; paid_at: string; amount_cents: number;
     cost_center?: string | null; receipt_storage_path?: string | null;
@@ -118,15 +119,12 @@ export const createRhVtTopupsBatch = createServerFn({ method: "POST" })
     }
     return input;
   })
-  .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const actor = await requireVtOperator(context);
-    const rows = data.rows.map(row => ({
-      ...row,
-      company_id: actor.company_id ?? null,
-      idempotency_key: row.idempotency_key || randomUUID(),
-      treasury_idempotency_key: `rh-vt:${row.idempotency_key || randomUUID()}`,
-    }));
+    const rows = data.rows.map(row => {
+      const key = row.idempotency_key || randomUUID();
+      return { ...row, company_id: actor.company_id ?? null, idempotency_key: key, treasury_idempotency_key: `rh-vt:${key}` };
+    });
     const { data: created, error } = await db.rpc("rh_vt_create_topups_batch", {
       p_rows: rows, p_actor: actor.id,
     });
