@@ -563,6 +563,8 @@
 
     drawSectionHeader(nextSectionNumber++, 'Responsáveis e aceite do cliente');
     const signature = await loadImage(signatureSource, 'assinatura do cliente');
+    const technicianSignatureSource = first(order.assinaturaTecnico, order.assinatura_tecnico, order.technical_signature, order.technical_signature_url, technician.assinatura, technician.signature, technician.signature_url);
+    const technicianSignature = await loadImage(technicianSignatureSource, 'assinatura do técnico');
     const signatureHeight = 38;
     ensureSpace(signatureHeight);
     const signatureY = page.y;
@@ -570,6 +572,13 @@
     const technicianRegistration = first(technician.matricula, technician.registration, technician.employee_code, order.matriculaTecnico, employeeUuid, '—');
     const technicianRole = first(technician.cargo, technician.position, technician.role, order.cargoTecnico, 'Técnico responsável');
     doc.setDrawColor(...theme.line); doc.setLineWidth(0.22);
+    if (technicianSignature) {
+      const scale = Math.min(75 / technicianSignature.width, 15 / technicianSignature.height);
+      const sw = technicianSignature.width * scale, sh = technicianSignature.height * scale;
+      doc.addImage(technicianSignature.data, 'PNG', leftX + (columnWidth - sw) / 2, signatureY + 1 + (15 - sh) / 2, sw, sh, undefined, 'FAST');
+    } else {
+      font(6.2, 'normal', theme.muted); doc.text('Assinatura digital não registrada', leftX, signatureY + 10);
+    }
     doc.line(leftX, signatureY + 19, leftX + columnWidth, signatureY + 19);
     font(5.8, 'bold', theme.muted); doc.text('ASSINATURA DO TÉCNICO RESPONSÁVEL', leftX, signatureY + 23);
     font(6.5, 'bold', theme.navy); doc.text(technicianName, leftX, signatureY + 28, { maxWidth: columnWidth });
