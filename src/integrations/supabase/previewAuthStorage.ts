@@ -60,8 +60,8 @@ export function brokeredPreviewStorage(): PreviewAuthStorage | undefined {
   // session token can never reach an untrusted embedder.
   const dev = host.endsWith('.lovableproject-dev.com') || host.endsWith('.gpt-eng.com');
   const EDITOR = dev
-    ? /^https:\/\/([a-z0-9-]+\\.)*(lovable\\.dev|gptengineer\\.app)$|^http:\/\/localhost:3000$/
-    : /^https:\/\/([a-z0-9-]+\\.)*(lovable\\.dev|gptengineer\\.app)$/;
+    ? /^https:\/\/([a-z0-9-]+\.)*(lovable\.dev|gptengineer\.app)$|^http:\/\/localhost:3000$/
+    : /^https:\/\/([a-z0-9-]+\.)*(lovable\.dev|gptengineer\.app)$/;
   const ancestorOrigins = location.ancestorOrigins as DOMStringList | undefined;
   const ancestor = ancestorOrigins?.[0] ?? (document.referrer ? new URL(document.referrer).origin : '');
   const editorOrigins = ancestor && EDITOR.test(ancestor)
