@@ -141,10 +141,10 @@ export const updateRhVtTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
     id: string; amount_cents: number; paid_at: string; cost_center?: string | null;
-    receipt_storage_path?: string | null; reason: string;
+    receipt_storage_path?: string | null; reason: string; operation_key: string;
   }) => {
     if (!input.id || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 ||
-      !input.paid_at || !input.reason?.trim()) throw new Error("Valor, data e motivo são obrigatórios.");
+      !input.paid_at || !input.reason?.trim() || !input.operation_key?.trim()) throw new Error("Valor, data e motivo são obrigatórios.");
     return input;
   })
   .handler(async ({ context, data }) => {
@@ -152,7 +152,7 @@ export const updateRhVtTopup = createServerFn({ method: "POST" })
     const { data: updated, error } = await db.rpc("rh_vt_update_topup", {
       p_topup_id: data.id, p_amount_cents: data.amount_cents, p_paid_at: data.paid_at,
       p_cost_center: data.cost_center ?? null, p_receipt_storage_path: data.receipt_storage_path ?? null,
-      p_reason: data.reason.trim(), p_actor: actor.id,
+      p_reason: data.reason.trim(), p_operation_key: data.operation_key, p_actor: actor.id,
     });
     if (error) throw new Error(error.message);
     return updated;
@@ -160,14 +160,14 @@ export const updateRhVtTopup = createServerFn({ method: "POST" })
 
 export const cancelRhVtTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { id: string; reason: string }) => {
-    if (!input.id || !input.reason?.trim()) throw new Error("Justificativa obrigatória.");
+  .validator((input: { id: string; reason: string; operation_key: string }) => {
+    if (!input.id || !input.reason?.trim() || !input.operation_key?.trim()) throw new Error("Justificativa obrigatória.");
     return input;
   })
   .handler(async ({ context, data }) => {
     const actor = await requireVtOperator(context);
     const { data: cancelled, error } = await db.rpc("rh_vt_cancel_topup", {
-      p_topup_id: data.id, p_reason: data.reason.trim(), p_actor: actor.id,
+      p_topup_id: data.id, p_reason: data.reason.trim(), p_operation_key: data.operation_key, p_actor: actor.id,
     });
     if (error) throw new Error(error.message);
     return cancelled;
