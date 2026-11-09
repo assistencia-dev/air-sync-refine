@@ -204,10 +204,10 @@ Os rótulos significam: **REAL** = regra/estrutura executável encontrada em có
 - A migration preserva o histórico de `rh_topups` do tipo `passagem` por cópia aditiva para a nova estrutura, mantendo a tabela original intacta e registrando a origem histórica.
 
 ### Limites ainda pendentes antes de considerar a fase concluída
-- CI da branch executado em 09/11/2026: `Validate`, `verificar` e `DBS Control smoke validation` concluíram com sucesso no SHA `a17aa7c4edf02b4b1b113d7fa244338c64e4c97d`; build, lint, TypeScript e testes automatizados incluídos nesses workflows passaram.
+- CI da branch executado em 09/11/2026: `Validate`, `verificar` e `DBS Control smoke validation` concluíram com sucesso no SHA de código `19a6d98db77df680f95a9fb8fccf4523c8524003`; lint, build, TypeScript e testes automatizados incluídos nesses workflows passaram.
 - Validar o SQL em banco de desenvolvimento/staging antes de qualquer aplicação em produção; a CI atual validou o nome da migration, não executou o DDL em banco.
 - Upload de comprovante foi ligado ao bucket privado existente `rh-files`; falta validar o ciclo de consulta/download do arquivo e as permissões reais de acesso.
 - Filtros por funcionário, mês/ano e totais por empresa foram adicionados à interface; falta teste funcional com dados reais após migração.
-- Revisar idempotência de reenvios de edição/cancelamento além da chave única de criação; a criação individual/em lote já usa chave única e a auditoria é append-only.
+- Criação individual/em lote, edição e cancelamento possuem chaves de idempotência; falta exercitar reenvios concorrentes e retries em teste funcional após a migration.
 
 **STATUS: CÓDIGO DA FASE 2 PREPARADO E CI VERDE — AINDA NÃO LIBERADO.** PR #148 permanece em draft. Não fazer merge, não publicar e não aplicar a migration em produção. Aguardar validação SQL em ambiente de desenvolvimento, teste funcional do fluxo completo e aprovação explícita para qualquer alteração no Supabase.
