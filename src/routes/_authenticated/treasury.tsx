@@ -183,7 +183,7 @@ function TreasuryPage() {
         <section className="mx-auto max-w-[1600px] border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="text-sm font-extrabold text-slate-900">Custo de Vale-Transporte por funcionário</h2><p className="mt-1 text-xs text-slate-500">Conciliação RH × Treasury · regime de competência · sem ajustes automáticos</p></div>
-            <label className="text-xs font-semibold text-slate-600">Competência <input className="ml-2 rounded-lg border border-slate-300 px-3 py-2" type="month" value={vtCompetence} onChange={e=>setVtCompetence(e.target.value)} /></label>
+            <label className="text-xs font-semibold text-slate-600">Competência <input className="ml-2 rounded-lg border border-slate-300 px-3 py-2" type="month" value={vtCompetence} onChange={e=>{if(e.target.value)setVtCompetence(e.target.value)}} /></label>
           </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">RH</p><p className="mt-1 text-lg font-black text-slate-900">{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(vtTotals.rh/100)}</p></div>
