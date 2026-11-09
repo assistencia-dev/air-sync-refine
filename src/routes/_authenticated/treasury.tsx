@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";\nimport { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getTreasuryCloudState, postTreasuryLedgerEntry, getTreasuryVtBenefitsReport } from "@/lib/treasury.functions";
