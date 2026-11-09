@@ -53,6 +53,18 @@ create table if not exists public.rh_vt_topups (
         or status = 'ativa')
 );
 
+create table if not exists public.rh_vt_topup_audit (
+  id uuid primary key default gen_random_uuid(),
+  topup_id uuid not null references public.rh_vt_topups(id) on delete restrict,
+  employee_id uuid not null references public.rh_employees(id) on delete restrict,
+  actor_user_id uuid references public.users(id) on delete set null,
+  action text not null check (action in ('importada','criada','editada','cancelada')),
+  before_data jsonb,
+  after_data jsonb not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
+
 -- Importa o histórico legado de VT sem apagar nem modificar rh_topups.
 -- O vínculo é resolvido para o registro central por registry_employee_id.
 insert into public.rh_vt_topups(
@@ -86,17 +98,6 @@ from public.rh_vt_topups vt
 where vt.source_legacy_topup_id is not null
   and not exists (select 1 from public.rh_vt_topup_audit a where a.topup_id=vt.id);
 
-create table if not exists public.rh_vt_topup_audit (
-  id uuid primary key default gen_random_uuid(),
-  topup_id uuid not null references public.rh_vt_topups(id) on delete restrict,
-  employee_id uuid not null references public.rh_employees(id) on delete restrict,
-  actor_user_id uuid references public.users(id) on delete set null,
-  action text not null check (action in ('importada','criada','editada','cancelada')),
-  before_data jsonb,
-  after_data jsonb not null,
-  reason text,
-  created_at timestamptz not null default now()
-);
 
 create index if not exists rh_vt_topups_employee_history_idx
   on public.rh_vt_topups(employee_id, paid_at desc, created_at desc);
