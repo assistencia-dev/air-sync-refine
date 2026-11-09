@@ -101,7 +101,19 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   return input;
 }).handler(async ({ context, data }) => {
   const employee = await getEmployee(context.userId);
-  const { data: rows, error } = await supabaseAdmin.from("rh_ponto_records").select("punch_type").eq("employee_id", employee.id).eq("work_date", data.work_date).order("punched_at", { ascending: true });
+  // A data operacional é definida pelo servidor no fuso oficial da empresa.
+  // O relógio do dispositivo serve apenas para exibir a hora local e capturar GPS.
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const serverWorkDate = `${dateParts.find(part => part.type === "year")?.value}-${dateParts.find(part => part.type === "month")?.value}-${dateParts.find(part => part.type === "day")?.value}`;
+  if (data.work_date !== serverWorkDate) {
+    throw new Error("A data da marcação diverge do horário oficial da empresa. Atualize a tela e tente novamente.");
+  }
+  const { data: rows, error } = await supabaseAdmin.from("rh_ponto_records").select("punch_type, punched_at").eq("employee_id", employee.id).eq("work_date", serverWorkDate).order("punched_at", { ascending: true });
   if (error) throw new Error(error.message);
   const existingTypes = (rows ?? []).map((row) => row.punch_type as PointType);
   if (existingTypes.includes(data.punch_type)) throw new Error("Esta marcação já foi registrada hoje.");
@@ -110,7 +122,9 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   if (!next || data.punch_type !== next) throw new Error(`A próxima marcação deve ser ${next ?? "nenhuma"}.`);
 
   const gps = validatePontoGps(data, employee, data.punch_type);
-  const payload = { ...data, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
+  // punched_at permanece omitido intencionalmente: o DEFAULT now() do PostgreSQL
+  // grava o timestamp UTC autoritativo no servidor de banco.
+  const payload = { ...data, work_date: serverWorkDate, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
   const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });

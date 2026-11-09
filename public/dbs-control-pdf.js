@@ -265,33 +265,28 @@
         doc.setDrawColor(...theme.line); doc.setLineWidth(0.2); doc.line(M, 23, M + W, 23);
         return 30;
       }
-      const height = 34;
-      doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.35); doc.rect(M, y, W, height, 'FD');
+      const height = 26;
+      doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.35); doc.roundedRect(M, y, W, height, 1.2, 1.2, 'FD');
       doc.setFillColor(...theme.blue); doc.rect(M, y, 1.5, height, 'F');
       doc.setFillColor(...theme.green); doc.rect(M + 1.5, y, 0.7, height, 'F');
       if (resources.logo) {
-        const scale = Math.min(48 / resources.logo.width, 22 / resources.logo.height);
+        const scale = Math.min(34 / resources.logo.width, 18 / resources.logo.height);
         const lw = resources.logo.width * scale, lh = resources.logo.height * scale;
-        doc.addImage(resources.logo.data, 'PNG', M + 6, y + (height - lh) / 2, lw, lh, undefined, 'FAST');
+        doc.addImage(resources.logo.data, 'PNG', M + 4, y + (height - lh) / 2, lw, lh, undefined, 'FAST');
       } else {
-        font(14, 'bold', theme.navy); doc.text('DBS AIR', M + 7, y + 20);
-        font(6.5, 'bold', theme.blue); doc.text('REFRIGERAÇÃO', M + 7, y + 25);
+        font(12, 'bold', theme.navy); doc.text('DBS AIR', M + 5, y + 12);
+        font(5.8, 'bold', theme.blue); doc.text('REFRIGERAÇÃO', M + 5, y + 17);
       }
-      font(7.2, 'bold', theme.blue); doc.text('ORDEM DE SERVIÇO', M + W - 5, y + 7, { align: 'right' });
-      font(10, 'bold', theme.navy); doc.text(`Nº ${protocol}`, M + W - 5, y + 15, { align: 'right' });
-      const badgeWidth = Math.min(68, Math.max(29, doc.getTextWidth(text(status).toUpperCase()) + 10));
-      doc.setFillColor(...statusFill); doc.roundedRect(M + W - 5 - badgeWidth, y + 19, badgeWidth, 8, 2, 2, 'F');
-      font(7.1, 'bold', statusInk); doc.text(text(status).toUpperCase(), M + W - 9, y + 24.2, { align: 'right', maxWidth: badgeWidth - 8 });
-
-      const ruleY = y + height + 6;
-      doc.setDrawColor(...theme.blue); doc.setLineWidth(0.25); doc.line(M, ruleY, M + W, ruleY);
-      const issuerY = ruleY + 8;
-      const issuerHeight = 18;
-      doc.setFillColor(...theme.soft); doc.setDrawColor(...theme.line); doc.setLineWidth(0.25); doc.rect(M, issuerY, W, issuerHeight, 'FD');
-      font(7.1, 'bold', theme.navy); doc.text(issuerTitle, M + 4, issuerY + 4.5, { maxWidth: W - 8 });
-      font(6.8, 'normal', theme.muted); doc.text(unique([companyEmail, companyPhone]) || '—', M + 4, issuerY + 9, { maxWidth: W - 8 });
-      doc.text(companyAddress || '—', M + 4, issuerY + 13.5, { maxWidth: W - 8 });
-      return issuerY + issuerHeight + 6;
+      const issuerX = M + 43;
+      font(6.8, 'bold', theme.navy); doc.text(issuerTitle, issuerX, y + 6, { maxWidth: 82 });
+      font(5.8, 'normal', theme.muted); doc.text(unique([companyEmail, companyPhone]) || '—', issuerX, y + 11, { maxWidth: 82 });
+      doc.text(companyAddress || '—', issuerX, y + 16, { maxWidth: 82 });
+      font(6.5, 'bold', theme.blue); doc.text('ORDEM DE SERVIÇO', M + W - 4, y + 5.5, { align: 'right' });
+      font(9.2, 'bold', theme.navy); doc.text(`Nº ${protocol}`, M + W - 4, y + 12.5, { align: 'right' });
+      const badgeWidth = Math.min(48, Math.max(26, doc.getTextWidth(text(status).toUpperCase()) + 8));
+      doc.setFillColor(...statusFill); doc.roundedRect(M + W - 4 - badgeWidth, y + 16, badgeWidth, 7, 1.5, 1.5, 'F');
+      font(6.2, 'bold', statusInk); doc.text(text(status).toUpperCase(), M + W - 8, y + 20.6, { align: 'right', maxWidth: badgeWidth - 6 });
+      return y + height + 5;
     };
 
     const addPage = () => {
@@ -405,7 +400,7 @@
     const totalValue = order.total_cents != null ? numeric(order.total_cents) / 100 : numeric(order.valor);
     const employeeUuid = first(order.concluidoPorEmployeeId, order.employeeId, order.assigned_employee_id, technician.id, '—');
     const integrityHash = first(order.integrityHash, order.hashIntegridade, order.contentHash, order.hash, '—');
-    const signatureSource = first(order.assinatura, order.signature_data, order.signatureData, order.assinatura_url, order.signature_url);
+    const signatureSource = first(order.assinatura, order.signature_data, order.signatureData, order.assinatura_url, order.signature_url, order.assinaturaStoragePath, order.assinatura_path, order.signature_path);
 
     page.y = drawHeader(true);
 
@@ -453,9 +448,107 @@
     });
 
     drawSectionHeader(4, 'Diagnóstico, execução e evidências');
+    let nextSectionNumber = 5;
     inlineRow([{ label: 'Diagnóstico técnico', value: diagnostic, width: 93 }, { label: 'Ação / peças', value: action, width: 89 }]);
     paragraph('Relatório técnico', report);
-    inlineRow([{ label: 'Evidências', value: evidenceText, width: 132 }, { label: !employeeMode && includeValues && totalValue != null ? 'Valor do atendimento' : 'Registro', value: !employeeMode && includeValues && totalValue != null ? money(totalValue) : (attachmentRows.length ? `${attachmentRows.length} anexo(s)` : 'Sem anexos'), width: 50 }]);
+    inlineRow([{ label: 'Evidências registradas', value: evidenceText, width: 132 }, { label: !employeeMode && includeValues && totalValue != null ? 'Valor do atendimento' : 'Registro', value: !employeeMode && includeValues && totalValue != null ? money(totalValue) : (attachmentRows.length ? `${attachmentRows.length} anexo(s)` : 'Sem anexos'), width: 50 }]);
+
+    const evidenceSources = [
+      { title: 'Evidência: Antes do Atendimento', source: first(order.fotoAntes, order.fotoAntesUrl, order.foto_antes_url, order.fotoAntesStoragePath, order.foto_antes_storage_path), stamp: first(order.fotoAntesEm, order.fotoAntesAt, order.started_at, order.created_at) },
+      { title: 'Evidência: Após Execução', source: first(order.fotoDepois, order.fotoDepoisUrl, order.foto_depois_url, order.fotoDepoisStoragePath, order.foto_depois_storage_path), stamp: first(order.fotoDepoisEm, order.fotoDepoisAt, order.completed_at, order.concluidoEm) },
+    ].filter(item => has(item.source));
+    if (evidenceSources.length) {
+      const loaded = await Promise.all(evidenceSources.map(item => loadImage(item.source, item.title)));
+      const cardGap = 5, cardWidth = (W - 8 - cardGap) / 2, cardHeight = 39;
+      ensureSpace(cardHeight + 3);
+      const cardY = page.y;
+      evidenceSources.forEach((item, index) => {
+        const x = M + 4 + index * (cardWidth + cardGap);
+        doc.setDrawColor(...theme.line); doc.setLineWidth(0.25); doc.roundedRect(x, cardY, cardWidth, cardHeight, 1.5, 1.5, 'S');
+        font(5.8, 'bold', theme.navy); doc.text(item.title, x + 2, cardY + 4, { maxWidth: cardWidth - 4 });
+        const image = loaded[index];
+        if (image) {
+          const maxW = cardWidth - 6, maxH = 25;
+          const scale = Math.min(maxW / image.width, maxH / image.height);
+          const iw = image.width * scale, ih = image.height * scale;
+          doc.addImage(image.data, 'PNG', x + (cardWidth - iw) / 2, cardY + 6 + (maxH - ih) / 2, iw, ih, undefined, 'FAST');
+        } else {
+          font(6.1, 'normal', theme.muted); doc.text('Imagem não disponível nesta sessão', x + 3, cardY + 19, { maxWidth: cardWidth - 6 });
+        }
+        font(5.2, 'normal', theme.muted); doc.text(formatDate(item.stamp), x + 2, cardY + 35, { maxWidth: cardWidth - 4 });
+      });
+      page.y += cardHeight + 3;
+    }
+
+    const partsRows = list(order.pecasUsadas).filter(part => Number(part?.qtd ?? part?.quantity ?? 0) > 0);
+    if (partsRows.length) {
+      drawSectionHeader(nextSectionNumber++, 'Peças, materiais e insumos');
+      const x0 = M + 4, widths = [25, 105, 25, 25], tableWidth = widths.reduce((sum, width) => sum + width, 0);
+      const headings = ['CÓDIGO/REF', 'DESCRIÇÃO DA PEÇA/MATERIAL', 'QTD', 'UNIDADE'];
+      const drawPartsHeader = () => {
+        ensureSpace(8);
+        doc.setFillColor(...theme.blueSoft); doc.roundedRect(x0, page.y, tableWidth, 6, 1, 1, 'F');
+        let x = x0;
+        headings.forEach((label, index) => { font(5.5, 'bold', theme.navy); doc.text(label, x + 1.5, page.y + 3.8, { maxWidth: widths[index] - 3 }); x += widths[index]; });
+        page.y += 8;
+      };
+      drawPartsHeader();
+      partsRows.forEach((part, index) => {
+        const values = [
+          first(part.codigo, part.code, part.ref, part.sku, part.id, '—'),
+          first(part.descricao, part.description, part.nome, part.name, 'Material não identificado'),
+          String(part.qtd ?? part.quantity ?? 0),
+          first(part.unidade, part.unit, part.measure, part.un, 'UN'),
+        ];
+        const measures = values.map((value, col) => wrapText(value, widths[col] - 3, 6.4));
+        const rowHeight = Math.max(6, Math.max(...measures.map(value => value.length)) * 3.1 + 2.5);
+        if (page.y + rowHeight > contentBottom) { addPage(); drawPartsHeader(); }
+        let x = x0;
+        measures.forEach((value, col) => { font(6.4, 'normal', theme.ink); doc.text(value, x + 1.5, page.y + 3.1, { lineHeightFactor: 1.05 }); x += widths[col]; });
+        doc.setDrawColor(...theme.line); doc.setLineWidth(0.18); doc.line(x0, page.y + rowHeight, x0 + tableWidth, page.y + rowHeight);
+        page.y += rowHeight + (index % 2 ? 0.8 : 1.2);
+      });
+    }
+
+    const checklistEntries = [];
+    const classifyChecklist = (value, explicitStatus) => {
+      const raw = normalize(explicitStatus ?? value);
+      if (raw === 'true' || /conforme|aprovado|ok/.test(raw)) return { label: 'CONFORME', fill: [220, 252, 231], ink: [22, 101, 52] };
+      if (/nao conforme|reprovado|falha|critico/.test(raw)) return { label: 'NÃO CONFORME', fill: [254, 243, 199], ink: [146, 64, 14] };
+      if (/^n\/?a$|nao aplicavel/.test(raw)) return { label: 'N/A', fill: [241, 245, 249], ink: [100, 116, 139] };
+      return null;
+    };
+    list(order.checklist).forEach(item => {
+      const status = classifyChecklist(item?.concluido, item?.status ?? item?.resultado);
+      if (status) checklistEntries.push({ label: first(item?.titulo, item?.title, item?.descricao, item?.name, 'Item de checklist'), status });
+    });
+    const technicalChecklist = order.checklistTecnico && typeof order.checklistTecnico === 'object' ? order.checklistTecnico : {};
+    Object.entries(technicalChecklist).forEach(([group, values]) => {
+      if (!values || typeof values !== 'object' || Array.isArray(values)) return;
+      Object.entries(values).forEach(([label, value]) => {
+        const status = classifyChecklist(value, value?.status ?? value?.resultado);
+        if (status) checklistEntries.push({ label: `${group}: ${label}`, status });
+      });
+    });
+    if (checklistEntries.length) {
+      drawSectionHeader(nextSectionNumber++, 'Checklist técnico / inspeção PMOC');
+      const gap = 4, cellWidth = (W - 8 - gap * 2) / 3, cellHeight = 13;
+      for (let offset = 0; offset < checklistEntries.length; offset += 3) {
+        if (page.y + cellHeight + 2 > contentBottom) addPage();
+        const rowY = page.y;
+        const rowEntries = checklistEntries.slice(offset, offset + 3);
+        rowEntries.forEach((entry, column) => {
+          const x = M + 4 + column * (cellWidth + gap);
+          doc.setDrawColor(...theme.line); doc.setLineWidth(0.2); doc.roundedRect(x, rowY, cellWidth, cellHeight, 1, 1, 'S');
+          font(5.7, 'normal', theme.ink); doc.text(wrapText(entry.label, cellWidth - 4, 5.7).slice(0, 2), x + 2, rowY + 3.3, { lineHeightFactor: 1.02 });
+          const badge = entry.status, badgeWidth = badge.label === 'NÃO CONFORME' ? 25 : 18;
+          doc.setFillColor(...badge.fill); doc.roundedRect(x + cellWidth - badgeWidth - 2, rowY + 7, badgeWidth, 4.2, 1, 1, 'F');
+          font(4.8, 'bold', badge.ink); doc.text(badge.label, x + cellWidth - badgeWidth / 2 - 2, rowY + 9.9, { align: 'center' });
+        });
+        page.y = rowY + cellHeight + 2;
+      }
+      page.y += 1;
+    }
 
     if (observations) {
       const observationLines = wrapText(observations, W - 8, 7.7);
@@ -464,42 +557,52 @@
         sectionState.title = '';
         addPage();
       }
-      drawSectionHeader(5, 'Observações complementares');
+      drawSectionHeader(nextSectionNumber++, 'Observações complementares');
       paragraph('Observações do técnico', observations);
     }
 
-    drawSectionHeader(6, 'Aceite do cliente e assinatura');
-    const signature = await loadImage(signatureSource, 'assinatura');
-    const signatureHeight = 31;
+    drawSectionHeader(nextSectionNumber++, 'Responsáveis e aceite do cliente');
+    const signature = await loadImage(signatureSource, 'assinatura do cliente');
+    const technicianSignatureSource = first(order.assinaturaTecnico, order.assinatura_tecnico, order.technical_signature, order.technical_signature_url, technician.assinatura, technician.signature, technician.signature_url);
+    const technicianSignature = await loadImage(technicianSignatureSource, 'assinatura do técnico');
+    const signatureHeight = 38;
     ensureSpace(signatureHeight);
     const signatureY = page.y;
-    const signatureX = M + 4, signatureWidth = 77;
-    if (signature) {
-      const scale = Math.min(62 / signature.width, 18 / signature.height);
-      doc.addImage(signature.data, 'PNG', signatureX, signatureY + 1, signature.width * scale, signature.height * scale, undefined, 'FAST');
+    const leftX = M + 4, rightX = M + 99, columnWidth = 87;
+    const technicianRegistration = first(technician.matricula, technician.registration, technician.employee_code, order.matriculaTecnico, employeeUuid, '—');
+    const technicianRole = first(technician.cargo, technician.position, technician.role, order.cargoTecnico, 'Técnico responsável');
+    doc.setDrawColor(...theme.line); doc.setLineWidth(0.22);
+    if (technicianSignature) {
+      const scale = Math.min(75 / technicianSignature.width, 15 / technicianSignature.height);
+      const sw = technicianSignature.width * scale, sh = technicianSignature.height * scale;
+      doc.addImage(technicianSignature.data, 'PNG', leftX + (columnWidth - sw) / 2, signatureY + 1 + (15 - sh) / 2, sw, sh, undefined, 'FAST');
     } else {
-      font(7.2, 'normal', theme.muted); doc.text('Assinatura digital não registrada', signatureX, signatureY + 11);
+      font(6.2, 'normal', theme.muted); doc.text('Assinatura digital não registrada', leftX, signatureY + 10);
     }
-    doc.setDrawColor(...theme.line); doc.setLineWidth(0.22); doc.line(signatureX, signatureY + 22, signatureX + signatureWidth, signatureY + 22);
-    font(5.8, 'bold', theme.muted); doc.text('ASSINATURA / ACEITE DO CLIENTE', signatureX, signatureY + 26);
-    const acceptedBy = first(order.assinaturaNome, order.signature_name, order.contatoNome, client.contato, '—');
-    const acceptanceX = M + 87;
-    const acceptanceWidth = M + W - 4 - acceptanceX;
-    const acceptanceFields = [{ label: 'Aceite por', value: acceptedBy, width: 52 }, { label: 'Data / hora', value: formatDate(first(order.assinaturaEm, order.accepted_at, order.concluidoEm)), width: acceptanceWidth - 56 }];
-    let acceptanceCursor = acceptanceX;
-    acceptanceFields.forEach((field, index) => {
-      const width = index === 0 ? 52 : acceptanceWidth - 56;
-      const measure = fieldLines(field.label, field.value, width, 7.6);
-      const label = `${field.label.toUpperCase()}: `;
-      font(6.1, 'bold', theme.muted); doc.text(label, acceptanceCursor, signatureY + 4);
-      font(7.6, 'normal', theme.ink); doc.text(measure.lines[0] || '—', acceptanceCursor + measure.labelWidth + 1, signatureY + 4);
-      if (measure.lines.length > 1) doc.text(measure.lines.slice(1), acceptanceCursor, signatureY + 4 + lineHeight, { lineHeightFactor: 1.08 });
-      acceptanceCursor += width + 4;
-    });
-    page.y = signatureY + signatureHeight;
-    paragraph('Observação do aceite', first(order.aceiteObservacao, order.signature_note, '—'));
+    doc.line(leftX, signatureY + 19, leftX + columnWidth, signatureY + 19);
+    font(5.8, 'bold', theme.muted); doc.text('ASSINATURA DO TÉCNICO RESPONSÁVEL', leftX, signatureY + 23);
+    font(6.5, 'bold', theme.navy); doc.text(technicianName, leftX, signatureY + 28, { maxWidth: columnWidth });
+    font(5.8, 'normal', theme.muted); doc.text(`Matrícula/ID: ${technicianRegistration}`, leftX, signatureY + 32, { maxWidth: columnWidth });
+    doc.text(`Cargo: ${technicianRole}`, leftX, signatureY + 36, { maxWidth: columnWidth });
 
-    drawSectionHeader(7, 'Rastreabilidade e auditoria');
+    if (signature) {
+      const scale = Math.min(75 / signature.width, 15 / signature.height);
+      const sw = signature.width * scale, sh = signature.height * scale;
+      doc.addImage(signature.data, 'PNG', rightX + (columnWidth - sw) / 2, signatureY + 1 + (15 - sh) / 2, sw, sh, undefined, 'FAST');
+    } else {
+      font(6.2, 'normal', theme.muted); doc.text('Assinatura digital não registrada', rightX, signatureY + 10);
+    }
+    doc.line(rightX, signatureY + 19, rightX + columnWidth, signatureY + 19);
+    font(5.8, 'bold', theme.muted); doc.text('ACEITE DO CLIENTE / RESPONSÁVEL', rightX, signatureY + 23);
+    const acceptedBy = first(order.assinaturaNome, order.signature_name, order.contatoNome, client.contato, '—');
+    const acceptedDocument = maskDocument(first(order.assinaturaDocumento, order.signature_document, order.cpfResponsavel, order.rgResponsavel, client.cpf, client.cnpj));
+    font(6.5, 'bold', theme.navy); doc.text(acceptedBy, rightX, signatureY + 28, { maxWidth: columnWidth });
+    font(5.8, 'normal', theme.muted); doc.text(`Documento: ${acceptedDocument}`, rightX, signatureY + 32, { maxWidth: columnWidth });
+    doc.text(`Aceite: ${formatDate(first(order.assinaturaEm, order.accepted_at, order.concluidoEm))}`, rightX, signatureY + 36, { maxWidth: columnWidth });
+    page.y = signatureY + signatureHeight;
+    if (has(first(order.aceiteObservacao, order.signature_note))) paragraph('Observação do aceite', first(order.aceiteObservacao, order.signature_note));
+
+    drawSectionHeader(nextSectionNumber, 'Rastreabilidade e auditoria');
     inlineRow([{ label: 'UUID do colaborador', value: employeeUuid, width: 92 }, { label: 'Hash de integridade', value: integrityHash, width: 88 }]);
     inlineRow([{ label: 'UUID da OS', value: first(order.id, '—'), width: 92 }, { label: 'Versão relacional', value: first(order.version, order.expected_version, '—'), width: 88 }]);
     inlineRow([{ label: 'Gerado em', value: formatDate(new Date().toISOString()), width: 92 }, { label: 'Fonte', value: 'DBS Control · registro relacional', width: 88 }]);
