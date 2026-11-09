@@ -532,19 +532,21 @@
     if (checklistEntries.length) {
       drawSectionHeader(6, 'Checklist técnico / inspeção PMOC');
       const gap = 4, cellWidth = (W - 8 - gap * 2) / 3, cellHeight = 13;
-      checklistEntries.forEach((entry, index) => {
-        const column = index % 3;
-        if (column === 0 && page.y + cellHeight > contentBottom) addPage();
-        const row = Math.floor(index / 3);
-        const x = M + 4 + column * (cellWidth + gap);
-        const y = page.y + row * (cellHeight + 2);
-        doc.setDrawColor(...theme.line); doc.setLineWidth(0.2); doc.roundedRect(x, y, cellWidth, cellHeight, 1, 1, 'S');
-        font(5.7, 'normal', theme.ink); doc.text(wrapText(entry.label, cellWidth - 4, 5.7).slice(0, 2), x + 2, y + 3.3, { lineHeightFactor: 1.02 });
-        const badge = entry.status, badgeWidth = badge.label === 'NÃO CONFORME' ? 25 : 18;
-        doc.setFillColor(...badge.fill); doc.roundedRect(x + cellWidth - badgeWidth - 2, y + 7, badgeWidth, 4.2, 1, 1, 'F');
-        font(4.8, 'bold', badge.ink); doc.text(badge.label, x + cellWidth - badgeWidth / 2 - 2, y + 9.9, { align: 'center' });
-      });
-      page.y += Math.ceil(checklistEntries.length / 3) * (cellHeight + 2) + 2;
+      for (let offset = 0; offset < checklistEntries.length; offset += 3) {
+        if (page.y + cellHeight + 2 > contentBottom) addPage();
+        const rowY = page.y;
+        const rowEntries = checklistEntries.slice(offset, offset + 3);
+        rowEntries.forEach((entry, column) => {
+          const x = M + 4 + column * (cellWidth + gap);
+          doc.setDrawColor(...theme.line); doc.setLineWidth(0.2); doc.roundedRect(x, rowY, cellWidth, cellHeight, 1, 1, 'S');
+          font(5.7, 'normal', theme.ink); doc.text(wrapText(entry.label, cellWidth - 4, 5.7).slice(0, 2), x + 2, rowY + 3.3, { lineHeightFactor: 1.02 });
+          const badge = entry.status, badgeWidth = badge.label === 'NÃO CONFORME' ? 25 : 18;
+          doc.setFillColor(...badge.fill); doc.roundedRect(x + cellWidth - badgeWidth - 2, rowY + 7, badgeWidth, 4.2, 1, 1, 'F');
+          font(4.8, 'bold', badge.ink); doc.text(badge.label, x + cellWidth - badgeWidth / 2 - 2, rowY + 9.9, { align: 'center' });
+        });
+        page.y = rowY + cellHeight + 2;
+      }
+      page.y += 1;
     }
 
     if (observations) {
