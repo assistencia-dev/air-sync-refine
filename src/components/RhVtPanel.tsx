@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelRhVtTopup, createRhVtTopupsBatch, listRhVtEmployees, listRhVtTopups,
-  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup,
+  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup, uploadRhVtReceipt,
 } from "@/lib/rh.vt.functions";
 
 const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -23,7 +23,7 @@ export function RhVtPanel() {
   const [amount, setAmount] = useState("");
   const [paidAt, setPaidAt] = useState(today());
   const [costCenter, setCostCenter] = useState("");
-  const [receiptPath, setReceiptPath] = useState("");
+  const [receiptFile, setReceiptFile] = useState<{name:string; type:string; base64:string} | null>(null);
   const [filterEmployee, setFilterEmployee] = useState("");
   const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth()+1));
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
@@ -62,11 +62,18 @@ export function RhVtPanel() {
     onError: (e: any) => setError(e.message),
   });
   const createBatch = useMutation({
-    mutationFn: () => createRhVtTopupsBatch({ data: { rows: selected.map(id => ({
-      employee_id: id, paid_at: paidAt, amount_cents: Math.round(Number(amount.replace(",", "."))*100),
-      cost_center: costCenter || null, receipt_storage_path: receiptPath || null,
-    })) }}),
-    onSuccess: () => { setError(""); setSelected([]); setAmount(""); setReceiptPath(""); invalidate(); },
+    mutationFn: async () => {
+      let receiptPath: string | null = null;
+      if (receiptFile) {
+        const uploaded = await uploadRhVtReceipt({ data: { file_name: receiptFile.name, content_type: receiptFile.type, base64: receiptFile.base64 } });
+        receiptPath = uploaded.path;
+      }
+      return createRhVtTopupsBatch({ data: { rows: selected.map(id => ({
+        employee_id: id, paid_at: paidAt, amount_cents: Math.round(Number(amount.replace(",", "."))*100),
+        cost_center: costCenter || null, receipt_storage_path: receiptPath,
+      })) }});
+    },
+    onSuccess: () => { setError(""); setSelected([]); setAmount(""); setReceiptFile(null); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
   const editTopup = useMutation({
@@ -85,6 +92,16 @@ export function RhVtPanel() {
   });
   const total = useMemo(() => (topups.data ?? []).filter((r: any) => r.status === "ativa")
     .reduce((sum: number, r: any) => sum + Number(r.amount_cents), 0), [topups.data]);
+  const totalsByCompany = useMemo(() => {
+    const grouped = new Map<string, {name:string; total:number}>();
+    for (const r of topups.data ?? []) if (r.status === "ativa") {
+      const key = r.company_id ?? "legacy";
+      const item = grouped.get(key) ?? { name: r.company_name, total: 0 };
+      item.total += Number(r.amount_cents);
+      grouped.set(key, item);
+    }
+    return [...grouped.values()];
+  }, [topups.data]);
 
   return <section className="space-y-6 rounded-2xl border border-slate-800 bg-[#1E293B] p-5 text-slate-100 sm:p-7">
     <header>
@@ -121,7 +138,7 @@ export function RhVtPanel() {
         <input className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Valor por funcionário (R$)" inputMode="decimal" />
         <input className={field} type="date" value={paidAt} onChange={e => setPaidAt(e.target.value)} />
         <input className={field} value={costCenter} onChange={e => setCostCenter(e.target.value)} placeholder="Centro de custo (opcional)" />
-        <input className={field} value={receiptPath} onChange={e => setReceiptPath(e.target.value)} placeholder="Caminho do comprovante (opcional)" />
+        <label className="block text-xs text-slate-300">Comprovante opcional (PDF, JPG ou PNG, até 10 MB)<input className={field+" mt-1"} type="file" accept="application/pdf,image/jpeg,image/png" onChange={e => { const file=e.target.files?.[0]; if(!file){setReceiptFile(null);return;} const reader=new FileReader(); reader.onload=()=>{const data=String(reader.result ?? "").split(",")[1] ?? "";setReceiptFile({name:file.name,type:file.type,base64:data});}; reader.readAsDataURL(file); }} /></label>
         <p className="text-[11px] text-slate-400">Competência definida automaticamente pelo mês da data da recarga. {selected.length} funcionário(s) selecionado(s).</p>
         <button disabled={!selected.length || Number(amount.replace(",", ".")) <= 0 || createBatch.isPending} onClick={() => createBatch.mutate()} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-black text-slate-950 disabled:opacity-50">{createBatch.isPending ? "Registrando..." : "Registrar recarga(s)"}</button>
       </div>
@@ -131,19 +148,19 @@ export function RhVtPanel() {
         <h3 className="font-bold">Histórico e consulta</h3>
         <div className="flex flex-wrap gap-2">
           <select className={field+" !w-auto"} value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}><option value="">Todos os funcionários</option>{rows.map((e: any)=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select>
-          <select className={field+" !w-auto"} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{String(i+1).padStart(2,"0")}</option>)}</select>
+          <select className={field+" !w-auto"} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}><option value="0">Ano inteiro</option>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{String(i+1).padStart(2,"0")}</option>)}</select>
           <input className={field+" !w-24"} value={filterYear} onChange={e => setFilterYear(e.target.value)} aria-label="Ano da competência" />
         </div>
       </div>
-      <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4">
-        <p className="text-[10px] uppercase text-slate-400">Total de recargas ativas no filtro</p>
-        <p className="mt-1 text-2xl font-black text-amber-400">{money(total)}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Total de recargas ativas no filtro</p><p className="mt-1 text-2xl font-black text-amber-400">{money(total)}</p></div>
+        <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Totais por empresa</p>{totalsByCompany.map((co,i)=><p key={i} className="mt-1 flex justify-between gap-2 text-xs"><span>{co.name}</span><strong>{money(co.total)}</strong></p>)}</div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#0F172A] text-slate-400"><tr><th className="p-3">Funcionário</th><th className="p-3">Data / competência</th><th className="p-3">Valor</th><th className="p-3">Centro de custo</th><th className="p-3">Status</th><th className="p-3">Ações</th></tr></thead>
           <tbody>{(topups.data ?? []).map((r: any)=><tr key={r.id} className="border-t border-slate-700">
-            <td className="p-3">{r.employee?.full_name ?? "Funcionário"}</td><td className="p-3">{r.paid_at} / {r.competence_month}</td><td className="p-3">{money(r.amount_cents)}</td><td className="p-3">{r.cost_center ?? "—"}</td><td className="p-3">{r.status}</td>
+            <td className="p-3">{r.employee?.full_name ?? "Funcionário"}</td><td className="p-3">{r.paid_at} / {r.competence_month}</td><td className="p-3">{money(r.amount_cents)}</td><td className="p-3">{r.cost_center ?? "—"}</td><td className="p-3">{r.status}{r.receipt_storage_path && <span className="block text-[10px] text-sky-300" title={r.receipt_storage_path}>Comprovante anexado</span>}</td>
             <td className="p-3"><div className="flex flex-wrap gap-2"><button className="text-sky-300" onClick={()=>{setEditing({...r,amount:(Number(r.amount_cents)/100).toFixed(2).replace(".",",")});setReason("");}}>Editar</button><button className="text-slate-300" onClick={()=>setAuditId(r.id)}>Auditoria</button>{r.status==="ativa" && <button className="text-red-300" onClick={()=>{setAuditId("");setEditing({cancel_id:r.id});setReason("");}}>Cancelar</button>}</div></td>
           </tr>)}</tbody>
         </table>
