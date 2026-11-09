@@ -24,6 +24,7 @@ create index if not exists rh_vt_employee_config_company_idx
 
 create table if not exists public.rh_vt_topups (
   id uuid primary key default gen_random_uuid(),
+  source_legacy_topup_id uuid unique,
   employee_id uuid not null references public.rh_employees(id) on delete restrict,
   company_id uuid references public.companies(id) on delete restrict,
   paid_at date not null,
@@ -51,6 +52,30 @@ create table if not exists public.rh_vt_topups (
     check ((status = 'cancelada' and cancel_reason is not null and cancelled_at is not null)
         or status = 'ativa')
 );
+
+-- Importa o histórico legado de VT sem apagar nem modificar rh_topups.
+-- O vínculo é resolvido para o registro central por registry_employee_id.
+insert into public.rh_vt_topups(
+  source_legacy_topup_id, employee_id, paid_at, competence_month, amount_cents,
+  idempotency_key, treasury_idempotency_key, created_by, updated_by
+)
+select
+  old.id,
+  canonical.id,
+  old.paid_at,
+  date_trunc('month', old.paid_at)::date,
+  old.amount_cents,
+  'legacy-rh-topup:' || old.id::text,
+  'rh-vt:legacy:' || old.id::text,
+  old.created_by,
+  old.created_by
+from public.rh_topups old
+join public.rh_employees legacy_employee on legacy_employee.id = old.employee_id
+join public.rh_employees canonical
+  on canonical.id = coalesce(legacy_employee.registry_employee_id, legacy_employee.id)
+ and canonical.registry_employee_id = canonical.id
+where old.benefit_type = 'passagem'
+on conflict (source_legacy_topup_id) do nothing;
 
 create index if not exists rh_vt_topups_employee_history_idx
   on public.rh_vt_topups(employee_id, paid_at desc, created_at desc);
