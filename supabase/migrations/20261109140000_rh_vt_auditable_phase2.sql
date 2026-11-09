@@ -57,7 +57,7 @@ create table if not exists public.rh_vt_topups (
 -- O vínculo é resolvido para o registro central por registry_employee_id.
 insert into public.rh_vt_topups(
   source_legacy_topup_id, employee_id, paid_at, competence_month, amount_cents,
-  idempotency_key, treasury_idempotency_key, created_by, updated_by
+  idempotency_key, treasury_idempotency_key, created_by, updated_by, created_at, updated_at
 )
 select
   old.id,
@@ -68,7 +68,9 @@ select
   'legacy-rh-topup:' || old.id::text,
   'rh-vt:legacy:' || old.id::text,
   old.created_by,
-  old.created_by
+  old.created_by,
+  old.created_at,
+  old.created_at
 from public.rh_topups old
 join public.rh_employees legacy_employee on legacy_employee.id = old.employee_id
 join public.rh_employees canonical
@@ -76,6 +78,13 @@ join public.rh_employees canonical
  and canonical.registry_employee_id = canonical.id
 where old.benefit_type = 'passagem'
 on conflict (source_legacy_topup_id) do nothing;
+
+-- Registra a origem histórica sem simular uma ação feita agora pelo operador.
+insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, after_data, created_at)
+select vt.id, vt.employee_id, vt.created_by, 'importada', to_jsonb(vt), vt.created_at
+from public.rh_vt_topups vt
+where vt.source_legacy_topup_id is not null
+  and not exists (select 1 from public.rh_vt_topup_audit a where a.topup_id=vt.id);
 
 create index if not exists rh_vt_topups_employee_history_idx
   on public.rh_vt_topups(employee_id, paid_at desc, created_at desc);
