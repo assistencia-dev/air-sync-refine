@@ -33,6 +33,7 @@ create table if not exists public.rh_vt_topups (
   receipt_storage_path text,
   status text not null default 'ativa' check (status in ('ativa','cancelada')),
   cancel_reason text,
+  change_reason text,
   idempotency_key text not null unique,
   -- Reservado para integração futura com o Ledger; não cria lançamento nesta fase.
   treasury_idempotency_key text not null unique,
@@ -112,6 +113,7 @@ begin
     v_reason := new.cancel_reason;
   else
     v_action := 'editada';
+    v_reason := new.change_reason;
   end if;
 
   insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, before_data, after_data, reason)
@@ -213,14 +215,10 @@ begin
       competence_month=date_trunc('month',p_paid_at)::date,
       cost_center=nullif(trim(p_cost_center),''),
       receipt_storage_path=nullif(trim(p_receipt_storage_path),''),
-      updated_by=p_actor
+      change_reason=trim(p_reason), updated_by=p_actor
   where id=p_topup_id and status='ativa'
   returning * into v_result;
   if not found then raise exception 'Recarga ativa não encontrada.'; end if;
-  -- O motivo também fica registrado na trilha; o trigger já gravou before/after.
-  update public.rh_vt_topup_audit
-  set reason=nullif(trim(p_reason),'')
-  where id=(select id from public.rh_vt_topup_audit where topup_id=p_topup_id order by created_at desc limit 1);
   return v_result;
 end;
 $$;
