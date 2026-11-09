@@ -235,8 +235,10 @@ Os rótulos significam: **REAL** = regra/estrutura executável encontrada em có
   - Reenvios usam chave `RH_VT_RECHARGE_{recharge_id}_{status}`; edições recebem sufixo de revisão para permitir vários ajustes independentes sem colisão.
   - Inclui RPC de conciliação RH × Treasury por funcionário e competência; diferença é exibida, nunca corrigida automaticamente.
   - Habilita RLS e revoga acesso direto de `anon`/`authenticated` à trilha financeira; operações permanecem no caminho server-side com `service_role`, respeitando o modelo de acesso restrito já usado pela Fase 2.
-- `src/lib/rh.vt.functions.ts`: adiciona leitura server-side do relatório de conciliação.
+- `src/lib/rh.vt.functions.ts`: adiciona leitura server-side do relatório de conciliação para o módulo RH.
 - `src/components/RhVtPanel.tsx`: adiciona totais RH/Treasury, diferença e detalhamento por funcionário/competência.
+- `src/lib/treasury.functions.ts`: adiciona leitura do relatório sob autorização SUPER_ADMIN do Financeiro.
+- `src/routes/_authenticated/treasury.tsx`: apresenta no DBS TREASURY V10 o custo de VT por funcionário e competência, com RH, Treasury e diferença.
 
 ### Segurança e limites
 - Nenhuma migration foi aplicada no Supabase oficial `gdglototcrehvhkvcqsq`.
