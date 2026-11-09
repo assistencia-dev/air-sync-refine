@@ -291,8 +291,8 @@ revoke all on function public.rh_vt_create_topups_batch(jsonb,uuid) from public,
 revoke all on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,text,uuid) from public, anon, authenticated;
 revoke all on function public.rh_vt_cancel_topup(uuid,text,text,uuid) from public, anon, authenticated;
 grant execute on function public.rh_vt_create_topups_batch(jsonb,uuid) to service_role;
-grant execute on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,uuid) to service_role;
-grant execute on function public.rh_vt_cancel_topup(uuid,text,uuid) to service_role;
+grant execute on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,text,uuid) to service_role;
+grant execute on function public.rh_vt_cancel_topup(uuid,text,text,uuid) to service_role;
 
 comment on table public.rh_vt_employee_config is 'Configuração de Vale-Transporte vinculada ao cadastro central rh_employees.id.';
 comment on table public.rh_vt_topups is 'Recargas de VT com competência, idempotência e preparação de integração futura; não gera lançamento financeiro.';
