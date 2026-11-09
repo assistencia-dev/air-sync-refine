@@ -233,3 +233,25 @@ export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
     });
     return { ...(asObject(result) as any), scope_key: scopeKey };
   });
+
+
+export const getTreasuryVtBenefitsReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { competence_start: string; competence_end: string }) => {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.competence_start) ||
+        !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.competence_end) ||
+        input.competence_start >= input.competence_end) {
+      throw new Error("Período de benefícios VT inválido.");
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    await requireTreasuryUser(context);
+    const { data: rows, error } = await (supabaseAdmin as any).rpc("rh_vt_financial_report", {
+      p_competence_start: data.competence_start,
+      p_competence_end: data.competence_end,
+      p_company_id: null,
+    });
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });

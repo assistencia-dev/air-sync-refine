@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelRhVtTopup, createRhVtTopupsBatch, listRhVtEmployees, listRhVtTopups,
-  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup, uploadRhVtReceipt,
+  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup, uploadRhVtReceipt, getRhVtFinancialReport,
 } from "@/lib/rh.vt.functions";
 
 const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -40,6 +40,21 @@ export function RhVtPanel() {
       competence_year: Number(filterYear), competence_month: Number(filterMonth),
     }}),
   });
+  const reportStart = filterMonth === "0" ? `${filterYear}-01-01` : `${filterYear}-${String(Number(filterMonth)).padStart(2,"0")}-01`;
+  const reportEndDate = filterMonth === "0"
+    ? new Date(Number(filterYear) + 1, 0, 1)
+    : new Date(Number(filterYear), Number(filterMonth), 1);
+  const reportEnd = `${reportEndDate.getFullYear()}-${String(reportEndDate.getMonth()+1).padStart(2,"0")}-01`;
+  const financialReport = useQuery({
+    queryKey: ["rh-vt-financial-report", reportStart, reportEnd],
+    queryFn: () => getRhVtFinancialReport({ data: { competence_start: reportStart, competence_end: reportEnd } }),
+  });
+  const reportRows = financialReport.data ?? [];
+  const reportTotals = reportRows.reduce((acc: any, row: any) => ({
+    rh: acc.rh + Number(row.rh_total_cents ?? 0),
+    treasury: acc.treasury + Number(row.treasury_total_cents ?? 0),
+    difference: acc.difference + Number(row.difference_cents ?? 0),
+  }), { rh: 0, treasury: 0, difference: 0 });
   const audit = useQuery({
     queryKey: ["rh-vt-audit", auditId],
     queryFn: () => listRhVtTopupAudit({ data: { topup_id: auditId } }),
@@ -156,6 +171,20 @@ export function RhVtPanel() {
         <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Total de recargas ativas no filtro</p><p className="mt-1 text-2xl font-black text-amber-400">{money(total)}</p></div>
         <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Totais por empresa</p>{totalsByCompany.map((co,i)=><p key={i} className="mt-1 flex justify-between gap-2 text-xs"><span>{co.name}</span><strong>{money(co.total)}</strong></p>)}</div>
       </div>
+      <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="font-bold">Conciliação RH × DBS TREASURY V10</h3><p className="text-[11px] text-slate-400">Competência selecionada · valores líquidos de estornos · sem correção automática</p></div>
+          {reportRows.some((r: any) => r.divergence) ? <span className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-bold text-red-300">Divergência identificada</span> : <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300">Conciliado</span>}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div><p className="text-[10px] uppercase text-slate-400">Total RH</p><strong>{money(reportTotals.rh)}</strong></div>
+          <div><p className="text-[10px] uppercase text-slate-400">Total Treasury</p><strong>{money(reportTotals.treasury)}</strong></div>
+          <div><p className="text-[10px] uppercase text-slate-400">Diferença (RH − Treasury)</p><strong className={reportTotals.difference ? "text-red-300" : "text-emerald-300"}>{money(reportTotals.difference)}</strong></div>
+        </div>
+        {reportRows.length > 0 && <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-slate-400"><tr><th className="p-2">Funcionário</th><th className="p-2">Competência</th><th className="p-2">RH</th><th className="p-2">Treasury</th><th className="p-2">Diferença</th></tr></thead><tbody>{reportRows.map((r: any) => <tr key={`${r.employee_id}-${r.company_id}-${r.competence_month}`} className="border-t border-slate-700"><td className="p-2">{r.employee_name ?? "Funcionário"}</td><td className="p-2">{r.competence_month}</td><td className="p-2">{money(Number(r.rh_total_cents ?? 0))}</td><td className="p-2">{money(Number(r.treasury_total_cents ?? 0))}</td><td className={`p-2 ${r.divergence ? "font-bold text-red-300" : "text-emerald-300"}`}>{money(Number(r.difference_cents ?? 0))}</td></tr>)}</tbody></table></div>}
+        {!reportRows.length && <p className="mt-3 text-xs text-slate-400">Nenhuma recarga ou lançamento encontrado nesta competência.</p>}
+        {financialReport.isError && <p className="mt-2 text-xs text-red-300">{(financialReport.error as Error).message}</p>}
+      </div>
       <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#0F172A] text-slate-400"><tr><th className="p-3">Funcionário</th><th className="p-3">Data / competência</th><th className="p-3">Valor</th><th className="p-3">Centro de custo</th><th className="p-3">Status</th><th className="p-3">Ações</th></tr></thead>
@@ -174,6 +203,6 @@ export function RhVtPanel() {
       <div className="flex gap-2"><button disabled={!reason.trim() || editTopup.isPending || cancelTopup.isPending} onClick={()=>editing.cancel_id ? cancelTopup.mutate(editing.cancel_id) : editTopup.mutate()} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-black text-slate-950">{editing.cancel_id ? "Confirmar cancelamento" : "Salvar edição"}</button><button onClick={()=>setEditing(null)} className="rounded-lg border border-slate-600 px-4 py-2 text-xs">Fechar</button></div>
     </div>}
     {auditId && <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-2 flex justify-between"><h4 className="font-bold">Trilha de auditoria</h4><button onClick={()=>setAuditId("")} className="text-xs text-slate-400">Fechar</button></div>{(audit.data ?? []).map((a:any)=><div key={a.id} className="border-t border-slate-700 py-2 text-xs"><strong>{a.action}</strong> · {new Date(a.created_at).toLocaleString("pt-BR")} · {a.reason ?? "—"}<pre className="mt-1 overflow-auto whitespace-pre-wrap text-[10px] text-slate-400">{JSON.stringify({antes:a.before_data,depois:a.after_data},null,2)}</pre></div>)}</div>}
-    <p className="text-[11px] text-slate-500">Nesta fase não há lançamento financeiro. A chave de integração futura fica reservada; o Ledger não é acionado.</p>
+    <p className="text-[11px] text-slate-500">Cada recarga ativa gera despesa por competência contra VT a pagar no DBS TREASURY V10. Edições e cancelamentos criam estornos auditáveis; divergências são apenas sinalizadas.</p>
   </section>;
 }

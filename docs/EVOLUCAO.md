@@ -211,3 +211,52 @@ Os rótulos significam: **REAL** = regra/estrutura executável encontrada em có
 - Criação individual/em lote, edição e cancelamento possuem chaves de idempotência; falta exercitar reenvios concorrentes e retries em teste funcional após a migration.
 
 **STATUS: CÓDIGO DA FASE 2 PREPARADO E CI VERDE — AINDA NÃO LIBERADO.** PR #148 permanece em draft. Não fazer merge, não publicar e não aplicar a migration em produção. Aguardar validação SQL em ambiente de desenvolvimento, teste funcional do fluxo completo e aprovação explícita para qualquer alteração no Supabase.
+
+
+---
+
+## Fase 3 — Integração de Vale-Transporte ao DBS TREASURY V10
+
+### Decisão contábil confirmada
+- Regime de competência: recarga ativa reconhece **Débito 3.1.02.01 — Despesas com Vale-Transporte** e **Crédito 2.1.02.01 — Vale-Transporte a Pagar**.
+- Pagamento efetivo da obrigação permanece operação posterior da Tesouraria: débito em VT a Pagar e crédito na conta bancária/caixa escolhida no fluxo de liquidação.
+- Edição: estorno integral do lançamento anterior e novo lançamento com o valor/competência atualizados.
+- Cancelamento: estorno integral do lançamento ativo.
+- Nunca alterar ou excluir partidas postadas; o lançamento de estorno referencia o original em `treasury_ledger_entries.reversed_entry_id`.
+
+### Implementação preparada na branch `feat/rh-vt-financeiro-fase3`
+- Dependência: branch `feat/rh-vt-auditavel-fase2` / PR #148. Esta fase não deve ser integrada diretamente em `main` antes da Fase 2.
+- `supabase/migrations/20261109160000_rh_vt_treasury_integration_phase3.sql`:
+  - Acrescenta os vínculos `financial_entry_id`, `financial_reversal_entry_id` e revisão financeira à tabela de recargas criada na Fase 2.
+  - Cria trilha append-only `rh_vt_financial_events`.
+  - Aciona a RPC canônica `post_treasury_ledger_entry(...)` dentro da transação da recarga; a RPC existente continua responsável por validar partidas equilibradas e publicar no Outbox próprio do Treasury.
+  - Identifica origem `source_module='rh'` e metadados da recarga/funcionário/centro de custo. Não utiliza nem altera a Outbox ou sincronização do DBS Control.
+  - Gera contas por escopo a partir dos códigos confirmados, apenas quando ausentes; se o mesmo código já existir com nome, tipo ou estado incompatível, interrompe a transação em vez de reclassificar silenciosamente o plano de contas.
+  - Reenvios usam chave `RH_VT_RECHARGE_{recharge_id}_{status}`; edições recebem sufixo de revisão para permitir vários ajustes independentes sem colisão.
+  - Inclui RPC de conciliação RH × Treasury por funcionário e competência; diferença é exibida, nunca corrigida automaticamente.
+  - Habilita RLS e revoga acesso direto de `anon`/`authenticated` à trilha financeira; operações permanecem no caminho server-side com `service_role`, respeitando o modelo de acesso restrito já usado pela Fase 2.
+- `src/lib/rh.vt.functions.ts`: adiciona leitura server-side do relatório de conciliação para o módulo RH.
+- `src/components/RhVtPanel.tsx`: adiciona totais RH/Treasury, diferença e detalhamento por funcionário/competência.
+- `src/lib/treasury.functions.ts`: adiciona leitura do relatório sob autorização SUPER_ADMIN do Financeiro.
+- `src/routes/_authenticated/treasury.tsx`: apresenta no DBS TREASURY V10 o custo de VT por funcionário e competência, com RH, Treasury e diferença.
+
+### Segurança e limites
+- Nenhuma migration foi aplicada no Supabase oficial `gdglototcrehvhkvcqsq`.
+- Nenhum lançamento, conta contábil ou dado de teste foi criado em produção.
+- Nenhum lançamento financeiro existente foi alterado; nenhuma partida foi excluída.
+- Histórico legado importado na Fase 2 não é postado retroativamente de forma automática. Se estiver ativo e não tiver vínculo financeiro, aparecerá como divergência na conciliação para regularização explícita.
+- A liquidação bancária de VT a pagar não é criada nesta fase; será feita no fluxo normal de pagamento do Treasury, sem antecipar saída de caixa.
+
+### Roteiro de validação obrigatório antes de liberar
+Usar banco de desenvolvimento isolado e funcionários/empresas de teste, nunca produção:
+1. **Criar:** recarga de R$ 100,00 na competência 2026-11. Esperado: 1 lançamento postado, débito 3.1.02.01 = 10.000 centavos, crédito 2.1.02.01 = 10.000 centavos, origem RH e centro de custo correto.
+2. **Reenviar:** repetir a mesma operação/chave. Esperado: mesmo `entry_id`, `replayed=true`, total de lançamentos continua 1 para a criação.
+3. **Editar:** alterar R$ 100,00 para R$ 120,00. Esperado: 1 estorno de R$ 100,00 (débito VT a pagar / crédito despesa) + 1 novo lançamento de R$ 120,00; total 3 lançamentos no ciclo; saldo líquido de despesa = R$ 120,00.
+4. **Reenviar edição:** repetir a mesma chave de operação. Esperado: sem novo estorno ou lançamento; total continua 3.
+5. **Cancelar:** cancelar a recarga editada. Esperado: 1 estorno de R$ 120,00; total 4 lançamentos; saldo líquido de despesa = R$ 0,00; histórico e partidas originais preservados.
+6. **Reenviar cancelamento:** repetir a mesma chave. Esperado: total continua 4.
+7. **Conciliação:** testar uma recarga ativa e uma recarga legada sem lançamento. Esperado: valores RH e Treasury separados e divergência sinalizada; nenhuma correção automática.
+8. **Concorrência:** duas requisições simultâneas com a mesma chave. Esperado: apenas um lançamento por chave, sem duplicidade de Outbox Treasury.
+9. **Segurança:** usuário sem perfil operador não acessa a RPC/relatório; tabelas novas sem acesso direto por `authenticated`; confirmar RLS/grants e executar Supabase Advisors.
+
+**STATUS FASE 3: CÓDIGO PREPARADO; BUILD PREVIEW DO HEAD FINAL VERDE — NÃO VALIDADO EM BANCO, NÃO MERGEADO E NÃO APLICADO.** Aguardar confirmação completa dos checks do head final, revisão SQL em staging e testes funcionais numerados acima. Não publicar em produção nem aplicar migration no Supabase oficial.

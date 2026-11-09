@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getTreasuryCloudState, postTreasuryLedgerEntry } from "@/lib/treasury.functions";
+import { getTreasuryCloudState, postTreasuryLedgerEntry, getTreasuryVtBenefitsReport } from "@/lib/treasury.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 
@@ -32,6 +33,25 @@ function TreasuryPage() {
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [vtCompetence, setVtCompetence] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  });
+  const vtStart = `${vtCompetence}-01`;
+  const [vtYear, vtMonth] = vtCompetence.split("-").map(Number);
+  const vtEndDate = new Date(vtYear, vtMonth, 1);
+  const vtEnd = `${vtEndDate.getFullYear()}-${String(vtEndDate.getMonth()+1).padStart(2,"0")}-01`;
+  const vtReport = useQuery({
+    queryKey: ["treasury-vt-benefits", vtCompetence],
+    queryFn: () => getTreasuryVtBenefitsReport({ data: { competence_start: vtStart, competence_end: vtEnd } }),
+    enabled: profile?.role_key === "SUPER_ADMIN",
+  });
+  const vtRows = vtReport.data ?? [];
+  const vtTotals = vtRows.reduce((acc: any, row: any) => ({
+    rh: acc.rh + Number(row.rh_total_cents ?? 0),
+    treasury: acc.treasury + Number(row.treasury_total_cents ?? 0),
+    difference: acc.difference + Number(row.difference_cents ?? 0),
+  }), { rh: 0, treasury: 0, difference: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +181,20 @@ function TreasuryPage() {
         <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
       </header>
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100vh - 64px)" }}>
+        <section className="mx-auto max-w-[1600px] border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="text-sm font-extrabold text-slate-900">Custo de Vale-Transporte por funcionário</h2><p className="mt-1 text-xs text-slate-500">Conciliação RH × Treasury · regime de competência · sem ajustes automáticos</p></div>
+            <label className="text-xs font-semibold text-slate-600">Competência <input className="ml-2 rounded-lg border border-slate-300 px-3 py-2" type="month" value={vtCompetence} onChange={e=>{if(e.target.value)setVtCompetence(e.target.value)}} /></label>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">RH</p><p className="mt-1 text-lg font-black text-slate-900">{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(vtTotals.rh/100)}</p></div>
+            <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Despesa no Treasury</p><p className="mt-1 text-lg font-black text-slate-900">{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(vtTotals.treasury/100)}</p></div>
+            <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Diferença</p><p className={`mt-1 text-lg font-black ${vtTotals.difference ? "text-rose-700" : "text-emerald-700"}`}>{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(vtTotals.difference/100)}</p></div>
+          </div>
+          {vtReport.isError && <p className="mt-2 text-xs text-rose-700">{(vtReport.error as Error).message}</p>}
+          <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-slate-500"><tr><th className="p-2">Funcionário</th><th className="p-2">Competência</th><th className="p-2">Custo RH</th><th className="p-2">Custo Treasury</th><th className="p-2">Diferença</th><th className="p-2">Conciliação</th></tr></thead><tbody>{vtRows.map((row: any)=><tr key={`${row.employee_id}-${row.company_id}-${row.competence_month}`} className="border-t border-slate-100"><td className="p-2 font-semibold text-slate-800">{row.employee_name ?? "Funcionário"}</td><td className="p-2 text-slate-600">{row.competence_month}</td><td className="p-2">{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(row.rh_total_cents ?? 0)/100)}</td><td className="p-2">{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(row.treasury_total_cents ?? 0)/100)}</td><td className={`p-2 font-bold ${row.divergence ? "text-rose-700" : "text-emerald-700"}`}>{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(row.difference_cents ?? 0)/100)}</td><td className="p-2">{row.divergence ? <span className="font-bold text-rose-700">Divergente</span> : <span className="font-bold text-emerald-700">Conciliado</span>}</td></tr>)}</tbody></table></div>
+          {!vtRows.length && !vtReport.isLoading && <p className="mt-2 text-xs text-slate-500">Sem recargas ou lançamentos de VT nesta competência.</p>}
+        </section>
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 p-5">
           {cloudError ? (
             <div role="alert" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-lg">
