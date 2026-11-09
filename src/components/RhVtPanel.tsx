@@ -80,13 +80,13 @@ export function RhVtPanel() {
     mutationFn: () => updateRhVtTopup({ data: {
       id: editing.id, amount_cents: Math.round(Number(editing.amount.replace(",", "."))*100),
       paid_at: editing.paid_at, cost_center: editing.cost_center, receipt_storage_path: editing.receipt_storage_path,
-      reason,
+      reason, operation_key: crypto.randomUUID(),
     }}),
     onSuccess: () => { setEditing(null); setReason(""); setError(""); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
   const cancelTopup = useMutation({
-    mutationFn: (id: string) => cancelRhVtTopup({ data: { id, reason } }),
+    mutationFn: (id: string) => cancelRhVtTopup({ data: { id, reason, operation_key: crypto.randomUUID() } }),
     onSuccess: () => { setEditing(null); setReason(""); setError(""); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
