@@ -260,3 +260,58 @@ Usar banco de desenvolvimento isolado e funcionários/empresas de teste, nunca p
 9. **Segurança:** usuário sem perfil operador não acessa a RPC/relatório; tabelas novas sem acesso direto por `authenticated`; confirmar RLS/grants e executar Supabase Advisors.
 
 **STATUS FASE 3: CÓDIGO PREPARADO; BUILD PREVIEW DO HEAD FINAL VERDE — NÃO VALIDADO EM BANCO, NÃO MERGEADO E NÃO APLICADO.** Aguardar confirmação completa dos checks do head final, revisão SQL em staging e testes funcionais numerados acima. Não publicar em produção nem aplicar migration no Supabase oficial.
+
+---
+
+## Fase 4 — Vale-Alimentação (levantamento e implementação)
+
+**Branch de trabalho:** `feat/rh-va-auditavel-fase4-implementation`  
+**Dependências:** Fases 2 e 3 (PRs #148 e #149); nenhuma delas foi aplicada ao Supabase oficial.
+
+### Situação real encontrada
+- `src/routes/admin/rh-dashboard/TabValeAlimentacao.tsx`: VA permanece no fluxo legado visual. Configura `rh_employees` via `configureRhEmployeeBenefit`, calcula previsão com `countRJBusinessDays(..., '5x2')` e não oferece créditos auditáveis individuais/em lote, histórico de edições/cancelamentos, nem conciliação financeira.
+- `src/lib/rh.vt.functions.ts` e `src/components/RhVtPanel.tsx`: fornecem o padrão implementado para funcionário central, lote idempotente, comprovante, auditoria, edição/cancelamento e relatório RH × Treasury. A Fase 4 deve reutilizar esse padrão, sem copiar a estrutura genérica antiga do pacote.
+- `supabase/migrations/20261109140000_rh_vt_auditable_phase2.sql` e `supabase/migrations/20261109160000_rh_vt_treasury_integration_phase3.sql`: são a base efetiva de schema e integração a reutilizar.
+
+### Decisões e bloqueios objetivos
+- Regras de VA precisam suportar diário, mensal e valor específico por competência, com dias elegíveis por funcionário/competência; o cálculo fixo 5x2 atual não pode continuar sendo a única regra.
+- Não foi encontrado no repositório mapeamento contábil de VA. Os códigos `3.1.02.01` e `2.1.02.01` estão explicitamente nomeados e validados como Vale-Transporte na migration da Fase 3; reutilizá-los para VA sem confirmação criaria classificação contábil incorreta. **Mapeamento contábil de VA: NÃO ENCONTRADO.**
+- A integração financeira da Fase 4 deve permanecer bloqueada até confirmar as contas de despesa e obrigação de VA no plano de contas real. O restante do desenvolvimento pode avançar sem postar valores incorretos no Treasury.
+
+**STATUS FASE 4: LEVANTAMENTO CONCLUÍDO; IMPLEMENTAÇÃO FUNCIONAL AINDA NÃO CONCLUÍDA.** Nenhuma migration VA criada/aplicada e nenhum dado alterado.
+
+---
+
+## Fase 5 — Compras → Estoque → Financeiro (mapeamento obrigatório antes de qualquer migration)
+
+### Mapeamento encontrado no repositório
+| Conceito do pacote Fase 5 | Objeto real já existente | Evidência |
+|---|---|---|
+| `parts` / catálogo de peças | `public.dbs_control_parts` | `supabase/migrations/20260930170000_dbs_control_core.sql`; `supabase/migrations/20261031040330_dbs_control_inventory_financial_bridge.sql` |
+| `cmp_purchase_orders` / compra registrada | `public.dbs_control_purchases` | `supabase/migrations/20261031040330_dbs_control_inventory_financial_bridge.sql`; `supabase/migrations/20261105125808_dbs_control_purchase_register_and_receipt_lifecycle.sql` |
+| `cmp_po_items` | `public.dbs_control_purchase_items` | mesmas migrations de compras |
+| `est_movements` / razão de estoque | `public.dbs_control_inventory_movements` | `supabase/migrations/20261031040330_dbs_control_inventory_financial_bridge.sql` |
+| `cmp_receipts` / recebimentos | Fluxo de recebimento existente em `dbs_control_receive_purchase` e `dbs_control_receive_registered_purchase`; o segundo grava movimentos e reclassificação contábil | migrations `20261031040330...` e `20261105125808...` |
+| Fornecedor relacional | **NÃO ENCONTRADO** no fluxo de compras acima; `dbs_control_purchases` armazena `supplier_name` como texto | `supabase/migrations/20261105125808_dbs_control_purchase_register_and_receipt_lifecycle.sql` |
+| Cotação persistida e comparativa | **NÃO CONFIRMADA** nas tabelas relacionais auditadas; há handoff de itens de cotação para a tela de compras | `src/routes/_authenticated/dbs-inventory.tsx`; `scripts/test-inventory-financial-bridge.cjs` |
+
+### Risco de duplicação identificado
+- `supabase/migrations/20261103090000_dbs_purchase_orders_partial_receipts.sql` cria outro conjunto: `dbs_purchase_orders`, `dbs_purchase_order_items`, `dbs_inventory_receipts` e `dbs_inventory_receipt_items`, além da RPC `dbs_process_purchase_receipt(jsonb)`.
+- Esse conjunto é distinto do fluxo operacional atual `dbs_control_purchases` / `dbs_control_purchase_items` / `dbs_control_inventory_movements`. A auditoria anterior registrou que as tabelas `dbs_purchase_orders` não estavam no catálogo do Supabase oficial consultado.
+- Portanto, **não aplicar nem duplicar** a migration de recebimento parcial antes de decidir a reconciliação/mapeamento. A implementação precisa estender o fluxo canônico `dbs_control_*` ou demonstrar por consulta de catálogo que o modelo `dbs_purchase_*` é o que está ativo.
+
+### Funcionalidade já presente
+- `src/routes/_authenticated/dbs-inventory.tsx`: tela já lista peças do catálogo, recebe itens vindos da cotação por URL, registra compra com seleção de peça, quantidade e custo, mostra balanço de estoque/contas a pagar/custo operacional/receita e oferece telas de venda e reserva.
+- `src/lib/dbs-control.functions.ts`: já contém funções server-side de compra, recebimento, pagamento, visão financeira e estoque.
+- `dbs_control_register_purchase(jsonb)`: cria obrigação no Treasury como estoque em trânsito × fornecedores, com chave idempotente.
+- `dbs_control_receive_registered_purchase(uuid,uuid,text)`: recebe a compra registrada, atualiza quantidade e custo médio ponderado, grava movimento idempotente e reclassifica estoque em trânsito para estoque de peças; o Outbox existente é mantido.
+- O fluxo legado `dbs_control_receive_purchase(jsonb)` também existe e deve ser preservado para compatibilidade.
+
+### Próximas verificações obrigatórias
+1. Conferir o corpo completo das funções de compra e a tela até o final para identificar se a ação de recebimento já está exposta e se é integral ou parcial.
+2. Verificar migrations corretivas posteriores e testes automatizados de compra/estoque; não concluir que o fluxo está operacional apenas pela presença da função.
+3. Confirmar por catálogo read-only do Supabase oficial quais tabelas de recebimento existem hoje.
+4. Apresentar proposta de recebimento parcial usando as tabelas canônicas existentes, com diff e migration aditiva, antes de qualquer aplicação.
+5. Não executar carga inicial nem criar fornecedor/cotação de teste em produção.
+
+**STATUS FASE 5: MAPEAMENTO PARCIAL CONCLUÍDO; NÃO APLICAR MIGRATION.** O fluxo de compra registrada, entrada de estoque, custo médio e Treasury já existe no código. Recebimento parcial, cadastro relacional de fornecedor e persistência de cotações permanecem como pontos de validação/integração. Nenhuma migration, escrita de dados ou alteração no Supabase oficial foi executada.
