@@ -12,7 +12,11 @@ const localSync = fs.readFileSync("src/lib/dbs-control.local-sync.ts", "utf8");
 const referenceMigration = fs.readFileSync("supabase/migrations/20261028191111_dbs_control_reference_validation.sql", "utf8");
 const syncConflictMigration = fs.readFileSync("supabase/migrations/20261105150000_dbs_control_sync_conflict_classification.sql", "utf8");
 const workOrderDefaultsMigration = fs.readFileSync("supabase/migrations/20261030041711_dbs_control_work_order_defaults.sql", "utf8");
+const fieldControl = fs.readFileSync("src/lib/fieldcontrol.functions.ts", "utf8");
 
+assert.match(fieldControl, /Retry-After/, "A integração FieldControl deve respeitar Retry-After nas respostas HTTP 429.");
+assert.match(fieldControl, /maxRateLimitRetries/, "A integração FieldControl deve limitar as tentativas de backoff.");
+assert.match(fieldControl, /importação parcial bloqueada/, "A importação FieldControl deve falhar fechada quando uma página falhar ou o limite for atingido.");
 assert.match(migration, /for update skip locked/i, "A outbox precisa usar SKIP LOCKED para evitar dois workers processando o mesmo evento.");
 assert.match(migration, /status = 'processing'/i, "O claim precisa marcar o evento como processing antes de devolvê-lo.");
 assert.match(migration, /now\(\) - interval '5 minutes'/i, "Locks abandonados precisam ser recuperáveis após perda do worker.");
