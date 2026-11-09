@@ -12,4 +12,8 @@ jobs:
           node-version: 22
       - run: npm i --no-audit --no-fund --legacy-peer-deps
       - run: node scripts/test-dbs-control.cjs
+      - run: node scripts/test-dbs-control-resilience.cjs
+      - run: node scripts/test-dbs-control-base-scope.cjs
+      - run: node scripts/test-rh-point-integrity.cjs
+      - run: node scripts/test-dbs-control-pdf.cjs
       - run: npx vite build
