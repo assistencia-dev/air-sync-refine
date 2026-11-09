@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelRhVtTopup, createRhVtTopupsBatch, listRhVtEmployees, listRhVtTopups,
-  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup, uploadRhVtReceipt,
+  listRhVtTopupAudit, saveRhVtEmployeeConfig, updateRhVtTopup, uploadRhVtReceipt, getRhVtFinancialReport,
 } from "@/lib/rh.vt.functions";
 
 const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -40,6 +40,21 @@ export function RhVtPanel() {
       competence_year: Number(filterYear), competence_month: Number(filterMonth),
     }}),
   });
+  const reportStart = filterMonth === "0" ? `${filterYear}-01-01` : `${filterYear}-${String(Number(filterMonth)).padStart(2,"0")}-01`;
+  const reportEndDate = filterMonth === "0"
+    ? new Date(Number(filterYear) + 1, 0, 1)
+    : new Date(Number(filterYear), Number(filterMonth), 1);
+  const reportEnd = `${reportEndDate.getFullYear()}-${String(reportEndDate.getMonth()+1).padStart(2,"0")}-01`;
+  const financialReport = useQuery({
+    queryKey: ["rh-vt-financial-report", reportStart, reportEnd],
+    queryFn: () => getRhVtFinancialReport({ data: { competence_start: reportStart, competence_end: reportEnd } }),
+  });
+  const reportRows = financialReport.data ?? [];
+  const reportTotals = reportRows.reduce((acc: any, row: any) => ({
+    rh: acc.rh + Number(row.rh_total_cents ?? 0),
+    treasury: acc.treasury + Number(row.treasury_total_cents ?? 0),
+    difference: acc.difference + Number(row.difference_cents ?? 0),
+  }), { rh: 0, treasury: 0, difference: 0 });
   const audit = useQuery({
     queryKey: ["rh-vt-audit", auditId],
     queryFn: () => listRhVtTopupAudit({ data: { topup_id: auditId } }),
@@ -174,6 +189,6 @@ export function RhVtPanel() {
       <div className="flex gap-2"><button disabled={!reason.trim() || editTopup.isPending || cancelTopup.isPending} onClick={()=>editing.cancel_id ? cancelTopup.mutate(editing.cancel_id) : editTopup.mutate()} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-black text-slate-950">{editing.cancel_id ? "Confirmar cancelamento" : "Salvar edição"}</button><button onClick={()=>setEditing(null)} className="rounded-lg border border-slate-600 px-4 py-2 text-xs">Fechar</button></div>
     </div>}
     {auditId && <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><div className="mb-2 flex justify-between"><h4 className="font-bold">Trilha de auditoria</h4><button onClick={()=>setAuditId("")} className="text-xs text-slate-400">Fechar</button></div>{(audit.data ?? []).map((a:any)=><div key={a.id} className="border-t border-slate-700 py-2 text-xs"><strong>{a.action}</strong> · {new Date(a.created_at).toLocaleString("pt-BR")} · {a.reason ?? "—"}<pre className="mt-1 overflow-auto whitespace-pre-wrap text-[10px] text-slate-400">{JSON.stringify({antes:a.before_data,depois:a.after_data},null,2)}</pre></div>)}</div>}
-    <p className="text-[11px] text-slate-500">Nesta fase não há lançamento financeiro. A chave de integração futura fica reservada; o Ledger não é acionado.</p>
+    <p className="text-[11px] text-slate-500">Cada recarga ativa gera despesa por competência contra VT a pagar no DBS TREASURY V10. Edições e cancelamentos criam estornos auditáveis; divergências são apenas sinalizadas.</p>
   </section>;
 }
