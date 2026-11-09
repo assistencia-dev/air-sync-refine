@@ -171,6 +171,20 @@ export function RhVtPanel() {
         <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Total de recargas ativas no filtro</p><p className="mt-1 text-2xl font-black text-amber-400">{money(total)}</p></div>
         <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4"><p className="text-[10px] uppercase text-slate-400">Totais por empresa</p>{totalsByCompany.map((co,i)=><p key={i} className="mt-1 flex justify-between gap-2 text-xs"><span>{co.name}</span><strong>{money(co.total)}</strong></p>)}</div>
       </div>
+      <div className="rounded-xl border border-slate-700 bg-[#141F33] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="font-bold">Conciliação RH × DBS TREASURY V10</h3><p className="text-[11px] text-slate-400">Competência selecionada · valores líquidos de estornos · sem correção automática</p></div>
+          {reportRows.some((r: any) => r.divergence) ? <span className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-bold text-red-300">Divergência identificada</span> : <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300">Conciliado</span>}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div><p className="text-[10px] uppercase text-slate-400">Total RH</p><strong>{money(reportTotals.rh)}</strong></div>
+          <div><p className="text-[10px] uppercase text-slate-400">Total Treasury</p><strong>{money(reportTotals.treasury)}</strong></div>
+          <div><p className="text-[10px] uppercase text-slate-400">Diferença (RH − Treasury)</p><strong className={reportTotals.difference ? "text-red-300" : "text-emerald-300"}>{money(reportTotals.difference)}</strong></div>
+        </div>
+        {reportRows.length > 0 && <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-slate-400"><tr><th className="p-2">Funcionário</th><th className="p-2">Competência</th><th className="p-2">RH</th><th className="p-2">Treasury</th><th className="p-2">Diferença</th></tr></thead><tbody>{reportRows.map((r: any) => <tr key={`${r.employee_id}-${r.company_id}-${r.competence_month}`} className="border-t border-slate-700"><td className="p-2">{r.employee_name ?? "Funcionário"}</td><td className="p-2">{r.competence_month}</td><td className="p-2">{money(Number(r.rh_total_cents ?? 0))}</td><td className="p-2">{money(Number(r.treasury_total_cents ?? 0))}</td><td className={`p-2 ${r.divergence ? "font-bold text-red-300" : "text-emerald-300"}`}>{money(Number(r.difference_cents ?? 0))}</td></tr>)}</tbody></table></div>}
+        {!reportRows.length && <p className="mt-3 text-xs text-slate-400">Nenhuma recarga ou lançamento encontrado nesta competência.</p>}
+        {financialReport.isError && <p className="mt-2 text-xs text-red-300">{(financialReport.error as Error).message}</p>}
+      </div>
       <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#0F172A] text-slate-400"><tr><th className="p-3">Funcionário</th><th className="p-3">Data / competência</th><th className="p-3">Valor</th><th className="p-3">Centro de custo</th><th className="p-3">Status</th><th className="p-3">Ações</th></tr></thead>
