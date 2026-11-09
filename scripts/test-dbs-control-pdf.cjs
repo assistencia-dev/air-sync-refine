@@ -131,6 +131,7 @@ async function main() {
     fotoAntes: "data:image/png;base64,AAAA",
     fotoDepois: "data:image/png;base64,BBBB",
     assinatura: "data:image/png;base64,CCCC",
+    assinaturaTecnico: "data:image/png;base64,DDDD",
   });
 
   const withoutPhotos = await render({
@@ -147,7 +148,7 @@ async function main() {
   assert.match(preventiveWithChecklist.text, /DESCRIÇÃO DA PEÇA\/MATERIAL/);
   assert.match(withPhotos.text, /Evidência: Antes do Atendimento/);
   assert.match(withPhotos.text, /Evidência: Após Execução/);
-  assert.ok(withPhotos.imageCount >= 4, "logo, duas evidências e assinatura devem ser renderizados");
+  assert.ok(withPhotos.imageCount >= 5, "logo, duas evidências e as duas assinaturas devem ser renderizados");
   assert.doesNotMatch(withoutPhotos.text, /Evidência: Antes do Atendimento/);
   assert.doesNotMatch(withoutPhotos.text, /Evidência: Após Execução/);
 
