@@ -71,7 +71,7 @@ export function RhVtPanel() {
   });
   const editTopup = useMutation({
     mutationFn: () => updateRhVtTopup({ data: {
-      id: editing.id, amount_cents: Math.round(Number(editing.amount)/100),
+      id: editing.id, amount_cents: Math.round(Number(editing.amount.replace(",", "."))*100),
       paid_at: editing.paid_at, cost_center: editing.cost_center, receipt_storage_path: editing.receipt_storage_path,
       reason,
     }}),
@@ -80,7 +80,7 @@ export function RhVtPanel() {
   });
   const cancelTopup = useMutation({
     mutationFn: (id: string) => cancelRhVtTopup({ data: { id, reason } }),
-    onSuccess: () => { setReason(""); setError(""); invalidate(); },
+    onSuccess: () => { setEditing(null); setReason(""); setError(""); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
   const total = useMemo(() => (topups.data ?? []).filter((r: any) => r.status === "ativa")
@@ -144,7 +144,7 @@ export function RhVtPanel() {
           <thead className="bg-[#0F172A] text-slate-400"><tr><th className="p-3">Funcionário</th><th className="p-3">Data / competência</th><th className="p-3">Valor</th><th className="p-3">Centro de custo</th><th className="p-3">Status</th><th className="p-3">Ações</th></tr></thead>
           <tbody>{(topups.data ?? []).map((r: any)=><tr key={r.id} className="border-t border-slate-700">
             <td className="p-3">{r.employee?.full_name ?? "Funcionário"}</td><td className="p-3">{r.paid_at} / {r.competence_month}</td><td className="p-3">{money(r.amount_cents)}</td><td className="p-3">{r.cost_center ?? "—"}</td><td className="p-3">{r.status}</td>
-            <td className="p-3"><div className="flex flex-wrap gap-2"><button className="text-sky-300" onClick={()=>{setEditing({...r,amount:String(r.amount_cents)});setReason("");}}>Editar</button><button className="text-slate-300" onClick={()=>setAuditId(r.id)}>Auditoria</button>{r.status==="ativa" && <button className="text-red-300" onClick={()=>{setAuditId("");setEditing({cancel_id:r.id});setReason("");}}>Cancelar</button>}</div></td>
+            <td className="p-3"><div className="flex flex-wrap gap-2"><button className="text-sky-300" onClick={()=>{setEditing({...r,amount:(Number(r.amount_cents)/100).toFixed(2).replace(".",",")});setReason("");}}>Editar</button><button className="text-slate-300" onClick={()=>setAuditId(r.id)}>Auditoria</button>{r.status==="ativa" && <button className="text-red-300" onClick={()=>{setAuditId("");setEditing({cancel_id:r.id});setReason("");}}>Cancelar</button>}</div></td>
           </tr>)}</tbody>
         </table>
         {!(topups.data ?? []).length && <p className="p-6 text-center text-xs text-slate-400">Nenhuma recarga encontrada para o filtro.</p>}
@@ -152,7 +152,7 @@ export function RhVtPanel() {
     </div>
     {editing && <div className="space-y-3 rounded-xl border border-slate-700 bg-[#141F33] p-4">
       {editing.cancel_id ? <h4 className="font-bold">Cancelar recarga</h4> : <h4 className="font-bold">Editar recarga</h4>}
-      {!editing.cancel_id && <div className="grid gap-3 sm:grid-cols-2"><input className={field} value={editing.amount} onChange={e=>setEditing({...editing,amount:e.target.value})} placeholder="Valor em centavos" /><input className={field} type="date" value={editing.paid_at} onChange={e=>setEditing({...editing,paid_at:e.target.value})} /><input className={field} value={editing.cost_center ?? ""} onChange={e=>setEditing({...editing,cost_center:e.target.value})} placeholder="Centro de custo" /><input className={field} value={editing.receipt_storage_path ?? ""} onChange={e=>setEditing({...editing,receipt_storage_path:e.target.value})} placeholder="Caminho comprovante" /></div>}
+      {!editing.cancel_id && <div className="grid gap-3 sm:grid-cols-2"><input className={field} value={editing.amount} onChange={e=>setEditing({...editing,amount:e.target.value})} placeholder="Valor da recarga (R$)" /><input className={field} type="date" value={editing.paid_at} onChange={e=>setEditing({...editing,paid_at:e.target.value})} /><input className={field} value={editing.cost_center ?? ""} onChange={e=>setEditing({...editing,cost_center:e.target.value})} placeholder="Centro de custo" /><input className={field} value={editing.receipt_storage_path ?? ""} onChange={e=>setEditing({...editing,receipt_storage_path:e.target.value})} placeholder="Caminho comprovante" /></div>}
       <textarea className={field} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Motivo da edição ou justificativa do cancelamento" />
       <div className="flex gap-2"><button disabled={!reason.trim() || editTopup.isPending || cancelTopup.isPending} onClick={()=>editing.cancel_id ? cancelTopup.mutate(editing.cancel_id) : editTopup.mutate()} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-black text-slate-950">{editing.cancel_id ? "Confirmar cancelamento" : "Salvar edição"}</button><button onClick={()=>setEditing(null)} className="rounded-lg border border-slate-600 px-4 py-2 text-xs">Fechar</button></div>
     </div>}
