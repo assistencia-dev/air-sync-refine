@@ -22,7 +22,7 @@ export const listRhVtEmployees = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const actor = await requireVtOperator(context);
-    let query = db.from("rh_employees")
+    const query = db.from("rh_employees")
       .select("id, full_name, unit, is_active, registry_employee_id")
       .eq("is_active", true).order("full_name");
     const { data: employees, error } = await query;
