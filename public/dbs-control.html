@@ -6952,7 +6952,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     <td><span class="day-status ${statusClass}">${escDbsControl(o.status || 'Sem status')}</span></td>
                     <td>${checkHtml}</td>
                     <td>${conclusion}</td>
-                    <td style="text-align:right;white-space:nowrap;"><button class="btn btn-secondary btn-sm" onclick="abrirHistoricoOS('${String(o.id).replace(/'/g,"\\'")}')">Histórico</button> <button class="btn btn-primary btn-sm" onclick="baixarPDFIndividual('${String(o.id).replace(/'/g,"\\'")}')">PDF</button></td>
+                    <td style="text-align:right;white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="abrirVisualizacaoOS('${String(o.id).replace(/'/g,"\\'")}')">Ver</button> <button class="btn btn-secondary btn-sm" onclick="abrirHistoricoOS('${String(o.id).replace(/'/g,"\\'")}')">Histórico</button> <button class="btn btn-primary btn-sm" onclick="baixarPDFIndividual('${String(o.id).replace(/'/g,"\\'")}')">PDF</button></td>
                 </tr>`;
             }).join('');
         }
@@ -7061,7 +7061,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return `
                     <tr data-status="${escDbsControl(o.status)}" data-archived="${archived ? 'true' : 'false'}" data-date="${normalizarDataFiltroOS(o.data)}" data-client="${escDbsControl(o.clienteId || '')}" data-technician="${escDbsControl(technicianId)}" data-priority="${escDbsControl(priority)}" data-classifications="${escDbsControl(classificationCodes.join('|'))}" data-search="${escDbsControl(searchText)}" data-sort-protocol="${escDbsControl(o.protocolo || o.id || '')}" data-sort-client="${escDbsControl(cli.nome || '')}" data-sort-equipment="${escDbsControl([eq.tag,eq.tipo,eq.modelo].filter(Boolean).join(' '))}" data-sort-technician="${escDbsControl(tec.nome || o.tecnicoNome || '')}" data-sort-type="${escDbsControl(o.tipo || '')}" data-sort-value="${Number(o.valor || 0)}" data-sort-status="${escDbsControl(statusLabel)}">
                         <td><input type="checkbox" class="chk-os-item" value="${escDbsControl(o.id)}" onchange="atualizarSelecaoOS()" ${archived ? 'disabled' : ''}></td>
-                        <td><strong>${escDbsControl(o.id)}</strong>${archived ? '<small style="display:block;color:#64748b">Arquivada</small>' : ''}</td>
+                        <td><button type="button" class="os-id-link" style="all:unset;cursor:pointer;font-weight:800;color:#0369a1;text-decoration:underline" onclick="abrirVisualizacaoOS('${o.id}')">${escDbsControl(o.id)}</button>${archived ? '<small style="display:block;color:#64748b">Arquivada</small>' : ''}</td>
                         <td>${escDbsControl(o.data || '—')}</td>
                         <td>${escDbsControl(cli.nome || '-')}</td>
                         <td><span class="badge badge-tag">${escDbsControl(eq.tag || 'S/N')}</span> ${escDbsControl([eq.tipo,eq.modelo].filter(Boolean).join(' '))}</td>
@@ -7071,7 +7071,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <td><span class="badge ${badgeClass}">${escDbsControl(statusLabel)}</span>${classificationHtml ? `<div class="os-classification-list" aria-label="Classificações">${classificationHtml}</div>` : ''}</td>
                         <td class="os-actions-cell">
                             <div class="os-row-actions">
-                                <button type="button" class="os-row-action" title="Baixar PDF" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
+                                <button type="button" class="os-row-action" title="Visualizar OS" onclick="abrirVisualizacaoOS('${o.id}')">Ver</button><button type="button" class="os-row-action" title="Baixar PDF" onclick="baixarPDFIndividual('${o.id}')">PDF</button>
                                 <button type="button" class="os-row-action" onclick="alternarArquivoOS('${o.id}')">${archived ? 'Restaurar' : 'Arquivar'}</button>
                                 <button type="button" class="os-row-action os-row-action-danger" onclick="excluirOSComSeguranca('${o.id}')">Excluir</button>
                             </div>
@@ -9260,6 +9260,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     <script src="/dbs-control-orcamentos-pdf.js?v=20261014-pdf-standard-1"></script>
     <script src="/dbs-control-orcamentos-flex.js?v=20261105-purchase-handoff-1"></script>
     <script src="/dbs-control-employee-nav.js?v=20261029-ops-workspace-1"></script>
+    <script src="/dbs-control-os-viewer.js?v=20261106-1"></script>
     <script src="/dbs-control-ux.js?v=20261028-sync-clean-3"></script>
     <script id="dbs-employee-stability-20261027">
     (function enforceDbsEmployeeStableShell(){
