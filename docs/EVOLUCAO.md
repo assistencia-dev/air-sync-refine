@@ -259,4 +259,4 @@ Usar banco de desenvolvimento isolado e funcionários/empresas de teste, nunca p
 8. **Concorrência:** duas requisições simultâneas com a mesma chave. Esperado: apenas um lançamento por chave, sem duplicidade de Outbox Treasury.
 9. **Segurança:** usuário sem perfil operador não acessa a RPC/relatório; tabelas novas sem acesso direto por `authenticated`; confirmar RLS/grants e executar Supabase Advisors.
 
-**STATUS FASE 3: CÓDIGO E MIGRATION PREPARADOS NA BRANCH DE DESENVOLVIMENTO — NÃO VALIDADO EM BANCO, NÃO MERGEADO E NÃO APLICADO.** Aguardar CI, revisão SQL em staging e testes funcionais numerados acima. Não publicar nem aplicar em produção.
+**STATUS FASE 3: CÓDIGO PREPARADO; BUILD PREVIEW DO HEAD FINAL VERDE — NÃO VALIDADO EM BANCO, NÃO MERGEADO E NÃO APLICADO.** Aguardar confirmação completa dos checks do head final, revisão SQL em staging e testes funcionais numerados acima. Não publicar em produção nem aplicar migration no Supabase oficial.
