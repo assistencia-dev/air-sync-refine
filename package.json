@@ -23,7 +23,8 @@
     "test:operational": "node scripts/test-operational-e2e.cjs",
     "test:treasury-health": "node scripts/check-treasury-ledger-health.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
-    "test:phase3-ledger-reporting": "node scripts/test-phase3-ledger-reporting.cjs"
+    "test:phase3-ledger-reporting": "node scripts/test-phase3-ledger-reporting.cjs",
+    "prebuild": "node scripts/check-supabase-project-ref.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
