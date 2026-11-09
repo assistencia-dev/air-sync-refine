@@ -83,7 +83,6 @@ export const listRhVtTopups = createServerFn({ method: "GET" })
   .handler(async ({ context, data }) => {
     const actor = await requireVtOperator(context);
     let query = db.from("rh_vt_topups").select("*").order("paid_at", { ascending: false });
-    if (actor.company_id) query = query.eq("company_id", actor.company_id);
     if (data.employee_id) query = query.eq("employee_id", data.employee_id);
     if (data.competence_year && data.competence_month) {
       const month = String(data.competence_month).padStart(2, "0");
