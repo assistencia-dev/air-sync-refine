@@ -1,0 +1,43 @@
+name: RH VT Phase 2+3 — Supabase local integration tests
+
+on:
+  push:
+    branches:
+      - "test/**"
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - ".github/workflows/rh-vt-supabase-local.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rh-vt-local:
+    name: Reset local Supabase and test VT + Treasury
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR code (including both phase migrations)
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated local Supabase
+        run: supabase start
+
+      - name: Apply every migration from zero
+        run: supabase db reset --local
+
+      - name: Run VT and Treasury integration assertions
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rh_vt_phase2_3.sql
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
