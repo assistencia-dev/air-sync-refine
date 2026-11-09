@@ -1,17 +1,14 @@
 name: RH VT Phase 2+3 — Supabase local integration tests
 
 on:
+  push:
+    branches:
+      - "test/**"
   pull_request:
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/**"
       - ".github/workflows/rh-vt-supabase-local.yml"
-  push:
-    branches:
-      - "feat/rh-vt-auditavel-fase2"
-      - "feat/rh-vt-financeiro-fase3"
-      - "test/rh-vt-supabase-local-ci"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,8 +36,7 @@ jobs:
       - name: Run VT and Treasury integration assertions
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rh_vt_phase2_3.sql
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rh_vt_phase2_3.sql
 
       - name: Stop local Supabase
         if: always()
