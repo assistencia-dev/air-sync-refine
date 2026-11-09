@@ -204,10 +204,10 @@ Os rótulos significam: **REAL** = regra/estrutura executável encontrada em có
 - A migration preserva o histórico de `rh_topups` do tipo `passagem` por cópia aditiva para a nova estrutura, mantendo a tabela original intacta e registrando a origem histórica.
 
 ### Limites ainda pendentes antes de considerar a fase concluída
-- Executar build, lint e testes no checkout completo da branch; a conexão GitHub usada nesta etapa não executa comandos locais.
-- Validar o SQL em banco de desenvolvimento/staging antes de qualquer aplicação em produção.
-- Implementar/validar upload real do comprovante no bucket autorizado. A interface atual recebe caminho de storage; não deve ser interpretada como upload concluído.
-- Completar filtros/totais consolidados por empresa e ano e revisar a compatibilidade dos registros históricos importados.
-- Revisar a idempotência de reenvios de edição/cancelamento além da chave única de criação.
+- CI da branch executado em 09/11/2026: `Validate`, `verificar` e `DBS Control smoke validation` concluíram com sucesso no SHA `a17aa7c4edf02b4b1b113d7fa244338c64e4c97d`; build, lint, TypeScript e testes automatizados incluídos nesses workflows passaram.
+- Validar o SQL em banco de desenvolvimento/staging antes de qualquer aplicação em produção; a CI atual validou o nome da migration, não executou o DDL em banco.
+- Upload de comprovante foi ligado ao bucket privado existente `rh-files`; falta validar o ciclo de consulta/download do arquivo e as permissões reais de acesso.
+- Filtros por funcionário, mês/ano e totais por empresa foram adicionados à interface; falta teste funcional com dados reais após migração.
+- Revisar idempotência de reenvios de edição/cancelamento além da chave única de criação; a criação individual/em lote já usa chave única e a auditoria é append-only.
 
-**STATUS: FASE 2 EM DESENVOLVIMENTO — NÃO PUBLICAR E NÃO APLICAR A MIGRATION EM PRODUÇÃO.** Aguardar validação técnica e aprovação explícita para qualquer alteração no Supabase.
+**STATUS: CÓDIGO DA FASE 2 PREPARADO E CI VERDE — AINDA NÃO LIBERADO.** PR #148 permanece em draft. Não fazer merge, não publicar e não aplicar a migration em produção. Aguardar validação SQL em ambiente de desenvolvimento, teste funcional do fluxo completo e aprovação explícita para qualquer alteração no Supabase.
