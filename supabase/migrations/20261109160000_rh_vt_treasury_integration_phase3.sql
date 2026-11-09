@@ -208,11 +208,9 @@ declare
   v_lines jsonb;
 begin
   if tg_op = 'UPDATE' then
-    if old.source_legacy_topup_id is not null and old.financial_entry_id is null then
-      -- Historical imports are not silently posted retroactively. They remain
-      -- visible as a reconciliation difference until explicitly regularized.
-      return new;
-    end if;
+    -- Imported legacy rows are not posted retroactively. If an operator edits
+    -- one after this integration is enabled, the edited active value is posted
+    -- as a new recognition; a cancellation without a prior entry has no reversal.
     if old.status = new.status
        and old.amount_cents = new.amount_cents
        and old.paid_at = new.paid_at
@@ -250,7 +248,7 @@ begin
     end if;
 
     if new.status = 'cancelada' then
-      new.financial_status := 'integrado';
+      new.financial_status := case when old.financial_entry_id is null then 'nao_integrado' else 'integrado' end;
       new.financial_reversal_entry_id := v_reversal_entry_id;
       return new;
     end if;
