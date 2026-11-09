@@ -80,13 +80,13 @@ export function RhVtPanel() {
     mutationFn: () => updateRhVtTopup({ data: {
       id: editing.id, amount_cents: Math.round(Number(editing.amount.replace(",", "."))*100),
       paid_at: editing.paid_at, cost_center: editing.cost_center, receipt_storage_path: editing.receipt_storage_path,
-      reason, operation_key: crypto.randomUUID(),
+      reason, operation_key: editing.operation_key,
     }}),
     onSuccess: () => { setEditing(null); setReason(""); setError(""); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
   const cancelTopup = useMutation({
-    mutationFn: (id: string) => cancelRhVtTopup({ data: { id, reason, operation_key: crypto.randomUUID() } }),
+    mutationFn: (id: string) => cancelRhVtTopup({ data: { id, reason, operation_key: editing.operation_key } }),
     onSuccess: () => { setEditing(null); setReason(""); setError(""); invalidate(); },
     onError: (e: any) => setError(e.message),
   });
@@ -161,7 +161,7 @@ export function RhVtPanel() {
           <thead className="bg-[#0F172A] text-slate-400"><tr><th className="p-3">Funcionário</th><th className="p-3">Data / competência</th><th className="p-3">Valor</th><th className="p-3">Centro de custo</th><th className="p-3">Status</th><th className="p-3">Ações</th></tr></thead>
           <tbody>{(topups.data ?? []).map((r: any)=><tr key={r.id} className="border-t border-slate-700">
             <td className="p-3">{r.employee?.full_name ?? "Funcionário"}</td><td className="p-3">{r.paid_at} / {r.competence_month}</td><td className="p-3">{money(r.amount_cents)}</td><td className="p-3">{r.cost_center ?? "—"}</td><td className="p-3">{r.status}{r.receipt_storage_path && <span className="block text-[10px] text-sky-300" title={r.receipt_storage_path}>Comprovante anexado</span>}</td>
-            <td className="p-3"><div className="flex flex-wrap gap-2"><button className="text-sky-300" onClick={()=>{setEditing({...r,amount:(Number(r.amount_cents)/100).toFixed(2).replace(".",",")});setReason("");}}>Editar</button><button className="text-slate-300" onClick={()=>setAuditId(r.id)}>Auditoria</button>{r.status==="ativa" && <button className="text-red-300" onClick={()=>{setAuditId("");setEditing({cancel_id:r.id});setReason("");}}>Cancelar</button>}</div></td>
+            <td className="p-3"><div className="flex flex-wrap gap-2"><button className="text-sky-300" onClick={()=>{setEditing({...r,amount:(Number(r.amount_cents)/100).toFixed(2).replace(".",","),operation_key:crypto.randomUUID()});setReason("");}}>Editar</button><button className="text-slate-300" onClick={()=>setAuditId(r.id)}>Auditoria</button>{r.status==="ativa" && <button className="text-red-300" onClick={()=>{setAuditId("");setEditing({cancel_id:r.id,operation_key:crypto.randomUUID()});setReason("");}}>Cancelar</button>}</div></td>
           </tr>)}</tbody>
         </table>
         {!(topups.data ?? []).length && <p className="p-6 text-center text-xs text-slate-400">Nenhuma recarga encontrada para o filtro.</p>}
