@@ -36,9 +36,13 @@ async function authenticateIfConfigured(page) {
       if (message.type() === "error") errors.push("console: " + message.text());
     });
     page.on("requestfailed", (request) => {
+      const failure = request.failure()?.errorText || "request failed";
+      // A redirect/navigation can legitimately cancel an in-flight script request.
+      // Keep failing every other network error; only suppress Chromium's navigation abort.
+      if (failure === "net::ERR_ABORTED") return;
       const url = request.url();
       if (!/favicon|\.png(?:\?|$)|\.jpg(?:\?|$)|\.svg(?:\?|$)/i.test(url)) {
-        failedRequests.push(url + " — " + (request.failure()?.errorText || "request failed"));
+        failedRequests.push(url + " — " + failure);
       }
     });
 
