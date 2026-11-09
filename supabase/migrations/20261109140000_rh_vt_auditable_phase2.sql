@@ -35,6 +35,7 @@ create table if not exists public.rh_vt_topups (
   status text not null default 'ativa' check (status in ('ativa','cancelada')),
   cancel_reason text,
   change_reason text,
+  last_operation_key text,
   idempotency_key text not null unique,
   -- Reservado para integração futura com o Ledger; não cria lançamento nesta fase.
   treasury_idempotency_key text not null unique,
@@ -59,6 +60,7 @@ create table if not exists public.rh_vt_topup_audit (
   employee_id uuid not null references public.rh_employees(id) on delete restrict,
   actor_user_id uuid references public.users(id) on delete set null,
   action text not null check (action in ('importada','criada','editada','cancelada')),
+  idempotency_key text unique,
   before_data jsonb,
   after_data jsonb not null,
   reason text,
@@ -92,8 +94,8 @@ where old.benefit_type = 'passagem'
 on conflict (source_legacy_topup_id) do nothing;
 
 -- Registra a origem histórica sem simular uma ação feita agora pelo operador.
-insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, after_data, created_at)
-select vt.id, vt.employee_id, vt.created_by, 'importada', to_jsonb(vt), vt.created_at
+insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, idempotency_key, after_data, created_at)
+select vt.id, vt.employee_id, vt.created_by, 'importada', 'legacy-rh-vt-audit:' || vt.id::text, to_jsonb(vt), vt.created_at
 from public.rh_vt_topups vt
 where vt.source_legacy_topup_id is not null
   and not exists (select 1 from public.rh_vt_topup_audit a where a.topup_id=vt.id);
@@ -138,8 +140,8 @@ begin
   if tg_op = 'INSERT' then
     v_action := 'criada';
     v_actor := new.created_by;
-    insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, before_data, after_data)
-    values (new.id, new.employee_id, v_actor, v_action, null, to_jsonb(new));
+    insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, idempotency_key, before_data, after_data)
+    values (new.id, new.employee_id, v_actor, v_action, new.idempotency_key, null, to_jsonb(new));
     return new;
   end if;
 
@@ -152,8 +154,8 @@ begin
     v_reason := new.change_reason;
   end if;
 
-  insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, before_data, after_data, reason)
-  values (new.id, new.employee_id, v_actor, v_action, to_jsonb(old), to_jsonb(new), v_reason);
+  insert into public.rh_vt_topup_audit(topup_id, employee_id, actor_user_id, action, idempotency_key, before_data, after_data, reason)
+  values (new.id, new.employee_id, v_actor, v_action, new.last_operation_key, to_jsonb(old), to_jsonb(new), v_reason);
   return new;
 end;
 $$;
@@ -238,11 +240,16 @@ $$;
 
 create or replace function public.rh_vt_update_topup(
   p_topup_id uuid, p_amount_cents bigint, p_paid_at date, p_cost_center text,
-  p_receipt_storage_path text, p_reason text, p_actor uuid
+  p_receipt_storage_path text, p_reason text, p_operation_key text, p_actor uuid
 ) returns public.rh_vt_topups
 language plpgsql security definer set search_path = public as $$
 declare v_result public.rh_vt_topups;
 begin
+  if nullif(trim(p_operation_key),'') is null then raise exception 'Chave de idempotência da edição obrigatória.'; end if;
+  if exists (select 1 from public.rh_vt_topup_audit where idempotency_key=p_operation_key) then
+    select * into v_result from public.rh_vt_topups where id=p_topup_id;
+    return v_result;
+  end if;
   if p_amount_cents <= 0 or nullif(trim(p_reason),'') is null then
     raise exception 'Valor válido e motivo da edição são obrigatórios.';
   end if;
@@ -251,7 +258,7 @@ begin
       competence_month=date_trunc('month',p_paid_at)::date,
       cost_center=nullif(trim(p_cost_center),''),
       receipt_storage_path=nullif(trim(p_receipt_storage_path),''),
-      change_reason=trim(p_reason), updated_by=p_actor
+      change_reason=trim(p_reason), last_operation_key=trim(p_operation_key), updated_by=p_actor
   where id=p_topup_id and status='ativa'
   returning * into v_result;
   if not found then raise exception 'Recarga ativa não encontrada.'; end if;
@@ -259,15 +266,20 @@ begin
 end;
 $$;
 
-create or replace function public.rh_vt_cancel_topup(p_topup_id uuid, p_reason text, p_actor uuid)
+create or replace function public.rh_vt_cancel_topup(p_topup_id uuid, p_reason text, p_operation_key text, p_actor uuid)
 returns public.rh_vt_topups
 language plpgsql security definer set search_path = public as $$
 declare v_result public.rh_vt_topups;
 begin
+  if nullif(trim(p_operation_key),'') is null then raise exception 'Chave de idempotência do cancelamento obrigatória.'; end if;
+  if exists (select 1 from public.rh_vt_topup_audit where idempotency_key=p_operation_key) then
+    select * into v_result from public.rh_vt_topups where id=p_topup_id;
+    return v_result;
+  end if;
   if nullif(trim(p_reason),'') is null then raise exception 'Justificativa do cancelamento é obrigatória.'; end if;
   update public.rh_vt_topups
   set status='cancelada', cancel_reason=trim(p_reason), cancelled_by=p_actor,
-      cancelled_at=now(), updated_by=p_actor
+      cancelled_at=now(), last_operation_key=trim(p_operation_key), updated_by=p_actor
   where id=p_topup_id and status='ativa'
   returning * into v_result;
   if not found then raise exception 'Recarga ativa não encontrada.'; end if;
@@ -276,8 +288,8 @@ end;
 $$;
 
 revoke all on function public.rh_vt_create_topups_batch(jsonb,uuid) from public, anon, authenticated;
-revoke all on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,uuid) from public, anon, authenticated;
-revoke all on function public.rh_vt_cancel_topup(uuid,text,uuid) from public, anon, authenticated;
+revoke all on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,text,uuid) from public, anon, authenticated;
+revoke all on function public.rh_vt_cancel_topup(uuid,text,text,uuid) from public, anon, authenticated;
 grant execute on function public.rh_vt_create_topups_batch(jsonb,uuid) to service_role;
 grant execute on function public.rh_vt_update_topup(uuid,bigint,date,text,text,text,uuid) to service_role;
 grant execute on function public.rh_vt_cancel_topup(uuid,text,uuid) to service_role;
