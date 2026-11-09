@@ -448,6 +448,7 @@
     });
 
     drawSectionHeader(4, 'Diagnóstico, execução e evidências');
+    let nextSectionNumber = 5;
     inlineRow([{ label: 'Diagnóstico técnico', value: diagnostic, width: 93 }, { label: 'Ação / peças', value: action, width: 89 }]);
     paragraph('Relatório técnico', report);
     inlineRow([{ label: 'Evidências registradas', value: evidenceText, width: 132 }, { label: !employeeMode && includeValues && totalValue != null ? 'Valor do atendimento' : 'Registro', value: !employeeMode && includeValues && totalValue != null ? money(totalValue) : (attachmentRows.length ? `${attachmentRows.length} anexo(s)` : 'Sem anexos'), width: 50 }]);
@@ -481,7 +482,7 @@
 
     const partsRows = list(order.pecasUsadas).filter(part => Number(part?.qtd ?? part?.quantity ?? 0) > 0);
     if (partsRows.length) {
-      drawSectionHeader(5, 'Peças, materiais e insumos');
+      drawSectionHeader(nextSectionNumber++, 'Peças, materiais e insumos');
       const x0 = M + 4, widths = [25, 105, 25, 25], tableWidth = widths.reduce((sum, width) => sum + width, 0);
       const headings = ['CÓDIGO/REF', 'DESCRIÇÃO DA PEÇA/MATERIAL', 'QTD', 'UNIDADE'];
       const drawPartsHeader = () => {
@@ -530,7 +531,7 @@
       });
     });
     if (checklistEntries.length) {
-      drawSectionHeader(6, 'Checklist técnico / inspeção PMOC');
+      drawSectionHeader(nextSectionNumber++, 'Checklist técnico / inspeção PMOC');
       const gap = 4, cellWidth = (W - 8 - gap * 2) / 3, cellHeight = 13;
       for (let offset = 0; offset < checklistEntries.length; offset += 3) {
         if (page.y + cellHeight + 2 > contentBottom) addPage();
@@ -556,11 +557,11 @@
         sectionState.title = '';
         addPage();
       }
-      drawSectionHeader(7, 'Observações complementares');
+      drawSectionHeader(nextSectionNumber++, 'Observações complementares');
       paragraph('Observações do técnico', observations);
     }
 
-    drawSectionHeader(8, 'Responsáveis e aceite do cliente');
+    drawSectionHeader(nextSectionNumber++, 'Responsáveis e aceite do cliente');
     const signature = await loadImage(signatureSource, 'assinatura do cliente');
     const signatureHeight = 38;
     ensureSpace(signatureHeight);
@@ -592,7 +593,7 @@
     page.y = signatureY + signatureHeight;
     if (has(first(order.aceiteObservacao, order.signature_note))) paragraph('Observação do aceite', first(order.aceiteObservacao, order.signature_note));
 
-    drawSectionHeader(9, 'Rastreabilidade e auditoria');
+    drawSectionHeader(nextSectionNumber, 'Rastreabilidade e auditoria');
     inlineRow([{ label: 'UUID do colaborador', value: employeeUuid, width: 92 }, { label: 'Hash de integridade', value: integrityHash, width: 88 }]);
     inlineRow([{ label: 'UUID da OS', value: first(order.id, '—'), width: 92 }, { label: 'Versão relacional', value: first(order.version, order.expected_version, '—'), width: 88 }]);
     inlineRow([{ label: 'Gerado em', value: formatDate(new Date().toISOString()), width: 92 }, { label: 'Fonte', value: 'DBS Control · registro relacional', width: 88 }]);
