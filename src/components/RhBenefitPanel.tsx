@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { RhVtPanel } from "@/components/RhVtPanel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Receipt, Trash2, UsersRound, WalletCards } from "lucide-react";
 import {
@@ -54,10 +55,12 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   const employees = useQuery({
     queryKey: ["rh-employees", benefitType],
     queryFn: () => listRhEmployees({ data: { benefit_type: benefitType } }),
+    enabled: benefitType !== "passagem",
   });
   const topups = useQuery({
     queryKey: ["rh-topups", benefitType],
     queryFn: () => listRhTopups({ data: { benefit_type: benefitType } }),
+    enabled: benefitType !== "passagem",
   });
   const activeEmployees = (employees.data ?? []).filter((item: Employee) => item.is_active);
   const totalMonth = (topups.data ?? [])
@@ -68,6 +71,8 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
     qc.invalidateQueries({ queryKey: ["rh-topups", benefitType] });
   };
   const title = benefitType === "alimentacao" ? "Vale Alimentação" : "Vale Passagem";
+
+  if (benefitType === "passagem") return <RhVtPanel />;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm">
