@@ -206,3 +206,25 @@ export const uploadRhVtReceipt = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { path };
   });
+
+
+export const getRhVtFinancialReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { competence_start: string; competence_end: string }) => {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.competence_start) ||
+        !/^\\d{4}-\\d{2}-\\d{2}$/.test(input.competence_end) ||
+        input.competence_start >= input.competence_end) {
+      throw new Error("Período de conciliação inválido.");
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await requireVtOperator(context);
+    const { data: rows, error } = await db.rpc("rh_vt_financial_report", {
+      p_competence_start: data.competence_start,
+      p_competence_end: data.competence_end,
+      p_company_id: actor.company_id ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
