@@ -264,9 +264,20 @@ CREATE POLICY dbs_os_admin_delete
   USING ((SELECT is_admin()));
 
 -- RH is authenticated-only; anonymous/public sessions must not evaluate these rules.
-ALTER POLICY rh_employees_admin_access
-  ON public.rh_employees
-  TO authenticated;
+-- This broad policy was installed manually in some environments; the
+-- explicit admin policies below are created by this migration regardless.
+DO $policy$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'rh_employees'
+      AND policyname = 'rh_employees_admin_access'
+  ) THEN
+    EXECUTE 'ALTER POLICY rh_employees_admin_access ON public.rh_employees TO authenticated';
+  END IF;
+END
+$policy$;
 
 ALTER POLICY rh_employees_gestor_conta_view
   ON public.rh_employees
