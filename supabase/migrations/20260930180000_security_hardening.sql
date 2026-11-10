@@ -21,5 +21,12 @@ BEGIN
 END
 $do$;
 ALTER FUNCTION public.set_treasury_snapshot_updated_at() SET search_path = public;
-CREATE POLICY project_authenticated_select
-  ON public.project FOR SELECT TO authenticated USING (true);
+-- The optional Supabase project catalog exists in some deployed environments only.
+DO $project$
+BEGIN
+  IF to_regclass('public.project') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS project_authenticated_select ON public.project';
+    EXECUTE 'CREATE POLICY project_authenticated_select ON public.project FOR SELECT TO authenticated USING (true)';
+  END IF;
+END
+$project$;
