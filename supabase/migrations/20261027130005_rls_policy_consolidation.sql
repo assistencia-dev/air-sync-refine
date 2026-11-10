@@ -11,7 +11,7 @@ BEGIN
     SELECT schemaname, tablename, policyname
     FROM pg_policies
     WHERE schemaname = 'public'
-      AND policyname LIKE 'hardening\\_%' ESCAPE '\\'
+      AND policyname LIKE 'hardening!_%' ESCAPE '!'
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', p.policyname, p.schemaname, p.tablename);
   END LOOP;
