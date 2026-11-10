@@ -7,7 +7,7 @@ const migration = fs.readFileSync(
   "utf8",
 );
 const reservationGuard = fs.readFileSync(
-  "supabase/migrations/20261103210000_dbs_phase2_reservation_sync_guard.sql",
+  "supabase/migrations/20261104135126_20261103210000_dbs_phase2_reservation_sync_guard.sql",
   "utf8",
 );
 
