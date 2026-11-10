@@ -11,6 +11,7 @@ const pendingDocument = path.resolve(
 );
 const localOnly = process.argv.includes("--local-only");
 const recover = process.argv.includes("--recover");
+const productionPreflight = process.argv.includes("--preflight");
 
 function migrationFileName(version, name) {
   return `${version}_${name}.sql`;
@@ -76,9 +77,14 @@ function normalizeStatements(value) {
 }
 
 function normalizeDatabaseMigration(row, hasName, hasStatements) {
+  const version = String(row.version);
+  let name = hasName && row.name !== null && row.name !== undefined ? String(row.name) : null;
+  // Some historical Supabase records stored the version twice in "name".
+  // Normalize only that exact prefix; retain meaningful embedded timestamps.
+  if (name && name.startsWith(`${version}_`)) name = name.slice(version.length + 1);
   return {
-    version: String(row.version),
-    name: hasName && row.name !== null && row.name !== undefined ? String(row.name) : null,
+    version,
+    name,
     statements: hasStatements ? normalizeStatements(row.statements) : null,
   };
 }
@@ -168,7 +174,15 @@ function compareMigrations(repository, database) {
     }
   }
 
-  return { onlyInDatabase, onlyInRepository, nameMismatches };
+  const latestDatabaseVersion = [...databaseVersions].sort((a, b) => a.localeCompare(b)).at(-1) ?? null;
+  const pendingOutOfOrder = latestDatabaseVersion
+    ? onlyInRepository.filter((migration) => migration.version < latestDatabaseVersion)
+      .map(({ path: _path, ...migration }) => ({
+        ...migration,
+        latest_database_version: latestDatabaseVersion,
+      }))
+    : [];
+  return { onlyInDatabase, onlyInRepository, nameMismatches, pendingOutOfOrder };
 }
 
 async function appendPendingDocument(pending) {
@@ -277,7 +291,7 @@ async function main() {
 
   const report = {
     ok: localErrors.length === 0,
-    mode: localOnly ? "local-only" : "read-only-database",
+    mode: localOnly ? "local-only" : productionPreflight ? "read-only-production-preflight" : "read-only-database",
     repository: {
       directory: path.relative(root, migrationsDirectory),
       file_count: repository.migrations.size + repository.invalidFiles.length,
@@ -309,8 +323,10 @@ async function main() {
       report.ok &&
       database.transaction_read_only === "on" &&
       comparison.onlyInDatabase.length === 0 &&
-      comparison.onlyInRepository.length === 0 &&
-      comparison.nameMismatches.length === 0;
+      comparison.nameMismatches.length === 0 &&
+      (productionPreflight
+        ? comparison.pendingOutOfOrder.length === 0
+        : comparison.onlyInRepository.length === 0);
   }
 
   console.log(JSON.stringify(report, null, 2));
