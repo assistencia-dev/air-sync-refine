@@ -302,7 +302,7 @@ assert.match(cloudFunctions, /const orderLabel = protocol \|\|/, "Uma OS nova de
 assert.doesNotMatch(cloudFunctions, /Não é possível sincronizar OS sem protocolo/, "O sincronizador não pode bloquear uma OS nova sem protocolo.");
 assert.match(protocolMigration, /dbs_control_work_order_protocol_seq/, "A migração deve criar o gerador canônico de protocolos de OS.");
 assert.match(protocolMigration, /'DBS-' \|\| to_char\(clock_timestamp\(\), 'YYYY'\)/, "O protocolo automático deve ser legível e gerado no banco.");
-assert.match(protocolMigration, /v_current_found boolean/, "A migração deve separar explicitamente consulta encontrada de FOUND residual.");
+assert.match(protocolLookupFixMigration, /v_current_found boolean/, "A correção de protocolo vazio deve declarar o estado de consulta encontrado.");
 assert.match(protocolLookupFixMigration, /v_current_found := found/, "A correção de protocolo vazio deve proteger o caminho de criação contra falso conflito.");
 assert.match(cloudFunctions, /normalizeOptionalTimestamp/, "Campos de data opcionais devem ser normalizados antes do RPC relacional.");
 assert.match(cloudFunctions, /scheduled_at: normalizeOptionalTimestamp/, "A data de agendamento vazia deve virar NULL, nunca string vazia.");
