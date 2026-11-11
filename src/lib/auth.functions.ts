@@ -2,8 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 
-const BOOTSTRAP_USERNAME = "DBSASSISTENCIA123";
-const BOOTSTRAP_EMAIL = "dbsassistencia123@dbsair.internal";
 function normalizeDigits(v: string) {
   return v.replace(/\D+/g, "");
 }
@@ -22,7 +20,6 @@ export const resolveLogin = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const BOOTSTRAP_PASSWORD = process.env.DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD;
     const raw = data.identifier;
     const digits = normalizeDigits(raw);
     const isEmail = raw.includes("@");
@@ -47,43 +44,7 @@ export const resolveLogin = createServerFn({ method: "POST" })
       return { email: found.email };
     }
 
-    // Bootstrap only when an operator has configured a private server-side password.
-    // Never ship a reusable administrator credential in source code.
-    if (raw.toUpperCase() === BOOTSTRAP_USERNAME) {
-      if (!BOOTSTRAP_PASSWORD || BOOTSTRAP_PASSWORD.length < 12) {
-        throw new Error(
-          "A conta inicial não existe. Configure DBS_SUPER_ADMIN_BOOTSTRAP_PASSWORD no ambiente do servidor (mínimo de 12 caracteres) antes de usar a inicialização.",
-        );
-      }
-      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email: BOOTSTRAP_EMAIL,
-        password: BOOTSTRAP_PASSWORD,
-        email_confirm: true,
-        user_metadata: { username: BOOTSTRAP_USERNAME },
-      });
-      if (createErr && !/already/i.test(createErr.message)) {
-        throw new Error("Falha ao inicializar administrador: " + createErr.message);
-      }
-      let authId = created?.user?.id ?? null;
-      if (!authId) {
-        const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-        authId = list.users.find((u) => u.email === BOOTSTRAP_EMAIL)?.id ?? null;
-      }
-      if (!authId) throw new Error("Não foi possível provisionar o administrador.");
-
-      await supabaseAdmin.from("users").upsert(
-        {
-          auth_id: authId,
-          username: BOOTSTRAP_USERNAME,
-          email: BOOTSTRAP_EMAIL,
-          full_name: "Super Administrador DBS Air",
-          role_key: "SUPER_ADMIN",
-        },
-        { onConflict: "auth_id" },
-      );
-      return { email: BOOTSTRAP_EMAIL };
-    }
-
+    // Administrator accounts are never auto-provisioned from a public login request.
     throw new Error("Usuário ou senha inválidos.");
   });
 

@@ -58,7 +58,7 @@ async function requireNativeOperator(context: { userId: string }) {
     error ||
     !data ||
     data.status !== "ativo" ||
-    (!["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "") && !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? ""))
+    (!["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? ""))
   ) {
     throw new Error("Acesso restrito ao operador nativo DBS.");
   }
@@ -298,7 +298,14 @@ export const createRhEmployee = createServerFn({ method: "POST" })
     await requireNativeOperator(context);
     const { data: employee, error } = await supabaseAdmin
       .from("rh_employees")
-      .insert({ ...data, is_active: true })
+      .insert({
+        benefit_type: data.benefit_type,
+        full_name: data.full_name,
+        unit: data.unit,
+        fare_cents: data.fare_cents,
+        trips_per_day: data.trips_per_day,
+        is_active: true,
+      })
       .select(
         "id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, created_at, updated_at",
       )

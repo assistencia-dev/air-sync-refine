@@ -89,9 +89,18 @@ async function resolveDbsControlScope(user: DbsControlUser, collaboratorScope?: 
   throw new Error("A base compartilhada ainda não foi criada pela administração. Os dados locais foram preservados.");
 }
 
+const DBS_CONTROL_STATE_KEYS = [
+  "ordens", "clientes", "equipamentos", "tecnicos", "orcamentos", "servicos", "pecas", "osHistorico",
+  "pmocControle", "sites", "locais", "configuracoesPdfDbs", "compras", "sessionTecnicoLogado", "_meta",
+] as const;
+
 function normalizeState(state: Record<string, unknown>) {
+  const allowed: Record<string, unknown> = {};
+  for (const key of DBS_CONTROL_STATE_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(state ?? {}, key)) allowed[key] = (state as any)[key];
+  }
   return {
-    ...state,
+    ...allowed,
     tecnicos: Array.isArray(state.tecnicos) ? state.tecnicos : [],
     clientes: Array.isArray(state.clientes) ? state.clientes : [],
     equipamentos: Array.isArray(state.equipamentos) ? state.equipamentos : [],

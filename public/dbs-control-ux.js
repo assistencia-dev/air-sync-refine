@@ -65,9 +65,11 @@
     if(window.__dbsFieldOrderDetailsBridge)return;
     window.__dbsFieldOrderDetailsBridge=true;
     window.addEventListener("message",(event)=>{
-      if(event.source!==window.parent)return;
+      if(event.source!==window.parent||event.origin!==window.location.origin)return;
       const msg=event.data||{};
       if(msg.type!=="DBS_CONTROL_FIELD_ORDER_DETAILS_RESULT")return;
+      const d=msg.result&&msg.result.details;
+      if(d!=null&&(typeof d!=="object"||Array.isArray(d)))return;
       if(!msg.ok){alert(msg.error||"Não foi possível carregar o histórico do FieldControl.");return;}
       const st=state();
       const os=st.ordens.find(o=>String(o.id)===String(msg.workOrderId));

@@ -71,14 +71,14 @@ function assertKind(kind: unknown): BenefitKind {
 async function requireNativeOperator(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, username, status")
+    .select("id, username, status, role_key")
     .eq("auth_id", context.userId)
     .maybeSingle();
   if (
     error ||
     !data ||
     data.status !== "ativo" ||
-    !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? "")
+    !["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes((data as any).role_key ?? "")
   ) {
     throw new Error("Acesso restrito ao operador nativo DBS.");
   }
