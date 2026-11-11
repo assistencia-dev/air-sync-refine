@@ -546,8 +546,6 @@ BEGIN
     SELECT wo.cost_center_id INTO v_center FROM public.dbs_control_work_orders wo WHERE wo.id=v_work_order;
     NEW.cost_center_id:=coalesce(NEW.cost_center_id,v_center);
     IF NEW.cost_center_id IS NULL THEN RAISE EXCEPTION 'DBS_OS_COST_CENTER_REQUIRED' USING ERRCODE='23514'; END IF;
-  ELSIF TG_TABLE_NAME='dbs_control_car_stock' THEN
-    IF NEW.cost_center_id IS NULL THEN RAISE EXCEPTION 'DBS_CAR_STOCK_COST_CENTER_REQUIRED' USING ERRCODE='23514'; END IF;
   ELSIF TG_TABLE_NAME='dbs_control_inventory_movements' THEN
     IF NEW.purchase_id IS NOT NULL THEN
       SELECT cost_center_id INTO v_center FROM public.dbs_control_purchases WHERE id=NEW.purchase_id;
@@ -594,13 +592,34 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'dbs_control_purchase_items','dbs_control_purchase_receipts','dbs_control_purchase_receipt_items',
     'dbs_control_inventory_movements','dbs_control_work_order_parts','dbs_control_work_order_reservations',
-    'dbs_control_reservation_consumptions','dbs_control_car_stock','dbs_control_car_stock_consumptions',
+    'dbs_control_reservation_consumptions','dbs_control_car_stock_consumptions',
     'dbs_control_gas_usage','treasury_ledger_entries','treasury_ledger_lines'
   ] LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I', 'trg_'||t||'_cost_center',t);
     EXECUTE format('CREATE TRIGGER %I BEFORE INSERT ON public.%I FOR EACH ROW EXECUTE FUNCTION public.dbs_control_fill_cost_center()', 'trg_'||t||'_cost_center',t);
   END LOOP;
 END $$;
+
+create or replace function public.dbs_control_list_my_gas_cylinders(p_work_order_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare v_actor uuid:=auth.uid(); v_employee uuid; v_os public.dbs_control_work_orders%rowtype;
+begin
+ if v_actor is null then raise exception 'DBS_GAS_UNAUTHENTICATED' using errcode='42501'; end if;
+ select * into v_os from public.dbs_control_work_orders where id=p_work_order_id and deleted_at is null;
+ if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
+ select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.status='ativo'
+ union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.status='ativo';
+ if public.dbs_control_is_admin_actor(v_actor) then v_employee:=v_os.assigned_employee_id; end if;
+ if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then raise exception 'DBS_GAS_FORBIDDEN' using errcode='42501'; end if;
+ return coalesce((select jsonb_agg(jsonb_build_object('id',id,'serial_number',serial_number,'refrigerant_type',refrigerant_type,
+ 'total_charges',total_charges,'used_charges',used_charges,'remaining_charges',remaining_charges,'refill_count',refill_count,
+ 'vehicle_label',vehicle_label,'status',status,
+ 'tare_weight_kg',tare_weight_kg,'initial_gross_weight_kg',initial_gross_weight_kg,
+ 'current_gross_weight_kg',current_gross_weight_kg,
+ 'remaining_net_weight_kg',case when tare_weight_kg is not null and current_gross_weight_kg is not null
+   then greatest(current_gross_weight_kg-tare_weight_kg,0) else null end) order by assigned_at desc)
+ from public.dbs_control_gas_cylinders where employee_id=v_employee and status='active'), '[]'::jsonb);
+end $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_register_gas_usage_weighted(
   p_work_order_id uuid,p_cylinder_id uuid,p_equipment_reference text,p_application_note text,
@@ -609,6 +628,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_register_gas_usage_weighted(
 DECLARE
   v_actor uuid:=auth.uid();
   v_cylinder public.dbs_control_gas_cylinders%rowtype;
+  v_existing public.dbs_control_gas_usage%rowtype;
   v_result jsonb;
   v_consumed numeric(12,3);
 BEGIN
@@ -617,6 +637,18 @@ BEGIN
      OR p_gross_weight_before_kg<0 OR p_gross_weight_after_kg<0
      OR p_gross_weight_after_kg>p_gross_weight_before_kg THEN
     RAISE EXCEPTION 'DBS_GAS_WEIGHT_INVALID' USING ERRCODE='22023';
+  END IF;
+  SELECT * INTO v_existing FROM public.dbs_control_gas_usage WHERE idempotency_key=p_idempotency_key;
+  IF FOUND THEN
+    IF v_existing.work_order_id<>p_work_order_id OR v_existing.cylinder_id<>p_cylinder_id
+       OR abs(coalesce(v_existing.gross_weight_before_kg,-1)-p_gross_weight_before_kg)>0.001
+       OR abs(coalesce(v_existing.gross_weight_after_kg,-1)-p_gross_weight_after_kg)>0.001 THEN
+      RAISE EXCEPTION 'DBS_GAS_WEIGHT_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505';
+    END IF;
+    RETURN jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,
+      'cylinder_id',p_cylinder_id,'gas_consumed_kg',v_existing.gas_consumed_kg,
+      'gross_weight_after_kg',v_existing.gross_weight_after_kg,
+      'remaining_net_weight_kg',greatest(v_existing.gross_weight_after_kg-v_cylinder.tare_weight_kg,0));
   END IF;
   SELECT * INTO v_cylinder FROM public.dbs_control_gas_cylinders WHERE id=p_cylinder_id FOR UPDATE;
   IF NOT FOUND OR v_cylinder.tare_weight_kg IS NULL THEN
