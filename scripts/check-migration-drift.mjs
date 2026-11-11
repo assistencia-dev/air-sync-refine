@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import postgres from "postgres";
+import { normalizeMigrationSql } from "./lib/normalize-migration-sql.mjs";
 
 const root = process.cwd();
 const migrationsDirectory = path.resolve(root, process.env.MIGRATIONS_DIR || "supabase/migrations");
@@ -143,7 +144,7 @@ async function readDatabaseMigrations() {
   }
 }
 
-function compareMigrations(repository, database) {
+async function compareMigrations(repository, database) {
   const repositoryVersions = new Set(repository.migrations.keys());
   const databaseMigrations = new Map(
     database.migrations.map((migration) => [migration.version, migration]),
@@ -174,6 +175,41 @@ function compareMigrations(repository, database) {
     }
   }
 
+  const contentMismatches = [];
+  let contentVerifiedCount = 0;
+  if (database.has_statements_column) {
+    for (const databaseMigration of database.migrations) {
+      const repositoryMigration = repository.migrations.get(databaseMigration.version);
+      if (!repositoryMigration) continue;
+      if (!databaseMigration.statements?.trim()) {
+        contentMismatches.push({
+          version: databaseMigration.version,
+          repository_file: repositoryMigration.fileName,
+          reason: "SQL aplicado ausente na coluna statements",
+        });
+        continue;
+      }
+      const repositorySql = await fs.readFile(repositoryMigration.path, "utf8");
+      const databaseSql = normalizeMigrationSql(databaseMigration.statements);
+      const localSql = normalizeMigrationSql(repositorySql);
+      if (databaseSql !== localSql) {
+        contentMismatches.push({
+          version: databaseMigration.version,
+          repository_file: repositoryMigration.fileName,
+          database_sql_length: databaseSql.length,
+          repository_sql_length: localSql.length,
+        });
+      } else {
+        contentVerifiedCount += 1;
+      }
+    }
+  } else {
+    contentMismatches.push({
+      version: "*",
+      reason: "a coluna statements não existe em supabase_migrations.schema_migrations; o conteúdo não pode ser conferido",
+    });
+  }
+
   const latestDatabaseVersion = [...databaseVersions].sort((a, b) => a.localeCompare(b)).at(-1) ?? null;
   const pendingOutOfOrder = latestDatabaseVersion
     ? onlyInRepository.filter((migration) => migration.version < latestDatabaseVersion)
@@ -182,7 +218,7 @@ function compareMigrations(repository, database) {
         latest_database_version: latestDatabaseVersion,
       }))
     : [];
-  return { onlyInDatabase, onlyInRepository, nameMismatches, pendingOutOfOrder };
+  return { onlyInDatabase, onlyInRepository, nameMismatches, contentMismatches, contentVerifiedCount, pendingOutOfOrder };
 }
 
 async function appendPendingDocument(pending) {
@@ -304,7 +340,7 @@ async function main() {
 
   if (!localOnly && localErrors.length === 0) {
     const database = await readDatabaseMigrations();
-    const comparison = compareMigrations(repository, database);
+    const comparison = await compareMigrations(repository, database);
     const recovery = await recoverMissingMigrations(
       repository,
       comparison.onlyInDatabase,
@@ -324,6 +360,8 @@ async function main() {
       database.transaction_read_only === "on" &&
       comparison.onlyInDatabase.length === 0 &&
       comparison.nameMismatches.length === 0 &&
+      comparison.contentMismatches.length === 0 &&
+      (!productionPreflight || comparison.contentVerifiedCount === database.migrations.length) &&
       (productionPreflight
         ? comparison.pendingOutOfOrder.length === 0
         : comparison.onlyInRepository.length === 0);
