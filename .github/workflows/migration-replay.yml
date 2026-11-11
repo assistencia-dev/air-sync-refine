@@ -34,7 +34,7 @@ jobs:
           echo "Only the local Supabase stack is used. No production credentials or remote database URL are configured."
 
       - name: Start local Supabase services
-        run: supabase start --exclude studio,mail,functions,analytics,pooler
+        run: supabase start --exclude studio,mailpit,edge-runtime,logflare,vector,supavisor,imgproxy
 
       - name: Replay every migration against a clean database
         run: supabase db reset --local --no-seed
