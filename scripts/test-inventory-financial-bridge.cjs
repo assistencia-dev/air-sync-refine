@@ -259,7 +259,7 @@ assert.match(integrationSql, /rollback;/i);
 console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle, phase 2 RPC contracts and inline UI syntax verified.');
 
 // Migration D: conferência física parcial por item, idempotente e aprovada.
-const partialReceipts = read("supabase/migrations/20261111140750_dbs_control_purchase_partial_receipts.sql");
+const partialReceipts = fs.readFileSync("supabase/migrations/20261111140750_dbs_control_purchase_partial_receipts.sql", "utf8");
 assert.match(partialReceipts, /dbs_control_purchase_receipts/i);
 assert.match(partialReceipts, /dbs_control_purchase_receipt_items/i);
 assert.match(partialReceipts, /quantity_received/i);
@@ -270,5 +270,5 @@ assert.match(partialReceipts, /purchase-receipt:/i);
 assert.match(partialReceipts, /1\.1\.03/i);
 assert.match(partialReceipts, /1\.1\.04/i);
 assert.match(functions, /dbs_control_receive_purchase_items/);
-assert.match(inventoryPage, /receiveDbsPurchaseItems/);
-assert.match(inventoryPage, /quantity_received/);
+assert.match(phase2Ui, /receiveDbsPurchaseItems/);
+assert.match(phase2Ui, /quantity_received/);
