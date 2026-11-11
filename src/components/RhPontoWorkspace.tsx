@@ -3,6 +3,7 @@ import { openRhPrint } from "@/lib/rh.exports";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, UserX, AlertTriangle, BriefcaseBusiness, ChevronRight, ClipboardCheck, Filter, History, Save, Search, XCircle, FileDown, FileSpreadsheet } from "lucide-react";
 import { getMyProfile } from "@/lib/admin-profile.functions";
+import { pontoGeolocationErrorMessage } from "@/lib/ponto-geo";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
@@ -265,9 +266,10 @@ function PontoColaborador() {
 
   const friendlyError = (e: unknown) => {
     const raw = e instanceof Error ? e.message : String(e ?? "");
-    if (/permission|denied|not allowed|permiss/i.test(raw)) return "A localização do dispositivo foi bloqueada. Libere a localização no navegador e tente novamente.";
-    if (/timeout|timed out/i.test(raw)) return "O GPS demorou para responder. Verifique o sinal de localização e tente novamente.";
-    if (/position|gps|geolocation|location/i.test(raw)) return "Não foi possível obter sua localização. Ative o GPS/localização e tente novamente.";
+    if (e && typeof e === "object" && "code" in e) return pontoGeolocationErrorMessage(e);
+    if (/permission|denied|not allowed|permiss/i.test(raw)) return "A localização do dispositivo foi bloqueada. Libere a permissão de localização no navegador e nas configurações do celular.";
+    if (/timeout|timed out/i.test(raw)) return "O GPS demorou para responder. Ative a localização precisa, vá para um local aberto e tente novamente.";
+    if (/position|gps|geolocation|location/i.test(raw)) return "Não foi possível obter sua localização. Confira se o GPS/localização está ativado e se o site tem permissão.";
     if (/raio|radius|fora do raio/i.test(raw)) return "Você está fora do raio permitido para registrar a entrada. Aproxime-se da base cadastrada pelo RH.";
     if (/próxima marcação|marcação inválida|nenhuma/i.test(raw)) return raw;
     return raw || "Não foi possível registrar a marcação agora.";
@@ -276,9 +278,14 @@ function PontoColaborador() {
   const punch = useMutation({
     mutationFn: async (type: any) => {
       const workDate = localDateISO();
-      if (!navigator.geolocation) throw new Error("Seu dispositivo não disponibiliza localização.");
+      if (!window.isSecureContext) throw new Error("A localização exige uma conexão segura (HTTPS). Abra a folha de ponto pelo endereço oficial https://air-sync-refine.lovable.app/.");
+      if (!navigator.geolocation) throw new Error("Este navegador não disponibiliza geolocalização. Abra a folha de ponto no navegador atualizado do celular.");
       const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          error => reject(new Error(pontoGeolocationErrorMessage(error))),
+          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+        )
       );
       const baseLat = query.data?.employee.ponto_base_lat;
       const baseLng = query.data?.employee.ponto_base_lng;
