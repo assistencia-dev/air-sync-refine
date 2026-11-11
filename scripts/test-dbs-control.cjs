@@ -260,6 +260,8 @@ assert.doesNotMatch(html, /if \(!beforeFile && !os\.fotoAntes\)/, "Foto antes de
 assert.doesNotMatch(html, /if \(!afterFile && !os\.fotoDepois\)/, "Foto depois deve ser opcional.");
 assert.doesNotMatch(html, /Registre a assinatura do cliente antes de concluir/, "Assinatura não pode bloquear o registro do relatório técnico.");
 assert.match(html, /const hasSignature = Boolean\(canvas/, "A assinatura deve ser detectada sem exigir que o canvas seja preenchido.");
+assert.match(html, /canvas\\.dataset\\.dbsDrawing = 'true'[\\s\\S]*?canvas\\.dataset\\.dbsDrawing = 'false'/, "O desenho da assinatura deve impedir que atualizações realtime desmontem o canvas durante o toque.");
+assert.match(html, /employee-execution-body canvas\\.sig-canvas\\[data-dbs-drawing="true"\\]/, "O renderizador deve preservar o formulário enquanto o cliente estiver assinando.");
 assert.match(html, /catch\(error => \(\{ field: 'fotoAntes'/, "Falha de upload de foto deve ser tratada sem perder a conclusão da OS.");
 assert.match(html, /Fotos, assinatura, checklist, observações, peças e localização são opcionais/, "A interface deve informar ao técnico quais evidências são opcionais.");
 assert.match(html, /switchTab\('tab-dashboard', dashboardNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente o dashboard de progresso.");
