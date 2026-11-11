@@ -77,6 +77,9 @@ const tables = [
   "dbs_control_equipment",
   "dbs_control_service_catalog",
   "dbs_control_parts",
+  "dbs_control_suppliers",
+  "dbs_control_measure_units",
+  "dbs_control_unit_conversions",
   "dbs_control_work_orders",
   "dbs_control_work_order_equipment",
   "dbs_control_work_order_parts",
@@ -111,8 +114,8 @@ const tables = [
   "treasury_ledger_outbox",
 ];
 
-if (tables.length !== 78 || new Set(tables).size !== tables.length) {
-  throw new Error(`Lista de backup inválida: esperadas 78 tabelas únicas, encontradas ${tables.length}.`);
+if (tables.length !== 81 || new Set(tables).size !== tables.length) {
+  throw new Error(`Lista de backup inválida: esperadas 81 tabelas únicas, encontradas ${tables.length}.`);
 }
 
 async function request(path, options = {}) {
