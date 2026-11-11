@@ -11,6 +11,7 @@ import {
   settleDbsPartSale,
   settleDbsPurchase,
   receiveDbsPurchase,
+  receiveDbsPurchaseItems,
   getDbsInventoryFinancialOverview,
 } from "@/lib/dbs-control.functions";
 
@@ -44,6 +45,7 @@ function DbsInventoryPage() {
   const [purchasePaymentAmounts, setPurchasePaymentAmounts] = useState<Record<string, string>>({});
   const [purchasePaymentMethods, setPurchasePaymentMethods] = useState<Record<string, "cash" | "pix" | "bank_transfer" | "card" | "other">>({});
   const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
+  const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -323,12 +325,39 @@ function DbsInventoryPage() {
                       {purchase.approval_status === "approved" && purchase.approved_at && <p className="mt-1 text-xs text-slate-500">{new Date(purchase.approved_at).toLocaleString("pt-BR")}</p>}
                     </td>
                     <td className="p-3">
-                      {purchase.status === "received" ? <span className="font-bold text-emerald-700">Recebido</span> :
-                        purchase.approval_status !== "approved" ? <span className="text-xs font-semibold text-amber-700">Aguardando aprovação</span> :
-                        <button type="button" disabled={busy} onClick={() => void runAction(() => receiveDbsPurchase({ data: {
-                          purchaseId: purchase.id,
-                          idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
-                        } }), "Recebimento confirmado: estoque e Ledger atualizados.")} className="min-h-9 rounded-lg bg-sky-700 px-3 text-xs font-black text-white disabled:opacity-40">Receber no estoque</button>}
+                      {purchase.status === "received" ? <span className="font-bold text-emerald-700">Recebimento completo</span> :
+                        purchase.approval_status !== "approved" ? <span className="text-xs font-semibold text-amber-700">Aguardando aprovação</span> : (() => {
+                          const lines = (data?.purchaseItems ?? []).filter((item: any) => item.purchase_id === purchase.id);
+                          const outstanding = lines.filter((item: any) => Number(item.quantity) > Number(item.quantity_received ?? 0));
+                          const selected = outstanding.filter((item: any) => Number(purchaseReceiptQuantities[item.id] ?? 0) > 0);
+                          return <details className="min-w-64">
+                            <summary className="min-h-9 cursor-pointer rounded-lg bg-sky-700 px-3 py-2 text-center text-xs font-black text-white">
+                              Conferir recebimento ({outstanding.length} itens pendentes)
+                            </summary>
+                            <div className="mt-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              {lines.map((item: any) => {
+                                const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
+                                const remainingQty = Math.max(0, Number(item.quantity) - Number(item.quantity_received ?? 0));
+                                return <label key={item.id} className="grid grid-cols-[minmax(0,1fr)_100px] items-center gap-2 text-xs">
+                                  <span className="min-w-0"><strong>{part?.name ?? part?.sku ?? "Peça"}</strong><span className="block text-slate-500">Recebido {Number(item.quantity_received ?? 0)} / {Number(item.quantity)}</span></span>
+                                  <input aria-label={"Quantidade conferida " + (part?.name ?? item.id)} type="number" min="0" max={remainingQty} step="0.0001" disabled={remainingQty <= 0} value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"máx. " + remainingQty} className="min-h-9 w-full rounded-lg border border-slate-200 bg-white px-2" />
+                                </label>;
+                              })}
+                              <button type="button" disabled={busy || selected.length === 0 || selected.some((item: any) => Number(purchaseReceiptQuantities[item.id]) > Number(item.quantity) - Number(item.quantity_received ?? 0))} onClick={() => void runAction(() => receiveDbsPurchaseItems({ data: {
+                                purchaseId: purchase.id,
+                                idempotencyKey: "purchase-receipt:" + purchase.id + ":" + crypto.randomUUID(),
+                                items: selected.map((item: any) => ({ purchaseItemId: item.id, quantityReceived: Number(purchaseReceiptQuantities[item.id]) })),
+                              } }), "Conferência registrada: somente as quantidades recebidas entraram no estoque e no Ledger.").then(ok => {
+                                if (ok) setPurchaseReceiptQuantities(prev => {
+                                  const next = { ...prev };
+                                  for (const item of selected) delete next[item.id];
+                                  return next;
+                                });
+                              })} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades conferidas</button>
+                            </div>
+                          </details>;
+                        })()}
+                      {purchase.status === "partially_received" && <p className="mt-1 text-xs font-semibold text-amber-700">Recebimento parcial · {money(purchase.received_total_cents ?? 0)} recebido</p>}
                     </td>
                     <td className="p-3">{money(purchase.paid_cents)}</td>
                     <td className="p-3 font-bold">{money(remaining)}</td>

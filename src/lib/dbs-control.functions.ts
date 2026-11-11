@@ -3040,6 +3040,36 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     return result;
   });
 
+export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+    const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    const items = Array.isArray(input?.items) ? input.items : [];
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de recebimento inválida.");
+    if (!items.length || items.length > 100) throw new Error("Informe ao menos um item conferido.");
+    return {
+      purchaseId, idempotencyKey,
+      items: items.map((item) => {
+        if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
+          throw new Error("A quantidade conferida deve ser maior que zero.");
+        }
+        return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
+      }),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
+      p_idempotency_key: data.idempotencyKey,
+      p_items: data.items,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const receiveDbsPurchase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { purchaseId: string; idempotencyKey: string }) => {
@@ -3222,7 +3252,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,paid_cents,ledger_entry_id,created_at")
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,received_total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")
@@ -3231,6 +3261,13 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
+    const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
+    const purchaseItems = purchaseIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
+          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no")
+          .in("purchase_id", purchaseIds).order("line_no")
+      : { data: [], error: null };
+    if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -3238,6 +3275,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       sales: sales.data ?? [],
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
+      purchaseItems: purchaseItems.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
     };
   });
