@@ -158,7 +158,12 @@
       if (!gasBody) return;
       if (!Array.isArray(cylinders) || !cylinders.length) { gasBody.className = 'osv-field-card gas'; gasBody.innerHTML = '<span class="osv-empty">Nenhuma botija ativa vinculada ao técnico.</span>'; return; }
       gasBody.className = 'osv-field-card gas';
-      gasBody.innerHTML = cylinders.map(c => '<div class="osv-field-row"><span><strong>' + esc(c.refrigerant_type) + ' · Série ' + esc(c.serial_number) + '</strong><br><small>' + esc(String(c.remaining_charges) + ' cargas restantes · ' + String(c.used_charges) + '/' + String(c.total_charges) + ' utilizadas' + (c.vehicle_label ? ' · ' + c.vehicle_label : '')) + '</small></span><button type="button" data-gas-cylinder="' + esc(c.id) + '" ' + (Number(c.remaining_charges) < 1 ? 'disabled' : '') + '>+1 Carga de Gás</button></div>').join('');
+      gasBody.innerHTML = cylinders.map(c => {
+        const tare=Number(c.tare_weight_kg), gross=Number(c.current_gross_weight_kg);
+        const net=Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0):NaN;
+        const weights=Number.isFinite(net)?('Tara '+tare.toFixed(3)+' kg · Bruto '+gross.toFixed(3)+' kg · Líquido '+net.toFixed(3)+' kg'):'Pesagem inicial pendente';
+        return '<div class="osv-field-row"><span><strong>' + esc(c.refrigerant_type) + ' · Série ' + esc(c.serial_number) + '</strong><br><small>' + esc(String(c.remaining_charges) + ' cargas restantes · ' + String(c.used_charges) + '/' + String(c.total_charges) + ' utilizadas' + (c.vehicle_label ? ' · ' + c.vehicle_label : '')) + '</small><br><small>' + esc(weights) + '</small></span><button type="button" data-gas-cylinder="' + esc(c.id) + '" data-gross-weight="' + (Number.isFinite(gross)?String(gross):'') + '" data-tare-weight="' + (Number.isFinite(tare)?String(tare):'') + '" ' + (Number(c.remaining_charges) < 1 || !Number.isFinite(gross) || !Number.isFinite(tare) ? 'disabled' : '') + '>Registrar pesagem e consumo</button></div>';
+      }).join('');
     };
     const fieldMessage = event => {
       if (event.source !== window.parent || !event.data) return;
@@ -241,8 +246,21 @@
       if (b.dataset.gasCylinder) {
         const equipmentReference = window.prompt('Equipamento / TAG (opcional):', '') || '';
         const applicationNote = window.prompt('Aplicação / observação (opcional):', '') || '';
+        const grossBeforeRaw = window.prompt('Peso bruto da botija ANTES da aplicação (kg):', String(b.dataset.grossWeight || ''));
+        if (grossBeforeRaw == null) return;
+        const grossAfterRaw = window.prompt('Peso bruto da botija DEPOIS da aplicação (kg):', '');
+        if (grossAfterRaw == null) return;
+        const grossWeightBeforeKg = Number(String(grossBeforeRaw).replace(',', '.'));
+        const grossWeightAfterKg = Number(String(grossAfterRaw).replace(',', '.'));
+        if (!Number.isFinite(grossWeightBeforeKg) || !Number.isFinite(grossWeightAfterKg) || grossWeightAfterKg >= grossWeightBeforeKg || grossWeightAfterKg < Number(b.dataset.tareWeight)) {
+          alert('Informe pesagens válidas: o peso final precisa ser menor que o inicial e não pode ficar abaixo da tara.');
+          return;
+        }
         b.disabled = true; b.textContent = 'Registrando…';
-        window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_GAS_USE', workOrderId: plannedId, cylinderId: b.dataset.gasCylinder, equipmentReference, applicationNote, requestId: fieldRequestId() }, '*');
+        window.parent.postMessage({
+          type: 'DBS_CONTROL_FIELD_GAS_USE', workOrderId: plannedId, cylinderId: b.dataset.gasCylinder,
+          equipmentReference, applicationNote, grossWeightBeforeKg, grossWeightAfterKg, requestId: fieldRequestId()
+        }, '*');
         return;
       }
       if (b.hasAttribute('data-confirm-install')) {
