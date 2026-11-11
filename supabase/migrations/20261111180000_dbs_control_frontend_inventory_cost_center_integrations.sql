@@ -681,6 +681,34 @@ BEGIN
     'gross_weight_after_kg',p_gross_weight_after_kg);
 END $$;
 
+CREATE OR REPLACE FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(
+  p_cylinder_id uuid,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE v_actor uuid:=auth.uid(); v_row public.dbs_control_gas_cylinders%rowtype;
+BEGIN
+  IF v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor) THEN
+    RAISE EXCEPTION 'DBS_GAS_WEIGHT_INITIALIZE_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  IF p_tare_weight_kg IS NULL OR p_initial_gross_weight_kg IS NULL OR
+     p_tare_weight_kg<0 OR p_initial_gross_weight_kg<=p_tare_weight_kg THEN
+    RAISE EXCEPTION 'DBS_GAS_INITIAL_WEIGHTS_INVALID' USING ERRCODE='22023';
+  END IF;
+  SELECT * INTO v_row FROM public.dbs_control_gas_cylinders WHERE id=p_cylinder_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_GAS_CYLINDER_NOT_FOUND' USING ERRCODE='23503'; END IF;
+  IF v_row.tare_weight_kg IS NOT NULL OR v_row.current_gross_weight_kg IS NOT NULL THEN
+    RAISE EXCEPTION 'DBS_GAS_WEIGHTS_ALREADY_INITIALIZED' USING ERRCODE='23514';
+  END IF;
+  UPDATE public.dbs_control_gas_cylinders SET tare_weight_kg=p_tare_weight_kg,
+    initial_gross_weight_kg=p_initial_gross_weight_kg,current_gross_weight_kg=p_initial_gross_weight_kg,
+    updated_at=now() WHERE id=p_cylinder_id;
+  RETURN jsonb_build_object('ok',true,'cylinder_id',p_cylinder_id,'tare_weight_kg',p_tare_weight_kg,
+    'initial_gross_weight_kg',p_initial_gross_weight_kg,'current_gross_weight_kg',p_initial_gross_weight_kg,
+    'remaining_net_weight_kg',p_initial_gross_weight_kg-p_tare_weight_kg);
+END $$;
+
+REVOKE ALL ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric) TO authenticated,service_role;
+
 CREATE OR REPLACE FUNCTION public.dbs_control_assign_gas_cylinder_weighted(
   p_serial_number text,p_refrigerant_type text,p_employee_id uuid,p_total_charges integer,
   p_vehicle_label text,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric
