@@ -3484,18 +3484,32 @@ export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
 
 export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((input:{quoteId:string})=>({quoteId:requireInventoryId(input?.quoteId,"Orçamento relacional")}))
+  .validator((input:{quoteId:string})=>{
+    const quoteId=String(input?.quoteId??"").trim();
+    if(!quoteId||quoteId.length>120) throw new Error("Identificador do orçamento inválido.");
+    if(!isDbsControlUuid(quoteId)&&!/^ORC-[A-Z0-9_-]+$/i.test(quoteId)) throw new Error("Identificador legado do orçamento inválido.");
+    return {quoteId};
+  })
   .handler(async ({context,data})=>{
     const user=await requireDbsInventoryAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
-    const quote=await (supabaseAdmin as any).from("dbs_control_quotes")
-      .select("id,quote_number,status,scope_key,cost_center_id")
-      .eq("id",data.quoteId).eq("scope_key",scopeKey).maybeSingle();
+    const admin=supabaseAdmin as any;
+    let quoteQuery=admin.from("dbs_control_quotes")
+      .select("id,quote_number,status,scope_key,cost_center_id,source_quote_id")
+      .eq("scope_key",scopeKey);
+    quoteQuery=isDbsControlUuid(data.quoteId)?quoteQuery.eq("id",data.quoteId):quoteQuery.eq("source_quote_id",data.quoteId);
+    let quote=await quoteQuery.maybeSingle();
     if(quote.error) throw new Error(quote.error.message);
+    if(!quote.data&&!isDbsControlUuid(data.quoteId)){
+      quote=await admin.from("dbs_control_quotes")
+        .select("id,quote_number,status,scope_key,cost_center_id,source_quote_id")
+        .eq("scope_key",scopeKey).eq("quote_number",data.quoteId).maybeSingle();
+      if(quote.error) throw new Error(quote.error.message);
+    }
     if(!quote.data) throw new Error("Orçamento relacional não encontrado neste escopo.");
-    const items=await (supabaseAdmin as any).from("dbs_control_quote_items")
+    const items=await admin.from("dbs_control_quote_items")
       .select("id,part_id,item_type,description,measure_unit,quantity,unit_sale_cents")
-      .eq("quote_id",data.quoteId).eq("item_type","catalog").not("part_id","is",null).order("created_at");
+      .eq("quote_id",quote.data.id).eq("item_type","catalog").not("part_id","is",null).order("created_at");
     if(items.error) throw new Error(items.error.message);
     return {quote:quote.data,items:items.data??[]};
   });
