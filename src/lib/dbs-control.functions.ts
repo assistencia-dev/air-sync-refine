@@ -3040,6 +3040,28 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     return result;
   });
 
+export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { movementId: string; idempotencyKey: string; reason: string }) => {
+    const movementId = requireInventoryId(input?.movementId, "Movimentação");
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    const reason = String(input?.reason ?? "").trim();
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de estorno inválida.");
+    if (reason.length < 5 || reason.length > 1000) throw new Error("Informe um motivo de estorno entre 5 e 1.000 caracteres.");
+    return { movementId, idempotencyKey, reason };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reverse_inventory_movement", {
+      p_movement_id: data.movementId,
+      p_actor_user_id: user.id,
+      p_idempotency_key: data.idempotencyKey,
+      p_reason: data.reason,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
@@ -3268,6 +3290,10 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
           .in("purchase_id", purchaseIds).order("line_no")
       : { data: [], error: null };
     if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
+    const inventoryMovements = await (supabaseAdmin as any).from("dbs_control_inventory_movements")
+      .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,created_at,metadata")
+      .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100);
+    if (inventoryMovements.error) throw new Error("Falha ao carregar histórico de movimentações: " + inventoryMovements.error.message);
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -3276,6 +3302,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItems.data ?? [],
+      inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
     };
   });
