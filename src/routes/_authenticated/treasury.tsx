@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getTreasuryCloudState, postTreasuryLedgerEntry } from "@/lib/treasury.functions";
+import { getTreasuryCloudState, postTreasuryLedgerEntry, saveTreasuryCostCenter } from "@/lib/treasury.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 
@@ -129,6 +129,34 @@ function TreasuryPage() {
           // Keep the iframe covered until shared state is hydrated; local-only edits
           // could otherwise appear saved even while the cloud is unavailable.
           setLoading(true);
+        }
+        return;
+      }
+      if (msg.type === "DBS_TREASURY_SAVE_COST_CENTER") {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
+        if (!requestId || !msg.center || typeof msg.center !== "object") return;
+        try {
+          if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não terminou a sincronização inicial.");
+          const result = await saveTreasuryCostCenter({ data: {
+            code: String(msg.center.code || ""),
+            name: String(msg.center.name || ""),
+          } });
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_COST_CENTER_RESULT", requestId, ok: true, result },
+            window.location.origin,
+          );
+          const cloud = await getTreasuryCloudState();
+          const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
+          if (state) iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
+            window.location.origin,
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Falha ao salvar centro de custo.";
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_COST_CENTER_RESULT", requestId, ok: false, error: message },
+            window.location.origin,
+          );
         }
         return;
       }
