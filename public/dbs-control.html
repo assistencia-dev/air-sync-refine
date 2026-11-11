@@ -8336,7 +8336,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // Realtime/ACK de outra operação não pode desmontar o formulário
             // que o técnico está preenchendo. Os campos já têm rascunho
             // durável; aqui preservamos também o DOM para evitar tremor.
-            if (employeeMode && !force && document.querySelector('.employee-execution-body:focus-within')) {
+            if (employeeMode && !force && (document.querySelector('.employee-execution-body:focus-within') || document.querySelector('.employee-execution-body canvas.sig-canvas[data-dbs-drawing="true"]'))) {
                 const focused = document.activeElement?.id || '';
                 const match = focused.match(/^dbs-mob-(?:result|pending-note|relato|observacao|no-parts)-(.+)$/);
                 if (match) agendarRascunhoExecucaoMobile(match[1]);
@@ -8559,7 +8559,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <label>Foto depois <span class="field-optional">Opcional</span><input type="file" accept="image/*" capture="environment" id="dbs-mob-after-${o.id}"></label>
                               </div>
                               <label>Assinatura do cliente <span class="field-optional">Opcional</span></label>
-                              <canvas id="sig-canvas-${o.id}" data-testid="sign-os" class="sig-canvas" aria-label="Assinatura do cliente"></canvas>
+                              <canvas id="sig-canvas-${o.id}" data-testid="sign-os" class="sig-canvas" tabindex="0" aria-label="Assinatura do cliente. Desenhe com o dedo ou mouse."></canvas>
                               <div class="employee-inline employee-finish-row"><button class="btn btn-secondary btn-sm" onclick="limparCanvas('${o.id}')">Limpar assinatura</button><button class="btn btn-success btn-sm employee-finish" data-testid="save-os" onclick="concluirOSMobile('${o.id}')">Concluir atendimento</button><span class="employee-save-status" role="status" aria-live="polite"></span></div>
                             </div>
                           </details>
@@ -8661,6 +8661,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             canvas.onpointerdown = function(e) {
                 e.preventDefault();
                 isDrawing = true;
+                canvas.dataset.dbsDrawing = 'true';
+                try { canvas.focus({ preventScroll: true }); } catch (_) {}
                 canvas.dataset.dbsDirty = 'true';
                 try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 const p = getPos(e);
@@ -8674,7 +8676,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ctx.lineTo(p.x, p.y);
                 ctx.stroke();
             };
-            const stopDrawing = () => { isDrawing = false; captureDraft(); };
+            const stopDrawing = () => {
+                isDrawing = false;
+                canvas.dataset.dbsDrawing = 'false';
+                captureDraft();
+            };
             canvas.onpointerup = stopDrawing;
             canvas.onpointercancel = stopDrawing;
             canvas.onlostpointercapture = stopDrawing;
