@@ -39,4 +39,4 @@ A validação estática não substitui parser PostgreSQL, execução em Sandbox,
 
 ## Hardening complementar da Fase 2
 
-A migration `20261103210000_dbs_phase2_reservation_sync_guard.sql` corrige o ciclo de reserva da OS: em autosaves não terminais, quantidades reservadas também são subtraídas do payload legado, evitando que o autosave faça baixa física antes da conclusão. A baixa da reserva ocorre apenas no estado terminal. Reserva, liberação, autosave e conclusão compartilham advisory lock por OS para serializar concorrência.
+A migration `20261104135126_20261103210000_dbs_phase2_reservation_sync_guard.sql` corrige o ciclo de reserva da OS: em autosaves não terminais, quantidades reservadas também são subtraídas do payload legado, evitando que o autosave faça baixa física antes da conclusão. A baixa da reserva ocorre apenas no estado terminal. Reserva, liberação, autosave e conclusão compartilham advisory lock por OS para serializar concorrência.

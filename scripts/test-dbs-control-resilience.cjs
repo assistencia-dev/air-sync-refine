@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8");
 const functions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
-const migration = fs.readFileSync("supabase/migrations/20261026170000_dbs_control_observability_outbox_worker.sql", "utf8");
+const migration = fs.readFileSync("supabase/migrations/20261026143541_dbs_control_observability_outbox_worker.sql", "utf8");
 const worker = fs.readFileSync("supabase/functions/dbs-control-outbox-worker/index.ts", "utf8");
 const workflow = fs.readFileSync(".github/workflows/dbs-control-outbox-worker.yml", "utf8");
 const runner = fs.readFileSync("scripts/run-dbs-control-outbox-worker.mjs", "utf8");

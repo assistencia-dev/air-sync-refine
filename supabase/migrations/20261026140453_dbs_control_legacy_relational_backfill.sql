@@ -204,7 +204,8 @@ begin
     -- Ordens de serviço: protocolo é a identidade de reconciliação; quando a
     -- versão antiga não tinha protocolo, o ID legado recebe um prefixo estável.
     for item in select value from jsonb_array_elements(
-      case when jsonb_typeof(snap.state->'ordens') = 'array' then snap.state->'ordens' else '[]'::jsonb end
+      (case when jsonb_typeof(snap.state->'ordens') = 'array' then snap.state->'ordens' else '[]'::jsonb end)
+      || (case when jsonb_typeof(snap.state->'osHistorico') = 'array' then snap.state->'osHistorico' else '[]'::jsonb end)
     ) loop
       raw_key := coalesce(nullif(btrim(item->>'id'), ''), md5(item::text));
       select m.canonical_id into order_id from public.dbs_control_legacy_id_map m where m.scope_key=snap.scope_key and m.entity_type='work_order' and m.legacy_key=raw_key;
@@ -260,9 +261,9 @@ begin
         where m.scope_key=snap.scope_key and m.entity_type='site' and m.legacy_key=raw_ref;
         perform set_config('app.dbs_control_idempotency_key', 'legacy-backfill:'||snap.scope_key||':order:'||raw_key, true);
         insert into public.dbs_control_work_orders
-          (id,protocol,protocolo,client_id,site_id,assigned_employee_id,created_by_user_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,signature_path,assinatura_path,total_cents,created_at,updated_at,version,idempotency_key,deleted_at)
+          (id,protocol,protocolo,client_id,site_id,assigned_employee_id,created_by_user_id,service_id,type,priority,status,scheduled_at,started_at,completed_at,description,technical_opinion,diagnostico,observation,servico_executado,signature_name,signature_data,signature_path,assinatura_path,total_cents,created_at,updated_at,version,idempotency_key)
         values
-          (candidate_id,v_protocol,v_protocol,client_id,site_id,technician_id,owner_user_id,service_id,coalesce(nullif(item->>'tipo',''),'corretiva'),coalesce(nullif(item->>'prioridade',''),'normal'),status,null, null, completed_at_value, coalesce(item->>'desc',item->>'description',''),coalesce(item->>'diagnostico',item->>'technical_opinion',''),coalesce(item->>'diagnostico',item->>'technical_opinion',''),coalesce(item->>'observacao',item->>'observation',''),coalesce(item->>'trabalhoExecutado',item->>'servicoExecutado',item->>'observacao',item->>'observation',''),nullif(coalesce(item->>'signature_name',item->>'signatureName',''),''),case when signature_path is null then nullif(item->>'assinatura','') else null end,signature_path,signature_path,round(coalesce(amount_value,0)*100),created_at_value,created_at_value,1,'legacy-backfill:'||snap.scope_key||':order:'||raw_key,case when coalesce(item->>'excluidaEm','') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then (item->>'excluidaEm')::timestamptz else null end)
+          (candidate_id,v_protocol,v_protocol,client_id,site_id,technician_id,owner_user_id,service_id,coalesce(nullif(item->>'tipo',''),'corretiva'),coalesce(nullif(item->>'prioridade',''),'normal'),status,null, null, completed_at_value, coalesce(item->>'desc',item->>'description',''),coalesce(item->>'diagnostico',item->>'technical_opinion',''),coalesce(item->>'diagnostico',item->>'technical_opinion',''),coalesce(item->>'observacao',item->>'observation',''),coalesce(item->>'trabalhoExecutado',item->>'servicoExecutado',item->>'observacao',item->>'observation',''),nullif(coalesce(item->>'signature_name',item->>'signatureName',''),''),case when signature_path is null then nullif(item->>'assinatura','') else null end,signature_path,signature_path,round(coalesce(amount_value,0)*100),created_at_value,created_at_value,1,'legacy-backfill:'||snap.scope_key||':order:'||raw_key)
         on conflict (id) do nothing;
         select w.id into order_id from public.dbs_control_work_orders w where w.id=candidate_id;
         if order_id is null then select w.id into order_id from public.dbs_control_work_orders w where w.protocol=v_protocol limit 1; end if;

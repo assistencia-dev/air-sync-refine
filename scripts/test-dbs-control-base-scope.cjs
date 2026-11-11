@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261026180000_dbs_control_bases_issue_scope.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261026150826_dbs_control_bases_issue_scope.sql'), 'utf8');
 const rh = fs.readFileSync(path.join(root, 'src/lib/rh.functions.ts'), 'utf8');
 const control = fs.readFileSync(path.join(root, 'src/lib/dbs-control.functions.ts'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'public/dbs-control.html'), 'utf8');

@@ -1,0 +1,10 @@
+DROP POLICY IF EXISTS dbs_control_backup_manifests_service_only ON public.dbs_control_backup_manifests;
+DROP POLICY IF EXISTS dbs_control_backup_manifests_service_only_select ON public.dbs_control_backup_manifests;
+DROP POLICY IF EXISTS dbs_control_backup_manifests_service_only_insert ON public.dbs_control_backup_manifests;
+DROP POLICY IF EXISTS dbs_control_backup_manifests_service_only_update ON public.dbs_control_backup_manifests;
+DROP POLICY IF EXISTS dbs_control_backup_manifests_service_only_delete ON public.dbs_control_backup_manifests;
+
+CREATE POLICY dbs_control_backup_manifests_service_only_select ON public.dbs_control_backup_manifests FOR SELECT TO service_role USING (true);
+CREATE POLICY dbs_control_backup_manifests_service_only_insert ON public.dbs_control_backup_manifests FOR INSERT TO service_role WITH CHECK (true);
+CREATE POLICY dbs_control_backup_manifests_service_only_update ON public.dbs_control_backup_manifests FOR UPDATE TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY dbs_control_backup_manifests_service_only_delete ON public.dbs_control_backup_manifests FOR DELETE TO service_role USING (true);

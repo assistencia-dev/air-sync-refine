@@ -263,18 +263,30 @@ CREATE POLICY dbs_os_admin_delete
   TO authenticated
   USING ((SELECT is_admin()));
 
--- RH is authenticated-only; anonymous/public sessions must not evaluate these rules.
-ALTER POLICY rh_employees_admin_access
-  ON public.rh_employees
-  TO authenticated;
-
-ALTER POLICY rh_employees_gestor_conta_view
-  ON public.rh_employees
-  TO authenticated;
-
-ALTER POLICY rh_employees_gestor_regional_access
-  ON public.rh_employees
-  TO authenticated;
+-- Legacy RH policies may exist only in manually hardened deployments.
+-- Harden only existing policies; the final role-scoped rules are created below
+-- and by the subsequent RLS consolidation migration.
+DO $policy$
+DECLARE
+  policy_to_alter text;
+BEGIN
+  FOREACH policy_to_alter IN ARRAY ARRAY[
+    'rh_employees_admin_access',
+    'rh_employees_gestor_conta_view',
+    'rh_employees_gestor_regional_access'
+  ]
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public'
+        AND tablename = 'rh_employees'
+        AND policyname = policy_to_alter
+    ) THEN
+      EXECUTE format('ALTER POLICY %I ON public.rh_employees TO authenticated', policy_to_alter);
+    END IF;
+  END LOOP;
+END
+$policy$;
 
 -- Replace the broad admin ALL policy with explicit operations.
 DROP POLICY IF EXISTS rh_employees_admin_access ON public.rh_employees;

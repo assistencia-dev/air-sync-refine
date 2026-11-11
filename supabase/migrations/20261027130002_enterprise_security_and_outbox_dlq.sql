@@ -57,6 +57,7 @@ CREATE POLICY dbs_os_select
 CREATE POLICY dbs_os_admin_insert
   ON public.dbs_control_work_orders FOR INSERT TO authenticated
   WITH CHECK ((SELECT is_admin()));
+DROP POLICY IF EXISTS dbs_os_update ON public.dbs_control_work_orders;
 CREATE POLICY dbs_os_update
   ON public.dbs_control_work_orders FOR UPDATE TO authenticated
   USING (
@@ -79,9 +80,32 @@ CREATE POLICY dbs_os_admin_delete
   ON public.dbs_control_work_orders FOR DELETE TO authenticated
   USING ((SELECT is_admin()));
 
-ALTER POLICY rh_employees_gestor_conta_view ON public.rh_employees TO authenticated;
-ALTER POLICY rh_employees_gestor_regional_access ON public.rh_employees TO authenticated;
+DO $policy$
+DECLARE
+  policy_to_alter text;
+BEGIN
+  FOREACH policy_to_alter IN ARRAY ARRAY[
+    'rh_employees_gestor_conta_view',
+    'rh_employees_gestor_regional_access'
+  ]
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public'
+        AND tablename = 'rh_employees'
+        AND policyname = policy_to_alter
+    ) THEN
+      EXECUTE format('ALTER POLICY %I ON public.rh_employees TO authenticated', policy_to_alter);
+    END IF;
+  END LOOP;
+END
+$policy$;
+
 DROP POLICY IF EXISTS rh_employees_admin_access ON public.rh_employees;
+DROP POLICY IF EXISTS rh_employees_admin_select ON public.rh_employees;
+DROP POLICY IF EXISTS rh_employees_admin_insert ON public.rh_employees;
+DROP POLICY IF EXISTS rh_employees_admin_update ON public.rh_employees;
+DROP POLICY IF EXISTS rh_employees_admin_delete ON public.rh_employees;
 CREATE POLICY rh_employees_admin_select
   ON public.rh_employees FOR SELECT TO authenticated
   USING ((SELECT current_role_key()) = ANY (ARRAY['SUPER_ADMIN'::role_key, 'ADMIN_OPERACIONAL'::role_key]));

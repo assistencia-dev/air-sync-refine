@@ -6,9 +6,9 @@ const shell = fs.readFileSync("public/dbs-control-shell.html", "utf8");
 const indexes = [
   "supabase/migrations/20261027130000_enterprise_hardening.sql",
   "supabase/migrations/20261027130001_enterprise_indexes_and_status_catalog.sql",
-  "supabase/migrations/20261027160001_rls_scope_lookup_indexes.sql",
-  "supabase/migrations/20261026161000_dbs_control_sync_indexes.sql",
-  "supabase/migrations/20261026180000_dbs_control_bases_issue_scope.sql",
+  "supabase/migrations/20261027151430_rls_scope_lookup_indexes.sql",
+  "supabase/migrations/20261026141751_dbs_control_sync_indexes.sql",
+  "supabase/migrations/20261026150826_dbs_control_bases_issue_scope.sql",
   "supabase/migrations/20261027162456_dbs_control_cursor_indexes.sql",
   "supabase/migrations/20261027162717_treasury_ledger_fk_indexes.sql",
 ].map((file) => fs.readFileSync(file, "utf8")).join("\n");

@@ -120,6 +120,42 @@ test("criar OS, assinar, operar offline, reconciliar a outbox e persistir após 
   await expect(reloadedFrame.locator(".employee-order").filter({ hasText: protocol })).toBeVisible({ timeout: 60_000 });
 });
 
+test("Realtime não fecha nem desmonta a execução da OS quando o campo perde foco", async ({ page }) => {
+  test.skip(!e2eEmail || !e2ePassword, "Credenciais de E2E não configuradas; o teste exige uma base isolada.");
+  await acceptDialogs(page);
+  await loginAs(page, e2eEmail, e2ePassword);
+  const frame = await controlFrame(page);
+  const { order } = await openNewOrder(frame);
+
+  const execution = order.locator("details.employee-execution");
+  await execution.locator("summary").click();
+  const report = order.getByTestId("technical-report");
+  await expect(report).toBeVisible();
+  await report.fill("Relato preservado enquanto a sincronização remota atualiza a OS.");
+  await page.waitForTimeout(250);
+  await order.locator(".employee-order-top").click();
+
+  const frameHandle = page.frames().find(candidate => candidate.url().includes("dbs-control"));
+  if (!frameHandle) throw new Error("Iframe autenticado do DBS Control não foi encontrado.");
+  await frameHandle.evaluate(() => {
+    const reportInput = document.querySelector('[data-testid="technical-report"]') as HTMLTextAreaElement | null;
+    const orderId = String(reportInput?.id || "").replace(/^dbs-mob-relato-/, "");
+    const state = JSON.parse(JSON.stringify(eval("ERP_STATE")));
+    const order = (state.ordens || []).find((row: any) => String(row.id) === orderId);
+    if (!order) throw new Error("A OS aberta não existe no estado da sessão.");
+    order.version = Number(order.version || 1) + 1;
+    const event = new MessageEvent("message", {
+      data: { type: "DBS_CONTROL_CLOUD_STATE", state, baseState: state },
+      origin: window.location.origin,
+      source: window.parent,
+    });
+    window.dispatchEvent(event);
+  });
+
+  await expect(execution).toHaveAttribute("open", "");
+  await expect(report).toHaveValue("Relato preservado enquanto a sincronização remota atualiza a OS.");
+});
+
 test("isolamento: o colaborador B não enxerga a OS criada pelo colaborador A", async ({ browser }) => {
   test.skip(
     !e2eEmail || !e2ePassword || !isolationEmail || !isolationPassword,

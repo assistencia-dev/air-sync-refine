@@ -1,6 +1,3 @@
--- Integração FieldControl para o DBS CONTROL.
--- ADITIVA: não remove nem altera os dados operacionais existentes.
-
 CREATE TABLE IF NOT EXISTS public.dbs_control_integrations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
@@ -17,7 +14,6 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_integrations (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(company_id, provider)
 );
-
 CREATE TABLE IF NOT EXISTS public.dbs_control_external_refs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
@@ -30,7 +26,6 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_external_refs (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(company_id, provider, entity_type, external_id)
 );
-
 CREATE TABLE IF NOT EXISTS public.dbs_control_sync_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
@@ -43,26 +38,17 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_sync_runs (
   errors jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_by_user_id uuid REFERENCES public.users(id) ON DELETE SET NULL
 );
-
 CREATE INDEX IF NOT EXISTS idx_dbs_control_external_refs_local ON public.dbs_control_external_refs(local_id);
 CREATE INDEX IF NOT EXISTS idx_dbs_control_sync_runs_company ON public.dbs_control_sync_runs(company_id, started_at DESC);
-
 ALTER TABLE public.dbs_control_integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dbs_control_external_refs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dbs_control_sync_runs ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS dbs_control_integrations_admin_all ON public.dbs_control_integrations;
-CREATE POLICY dbs_control_integrations_admin_all ON public.dbs_control_integrations FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
+CREATE POLICY dbs_control_integrations_admin_all ON public.dbs_control_integrations FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 DROP POLICY IF EXISTS dbs_control_external_refs_admin_all ON public.dbs_control_external_refs;
-CREATE POLICY dbs_control_external_refs_admin_all ON public.dbs_control_external_refs FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
+CREATE POLICY dbs_control_external_refs_admin_all ON public.dbs_control_external_refs FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 DROP POLICY IF EXISTS dbs_control_sync_runs_admin_all ON public.dbs_control_sync_runs;
-CREATE POLICY dbs_control_sync_runs_admin_all ON public.dbs_control_sync_runs FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
+CREATE POLICY dbs_control_sync_runs_admin_all ON public.dbs_control_sync_runs FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 REVOKE ALL ON public.dbs_control_integrations FROM anon;
 REVOKE ALL ON public.dbs_control_external_refs FROM anon;
 REVOKE ALL ON public.dbs_control_sync_runs FROM anon;
