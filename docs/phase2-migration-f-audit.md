@@ -50,3 +50,24 @@ A implementação segura deverá ser entregue em commits pequenos dentro desta b
 - Não alterar custos/fornecedores visíveis a perfis operacionais ou técnicos.
 - Não criar dados fictícios em produção.
 - Não aplicar migration nem publicar Lovable nesta etapa de auditoria.
+
+
+## Detalhamento confirmado dos 3 orçamentos legados
+
+A leitura pontual do único snapshot que contém orçamentos confirmou:
+
+| ID legado | Cliente UUID | Estado | Itens |
+|---|---|---|---|
+| ORC-1001 | `85372da6-c90b-4c4f-a212-61fd91cbc035` | Rascunho | 1 item manual, R$ 890,00 |
+| ORC-1002 | `85372da6-c90b-4c4f-a212-61fd91cbc035` | Rascunho | 1 item manual, R$ 890,00 |
+| ORC-1003 | `c765dda3-0c8c-44be-9d32-326748ac32a4` | Rascunho | 1 item manual, R$ 930,00 |
+
+Os três itens têm `catalogoId: null`; portanto, não são itens vinculáveis automaticamente a uma peça do estoque. Devem ser preservados como itens manuais relacionais, sem criar reserva ou baixa retroativa. O snapshot original deve permanecer intacto após o backfill.
+
+## Ajuste de arquitetura solicitado para a implementação
+
+- O card “Itens Previstos (Contrato/Orçamento)” deve ler os itens relacionais vinculados à OS, não confiar somente em arrays locais do iframe.
+- A ação “Confirmar Instalação” deve chamar uma RPC autenticada no backend. A RPC confirma os itens e chama `dbs_control_consume_work_order_reservations` com chave idempotente; nunca cria movimento `consume` diretamente.
+- A reserva ocorre na conversão/aprovação do orçamento para a OS. A confirmação física consome a reserva já existente; itens manuais sem `part_id` são apenas confirmados, sem movimentação de estoque.
+- O card deve ser responsivo e de leitura simples. Não adicionar campos obrigatórios extras ao formulário de OS.
+- A conversão precisa criar uma OS relacional UUID em `dbs_control_work_orders` e manter a referência legada `ORC-...` como chave externa. Não associar a OS textual do snapshot por aproximação.
