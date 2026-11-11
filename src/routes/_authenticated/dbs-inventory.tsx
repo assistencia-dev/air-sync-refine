@@ -12,6 +12,7 @@ import {
   settleDbsPurchase,
   receiveDbsPurchase,
   receiveDbsPurchaseItems,
+  reverseDbsInventoryMovement,
   getDbsInventoryFinancialOverview,
 } from "@/lib/dbs-control.functions";
 
@@ -46,6 +47,7 @@ function DbsInventoryPage() {
   const [purchasePaymentMethods, setPurchasePaymentMethods] = useState<Record<string, "cash" | "pix" | "bank_transfer" | "card" | "other">>({});
   const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
+  const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -383,6 +385,47 @@ function DbsInventoryPage() {
               </table>
             </div>
           </div>
+          <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 p-5">
+              <h2 className="text-lg font-black">Histórico imutável de movimentações</h2>
+              <p className="mt-1 text-sm text-slate-500">Movimentos não podem ser editados ou apagados. Correções elegíveis são registradas por estorno, com motivo e contrapartida no Ledger.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
+                  <th className="p-3">Data</th><th className="p-3">Peça</th><th className="p-3">Tipo</th><th className="p-3">Quantidade</th><th className="p-3">Saldo após</th><th className="p-3">Correção</th>
+                </tr></thead>
+                <tbody>{(data?.inventoryMovements ?? []).map((movement: any) => {
+                  const part = parts.find((entry: any) => String(entry.id) === String(movement.part_id));
+                  const movements = data?.inventoryMovements ?? [];
+                  const alreadyReversed = movements.some((entry: any) => entry.reversal_of_movement_id === movement.id);
+                  const canReverse = ["receipt", "consume", "return", "adjustment"].includes(String(movement.movement_type))
+                    && !movement.work_order_id && !movement.work_order_part_id
+                    && !movement.reversal_of_movement_id && !alreadyReversed;
+                  const reason = String(movementReversalReasons[movement.id] ?? "");
+                  return <tr key={movement.id} className="border-t border-slate-100">
+                    <td className="p-3 whitespace-nowrap">{movement.created_at ? new Date(movement.created_at).toLocaleString("pt-BR") : "—"}</td>
+                    <td className="p-3 font-semibold">{part?.name ?? part?.sku ?? movement.part_id}</td>
+                    <td className="p-3">{movement.movement_type === "reversal" ? "Estorno" : movement.movement_type}</td>
+                    <td className="p-3">{Number(movement.quantity_delta).toLocaleString("pt-BR")}</td>
+                    <td className="p-3">{Number(movement.balance_after).toLocaleString("pt-BR")}</td>
+                    <td className="p-3">
+                      {movement.reversal_of_movement_id ? <span className="text-xs font-bold text-emerald-700">Estorno rastreado</span> :
+                        alreadyReversed ? <span className="text-xs font-bold text-slate-500">Já estornado</span> :
+                        canReverse ? <div className="flex min-w-64 flex-col gap-2">
+                          <input aria-label="Motivo do estorno" maxLength={1000} value={reason} onChange={e => setMovementReversalReasons(prev => ({ ...prev, [movement.id]: e.target.value }))} placeholder="Motivo obrigatório (mín. 5 caracteres)" className="min-h-9 rounded-lg border border-slate-200 px-2 text-xs" />
+                          <button type="button" disabled={busy || reason.trim().length < 5} onClick={() => void runAction(() => reverseDbsInventoryMovement({ data: {
+                            movementId: movement.id,
+                            idempotencyKey: "inventory-reversal:" + movement.id + ":" + crypto.randomUUID(),
+                            reason,
+                          } }), "Estorno registrado no histórico e no Ledger.")} className="min-h-9 rounded-lg bg-amber-700 px-3 text-xs font-black text-white disabled:opacity-40">Registrar estorno</button>
+                        </div> : <span className="text-xs text-slate-500">Correção pelo fluxo vinculado</span>}
+                    </td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </section>
           {tab === "sales" ? <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
             <form onSubmit={createSale} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-black">Nova venda avulsa</h2>
