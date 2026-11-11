@@ -154,9 +154,9 @@
         '<li><span><strong>' + esc(it.description || 'Item') + '</strong><br><small>' +
         esc(String(it.quantity ?? '') + (it.measure_unit ? ' ' + it.measure_unit : '')) +
         (it.item_type === 'manual' ? ' · item manual' : '') + '</small></span><span class="osv-chip">' +
-        esc(it.reservation_status === 'reserved' ? 'Reservado' : it.reservation_status === 'consumed' ? 'Instalado' : 'Previsto') +
+        esc(it.installation_confirmed ? 'Confirmado' : it.reservation_status === 'reserved' ? 'Reservado' : it.reservation_status === 'consumed' ? 'Consumido' : 'Previsto') +
         '</span></li>').join('') + '</ul>' +
-        (items.some(it => it.reservation_status === 'reserved') ? '<button type="button" class="pri" data-confirm-install style="margin-top:12px;min-height:44px;padding:0 16px;border:0;border-radius:9px;background:#0284c7;color:#fff;font-weight:800">Confirmar Instalação</button>' : '');
+        (items.some(it => !it.installation_confirmed) ? '<button type="button" class="pri" data-confirm-install style="margin-top:12px;min-height:44px;padding:0 16px;border:0;border-radius:9px;background:#0284c7;color:#fff;font-weight:800">Confirmar Instalação</button>' : '');
     };
     const plannedMessage = event => {
       if (event.source !== window.parent || !event.data) return;
