@@ -247,7 +247,9 @@ assert.match(functions, /user\.role_key !== "SUPER_ADMIN"/);
 assert.match(functions, /canReconcileWorkOrderFinancials: user\.role_key === "SUPER_ADMIN"/);
 assert.match(phase2Ui, /reconcileDbsWorkOrderFinancials/);
 assert.match(phase2Ui, /window\.confirm/);
-assert.match(phase2Ui, /conciliação é GLOBAL/);
+assert.match(phase2Ui, /conciliação global/i);
+assert.match(phase2Ui, /window\.confirm/);
+assert.match(phase2Ui, /Ação global, exclusiva do SUPER_ADMIN/i);
 
 assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 35801/i);
 assert.match(integrationSql, /v_part2/i);
