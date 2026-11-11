@@ -203,6 +203,33 @@ function isWorkOrderHiddenFromCollaborator(order: any): boolean {
   return status.includes("cancelad");
 }
 
+function stripOperationalCostFields(record: any) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return record;
+
+  const {
+    custo,
+    cost,
+    cost_cents,
+    costCents,
+    unit_cost,
+    unit_cost_cents,
+    unitCostCents,
+    total_cost_cents,
+    parts_cost_cents,
+    partsCostCents,
+    custoPecas,
+    lucroBruto,
+    revenue_cents,
+    revenueCents,
+    financial_status,
+    revenue_entry_id,
+    revenue_reversal_entry_id,
+    ...safe
+  } = record;
+
+  return safe;
+}
+
 function filterCollaboratorState(
   state: Record<string, unknown>,
   employeeId: string,
@@ -237,11 +264,14 @@ function filterCollaboratorState(
       const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
       return clientId.length > 0 && scopedClientIds.has(clientId);
     })
-    .map((order) => (
-      String(order?.employeeId ?? "") === employeeId
-        ? order
-        : { ...order, employeeId }
-    ));
+    .map((order) => ({
+      ...stripOperationalCostFields(order),
+      employeeId: String(order?.employeeId ?? "") === employeeId
+        ? order.employeeId
+        : employeeId,
+      pecasUsadas: (Array.isArray(order?.pecasUsadas) ? order.pecasUsadas : [])
+        .map((part: any) => stripOperationalCostFields(part)),
+    }));
   const clientIds = new Set([
     ...orders.map((order) => String(order?.clienteId)).filter(Boolean),
     ...(scope.canIssueWorkOrders ? (scope.clientIds ?? []).map(String) : []),
@@ -283,7 +313,9 @@ function filterCollaboratorState(
       const clientId = String(item?.clienteId ?? item?.client_id ?? "").trim();
       return (!hasBoundBase || (baseIsActive && scopedClientIds.has(clientId))) && clientIds.has(clientId);
     }),
-    pecas: (normalized.pecas as any[]).filter((item) => partsUsed.has(String(item?.id))),
+    pecas: (normalized.pecas as any[])
+      .filter((item) => partsUsed.has(String(item?.id)))
+      .map((item) => stripOperationalCostFields(item)),
     compras: [],
   };
 }
@@ -502,7 +534,9 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = supabaseAdmin.from("dbs_control_work_order_parts")
-        .select("work_order_id,part_id,quantity,unit_cents,cost_cents,consumption_status");
+        .select(isScopedCollaborator
+          ? "work_order_id,part_id,quantity,unit_cents,consumption_status"
+          : "work_order_id,part_id,quantity,unit_cents,cost_cents,consumption_status");
       return isScopedCollaborator
         ? (inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows)
         : query;
@@ -519,7 +553,9 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = (supabaseAdmin as any).from("dbs_control_work_order_financials")
-        .select("work_order_id,revenue_cents,parts_cost_cents,status,revenue_entry_id,revenue_reversal_entry_id,updated_at");
+        .select(isScopedCollaborator
+          ? "work_order_id,status,updated_at"
+          : "work_order_id,revenue_cents,parts_cost_cents,status,revenue_entry_id,revenue_reversal_entry_id,updated_at");
       if (!isScopedCollaborator) return query;
       return inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows;
     })(),
