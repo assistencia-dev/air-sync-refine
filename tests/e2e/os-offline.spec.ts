@@ -140,7 +140,7 @@ test("Realtime não fecha nem desmonta a execução da OS quando o campo perde f
   await frameHandle.evaluate(() => {
     const reportInput = document.querySelector('[data-testid="technical-report"]') as HTMLTextAreaElement | null;
     const orderId = String(reportInput?.id || "").replace(/^dbs-mob-relato-/, "");
-    const state = JSON.parse(JSON.stringify(ERP_STATE));
+    const state = JSON.parse(JSON.stringify(eval("ERP_STATE")));
     const order = (state.ordens || []).find((row: any) => String(row.id) === orderId);
     if (!order) throw new Error("A OS aberta não existe no estado da sessão.");
     order.version = Number(order.version || 1) + 1;
