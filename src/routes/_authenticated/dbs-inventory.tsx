@@ -11,6 +11,7 @@ import {
   settleDbsPurchase,
   receiveDbsPurchase,
   getDbsInventoryFinancialOverview,
+  reconcileDbsWorkOrderFinancials,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -103,6 +104,27 @@ function DbsInventoryPage() {
   }
 
 
+  async function reconcileWorkOrderFinancials() {
+    if (busy || !data?.canReconcileWorkOrderFinancials) return;
+    const confirmed = window.confirm(
+      "Esta conciliação é GLOBAL e restrita ao SUPER_ADMIN. Ela cria fichas financeiras ausentes para OS concluídas com valor positivo ou com movimentos de estoque, recalcula custos somente com movimentos registrados e pode publicar receitas no DBS TREASURY. Os lançamentos do Ledger são permanentes e eventuais correções exigem estorno. Nenhum custo ou movimento será inventado. Deseja continuar?"
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await reconcileDbsWorkOrderFinancials();
+      setMessage(
+        `Conciliação global concluída: ${result.financial_rows_created ?? 0} fichas criadas, ${result.cost_rows_reconciled ?? 0} custos reconciliados, ${result.revenue_rows_posted ?? 0} receitas lançadas e ${result.completed_without_source_value ?? 0} OS sem valor de origem mantidas pendentes.`
+      );
+      await Promise.all([overview.refetch(), financial.refetch()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha na conciliação global das OS.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitPurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const items = purchaseLines.map((line) => ({
@@ -176,7 +198,11 @@ function DbsInventoryPage() {
           {financial.isLoading && <p className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Carregando balanço de custos e rentabilidade...</p>}
           {financial.error && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Não foi possível carregar o balanço financeiro: {financial.error instanceof Error ? financial.error.message : "Falha ao consultar os indicadores."}</div>}
           {financial.data && <section className="mb-5">
-            <div className="mb-3"><h2 className="text-lg font-black">Balanço de custos e rentabilidade</h2><p className="text-xs text-slate-500">Valores consolidados do Ledger e do estoque relacional.</p></div>
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="text-lg font-black">Balanço de custos e rentabilidade</h2><p className="text-xs text-slate-500">Valores consolidados do Ledger e do estoque relacional.</p></div>
+              {data.canReconcileWorkOrderFinancials && <button type="button" disabled={busy} onClick={() => void reconcileWorkOrderFinancials()} className="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-900 disabled:opacity-50">Reconciliar OS concluídas no Ledger</button>}
+            </div>
+            {data.canReconcileWorkOrderFinancials && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Ação global, exclusiva do SUPER_ADMIN. Exige confirmação e pode criar lançamentos permanentes de receita para OS concluídas com valor positivo. Custos são calculados somente a partir dos movimentos de estoque já registrados.</p>}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Valor em estoque", financial.data.stock_value_cents],
