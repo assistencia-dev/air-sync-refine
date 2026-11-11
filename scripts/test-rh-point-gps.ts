@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
-import { distanceMeters, validatePontoGps } from "../src/lib/ponto-geo";
+import { distanceMeters, pontoGeolocationErrorMessage, validatePontoGps } from "../src/lib/ponto-geo";
 
 const employee = { ponto_base_lat: -22.9, ponto_base_lng: -43.2, ponto_raio_m: 150 };
+
+// Os códigos nativos do navegador devem produzir instruções claras ao colaborador.
+assert.match(pontoGeolocationErrorMessage({ code: 1 }), /Permissão de localização negada/i);
+assert.match(pontoGeolocationErrorMessage({ code: 2 }), /não conseguiu determinar sua posição/i);
+assert.match(pontoGeolocationErrorMessage({ code: 3 }), /excedeu o tempo de resposta/i);
+
 
 const inside = validatePontoGps(
   { latitude: -22.9, longitude: -43.2, gps_accuracy_m: 8 },
