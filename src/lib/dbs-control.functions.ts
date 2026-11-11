@@ -3457,3 +3457,22 @@ export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
     for(const result of [suppliers,measureUnits,unitConversions,costCenters]) if(result.error) throw new Error(result.error.message);
     return {suppliers:suppliers.data??[],measureUnits:measureUnits.data??[],unitConversions:unitConversions.data??[],costCenters:costCenters.data??[]};
   });
+
+
+export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{quoteId:string})=>({quoteId:requireInventoryId(input?.quoteId,"Orçamento relacional")}))
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const quote=await (supabaseAdmin as any).from("dbs_control_quotes")
+      .select("id,quote_number,status,scope_key,cost_center_id")
+      .eq("id",data.quoteId).eq("scope_key",scopeKey).maybeSingle();
+    if(quote.error) throw new Error(quote.error.message);
+    if(!quote.data) throw new Error("Orçamento relacional não encontrado neste escopo.");
+    const items=await (supabaseAdmin as any).from("dbs_control_quote_items")
+      .select("id,part_id,item_type,description,measure_unit,quantity,unit_sale_cents")
+      .eq("quote_id",data.quoteId).eq("item_type","catalog").not("part_id","is",null).order("created_at");
+    if(items.error) throw new Error(items.error.message);
+    return {quote:quote.data,items:items.data??[]};
+  });
