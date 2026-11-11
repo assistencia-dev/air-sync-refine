@@ -11,6 +11,7 @@ const workflow = fs.readFileSync(path.join(root, ".github/workflows/daily-supaba
 const restoreDrill = fs.readFileSync(path.join(root, "scripts/verify-backup-restore.mjs"), "utf8");
 const restoreWorkflow = fs.readFileSync(path.join(root, ".github/workflows/backup-restore-drill.yml"), "utf8");
 const masterData = fs.readFileSync(path.join(root, "supabase/migrations/20261111133659_dbs_control_supplier_uom_master_data.sql"), "utf8");
+const purchaseApproval = fs.readFileSync(path.join(root, "supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql"), "utf8");
 
 assert.match(backup, /dbs-control-os/);
 assert.match(backup, /listStorageObjects/);
@@ -25,6 +26,7 @@ for (const table of [
   "dbs_control_measure_units",
   "dbs_control_unit_conversions",
   "dbs_control_purchases",
+  "dbs_control_purchase_approval_history",
   "dbs_control_purchase_items",
   "dbs_control_inventory_movements",
   "dbs_control_inventory_commands",
@@ -42,6 +44,11 @@ assert.match(masterData, /create table if not exists public\.dbs_control_unit_co
 assert.match(masterData, /enable row level security/i);
 assert.match(masterData, /supplier_name/);
 assert.match(masterData, /conversion_factor/);
+assert.match(purchaseApproval, /approval_status text not null default 'pending'/i);
+assert.match(purchaseApproval, /dbs_control_purchase_approval_history/i);
+assert.match(purchaseApproval, /dbs_control_decide_purchase_approval/i);
+assert.match(purchaseApproval, /DBS_PURCHASE_APPROVAL_REQUIRED/);
+assert.match(purchaseApproval, /legacy_received/);
 assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
 assert.match(retention, /dbs_control_work_order_revisions/);
 assert.match(integrity, /rh_ponto_records_employee_date_type_uq/);
