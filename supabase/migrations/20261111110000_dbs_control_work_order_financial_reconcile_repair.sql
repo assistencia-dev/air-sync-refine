@@ -31,7 +31,7 @@ AS $function$
   left join public.users u on u.id = w.created_by_user_id
   cross join single_admin_company a
   where w.id = p_work_order_id;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_reconcile_work_order_financials(p_actor_user_id uuid)
  RETURNS jsonb
@@ -213,7 +213,7 @@ begin
     'as_of', now()
   );
 end;
-$function$
+$function$;
 
 revoke all on function public.dbs_control_inventory_scope_for_work_order(uuid) from public, anon, authenticated;
 grant execute on function public.dbs_control_inventory_scope_for_work_order(uuid) to service_role;
