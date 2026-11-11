@@ -19,6 +19,7 @@ const settlementIndexes = fs.readFileSync('supabase/migrations/20261105125435_db
 const purchaseLifecycle = fs.readFileSync('supabase/migrations/20261105125808_dbs_control_purchase_register_and_receipt_lifecycle.sql', 'utf8');
 const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_fix_dbs_control_purchase_receipt_status_lock.sql', 'utf8');
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
+const purchaseApproval = fs.readFileSync('supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql', 'utf8');
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
 const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
 const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_dbs_inventory_scope_sku_and_financial_reconciliation.sql', 'utf8');
@@ -79,6 +80,15 @@ assert.match(idempotencyGuard, /payload_hash/i);
 assert.match(idempotencyGuard, /pg_advisory_xact_lock/i);
 
 assert.match(functions, /dbs_control_receive_registered_purchase/);
+assert.match(functions, /export const decideDbsPurchaseApproval/);
+assert.match(functions, /dbs_control_decide_purchase_approval/);
+assert.match(purchaseApproval, /approval_status text not null default 'pending'/i);
+assert.match(purchaseApproval, /create table if not exists public\\.dbs_control_purchase_approval_history/i);
+assert.match(purchaseApproval, /create or replace function public\\.dbs_control_decide_purchase_approval/i);
+assert.match(purchaseApproval, /DBS_PURCHASE_APPROVAL_REQUIRED/);
+assert.match(purchaseApproval, /approval_status is distinct from 'approved'/i);
+assert.match(purchaseApproval, /create or replace function public\\.dbs_control_receive_purchase/i);
+assert.match(purchaseApproval, /registre a compra, aprove financeiramente/i);
 assert.match(functions, /dbs_control_upsert_part/);
 assert.match(functions, /export const receiveDbsPurchase/);
 assert.match(functions, /dbs_control_upsert_part_safe/);
