@@ -1733,6 +1733,65 @@ function DbsControlPage() {
         return;
       }
 
+      if ([
+        "DBS_CONTROL_FIELD_INVENTORY_LOAD",
+        "DBS_CONTROL_FIELD_CAR_STOCK_CONSUME",
+        "DBS_CONTROL_FIELD_GAS_USE",
+      ].includes(String(msg.type))) {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        const workOrderId = String(msg.workOrderId || "");
+        const validUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        const reply = (type: string, payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({ type, requestId, ...payload }, "*");
+        };
+        try {
+          if (!requestId || !validUuid.test(workOrderId)) throw new Error("Identificador relacional da OS inválido.");
+          if (msg.type === "DBS_CONTROL_FIELD_INVENTORY_LOAD") {
+            const [car, gas] = await Promise.all([
+              (supabase as any).rpc("dbs_control_list_my_car_stock", { p_work_order_id: workOrderId }),
+              (supabase as any).rpc("dbs_control_list_my_gas_cylinders", { p_work_order_id: workOrderId }),
+            ]);
+            if (car.error) throw car.error;
+            if (gas.error) throw gas.error;
+            reply("DBS_CONTROL_FIELD_CAR_STOCK_RESULT", { ok: true, items: Array.isArray(car.data) ? car.data : [] });
+            reply("DBS_CONTROL_FIELD_GAS_RESULT", { ok: true, cylinders: Array.isArray(gas.data) ? gas.data : [] });
+          } else if (msg.type === "DBS_CONTROL_FIELD_CAR_STOCK_CONSUME") {
+            const carStockId = String(msg.carStockId || "");
+            const quantity = Number(msg.quantity);
+            if (!validUuid.test(carStockId) || !Number.isFinite(quantity) || quantity <= 0) throw new Error("Peça ou quantidade inválida.");
+            const { data, error } = await (supabase as any).rpc("dbs_control_consume_car_stock_item", {
+              p_work_order_id: workOrderId,
+              p_car_stock_id: carStockId,
+              p_quantity: quantity,
+              p_idempotency_key: "field-ui:" + requestId,
+            });
+            if (error) throw error;
+            reply("DBS_CONTROL_FIELD_CAR_STOCK_CONSUME_RESULT", { ok: true, result: data });
+          } else {
+            const cylinderId = String(msg.cylinderId || "");
+            if (!validUuid.test(cylinderId)) throw new Error("Botija inválida.");
+            const { data, error } = await (supabase as any).rpc("dbs_control_register_gas_usage", {
+              p_work_order_id: workOrderId,
+              p_cylinder_id: cylinderId,
+              p_equipment_reference: String(msg.equipmentReference || "").slice(0, 180),
+              p_application_note: String(msg.applicationNote || "").slice(0, 500),
+              p_idempotency_key: "field-ui:" + requestId,
+            });
+            if (error) throw error;
+            reply("DBS_CONTROL_FIELD_GAS_USE_RESULT", { ok: true, result: data });
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Não foi possível concluir a operação de campo.";
+          const responseType = msg.type === "DBS_CONTROL_FIELD_INVENTORY_LOAD"
+            ? "DBS_CONTROL_FIELD_INVENTORY_ERROR"
+            : msg.type === "DBS_CONTROL_FIELD_CAR_STOCK_CONSUME"
+              ? "DBS_CONTROL_FIELD_CAR_STOCK_CONSUME_RESULT"
+              : "DBS_CONTROL_FIELD_GAS_USE_RESULT";
+          reply(responseType, { ok: false, error: message });
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_QUOTE_ITEMS" || msg.type === "DBS_CONTROL_CONFIRM_QUOTE_INSTALLATION") {
         const requestId = String(msg.requestId || "").slice(0, 160);
         const workOrderId = String(msg.workOrderId || "");

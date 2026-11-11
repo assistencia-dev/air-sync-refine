@@ -41,6 +41,7 @@
 .osv-list button,.osv-list a{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f2f57;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
 .osv-sig{max-width:320px;max-height:140px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
 .osv-empty{color:#64748b;font-size:13px}
+.osv-field-card{border:1px solid #dbeafe;border-radius:12px;padding:12px;background:#eff6ff;margin:8px 0}.osv-field-card.gas{border-color:#fed7aa;background:#fff7ed}.osv-field-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(148,163,184,.25)}.osv-field-row:last-child{border-bottom:0}.osv-field-row button{min-height:44px;padding:0 14px;border:0;border-radius:9px;background:#0284c7;color:#fff;font-weight:800;cursor:pointer}.osv-field-card.gas button{background:#ea580c}.osv-field-row button:disabled{opacity:.55}
 .osv-lb{position:fixed;inset:0;z-index:9100;background:rgba(2,6,23,.92);display:flex;flex-direction:column}
 .osv-lb-top{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;color:#fff;gap:8px}
 .osv-lb-top button,.osv-lb-nav{min-width:44px;min-height:44px;border:0;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer}
@@ -122,6 +123,8 @@
       pend ? sec('Pendência', `<div class="osv-text" style="border-color:#f59e0b">${esc(pend[0])}</div>`) : '',
       sec('Checklist', checklist.length ? `<ul class="osv-list">${checklist.map(c => `<li><span>${esc(typeof c === 'string' ? c : first(c.item, c.label, c.nome, c.descricao))}</span><span class="osv-chip">${c.ok || c.done || c.checked || c.concluido ? '✓ Conferido' : 'Pendente'}</span></li>`).join('')}</ul>` : ''),
       sec('Peças e materiais', pecas.length ? `<ul class="osv-list">${pecas.map(p => `<li><span>${esc(typeof p === 'string' ? p : first(p.nome, p.descricao, p.name, p.item))}</span><span>${esc(typeof p === 'object' ? first(p.qtd, p.quantidade, p.quantity, '') : '')}</span></li>`).join('')}</ul>` : ''),
+      sec('Meu Carro', '<div id="osv-car-stock" class="osv-field-card osv-empty">Carregando peças sob custódia…</div>'),
+      sec('Gás / Insumos', '<div id="osv-gas-cylinders" class="osv-field-card osv-empty">Carregando botija vinculada…</div>'),
       sec('Itens Previstos (Contrato/Orçamento)', '<div id="osv-planned-items" class="osv-empty">Carregando itens previstos…</div>'),
       sec(`Fotografias (${media.length})`, media.length ? `<div class="osv-gal">${media.map((m, i) => `<button type="button" class="osv-thumb" data-media="${i}"><img src="${esc(m.src)}" alt="${esc(m.name)}" loading="lazy"><span>${esc(m.name)}</span></button>`).join('')}</div>` : ''),
       sec(`Documentos e anexos (${docs.length})`, docs.length ? `<ul class="osv-list">${docs.map((d, i) => `<li><span>${esc(d.name)}</span>${d.kind === 'pdf' ? `<button type="button" data-doc="${i}">Visualizar</button>` : d.src ? `<a href="${esc(d.src)}" target="_blank" rel="noopener" download="${esc(d.name)}">Abrir</a>` : '<span class="osv-empty">Arquivo indisponível</span>'}</li>`).join('')}</ul>` : ''),
@@ -142,6 +145,48 @@
       </div>
       <div class="osv-body">${html || '<p class="osv-empty">Esta OS não tem detalhes preenchidos.</p>'}</div></div>`;
     const plannedId = String(o.work_order_id || o.workOrderId || o.id || '');
+    const fieldRequestId = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'field-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    const carStockBody = back.querySelector('#osv-car-stock');
+    const gasBody = back.querySelector('#osv-gas-cylinders');
+    const renderCarStock = items => {
+      if (!carStockBody) return;
+      if (!Array.isArray(items) || !items.length) { carStockBody.className = 'osv-field-card'; carStockBody.innerHTML = '<span class="osv-empty">Nenhuma peça disponível no estoque do veículo.</span>'; return; }
+      carStockBody.className = 'osv-field-card';
+      carStockBody.innerHTML = items.map(it => '<div class="osv-field-row"><span><strong>' + esc(it.name || 'Peça') + '</strong><br><small>' + esc([it.sku, it.vehicle_label, String(it.quantity ?? 0) + (it.measure_unit ? ' ' + it.measure_unit : '')].filter(Boolean).join(' · ')) + '</small></span><button type="button" data-car-stock="' + esc(it.id) + '">Usar do Meu Carro</button></div>').join('');
+    };
+    const renderGas = cylinders => {
+      if (!gasBody) return;
+      if (!Array.isArray(cylinders) || !cylinders.length) { gasBody.className = 'osv-field-card gas'; gasBody.innerHTML = '<span class="osv-empty">Nenhuma botija ativa vinculada ao técnico.</span>'; return; }
+      gasBody.className = 'osv-field-card gas';
+      gasBody.innerHTML = cylinders.map(c => '<div class="osv-field-row"><span><strong>' + esc(c.refrigerant_type) + ' · Série ' + esc(c.serial_number) + '</strong><br><small>' + esc(String(c.remaining_charges) + ' cargas restantes · ' + String(c.used_charges) + '/' + String(c.total_charges) + ' utilizadas' + (c.vehicle_label ? ' · ' + c.vehicle_label : '')) + '</small></span><button type="button" data-gas-cylinder="' + esc(c.id) + '" ' + (Number(c.remaining_charges) < 1 ? 'disabled' : '') + '>+1 Carga de Gás</button></div>').join('');
+    };
+    const fieldMessage = event => {
+      if (event.source !== window.parent || !event.data) return;
+      const msg = event.data;
+      if (msg.type === 'DBS_CONTROL_FIELD_CAR_STOCK_RESULT') renderCarStock(msg.items);
+      if (msg.type === 'DBS_CONTROL_FIELD_GAS_RESULT') renderGas(msg.cylinders);
+      if (msg.type === 'DBS_CONTROL_FIELD_INVENTORY_ERROR') {
+        if (carStockBody) carStockBody.textContent = msg.error || 'Falha ao carregar o estoque do veículo.';
+        if (gasBody) gasBody.textContent = msg.error || 'Falha ao carregar a botija.';
+      }
+      if (msg.type === 'DBS_CONTROL_FIELD_CAR_STOCK_CONSUME_RESULT') {
+        if (!msg.ok) { alert(msg.error || 'Não foi possível usar a peça do veículo.'); return; }
+        if (carStockBody) carStockBody.insertAdjacentHTML('afterbegin', '<p class="osv-chip">Peça lançada na O.S. Atualizando saldo…</p>');
+        window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_INVENTORY_LOAD', workOrderId: plannedId, requestId: fieldRequestId() }, '*');
+      }
+      if (msg.type === 'DBS_CONTROL_FIELD_GAS_USE_RESULT') {
+        if (!msg.ok) { alert(msg.error || 'Não foi possível registrar a carga de gás.'); return; }
+        if (gasBody) gasBody.insertAdjacentHTML('afterbegin', '<p class="osv-chip">Carga registrada na O.S. Atualizando saldo…</p>');
+        window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_INVENTORY_LOAD', workOrderId: plannedId, requestId: fieldRequestId() }, '*');
+      }
+    };
+    window.addEventListener('message', fieldMessage);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(plannedId)) {
+      window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_INVENTORY_LOAD', workOrderId: plannedId, requestId: fieldRequestId() }, '*');
+    } else {
+      if (carStockBody) carStockBody.textContent = 'Vínculo relacional da OS ainda não disponível.';
+      if (gasBody) gasBody.textContent = 'Vínculo relacional da OS ainda não disponível.';
+    }
     const plannedRequestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'planned-' + Date.now();
     const plannedBody = back.querySelector('#osv-planned-items');
     const renderPlanned = items => {
@@ -177,13 +222,29 @@
     } else if (plannedBody) {
       plannedBody.textContent = 'Vínculo relacional da OS ainda não disponível.';
     }
-    const close = () => { window.removeEventListener('message', plannedMessage); back.remove(); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
+    const close = () => { window.removeEventListener('message', plannedMessage); window.removeEventListener('message', fieldMessage); back.remove(); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
     const key = e => { if (e.key === 'Escape' && !document.querySelector('.osv-lb')) close(); };
     const busy = async (btn, fn) => { const t = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…'; try { await fn(); } catch (err) { alert(err instanceof Error ? err.message : 'Não foi possível gerar o PDF.'); } finally { btn.disabled = false; btn.textContent = t; } };
     back.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (e.target === back || e.target.closest('[data-close]')) return close();
       if (!b) return;
+      if (b.dataset.carStock) {
+        const raw = window.prompt('Quantidade a utilizar do veículo:', '1');
+        if (raw == null) return;
+        const quantity = Number(String(raw).replace(',', '.'));
+        if (!Number.isFinite(quantity) || quantity <= 0) { alert('Informe uma quantidade válida.'); return; }
+        b.disabled = true; b.textContent = 'Registrando…';
+        window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_CAR_STOCK_CONSUME', workOrderId: plannedId, carStockId: b.dataset.carStock, quantity, requestId: fieldRequestId() }, '*');
+        return;
+      }
+      if (b.dataset.gasCylinder) {
+        const equipmentReference = window.prompt('Equipamento / TAG (opcional):', '') || '';
+        const applicationNote = window.prompt('Aplicação / observação (opcional):', '') || '';
+        b.disabled = true; b.textContent = 'Registrando…';
+        window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_GAS_USE', workOrderId: plannedId, cylinderId: b.dataset.gasCylinder, equipmentReference, applicationNote, requestId: fieldRequestId() }, '*');
+        return;
+      }
       if (b.hasAttribute('data-confirm-install')) {
         b.disabled = true; b.textContent = 'Confirmando…';
         window.parent.postMessage({ type: 'DBS_CONTROL_CONFIRM_QUOTE_INSTALLATION', workOrderId: plannedId, requestId: plannedRequestId }, '*');
