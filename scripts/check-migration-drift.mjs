@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import postgres from "postgres";
-import { normalizeMigrationSql } from "./lib/normalize-migration-sql.mjs";
 
 const root = process.cwd();
 const migrationsDirectory = path.resolve(root, process.env.MIGRATIONS_DIR || "supabase/migrations");
@@ -13,6 +12,201 @@ const pendingDocument = path.resolve(
 const localOnly = process.argv.includes("--local-only");
 const recover = process.argv.includes("--recover");
 const productionPreflight = process.argv.includes("--preflight");
+const testNormalizer = process.argv.includes("--test-normalizer");
+
+
+function normalizeMigrationSql(source) {
+  const input = String(source ?? "").replace(/^\uFEFF/, "");
+  let output = "";
+  let index = 0;
+  let state = "normal";
+  let blockDepth = 0;
+  let dollarTag = "";
+  let pendingSpace = false;
+
+  const addSpace = () => {
+    if (output.length > 0 && output[output.length - 1] !== " ") output += " ";
+  };
+
+  while (index < input.length) {
+    const current = input[index];
+    const next = input[index + 1];
+
+    if (state === "line-comment") {
+      if (current === "\n") {
+        state = "normal";
+        pendingSpace = true;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === "block-comment") {
+      if (current === "/" && next === "*") {
+        blockDepth += 1;
+        index += 2;
+        continue;
+      }
+      if (current === "*" && next === "/") {
+        blockDepth -= 1;
+        index += 2;
+        if (blockDepth === 0) {
+          state = "normal";
+          pendingSpace = true;
+        }
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === "single-quoted") {
+      output += current;
+      if (current === "'" && next === "'") {
+        output += next;
+        index += 2;
+        continue;
+      }
+      if (current === "'") {
+        state = "normal";
+        index += 1;
+        continue;
+      }
+      if (current === "\\" && index + 1 < input.length) {
+        output += input[index + 1];
+        index += 2;
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === "double-quoted") {
+      output += current;
+      if (current === '"' && next === '"') {
+        output += next;
+        index += 2;
+        continue;
+      }
+      if (current === '"') state = "normal";
+      index += 1;
+      continue;
+    }
+
+    if (state === "dollar-quoted") {
+      if (input.startsWith(dollarTag, index)) {
+        output += dollarTag;
+        index += dollarTag.length;
+        state = "normal";
+        continue;
+      }
+      output += current;
+      index += 1;
+      continue;
+    }
+
+    if (current === "-" && next === "-") {
+      state = "line-comment";
+      index += 2;
+      continue;
+    }
+    if (current === "/" && next === "*") {
+      state = "block-comment";
+      blockDepth = 1;
+      index += 2;
+      continue;
+    }
+    if (/\s/.test(current)) {
+      pendingSpace = true;
+      index += 1;
+      continue;
+    }
+    if (pendingSpace) {
+      addSpace();
+      pendingSpace = false;
+    }
+    if (current === "'") {
+      output += current;
+      state = "single-quoted";
+      index += 1;
+      continue;
+    }
+    if (current === '"') {
+      output += current;
+      state = "double-quoted";
+      index += 1;
+      continue;
+    }
+    if (current === "$") {
+      const match = /^\$[A-Za-z_0-9]*\$/.exec(input.slice(index));
+      if (match) {
+        dollarTag = match[0];
+        output += dollarTag;
+        state = "dollar-quoted";
+        index += dollarTag.length;
+        continue;
+      }
+    }
+
+    output += current;
+    index += 1;
+  }
+
+  return output.trim().replace(/[ \t]+/g, " ");
+}
+
+function runNormalizationSelfTests() {
+  const original = [
+    "-- migration header",
+    "CREATE OR REPLACE FUNCTION public.example(p_value text)",
+    "RETURNS text",
+    "LANGUAGE plpgsql",
+    "AS $body$",
+    "BEGIN",
+    "  /* body comment stays because it is inside the dollar-quoted function */",
+    "  RETURN coalesce(p_value, 'text -- not a comment');",
+    "END;",
+    "$body$;",
+  ].join("\n");
+  const reformatted = [
+    "/* external comment */",
+    "CREATE OR REPLACE FUNCTION public.example( p_value text )",
+    "RETURNS text LANGUAGE plpgsql AS $body$",
+    "BEGIN",
+    "  /* body comment stays because it is inside the dollar-quoted function */",
+    "  RETURN coalesce( p_value, 'text -- not a comment' );",
+    "END;",
+    "$body$;",
+  ].join("\n");
+
+  if (normalizeMigrationSql(original) !== normalizeMigrationSql(reformatted)) {
+    throw new Error("Migration normalizer did not ignore comments/whitespace outside literals.");
+  }
+  if (
+    normalizeMigrationSql(original) ===
+    normalizeMigrationSql(reformatted.replace("text -- not a comment", "different -- literal"))
+  ) {
+    throw new Error("Migration normalizer failed to detect a changed SQL literal.");
+  }
+  if (
+    normalizeMigrationSql(original) ===
+    normalizeMigrationSql(reformatted.replace("coalesce(", "nullif("))
+  ) {
+    throw new Error("Migration normalizer failed to detect changed function logic.");
+  }
+  if (
+    normalizeMigrationSql("select /* outer /* nested */ still outer */ 1;") !==
+    normalizeMigrationSql("select 1;")
+  ) {
+    throw new Error("Migration normalizer failed to handle nested block comments.");
+  }
+  if (
+    normalizeMigrationSql('select "MixedCase" from public.example;') ===
+    normalizeMigrationSql("select mixedcase from public.example;")
+  ) {
+    throw new Error("Migration normalizer did not preserve quoted identifier spelling.");
+  }
+}
 
 function migrationFileName(version, name) {
   return `${version}_${name}.sql`;
@@ -371,6 +565,15 @@ async function main() {
   if (!report.ok) process.exitCode = 1;
 }
 
+if (testNormalizer) {
+  try {
+    runNormalizationSelfTests();
+    process.stdout.write("Migration drift normalization tests passed.\\n");
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
+} else {
 main().catch((error) => {
   console.error(
     JSON.stringify(
@@ -385,3 +588,4 @@ main().catch((error) => {
   );
   process.exitCode = 1;
 });
+}
