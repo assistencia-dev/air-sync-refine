@@ -3088,12 +3088,16 @@ export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" }
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryAdmin(context);
+    if (user.role_key !== "SUPER_ADMIN") {
+      throw new Error("A conciliação global de receitas das OS é restrita ao SUPER_ADMIN.");
+    }
     const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_reconcile_work_order_financials", {
       p_actor_user_id: user.id,
     });
     if (error) throw new Error(error.message);
     return data as {
       ok: boolean;
+      financial_rows_created: number;
       cost_rows_reconciled: number;
       revenue_rows_posted: number;
       completed_without_source_value: number;
@@ -3168,5 +3172,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
+      canReconcileWorkOrderFinancials: user.role_key === "SUPER_ADMIN",
     };
   });
