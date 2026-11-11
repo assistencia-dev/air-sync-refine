@@ -322,7 +322,7 @@ GRANT EXECUTE ON FUNCTION public.dbs_control_confirm_quote_installation(uuid,tex
 CREATE OR REPLACE FUNCTION public.dbs_control_approve_quote_by_number(
   p_quote_number text, p_idempotency_key text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
-AS $
+AS $$
 DECLARE v_actor uuid:=auth.uid(); v_quote_id uuid;
 BEGIN
   IF v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor) THEN
@@ -337,7 +337,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_NOT_FOUND' USING ERRCODE='23503'; END IF;
   RETURN public.dbs_control_approve_quote_and_create_work_order(v_quote_id,p_idempotency_key);
 END;
-$;
+$$;
 REVOKE ALL ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) TO authenticated,service_role;
 
