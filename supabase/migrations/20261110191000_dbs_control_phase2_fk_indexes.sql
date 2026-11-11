@@ -1,5 +1,5 @@
 -- Cover foreign keys flagged by the Supabase performance advisor.
--- Additive only: indexes are created concurrently with normal writes and contain no data changes.
+-- Additive only: creates FK indexes transactionally; no application rows are rewritten.
 begin;
 
 create index if not exists dbs_control_reservation_batches_company_fk_idx
