@@ -341,4 +341,85 @@ $$;
 REVOKE ALL ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) TO authenticated,service_role;
 
+-- Persistência relacional para novas propostas; itens de peça só referenciam o catálogo mestre.
+CREATE OR REPLACE FUNCTION public.dbs_control_save_quote(p_quote jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $$
+DECLARE
+  v_actor uuid:=auth.uid();
+  v_user public.users%rowtype;
+  v_quote public.dbs_control_quotes%rowtype;
+  v_scope text;
+  v_quote_number text:=nullif(btrim(p_quote->>'id'),'');
+  v_client uuid:=nullif(p_quote->>'clienteId','')::uuid;
+  v_item jsonb;
+  v_part uuid;
+  v_qty numeric(18,4);
+  v_unit numeric;
+  v_line bigint;
+  v_subtotal bigint;
+  v_discount bigint;
+  v_total bigint;
+BEGIN
+  IF v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor) THEN
+    RAISE EXCEPTION 'DBS_QUOTE_SAVE_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  IF jsonb_typeof(p_quote) IS DISTINCT FROM 'object' OR v_quote_number IS NULL OR
+     v_client IS NULL OR jsonb_typeof(p_quote->'itens') IS DISTINCT FROM 'array' OR
+     jsonb_array_length(p_quote->'itens')=0 THEN
+    RAISE EXCEPTION 'DBS_QUOTE_SAVE_INPUT_INVALID' USING ERRCODE='22023';
+  END IF;
+  SELECT * INTO v_user FROM public.users WHERE id=v_actor AND status='ativo';
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_SAVE_ACTOR_INACTIVE' USING ERRCODE='42501'; END IF;
+  v_scope:=CASE WHEN v_user.company_id IS NOT NULL THEN 'company:'||v_user.company_id::text ELSE 'user:'||v_actor::text END;
+  IF NOT EXISTS (SELECT 1 FROM public.dbs_control_clients c WHERE c.id=v_client AND c.status='ativo') THEN
+    RAISE EXCEPTION 'DBS_QUOTE_CLIENT_UNAVAILABLE' USING ERRCODE='23503';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_scope||':quote:'||v_quote_number,0));
+  SELECT * INTO v_quote FROM public.dbs_control_quotes
+   WHERE scope_key=v_scope AND quote_number=v_quote_number FOR UPDATE;
+  IF FOUND THEN
+    RETURN jsonb_build_object('ok',true,'replayed',true,'quote_id',v_quote.id,'quote_number',v_quote.quote_number);
+  END IF;
+  v_subtotal:=round(coalesce(nullif(p_quote->>'subtotal','')::numeric,0)*100)::bigint;
+  v_discount:=round(coalesce(nullif(p_quote->>'desconto','')::numeric,0)*100)::bigint;
+  v_total:=round(coalesce(nullif(p_quote->>'total','')::numeric,0)*100)::bigint;
+  INSERT INTO public.dbs_control_quotes(
+    scope_key,company_id,client_id,quote_number,status,description,payment_terms,
+    subtotal_cents,discount_cents,total_cents,metadata
+  ) VALUES (v_scope,v_user.company_id,v_client,v_quote_number,'draft',
+    nullif(p_quote->>'desc',''),nullif(p_quote->>'pagamento',''),
+    greatest(v_subtotal,0),greatest(v_discount,0),greatest(v_total,0),
+    jsonb_build_object('source','dbs_control_quote_ui','legacy_payload',
+      jsonb_build_object('data',p_quote->>'data','validade',p_quote->>'validade'))
+  ) RETURNING * INTO v_quote;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_quote->'itens')
+  LOOP
+    v_qty:=nullif(v_item->>'quantidade','')::numeric;
+    v_unit:=coalesce(nullif(v_item->>'valorUnitario','')::numeric,0);
+    IF v_qty IS NULL OR v_qty<=0 OR v_unit<0 THEN
+      RAISE EXCEPTION 'DBS_QUOTE_ITEM_INVALID' USING ERRCODE='22023';
+    END IF;
+    v_part:=NULL;
+    IF coalesce(v_item->>'tipo','')='peca' AND nullif(v_item->>'catalogoId','') IS NOT NULL THEN
+      v_part:=nullif(v_item->>'catalogoId','')::uuid;
+      IF NOT EXISTS (SELECT 1 FROM public.dbs_control_sales_catalog c WHERE c.part_id=v_part) THEN
+        RAISE EXCEPTION 'DBS_QUOTE_CATALOG_PART_UNAVAILABLE' USING ERRCODE='23503';
+      END IF;
+    END IF;
+    v_line:=round(coalesce(nullif(v_item->>'total','')::numeric,v_qty*v_unit)*100)::bigint;
+    INSERT INTO public.dbs_control_quote_items(
+      quote_id,item_type,part_id,description,measure_unit,quantity,unit_sale_cents,total_cents,source_item
+    ) VALUES (v_quote.id,
+      CASE WHEN v_part IS NOT NULL THEN 'catalog' WHEN coalesce(v_item->>'tipo','')='servico' THEN 'service' ELSE 'manual' END,
+      v_part,coalesce(nullif(v_item->>'descricao',''),'Item do orçamento'),
+      nullif(coalesce(v_item->>'unidade','UN'),''),v_qty,round(v_unit*100)::integer,greatest(v_line,0),v_item
+    );
+  END LOOP;
+  RETURN jsonb_build_object('ok',true,'replayed',false,'quote_id',v_quote.id,'quote_number',v_quote.quote_number);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.dbs_control_save_quote(jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.dbs_control_save_quote(jsonb) TO authenticated,service_role;
+
 COMMIT;
