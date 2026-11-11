@@ -1662,6 +1662,33 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_APPROVE_QUOTE") {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        const quoteNumber = String(msg.quoteNumber || "").trim().slice(0, 80);
+        try {
+          if (!requestId || !quoteNumber) throw new Error("Número do orçamento inválido.");
+          const { data, error } = await supabase.rpc("dbs_control_approve_quote_by_number", {
+            p_quote_number: quoteNumber,
+            p_idempotency_key: "quote-ui:" + requestId,
+          });
+          if (error) throw error;
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_APPROVAL_RESULT",
+            requestId,
+            ok: true,
+            result: data,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_APPROVAL_RESULT",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível aprovar o orçamento.",
+          }, "*");
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_QUOTE_ITEMS" || msg.type === "DBS_CONTROL_CONFIRM_QUOTE_INSTALLATION") {
         const requestId = String(msg.requestId || "").slice(0, 160);
         const workOrderId = String(msg.workOrderId || "");
