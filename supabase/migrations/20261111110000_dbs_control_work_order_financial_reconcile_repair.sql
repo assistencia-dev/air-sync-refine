@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_inventory_scope_for_work_order(p_w
 AS $function$
   with single_admin_company as (
     select
-      count(*) as admin_count,
+      count(distinct u.company_id) as company_count,
       (array_agg(u.id order by u.id))[1] as owner_id,
       (array_agg(u.company_id order by u.id))[1] as company_id
     from public.users u
@@ -22,14 +22,14 @@ AS $function$
     case
       when u.company_id is not null then 'company:' || u.company_id::text
       when w.created_by_user_id is not null then 'user:' || w.created_by_user_id::text
-      when a.admin_count = 1 and a.company_id is not null then 'company:' || a.company_id::text
+      when a.company_count = 1 and a.company_id is not null then 'company:' || a.company_id::text
       else 'work_order:' || w.id::text
     end,
-    coalesce(u.company_id, case when w.created_by_user_id is null and a.admin_count = 1 then a.company_id end),
-    coalesce(w.created_by_user_id, case when a.admin_count = 1 and a.company_id is not null then a.owner_id end)
+    coalesce(u.company_id, case when w.created_by_user_id is null and a.company_count = 1 then a.company_id end),
+    coalesce(w.created_by_user_id, case when a.company_count = 1 and a.company_id is not null then a.owner_id end)
   from public.dbs_control_work_orders w
   left join public.users u on u.id = w.created_by_user_id
-  cross join sole_admin a
+  cross join single_admin_company a
   where w.id = p_work_order_id;
 $function$
 
