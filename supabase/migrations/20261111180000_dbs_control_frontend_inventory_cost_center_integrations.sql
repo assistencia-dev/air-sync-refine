@@ -513,7 +513,6 @@ BEGIN
     IF NEW.cost_center_id IS NOT NULL AND NOT EXISTS(
       SELECT 1 FROM public.dbs_control_cost_centers cc
        WHERE cc.id=NEW.cost_center_id AND cc.status='active'
-         AND (NEW.company_id IS NULL OR cc.company_id IS NULL OR cc.company_id=NEW.company_id)
     ) THEN RAISE EXCEPTION 'DBS_WORK_ORDER_COST_CENTER_INVALID' USING ERRCODE='23503'; END IF;
     RETURN NEW;
   ELSIF TG_TABLE_NAME='dbs_control_quotes' THEN
