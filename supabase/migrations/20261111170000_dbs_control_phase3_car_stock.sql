@@ -49,27 +49,25 @@ begin
   if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
   select ea.employee_id into v_employee
     from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true
-    where u.id=v_actor and u.auth_id=v_actor and u.status='ativo'
+    where u.id=v_actor and u.status='ativo'
   union
   select re.id from public.users u join public.rh_employees re
     on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true
-    where u.id=v_actor and u.auth_id=v_actor and u.status='ativo';
+    where u.id=v_actor and u.status='ativo';
   if public.dbs_control_is_admin_actor(v_actor) then
     return coalesce((select jsonb_agg(jsonb_build_object('id',cs.id,'part_id',cs.part_id,'name',p.name,
-      'sku',p.sku,'measure_unit',mu.name,'quantity',cs.quantity,'vehicle_label',cs.vehicle_label,
+      'sku',p.sku,'quantity',cs.quantity,'vehicle_label',cs.vehicle_label,
       'unit_cost_cents',cs.unit_cost_cents) order by p.name)
       from public.dbs_control_car_stock cs join public.dbs_control_parts p on p.id=cs.part_id
-      left join public.dbs_control_measure_units mu on mu.id=p.measure_unit_id
       where cs.status='active' and cs.quantity>0 and cs.scope_key=(select scope_key from public.dbs_control_inventory_scope_for_work_order(p_work_order_id))), '[]'::jsonb);
   end if;
   if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then
     raise exception 'DBS_CAR_STOCK_FORBIDDEN' using errcode='42501';
   end if;
   return coalesce((select jsonb_agg(jsonb_build_object('id',cs.id,'part_id',cs.part_id,'name',p.name,
-    'sku',p.sku,'measure_unit',mu.name,'quantity',cs.quantity,'vehicle_label',cs.vehicle_label,
+    'sku',p.sku,'quantity',cs.quantity,'vehicle_label',cs.vehicle_label,
     'unit_cost_cents',cs.unit_cost_cents) order by p.name)
     from public.dbs_control_car_stock cs join public.dbs_control_parts p on p.id=cs.part_id
-    left join public.dbs_control_measure_units mu on mu.id=p.measure_unit_id
     where cs.employee_id=v_employee and cs.status='active' and cs.quantity>0
       and cs.scope_key=(select scope_key from public.dbs_control_inventory_scope_for_work_order(p_work_order_id))), '[]'::jsonb);
 end $$;
@@ -77,13 +75,16 @@ end $$;
 create or replace function public.dbs_control_transfer_to_car_stock(
   p_employee_id uuid,p_part_id uuid,p_quantity numeric,p_vehicle_label text,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
-declare v_actor uuid:=auth.uid(); v_user public.users%rowtype; v_part public.dbs_control_parts%rowtype;
+declare v_actor uuid:=auth.uid(); v_user public.users%rowtype; v_employee_user public.users%rowtype; v_part public.dbs_control_parts%rowtype;
  v_scope text; v_existing public.dbs_control_car_stock%rowtype; v_new numeric;
 begin
  if v_actor is null or not public.dbs_control_is_admin_actor(v_actor) then raise exception 'DBS_CAR_STOCK_TRANSFER_FORBIDDEN' using errcode='42501'; end if;
  if p_quantity is null or p_quantity<=0 or p_idempotency_key is null or char_length(trim(p_idempotency_key)) not between 8 and 240 then raise exception 'DBS_CAR_STOCK_TRANSFER_INPUT_INVALID' using errcode='22023'; end if;
  select * into v_user from public.users where id=v_actor and status='ativo';
- v_scope:=case when v_user.company_id is not null then 'company:'||v_user.company_id::text else 'user:'||v_actor::text end;
+ select u.* into v_employee_user from public.rh_employee_access ea join public.users u on u.id=ea.user_id where ea.employee_id=p_employee_id and ea.access_enabled=true and u.status='ativo';
+ if not found then raise exception 'DBS_CAR_STOCK_EMPLOYEE_ACCESS_MISSING' using errcode='23503'; end if;
+ if v_user.company_id is not null and v_employee_user.company_id is distinct from v_user.company_id then raise exception 'DBS_CAR_STOCK_COMPANY_MISMATCH' using errcode='42501'; end if;
+ v_scope:=case when v_employee_user.company_id is not null then 'company:'||v_employee_user.company_id::text else 'user:'||v_employee_user.id::text end;
  perform pg_advisory_xact_lock(hashtextextended(v_scope||':car-stock-transfer:'||p_idempotency_key,0));
  if exists(select 1 from public.dbs_control_car_stock_consumptions where idempotency_key=p_idempotency_key) then raise exception 'DBS_CAR_STOCK_IDEMPOTENCY_CONFLICT' using errcode='23505'; end if;
  select * into v_part from public.dbs_control_parts where id=p_part_id for update;
@@ -91,10 +92,10 @@ begin
  if not exists(select 1 from public.rh_employees where id=p_employee_id and is_active=true) then raise exception 'DBS_CAR_STOCK_EMPLOYEE_INVALID' using errcode='23503'; end if;
  update public.dbs_control_parts set stock_quantity=stock_quantity-p_quantity,version=version+1,updated_at=now() where id=p_part_id returning stock_quantity into v_new;
  insert into public.dbs_control_inventory_movements(company_id,scope_key,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,idempotency_key,created_by,metadata)
- values(v_user.company_id,v_scope,p_part_id,'adjustment',-p_quantity,v_part.cost_cents,v_new,left(p_idempotency_key,200),v_actor,
+ values(v_employee_user.company_id,v_scope,p_part_id,'adjustment',-p_quantity,v_part.cost_cents,v_new,left(p_idempotency_key,200),v_actor,
  jsonb_build_object('source','car_stock_transfer','employee_id',p_employee_id,'vehicle_label',coalesce(nullif(trim(p_vehicle_label),''),'Veículo do colaborador')));
  insert into public.dbs_control_car_stock(scope_key,company_id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,created_by,updated_by)
- values(v_scope,v_user.company_id,p_employee_id,p_part_id,coalesce(nullif(trim(p_vehicle_label),''),'Veículo do colaborador'),p_quantity,coalesce(v_part.cost_cents,0),v_actor,v_actor)
+ values(v_scope,v_employee_user.company_id,p_employee_id,p_part_id,coalesce(nullif(trim(p_vehicle_label),''),'Veículo do colaborador'),p_quantity,coalesce(v_part.cost_cents,0),v_actor,v_actor)
  on conflict(scope_key,employee_id,part_id,vehicle_label) do update set quantity=dbs_control_car_stock.quantity+excluded.quantity,
  unit_cost_cents=excluded.unit_cost_cents,version=dbs_control_car_stock.version+1,updated_by=v_actor,updated_at=now()
  returning * into v_existing;
@@ -112,8 +113,8 @@ begin
  if p_quantity is null or p_quantity<=0 or v_key is null or char_length(v_key) not between 8 and 240 then raise exception 'DBS_CAR_STOCK_INPUT_INVALID' using errcode='22023'; end if;
  select * into v_os from public.dbs_control_work_orders where id=p_work_order_id and deleted_at is null for update;
  if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
- select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo'
- union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo';
+ select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.status='ativo'
+ union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.status='ativo';
  if public.dbs_control_is_admin_actor(v_actor) then v_employee:=v_os.assigned_employee_id; end if;
  if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then raise exception 'DBS_CAR_STOCK_NOT_ASSIGNED' using errcode='42501'; end if;
  select * into v_scope from public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
