@@ -3261,6 +3261,13 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
+    const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
+    const purchaseItems = purchaseIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
+          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no")
+          .in("purchase_id", purchaseIds).order("line_no")
+      : { data: [], error: null };
+    if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -3268,6 +3275,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       sales: sales.data ?? [],
       saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
+      purchaseItems: purchaseItems.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
     };
   });
