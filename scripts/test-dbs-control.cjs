@@ -248,7 +248,10 @@ assert.match(html, /const queuedLocally = saveResult\?\.queuedLocally === true/,
 assert.match(html, /renderizarDbsControlCurrentMode\(true\)/, "A conclusão deve renderizar apenas a tela operacional depois do ACK, sem desmontar o shell inteiro.");
 assert.match(html, /function dbsControlCompactLocalState\(state\)/, "A cópia local deve compactar evidências binárias para evitar estouro no celular.");
 assert.match(html, /function saveExecutionDraft\(osId\)/, "O preenchimento da execução deve ter rascunho durável por OS.");
-assert.match(html, /if \(employeeMode && !force && document\.querySelector\('\.employee-execution-body:focus-within'\)\)/, "Eventos de sincronização não podem desmontar um formulário de execução em edição.");
+assert.match(html, /document\.querySelectorAll\('\.employee-execution\[open\]'\)/, "Realtime não pode desmontar a sessão de execução expandida do colaborador.");
+assert.match(html, /data-os-id="\\$\{escHtml\(o\.id\)\}"/, "Cada formulário expandido precisa carregar a identidade estável da OS.");
+assert.match(html, /function restoreExecutionFiles\(osId\)/, "Fotos selecionadas devem sobreviver a uma atualização visual da lista.");
+assert.match(html, /restoreExecutionFiles\(o\.id\)/, "O render do colaborador deve reanexar fotos selecionadas ao formulário.");
 assert.match(html, /const beforeCompletion = JSON\.parse\(JSON\.stringify\(os\)\)/, "A conclusão deve guardar o estado anterior para rollback seguro.");
 assert.match(html, /ERP_STATE\.ordens\[currentIndex\] = beforeCompletion/, "Uma conclusão sem ACK deve restaurar a OS anterior.");
 assert.match(html, /mergeCollaboratorCloudState\(stateForHydration\)/, "Leitura atrasada não pode reabrir visualmente uma OS concluída.");
