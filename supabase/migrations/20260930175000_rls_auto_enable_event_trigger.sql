@@ -1,5 +1,6 @@
--- RLS event trigger used by the DBS Air project to protect every newly created
--- table in the exposed public schema. Recovered from the official project.
+-- Preserve the official DBS Air event-trigger behavior for new public tables.
+-- Harden the SECURITY DEFINER search_path; the trigger only uses pg_catalog
+-- functions and the server-generated, schema-qualified object_identity.
 begin;
 
 create or replace function public.rls_auto_enable()
@@ -15,10 +16,11 @@ begin
     select *
     from pg_event_trigger_ddl_commands()
     where command_tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
-      and object_type in ('table', 'partitioned table')
+      and object_type in ('table','partitioned table')
   loop
-    if cmd.schema_name = 'public'
-       and cmd.schema_name not in ('pg_catalog', 'information_schema')
+    if cmd.schema_name is not null
+       and cmd.schema_name in ('public')
+       and cmd.schema_name not in ('pg_catalog','information_schema')
        and cmd.schema_name not like 'pg_toast%'
        and cmd.schema_name not like 'pg_temp%' then
       begin
@@ -29,7 +31,7 @@ begin
           raise log 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
       end;
     else
-      raise log 'rls_auto_enable: skip % (schema: %)', cmd.object_identity, cmd.schema_name;
+      raise log 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;
     end if;
   end loop;
 end;
