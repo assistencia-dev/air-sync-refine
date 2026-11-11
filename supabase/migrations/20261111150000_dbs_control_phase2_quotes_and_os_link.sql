@@ -112,8 +112,8 @@ BEGIN
              WHEN lower(coalesce(q->>'status','')) IN ('convertido em os','converted') THEN 'converted'
              ELSE 'draft' END,
         s.id,v_quote_number,nullif(q->>'desc',''),nullif(q->>'pagamento',''),
-        CASE WHEN coalesce(q->>'data','') ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN to_date(q->>'data','DD/MM/YYYY') END,
-        CASE WHEN coalesce(q->>'validade','') ~ '^\\d{2}/\\d{2}/\\d{4}$' THEN to_date(q->>'validade','DD/MM/YYYY') END,
+        CASE WHEN coalesce(q->>'data','') ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN to_date(q->>'data','DD/MM/YYYY') END,
+        CASE WHEN coalesce(q->>'validade','') ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN to_date(q->>'validade','DD/MM/YYYY') END,
         round(coalesce(nullif(q->>'subtotal','')::numeric,nullif(q->>'total','')::numeric,0)*100)::bigint,
         round(coalesce(nullif(q->>'desconto','')::numeric,0)*100)::bigint,
         round(coalesce(nullif(q->>'total','')::numeric,0)*100)::bigint,
