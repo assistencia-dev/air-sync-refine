@@ -3040,6 +3040,36 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     return result;
   });
 
+export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+    const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    const items = Array.isArray(input?.items) ? input.items : [];
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de recebimento inválida.");
+    if (!items.length || items.length > 100) throw new Error("Informe ao menos um item conferido.");
+    return {
+      purchaseId, idempotencyKey,
+      items: items.map((item) => {
+        if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
+          throw new Error("A quantidade conferida deve ser maior que zero.");
+        }
+        return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
+      }),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
+      p_idempotency_key: data.idempotencyKey,
+      p_items: data.items,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const receiveDbsPurchase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { purchaseId: string; idempotencyKey: string }) => {
