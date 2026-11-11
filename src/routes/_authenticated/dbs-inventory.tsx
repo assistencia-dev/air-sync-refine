@@ -559,6 +559,11 @@ function DbsInventoryPage() {
                 <option value="">Selecione uma OS</option>
                 {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
               </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
+              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <option value="">Selecione o centro de custo</option>
+                {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+              </select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
               <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
                 <option value="">Selecione uma peça</option>
