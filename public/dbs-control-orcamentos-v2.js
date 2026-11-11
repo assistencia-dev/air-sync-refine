@@ -142,18 +142,46 @@
     }
   }
 
+  function approveQuoteThroughAuthenticatedBridge(quoteNumber) {
+    return new Promise(function (resolve, reject) {
+      var requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'quote-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      var settled = false;
+      var finish = function (error, result) {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('message', onMessage);
+        window.clearTimeout(timeout);
+        if (error) reject(error); else resolve(result);
+      };
+      var onMessage = function (event) {
+        if (event.source !== window.parent || !event.data || event.data.type !== 'DBS_CONTROL_QUOTE_APPROVAL_RESULT'
+            || event.data.requestId !== requestId) return;
+        if (!event.data.ok) return finish(new Error(event.data.error || 'A aprovação foi recusada.'));
+        finish(null, event.data.result || {});
+      };
+      var timeout = window.setTimeout(function () {
+        finish(new Error('A aprovação ainda não foi confirmada pelo servidor. Atualize a lista antes de tentar novamente.'));
+      }, 30000);
+      window.addEventListener('message', onMessage);
+      window.parent.postMessage({ type: 'DBS_CONTROL_APPROVE_QUOTE', quoteNumber: quoteNumber, requestId: requestId }, '*');
+    });
+  }
+
   window.quoteStatus = async function (id, status) {
     ensureState();
     var q = ERP_STATE.orcamentos.find(function (x) { return x.id === id; }); if (!q) return;
-    var previousStatus = q.status;
-    q.status = status;
+    if (status !== 'Aprovado') return;
+    if (q.status === 'Convertido em OS' || q.osId) { alert('Este orçamento já está vinculado a uma OS.'); return; }
     try {
+      var result = await approveQuoteThroughAuthenticatedBridge(q.id);
+      q.status = 'Convertido em OS';
+      q.osId = result.protocol || result.work_order_id || 'OS vinculada';
       await persistCommercialMutation();
       renderQuotes();
+      alert('Orçamento aprovado e convertido na OS ' + q.osId + '.');
     } catch (error) {
-      q.status = previousStatus;
       renderQuotes();
-      alert('A alteração do orçamento não foi confirmada na nuvem. ' + (error && error.message ? error.message : 'Tente novamente.'));
+      alert('O orçamento não foi aprovado. ' + (error && error.message ? error.message : 'Tente novamente.'));
     }
   };
 
