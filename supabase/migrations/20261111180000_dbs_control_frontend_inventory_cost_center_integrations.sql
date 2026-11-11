@@ -638,6 +638,10 @@ BEGIN
      OR p_gross_weight_after_kg>p_gross_weight_before_kg THEN
     RAISE EXCEPTION 'DBS_GAS_WEIGHT_INVALID' USING ERRCODE='22023';
   END IF;
+  SELECT * INTO v_cylinder FROM public.dbs_control_gas_cylinders WHERE id=p_cylinder_id FOR UPDATE;
+  IF NOT FOUND OR v_cylinder.tare_weight_kg IS NULL THEN
+    RAISE EXCEPTION 'DBS_GAS_TARE_WEIGHT_REQUIRED' USING ERRCODE='23514';
+  END IF;
   SELECT * INTO v_existing FROM public.dbs_control_gas_usage WHERE idempotency_key=p_idempotency_key;
   IF FOUND THEN
     IF v_existing.work_order_id<>p_work_order_id OR v_existing.cylinder_id<>p_cylinder_id
@@ -649,10 +653,6 @@ BEGIN
       'cylinder_id',p_cylinder_id,'gas_consumed_kg',v_existing.gas_consumed_kg,
       'gross_weight_after_kg',v_existing.gross_weight_after_kg,
       'remaining_net_weight_kg',greatest(v_existing.gross_weight_after_kg-v_cylinder.tare_weight_kg,0));
-  END IF;
-  SELECT * INTO v_cylinder FROM public.dbs_control_gas_cylinders WHERE id=p_cylinder_id FOR UPDATE;
-  IF NOT FOUND OR v_cylinder.tare_weight_kg IS NULL THEN
-    RAISE EXCEPTION 'DBS_GAS_TARE_WEIGHT_REQUIRED' USING ERRCODE='23514';
   END IF;
   IF p_gross_weight_after_kg<v_cylinder.tare_weight_kg THEN
     RAISE EXCEPTION 'DBS_GAS_WEIGHT_BELOW_TARE' USING ERRCODE='23514';
