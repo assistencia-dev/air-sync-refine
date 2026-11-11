@@ -25,7 +25,8 @@
     "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
     "test:phase3-ledger-reporting": "node scripts/test-phase3-ledger-reporting.cjs",
     "prebuild": "node scripts/check-supabase-project-ref.cjs",
-    "test:dbs-control-pdf": "node scripts/test-dbs-control-pdf.cjs"
+    "test:dbs-control-pdf": "node scripts/test-dbs-control-pdf.cjs",
+    "test:migration-drift": "node scripts/test-migration-drift.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
