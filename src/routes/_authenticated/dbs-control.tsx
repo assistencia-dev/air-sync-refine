@@ -1668,7 +1668,7 @@ function DbsControlPage() {
           if (!requestId || !msg.quote || typeof msg.quote !== "object" || Array.isArray(msg.quote)) {
             throw new Error("Dados da proposta inválidos.");
           }
-          const { data, error } = await supabase.rpc("dbs_control_save_quote", {
+          const { data, error } = await (supabase as any).rpc("dbs_control_save_quote", {
             p_quote: msg.quote,
           });
           if (error) throw error;
@@ -1694,7 +1694,7 @@ function DbsControlPage() {
         const quoteNumber = String(msg.quoteNumber || "").trim().slice(0, 80);
         try {
           if (!requestId || !quoteNumber) throw new Error("Número do orçamento inválido.");
-          const { data, error } = await supabase.rpc("dbs_control_approve_quote_by_number", {
+          const { data, error } = await (supabase as any).rpc("dbs_control_approve_quote_by_number", {
             p_quote_number: quoteNumber,
             p_idempotency_key: "quote-ui:" + requestId,
           });
@@ -1741,7 +1741,7 @@ function DbsControlPage() {
             throw new Error("Identificador relacional da OS inválido.");
           }
           if (msg.type === "DBS_CONTROL_QUOTE_ITEMS") {
-            const { data, error } = await supabase.rpc("dbs_control_list_work_order_quote_items", {
+            const { data, error } = await (supabase as any).rpc("dbs_control_list_work_order_quote_items", {
               p_work_order_id: workOrderId,
             });
             if (error) throw error;
@@ -1752,7 +1752,7 @@ function DbsControlPage() {
               items: Array.isArray(data) ? data : [],
             }, "*");
           } else {
-            const { data, error } = await supabase.rpc("dbs_control_confirm_quote_installation", {
+            const { data, error } = await (supabase as any).rpc("dbs_control_confirm_quote_installation", {
               p_work_order_id: workOrderId,
               p_idempotency_key: "ui:" + requestId,
             });
