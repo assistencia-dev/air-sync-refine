@@ -122,6 +122,7 @@
       pend ? sec('Pendência', `<div class="osv-text" style="border-color:#f59e0b">${esc(pend[0])}</div>`) : '',
       sec('Checklist', checklist.length ? `<ul class="osv-list">${checklist.map(c => `<li><span>${esc(typeof c === 'string' ? c : first(c.item, c.label, c.nome, c.descricao))}</span><span class="osv-chip">${c.ok || c.done || c.checked || c.concluido ? '✓ Conferido' : 'Pendente'}</span></li>`).join('')}</ul>` : ''),
       sec('Peças e materiais', pecas.length ? `<ul class="osv-list">${pecas.map(p => `<li><span>${esc(typeof p === 'string' ? p : first(p.nome, p.descricao, p.name, p.item))}</span><span>${esc(typeof p === 'object' ? first(p.qtd, p.quantidade, p.quantity, '') : '')}</span></li>`).join('')}</ul>` : ''),
+      sec('Itens Previstos (Contrato/Orçamento)', '<div id="osv-planned-items" class="osv-empty">Carregando itens previstos…</div>'),
       sec(`Fotografias (${media.length})`, media.length ? `<div class="osv-gal">${media.map((m, i) => `<button type="button" class="osv-thumb" data-media="${i}"><img src="${esc(m.src)}" alt="${esc(m.name)}" loading="lazy"><span>${esc(m.name)}</span></button>`).join('')}</div>` : ''),
       sec(`Documentos e anexos (${docs.length})`, docs.length ? `<ul class="osv-list">${docs.map((d, i) => `<li><span>${esc(d.name)}</span>${d.kind === 'pdf' ? `<button type="button" data-doc="${i}">Visualizar</button>` : d.src ? `<a href="${esc(d.src)}" target="_blank" rel="noopener" download="${esc(d.name)}">Abrir</a>` : '<span class="osv-empty">Arquivo indisponível</span>'}</li>`).join('')}</ul>` : ''),
       sec('Assinaturas', (sig ? `<div class="osv-f" style="margin-bottom:10px"><small>Cliente${o.assinaturaNome ? ' · ' + esc(o.assinaturaNome) : ''}${o.assinaturaEm ? ' · ' + esc(fmt(o.assinaturaEm)) : ''}</small><img class="osv-sig" src="${esc(sig)}" alt="Assinatura do cliente"></div>` : '') + (sigT ? `<div class="osv-f"><small>Técnico${o.assinaturaTecnicoNome ? ' · ' + esc(o.assinaturaTecnicoNome) : ''}</small><img class="osv-sig" src="${esc(sigT)}" alt="Assinatura do técnico"></div>` : '')),
@@ -140,13 +141,54 @@
         ${canAct && typeof transicionarStatusOS === 'function' ? `${['Pendente', 'Aguardando peça', 'Aguardando cliente'].includes(s) ? '<button type="button" data-status="Em Atendimento">Iniciar atendimento</button>' : ''}<button type="button" data-status="Concluída">Concluir OS</button><button type="button" class="warn" data-status="Cancelada">Cancelar OS</button>` : ''}
       </div>
       <div class="osv-body">${html || '<p class="osv-empty">Esta OS não tem detalhes preenchidos.</p>'}</div></div>`;
-    const close = () => { back.remove(); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
+    const plannedId = String(o.work_order_id || o.workOrderId || o.id || '');
+    const plannedRequestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'planned-' + Date.now();
+    const plannedBody = back.querySelector('#osv-planned-items');
+    const renderPlanned = items => {
+      if (!plannedBody) return;
+      if (!Array.isArray(items) || !items.length) {
+        plannedBody.innerHTML = '<span class="osv-empty">Nenhum item previsto vinculado a esta OS.</span>';
+        return;
+      }
+      plannedBody.innerHTML = '<ul class="osv-list">' + items.map(it =>
+        '<li><span><strong>' + esc(it.description || 'Item') + '</strong><br><small>' +
+        esc(String(it.quantity ?? '') + (it.measure_unit ? ' ' + it.measure_unit : '')) +
+        (it.item_type === 'manual' ? ' · item manual' : '') + '</small></span><span class="osv-chip">' +
+        esc(it.installation_confirmed ? 'Confirmado' : it.reservation_status === 'reserved' ? 'Reservado' : it.reservation_status === 'consumed' ? 'Consumido' : 'Previsto') +
+        '</span></li>').join('') + '</ul>' +
+        (items.some(it => !it.installation_confirmed) ? '<button type="button" class="pri" data-confirm-install style="margin-top:12px;min-height:44px;padding:0 16px;border:0;border-radius:9px;background:#0284c7;color:#fff;font-weight:800">Confirmar Instalação</button>' : '');
+    };
+    const plannedMessage = event => {
+      if (event.source !== window.parent || !event.data) return;
+      const msg = event.data;
+      if (msg.requestId !== plannedRequestId) return;
+      if (msg.type === 'DBS_CONTROL_QUOTE_ITEMS_RESULT') {
+        if (!msg.ok) { if (plannedBody) plannedBody.textContent = msg.error || 'Não foi possível carregar os itens previstos.'; return; }
+        renderPlanned(msg.items);
+      }
+      if (msg.type === 'DBS_CONTROL_QUOTE_INSTALLATION_RESULT') {
+        if (plannedBody) plannedBody.textContent = msg.ok ? 'Instalação confirmada. Atualizando itens…' : (msg.error || 'Não foi possível confirmar a instalação.');
+        if (msg.ok) window.parent.postMessage({ type: 'DBS_CONTROL_QUOTE_ITEMS', workOrderId: plannedId, requestId: plannedRequestId }, '*');
+      }
+    };
+    window.addEventListener('message', plannedMessage);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(plannedId)) {
+      window.parent.postMessage({ type: 'DBS_CONTROL_QUOTE_ITEMS', workOrderId: plannedId, requestId: plannedRequestId }, '*');
+    } else if (plannedBody) {
+      plannedBody.textContent = 'Vínculo relacional da OS ainda não disponível.';
+    }
+    const close = () => { window.removeEventListener('message', plannedMessage); back.remove(); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
     const key = e => { if (e.key === 'Escape' && !document.querySelector('.osv-lb')) close(); };
     const busy = async (btn, fn) => { const t = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…'; try { await fn(); } catch (err) { alert(err instanceof Error ? err.message : 'Não foi possível gerar o PDF.'); } finally { btn.disabled = false; btn.textContent = t; } };
     back.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (e.target === back || e.target.closest('[data-close]')) return close();
       if (!b) return;
+      if (b.hasAttribute('data-confirm-install')) {
+        b.disabled = true; b.textContent = 'Confirmando…';
+        window.parent.postMessage({ type: 'DBS_CONTROL_CONFIRM_QUOTE_INSTALLATION', workOrderId: plannedId, requestId: plannedRequestId }, '*');
+        return;
+      }
       if (b.dataset.media != null) return lightbox(media, Number(b.dataset.media));
       if (b.dataset.doc != null) { const pdfs = docs.filter(d => d.kind === 'pdf'); return lightbox(pdfs, pdfs.indexOf(docs[Number(b.dataset.doc)])); }
       if (b.dataset.status) { close(); return transicionarStatusOS(o.id, b.dataset.status); }

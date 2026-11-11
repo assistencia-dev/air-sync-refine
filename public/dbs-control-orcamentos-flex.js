@@ -131,17 +131,30 @@
       acceptanceInFlight=true;
       setAcceptanceBusy(true);
       setAcceptanceStatus("Salvando e confirmando o aceite na nuvem…");
+      var relationalApproved = false;
       try {
+        if (status === "Aprovado") {
+          if (typeof window.quoteStatus !== "function") throw new Error("A aprovação relacional não está disponível.");
+          await window.quoteStatus(q.id, "Aprovado");
+          if (q.status !== "Convertido em OS" || !q.osId) throw new Error("A aprovação e a criação da OS não foram confirmadas.");
+          relationalApproved = true;
+        }
         await persistAcceptanceMutation();
         render();
         closeAcceptance();
-        alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
+        alert(status==="Aprovado"?"Orçamento aprovado, OS criada e aceite registrado.":"Orçamento recusado e decisão registrada.");
       } catch (error) {
-        q.status=previousStatus;
-        q.aceiteWeb=previousAcceptance;
+        if (!relationalApproved) {
+          q.status=previousStatus;
+          q.aceiteWeb=previousAcceptance;
+        }
         render();
-        setAcceptanceStatus("Não foi possível confirmar o aceite. Os dados foram preservados; tente novamente.", "is-error");
-        alert("Aceite não confirmado na nuvem. " + (error && error.message ? error.message : "Tente novamente."));
+        setAcceptanceStatus(relationalApproved
+          ? "A OS foi criada; o aceite ainda precisa ser sincronizado. Não repita a aprovação."
+          : "Não foi possível confirmar o aceite. Os dados foram preservados; tente novamente.", "is-error");
+        alert(relationalApproved
+          ? "A OS já foi criada, mas o aceite ainda não foi sincronizado. Atualize a tela e confira o orçamento antes de repetir."
+          : "Aceite não confirmado na nuvem. " + (error && error.message ? error.message : "Tente novamente."));
       } finally {
         acceptanceInFlight=false;
         setAcceptanceBusy(false);
@@ -225,7 +238,33 @@
         valorUnitario: num(row.querySelector(".oq-price").value), total: convertedLine(num(row.querySelector(".oq-qty").value),row.querySelector(".oq-unit").value,num(row.querySelector(".oq-price").value),row.querySelector(".oq-price-unit").value) };
     });
   }
-  function save(ev) {
+  function saveQuoteRelational(quote) {
+    return new Promise(function (resolve, reject) {
+      var requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'quote-save-' + Date.now();
+      var settled = false;
+      var finish = function (error, result) {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('message', onMessage);
+        window.clearTimeout(timeout);
+        if (error) reject(error); else resolve(result);
+      };
+      var onMessage = function (event) {
+        if (event.source !== window.parent || !event.data || event.data.type !== 'DBS_CONTROL_QUOTE_SAVED'
+            || event.data.requestId !== requestId) return;
+        if (!event.data.ok) return finish(new Error(event.data.error || 'O servidor recusou o salvamento.'));
+        finish(null, event.data.result || {});
+      };
+      var timeout = window.setTimeout(function () {
+        finish(new Error('O servidor não confirmou o salvamento da proposta. Atualize a lista antes de repetir.'));
+      }, 30000);
+      window.addEventListener('message', onMessage);
+      quote.idempotencyKey = requestId;
+      window.parent.postMessage({ type: 'DBS_CONTROL_SAVE_QUOTE', requestId: requestId, quote: quote }, '*');
+    });
+  }
+
+  async function save(ev) {
     ev.preventDefault();
     var items = readItems().filter(function (x) { return x.descricao && x.quantidade > 0 && x.valorUnitario >= 0; });
     var invalidUnits=Array.from($("oq-items").querySelectorAll("tr")).some(function(row){return !unitsCompatible(row.querySelector(".oq-unit").value,row.querySelector(".oq-price-unit").value);});
@@ -244,6 +283,13 @@
       serviceId: first.tipo === "servico" ? first.catalogoId : null, servicoId: first.tipo === "servico" ? first.catalogoId : null,
       qtd: first.quantidade, valorUnitario: first.valorUnitario, pagamento: $("oq-payment").value.trim(),
       desc: $("oq-notes").value.trim(), status: "Rascunho", osId: null };
+    try {
+      var relational = await saveQuoteRelational(q);
+      q.relationalQuoteId = relational.quote_id || null;
+    } catch (error) {
+      alert("A proposta não foi salva na base relacional. " + (error && error.message ? error.message : "Tente novamente."));
+      return;
+    }
     ERP_STATE.orcamentos = Array.isArray(ERP_STATE.orcamentos) ? ERP_STATE.orcamentos : [];
     ERP_STATE.orcamentos.push(q);
     if (typeof window.saveState === "function") window.saveState();

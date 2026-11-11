@@ -1662,6 +1662,121 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_SAVE_QUOTE") {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        try {
+          if (!requestId || !msg.quote || typeof msg.quote !== "object" || Array.isArray(msg.quote)) {
+            throw new Error("Dados da proposta inválidos.");
+          }
+          const { data, error } = await (supabase as any).rpc("dbs_control_save_quote", {
+            p_quote: msg.quote,
+          });
+          if (error) throw error;
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_SAVED",
+            requestId,
+            ok: true,
+            result: data,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_SAVED",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível salvar a proposta relacional.",
+          }, "*");
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_APPROVE_QUOTE") {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        const quoteNumber = String(msg.quoteNumber || "").trim().slice(0, 80);
+        try {
+          if (!requestId || !quoteNumber) throw new Error("Número do orçamento inválido.");
+          const { data, error } = await (supabase as any).rpc("dbs_control_approve_quote_by_number", {
+            p_quote_number: quoteNumber,
+            p_idempotency_key: "quote-ui:" + requestId,
+          });
+          if (error) throw error;
+          // Recarrega a OS UUID criada na mesma transação para que ela apareça
+          // imediatamente na lista operacional e possa receber técnico.
+          try {
+            const cloud = await getCloudStateSingleFlight();
+            if (cloud?.state) {
+              iframeRef.current?.contentWindow?.postMessage({
+                type: "DBS_CONTROL_CLOUD_STATE",
+                state: cloud.state,
+                baseState: cloud.state,
+              }, "*");
+            }
+          } catch (refreshError) {
+            logSyncEvent("quote_os_cloud_refresh_error", {
+              requestId,
+              message: refreshError instanceof Error ? refreshError.message : "Falha ao atualizar a OS convertida.",
+            });
+          }
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_APPROVAL_RESULT",
+            requestId,
+            ok: true,
+            result: data,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_APPROVAL_RESULT",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível aprovar o orçamento.",
+          }, "*");
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_QUOTE_ITEMS" || msg.type === "DBS_CONTROL_CONFIRM_QUOTE_INSTALLATION") {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        const workOrderId = String(msg.workOrderId || "");
+        try {
+          if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workOrderId)) {
+            throw new Error("Identificador relacional da OS inválido.");
+          }
+          if (msg.type === "DBS_CONTROL_QUOTE_ITEMS") {
+            const { data, error } = await (supabase as any).rpc("dbs_control_list_work_order_quote_items", {
+              p_work_order_id: workOrderId,
+            });
+            if (error) throw error;
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_QUOTE_ITEMS_RESULT",
+              requestId,
+              ok: true,
+              items: Array.isArray(data) ? data : [],
+            }, "*");
+          } else {
+            const { data, error } = await (supabase as any).rpc("dbs_control_confirm_quote_installation", {
+              p_work_order_id: workOrderId,
+              p_idempotency_key: "ui:" + requestId,
+            });
+            if (error) throw error;
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_QUOTE_INSTALLATION_RESULT",
+              requestId,
+              ok: true,
+              result: data,
+            }, "*");
+          }
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: msg.type === "DBS_CONTROL_QUOTE_ITEMS"
+              ? "DBS_CONTROL_QUOTE_ITEMS_RESULT"
+              : "DBS_CONTROL_QUOTE_INSTALLATION_RESULT",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível concluir a operação dos itens previstos.",
+          }, "*");
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_DELETE_WORK_ORDER") {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : crypto.randomUUID();
         try {
