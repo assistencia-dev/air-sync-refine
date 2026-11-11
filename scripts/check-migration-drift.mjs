@@ -122,7 +122,10 @@ function normalizeMigrationSql(source) {
       continue;
     }
     if (pendingSpace) {
-      addSpace();
+      const previous = output[output.length - 1] || "";
+      const nextIsPunctuation = /[),;.]|::/.test(input.slice(index));
+      const previousIsOpeningPunctuation = /[(.[{:]$/.test(previous);
+      if (!nextIsPunctuation && !previousIsOpeningPunctuation) addSpace();
       pendingSpace = false;
     }
     if (current === "'") {
