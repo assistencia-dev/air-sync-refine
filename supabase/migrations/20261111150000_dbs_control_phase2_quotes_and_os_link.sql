@@ -328,8 +328,12 @@ BEGIN
   IF v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor) THEN
     RAISE EXCEPTION 'DBS_QUOTE_APPROVAL_FORBIDDEN' USING ERRCODE='42501';
   END IF;
-  SELECT id INTO v_quote_id FROM public.dbs_control_quotes
-   WHERE quote_number=nullif(btrim(p_quote_number),'') FOR UPDATE;
+  SELECT q.id INTO v_quote_id
+    FROM public.dbs_control_quotes q
+    JOIN public.users u ON u.id=v_actor AND u.status='ativo'
+   WHERE q.quote_number=nullif(btrim(p_quote_number),'')
+     AND (u.company_id IS NULL OR q.company_id IS NULL OR q.company_id=u.company_id)
+   ORDER BY q.created_at DESC LIMIT 1 FOR UPDATE OF q;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_NOT_FOUND' USING ERRCODE='23503'; END IF;
   RETURN public.dbs_control_approve_quote_and_create_work_order(v_quote_id,p_idempotency_key);
 END;
