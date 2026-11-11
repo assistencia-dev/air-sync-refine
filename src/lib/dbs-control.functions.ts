@@ -3305,7 +3305,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id")
         .order("name").limit(500),
