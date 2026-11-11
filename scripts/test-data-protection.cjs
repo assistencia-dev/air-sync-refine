@@ -36,9 +36,9 @@ for (const table of [
 ]) {
   assert.match(backup, new RegExp(`"${table}"`), `Backup must include relational table ${table}.`);
 }
-assert.match(masterData, /create table if not exists public\\.dbs_control_suppliers/i);
-assert.match(masterData, /create table if not exists public\\.dbs_control_measure_units/i);
-assert.match(masterData, /create table if not exists public\\.dbs_control_unit_conversions/i);
+assert.match(masterData, /create table if not exists public\.dbs_control_suppliers/i);
+assert.match(masterData, /create table if not exists public\.dbs_control_measure_units/i);
+assert.match(masterData, /create table if not exists public\.dbs_control_unit_conversions/i);
 assert.match(masterData, /enable row level security/);
 assert.match(masterData, /supplier_name/);
 assert.match(masterData, /conversion_factor/);
