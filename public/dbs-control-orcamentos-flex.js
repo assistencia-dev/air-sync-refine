@@ -82,7 +82,7 @@
       '<div class="oq-table-wrap"><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead><tbody id="oq-list"></tbody></table></div></div>';
     var acceptance = document.createElement("div"); acceptance.id = "oq-accept-modal"; acceptance.hidden = true; acceptance.innerHTML = '<div class="oq-accept-panel" role="dialog" aria-modal="true" aria-labelledby="oq-accept-title"><div class="oq-accept-head"><div><h3 id="oq-accept-title">Aceite da proposta</h3><p>Registre a decisão e a assinatura do responsável pelo cliente.</p></div><button type="button" class="btn btn-secondary" id="oq-accept-close">Fechar</button></div><label>Comentário do cliente<textarea id="oq-accept-comment" rows="3" placeholder="Comentário, ressalvas ou motivo da recusa"></textarea></label><label>Nome do responsável<input id="oq-accept-name" maxlength="160" placeholder="Nome completo"></label><label>Assinatura digital do cliente <canvas id="oq-signature" width="900" height="180" aria-label="Área para assinatura digital"></canvas></label><div class="oq-accept-actions"><button type="button" class="btn btn-secondary" id="oq-sign-clear">Limpar assinatura</button><span></span><button type="button" class="btn btn-danger" id="oq-accept-reject">Recusar orçamento</button><button type="button" class="btn btn-primary" id="oq-accept-approve">Aprovar orçamento</button></div><p id="oq-accept-status" class="oq-accept-status" role="status" aria-live="polite"></p><p class="oq-accept-note">A assinatura é registrada neste orçamento no sistema. Confirme a identidade do responsável conforme o procedimento comercial da empresa.</p></div>'; tab.appendChild(acceptance);
     var quickProductModal = document.createElement("div"); quickProductModal.id = "oq-product-modal"; quickProductModal.hidden = true;
-    quickProductModal.innerHTML = '<div class="oq-product-panel" role="dialog" aria-modal="true" aria-labelledby="oq-product-title"><div class="oq-accept-head"><div><h3 id="oq-product-title">Cadastro rápido de produto</h3><p>O produto será cadastrado no catálogo relacional com fornecedor e unidade-base.</p></div><button type="button" class="btn btn-secondary" id="oq-product-close">Fechar</button></div><form id="oq-product-form"><div class="oq-product-grid"><label>SKU / código<input id="oq-product-sku" maxlength="80" placeholder="Código interno"></label><label>Nome do produto *<input id="oq-product-name" maxlength="180" required placeholder="Nome do produto"></label><label>Fornecedor cadastrado *<select id="oq-product-supplier" required><option value="">Selecione o fornecedor...</option></select></label><label>Unidade-base *<select id="oq-product-unit" required><option value="">Selecione a unidade...</option></select></label><label>Quantidade inicial<input id="oq-product-qty" type="number" min="0" step="0.001" value="0" required></label><label>Custo unitário (R$)<input id="oq-product-cost" type="number" min="0" step="0.01" value="0"></label><label>Preço de venda (R$) *<input id="oq-product-sale" type="number" min="0" step="0.01" value="0" required></label></div><p class="oq-product-note">O cadastro não lança saldo inicial. Entradas físicas são registradas exclusivamente pelo recebimento de compras.</p><div class="oq-accept-actions"><span></span><button type="submit" class="btn btn-primary">Cadastrar e adicionar ao orçamento</button></div></form></div>';
+    quickProductModal.innerHTML = '<div class="oq-product-panel" role="dialog" aria-modal="true" aria-labelledby="oq-product-title"><div class="oq-accept-head"><div><h3 id="oq-product-title">Cadastro rápido de produto</h3><p>O produto será cadastrado no catálogo relacional com fornecedor e unidade-base.</p></div><button type="button" class="btn btn-secondary" id="oq-product-close">Fechar</button></div><form id="oq-product-form"><div class="oq-product-grid"><label>SKU / código<input id="oq-product-sku" maxlength="80" placeholder="Código interno"></label><label>Nome do produto *<input id="oq-product-name" maxlength="180" required placeholder="Nome do produto"></label><label>Fornecedor cadastrado *<select id="oq-product-supplier" required><option value="">Selecione o fornecedor...</option></select></label><label>Unidade-base *<select id="oq-product-unit" required><option value="">Selecione a unidade...</option></select></label><p>Saldo inicial não é cadastrado aqui; use Compras e Recebimento para movimentar estoque.</p><label>Custo unitário (R$)<input id="oq-product-cost" type="number" min="0" step="0.01" value="0"></label><label>Preço de venda (R$) *<input id="oq-product-sale" type="number" min="0" step="0.01" value="0" required></label></div><p class="oq-product-note">O cadastro não lança saldo inicial. Entradas físicas são registradas exclusivamente pelo recebimento de compras.</p><div class="oq-accept-actions"><span></span><button type="submit" class="btn btn-primary">Cadastrar e adicionar ao orçamento</button></div></form></div>';
     tab.appendChild(quickProductModal);
     var signatureCanvas = $("oq-signature"), signatureCtx = signatureCanvas.getContext("2d"), drawing = false, activeQuoteId = null, signed = false;
     var acceptanceInFlight = false;
@@ -163,7 +163,7 @@
     function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; setAcceptanceStatus(""); setAcceptanceBusy(false); acceptance.hidden=false; $("oq-accept-name").focus(); }
     $("oq-accept-close").addEventListener("click",closeAcceptance); $("oq-sign-clear").addEventListener("click",function(){signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height);signed=false;}); $("oq-accept-approve").addEventListener("click",function(){commitAcceptance("Aprovado");}); $("oq-accept-reject").addEventListener("click",function(){commitAcceptance("Rejeitado");});
     function closeProductModal(){quickProductModal.hidden=true;}
-    $("oq-quick-product").addEventListener("click",function(){ $("oq-product-form").reset(); $("oq-product-qty").value="0"; $("oq-product-cost").value="0"; $("oq-product-sale").value="0"; quickProductModal.hidden=false; $("oq-product-name").focus(); });
+    $("oq-quick-product").addEventListener("click",function(){ $("oq-product-form").reset(); $("oq-product-cost").value="0"; $("oq-product-sale").value="0"; quickProductModal.hidden=false; $("oq-product-name").focus(); });
     $("oq-product-close").addEventListener("click",closeProductModal);
     function fillQuickProductMasterData(data) {
       data = data || {};
@@ -202,7 +202,7 @@
     fillQuickProductMasterData(ERP_STATE._dbsControlMasterData || {});
     $("oq-product-form").addEventListener("submit",function(ev){
       ev.preventDefault();
-      var sku=$("oq-product-sku").value.trim(), name=$("oq-product-name").value.trim(), qty=Math.max(0,num($("oq-product-qty").value)), cost=Math.max(0,num($("oq-product-cost").value)), sale=Math.max(0,num($("oq-product-sale").value));
+      var sku=$("oq-product-sku").value.trim(), name=$("oq-product-name").value.trim(), cost=Math.max(0,num($("oq-product-cost").value)), sale=Math.max(0,num($("oq-product-sale").value));
       var supplierId=$("oq-product-supplier").value, measureUnitId=$("oq-product-unit").value;
       if(!name || !supplierId || !measureUnitId){alert("Informe o nome, o fornecedor e a unidade-base cadastrados.");return;}
       var norm=function(v){return String(v||"").trim().toLocaleLowerCase("pt-BR");};
@@ -214,8 +214,19 @@
       ERP_STATE.pecas=Array.isArray(ERP_STATE.pecas)?ERP_STATE.pecas:[];
       ERP_STATE.pecas.push(product);
       if(typeof window.saveStateAndConfirmCloud==="function" && window.parent!==window){
-        try { var saved=await window.saveStateAndConfirmCloud(); if(saved && saved.queuedLocally) throw new Error("O catálogo ficou pendente de sincronização; não foi adicionado ao orçamento."); }
-        catch(error){ERP_STATE.pecas=ERP_STATE.pecas.filter(function(p){return p!==product;});alert(error && error.message ? error.message : "Não foi possível salvar a peça no catálogo relacional.");return;}
+        try {
+          var saved=await window.saveStateAndConfirmCloud();
+          if(saved && saved.queuedLocally) {
+            product.__dbs_control_sync_state="pending";
+            if(typeof window.persistDbsControlLocalStateOnly==="function")window.persistDbsControlLocalStateOnly();
+            throw new Error("A peça foi preservada neste dispositivo e está aguardando confirmação da nuvem. Ela não foi adicionada ao orçamento.");
+          }
+        } catch(error) {
+          product.__dbs_control_sync_state="pending";
+          if(typeof window.persistDbsControlLocalStateOnly==="function")window.persistDbsControlLocalStateOnly();
+          alert(error && error.message ? error.message : "A peça foi preservada localmente e aguarda confirmação relacional.");
+          return;
+        }
       } else if(typeof window.saveState==="function") { window.saveState(); }
       closeProductModal();
       var item={tipo:"peca",catalogoId:product.id,descricao:product.nome,unidade:unit.symbol||unit.code||"UN",quantidade:1,valorUnitario:sale};
@@ -385,12 +396,9 @@
   function sendQuotePartsToPurchase(id) {
     var quote = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
     if (!quote) return;
-    if (!quote.relationalQuoteId) {
-      alert("Esta proposta ainda não possui identificador relacional. Salve novamente pela versão atual antes de abrir Compras.");
-      return;
-    }
+    var relationalQuoteKey = quote.relationalQuoteId || quote.id;
     var target = new URL("/dbs-inventory", window.location.origin);
-    target.searchParams.set("quote_id", String(quote.relationalQuoteId));
+    target.searchParams.set("quote_id", String(relationalQuoteKey));
     window.open(target.toString(), "_blank", "noopener,noreferrer");
   }
 
