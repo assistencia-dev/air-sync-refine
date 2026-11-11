@@ -259,6 +259,7 @@
         finish(new Error('O servidor não confirmou o salvamento da proposta. Atualize a lista antes de repetir.'));
       }, 30000);
       window.addEventListener('message', onMessage);
+      quote.idempotencyKey = requestId;
       window.parent.postMessage({ type: 'DBS_CONTROL_SAVE_QUOTE', requestId: requestId, quote: quote }, '*');
     });
   }
