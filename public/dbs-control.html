@@ -2060,32 +2060,12 @@
     }
     render('servicos');
   };
-  window.salvarCompra = async function (event) {
-    event.preventDefault();
-    var form = document.getElementById('form-compra');
-    var id = form && form.dataset.dbsEditId || '';
-    var partSelect = document.getElementById('comp-peca');
-    var partId = partSelect && partSelect.value || '';
-    var selectedPart = partId ? (ERP_STATE.pecas || []).find(function (part) { return String(part.id) === String(partId); }) : null;
-    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, part_sku: selectedPart && selectedPart.sku ? String(selectedPart.sku).trim() : '', qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), status: document.getElementById('comp-status').value === 'received' ? 'received' : 'draft' };
-    if (!value.fornecedor || !value.part_id || !value.qtd || value.qtd <= 0 || !Number.isFinite(value.valor) || value.valor <= 0) return;
-    var existing = id ? findRow('compras', id) : null;
-    if (existing && existing.ledger_entry_id) { alert('Esta compra já entrou no estoque e no Financeiro; faça uma devolução/estorno para corrigir.'); return; }
-    var row = existing;
-    if (row) Object.assign(row, value);
-    else {
-      var state = appState();
-      row = { id: crypto.randomUUID(), ...value, deleted: false };
-      (state.compras || (state.compras = [])).push(row);
-    }
-    clearEdit('compras');
-    try {
-      await confirmCatalogMutation('compras', row);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'A compra foi preservada, mas aguarda confirmação da nuvem.');
-    }
-    render('compras');
+  window.salvarCompra = function (event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    alert('O cadastro antigo por texto livre foi substituído. Abra Compras & Estoque para selecionar fornecedor, peça, unidade e centro de custo relacionais.');
+    return window.abrirFinanceiroEstoque();
   };
+
 
   function persistLocalOnly() {
     if (typeof window.persistDbsControlLocalStateOnly === 'function') window.persistDbsControlLocalStateOnly();
@@ -4463,20 +4443,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         <!-- COMPRAS -->
         <div id="tab-compras" class="tab-view">
-            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Registrar compra</h3>
-                <form id="form-compra" onsubmit="salvarCompra(event)">
-                    <div class="form-grid">
-                        <div class="form-group"><label>Fornecedor</label><input type="text" id="comp-fornecedor" required></div>
-                        <div class="form-group"><label>Peça do estoque</label><select id="comp-peca" required><option value="">Selecione a peça que entrou no estoque</option></select></div>
-                        <div class="form-group"><label>Descrição complementar</label><input type="text" id="comp-item" placeholder="NF, lote ou observação"></div>
-                        <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" min="0.001" step="0.001" required></div>
-                        <div class="form-group"><label>Status da compra</label><select id="comp-status"><option value="draft" selected>Pedido enviado · aguardando recebimento</option><option value="received">Recebido · lançar no estoque</option></select></div>
-                        <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="comp-valor" value="450.00" step="0.01" required></div>
-                        <div class="form-group"><label>Financeiro</label><div style="padding:10px 12px;border:1px solid #dbe3ee;border-radius:10px;font-size:12px;color:#475569;">A compra gera Contas a Pagar. Registre a quitação no DBS Treasury para atualizar o caixa.</div></div>
-                    </div>
-                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Registrar Compra</button></div>
-                </form>
+            <div class="data-card" style="padding:20px;margin-bottom:20px;">
+                <h3 style="margin-bottom:8px;">Compras relacionais, recebimento e contas a pagar</h3>
+                <p style="font-size:12px;color:#64748b;margin-bottom:14px;">Novos pedidos devem ser vinculados a um fornecedor cadastrado, peças do catálogo, unidade de compra, conversão e centro de custo. O recebimento físico e as aprovações são executados no fluxo relacional.</p>
+                <button type="button" class="btn btn-primary" onclick="abrirFinanceiroEstoque()">Abrir Compras &amp; Estoque</button>
             </div>
             <div class="data-card">
                 <div class="data-header"><h3>Pedidos de Compra Registrados</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Contas a pagar e balanço</button></div>
