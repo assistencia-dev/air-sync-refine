@@ -161,8 +161,8 @@ BEGIN
         jsonb_build_object('source','dbs_control_inventory_movements','movement_id',p_movement_id,
           'reversal_movement_id',v_existing.id,'reason',v_reason),
         jsonb_build_array(
-          jsonb_build_object('account_code','5.1.01','account_name','Custo de peças aplicadas','account_type':'expense','debit_cents',v_amount,'credit_cents',0),
-          jsonb_build_object('account_code','1.1.03','account_name','Estoque de peças','account_type':'asset','debit_cents',0,'credit_cents',v_amount)
+          jsonb_build_object('account_code','5.1.01','account_name','Custo de peças aplicadas','account_type','expense','debit_cents',v_amount,'credit_cents',0),
+          jsonb_build_object('account_code','1.1.03','account_name','Estoque de peças','account_type','asset','debit_cents',0,'credit_cents',v_amount)
         )
       );
     END IF;
