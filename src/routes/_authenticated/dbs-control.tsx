@@ -1699,6 +1699,16 @@ function DbsControlPage() {
             p_idempotency_key: "quote-ui:" + requestId,
           });
           if (error) throw error;
+          // Recarrega a OS UUID criada na mesma transação para que ela apareça
+          // imediatamente na lista operacional e possa receber técnico.
+          const cloud = await getCloudStateSingleFlight();
+          if (cloud?.state) {
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_CLOUD_STATE",
+              state: cloud.state,
+              baseState: cloud.state,
+            }, "*");
+          }
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_QUOTE_APPROVAL_RESULT",
             requestId,
