@@ -288,4 +288,24 @@ GRANT EXECUTE ON FUNCTION public.dbs_control_approve_quote_and_create_work_order
 GRANT EXECUTE ON FUNCTION public.dbs_control_list_work_order_quote_items(uuid) TO authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.dbs_control_confirm_quote_installation(uuid,text) TO authenticated,service_role;
 
+
+-- Adaptador estável para o módulo legado: o navegador envia apenas o número visível.
+CREATE OR REPLACE FUNCTION public.dbs_control_approve_quote_by_number(
+  p_quote_number text, p_idempotency_key text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $
+DECLARE v_actor uuid:=auth.uid(); v_quote_id uuid;
+BEGIN
+  IF v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor) THEN
+    RAISE EXCEPTION 'DBS_QUOTE_APPROVAL_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  SELECT id INTO v_quote_id FROM public.dbs_control_quotes
+   WHERE quote_number=nullif(btrim(p_quote_number),'') FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_NOT_FOUND' USING ERRCODE='23503'; END IF;
+  RETURN public.dbs_control_approve_quote_and_create_work_order(v_quote_id,p_idempotency_key);
+END;
+$;
+REVOKE ALL ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.dbs_control_approve_quote_by_number(text,text) TO authenticated,service_role;
+
 COMMIT;
