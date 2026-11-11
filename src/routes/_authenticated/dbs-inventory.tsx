@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   createDbsPartSale, createDbsPurchase, createDbsSupplier, createDbsMeasureUnit,
   createDbsUnitConversion, decideDbsPurchaseApproval, getDbsPhase2InventoryOverview,
@@ -57,6 +58,15 @@ function DbsInventoryPage() {
   const [conversionFrom, setConversionFrom] = useState("");
   const [conversionTo, setConversionTo] = useState("");
   const [conversionFactor, setConversionFactor] = useState("1");
+  const [costCenterWorkOrderId, setCostCenterWorkOrderId] = useState("");
+  const [costCenterWorkOrderValue, setCostCenterWorkOrderValue] = useState("");
+  const [gasSerialNumber, setGasSerialNumber] = useState("");
+  const [gasType, setGasType] = useState("R410A");
+  const [gasEmployeeId, setGasEmployeeId] = useState("");
+  const [gasVehicleLabel, setGasVehicleLabel] = useState("");
+  const [gasTotalCharges, setGasTotalCharges] = useState("10");
+  const [gasTareWeight, setGasTareWeight] = useState("");
+  const [gasInitialGrossWeight, setGasInitialGrossWeight] = useState("");
   const [quoteImport] = useState(() => {
     if (typeof window === "undefined") return { quoteId: "" };
     return { quoteId: new URLSearchParams(window.location.search).get("quote_id") || "" };
@@ -77,6 +87,8 @@ function DbsInventoryPage() {
   const measureUnits = data?.measureUnits ?? [];
   const unitConversions = data?.unitConversions ?? [];
   const costCenters = data?.costCenters ?? [];
+  const gasCylinders = data?.gasCylinders ?? [];
+  const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
   const sales = data?.sales ?? [];
@@ -183,6 +195,37 @@ function DbsInventoryPage() {
     event.preventDefault();
     const saved = await runAction(() => createDbsUnitConversion({ data: { fromUnitId:conversionFrom, toUnitId:conversionTo, factor:Number(conversionFactor) } }), "Conversão de unidade cadastrada.");
     if (saved) { setConversionFactor("1"); await overview.refetch(); }
+  }
+
+  async function linkOrderCostCenter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!costCenterWorkOrderId||!costCenterWorkOrderValue){setMessage("Selecione a OS e o centro de custo.");return;}
+    const saved=await runAction(()=>setDbsWorkOrderCostCenter({data:{workOrderId:costCenterWorkOrderId,costCenterId:costCenterWorkOrderValue}}),"Centro de custo vinculado à ordem de serviço.");
+    if(saved){setCostCenterWorkOrderId("");setCostCenterWorkOrderValue("");}
+  }
+
+  async function assignWeightedGasCylinder(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const tare=Number(gasTareWeight), gross=Number(gasInitialGrossWeight), charges=Number(gasTotalCharges);
+    if(!gasSerialNumber.trim()||!gasType.trim()||!gasEmployeeId||!Number.isInteger(charges)||charges<=0||
+      !Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
+      setMessage("Informe série, refrigerante, técnico, quantidade de cargas, tara e peso bruto inicial válidos.");
+      return;
+    }
+    await runAction(async()=>{
+      const {data,error}=await (supabase as any).rpc("dbs_control_assign_gas_cylinder_weighted",{
+        p_serial_number:gasSerialNumber.trim(),
+        p_refrigerant_type:gasType.trim().toUpperCase(),
+        p_employee_id:gasEmployeeId,
+        p_total_charges:charges,
+        p_vehicle_label:gasVehicleLabel.trim()||null,
+        p_tare_weight_kg:tare,
+        p_initial_gross_weight_kg:gross,
+      });
+      if(error) throw new Error(error.message);
+      return data;
+    },"Cilindro cadastrado e vinculado ao técnico com tara e pesagem inicial.");
+    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
   }
 
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
@@ -309,6 +352,53 @@ function DbsInventoryPage() {
             </form>
           </section>
           {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo no DBS TREASURY.</p>}
+          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <form onSubmit={linkOrderCostCenter} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-black">Vincular centro de custo à OS</h2>
+              <p className="mt-1 text-xs text-slate-500">Defina a classificação operacional antes do consumo de peças do carro ou gás.</p>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
+                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <option value="">Selecione a OS</option>
+                  {workOrders.map((order:any)=><option key={order.id} value={order.id}>{order.protocol||order.id} · {order.status}</option>)}
+                </select>
+              </label>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo
+                <select required value={costCenterWorkOrderValue} onChange={e=>setCostCenterWorkOrderValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <option value="">Selecione o centro de custo</option>
+                  {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+                </select>
+              </label>
+              <button disabled={busy||!workOrders.length||!costCenters.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-50">Vincular à OS</button>
+            </form>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-black">Cilindros sob custódia</h2><span className="text-xs text-slate-500">{gasCylinders.length} cadastrados</span></div>
+              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. A pesagem na OS atualiza o saldo do cilindro.</p>
+              {gasCylinders.length ? <div className="mt-3 space-y-2">
+                {gasCylinders.map((cylinder:any)=>{
+                  const employee=employees.find((entry:any)=>String(entry.id)===String(cylinder.employee_id));
+                  const tare=Number(cylinder.tare_weight_kg),gross=Number(cylinder.current_gross_weight_kg);
+                  return <div key={cylinder.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
+                    <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
+                    <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                  </div>;
+                })}
+              </div> : <p className="mt-3 text-sm text-slate-500">Nenhum cilindro cadastrado.</p>}
+            </div>
+          </section>
+          <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. Informe tara e peso bruto inicial para habilitar consumo pesado na OS.</p></div>
+            <form onSubmit={assignWeightedGasCylinder} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
+              <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Selecione técnico</option>{employees.filter((employee:any)=>employee.dbs_control_access_enabled).map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
+              <label className="text-xs font-bold text-slate-600">Veículo<input value={gasVehicleLabel} onChange={e=>setGasVehicleLabel(e.target.value)} placeholder="Veículo / placa" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
+            </form>
+          </section>
           <div className="mb-5 flex gap-2">
             <button type="button" onClick={() => setTab("sales")} className={tab === "sales" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Vendas avulsas</button>
             <button type="button" onClick={() => setTab("reservations")} className={tab === "reservations" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Reservas de OS</button>
