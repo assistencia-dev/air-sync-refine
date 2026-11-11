@@ -106,7 +106,7 @@ create or replace function public.dbs_control_consume_car_stock_item(
  p_work_order_id uuid,p_car_stock_id uuid,p_quantity numeric,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_actor uuid:=auth.uid(); v_os public.dbs_control_work_orders%rowtype; v_stock public.dbs_control_car_stock%rowtype;
- v_employee uuid; v_scope record; v_part_id uuid; v_cost integer; v_wop uuid; v_key text:=nullif(trim(p_idempotency_key),'');
+ v_employee uuid; v_scope record; v_part_id uuid; v_cost integer; v_wop uuid; v_key text:=nullif(trim(p_idempotency_key),''); v_previous public.dbs_control_car_stock_consumptions%rowtype;
  v_ledger jsonb; v_ledger_id uuid; v_total bigint;
 begin
  if v_actor is null then raise exception 'DBS_CAR_STOCK_UNAUTHENTICATED' using errcode='42501'; end if;
@@ -120,8 +120,10 @@ begin
  select * into v_scope from public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
  select * into v_stock from public.dbs_control_car_stock where id=p_car_stock_id and employee_id=v_employee and scope_key=v_scope.scope_key and status='active' for update;
  if not found then raise exception 'DBS_CAR_STOCK_ITEM_NOT_FOUND' using errcode='23503'; end if;
- if exists(select 1 from public.dbs_control_car_stock_consumptions where idempotency_key=v_key) then
-   return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id);
+ select * into v_previous from public.dbs_control_car_stock_consumptions where idempotency_key=v_key;
+ if found then
+   if v_previous.work_order_id<>p_work_order_id or v_previous.car_stock_id<>p_car_stock_id or v_previous.employee_id<>v_employee or v_previous.quantity<>p_quantity then raise exception 'DBS_CAR_STOCK_IDEMPOTENCY_CONFLICT' using errcode='23505'; end if;
+   return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,'work_order_part_id',v_previous.work_order_part_id);
  end if;
  if v_stock.quantity<p_quantity then raise exception 'DBS_CAR_STOCK_BALANCE_INSUFFICIENT' using errcode='23514'; end if;
  v_part_id:=v_stock.part_id; v_cost:=v_stock.unit_cost_cents;
