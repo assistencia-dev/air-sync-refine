@@ -174,7 +174,7 @@ function runNormalizationSelfTests() {
     "RETURNS text LANGUAGE plpgsql AS $body$",
     "BEGIN",
     "  /* body comment stays because it is inside the dollar-quoted function */",
-    "  RETURN coalesce( p_value, 'text -- not a comment' );",
+    "  RETURN coalesce(p_value, 'text -- not a comment');",
     "END;",
     "$body$;",
   ].join("\n");
@@ -568,7 +568,7 @@ async function main() {
 if (testNormalizer) {
   try {
     runNormalizationSelfTests();
-    process.stdout.write("Migration drift normalization tests passed.\\n");
+    process.stdout.write("Migration drift normalization tests passed.\n");
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
