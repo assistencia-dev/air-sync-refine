@@ -228,6 +228,25 @@ function DbsInventoryPage() {
     setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
   }
 
+  async function initializeExistingCylinderWeights(cylinder:any) {
+    const tareRaw=window.prompt("Tara do vasilhame (kg):","");
+    if(tareRaw===null)return;
+    const grossRaw=window.prompt("Peso bruto atual da botija (kg):","");
+    if(grossRaw===null)return;
+    const tare=Number(tareRaw.replace(",",".")),gross=Number(grossRaw.replace(",","."));
+    if(!Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
+      setMessage("Pesagem inválida: o peso bruto deve ser maior que a tara.");
+      return;
+    }
+    await runAction(async()=>{
+      const {data,error}=await (supabase as any).rpc("dbs_control_initialize_existing_gas_cylinder_weights",{
+        p_cylinder_id:cylinder.id,p_tare_weight_kg:tare,p_initial_gross_weight_kg:gross
+      });
+      if(error)throw new Error(error.message);
+      return data;
+    },"Tara e pesagem inicial do cilindro registradas.");
+  }
+
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!partId || !workOrderId || !costCenterId || Number(quantity) <= 0) {
@@ -381,6 +400,7 @@ function DbsInventoryPage() {
                     <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
                     <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
                     <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                    {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
                   </div>;
                 })}
               </div> : <p className="mt-3 text-sm text-slate-500">Nenhum cilindro cadastrado.</p>}
