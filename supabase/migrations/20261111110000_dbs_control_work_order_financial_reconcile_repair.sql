@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_inventory_scope_for_work_order(p_w
  SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-  with sole_admin as (
+  with single_admin_company as (
     select
       count(*) as admin_count,
       (array_agg(u.id order by u.id))[1] as owner_id,
