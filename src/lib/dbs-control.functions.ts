@@ -1599,6 +1599,9 @@ function dbsControlPartPayload(
     sku: String(record?.sku ?? '').trim(),
     name: String(record?.name ?? record?.nome ?? '').trim(),
     description: String(record?.description ?? record?.descricao ?? '').trim(),
+    supplier_id: isDbsControlUuid(String(record?.supplier_id ?? record?.supplierId ?? '').trim()) ? String(record?.supplier_id ?? record?.supplierId).trim() : null,
+    measure_unit_id: isDbsControlUuid(String(record?.measure_unit_id ?? record?.measureUnitId ?? '').trim()) ? String(record?.measure_unit_id ?? record?.measureUnitId).trim() : null,
+    require_master_data: record?.require_master_data === true || record?.requireMasterData === true,
     cost_cents: Number.isFinite(cost)
       ? (record?.cost_cents !== undefined ? Math.round(cost) : Math.round(cost * 100))
       : 0,
@@ -3153,35 +3156,39 @@ export const decideDbsPurchaseApproval = createServerFn({ method: "POST" })
 export const createDbsPurchase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
-    supplierName: string;
+    supplierId: string;
+    costCenterId: string;
     documentNumber?: string;
     purchaseDate: string;
     idempotencyKey: string;
-    items: Array<{ partId: string; quantity: number; unitCostCents: number }>;
+    items: Array<{ partId: string; purchaseUnitId: string; quantity: number; unitCostCents: number; conversionFactor: number }>;
   }) => {
-    const supplierName = String(input?.supplierName ?? "").trim();
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
-    if (!supplierName || supplierName.length > 180) throw new Error("Informe um fornecedor válido.");
+    if (!input?.supplierId || !input?.costCenterId) throw new Error("Selecione o fornecedor cadastrado e o centro de custo.");
     if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(purchaseDate) || Number.isNaN(Date.parse(purchaseDate + "T12:00:00Z"))) {
       throw new Error("Informe uma data de compra válida.");
     }
     if (!input?.idempotencyKey || input.idempotencyKey.trim().length < 8) throw new Error("Chave de segurança da compra inválida.");
     if (!items.length || items.length > 100) throw new Error("A compra precisa ter entre 1 e 100 itens.");
     return {
-      supplierName,
+      supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
+      costCenterId: requireInventoryId(input.costCenterId, "Centro de custo"),
       documentNumber: String(input.documentNumber ?? "").trim().slice(0, 100) || null,
       purchaseDate,
       idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
       items: items.map((item) => {
-        if (!item?.partId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
-            !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0) {
-          throw new Error("Cada item precisa ter peça cadastrada, quantidade e custo unitário maiores que zero.");
+        if (!item?.partId || !item?.purchaseUnitId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
+            !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0 ||
+            !Number.isFinite(item.conversionFactor) || item.conversionFactor <= 0) {
+          throw new Error("Cada item precisa de peça, unidade de compra, quantidade, custo e conversão válidos.");
         }
         return {
-          part_id: requireInventoryId(item.partId, "Peça"),
+          partId: requireInventoryId(item.partId, "Peça"),
+          purchaseUnitId: requireInventoryId(item.purchaseUnitId, "Unidade de compra"),
           quantity: item.quantity,
-          unit_cost_cents: item.unitCostCents,
+          unitCostCents: item.unitCostCents,
+          conversionFactor: item.conversionFactor,
         };
       }),
     };
@@ -3190,17 +3197,60 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     const user = await requireDbsInventoryAdmin(context);
     const companyId = user.company_id;
     const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const [supplier, center] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,name").eq("id", data.costCenterId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+    ]);
+    if (supplier.error) throw new Error(supplier.error.message);
+    if (center.error) throw new Error(center.error.message);
+    if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo.");
+    if (!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
+    const resolvedItems = [];
+    for (const item of data.items) {
+      const [part, unit] = await Promise.all([
+        (supabaseAdmin as any).from("dbs_control_parts").select("id,measure_unit_id,status").eq("id", item.partId).maybeSingle(),
+        (supabaseAdmin as any).from("dbs_control_measure_units").select("id,status").eq("id", item.purchaseUnitId).eq("scope_key", scopeKey).maybeSingle(),
+      ]);
+      if (part.error) throw new Error(part.error.message);
+      if (unit.error) throw new Error(unit.error.message);
+      if (!part.data || part.data.status !== "ativo" || !part.data.measure_unit_id) throw new Error("A peça precisa estar ativa e possuir unidade-base cadastrada.");
+      if (!unit.data || unit.data.status !== "active") throw new Error("Unidade de compra inválida ou inativa.");
+      if (String(part.data.measure_unit_id) === item.purchaseUnitId) {
+        if (Math.abs(item.conversionFactor - 1) > 0.000001) throw new Error("A conversão da unidade-base deve ser 1.");
+      } else {
+        const conversion = await (supabaseAdmin as any).from("dbs_control_unit_conversions")
+          .select("factor").eq("scope_key", scopeKey).eq("from_unit_id", item.purchaseUnitId)
+          .eq("to_unit_id", part.data.measure_unit_id).eq("status", "active").maybeSingle();
+        if (conversion.error) throw new Error(conversion.error.message);
+        if (!conversion.data || Math.abs(Number(conversion.data.factor) - item.conversionFactor) > 0.000001) {
+          throw new Error("Não existe conversão ativa entre a unidade de compra e a unidade-base da peça.");
+        }
+      }
+      const baseQuantity = Number((item.quantity * item.conversionFactor).toFixed(4));
+      const baseUnitCost = Math.max(1, Math.round(item.unitCostCents / item.conversionFactor));
+      resolvedItems.push({
+        part_id: item.partId,
+        purchase_unit_id: item.purchaseUnitId,
+        purchase_quantity: item.quantity,
+        quantity: baseQuantity,
+        base_quantity: baseQuantity,
+        conversion_factor: item.conversionFactor,
+        unit_cost_cents: baseUnitCost,
+      });
+    }
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase", {
       p_payload: {
         actor_user_id: user.id,
         company_id: companyId,
         scope_key: scopeKey,
-        supplier_name: data.supplierName,
+        supplier_id: data.supplierId,
+        supplier_name: supplier.data.name,
+        cost_center_id: data.costCenterId,
         document_number: data.documentNumber,
         purchase_date: data.purchaseDate,
         payment_status: "unpaid",
         idempotency_key: data.idempotencyKey,
-        items: data.items,
+        items: resolvedItems,
       },
     });
     if (error) throw new Error(error.message);
@@ -3255,13 +3305,13 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
-            .select("id,protocol,status,client_id,created_by_user_id")
+            .select("id,protocol,status,client_id,created_by_user_id,cost_center_id")
             .in("created_by_user_id", scopedUserIds).is("deleted_at", null).order("created_at", { ascending: false }).limit(500)
         : Promise.resolve({ data: [], error: null }),
       (supabaseAdmin as any).from("dbs_control_work_order_reservations")
@@ -3274,24 +3324,28 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,received_total_cents,paid_cents,ledger_entry_id,created_at")
+        .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,received_total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")
         .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
+      (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,legal_name,trade_name,cnpj,phone,status").eq("scope_key",scopeKey).order("name").limit(500),
+      (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system").eq("scope_key",scopeKey).eq("status","active").order("code").limit(100),
+      (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
+      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
     const purchaseItems = purchaseIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
-          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no")
+          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no,purchase_unit_id,conversion_factor,base_quantity,cost_center_id")
           .in("purchase_id", purchaseIds).order("line_no")
       : { data: [], error: null };
     if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
     const inventoryMovements = await (supabaseAdmin as any).from("dbs_control_inventory_movements")
-      .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,created_at,metadata")
+      .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,cost_center_id,created_at,metadata")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100);
     if (inventoryMovements.error) throw new Error("Falha ao carregar histórico de movimentações: " + inventoryMovements.error.message);
     return {
@@ -3304,5 +3358,102 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchaseItems: purchaseItems.data ?? [],
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
+      suppliers: suppliers.data ?? [],
+      measureUnits: measureUnits.data ?? [],
+      unitConversions: unitConversions.data ?? [],
+      costCenters: costCenters.data ?? [],
     };
+  });
+
+
+export const createDbsSupplier = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { name: string; cnpj?: string; phone?: string }) => {
+    const name=String(input?.name||"").trim();
+    const cnpj=String(input?.cnpj||"").replace(/\\D/g,"");
+    if(name.length<2||name.length>180) throw new Error("Informe o nome do fornecedor.");
+    if(cnpj && ![11,14].includes(cnpj.length)) throw new Error("CNPJ/CPF do fornecedor inválido.");
+    return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
+  })
+  .handler(async ({context,data}) => {
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
+      company_id:user.company_id,scope_key:scopeKey,name:data.name,normalized_name:data.name.toLocaleLowerCase("pt-BR"),
+      legal_name:data.name,cnpj:data.cnpj,phone:data.phone,status:"active",created_by:user.id,updated_by:user.id
+    }).select("id,name,status").single();
+    if(saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
+export const createDbsMeasureUnit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { code:string; name:string; symbol?:string; decimalPlaces?:number }) => {
+    const code=String(input?.code||"").trim().toUpperCase();
+    const name=String(input?.name||"").trim();
+    const decimals=Number(input?.decimalPlaces??3);
+    if(!/^[A-Z0-9_-]{1,12}$/.test(code)||name.length<1||name.length>80||!Number.isInteger(decimals)||decimals<0||decimals>4)
+      throw new Error("Código, nome ou precisão da unidade inválidos.");
+    return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
+  })
+  .handler(async ({context,data}) => {
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
+      company_id:user.company_id,scope_key:scopeKey,code:data.code,normalized_code:data.code,
+      name:data.name,symbol:data.symbol,decimal_places:data.decimalPlaces,status:"active",is_system:false,
+      created_by:user.id,updated_by:user.id
+    }).select("id,code,name,symbol,status").single();
+    if(saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
+export const createDbsUnitConversion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { fromUnitId:string; toUnitId:string; factor:number }) => {
+    if(!input?.fromUnitId||!input?.toUnitId||input.fromUnitId===input.toUnitId||!Number.isFinite(input.factor)||input.factor<=0)
+      throw new Error("Informe unidades diferentes e fator de conversão positivo.");
+    return {fromUnitId:requireInventoryId(input.fromUnitId,"Unidade de compra"),toUnitId:requireInventoryId(input.toUnitId,"Unidade-base"),factor:input.factor};
+  })
+  .handler(async ({context,data}) => {
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const saved=await (supabaseAdmin as any).from("dbs_control_unit_conversions").upsert({
+      company_id:user.company_id,scope_key:scopeKey,from_unit_id:data.fromUnitId,to_unit_id:data.toUnitId,
+      factor:data.factor,status:"active",notes:"Conversão cadastrada pela tela de suprimentos"
+    },{onConflict:"scope_key,from_unit_id,to_unit_id"}).select("id,from_unit_id,to_unit_id,factor,status").single();
+    if(saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
+export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{workOrderId:string;costCenterId:string})=>{
+    return {workOrderId:requireInventoryId(input.workOrderId,"OS"),costCenterId:requireInventoryId(input.costCenterId,"Centro de custo")};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const center=await (supabaseAdmin as any).from("dbs_control_cost_centers").select("id").eq("id",data.costCenterId).eq("scope_key",scopeKey).eq("status","active").maybeSingle();
+    if(center.error) throw new Error(center.error.message);
+    if(!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
+    const updated=await (supabaseAdmin as any).from("dbs_control_work_orders").update({cost_center_id:data.costCenterId,updated_at:new Date().toISOString()}).eq("id",data.workOrderId).select("id,cost_center_id").maybeSingle();
+    if(updated.error) throw new Error(updated.error.message);
+    if(!updated.data) throw new Error("OS não encontrada para esta operação.");
+    return updated.data;
+  });
+
+export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({context})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const [suppliers,measureUnits,unitConversions,costCenters]=await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,status").eq("scope_key",scopeKey).eq("status","active").order("name"),
+      (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,status").eq("scope_key",scopeKey).eq("status","active").order("code"),
+      (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active"),
+      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code")
+    ]);
+    for(const result of [suppliers,measureUnits,unitConversions,costCenters]) if(result.error) throw new Error(result.error.message);
+    return {suppliers:suppliers.data??[],measureUnits:measureUnits.data??[],unitConversions:unitConversions.data??[],costCenters:costCenters.data??[]};
   });
