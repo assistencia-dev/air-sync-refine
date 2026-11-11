@@ -249,17 +249,22 @@ GRANT SELECT,INSERT ON public.dbs_control_quote_installations TO service_role;
 CREATE OR REPLACE FUNCTION public.dbs_control_list_work_order_quote_items(p_work_order_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
 AS $$
-DECLARE v_actor uuid:=auth.uid(); v_os public.dbs_control_work_orders%rowtype;
+DECLARE
+  v_actor uuid:=auth.uid();
+  v_os public.dbs_control_work_orders%rowtype;
+  v_scope record;
 BEGIN
   IF v_actor IS NULL THEN RAISE EXCEPTION 'DBS_QUOTE_ITEMS_UNAUTHENTICATED' USING ERRCODE='42501'; END IF;
   SELECT * INTO v_os FROM public.dbs_control_work_orders WHERE id=p_work_order_id AND deleted_at IS NULL;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OS_NOT_FOUND' USING ERRCODE='23503'; END IF;
+  SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
   IF NOT public.dbs_control_is_admin_actor(v_actor) AND NOT EXISTS (
     SELECT 1 FROM public.users u
     LEFT JOIN public.rh_employee_access ea ON ea.user_id=u.id AND ea.access_enabled=true
     LEFT JOIN public.rh_employees re ON re.ponto_portal_user_id=u.id AND re.dbs_control_access_enabled=true AND re.is_active=true
     WHERE u.id=v_actor AND u.status='ativo' AND u.role_key::text='COLABORADOR'
       AND v_os.assigned_employee_id=coalesce(ea.employee_id,re.id)
+      AND coalesce(u.company_id,v_scope.company_id)=v_scope.company_id
   ) THEN RAISE EXCEPTION 'DBS_QUOTE_ITEMS_FORBIDDEN' USING ERRCODE='42501'; END IF;
   RETURN coalesce((
     SELECT jsonb_agg(jsonb_build_object('id',i.id,'item_type',i.item_type,'part_id',i.part_id,
