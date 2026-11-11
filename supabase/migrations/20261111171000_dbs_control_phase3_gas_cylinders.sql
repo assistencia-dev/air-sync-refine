@@ -59,15 +59,18 @@ end $$;
 create or replace function public.dbs_control_assign_gas_cylinder(
  p_serial_number text,p_refrigerant_type text,p_employee_id uuid,p_total_charges integer,p_vehicle_label text
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
-declare v_actor uuid:=auth.uid(); v_user public.users%rowtype; v_scope text; v_row public.dbs_control_gas_cylinders%rowtype;
+declare v_actor uuid:=auth.uid(); v_user public.users%rowtype; v_employee_user public.users%rowtype; v_scope text; v_row public.dbs_control_gas_cylinders%rowtype;
 begin
  if v_actor is null or not public.dbs_control_is_admin_actor(v_actor) then raise exception 'DBS_GAS_ASSIGN_FORBIDDEN' using errcode='42501'; end if;
  if nullif(trim(p_serial_number),'') is null or nullif(trim(p_refrigerant_type),'') is null or p_total_charges<=0 then raise exception 'DBS_GAS_ASSIGN_INPUT_INVALID' using errcode='22023'; end if;
  if not exists(select 1 from public.rh_employees where id=p_employee_id and is_active=true) then raise exception 'DBS_GAS_EMPLOYEE_INVALID' using errcode='23503'; end if;
  select * into v_user from public.users where id=v_actor and status='ativo';
- v_scope:=case when v_user.company_id is not null then 'company:'||v_user.company_id::text else 'user:'||v_actor::text end;
+ select u.* into v_employee_user from public.rh_employee_access ea join public.users u on u.id=ea.user_id where ea.employee_id=p_employee_id and ea.access_enabled=true and u.status='ativo';
+ if not found then raise exception 'DBS_GAS_EMPLOYEE_ACCESS_MISSING' using errcode='23503'; end if;
+ if v_user.company_id is not null and v_employee_user.company_id is distinct from v_user.company_id then raise exception 'DBS_GAS_COMPANY_MISMATCH' using errcode='42501'; end if;
+ v_scope:=case when v_employee_user.company_id is not null then 'company:'||v_employee_user.company_id::text else 'user:'||v_employee_user.id::text end;
  insert into public.dbs_control_gas_cylinders(company_id,scope_key,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,remaining_charges,created_by)
- values(v_user.company_id,v_scope,trim(p_serial_number),upper(trim(p_refrigerant_type)),p_employee_id,nullif(trim(p_vehicle_label),''),p_total_charges,p_total_charges,v_actor)
+ values(v_employee_user.company_id,v_scope,trim(p_serial_number),upper(trim(p_refrigerant_type)),p_employee_id,nullif(trim(p_vehicle_label),''),p_total_charges,p_total_charges,v_actor)
  returning * into v_row;
  return jsonb_build_object('ok',true,'cylinder_id',v_row.id,'serial_number',v_row.serial_number,'remaining_charges',v_row.remaining_charges);
 end $$;
@@ -88,7 +91,7 @@ end $$;
 create or replace function public.dbs_control_register_gas_usage(
  p_work_order_id uuid,p_cylinder_id uuid,p_equipment_reference text,p_application_note text,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
-declare v_actor uuid:=auth.uid(); v_employee uuid; v_os public.dbs_control_work_orders%rowtype; v_cylinder public.dbs_control_gas_cylinders%rowtype; v_key text:=nullif(trim(p_idempotency_key),'');
+declare v_actor uuid:=auth.uid(); v_employee uuid; v_os public.dbs_control_work_orders%rowtype; v_cylinder public.dbs_control_gas_cylinders%rowtype; v_key text:=nullif(trim(p_idempotency_key),''); v_previous public.dbs_control_gas_usage%rowtype; v_scope record;
 begin
  if v_actor is null then raise exception 'DBS_GAS_UNAUTHENTICATED' using errcode='42501'; end if;
  if v_key is null or char_length(v_key) not between 8 and 240 then raise exception 'DBS_GAS_IDEMPOTENCY_REQUIRED' using errcode='22023'; end if;
@@ -98,8 +101,13 @@ begin
  union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.status='ativo';
  if public.dbs_control_is_admin_actor(v_actor) then v_employee:=v_os.assigned_employee_id; end if;
  if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then raise exception 'DBS_GAS_NOT_ASSIGNED' using errcode='42501'; end if;
- if exists(select 1 from public.dbs_control_gas_usage where idempotency_key=v_key) then return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id); end if;
- select * into v_cylinder from public.dbs_control_gas_cylinders where id=p_cylinder_id and employee_id=v_employee and status='active' for update;
+ select * into v_previous from public.dbs_control_gas_usage where idempotency_key=v_key;
+ if found then
+   if v_previous.work_order_id<>p_work_order_id or v_previous.cylinder_id<>p_cylinder_id or v_previous.employee_id<>v_employee then raise exception 'DBS_GAS_IDEMPOTENCY_CONFLICT' using errcode='23505'; end if;
+   return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,'cylinder_id',p_cylinder_id);
+ end if;
+ select * into v_scope from public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+ select * into v_cylinder from public.dbs_control_gas_cylinders where id=p_cylinder_id and employee_id=v_employee and scope_key=v_scope.scope_key and status='active' for update;
  if not found then raise exception 'DBS_GAS_CYLINDER_NOT_ASSIGNED' using errcode='42501'; end if;
  if v_cylinder.remaining_charges<1 then raise exception 'DBS_GAS_CYLINDER_EMPTY' using errcode='23514'; end if;
  update public.dbs_control_gas_cylinders set used_charges=used_charges+1,remaining_charges=remaining_charges-1,
