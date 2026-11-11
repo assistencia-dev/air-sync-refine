@@ -1908,6 +1908,8 @@
       document.getElementById('peca-qtd').value = Number(row.qtd ?? row.stock_quantity ?? 0);
       document.getElementById('peca-custo').value = Number(row.custo ?? (Number(row.cost_cents || 0) / 100)).toFixed(2);
       document.getElementById('peca-venda').value = Number(row.venda ?? (Number(row.sale_cents || 0) / 100)).toFixed(2);
+      document.getElementById('peca-fornecedor').value = row.supplier_id || row.supplierId || '';
+      document.getElementById('peca-unidade').value = row.measure_unit_id || row.measureUnitId || '';
       document.getElementById('peca-status').value = ['inativo','inativa','arquivado','arquivada','excluido','excluida','deleted'].includes(String(row.status || 'ativo').toLowerCase()) ? 'inativo' : 'ativo';
     } else if (kind === 'servicos') {
       document.getElementById('serv-nome').value = row.nome || row.name || '';
@@ -2003,8 +2005,21 @@
     var id = form && form.dataset.dbsEditId || '';
     var existingPart = id ? findRow('pecas', id) : null;
     var currentStock = existingPart ? Number(existingPart.qtd ?? existingPart.stock_quantity ?? 0) : 0;
-    var value = { sku: document.getElementById('peca-sku').value.trim(), nome: document.getElementById('peca-nome').value.trim(), qtd: id ? currentStock : 0, custo: Number(document.getElementById('peca-custo').value || 0), venda: Number(document.getElementById('peca-venda').value || 0), status: document.getElementById('peca-status').value === 'inativo' ? 'inativo' : 'ativo' };
-    if (!value.sku || !value.nome) return;
+    var value = {
+      sku: document.getElementById('peca-sku').value.trim(),
+      nome: document.getElementById('peca-nome').value.trim(),
+      qtd: id ? currentStock : 0,
+      custo: Number(document.getElementById('peca-custo').value || 0),
+      venda: Number(document.getElementById('peca-venda').value || 0),
+      supplier_id: document.getElementById('peca-fornecedor').value || null,
+      measure_unit_id: document.getElementById('peca-unidade').value || null,
+      require_master_data: true,
+      status: document.getElementById('peca-status').value === 'inativo' ? 'inativo' : 'ativo'
+    };
+    if (!value.sku || !value.nome || !value.supplier_id || !value.measure_unit_id) {
+      alert('Selecione o fornecedor e a unidade de medida cadastrados.');
+      return;
+    }
     if (findDuplicate('pecas', value.sku, id)) { alert('Já existe uma peça com este SKU.'); return; }
     var row = id ? findRow('pecas', id) : null;
     if (row) Object.assign(row, value);
@@ -2275,7 +2290,34 @@
     alert(action === 'update' ? 'Técnico atualizado com segurança.' : action === 'restore' ? 'Técnico restaurado.' : action === 'archive' ? 'Técnico arquivado. O histórico foi preservado.' : 'Técnico excluído logicamente. O histórico foi preservado.');
   }
   window.addEventListener('message', function (event) {
-    if (event && event.data && event.data.type === 'DBS_CONTROL_TECHNICIAN_MUTATED') handleTechnicianMutation(event.data);
+    if (!event || event.source !== window.parent || event.origin !== window.location.origin || !event.data) return;
+    if (event.data.type === 'DBS_CONTROL_TECHNICIAN_MUTATED') handleTechnicianMutation(event.data);
+    if (event.data.type === 'DBS_CONTROL_CATALOG_MASTER_DATA') {
+      var data = event.data.result || {};
+      var supplierSelect = document.getElementById('peca-fornecedor');
+      var unitSelect = document.getElementById('peca-unidade');
+      if (supplierSelect) {
+        var currentSupplier = supplierSelect.value;
+        supplierSelect.innerHTML = '<option value="">Selecione o fornecedor...</option>' +
+          (Array.isArray(data.suppliers) ? data.suppliers : []).map(function (item) {
+            return '<option value="' + String(item.id) + '">' + String(item.name || 'Fornecedor') + '</option>';
+          }).join('');
+        if (currentSupplier) supplierSelect.value = currentSupplier;
+      }
+      if (unitSelect) {
+        var currentUnit = unitSelect.value;
+        unitSelect.innerHTML = '<option value="">Selecione a unidade...</option>' +
+          (Array.isArray(data.measureUnits) ? data.measureUnits : []).map(function (item) {
+            return '<option value="' + String(item.id) + '">' + String(item.code || '') + ' · ' + String(item.name || '') + '</option>';
+          }).join('');
+        if (currentUnit) unitSelect.value = currentUnit;
+      }
+      if (typeof ERP_STATE !== 'undefined') ERP_STATE._dbsControlMasterData = data;
+      window.dispatchEvent(new CustomEvent('dbs:catalog-master-data', { detail: data }));
+    }
+    if (event.data.type === 'DBS_CONTROL_CATALOG_MASTER_DATA_ERROR') {
+      alert(event.data.error || 'Não foi possível carregar fornecedores e unidades de medida.');
+    }
   });
 
   var previousOnload = window.onload;
@@ -2283,9 +2325,13 @@
     if (typeof previousOnload === 'function') previousOnload.apply(this, arguments);
     setupCatalogUi();
     render('tecnicos'); render('pecas'); render('servicos'); render('compras');
+    if (window.parent !== window) window.parent.postMessage({ type: 'DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA' }, window.location.origin);
   };
   if (document.readyState !== 'loading') {
-    setTimeout(function () { setupCatalogUi(); render('tecnicos'); render('pecas'); render('servicos'); render('compras'); }, 0);
+    setTimeout(function () {
+      setupCatalogUi(); render('tecnicos'); render('pecas'); render('servicos'); render('compras');
+      if (window.parent !== window) window.parent.postMessage({ type: 'DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA' }, window.location.origin);
+    }, 0);
   }
 })();
 </script>
@@ -4374,6 +4420,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     <div class="form-grid">
                         <div class="form-group"><label>SKU / Código</label><input type="text" id="peca-sku" required></div>
                         <div class="form-group"><label>Descrição Peça</label><input type="text" id="peca-nome" required></div>
+                        <div class="form-group"><label>Fornecedor cadastrado *</label><select id="peca-fornecedor" required><option value="">Carregando fornecedores...</option></select></div>
+                        <div class="form-group"><label>Unidade de medida *</label><select id="peca-unidade" required><option value="">Carregando unidades...</option></select></div>
                         <div class="form-group"><label>Saldo atual (somente leitura)</label><input type="number" id="peca-qtd" value="0" readonly title="O estoque entra por Compras e baixa ao aplicar a peça em uma OS"></div>
                         <div class="form-group"><label>Preço Custo (R$)</label><input type="number" id="peca-custo" value="22.00" step="0.01" required></div>
                         <div class="form-group"><label>Preço Venda (R$)</label><input type="number" id="peca-venda" value="65.00" step="0.01" required></div>
