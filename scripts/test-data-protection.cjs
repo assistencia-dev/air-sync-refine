@@ -10,6 +10,7 @@ const bucketMigration = fs.readFileSync(path.join(root, "supabase/migrations/202
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/daily-supabase-backup.yml"), "utf8");
 const restoreDrill = fs.readFileSync(path.join(root, "scripts/verify-backup-restore.mjs"), "utf8");
 const restoreWorkflow = fs.readFileSync(path.join(root, ".github/workflows/backup-restore-drill.yml"), "utf8");
+const masterData = fs.readFileSync(path.join(root, "supabase/migrations/20261111133659_dbs_control_supplier_uom_master_data.sql"), "utf8");
 
 assert.match(backup, /dbs-control-os/);
 assert.match(backup, /listStorageObjects/);
@@ -20,6 +21,9 @@ assert.match(backup, /relationalDocumentsByBucket/);
 assert.match(backup, /documentBuckets/);
 assert.match(backup, /metadataRows\.length \|\| !String\(error\.message\)\.includes\("\(404\)"\)/);
 for (const table of [
+  "dbs_control_suppliers",
+  "dbs_control_measure_units",
+  "dbs_control_unit_conversions",
   "dbs_control_purchases",
   "dbs_control_purchase_items",
   "dbs_control_inventory_movements",
@@ -32,6 +36,12 @@ for (const table of [
 ]) {
   assert.match(backup, new RegExp(`"${table}"`), `Backup must include relational table ${table}.`);
 }
+assert.match(masterData, /create table if not exists public\\.dbs_control_suppliers/i);
+assert.match(masterData, /create table if not exists public\\.dbs_control_measure_units/i);
+assert.match(masterData, /create table if not exists public\\.dbs_control_unit_conversions/i);
+assert.match(masterData, /enable row level security/);
+assert.match(masterData, /supplier_name/);
+assert.match(masterData, /conversion_factor/);
 assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
 assert.match(retention, /dbs_control_work_order_revisions/);
 assert.match(integrity, /rh_ponto_records_employee_date_type_uq/);
