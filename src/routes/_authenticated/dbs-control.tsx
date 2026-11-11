@@ -1662,6 +1662,33 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_SAVE_QUOTE") {
+        const requestId = String(msg.requestId || "").slice(0, 160);
+        try {
+          if (!requestId || !msg.quote || typeof msg.quote !== "object" || Array.isArray(msg.quote)) {
+            throw new Error("Dados da proposta inválidos.");
+          }
+          const { data, error } = await supabase.rpc("dbs_control_save_quote", {
+            p_quote: msg.quote,
+          });
+          if (error) throw error;
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_SAVED",
+            requestId,
+            ok: true,
+            result: data,
+          }, "*");
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_QUOTE_SAVED",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : "Não foi possível salvar a proposta relacional.",
+          }, "*");
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_APPROVE_QUOTE") {
         const requestId = String(msg.requestId || "").slice(0, 160);
         const quoteNumber = String(msg.quoteNumber || "").trim().slice(0, 80);
