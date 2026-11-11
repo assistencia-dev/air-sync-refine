@@ -3333,10 +3333,22 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system").eq("scope_key",scopeKey).eq("status","active").order("code").limit(100),
       (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinders")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
+        .eq("scope_key",scopeKey).order("serial_number").limit(500),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
+    const accessRows = scopedUserIds.length
+      ? await (supabaseAdmin as any).from("rh_employee_access").select("employee_id").in("user_id",scopedUserIds).eq("access_enabled",true)
+      : { data: [], error: null };
+    if(accessRows.error) throw new Error("Falha ao carregar vínculos de técnicos: " + accessRows.error.message);
+    const employeeIds=[...new Set((accessRows.data??[]).map((row:any)=>String(row.employee_id)).filter(Boolean))];
+    const employees=employeeIds.length
+      ? await (supabaseAdmin as any).from("rh_employees").select("id,full_name,is_active,dbs_control_access_enabled").in("id",employeeIds).eq("is_active",true).order("full_name").limit(500)
+      : { data: [], error: null };
+    if(employees.error) throw new Error("Falha ao carregar técnicos ativos: " + employees.error.message);
     const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
     const purchaseItems = purchaseIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
@@ -3362,6 +3374,8 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       measureUnits: measureUnits.data ?? [],
       unitConversions: unitConversions.data ?? [],
       costCenters: costCenters.data ?? [],
+      gasCylinders: gasCylinders.data ?? [],
+      employees: employees.data ?? [],
     };
   });
 
@@ -3437,7 +3451,16 @@ export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
     const center=await (supabaseAdmin as any).from("dbs_control_cost_centers").select("id").eq("id",data.costCenterId).eq("scope_key",scopeKey).eq("status","active").maybeSingle();
     if(center.error) throw new Error(center.error.message);
     if(!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
-    const updated=await (supabaseAdmin as any).from("dbs_control_work_orders").update({cost_center_id:data.costCenterId,updated_at:new Date().toISOString()}).eq("id",data.workOrderId).select("id,cost_center_id").maybeSingle();
+    const scopedUsers= user.company_id
+      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id",user.company_id).eq("status","ativo")
+      : {data:[{id:user.id}],error:null};
+    if(scopedUsers.error) throw new Error(scopedUsers.error.message);
+    const scopedUserIds=(scopedUsers.data??[]).map((row:any)=>row.id);
+    if(!scopedUserIds.length) throw new Error("Não há usuários ativos neste escopo.");
+    const updated=await (supabaseAdmin as any).from("dbs_control_work_orders")
+      .update({cost_center_id:data.costCenterId,updated_at:new Date().toISOString()})
+      .eq("id",data.workOrderId).in("created_by_user_id",scopedUserIds)
+      .select("id,cost_center_id").maybeSingle();
     if(updated.error) throw new Error(updated.error.message);
     if(!updated.data) throw new Error("OS não encontrada para esta operação.");
     return updated.data;
