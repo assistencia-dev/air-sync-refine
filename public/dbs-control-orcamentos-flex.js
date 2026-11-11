@@ -131,17 +131,30 @@
       acceptanceInFlight=true;
       setAcceptanceBusy(true);
       setAcceptanceStatus("Salvando e confirmando o aceite na nuvem…");
+      var relationalApproved = false;
       try {
+        if (status === "Aprovado") {
+          if (typeof window.quoteStatus !== "function") throw new Error("A aprovação relacional não está disponível.");
+          await window.quoteStatus(q.id, "Aprovado");
+          if (q.status !== "Convertido em OS" || !q.osId) throw new Error("A aprovação e a criação da OS não foram confirmadas.");
+          relationalApproved = true;
+        }
         await persistAcceptanceMutation();
         render();
         closeAcceptance();
-        alert(status==="Aprovado"?"Orçamento aprovado e aceite registrado.":"Orçamento recusado e decisão registrada.");
+        alert(status==="Aprovado"?"Orçamento aprovado, OS criada e aceite registrado.":"Orçamento recusado e decisão registrada.");
       } catch (error) {
-        q.status=previousStatus;
-        q.aceiteWeb=previousAcceptance;
+        if (!relationalApproved) {
+          q.status=previousStatus;
+          q.aceiteWeb=previousAcceptance;
+        }
         render();
-        setAcceptanceStatus("Não foi possível confirmar o aceite. Os dados foram preservados; tente novamente.", "is-error");
-        alert("Aceite não confirmado na nuvem. " + (error && error.message ? error.message : "Tente novamente."));
+        setAcceptanceStatus(relationalApproved
+          ? "A OS foi criada; o aceite ainda precisa ser sincronizado. Não repita a aprovação."
+          : "Não foi possível confirmar o aceite. Os dados foram preservados; tente novamente.", "is-error");
+        alert(relationalApproved
+          ? "A OS já foi criada, mas o aceite ainda não foi sincronizado. Atualize a tela e confira o orçamento antes de repetir."
+          : "Aceite não confirmado na nuvem. " + (error && error.message ? error.message : "Tente novamente."));
       } finally {
         acceptanceInFlight=false;
         setAcceptanceBusy(false);
