@@ -30,6 +30,9 @@ assert.match(geo, /punchType === "entrada" && !hasBaseLat/, "a Entrada deve exig
 assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
 assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS capturado"/, "a interface deve distinguir captura GPS de geocerca validada");
 assert.match(workspace, /navigator\.geolocation\.getCurrentPosition/, "o cliente deve capturar a localização do dispositivo");
+assert.match(workspace, /timeout: 30000/, "a captura GPS deve tolerar a aquisição inicial do sinal");
+assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
+assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
 
 function parseTime(value) {
   const raw = String(value || "").trim();

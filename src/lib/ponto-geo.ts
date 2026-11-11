@@ -1,3 +1,13 @@
+export function pontoGeolocationErrorMessage(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error
+    ? Number((error as { code?: unknown }).code)
+    : 0;
+  if (code === 1) return "Permissão de localização negada. Autorize a localização para este site no navegador e nas configurações do celular.";
+  if (code === 2) return "O dispositivo não conseguiu determinar sua posição. Ative a localização/GPS, desative o modo avião e tente novamente em local aberto.";
+  if (code === 3) return "O GPS excedeu o tempo de resposta. Mantenha a localização precisa ativada e tente novamente em local aberto.";
+  return "Falha ao acessar o GPS. Confira a permissão de localização do navegador e tente novamente.";
+}
+
 export type PontoGeoInput = {
   latitude?: number | null;
   longitude?: number | null;
