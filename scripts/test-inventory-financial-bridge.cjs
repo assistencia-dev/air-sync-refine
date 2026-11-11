@@ -22,6 +22,7 @@ const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fi
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
 const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
 const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_dbs_inventory_scope_sku_and_financial_reconciliation.sql', 'utf8');
+const reconcileRepair = fs.readFileSync('supabase/migrations/20261111110000_dbs_control_work_order_financial_reconcile_repair.sql', 'utf8');
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
@@ -236,6 +237,18 @@ assert.match(scopeSkuMigration, /dbs_control_normalize_part_sku/i);
 assert.match(scopeSkuMigration, /admin_count = 1/i);
 assert.match(scopeSkuMigration, /dbs_control_reconcile_work_order_financials/i);
 assert.match(scopeSkuMigration, /completed_without_source_value/i);
+assert.match(reconcileRepair, /role_key::text = 'SUPER_ADMIN'/i);
+assert.match(reconcileRepair, /on conflict \(work_order_id\) do nothing/i);
+assert.match(reconcileRepair, /financial_rows_created/i);
+assert.match(reconcileRepair, /pg_advisory_xact_lock/i);
+assert.match(reconcileRepair, /revenue_rows_posted/i);
+assert.doesNotMatch(reconcileRepair, /drop\\s+(table|schema|column)\\b/i);
+assert.match(functions, /user\\.role_key !== "SUPER_ADMIN"/);
+assert.match(functions, /canReconcileWorkOrderFinancials: user\\.role_key === "SUPER_ADMIN"/);
+assert.match(phase2Ui, /reconcileDbsWorkOrderFinancials/);
+assert.match(phase2Ui, /window\\.confirm/);
+assert.match(phase2Ui, /Conciliação GLOBAL/);
+
 assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 35801/i);
 assert.match(integrationSql, /v_part2/i);
 assert.match(integrationSql, /TEST_OS_REVENUE/i);
