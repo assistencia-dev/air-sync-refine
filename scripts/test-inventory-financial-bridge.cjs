@@ -90,7 +90,7 @@ assert.match(purchaseApproval, /approval_status text not null default 'pending'/
 assert.ok(purchaseApproval.includes("CREATE TABLE IF NOT EXISTS public.dbs_control_purchase_approval_history"));
 assert.ok(purchaseApproval.includes("CREATE OR REPLACE FUNCTION public.dbs_control_decide_purchase_approval"));
 assert.match(purchaseApproval, /DBS_PURCHASE_APPROVAL_REQUIRED/);
-assert.match(purchaseApproval, /v_purchase\.approval_status is distinct from 'approved'/i);
+assert.ok(purchaseApproval.includes("v_purchase.approval_status IS DISTINCT FROM ''approved''"));
 assert.ok(purchaseApproval.includes("CREATE OR REPLACE FUNCTION public.dbs_control_receive_purchase"));
 assert.match(purchaseApproval, /registre a compra, aprove financeiramente/i);
 assert.match(functions, /dbs_control_upsert_part/);
