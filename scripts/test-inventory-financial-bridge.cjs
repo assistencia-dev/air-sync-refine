@@ -242,11 +242,11 @@ assert.match(reconcileRepair, /on conflict \(work_order_id\) do nothing/i);
 assert.match(reconcileRepair, /financial_rows_created/i);
 assert.match(reconcileRepair, /pg_advisory_xact_lock/i);
 assert.match(reconcileRepair, /revenue_rows_posted/i);
-assert.doesNotMatch(reconcileRepair, /drop\\s+(table|schema|column)\\b/i);
-assert.match(functions, /user\\.role_key !== "SUPER_ADMIN"/);
-assert.match(functions, /canReconcileWorkOrderFinancials: user\\.role_key === "SUPER_ADMIN"/);
+assert.doesNotMatch(reconcileRepair, /drop\s+(table|schema|column)\b/i);
+assert.match(functions, /user\.role_key !== "SUPER_ADMIN"/);
+assert.match(functions, /canReconcileWorkOrderFinancials: user\.role_key === "SUPER_ADMIN"/);
 assert.match(phase2Ui, /reconcileDbsWorkOrderFinancials/);
-assert.match(phase2Ui, /window\\.confirm/);
+assert.match(phase2Ui, /window\.confirm/);
 assert.match(phase2Ui, /Conciliação GLOBAL/);
 
 assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 35801/i);
