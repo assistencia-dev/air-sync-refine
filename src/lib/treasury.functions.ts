@@ -132,7 +132,11 @@ function mergeLedgerState(snapshotState: unknown, entries: any[]): Record<string
 export async function readTreasuryScope(user: { id: string; company_id: string | null }) {
   const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
   const admin = supabaseAdmin as any;
-  const [{ data: snapshot, error: snapshotError }, { data: entries, error: entriesError }] = await Promise.all([
+  const [
+    { data: snapshot, error: snapshotError },
+    { data: entries, error: entriesError },
+    { data: purchaseCommitments, error: commitmentsError },
+  ] = await Promise.all([
     supabaseAdmin
       .from("treasury_snapshots")
       .select("state, state_version, updated_at")
@@ -146,10 +150,17 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .order("competence_date", { ascending: true })
       .order("created_at", { ascending: true })
       .limit(5000),
+    admin
+      .from("dbs_treasury_purchase_commitments")
+      .select("purchase_id,supplier_name,document_number,commitment_date,purchase_status,payment_status,total_cents,paid_cents,outstanding_cents,received_total_cents,payable_ledger_entry_id")
+      .eq("scope_key", scopeKey)
+      .order("commitment_date", { ascending: true })
+      .limit(500),
   ]);
 
   if (snapshotError) throw new Error(snapshotError.message);
   if (entriesError) throw new Error(entriesError.message);
+  if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   const state = mergeLedgerState(snapshot?.state, entries ?? []);
   const lastLedgerUpdate = (entries ?? []).reduce((latest: string | null, entry: any) => {
     const current = entry.updated_at ?? null;
@@ -162,6 +173,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     state_version: snapshot?.state_version ?? 5,
     updated_at: snapshot?.updated_at ?? lastLedgerUpdate,
     ledger_entry_count: entries?.length ?? 0,
+    purchase_commitments: purchaseCommitments ?? [],
     source: state ? "legacy_read_plus_relational_ledger" : "relational_ledger",
   };
 }
