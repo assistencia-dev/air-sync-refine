@@ -63,3 +63,6 @@ assert.match(restoreDrill, /mode: "read-only restore verification"/);
 assert.match(restoreWorkflow, /SUPABASE_SERVICE_ROLE_KEY/);
 assert.match(restoreWorkflow, /SUPABASE_REQUIRE_DOCUMENT_BACKUP/);
 console.log("Data protection: immutable OS history, document checksums, verified manifests, daily workflow and duplicate-punch guard passed.");
+
+assert.match(backup, /"dbs_control_purchase_receipts"/);
+assert.match(backup, /"dbs_control_purchase_receipt_items"/);
