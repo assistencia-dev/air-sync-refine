@@ -123,8 +123,8 @@ function normalizeMigrationSql(source) {
     }
     if (pendingSpace) {
       const previous = output[output.length - 1] || "";
-      const nextIsPunctuation = /[),;.]|::/.test(input.slice(index));
-      const previousIsOpeningPunctuation = /[(.[{:]$/.test(previous);
+      const nextIsPunctuation = /^[),;.]|^::/.test(input.slice(index));
+      const previousIsOpeningPunctuation = ["(", "[", ".", "{", ":"].includes(previous);
       if (!nextIsPunctuation && !previousIsOpeningPunctuation) addSpace();
       pendingSpace = false;
     }
