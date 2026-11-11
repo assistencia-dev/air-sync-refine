@@ -229,6 +229,19 @@ BEGIN
 END;
 $$;
 
+CREATE TABLE IF NOT EXISTS public.dbs_control_quote_installations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_order_id uuid NOT NULL UNIQUE REFERENCES public.dbs_control_work_orders(id) ON DELETE RESTRICT,
+  quote_id uuid NOT NULL REFERENCES public.dbs_control_quotes(id) ON DELETE RESTRICT,
+  idempotency_key text NOT NULL CHECK (char_length(trim(idempotency_key)) BETWEEN 8 AND 240),
+  confirmed_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  confirmed_at timestamptz NOT NULL DEFAULT now(),
+  result jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+ALTER TABLE public.dbs_control_quote_installations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.dbs_control_quote_installations FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT ON public.dbs_control_quote_installations TO service_role;
+
 -- Leitura de itens previstos: somente admin ou técnico efetivamente vinculado à OS.
 CREATE OR REPLACE FUNCTION public.dbs_control_list_work_order_quote_items(p_work_order_id uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
@@ -249,11 +262,14 @@ BEGIN
     SELECT jsonb_agg(jsonb_build_object('id',i.id,'item_type',i.item_type,'part_id',i.part_id,
       'description',i.description,'measure_unit',i.measure_unit,'quantity',i.quantity,
       'unit_sale_cents',i.unit_sale_cents,'total_cents',i.total_cents,
-      'reservation_status',coalesce(r.status,'not_reserved')) ORDER BY i.created_at,i.id)
+      'reservation_status',coalesce(r.status,'not_reserved'),
+      'installation_confirmed',ins.work_order_id IS NOT NULL,
+      'installation_confirmed_at',ins.confirmed_at) ORDER BY i.created_at,i.id)
     FROM public.dbs_control_quotes q
     JOIN public.dbs_control_quote_items i ON i.quote_id=q.id
     LEFT JOIN public.dbs_control_work_order_reservations r
       ON r.work_order_id=q.work_order_id AND r.part_id=i.part_id
+    LEFT JOIN public.dbs_control_quote_installations ins ON ins.work_order_id=q.work_order_id
     WHERE q.work_order_id=p_work_order_id
   ),'[]'::jsonb);
 END;
@@ -264,20 +280,33 @@ CREATE OR REPLACE FUNCTION public.dbs_control_confirm_quote_installation(
   p_work_order_id uuid, p_idempotency_key text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
 AS $$
-DECLARE v_actor uuid:=auth.uid();
+DECLARE
+  v_actor uuid:=auth.uid();
+  v_quote_id uuid;
+  v_existing public.dbs_control_quote_installations%rowtype;
+  v_result jsonb;
 BEGIN
   IF v_actor IS NULL THEN RAISE EXCEPTION 'DBS_QUOTE_CONFIRM_UNAUTHENTICATED' USING ERRCODE='42501'; END IF;
-  IF p_idempotency_key IS NULL OR char_length(btrim(p_idempotency_key)) NOT BETWEEN 8 AND 240 THEN
+  IF p_idempotency_key IS NULL OR char_length(btrim(p_idempotency_key)) NOT BETWEEN 8 AND 220 THEN
     RAISE EXCEPTION 'DBS_QUOTE_CONFIRM_IDEMPOTENCY_REQUIRED' USING ERRCODE='22023';
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM public.dbs_control_quotes q
-    JOIN public.dbs_control_work_orders wo ON wo.id=q.work_order_id
-    WHERE wo.id=p_work_order_id
-  ) THEN RAISE EXCEPTION 'DBS_QUOTE_CONFIRM_NO_APPROVED_ITEMS' USING ERRCODE='23503'; END IF;
-  RETURN public.dbs_control_consume_work_order_reservations(
+  SELECT q.id INTO v_quote_id FROM public.dbs_control_quotes q
+   WHERE q.work_order_id=p_work_order_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_CONFIRM_NO_APPROVED_ITEMS' USING ERRCODE='23503'; END IF;
+  SELECT * INTO v_existing FROM public.dbs_control_quote_installations
+   WHERE work_order_id=p_work_order_id FOR UPDATE;
+  IF FOUND THEN
+    RETURN coalesce(v_existing.result,'{}'::jsonb)||jsonb_build_object(
+      'ok',true,'replayed',true,'installation_confirmed',true,'work_order_id',p_work_order_id);
+  END IF;
+  -- Esta RPC existente valida admin/técnico atribuído e consome somente reservas já criadas.
+  v_result := public.dbs_control_consume_work_order_reservations(
     p_work_order_id,v_actor,'quote-install:'||p_idempotency_key
   );
+  INSERT INTO public.dbs_control_quote_installations(
+    work_order_id,quote_id,idempotency_key,confirmed_by,result
+  ) VALUES (p_work_order_id,v_quote_id,p_idempotency_key,v_actor,v_result);
+  RETURN v_result||jsonb_build_object('installation_confirmed',true,'work_order_id',p_work_order_id);
 END;
 $$;
 
