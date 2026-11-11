@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_inventory_scope_for_work_order(p_w
  RETURNS TABLE(scope_key text, company_id uuid, owner_user_id uuid)
  LANGUAGE sql
  SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
+ SET search_path TO 'pg_catalog'
 AS $function$
   with single_admin_company as (
     select
@@ -31,13 +31,13 @@ AS $function$
   left join public.users u on u.id = w.created_by_user_id
   cross join single_admin_company a
   where w.id = p_work_order_id;
-$function$;
+$function$;;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_reconcile_work_order_financials(p_actor_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
+ SET search_path TO 'pg_catalog'
 AS $function$
 declare
   v_order record;
