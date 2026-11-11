@@ -39,7 +39,7 @@ for (const table of [
 assert.match(masterData, /create table if not exists public\.dbs_control_suppliers/i);
 assert.match(masterData, /create table if not exists public\.dbs_control_measure_units/i);
 assert.match(masterData, /create table if not exists public\.dbs_control_unit_conversions/i);
-assert.match(masterData, /enable row level security/);
+assert.match(masterData, /enable row level security/i);
 assert.match(masterData, /supplier_name/);
 assert.match(masterData, /conversion_factor/);
 assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
