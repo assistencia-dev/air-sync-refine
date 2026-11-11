@@ -46,8 +46,8 @@ begin
  if v_actor is null then raise exception 'DBS_GAS_UNAUTHENTICATED' using errcode='42501'; end if;
  select * into v_os from public.dbs_control_work_orders where id=p_work_order_id and deleted_at is null;
  if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
- select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo'
- union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo';
+ select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.status='ativo'
+ union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.status='ativo';
  if public.dbs_control_is_admin_actor(v_actor) then v_employee:=v_os.assigned_employee_id; end if;
  if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then raise exception 'DBS_GAS_FORBIDDEN' using errcode='42501'; end if;
  return coalesce((select jsonb_agg(jsonb_build_object('id',id,'serial_number',serial_number,'refrigerant_type',refrigerant_type,
@@ -94,8 +94,8 @@ begin
  if v_key is null or char_length(v_key) not between 8 and 240 then raise exception 'DBS_GAS_IDEMPOTENCY_REQUIRED' using errcode='22023'; end if;
  select * into v_os from public.dbs_control_work_orders where id=p_work_order_id and deleted_at is null for update;
  if not found then raise exception 'DBS_OS_NOT_FOUND' using errcode='23503'; end if;
- select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo'
- union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.auth_id=v_actor and u.status='ativo';
+ select ea.employee_id into v_employee from public.users u join public.rh_employee_access ea on ea.user_id=u.id and ea.access_enabled=true where u.id=v_actor and u.status='ativo'
+ union select re.id from public.users u join public.rh_employees re on re.ponto_portal_user_id=u.id and re.dbs_control_access_enabled=true and re.is_active=true where u.id=v_actor and u.status='ativo';
  if public.dbs_control_is_admin_actor(v_actor) then v_employee:=v_os.assigned_employee_id; end if;
  if v_employee is null or v_os.assigned_employee_id is distinct from v_employee then raise exception 'DBS_GAS_NOT_ASSIGNED' using errcode='42501'; end if;
  if exists(select 1 from public.dbs_control_gas_usage where idempotency_key=v_key) then return jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id); end if;
