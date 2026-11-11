@@ -105,6 +105,7 @@ const tables = [
   // a purchase without its stock or Ledger trail.
   "dbs_control_purchases",
   "dbs_control_purchase_items",
+  "dbs_control_purchase_approval_history",
   "dbs_control_inventory_movements",
   "dbs_control_inventory_commands",
   "dbs_control_work_order_financials",
@@ -114,8 +115,8 @@ const tables = [
   "treasury_ledger_outbox",
 ];
 
-if (tables.length !== 81 || new Set(tables).size !== tables.length) {
-  throw new Error(`Lista de backup inválida: esperadas 81 tabelas únicas, encontradas ${tables.length}.`);
+if (tables.length !== 82 || new Set(tables).size !== tables.length) {
+  throw new Error(`Lista de backup inválida: esperadas 82 tabelas únicas, encontradas ${tables.length}.`);
 }
 
 async function request(path, options = {}) {

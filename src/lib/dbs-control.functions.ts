@@ -543,7 +543,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,receipt_ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,paid_cents,ledger_entry_id,receipt_ledger_entry_id,idempotency_key,legacy_key,created_at,updated_at");
       return isScopedCollaborator ? noRows : query.eq("scope_key", scopeKey);
     })(),
     (() => {
@@ -3063,6 +3063,41 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
   });
 
 
+export const decideDbsPurchaseApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    purchaseId: string;
+    decision: "approved" | "rejected";
+    reason?: string;
+    expectedVersion?: number;
+  }) => {
+    const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
+    const decision = input?.decision;
+    const reason = String(input?.reason ?? "").trim();
+    if (decision !== "approved" && decision !== "rejected") {
+      throw new Error("Decisão de aprovação inválida.");
+    }
+    if (decision === "rejected" && (reason.length < 5 || reason.length > 1000)) {
+      throw new Error("Informe um motivo de rejeição entre 5 e 1.000 caracteres.");
+    }
+    if (input?.expectedVersion != null && (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1)) {
+      throw new Error("Versão da compra inválida.");
+    }
+    return { purchaseId, decision, reason: reason || null, expectedVersion: input?.expectedVersion ?? null };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
+      p_decision: data.decision,
+      p_reason: data.reason,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPurchase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
@@ -3187,7 +3222,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_name,document_number,purchase_date,status,payment_status,total_cents,paid_cents,ledger_entry_id,created_at")
+        .select("id,supplier_name,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")

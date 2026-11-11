@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   createDbsPartSale,
   createDbsPurchase,
+  decideDbsPurchaseApproval,
   getDbsPhase2InventoryOverview,
   releaseDbsWorkOrderReservation,
   reserveDbsWorkOrderParts,
@@ -42,6 +43,7 @@ function DbsInventoryPage() {
   const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
   const [purchasePaymentAmounts, setPurchasePaymentAmounts] = useState<Record<string, string>>({});
   const [purchasePaymentMethods, setPurchasePaymentMethods] = useState<Record<string, "cash" | "pix" | "bank_transfer" | "card" | "other">>({});
+  const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -292,9 +294,9 @@ function DbsInventoryPage() {
               <p className="mt-1 text-sm text-slate-500">Cada compra recebida gera a obrigação no Ledger. Os pagamentos baixam fornecedores e caixa com partidas dobradas.</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1120px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
-                  <th className="p-3">Fornecedor</th><th className="p-3">Data</th><th className="p-3">Compra</th><th className="p-3">Recebimento</th><th className="p-3">Pago</th><th className="p-3">Saldo</th><th className="p-3">Pagamento</th><th className="p-3">Ação</th>
+                  <th className="p-3">Fornecedor</th><th className="p-3">Data</th><th className="p-3">Compra</th><th className="p-3">Aprovação financeira</th><th className="p-3">Recebimento</th><th className="p-3">Pago</th><th className="p-3">Saldo</th><th className="p-3">Pagamento</th><th className="p-3">Ação</th>
                 </tr></thead>
                 <tbody>{(data?.purchases ?? []).map((purchase: any) => {
                   const remaining = Math.max(0, Number(purchase.total_cents ?? 0) - Number(purchase.paid_cents ?? 0));
@@ -303,7 +305,26 @@ function DbsInventoryPage() {
                     <td className="p-3">{purchase.purchase_date ? new Date(purchase.purchase_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="p-3">{money(purchase.total_cents)}</td>
                     <td className="p-3">
+                      {purchase.approval_status === "approved" ? <span className="font-bold text-emerald-700">Aprovada</span> :
+                        purchase.approval_status === "legacy_received" ? <span className="font-semibold text-slate-500">Recebida antes da regra</span> :
+                        purchase.approval_status === "rejected" ? <div className="max-w-52 text-rose-700"><span className="font-bold">Rejeitada</span><p className="mt-1 text-xs">{purchase.rejection_reason}</p></div> :
+                        <div className="flex min-w-52 flex-col gap-2">
+                          <span className="font-bold text-amber-700">Pendente</span>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" disabled={busy} onClick={() => void runAction(() => decideDbsPurchaseApproval({ data: {
+                              purchaseId: purchase.id, decision: "approved", expectedVersion: Number(purchase.version),
+                            } }), "Compra aprovada. O recebimento no estoque foi liberado.")} className="min-h-9 rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Aprovar</button>
+                            <button type="button" disabled={busy || String(purchaseRejectionReasons[purchase.id] ?? "").trim().length < 5} onClick={() => void runAction(() => decideDbsPurchaseApproval({ data: {
+                              purchaseId: purchase.id, decision: "rejected", reason: purchaseRejectionReasons[purchase.id], expectedVersion: Number(purchase.version),
+                            } }), "Compra rejeitada. O recebimento no estoque permanece bloqueado.")} className="min-h-9 rounded-lg bg-rose-700 px-3 text-xs font-black text-white disabled:opacity-40">Rejeitar</button>
+                          </div>
+                          <input aria-label={"Motivo da rejeição da compra de " + purchase.supplier_name} value={purchaseRejectionReasons[purchase.id] ?? ""} onChange={e => setPurchaseRejectionReasons(prev => ({ ...prev, [purchase.id]: e.target.value }))} maxLength={1000} placeholder="Motivo da rejeição (obrigatório)" className="min-h-9 w-full rounded-lg border border-slate-200 px-2 text-xs" />
+                        </div>}
+                      {purchase.approval_status === "approved" && purchase.approved_at && <p className="mt-1 text-xs text-slate-500">{new Date(purchase.approved_at).toLocaleString("pt-BR")}</p>}
+                    </td>
+                    <td className="p-3">
                       {purchase.status === "received" ? <span className="font-bold text-emerald-700">Recebido</span> :
+                        purchase.approval_status !== "approved" ? <span className="text-xs font-semibold text-amber-700">Aguardando aprovação</span> :
                         <button type="button" disabled={busy} onClick={() => void runAction(() => receiveDbsPurchase({ data: {
                           purchaseId: purchase.id,
                           idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
