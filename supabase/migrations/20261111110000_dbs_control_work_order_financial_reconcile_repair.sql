@@ -12,8 +12,8 @@ AS $function$
   with single_admin_company as (
     select
       count(distinct u.company_id) as company_count,
-      (array_agg(u.id order by u.id))[1] as owner_id,
-      (array_agg(u.company_id order by u.id))[1] as company_id
+      (array_agg(u.id order by (u.company_id is not null) desc, u.id))[1] as owner_id,
+      (array_agg(u.company_id order by (u.company_id is not null) desc, u.id))[1] as company_id
     from public.users u
     where u.status = 'ativo'
       and u.role_key::text = 'SUPER_ADMIN'
