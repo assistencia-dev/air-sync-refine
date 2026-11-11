@@ -51,6 +51,9 @@ CREATE INDEX IF NOT EXISTS dbs_control_quote_items_quote_idx
   ON public.dbs_control_quote_items(quote_id,created_at);
 CREATE INDEX IF NOT EXISTS dbs_control_quotes_work_order_idx
   ON public.dbs_control_quotes(work_order_id) WHERE work_order_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS dbs_control_quotes_scope_idempotency_uidx
+  ON public.dbs_control_quotes(scope_key,idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
 
 ALTER TABLE public.dbs_control_quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dbs_control_quote_items ENABLE ROW LEVEL SECURITY;
@@ -350,6 +353,7 @@ DECLARE
   v_user public.users%rowtype;
   v_quote public.dbs_control_quotes%rowtype;
   v_scope text;
+  v_key text:=nullif(btrim(p_quote->>'idempotencyKey'),'');
   v_quote_number text:=nullif(btrim(p_quote->>'id'),'');
   v_client uuid:=nullif(p_quote->>'clienteId','')::uuid;
   v_item jsonb;
@@ -365,6 +369,7 @@ BEGIN
     RAISE EXCEPTION 'DBS_QUOTE_SAVE_FORBIDDEN' USING ERRCODE='42501';
   END IF;
   IF jsonb_typeof(p_quote) IS DISTINCT FROM 'object' OR v_quote_number IS NULL OR
+     v_key IS NULL OR char_length(v_key) NOT BETWEEN 8 AND 240 OR
      v_client IS NULL OR jsonb_typeof(p_quote->'itens') IS DISTINCT FROM 'array' OR
      jsonb_array_length(p_quote->'itens')=0 THEN
     RAISE EXCEPTION 'DBS_QUOTE_SAVE_INPUT_INVALID' USING ERRCODE='22023';
@@ -377,19 +382,23 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(v_scope||':quote:'||v_quote_number,0));
   SELECT * INTO v_quote FROM public.dbs_control_quotes
-   WHERE scope_key=v_scope AND quote_number=v_quote_number FOR UPDATE;
+   WHERE scope_key=v_scope AND idempotency_key=v_key FOR UPDATE;
   IF FOUND THEN
     RETURN jsonb_build_object('ok',true,'replayed',true,'quote_id',v_quote.id,'quote_number',v_quote.quote_number);
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.dbs_control_quotes
+      WHERE scope_key=v_scope AND quote_number=v_quote_number) THEN
+    RAISE EXCEPTION 'DBS_QUOTE_NUMBER_CONFLICT' USING ERRCODE='23505';
   END IF;
   v_subtotal:=round(coalesce(nullif(p_quote->>'subtotal','')::numeric,0)*100)::bigint;
   v_discount:=round(coalesce(nullif(p_quote->>'desconto','')::numeric,0)*100)::bigint;
   v_total:=round(coalesce(nullif(p_quote->>'total','')::numeric,0)*100)::bigint;
   INSERT INTO public.dbs_control_quotes(
     scope_key,company_id,client_id,quote_number,status,description,payment_terms,
-    subtotal_cents,discount_cents,total_cents,metadata
+    subtotal_cents,discount_cents,total_cents,idempotency_key,metadata
   ) VALUES (v_scope,v_user.company_id,v_client,v_quote_number,'draft',
     nullif(p_quote->>'desc',''),nullif(p_quote->>'pagamento',''),
-    greatest(v_subtotal,0),greatest(v_discount,0),greatest(v_total,0),
+    greatest(v_subtotal,0),greatest(v_discount,0),greatest(v_total,0),v_key,
     jsonb_build_object('source','dbs_control_quote_ui','legacy_payload',
       jsonb_build_object('data',p_quote->>'data','validade',p_quote->>'validade'))
   ) RETURNING * INTO v_quote;
