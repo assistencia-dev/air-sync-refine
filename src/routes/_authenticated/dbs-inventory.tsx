@@ -24,13 +24,11 @@ type DbsInventorySection = "parts" | "purchases";
 type DbsInventoryPageProps = {
   embedded?: boolean;
   initialSection?: DbsInventorySection;
-  onClose?: () => void;
 };
 
 export function DbsInventoryPage({
   embedded = false,
   initialSection = "parts",
-  onClose,
 }: DbsInventoryPageProps = {}) {
   const overview = useQuery({
     queryKey: ["dbs-phase2-inventory-overview"],
