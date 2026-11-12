@@ -378,14 +378,18 @@ BEGIN
   END IF;
   IF jsonb_typeof(p_quote) IS DISTINCT FROM 'object' OR v_quote_number IS NULL OR
      v_key IS NULL OR char_length(v_key) NOT BETWEEN 8 AND 240 OR
-     v_client IS NULL OR v_cost_center_id IS NULL OR jsonb_typeof(p_quote->'itens') IS DISTINCT FROM 'array' OR
+     v_client IS NULL OR v_cost_center_id IS NULL OR
+     jsonb_typeof(p_quote->'itens') IS DISTINCT FROM 'array' OR
      jsonb_array_length(p_quote->'itens')=0 THEN
-    RAISE EXCEPTION 'DBS_QUOTE_SAVE_INPUT_INVALID' USING ERRCODE='22023';
+    RAISE EXCEPTION 'DBS_QUOTE_SAVE_INPUT_INVALID: centro de custo, cliente e itens são obrigatórios.' USING ERRCODE='22023';
   END IF;
   SELECT * INTO v_user FROM public.users WHERE id=v_actor AND status='ativo';
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_QUOTE_SAVE_ACTOR_INACTIVE' USING ERRCODE='42501'; END IF;
   v_scope:=CASE WHEN v_user.company_id IS NOT NULL THEN 'company:'||v_user.company_id::text ELSE 'user:'||v_actor::text END;
-  IF NOT EXISTS (SELECT 1 FROM public.dbs_control_cost_centers cc WHERE cc.id=v_cost_center_id AND cc.scope_key=v_scope AND cc.status='active') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.dbs_control_cost_centers cc
+    WHERE cc.id=v_cost_center_id AND cc.scope_key=v_scope AND cc.status='active'
+  ) THEN
     RAISE EXCEPTION 'DBS_QUOTE_COST_CENTER_INVALID' USING ERRCODE='23503';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.dbs_control_clients c WHERE c.id=v_client AND c.status='ativo') THEN
@@ -407,11 +411,12 @@ BEGIN
   INSERT INTO public.dbs_control_quotes(
     scope_key,company_id,client_id,cost_center_id,quote_number,status,description,payment_terms,
     subtotal_cents,discount_cents,total_cents,idempotency_key,metadata
-  ) VALUES (v_scope,v_user.company_id,v_client,v_cost_center_id,v_quote_number,'draft',
+  ) VALUES (
+    v_scope,v_user.company_id,v_client,v_cost_center_id,v_quote_number,'draft',
     nullif(p_quote->>'desc',''),nullif(p_quote->>'pagamento',''),
     greatest(v_subtotal,0),greatest(v_discount,0),greatest(v_total,0),v_key,
-    jsonb_build_object('source','dbs_control_quote_ui','legacy_payload',
-      jsonb_build_object('data',p_quote->>'data','validade',p_quote->>'validade'))
+    jsonb_build_object('source','dbs_control_quote_ui','cost_center_id',v_cost_center_id,
+      'legacy_payload',jsonb_build_object('data',p_quote->>'data','validade',p_quote->>'validade'))
   ) RETURNING * INTO v_quote;
   FOR v_item IN SELECT value FROM jsonb_array_elements(p_quote->'itens')
   LOOP
@@ -430,13 +435,15 @@ BEGIN
     v_line:=round(coalesce(nullif(v_item->>'total','')::numeric,v_qty*v_unit)*100)::bigint;
     INSERT INTO public.dbs_control_quote_items(
       quote_id,item_type,part_id,description,measure_unit,quantity,unit_sale_cents,total_cents,source_item
-    ) VALUES (v_quote.id,
+    ) VALUES (
+      v_quote.id,
       CASE WHEN v_part IS NOT NULL THEN 'catalog' WHEN coalesce(v_item->>'tipo','')='servico' THEN 'service' ELSE 'manual' END,
       v_part,coalesce(nullif(v_item->>'descricao',''),'Item do orçamento'),
       nullif(coalesce(v_item->>'unidade','UN'),''),v_qty,round(v_unit*100)::integer,greatest(v_line,0),v_item
     );
   END LOOP;
-  RETURN jsonb_build_object('ok',true,'replayed',false,'quote_id',v_quote.id,'quote_number',v_quote.quote_number);
+  RETURN jsonb_build_object('ok',true,'replayed',false,'quote_id',v_quote.id,'quote_number',v_quote.quote_number,
+    'cost_center_id',v_cost_center_id);
 END;
 $$;
 
