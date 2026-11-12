@@ -5,10 +5,25 @@
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); };
   var num = function (v) { var n = Number(String(v == null ? "" : v).replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   var catalog = function () {
+    var master = ERP_STATE._dbsControlMasterData || {};
     var s = Array.isArray(ERP_STATE.servicos) ? ERP_STATE.servicos : [];
-    var p = Array.isArray(ERP_STATE.pecas) ? ERP_STATE.pecas : [];
-    return s.map(function (x) { return { tipo: "servico", id: x.id, nome: x.nome || x.descricao || "Serviço", descricao: x.descricao || x.nome || "Serviço", valor: num(x.valor || x.preco || x.valorVenda), unidade: "HRS" }; })
-      .concat(p.map(function (x) { return { tipo: "peca", id: x.id, sku: x.sku || x.codigo || "", nome: x.nome || x.descricao || x.codigo || "Peça", descricao: x.nome || x.descricao || x.codigo || "Peça", valor: num(x.venda || x.valorVenda || x.precoVenda || x.valor || x.preco), estoque: num(x.qtd), unidade: "UN" }; }));
+    var units = Array.isArray(master.measureUnits) ? master.measureUnits : [];
+    // A proposta nunca usa SKU ou ID temporário do snapshot legado para peça.
+    // Somente peças com UUID e vínculos de fornecedor/unidade do catálogo SQL.
+    var p = (Array.isArray(master.parts) ? master.parts : []).filter(function (x) {
+      return !!x && !!x.id && !!x.supplier_id && !!x.measure_unit_id && String(x.status || "ativo") === "ativo";
+    }).map(function (x) {
+      var unit = units.find(function (u) { return String(u.id) === String(x.measure_unit_id); }) || {};
+      return {
+        tipo: "peca", id: String(x.id), sku: String(x.sku || ""),
+        nome: String(x.name || "Peça"), descricao: String(x.name || x.description || "Peça"),
+        valor: Number(x.sale_cents || 0) / 100,
+        estoque: Number(x.stock_quantity || 0) - Number(x.reserved_quantity || 0),
+        unidade: String(unit.code || unit.symbol || "UN"),
+        supplierId: String(x.supplier_id), measureUnitId: String(x.measure_unit_id)
+      };
+    });
+    return s.map(function (x) { return { tipo: "servico", id: x.id, nome: x.nome || x.descricao || "Serviço", descricao: x.descricao || x.nome || "Serviço", valor: num(x.valor || x.preco || x.valorVenda), unidade: "HRS" }; }).concat(p);
   };
   var clients = function () { return Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : []; };
   var quoteItems = function (q) {
@@ -34,7 +49,7 @@
       var selected = String(item.catalogoId || "") === String(c.id) && String(item.tipo || "") === c.tipo;
       return '<option value="' + esc(c.tipo + ":" + c.id) + '"' + (selected ? " selected" : "") + '>' + esc((c.tipo === "peca" ? "Estoque · " + c.nome + (c.sku ? " (" + c.sku + ")" : "") + " · saldo " + c.estoque : "Serviço · " + c.nome)) + '</option>';
     }).join("");
-    return '<tr data-item-row="' + index + '"><td><select class="oq-catalog" aria-label="Item do catálogo"><option value="">Item manual / descrição livre</option>' + options + '</select></td>' +
+    return '<tr data-item-row="' + index + '"><td><select class="oq-catalog" aria-label="Item do catálogo"><option value="">Serviço / descrição manual (não movimenta estoque)</option>' + options + '</select></td>' +
       '<td><input class="oq-desc" aria-label="Descrição do item" value="' + esc(item.descricao || "") + '" placeholder="Descrição do produto/serviço e escopo" required></td>' +
       '<td>' + unitSelect("oq-unit",item.unidade||"UN") + '</td>' +
       '<td><input class="oq-qty" aria-label="Quantidade" type="number" min="0.01" step="0.01" value="' + esc(item.quantidade == null ? 1 : item.quantidade) + '" required></td>' +
@@ -51,7 +66,7 @@
     tab.dataset.flexReady = "1";
     tab.innerHTML = '<div class="data-card oq-shell"><div class="oq-heading"><div class="oq-brand-lockup"><img class="oq-logo" src="/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg" alt="Logo DBS Air"><div><h2>Proposta comercial</h2><p>DBS AIR REFRIGERACAO LTDA - ME · CNPJ 13.352.707/0001-09</p><p>assistencia@dbsair.com.br · (21) 99825-6991 · Rua Nabor do Rego, 481 (ou nº 2908), Ramos, Rio de Janeiro - RJ · CEP 21031-720</p><p>Use itens do estoque cadastrado, serviços ou cadastre um produto sem sair do orçamento. A proposta não movimenta o estoque.</p></div></div></div>' +
       '<form id="oq-form"><div class="oq-grid"><label>Cliente<select id="oq-client" required></select></label><label>Centro de custo *<select id="oq-cost-center" required><option value="">Carregando centros de custo...</option></select></label><label>Validade (dias)<input id="oq-validity" type="number" min="1" value="10" required></label><label>Condição de pagamento<input id="oq-payment" value="A combinar" maxlength="180"></label><label>Desconto total (R$)<input id="oq-discount" type="number" min="0" step="0.01" value="0"></label></div><div id="oq-client-details" class="oq-client-details">Selecione um cliente para conferir os dados cadastrais.</div>' +
-      '<div class="oq-items-head"><div><h3>Itens da proposta</h3><p class="oq-help">Selecione uma peça do estoque para preencher descrição e preço automaticamente.</p></div><div class="oq-item-buttons"><button type="button" class="btn btn-secondary" id="oq-quick-product">+ Cadastrar produto rápido</button><button type="button" class="btn btn-secondary" id="oq-add">+ Adicionar item</button></div></div>' +
+      '<div class="oq-items-head"><div><h3>Itens da proposta</h3><p class="oq-help">As peças disponíveis vêm do catálogo relacional (UUID, fornecedor e unidade-base). Complete os cadastros pendentes em Peças & Estoque antes de incluí-las.</p></div><div class="oq-item-buttons"><button type="button" class="btn btn-secondary" id="oq-open-parts">+ Cadastrar peça no Peças & Estoque</button><button type="button" class="btn btn-secondary" id="oq-add">+ Adicionar item</button></div></div>' +
       '<div class="oq-table-wrap"><table class="oq-items"><thead><tr><th>Catálogo</th><th>Descrição / escopo</th><th>Un.</th><th>Qtd.</th><th>Preço (R$) por</th><th>Total</th><th></th></tr></thead><tbody id="oq-items"></tbody></table></div>' +
       '<label class="oq-notes-label">Descrição geral, condições e observações<textarea id="oq-notes" rows="3" placeholder="Prazo de entrega, garantia, escopo, condições especiais..."></textarea></label>' +
       '<div class="oq-totals"><span>Subtotal <strong id="oq-subtotal">R$ 0,00</strong></span><span>Desconto <strong id="oq-discount-show">R$ 0,00</strong></span><span class="oq-grand">Total da proposta <strong id="oq-total">R$ 0,00</strong></span></div>' +
@@ -59,9 +74,6 @@
       '<div class="data-card oq-list-card"><div class="oq-list-head"><div><h3>Propostas registradas</h3><p class="oq-list-caption">Pesquise por proposta, cliente, serviço ou responsável.</p></div><div class="oq-list-tools"><label class="oq-search-label" for="oq-search">Buscar<input id="oq-search" type="search" placeholder="Nº, cliente ou serviço" aria-label="Buscar proposta"></label><label class="oq-filter-label" for="oq-filter">Status<select id="oq-filter"><option value="TODOS">Todos os status</option><option>Rascunho</option><option>Aprovado</option><option>Rejeitado</option><option>Convertido em OS</option></select></label></div></div>' +
       '<div class="oq-table-wrap"><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead><tbody id="oq-list"></tbody></table></div></div>';
     var acceptance = document.createElement("div"); acceptance.id = "oq-accept-modal"; acceptance.hidden = true; acceptance.innerHTML = '<div class="oq-accept-panel" role="dialog" aria-modal="true" aria-labelledby="oq-accept-title"><div class="oq-accept-head"><div><h3 id="oq-accept-title">Aceite da proposta</h3><p>Registre a decisão e a assinatura do responsável pelo cliente.</p></div><button type="button" class="btn btn-secondary" id="oq-accept-close">Fechar</button></div><label>Comentário do cliente<textarea id="oq-accept-comment" rows="3" placeholder="Comentário, ressalvas ou motivo da recusa"></textarea></label><label>Nome do responsável<input id="oq-accept-name" maxlength="160" placeholder="Nome completo"></label><label>Assinatura digital do cliente <canvas id="oq-signature" width="900" height="180" aria-label="Área para assinatura digital"></canvas></label><div class="oq-accept-actions"><button type="button" class="btn btn-secondary" id="oq-sign-clear">Limpar assinatura</button><span></span><button type="button" class="btn btn-danger" id="oq-accept-reject">Recusar orçamento</button><button type="button" class="btn btn-primary" id="oq-accept-approve">Aprovar orçamento</button></div><p id="oq-accept-status" class="oq-accept-status" role="status" aria-live="polite"></p><p class="oq-accept-note">A assinatura é registrada neste orçamento no sistema. Confirme a identidade do responsável conforme o procedimento comercial da empresa.</p></div>'; tab.appendChild(acceptance);
-    var quickProductModal = document.createElement("div"); quickProductModal.id = "oq-product-modal"; quickProductModal.hidden = true;
-    quickProductModal.innerHTML = '<div class="oq-product-panel" role="dialog" aria-modal="true" aria-labelledby="oq-product-title"><div class="oq-accept-head"><div><h3 id="oq-product-title">Cadastro rápido de produto</h3><p>O produto será cadastrado no catálogo relacional com fornecedor e unidade-base.</p></div><button type="button" class="btn btn-secondary" id="oq-product-close">Fechar</button></div><form id="oq-product-form"><div class="oq-product-grid"><label>SKU / código<input id="oq-product-sku" maxlength="80" placeholder="Código interno"></label><label>Nome do produto *<input id="oq-product-name" maxlength="180" required placeholder="Nome do produto"></label><label>Fornecedor cadastrado *<select id="oq-product-supplier" required><option value="">Selecione o fornecedor...</option></select></label><label>Unidade-base *<select id="oq-product-unit" required><option value="">Selecione a unidade...</option></select></label><p>Saldo inicial não é cadastrado aqui; use Compras e Recebimento para movimentar estoque.</p><label>Custo unitário (R$)<input id="oq-product-cost" type="number" min="0" step="0.01" value="0"></label><label>Preço de venda (R$) *<input id="oq-product-sale" type="number" min="0" step="0.01" value="0" required></label></div><p class="oq-product-note">O cadastro não lança saldo inicial. Entradas físicas são registradas exclusivamente pelo recebimento de compras.</p><div class="oq-accept-actions"><span></span><button type="submit" class="btn btn-primary">Cadastrar e adicionar ao orçamento</button></div></form></div>';
-    tab.appendChild(quickProductModal);
     var signatureCanvas = $("oq-signature"), signatureCtx = signatureCanvas.getContext("2d"), drawing = false, activeQuoteId = null, signed = false;
     var acceptanceInFlight = false;
     signatureCtx.strokeStyle = "#123e65"; signatureCtx.lineWidth = 3; signatureCtx.lineCap = "round"; signatureCtx.lineJoin = "round";
@@ -140,81 +152,17 @@
     }
     function openAcceptance(id){ var q=(ERP_STATE.orcamentos||[]).find(function(x){return String(x.id)===String(id);}); if(!q)return; activeQuoteId=id; signed=false; signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height); $("oq-accept-name").value=q.aceiteWeb&&q.aceiteWeb.responsavel||""; $("oq-accept-comment").value=q.aceiteWeb&&q.aceiteWeb.comentario||""; setAcceptanceStatus(""); setAcceptanceBusy(false); acceptance.hidden=false; $("oq-accept-name").focus(); }
     $("oq-accept-close").addEventListener("click",closeAcceptance); $("oq-sign-clear").addEventListener("click",function(){signatureCtx.clearRect(0,0,signatureCanvas.width,signatureCanvas.height);signed=false;}); $("oq-accept-approve").addEventListener("click",function(){commitAcceptance("Aprovado");}); $("oq-accept-reject").addEventListener("click",function(){commitAcceptance("Rejeitado");});
-    function closeProductModal(){quickProductModal.hidden=true;}
-    $("oq-quick-product").addEventListener("click",function(){ $("oq-product-form").reset(); $("oq-product-cost").value="0"; $("oq-product-sale").value="0"; quickProductModal.hidden=false; $("oq-product-name").focus(); });
-    $("oq-product-close").addEventListener("click",closeProductModal);
-    function fillQuickProductMasterData(data) {
-      data = data || {};
-      var supplierSelect = $("oq-product-supplier");
-      var unitSelect = $("oq-product-unit");
-      if (supplierSelect) {
-        var selectedSupplier = supplierSelect.value;
-        supplierSelect.innerHTML = '<option value="">Selecione o fornecedor...</option>' +
-          (Array.isArray(data.suppliers) ? data.suppliers : []).map(function(x) {
-            return '<option value="' + esc(x.id) + '">' + esc(x.name || "Fornecedor") + '</option>';
-          }).join("");
-        if (selectedSupplier) supplierSelect.value = selectedSupplier;
+    $("oq-open-parts").addEventListener("click",function(){
+      if (typeof window.abrirModuloMateriais === "function") {
+        window.abrirModuloMateriais("parts");
+      } else {
+        alert("Abra Peças & Estoque pelo menu do DBS CONTROL para cadastrar o material no catálogo relacional.");
       }
-      if (unitSelect) {
-        var selectedUnit = unitSelect.value;
-        unitSelect.innerHTML = '<option value="">Selecione a unidade...</option>' +
-          (Array.isArray(data.measureUnits) ? data.measureUnits : []).map(function(x) {
-            return '<option value="' + esc(x.id) + '">' + esc(x.code + " · " + x.name) + '</option>';
-          }).join("");
-        if (selectedUnit) unitSelect.value = selectedUnit;
-      }
-      var costSelect = $("oq-cost-center");
-      if (costSelect) {
-        var selectedCostCenter = costSelect.value;
-        costSelect.innerHTML = '<option value="">Selecione o centro de custo...</option>' +
-          (Array.isArray(data.costCenters) ? data.costCenters : []).map(function(x) {
-            return '<option value="' + esc(x.id) + '">' + esc((x.code || "") + " · " + (x.name || "Centro")) + '</option>';
-          }).join("");
-        if (selectedCostCenter) costSelect.value = selectedCostCenter;
-      }
-    }
-    window.addEventListener('dbs:catalog-master-data', function(event) {
-      var data = event && event.detail ? event.detail : (ERP_STATE._dbsControlMasterData || {});
-      fillQuickProductMasterData(data);
     });
-    fillQuickProductMasterData(ERP_STATE._dbsControlMasterData || {});
-    $("oq-product-form").addEventListener("submit",async function(ev){
-      ev.preventDefault();
-      var sku=$("oq-product-sku").value.trim(), name=$("oq-product-name").value.trim(), cost=Math.max(0,num($("oq-product-cost").value)), sale=Math.max(0,num($("oq-product-sale").value));
-      var supplierId=$("oq-product-supplier").value, measureUnitId=$("oq-product-unit").value;
-      if(!name || !supplierId || !measureUnitId){alert("Informe o nome, o fornecedor e a unidade-base cadastrados.");return;}
-      var norm=function(v){return String(v||"").trim().toLocaleLowerCase("pt-BR");};
-      if(sku && (ERP_STATE.pecas||[]).some(function(p){return norm(p.sku)===norm(sku);})){alert("Já existe um produto com esse SKU. Informe outro código.");return;}
-      var masterData=ERP_STATE._dbsControlMasterData||{};
-      var unit=(masterData.measureUnits||[]).find(function(u){return String(u.id)===String(measureUnitId);});
-      if(!unit){alert("A unidade-base selecionada não está mais disponível. Atualize os cadastros.");return;}
-      var product={id:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():"peca-"+Date.now(),sku:sku||("ORC-"+Date.now()),nome:name,qtd:0,custo:cost,venda:sale,supplier_id:supplierId,measure_unit_id:measureUnitId,require_master_data:true};
-      ERP_STATE.pecas=Array.isArray(ERP_STATE.pecas)?ERP_STATE.pecas:[];
-      ERP_STATE.pecas.push(product);
-      if(typeof window.saveStateAndConfirmCloud==="function" && window.parent!==window){
-        try {
-          var saved=await window.saveStateAndConfirmCloud();
-          if(saved && saved.queuedLocally) {
-            product.__dbs_control_sync_state="pending";
-            if(typeof window.persistDbsControlLocalStateOnly==="function")window.persistDbsControlLocalStateOnly();
-            throw new Error("A peça foi preservada neste dispositivo e está aguardando confirmação da nuvem. Ela não foi adicionada ao orçamento.");
-          }
-        } catch(error) {
-          product.__dbs_control_sync_state="pending";
-          if(typeof window.persistDbsControlLocalStateOnly==="function")window.persistDbsControlLocalStateOnly();
-          alert(error && error.message ? error.message : "A peça foi preservada localmente e aguarda confirmação relacional.");
-          return;
-        }
-      } else if(typeof window.saveState==="function") { window.saveState(); }
-      closeProductModal();
-      var item={tipo:"peca",catalogoId:product.id,descricao:product.nome,unidade:unit.symbol||unit.code||"UN",quantidade:1,valorUnitario:sale};
-      addItem(item);
-      var row=$("oq-items").lastElementChild;
-      if(row){row.querySelector(".oq-catalog").value="peca:"+product.id;}
+    window.addEventListener("dbs:catalog-master-data",function(){
+      render();
       totals();
-      alert("Produto cadastrado e adicionado à proposta. O estoque não foi movimentado.");
     });
-    fillQuickProductMasterData(ERP_STATE._dbsControlMasterData || {});
     var client = $("oq-client");
     client.innerHTML = '<option value="">Selecione o cliente...</option>' + clients().map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "Cliente") + '</option>'; }).join("");
     function renderClientDetails(){ var c=clients().find(function(x){return String(x.id)===String(client.value);}); var el=$("oq-client-details"); if(!c){el.textContent="Selecione um cliente para conferir os dados cadastrais.";return;} var fields=[c.razaoSocial||c.nome||c.nomeFantasia,c.filial||c.nomeFantasia,c.cnpj?"CNPJ: "+c.cnpj:(c.cpf?"CPF: "+c.cpf:""),c.email,c.telefone,[c.endereco||c.logradouro,c.numero,c.complemento,c.bairro,c.cidade||c.municipio,c.estado||c.uf,c.cep].filter(Boolean).join(", ")].filter(Boolean); el.textContent=fields.join(" · ")||"Cliente selecionado; complete os dados cadastrais no cadastro de clientes se necessário."; }
