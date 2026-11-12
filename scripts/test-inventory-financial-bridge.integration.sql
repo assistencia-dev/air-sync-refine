@@ -99,8 +99,8 @@ begin
   v_result := public.dbs_control_register_purchase(v_payload);
   v_purchase := nullif(v_result->>'purchase_id', '')::uuid;
   v_ledger := nullif(v_result->>'ledger_entry_id', '')::uuid;
-  if v_purchase is null or v_ledger is null or v_result->>'status' <> 'draft' then
-    raise exception 'TEST_PURCHASE: registro não criou pedido e conta a pagar em draft: %', v_result;
+  if v_purchase is null or v_ledger is not null or v_result->>'status' <> 'draft' then
+    raise exception 'TEST_PURCHASE: pedido deve ficar draft e sem AP postado antes da aprovação: %', v_result;
   end if;
 
   -- Registering a purchase must create AP but must not touch stock.
@@ -120,6 +120,13 @@ begin
   v_replay := public.dbs_control_register_purchase(v_payload);
   if nullif(v_replay->>'purchase_id', '')::uuid is distinct from v_purchase then
     raise exception 'TEST_IDEMPOTENCY: replay retornou outra compra.';
+  end if;
+
+  perform public.dbs_control_decide_purchase_approval(v_purchase, v_actor, 'approved', null, 1);
+  select ledger_entry_id into v_ledger
+    from public.dbs_control_purchases where id = v_purchase;
+  if v_ledger is null then
+    raise exception 'TEST_APPROVAL: aprovação não gerou a obrigação no Ledger.';
   end if;
 
   v_result := public.dbs_control_receive_registered_purchase(v_purchase, v_actor, v_key || ':receipt');
@@ -330,7 +337,7 @@ begin
     raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem todos os fluxos com valores positivos: %',v_overview;
   end if;
 
-  raise notice 'PASS: two-item purchase -> AP -> exactly two receipt movements -> weighted average -> partial supplier payment -> one OS part consumption -> parts COGS -> OS closure/revenue Ledger -> all seven overview metrics.';
+  raise notice 'PASS: pending purchase -> finance approval creates AP -> exactly two receipt movements -> weighted average -> partial supplier payment -> one OS part consumption -> parts COGS -> OS closure/revenue Ledger -> all seven overview metrics.';
 end;
 $test$;
 
