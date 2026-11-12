@@ -7,7 +7,7 @@ import {
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   reserveDbsWorkOrderParts, setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog, transferDbsStockToTechnician,
+  updateDbsPartCatalog, transferDbsStockToTechnician, linkDbsGasCylinderPart,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -78,7 +78,8 @@ export function DbsInventoryPage({
   const [costCenterWorkOrderId, setCostCenterWorkOrderId] = useState("");
   const [costCenterWorkOrderValue, setCostCenterWorkOrderValue] = useState("");
   const [gasSerialNumber, setGasSerialNumber] = useState("");
-  const [gasType, setGasType] = useState("R410A");
+  const [gasPartId, setGasPartId] = useState("");
+  const [gasCylinderPartLinks, setGasCylinderPartLinks] = useState<Record<string,string>>({});
   const [gasEmployeeId, setGasEmployeeId] = useState("");
   const [gasVehicleLabel, setGasVehicleLabel] = useState("");
   const [gasTotalCharges, setGasTotalCharges] = useState("10");
@@ -140,6 +141,14 @@ export function DbsInventoryPage({
 
   const availableParts = parts.filter((part: any) =>
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
+  );
+  const kilogramUnitIds = new Set(measureUnits
+    .filter((unit:any) => String(unit.code || "").toUpperCase() === "KG" && unit.status === "active")
+    .map((unit:any) => String(unit.id)));
+  const gasMaterialParts = parts.filter((part:any) =>
+    part.status === "ativo" && Boolean(part.supplier_id) &&
+    kilogramUnitIds.has(String(part.measure_unit_id)) &&
+    Number(part.cost_cents ?? 0) > 0
   );
 
   async function runAction(action: () => Promise<unknown>, success: string): Promise<boolean> {
@@ -320,15 +329,16 @@ export function DbsInventoryPage({
   async function assignWeightedGasCylinder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const tare=Number(gasTareWeight), gross=Number(gasInitialGrossWeight), charges=Number(gasTotalCharges);
-    if(!gasSerialNumber.trim()||!gasType.trim()||!gasEmployeeId||!Number.isInteger(charges)||charges<=0||
+    const selectedGasPart = gasMaterialParts.find((part:any) => String(part.id) === gasPartId);
+    if(!gasSerialNumber.trim()||!selectedGasPart||!gasEmployeeId||!Number.isInteger(charges)||charges<=0||
       !Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
-      setMessage("Informe série, refrigerante, técnico, quantidade de cargas, tara e peso bruto inicial válidos.");
+      setMessage("Selecione o material refrigerante do catálogo em KG, técnico, série, cargas, tara e peso bruto inicial.");
       return;
     }
-    await runAction(async()=>{
+    const saved = await runAction(async()=>{
       const {data,error}=await (supabase as any).rpc("dbs_control_assign_gas_cylinder_weighted",{
         p_serial_number:gasSerialNumber.trim(),
-        p_refrigerant_type:gasType.trim().toUpperCase(),
+        p_part_id:gasPartId,
         p_employee_id:gasEmployeeId,
         p_total_charges:charges,
         p_vehicle_label:gasVehicleLabel.trim()||null,
@@ -337,8 +347,16 @@ export function DbsInventoryPage({
       });
       if(error) throw new Error(error.message);
       return data;
-    },"Cilindro cadastrado e vinculado ao técnico com tara e pesagem inicial.");
-    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
+    },"Cilindro vinculado ao material relacional em KG, ao técnico e à pesagem inicial. O custo por kg vem do custo médio do catálogo.");
+    if(saved){setGasSerialNumber("");setGasPartId("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");}
+  }
+
+  async function linkGasCylinderCatalogPart(cylinder:any) {
+    const partId = gasCylinderPartLinks[String(cylinder.id)] || "";
+    if(!partId){setMessage("Selecione o material em KG do catálogo para vincular ao cilindro.");return;}
+    const saved = await runAction(() => linkDbsGasCylinderPart({data:{cylinderId:String(cylinder.id),partId}}),
+      "Cilindro vinculado ao material relacional. As próximas aplicações usarão o custo médio por KG.");
+    if(saved) setGasCylinderPartLinks(current=>({...current,[String(cylinder.id)]:partId}));
   }
 
   async function initializeExistingCylinderWeights(cylinder:any) {
@@ -448,6 +466,8 @@ export function DbsInventoryPage({
             <form onSubmit={addCostCenter} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Centro de custo</h2>
               <p className="mt-1 text-xs text-slate-500">Cadastre a classificação que será usada nas compras, OS e consumo.</p>
+              {!costCenters.length && <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-semibold text-amber-900">Ainda não existe centro de custo ativo neste escopo. Crie o primeiro antes de salvar cotações, compras ou classificar uma OS.</p>}
+              {!costCenters.some((center:any)=>String(center.code).toUpperCase()==="OPERACAO") && <button type="button" disabled={busy} onClick={()=>void runAction(()=>createDbsCostCenter({data:{code:"OPERACAO",name:"Operacional"}}),"Centro de custo Operacional criado. Você pode cadastrar outros centros para separar áreas e contratos.")} className="mt-2 min-h-9 w-full rounded-lg border border-sky-200 bg-sky-50 px-3 text-xs font-bold text-sky-800 disabled:opacity-50">Criar centro padrão · OPERACIONAL</button>}
               <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
               <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
@@ -640,6 +660,13 @@ export function DbsInventoryPage({
                     <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
                     <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
                     <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                    {cylinder.part_id ? <p className="text-xs font-semibold text-emerald-700">Material: {parts.find((part:any)=>String(part.id)===String(cylinder.part_id))?.name || "Vinculado ao catálogo"} · custo médio {money(parts.find((part:any)=>String(part.id)===String(cylinder.part_id))?.cost_cents)} / KG</p> : <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <select aria-label={"Material refrigerante do cilindro "+cylinder.serial_number} value={gasCylinderPartLinks[String(cylinder.id)] || ""} onChange={e=>setGasCylinderPartLinks(current=>({...current,[String(cylinder.id)]:e.target.value}))} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs">
+                        <option value="">Vincular material do catálogo (KG)</option>
+                        {gasMaterialParts.map((part:any)=><option key={part.id} value={part.id}>{part.name} · {money(part.cost_cents)}/KG</option>)}
+                      </select>
+                      <button type="button" disabled={busy||!gasMaterialParts.length} onClick={()=>void linkGasCylinderCatalogPart(cylinder)} className="min-h-10 rounded-lg border border-sky-200 bg-sky-50 px-3 text-xs font-bold text-sky-800 disabled:opacity-50">Vincular material</button>
+                    </div>}
                     {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
                   </div>;
                 })}
@@ -647,16 +674,16 @@ export function DbsInventoryPage({
             </div>
           </section>
           <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. Informe tara e peso bruto inicial para habilitar consumo pesado na OS.</p></div>
+            <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. O cilindro precisa estar ligado a uma peça ativa do catálogo em KG; a aplicação pesada gera custo na OS e no DBS Treasury pelo custo médio vigente.</p></div>
             <form onSubmit={assignWeightedGasCylinder} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
+              <label className="text-xs font-bold text-slate-600">Material de gás do catálogo (unidade-base KG) *<select required value={gasPartId} onChange={e=>setGasPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Selecione o material relacional</option>{gasMaterialParts.map((part:any)=><option key={part.id} value={part.id}>{part.name} · {money(part.cost_cents)}/KG</option>)}</select></label>
               <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
               <label className="text-xs font-bold text-slate-600">Veículo<input value={gasVehicleLabel} onChange={e=>setGasVehicleLabel(e.target.value)} placeholder="Veículo / placa" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
+              <div className="flex items-end"><button disabled={busy||!employees.length||!gasMaterialParts.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
             </form>
           </section>
           </>}
