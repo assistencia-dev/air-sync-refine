@@ -3393,7 +3393,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
     const user=await requireDbsInventoryAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
-      company_id:user.company_id,scope_key:scopeKey,name:data.name,normalized_name:data.name.toLocaleLowerCase("pt-BR"),
+      company_id:user.company_id,scope_key:scopeKey,name:data.name,
       legal_name:data.name,cnpj:data.cnpj,phone:data.phone,status:"active",created_by:user.id,updated_by:user.id
     }).select("id,name,status").single();
     if(saved.error) throw new Error(saved.error.message);
@@ -3414,7 +3414,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     const user=await requireDbsInventoryAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
-      company_id:user.company_id,scope_key:scopeKey,code:data.code,normalized_code:data.code,
+      company_id:user.company_id,scope_key:scopeKey,code:data.code,
       name:data.name,symbol:data.symbol,decimal_places:data.decimalPlaces,status:"active",is_system:false,
       created_by:user.id,updated_by:user.id
     }).select("id,code,name,symbol,status").single();
