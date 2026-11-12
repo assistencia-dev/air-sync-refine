@@ -1001,6 +1001,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                 <div class="form-group"><label>Valor por Parcela (R$)</label><input type="number" step="0.01" id="add-p-val" required placeholder="500.00"></div>
             </div>
             <div class="form-group"><label>Vencimento da 1ª Parcela</label><input type="date" id="add-p-data" required></div>
+            <div class="form-group"><label>Centro de Custo *</label><select id="add-p-centro-custo" required><option value="">Selecione o centro de custo</option></select></div>
             <div class="form-group"><label>Conta para Pagamento das Parcelas</label><select id="add-p-banco" required></select></div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
                 <button type="button" class="btn btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1054,6 +1055,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                 </div>
             </div>
             <div class="form-group"><label>Data Prevista</label><input type="date" id="add-rec-data" required></div>
+            <div class="form-group"><label>Centro de Custo *</label><select id="add-rec-centro-custo" required><option value="">Selecione o centro de custo</option></select></div>
             <div class="form-group"><label>Conta de Destino</label><select id="add-rec-banco" required></select></div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
                 <button type="button" class="btn btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1074,6 +1076,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                 <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" id="add-pag-val" required placeholder="1200.00"></div>
                 <div class="form-group"><label>Data de Vencimento</label><input type="date" id="add-pag-venc" required></div>
             </div>
+            <div class="form-group"><label>Centro de Custo *</label><select id="add-pag-centro-custo" required><option value="">Selecione o centro de custo</option></select></div>
             <div class="form-group"><label>Conta para Pagamento</label><select id="add-pag-banco" required></select></div>
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
                 <button type="button" class="btn btn-secondary" onclick="closeModals()">Cancelar</button>
@@ -1260,6 +1263,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             metadata: {
                 source_kind: sourceKind || null,
                 source_id: sourceId || null,
+                cost_center_id: String(movement?.cost_center_id || movement?.costCenterId || record?.cost_center_id || record?.costCenterId || recordAfter?.cost_center_id || recordAfter?.costCenterId || '') || null,
                 movement: movement || {},
                 movements: Array.isArray(movements) ? movements : (movement ? [movement] : []),
                 record: record || {},
@@ -1609,7 +1613,8 @@ function showToast(msg) {
         const categoria = document.getElementById('add-rec-cat').value;
         const data = document.getElementById('add-rec-data').value;
         const bancoId = document.getElementById('add-rec-banco').value;
-        if (!cliente || !Number.isFinite(valor) || valor <= 0 || !data || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
+        const costCenterId = document.getElementById('add-rec-centro-custo').value;
+        if (!cliente || !Number.isFinite(valor) || valor <= 0 || !data || !bancoId || !costCenterId) { alert('Preencha os dados obrigatórios e escolha a conta e o centro de custo.'); return; }
 
         const existing = id ? STATE.recebimentos.find(x => x.id === id) : null;
         if (id && !existing) return;
@@ -1617,7 +1622,7 @@ function showToast(msg) {
         const itemId = existing?.id || `rec_in_${Date.now()}`;
         const nextRecord = {
             ...(existing || {}), id: itemId, cliente, valor, categoria, data,
-            status: existing?.status || 'Pendente', bancoId,
+            status: existing?.status || 'Pendente', bancoId, costCenterId,
         };
         try {
             await persistTreasuryLedgerMovement({
@@ -1640,7 +1645,7 @@ function showToast(msg) {
             if (!item) return;
             if (!(await validarDataRetroativa(data))) return;
             registrarAlteracaoValor('Recebimentos', `Entrada de ${cliente}`, item.valor, valor);
-            item.cliente = cliente; item.valor = valor; item.categoria = categoria; item.data = data; item.bancoId = bancoId;
+            item.cliente = cliente; item.valor = valor; item.categoria = categoria; item.data = data; item.bancoId = bancoId; item.costCenterId = costCenterId;
             logAuditoria('EDIÇÃO', 'Recebimentos', `Entrada de ${cliente} alterada.`);
             showToast('Recebimento atualizado!');
         } else {
@@ -1659,7 +1664,8 @@ function showToast(msg) {
         const valor = parseFloat(document.getElementById('add-pag-val').value);
         const vencimento = document.getElementById('add-pag-venc').value;
         const bancoId = document.getElementById('add-pag-banco').value;
-        if (!fornecedor || !descricao || !Number.isFinite(valor) || valor <= 0 || !vencimento || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
+        const costCenterId = document.getElementById('add-pag-centro-custo').value;
+        if (!fornecedor || !descricao || !Number.isFinite(valor) || valor <= 0 || !vencimento || !bancoId || !costCenterId) { alert('Preencha os dados obrigatórios e escolha a conta e o centro de custo.'); return; }
 
         const existing = id ? STATE.contasPagar.find(x => x.id === id) : null;
         if (id && !existing) return;
@@ -1667,7 +1673,7 @@ function showToast(msg) {
         const itemId = existing?.id || `pag_${Date.now()}`;
         const nextRecord = {
             ...(existing || {}), id: itemId, fornecedor, descricao, valor, vencimento,
-            status: existing?.status || 'Pendente', bancoId,
+            status: existing?.status || 'Pendente', bancoId, costCenterId,
         };
         try {
             await persistTreasuryLedgerMovement({
@@ -1690,7 +1696,7 @@ function showToast(msg) {
             if (!item) return;
             if (!(await validarDatasRetroativas(item.vencimento, vencimento))) return;
             registrarAlteracaoValor('Contas a Pagar', `Conta de ${fornecedor}`, item.valor, valor);
-            item.fornecedor = fornecedor; item.descricao = descricao; item.valor = valor; item.vencimento = vencimento; item.bancoId = bancoId;
+            item.fornecedor = fornecedor; item.descricao = descricao; item.valor = valor; item.vencimento = vencimento; item.bancoId = bancoId; item.costCenterId = costCenterId;
             logAuditoria('EDIÇÃO', 'Contas a Pagar', `Conta de ${fornecedor} alterada.`);
             showToast('Conta a pagar atualizada!');
         } else {
@@ -1710,7 +1716,8 @@ function showToast(msg) {
         const val = parseFloat(document.getElementById('add-p-val').value);
         const dataStr = document.getElementById('add-p-data').value;
         const bancoId = document.getElementById('add-p-banco').value;
-        if (!credor || !doc || !Number.isInteger(qtd) || qtd <= 0 || !Number.isFinite(val) || val <= 0 || !dataStr || !bancoId) { alert('Preencha os dados obrigatórios e escolha a conta.'); return; }
+        const costCenterId = document.getElementById('add-p-centro-custo').value;
+        if (!credor || !doc || !Number.isInteger(qtd) || qtd <= 0 || !Number.isFinite(val) || val <= 0 || !dataStr || !bancoId || !costCenterId) { alert('Preencha os dados obrigatórios e escolha a conta e o centro de custo.'); return; }
 
         if (!(await validarDataRetroativa(dataStr))) return;
         const base = new Date(dataStr + 'T00:00:00');
@@ -1719,11 +1726,11 @@ function showToast(msg) {
         for (let i = 0; i < qtd; i++) {
             let d = new Date(base.getFullYear(), base.getMonth() + i, base.getDate());
             parcelas.push({
-                id: `p_${stamp}_${i}`, num: i + 1, vencimento: d.toISOString().split('T')[0], valor: val, status: 'Pendente', comprovante: null, bancoId
+                id: `p_${stamp}_${i}`, num: i + 1, vencimento: d.toISOString().split('T')[0], valor: val, status: 'Pendente', comprovante: null, bancoId, costCenterId
             });
         }
 
-        STATE.passivos.push({ id: `pass_${stamp}`, credor, doc, categoria, valorTotal: qtd * val, parcelas });
+        STATE.passivos.push({ id: `pass_${stamp}`, credor, doc, categoria, costCenterId, valorTotal: qtd * val, parcelas });
         logAuditoria('CADASTRO', 'Acordos', `Novo acordo: ${credor} com ${qtd} parcelas`);
         showToast('Acordo cadastrado com sucesso!');
         save(); closeModals(); render();
@@ -2302,6 +2309,7 @@ function showToast(msg) {
         document.getElementById('add-rec-val').value = item.valor;
         document.getElementById('add-rec-cat').value = item.categoria;
         document.getElementById('add-rec-data').value = item.data;
+        document.getElementById('add-rec-centro-custo').value = item.costCenterId || '';
         openModalReceber();
         populateBankSelect('add-rec-banco', getPreferredBankId(item, 'bancoId'));
     }
@@ -2313,6 +2321,7 @@ function showToast(msg) {
         document.getElementById('add-pag-desc').value = item.descricao;
         document.getElementById('add-pag-val').value = item.valor;
         document.getElementById('add-pag-venc').value = item.vencimento;
+        document.getElementById('add-pag-centro-custo').value = item.costCenterId || '';
         openModalPagar();
         populateBankSelect('add-pag-banco', getPreferredBankId(item, 'bancoId'));
     }
@@ -2705,6 +2714,20 @@ function showToast(msg) {
         if(cc) cc.innerHTML=(STATE._meta.centrosCusto||[]).map(x=>'<div style="padding:7px 9px;border:1px solid var(--border-light);border-radius:7px;margin-bottom:5px;font-size:11px"><strong>'+x.codigo+'</strong> — '+x.nome+'</div>').join('') || '<span style="font-size:11px;color:var(--text-muted)">Nenhum centro cadastrado.</span>';
     }
 
+    function renderCostCenterSelects(){
+        const centers=(STATE && STATE._meta && Array.isArray(STATE._meta.centrosCusto)?STATE._meta.centrosCusto:[])
+          .filter(x=>x && x.ativo!==false && x.id);
+        ['add-rec-centro-custo','add-pag-centro-custo','add-p-centro-custo'].forEach(id=>{
+            const select=document.getElementById(id);
+            if(!select)return;
+            const selected=select.value;
+            select.innerHTML='<option value="">Selecione o centro de custo</option>'+centers.map(x=>
+              '<option value="'+String(x.id)+'">'+String(x.codigo||'')+' · '+String(x.nome||'Centro de custo')+'</option>'
+            ).join('');
+            if(selected && centers.some(x=>String(x.id)===String(selected)))select.value=selected;
+        });
+    }
+
     function adicionarPlanoContaPrompt(){
         const nome=prompt('Nome da conta do plano de contas:'); if(!nome)return;
         const codigo=prompt('Código (ex.: 1.01.001):')||String((STATE._meta.planoContas||[]).length+1);
@@ -2800,6 +2823,7 @@ function showToast(msg) {
     }
 
     function render() {
+        renderCostCenterSelects();
         const selectedPeriod = document.getElementById('global-period-filter').value;
         try { renderGestaoFinanceiraProfissional(selectedPeriod); } catch (e) { console.warn('DBS Treasury professional controls:', e); }
         let [selY, selM] = selectedPeriod.split('-');
