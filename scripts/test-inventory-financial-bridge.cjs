@@ -177,7 +177,7 @@ assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
 assert.match(phase2, /atendimento com pendência/i);
 assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
 assert.doesNotMatch(phase2Ui, /Vendas avulsas|Vendas recentes|Registrar venda|settleDbsPartSale|createDbsPartSale/);
-assert.match(phase2Ui, /Reservas de OS/);
+assert.match(phase2Ui, /Reservas recentes/);
 assert.match(phase2Ui, /reserveDbsWorkOrderParts/);
 assert.match(ledgerRpc, /insert into public\.treasury_accounts/i);
 assert.match(ledgerRpc, /on conflict \(scope_key, code\) do update/i);
