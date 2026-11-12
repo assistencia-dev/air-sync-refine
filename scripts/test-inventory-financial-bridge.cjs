@@ -36,23 +36,26 @@ const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'u
 assert.match(phase2Ui, /createDbsPurchase/);
 assert.match(phase2Ui, /export function DbsInventoryPage/);
 assert.ok(phase2Ui.includes('{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}'));
-assert.ok(phase2Ui.includes("{!embedded &&"));
-
+assert.ok(phase2Ui.includes("initialQuoteId?: string"));
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
 assert.match(phase2Ui, /embedded\?: boolean/);
 assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
-assert.match(phase2Ui, /Aprovação financeira/);
-assert.match(phase2Ui, /decision: "approved"/);
-assert.match(phase2Ui, /decision: "rejected"/);
-assert.match(phase2Ui, /purchase\.approval_status !== "approved"/);
+assert.match(phase2Ui, /Enviar pedido para aprovação financeira/);
 assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
+assert.match(phase2Ui, /receiveDbsPurchaseItems/);
+assert.match(phase2Ui, /Pedidos e recebimento físico/);
+assert.match(phase2Ui, /Abrir Financeiro \/ DBS Treasury/);
+assert.doesNotMatch(phase2Ui, /decideDbsPurchaseApproval|settleDbsPurchase|settleDbsPartSale|createDbsPartSale/);
+assert.doesNotMatch(phase2Ui, /gross_margin_pct|paid_cents|payment_status|settlementAmounts/);
 assert.match(functions, /export const createDbsPurchase/);
 assert.match(functions, /dbs_control_register_purchase/);
 assert.match(quoteBuilder, /data-purchase=/);
 assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
-assert.match(quoteBuilder, /Compras & Custos/);
+assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
+assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
+assert.match(controlRoute, /20261112-materials-tabs-5/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -173,9 +176,8 @@ assert.match(phase2, /jsonb_set\(v_payload,'\{parts\}'/i);
 assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
 assert.match(phase2, /atendimento com pendência/i);
 assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
-assert.match(phase2Ui, /Vendas avulsas/);
-assert.match(phase2Ui, /Reservas de OS/);
-assert.match(phase2Ui, /createDbsPartSale/);
+assert.doesNotMatch(phase2Ui, /Vendas avulsas|Vendas recentes|Registrar venda|settleDbsPartSale|createDbsPartSale/);
+assert.match(phase2Ui, /Reservas recentes/);
 assert.match(phase2Ui, /reserveDbsWorkOrderParts/);
 assert.match(ledgerRpc, /insert into public\.treasury_accounts/i);
 assert.match(ledgerRpc, /on conflict \(scope_key, code\) do update/i);
@@ -227,23 +229,25 @@ assert.match(settlement, /revoke all on function public\.dbs_control_settle_purc
 assert.match(settlement, /grant execute on function public\.dbs_control_settle_purchase.*to service_role/i);
 assert.match(functions, /export const settleDbsPurchase/);
 assert.match(functions, /export const getDbsInventoryFinancialOverview/);
-const saleSettlementsStart = functions.indexOf('.from("dbs_control_sale_settlements")');
-const saleSettlementsEnd = functions.indexOf(".limit(200)", saleSettlementsStart);
-const saleSettlementsQuery = saleSettlementsStart >= 0 && saleSettlementsEnd > saleSettlementsStart
-  ? functions.slice(saleSettlementsStart, saleSettlementsEnd)
+const inventoryOverviewStart = functions.indexOf("export const getDbsPhase2InventoryOverview");
+const inventoryOverviewEnd = functions.indexOf("export const createDbsSupplier", inventoryOverviewStart);
+const inventoryOverview = inventoryOverviewStart >= 0 && inventoryOverviewEnd > inventoryOverviewStart
+  ? functions.slice(inventoryOverviewStart, inventoryOverviewEnd)
   : "";
-assert.ok(saleSettlementsQuery.includes('.select("id,sale_id,amount_cents,payment_method,received_at,scope_key")'));
-assert.ok(saleSettlementsQuery.includes('.order("received_at", { ascending: false })'));
-assert.ok(!saleSettlementsQuery.includes("created_at"));
+assert.ok(inventoryOverview.length > 0);
+assert.doesNotMatch(inventoryOverview, /from\("dbs_control_sale_settlements"\)|from\("dbs_control_sales"\)/);
+assert.match(inventoryOverview, /select\("work_order_id,parts_cost_cents,status,updated_at"\)/);
+assert.doesNotMatch(inventoryOverview, /revenue_cents|paid_cents|payment_status/);
 
-assert.match(functions, /payment_status: 'unpaid'/);
+assert.match(functions, /payment_status: "unpaid"/);
 assert.match(functions, /paid_cents/);
-assert.match(phase2Ui, /Compras e contas a pagar/);
-assert.match(phase2Ui, /Custos por ordem de serviço/);
+assert.match(phase2Ui, /Pedidos e recebimento físico/);
+assert.match(phase2Ui, /Custo de materiais por ordem de serviço/);
 assert.match(functions, /workOrderFinancials: workOrderFinancials\.data/);
 assert.match(functions, /dbs_control_work_order_financials/);
-assert.match(phase2Ui, /settleDbsPurchase/);
-assert.match(phase2Ui, /gross_margin_pct/);
+assert.match(phase2Ui, /Abrir Financeiro \/ DBS Treasury/);
+assert.doesNotMatch(phase2Ui, /settleDbsPurchase|gross_margin_pct/);
+
 assert.match(mainHtml, /id="peca-status"/);
 assert.match(mainHtml, /status: document\.getElementById\('peca-status'\)/);
 assert.match(mainHtml, /window\.abrirFinanceiroEstoque/);
@@ -251,15 +255,15 @@ assert.doesNotMatch(mainHtml, /status: document\.getElementById\('comp-status'\)
 assert.match(mainHtml, /abrirFinanceiroEstoque/);
 assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
-assert.match(controlRoute, /setInventoryModuleSection\("purchases"\)/);
-assert.match(controlRoute, /<DbsInventoryPage/);
-assert.ok(controlRoute.includes('className="admin-mobile-hostbar'));
-assert.ok(controlRoute.includes('className={`min-h-0 flex-1 ${inventoryModuleSection ? "hidden" : "flex"}`}'));
-
+assert.match(controlRoute, /mountDbsMaterialsPortal/);
+assert.match(controlRoute, /createPortal/);
+assert.match(controlRoute, /data-dbs-materials-react-root/);
 assert.match(controlRoute, /initialSection=\{inventoryModuleSection\}/);
+assert.match(controlRoute, /initialQuoteId=\{inventoryQuoteId\}/);
+assert.doesNotMatch(controlRoute, /admin-mobile-hostbar|inventoryModuleSection \? "hidden" : "flex"/);
 assert.match(mainHtml, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
 assert.match(mainHtml, /window\.abrirModuloMateriais/);
-assert.doesNotMatch(mainHtml, /window\.location\.href = '\/dbs-inventory'/);
+assert.match(mainHtml, /function switchTab\(tabId, element, quoteId\)/);
 assert.match(mainHtml, /employeeTab === 'tab-pecas'/);
 assert.match(mainHtml, /employeeTab === 'tab-compras'/);
 assert.match(integrationSql, /integration_test_status/);
