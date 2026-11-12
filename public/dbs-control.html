@@ -2316,6 +2316,19 @@
         });
         if (currentUnit) unitSelect.value = currentUnit;
       }
+      var quoteCostCenterSelect = document.getElementById('oq-cost-center');
+      if (quoteCostCenterSelect) {
+        var selectedCostCenter = quoteCostCenterSelect.value;
+        quoteCostCenterSelect.innerHTML = '<option value="">Selecione o centro de custo...</option>';
+        (Array.isArray(data.costCenters) ? data.costCenters : []).forEach(function (center) {
+          var option = document.createElement('option');
+          option.value = String(center.id || '');
+          option.textContent = String(center.code || '') + ' · ' + String(center.name || 'Centro');
+          quoteCostCenterSelect.appendChild(option);
+        });
+        if (selectedCostCenter) quoteCostCenterSelect.value = selectedCostCenter;
+        else if (data.costCenters && data.costCenters.length === 1) quoteCostCenterSelect.value = String(data.costCenters[0].id);
+      }
       if (typeof ERP_STATE !== 'undefined') ERP_STATE._dbsControlMasterData = data;
       window.dispatchEvent(new CustomEvent('dbs:catalog-master-data', { detail: data }));
     }
