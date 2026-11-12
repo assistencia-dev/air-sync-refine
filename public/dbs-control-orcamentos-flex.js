@@ -200,7 +200,7 @@
       fillQuickProductMasterData(data);
     });
     fillQuickProductMasterData(ERP_STATE._dbsControlMasterData || {});
-    $("oq-product-form").addEventListener("submit",function(ev){
+    $("oq-product-form").addEventListener("submit",async function(ev){
       ev.preventDefault();
       var sku=$("oq-product-sku").value.trim(), name=$("oq-product-name").value.trim(), cost=Math.max(0,num($("oq-product-cost").value)), sale=Math.max(0,num($("oq-product-sale").value));
       var supplierId=$("oq-product-supplier").value, measureUnitId=$("oq-product-unit").value;
