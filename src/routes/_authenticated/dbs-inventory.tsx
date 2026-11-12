@@ -397,7 +397,7 @@ export function DbsInventoryPage({
   }
 
   return (
-    <main className="min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6">
+    <main className={embedded ? "min-h-full bg-slate-50 px-4 py-5 text-slate-900 sm:px-6" : "min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6"}>
       <div className="mx-auto max-w-7xl">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
