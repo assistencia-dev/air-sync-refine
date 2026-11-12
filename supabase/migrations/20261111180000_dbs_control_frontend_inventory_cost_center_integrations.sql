@@ -35,6 +35,7 @@ ALTER TABLE public.dbs_control_purchase_receipt_items ADD COLUMN IF NOT EXISTS c
 ALTER TABLE public.dbs_control_inventory_movements ADD COLUMN IF NOT EXISTS cost_center_id uuid;
 ALTER TABLE public.dbs_control_quotes ADD COLUMN IF NOT EXISTS cost_center_id uuid;
 ALTER TABLE public.dbs_control_work_orders ADD COLUMN IF NOT EXISTS cost_center_id uuid;
+ALTER TABLE public.dbs_control_work_order_financials ADD COLUMN IF NOT EXISTS cost_center_id uuid;
 ALTER TABLE public.dbs_control_work_order_parts ADD COLUMN IF NOT EXISTS cost_center_id uuid;
 ALTER TABLE public.dbs_control_work_order_reservations ADD COLUMN IF NOT EXISTS cost_center_id uuid;
 ALTER TABLE public.dbs_control_reservation_consumptions ADD COLUMN IF NOT EXISTS cost_center_id uuid;
@@ -84,7 +85,8 @@ BEGIN
     'dbs_control_purchase_items','dbs_control_purchase_receipts','dbs_control_purchase_receipt_items',
     'dbs_control_inventory_movements','dbs_control_quotes','dbs_control_work_orders',
     'dbs_control_work_order_parts','dbs_control_work_order_reservations',
-    'dbs_control_reservation_consumptions','dbs_control_car_stock','dbs_control_car_stock_consumptions',
+    'dbs_control_reservation_consumptions','dbs_control_work_order_financials',
+    'dbs_control_car_stock','dbs_control_car_stock_consumptions',
     'dbs_control_gas_usage','treasury_ledger_entries','treasury_ledger_lines'
   ] LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname=t||'_cost_center_id_fkey') THEN
@@ -553,6 +555,10 @@ BEGIN
   ELSIF TG_TABLE_NAME='dbs_control_purchase_receipt_items' THEN
     SELECT r.cost_center_id INTO v_center FROM public.dbs_control_purchase_receipts r WHERE r.id=NEW.receipt_id;
     NEW.cost_center_id:=coalesce(NEW.cost_center_id,v_center);
+  ELSIF TG_TABLE_NAME='dbs_control_work_order_financials' THEN
+    SELECT wo.cost_center_id INTO v_center FROM public.dbs_control_work_orders wo WHERE wo.id=NEW.work_order_id;
+    NEW.cost_center_id:=coalesce(NEW.cost_center_id,v_center);
+    IF NEW.cost_center_id IS NULL THEN RAISE EXCEPTION 'DBS_OS_FINANCIAL_COST_CENTER_REQUIRED' USING ERRCODE='23514'; END IF;
   ELSIF TG_TABLE_NAME IN ('dbs_control_work_order_parts','dbs_control_work_order_reservations','dbs_control_reservation_consumptions','dbs_control_car_stock_consumptions','dbs_control_gas_usage') THEN
     v_work_order:=NEW.work_order_id;
     SELECT wo.cost_center_id INTO v_center FROM public.dbs_control_work_orders wo WHERE wo.id=v_work_order;
@@ -604,7 +610,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'dbs_control_purchase_items','dbs_control_purchase_receipts','dbs_control_purchase_receipt_items',
     'dbs_control_inventory_movements','dbs_control_work_order_parts','dbs_control_work_order_reservations',
-    'dbs_control_reservation_consumptions','dbs_control_car_stock_consumptions',
+    'dbs_control_reservation_consumptions','dbs_control_work_order_financials','dbs_control_car_stock_consumptions',
     'dbs_control_gas_usage','treasury_ledger_entries','treasury_ledger_lines'
   ] LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I', 'trg_'||t||'_cost_center',t);
