@@ -128,6 +128,9 @@ export function DbsInventoryPage({
     });
     if (lines.length) setPurchaseLines(lines);
     if (quotePurchase.data.quote?.cost_center_id) setCostCenterId(String(quotePurchase.data.quote.cost_center_id));
+    if (quotePurchase.data.quote?.quote_number) {
+      setPurchaseDocument((current) => current || String(quotePurchase.data.quote.quote_number));
+    }
   }, [quotePurchase.data, parts]);
 
   useEffect(() => {
@@ -666,6 +669,9 @@ export function DbsInventoryPage({
                 <p className="mt-1 text-sm text-slate-500">Registre o preço cotado, fornecedor, peças e centro de custo. O pedido segue ao DBS Treasury para aprovação; o estoque só entra após o recebimento físico.</p>
               </div>
               {quoteImport.quoteId && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-800">Origem: cotação {quoteImport.quoteId}</span>}
+              {quoteImport.quoteId && quotePurchase.isLoading && <p role="status" className="w-full rounded-lg bg-sky-50 p-3 text-xs text-sky-800">Importando peças relacionais da cotação…</p>}
+              {quoteImport.quoteId && quotePurchase.error && <p role="alert" className="w-full rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">Não foi possível importar as peças desta cotação: {quotePurchase.error instanceof Error ? quotePurchase.error.message : "Falha ao consultar a cotação."}</p>}
+              {quoteImport.quoteId && quotePurchase.data && !quotePurchase.data.items.length && <p role="alert" className="w-full rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Esta cotação não possui peças do catálogo relacional. Adicione as peças manualmente antes de registrar o pedido.</p>}
             </div>
             <form onSubmit={submitPurchase} className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-3">
