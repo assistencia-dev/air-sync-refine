@@ -259,6 +259,7 @@ function TreasuryPage() {
             <div key={String(item.purchase_id)} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 py-2 text-xs">
               <span className="min-w-0 truncate font-semibold text-slate-700">{String(item.supplier_name ?? "Fornecedor")} · {String(item.document_number ?? "Compra")}</span>
               <span className="text-slate-500">{item.commitment_date ? new Date(String(item.commitment_date) + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span>
+              <span className="min-w-40 text-slate-600">Centro: {item.cost_center_code ? String(item.cost_center_code) + " · " : ""}{String(item.cost_center_name ?? "Não informado")}</span>
               <strong className="text-slate-900">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.outstanding_cents ?? 0) / 100)}</strong>
             </div>
           )) : <p className="border-t border-slate-100 py-2 text-xs text-slate-500">Nenhum compromisso de compra aprovado em aberto.</p>}
@@ -285,7 +286,7 @@ function TreasuryPage() {
                     {purchase.purchase_date ? new Date(String(purchase.purchase_date) + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                     {" · "} {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(purchase.total_cents ?? 0) / 100)}
                   </p>
-                  {purchase.cost_center_name && <p className="mt-1 text-xs text-slate-500">Centro de custo: {String(purchase.cost_center_name)}</p>}
+                  {(purchase.cost_center_name || purchase.cost_center_code) && <p className="mt-1 text-xs text-slate-500">Centro de custo: {purchase.cost_center_code ? String(purchase.cost_center_code) + " · " : ""}{String(purchase.cost_center_name || "")}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <input
