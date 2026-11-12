@@ -239,7 +239,7 @@ const inventoryOverview = inventoryOverviewStart >= 0 && inventoryOverviewEnd > 
   : "";
 assert.ok(inventoryOverview.length > 0);
 assert.doesNotMatch(inventoryOverview, /from\("dbs_control_sale_settlements"\)|from\("dbs_control_sales"\)/);
-assert.match(inventoryOverview, /select\("work_order_id,parts_cost_cents,status,updated_at"\)/);
+assert.match(inventoryOverview, /select\("work_order_id,parts_cost_cents,gas_cost_cents,status,updated_at"\)/);
 assert.doesNotMatch(inventoryOverview, /revenue_cents|paid_cents|payment_status/);
 
 assert.match(functions, /payment_status: "unpaid"/);
