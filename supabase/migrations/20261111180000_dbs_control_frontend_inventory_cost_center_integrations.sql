@@ -208,6 +208,7 @@ declare
   v_part uuid;
   v_qty numeric;
   v_unit_cost integer;
+  v_purchase_unit_cost integer;
   v_purchase_qty numeric;
   v_factor numeric(24,10);
   v_purchase_unit_id uuid;
@@ -279,8 +280,9 @@ begin
     v_factor := coalesce(nullif(v_item->>'conversion_factor','')::numeric,1);
     v_purchase_unit_id := nullif(v_item->>'purchase_unit_id','')::uuid;
     v_qty := coalesce(nullif(v_item->>'base_quantity','')::numeric,v_purchase_qty*v_factor);
-    v_unit_cost := greatest(round(coalesce(nullif(coalesce(v_item->>'unit_cost_cents',v_item->>'unit_cost'),'')::numeric,0)/greatest(v_factor,0.0000000001))::integer,0);
-    if v_part is null or v_purchase_qty<=0 or v_qty<=0 or v_factor<=0 then
+    v_purchase_unit_cost := greatest(round(coalesce(nullif(coalesce(v_item->>'unit_cost_cents',v_item->>'unit_cost'),'')::numeric,0))::integer,0);
+    v_unit_cost := greatest(round(v_purchase_unit_cost/greatest(v_factor,0.0000000001))::integer,0);
+    if v_part is null or v_purchase_qty<=0 or v_qty<=0 or v_factor<=0 or v_purchase_unit_cost<=0 then
       raise exception 'DBS_PURCHASE_ITEM_INVALID: informe peça, quantidade e conversão positiva.' using errcode='22023';
     end if;
     if v_purchase_unit_id is null then
@@ -299,7 +301,7 @@ begin
       raise exception 'DBS_PART_INACTIVE: ative a peça no catálogo antes de registrar a compra.' using errcode='23514';
     end if;
     v_line := v_line+1;
-    v_line_total := round(v_qty*v_unit_cost)::bigint;
+    v_line_total := round(v_purchase_qty*v_purchase_unit_cost)::bigint;
     v_total := v_total+v_line_total;
     insert into public.dbs_control_purchase_items(
       purchase_id,part_id,line_no,quantity,unit_cost_cents,total_cents,
@@ -307,7 +309,7 @@ begin
     ) values(v_purchase,v_part,v_line,v_qty,v_unit_cost,v_line_total,
       v_purchase_unit_id,v_factor,v_qty,
       jsonb_build_object('purchase_quantity',v_purchase_qty,'purchase_unit_id',v_purchase_unit_id,
-        'purchase_unit_cost_cents',coalesce(nullif(v_item->>'unit_cost_cents','')::integer,0),
+        'purchase_unit_cost_cents',v_purchase_unit_cost,
         'cost_center_id',v_cost_center_id));
   end loop;
 
