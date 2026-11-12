@@ -322,7 +322,7 @@ assert.match(phase2Ui, /dbs_control_assign_gas_cylinder_weighted/);
 assert.match(phase2Ui, /p_cost_per_kg_cents/);
 assert.match(phase2Ui, /dbs_control_update_gas_cylinder_cost/);
 assert.match(phase2Ui, /gas_cost_cents/);
-assert.match(phase2Ui, /unit_cost_cents_per_kg/);
+assert.match(gasCostMigration, /unit_cost_cents_per_kg/);
 assert.match(phase2Ui, /dbs_control_initialize_existing_gas_cylinder_weights/);
 assert.match(mainHtml, /id="peca-fornecedor"/);
 assert.match(mainHtml, /id="peca-unidade"/);
