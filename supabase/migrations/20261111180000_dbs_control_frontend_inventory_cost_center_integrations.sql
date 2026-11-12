@@ -47,11 +47,15 @@ ALTER TABLE public.treasury_ledger_lines ADD COLUMN IF NOT EXISTS cost_center_id
 ALTER TABLE public.dbs_control_gas_cylinders
   ADD COLUMN IF NOT EXISTS tare_weight_kg numeric(12,3),
   ADD COLUMN IF NOT EXISTS initial_gross_weight_kg numeric(12,3),
-  ADD COLUMN IF NOT EXISTS current_gross_weight_kg numeric(12,3);
+  ADD COLUMN IF NOT EXISTS current_gross_weight_kg numeric(12,3),
+  ADD COLUMN IF NOT EXISTS cost_per_kg_cents integer;
 ALTER TABLE public.dbs_control_gas_usage
   ADD COLUMN IF NOT EXISTS gross_weight_before_kg numeric(12,3),
   ADD COLUMN IF NOT EXISTS gross_weight_after_kg numeric(12,3),
-  ADD COLUMN IF NOT EXISTS gas_consumed_kg numeric(12,3);
+  ADD COLUMN IF NOT EXISTS gas_consumed_kg numeric(12,3),
+  ADD COLUMN IF NOT EXISTS cost_per_kg_cents integer,
+  ADD COLUMN IF NOT EXISTS total_cost_cents bigint,
+  ADD COLUMN IF NOT EXISTS ledger_entry_id uuid;
 
 DO $$
 BEGIN
@@ -637,8 +641,13 @@ DECLARE
   v_actor uuid:=auth.uid();
   v_cylinder public.dbs_control_gas_cylinders%rowtype;
   v_existing public.dbs_control_gas_usage%rowtype;
+  v_os public.dbs_control_work_orders%rowtype;
+  v_scope record;
   v_result jsonb;
+  v_ledger jsonb;
+  v_ledger_id uuid;
   v_consumed numeric(12,3);
+  v_total bigint;
 BEGIN
   IF v_actor IS NULL THEN RAISE EXCEPTION 'DBS_GAS_UNAUTHENTICATED' USING ERRCODE='42501'; END IF;
   IF p_gross_weight_before_kg IS NULL OR p_gross_weight_after_kg IS NULL
@@ -650,6 +659,11 @@ BEGIN
   IF NOT FOUND OR v_cylinder.tare_weight_kg IS NULL THEN
     RAISE EXCEPTION 'DBS_GAS_TARE_WEIGHT_REQUIRED' USING ERRCODE='23514';
   END IF;
+  IF coalesce(v_cylinder.cost_per_kg_cents,0)<=0 THEN
+    RAISE EXCEPTION 'DBS_GAS_COST_PER_KG_REQUIRED: cadastre o custo do gás por kg antes de consumir.' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO v_os FROM public.dbs_control_work_orders WHERE id=p_work_order_id AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OS_NOT_FOUND' USING ERRCODE='23503'; END IF;
   SELECT * INTO v_existing FROM public.dbs_control_gas_usage WHERE idempotency_key=p_idempotency_key;
   IF FOUND THEN
     IF v_existing.work_order_id<>p_work_order_id OR v_existing.cylinder_id<>p_cylinder_id
@@ -679,19 +693,48 @@ BEGIN
   IF coalesce((v_result->>'replayed')::boolean,false)=false THEN
     UPDATE public.dbs_control_gas_cylinders SET current_gross_weight_kg=p_gross_weight_after_kg,updated_at=now()
      WHERE id=p_cylinder_id;
+    v_total:=round(v_consumed*v_cylinder.cost_per_kg_cents)::bigint;
+    v_scope:=public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+    v_ledger:=public.post_treasury_ledger_entry(
+      v_scope.scope_key,v_scope.company_id,current_date,current_date,
+      'work_order_gas_cogs','Consumo de gás · OS '||coalesce(v_os.protocol,p_work_order_id::text),
+      left(p_idempotency_key,150)||':ledger','work-order-gas:'||p_idempotency_key,
+      v_actor,'posted',
+      jsonb_build_object('source','dbs_control_gas_usage','work_order_id',p_work_order_id,
+        'cylinder_id',p_cylinder_id,'gas_consumed_kg',v_consumed,
+        'cost_per_kg_cents',v_cylinder.cost_per_kg_cents,'cost_center_id',v_os.cost_center_id),
+      jsonb_build_array(
+        jsonb_build_object('account_code','5.1.01','account_name','Custo de materiais consumidos',
+          'account_type','expense','debit_cents',v_total,'credit_cents',0),
+        jsonb_build_object('account_code','1.1.03','account_name','Estoque de materiais',
+          'account_type','asset','debit_cents',0,'credit_cents',v_total)
+      )
+    );
+    v_ledger_id:=nullif(v_ledger->>'entry_id','')::uuid;
+    IF v_ledger_id IS NULL THEN RAISE EXCEPTION 'DBS_GAS_COGS_LEDGER_FAILED' USING ERRCODE='23514'; END IF;
     UPDATE public.dbs_control_gas_usage SET
       gross_weight_before_kg=p_gross_weight_before_kg,
       gross_weight_after_kg=p_gross_weight_after_kg,
-      gas_consumed_kg=v_consumed
+      gas_consumed_kg=v_consumed,
+      cost_per_kg_cents=v_cylinder.cost_per_kg_cents,
+      total_cost_cents=v_total,
+      ledger_entry_id=v_ledger_id
      WHERE idempotency_key=p_idempotency_key;
+    INSERT INTO public.dbs_control_work_order_financials(work_order_id,company_id,scope_key,parts_cost_cents)
+    VALUES(p_work_order_id,v_scope.company_id,v_scope.scope_key,v_total)
+    ON CONFLICT(work_order_id) DO UPDATE SET
+      parts_cost_cents=public.dbs_control_work_order_financials.parts_cost_cents+excluded.parts_cost_cents,
+      version=public.dbs_control_work_order_financials.version+1,updated_at=now();
   END IF;
   RETURN v_result||jsonb_build_object('gas_consumed_kg',v_consumed,
+    'cost_per_kg_cents',v_cylinder.cost_per_kg_cents,'total_cost_cents',v_total,
+    'ledger_entry_id',v_ledger_id,
     'remaining_net_weight_kg',greatest(p_gross_weight_after_kg-v_cylinder.tare_weight_kg,0),
     'gross_weight_after_kg',p_gross_weight_after_kg);
 END $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(
-  p_cylinder_id uuid,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric
+  p_cylinder_id uuid,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric,p_cost_per_kg_cents integer
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_actor uuid:=auth.uid(); v_row public.dbs_control_gas_cylinders%rowtype;
 BEGIN
@@ -699,7 +742,7 @@ BEGIN
     RAISE EXCEPTION 'DBS_GAS_WEIGHT_INITIALIZE_FORBIDDEN' USING ERRCODE='42501';
   END IF;
   IF p_tare_weight_kg IS NULL OR p_initial_gross_weight_kg IS NULL OR
-     p_tare_weight_kg<0 OR p_initial_gross_weight_kg<=p_tare_weight_kg THEN
+     p_tare_weight_kg<0 OR p_initial_gross_weight_kg<=p_tare_weight_kg OR coalesce(p_cost_per_kg_cents,0)<=0 THEN
     RAISE EXCEPTION 'DBS_GAS_INITIAL_WEIGHTS_INVALID' USING ERRCODE='22023';
   END IF;
   SELECT * INTO v_row FROM public.dbs_control_gas_cylinders WHERE id=p_cylinder_id FOR UPDATE;
@@ -709,23 +752,24 @@ BEGIN
   END IF;
   UPDATE public.dbs_control_gas_cylinders SET tare_weight_kg=p_tare_weight_kg,
     initial_gross_weight_kg=p_initial_gross_weight_kg,current_gross_weight_kg=p_initial_gross_weight_kg,
+    cost_per_kg_cents=p_cost_per_kg_cents,
     updated_at=now() WHERE id=p_cylinder_id;
   RETURN jsonb_build_object('ok',true,'cylinder_id',p_cylinder_id,'tare_weight_kg',p_tare_weight_kg,
     'initial_gross_weight_kg',p_initial_gross_weight_kg,'current_gross_weight_kg',p_initial_gross_weight_kg,
-    'remaining_net_weight_kg',p_initial_gross_weight_kg-p_tare_weight_kg);
-END $$;
+    'cost_per_kg_cents',p_cost_per_kg_cents,'remaining_net_weight_kg',p_initial_gross_weight_kg-p_tare_weight_kg);
+END $;
 
-REVOKE ALL ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric) TO authenticated,service_role;
+REVOKE ALL ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric,integer) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.dbs_control_initialize_existing_gas_cylinder_weights(uuid,numeric,numeric,integer) TO authenticated,service_role;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_assign_gas_cylinder_weighted(
   p_serial_number text,p_refrigerant_type text,p_employee_id uuid,p_total_charges integer,
-  p_vehicle_label text,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric
+  p_vehicle_label text,p_tare_weight_kg numeric,p_initial_gross_weight_kg numeric,p_cost_per_kg_cents integer
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_result jsonb; v_id uuid;
 BEGIN
   IF p_tare_weight_kg IS NULL OR p_initial_gross_weight_kg IS NULL OR
-     p_tare_weight_kg<0 OR p_initial_gross_weight_kg<=p_tare_weight_kg THEN
+     p_tare_weight_kg<0 OR p_initial_gross_weight_kg<=p_tare_weight_kg OR coalesce(p_cost_per_kg_cents,0)<=0 THEN
     RAISE EXCEPTION 'DBS_GAS_INITIAL_WEIGHTS_INVALID' USING ERRCODE='22023';
   END IF;
   v_result:=public.dbs_control_assign_gas_cylinder(
@@ -738,8 +782,8 @@ BEGIN
   WHERE id=v_id;
   RETURN v_result||jsonb_build_object('tare_weight_kg',p_tare_weight_kg,
     'initial_gross_weight_kg',p_initial_gross_weight_kg,'current_gross_weight_kg',p_initial_gross_weight_kg,
-    'remaining_net_weight_kg',p_initial_gross_weight_kg-p_tare_weight_kg);
-END $$;
+    'cost_per_kg_cents',p_cost_per_kg_cents,'remaining_net_weight_kg',p_initial_gross_weight_kg-p_tare_weight_kg);
+END $;
 
 REVOKE ALL ON FUNCTION public.dbs_control_register_gas_usage_weighted(uuid,uuid,text,text,numeric,numeric,text) FROM PUBLIC,anon;
 REVOKE ALL ON FUNCTION public.dbs_control_assign_gas_cylinder_weighted(text,text,uuid,integer,text,numeric,numeric) FROM PUBLIC,anon;
