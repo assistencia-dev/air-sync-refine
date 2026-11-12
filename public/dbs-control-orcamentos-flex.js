@@ -4,11 +4,16 @@
   var money = function (v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); };
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); };
   var num = function (v) { var n = Number(String(v == null ? "" : v).replace(",", ".")); return Number.isFinite(n) ? n : 0; };
+  var isRelationalUuid = function (value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+  };
   var catalog = function () {
     var s = Array.isArray(ERP_STATE.servicos) ? ERP_STATE.servicos : [];
     var p = Array.isArray(ERP_STATE.pecas) ? ERP_STATE.pecas : [];
     return s.map(function (x) { return { tipo: "servico", id: x.id, nome: x.nome || x.descricao || "Serviço", descricao: x.descricao || x.nome || "Serviço", valor: num(x.valor || x.preco || x.valorVenda), unidade: "HRS" }; })
-      .concat(p.map(function (x) { return { tipo: "peca", id: x.id, sku: x.sku || x.codigo || "", nome: x.nome || x.descricao || x.codigo || "Peça", descricao: x.nome || x.descricao || x.codigo || "Peça", valor: num(x.venda || x.valorVenda || x.precoVenda || x.valor || x.preco), estoque: num(x.qtd), unidade: "UN" }; }));
+      // Peças só entram na proposta quando o ID é o UUID canônico da tabela relacional.
+      // SKU e códigos locais continuam servindo apenas como descrição, nunca como chave.
+      .concat(p.filter(function (x) { return isRelationalUuid(x.id); }).map(function (x) { return { tipo: "peca", id: x.id, sku: x.sku || x.codigo || "", nome: x.nome || x.descricao || x.codigo || "Peça", descricao: x.nome || x.descricao || x.codigo || "Peça", valor: num(x.venda || x.valorVenda || x.precoVenda || x.valor || x.preco), estoque: num(x.qtd), unidade: "UN" }; }));
   };
   var clients = function () { return Array.isArray(ERP_STATE.clientes) ? ERP_STATE.clientes : []; };
   var quoteItems = function (q) {
@@ -301,6 +306,10 @@
     var items = readItems().filter(function (x) { return x.descricao && x.quantidade > 0 && x.valorUnitario >= 0; });
     var invalidUnits=Array.from($("oq-items").querySelectorAll("tr")).some(function(row){return !unitsCompatible(row.querySelector(".oq-unit").value,row.querySelector(".oq-price-unit").value);});
     if(invalidUnits){alert("Há itens com unidades incompatíveis. Confira se quantidade e preço usam medidas compatíveis.");return;}
+    if (items.some(function (item) { return item.tipo === "peca" && !isRelationalUuid(item.catalogoId); })) {
+      alert("Cada peça do orçamento precisa estar vinculada ao catálogo relacional. Atualize o catálogo e selecione novamente; SKU legado não será usado como identificador.");
+      return;
+    }
     if (!$("oq-client").value) { alert("Selecione o cliente da proposta."); return; }
     if (!items.length) { alert("Adicione pelo menos um item com descrição e quantidade válida."); return; }
     var costCenterId = $("oq-cost-center").value;
@@ -374,7 +383,11 @@
   function sendQuotePartsToPurchase(id) {
     var quote = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
     if (!quote) return;
-    var relationalQuoteKey = quote.relationalQuoteId || quote.id;
+    var relationalQuoteKey = String(quote.relationalQuoteId || "");
+    if (!isRelationalUuid(relationalQuoteKey)) {
+      alert("Esta cotação ainda não possui ID relacional. Reabra e salve a proposta na tela atual antes de gerar o pedido de compra.");
+      return;
+    }
     if (typeof window.abrirModuloMateriais !== "function") {
       alert("A aba Compras do DBS CONTROL não está disponível. Atualize o painel e tente novamente.");
       return;
