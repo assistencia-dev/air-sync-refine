@@ -2380,7 +2380,6 @@ function DbsControlPage() {
           <DbsInventoryPage
             embedded
             initialSection={inventoryModuleSection}
-            onClose={() => setInventoryModuleSection(null)}
           />
         </div>
       )}
