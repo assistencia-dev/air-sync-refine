@@ -57,7 +57,7 @@ assert.match(quoteBuilder, /data-purchase=/);
 assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
-assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
+assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261112-relational-uuid-1/);
 assert.match(controlRoute, /20261112-materials-tabs-5/);
 
 
