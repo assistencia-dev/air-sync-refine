@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { isValidIsoCalendarDate, normalizeBrazilianTaxId } from "@/lib/dbs-inventory.validation";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin as typedSupabaseAdmin } from "@/integrations/supabase/client.server";
@@ -3168,7 +3169,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
     if (!input?.supplierId || !input?.costCenterId) throw new Error("Selecione o fornecedor cadastrado e o centro de custo.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || Number.isNaN(Date.parse(purchaseDate + "T12:00:00Z"))) {
+    if (!isValidIsoCalendarDate(purchaseDate)) {
       throw new Error("Informe uma data de compra válida.");
     }
     if (!input?.idempotencyKey || input.idempotencyKey.trim().length < 8) throw new Error("Chave de segurança da compra inválida.");
@@ -3391,7 +3392,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { name: string; cnpj?: string; phone?: string }) => {
     const name=String(input?.name||"").trim();
-    const cnpj=String(input?.cnpj||"").replace(/\D/g,"");
+    const cnpj=normalizeBrazilianTaxId(input?.cnpj);
     if(name.length<2||name.length>180) throw new Error("Informe o nome do fornecedor.");
     if(cnpj && ![11,14].includes(cnpj.length)) throw new Error("CNPJ/CPF do fornecedor inválido.");
     return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
@@ -3403,7 +3404,16 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
       company_id:user.company_id,scope_key:scopeKey,name:data.name,
       legal_name:data.name,cnpj:data.cnpj,phone:data.phone,status:"active",created_by:user.id,updated_by:user.id
     }).select("id,name,status").single();
-    if(saved.error) throw new Error(saved.error.message);
+    if(saved.error) {
+      if (saved.error.code === "23505") {
+        const constraint = String((saved.error as any).constraint ?? saved.error.message ?? "");
+        if (constraint.includes("cnpj_scope_uidx")) {
+          throw new Error("Já existe um fornecedor com este CNPJ/CPF neste cadastro.");
+        }
+        throw new Error("Já existe um fornecedor com este nome neste cadastro.");
+      }
+      throw new Error(saved.error.message);
+    }
     return saved.data;
   });
 
@@ -3541,7 +3551,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     const code=String(input?.code||"").trim().toUpperCase();
     const name=String(input?.name||"").trim();
     const decimals=Number(input?.decimalPlaces??3);
-    if(!/^[A-Z0-9_-]{1,12}$/.test(code)||name.length<1||name.length>80||!Number.isInteger(decimals)||decimals<0||decimals>4)
+    if(!/^[A-Z0-9_-]{1,12}$/.test(code)||name.length<2||name.length>80||!Number.isInteger(decimals)||decimals<0||decimals>4)
       throw new Error("Código, nome ou precisão da unidade inválidos.");
     return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
   })
@@ -3553,7 +3563,10 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
       name:data.name,symbol:data.symbol,decimal_places:data.decimalPlaces,status:"active",is_system:false,
       created_by:user.id,updated_by:user.id
     }).select("id,code,name,symbol,status").single();
-    if(saved.error) throw new Error(saved.error.message);
+    if(saved.error) {
+      if (saved.error.code === "23505") throw new Error("Já existe uma unidade com este código neste cadastro.");
+      throw new Error(saved.error.message);
+    }
     return saved.data;
   });
 

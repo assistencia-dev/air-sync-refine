@@ -1,8 +1,10 @@
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const ts = require('typescript');
+const vm = require('node:vm');
 
 const functions = fs.readFileSync('src/lib/dbs-control.functions.ts', 'utf8');
+const inventoryValidationSource = fs.readFileSync('src/lib/dbs-inventory.validation.ts', 'utf8');
 const mainHtml = fs.readFileSync('public/dbs-control.html', 'utf8');
 const shellHtml = fs.readFileSync('public/dbs-control-shell.html', 'utf8');
 const bridge = fs.readFileSync('supabase/migrations/20261031040330_dbs_control_inventory_financial_bridge.sql', 'utf8');
@@ -371,11 +373,26 @@ assert.match(treasuryPage, /Compromissos de compras aprovadas/);
 assert.match(phase2Ui, /reverseDbsInventoryMovement/);
 assert.match(phase2Ui, /Histórico imutável de movimentações/);
 
-// Purchase date and supplier CNPJ validators must use real regex escapes.
-// A doubled backslash made every purchase fail "data inválida" and rejected formatted CNPJs.
-assert.doesNotMatch(functions, /\/\^\\\\\\\\d\{4\}/, 'purchase date regex must not be double-escaped');
-assert.match(functions, /\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(purchaseDate\)/);
-assert.match(functions, /const cnpj=String\(input\?\.cnpj\|\|""\)\.replace\(\/\\D\/g,""\)/);
-assert.equal(/^\d{4}-\d{2}-\d{2}$/.test('2026-11-12'), true);
-assert.equal('12.345.678/0001-90'.replace(/\D/g, '').length, 14);
-console.log('purchase/supplier validator regex checks passed');
+// Supplier tax identifiers must pass Brazilian check digits; purchase dates must exist.
+assert.match(functions, /normalizeBrazilianTaxId\(input\?\.cnpj\)/);
+assert.match(functions, /isValidIsoCalendarDate\(purchaseDate\)/);
+const validationSandbox = { exports: {} };
+vm.runInNewContext(ts.transpileModule(inventoryValidationSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText, validationSandbox);
+const { normalizeBrazilianTaxId, isValidIsoCalendarDate } = validationSandbox.exports;
+assert.equal(normalizeBrazilianTaxId("529.982.247-25"), "52998224725");
+assert.equal(normalizeBrazilianTaxId("11.222.333/0001-81"), "11222333000181");
+assert.equal(normalizeBrazilianTaxId(""), null);
+assert.throws(() => normalizeBrazilianTaxId("529.982.247-24"), /CPF válido/);
+assert.throws(() => normalizeBrazilianTaxId("11.222.333/0001-82"), /CNPJ válido/);
+assert.throws(() => normalizeBrazilianTaxId("000.000.000-00"), /CPF\/CNPJ válido/);
+assert.throws(() => normalizeBrazilianTaxId("123456"), /CPF.*CNPJ/);
+assert.equal(isValidIsoCalendarDate("2026-11-12"), true);
+assert.equal(isValidIsoCalendarDate("2024-02-29"), true);
+assert.equal(isValidIsoCalendarDate("2023-02-29"), false);
+assert.equal(isValidIsoCalendarDate("2026-02-31"), false);
+assert.equal(isValidIsoCalendarDate("2026-11-31"), false);
+assert.equal(isValidIsoCalendarDate("2026-11-00"), false);
+assert.equal(isValidIsoCalendarDate("2026-11-1"), false);
+console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
