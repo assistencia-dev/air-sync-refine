@@ -5,6 +5,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
+import { DbsInventoryPage } from "./dbs-inventory";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
 import {
@@ -436,6 +437,7 @@ function DbsControlPage() {
   const employeeFrameDocumentRef = useRef<Document | null>(null);
   const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [inventoryModuleSection, setInventoryModuleSection] = useState<"parts" | "purchases" | null>(null);
 
   // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
   // autenticado reaplica apenas a apresentação do colaborador no carregamento
@@ -1146,7 +1148,11 @@ function DbsControlPage() {
         return;
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE") {
-        navigate({ to: "/dbs-inventory" });
+        setInventoryModuleSection("purchases");
+        return;
+      }
+      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
+        setInventoryModuleSection(msg.section === "purchases" ? "purchases" : "parts");
         return;
       }
       if (msg.type === "DBS_CONTROL_BACK_TO_MAIN") {
@@ -2298,8 +2304,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-operational-2`
-    : "/dbs-control.html?v=20261112-materials-operational-2"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-inline-3`
+    : "/dbs-control.html?v=20261112-materials-inline-3"
 
   if (employeeMode) {
     return (
@@ -2317,27 +2323,40 @@ function DbsControlPage() {
 
   return (
     <main className="flex min-h-[100dvh] flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
-      <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
-        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-          <span>DBS CONTROL</span>
-          <button type="button" onClick={() => navigate({ to: "/dbs-inventory" })} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Peças, Estoque e Compras</button>
-          {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
+      {inventoryModuleSection ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <DbsInventoryPage
+            embedded
+            initialSection={inventoryModuleSection}
+            onClose={() => setInventoryModuleSection(null)}
+          />
         </div>
-        <button
-          type="button"
-          onClick={() => navigate({ to: employeeMode ? "/folha-ponto" : "/admin", replace: true })}
-          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-        >
-          ← Voltar ao menu principal
-        </button>
-      </div>
-      {cloudError && (
-        <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
-          <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
-          <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
-        </section>
+      ) : (
+        <>
+          <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+              <span>DBS CONTROL</span>
+              <button type="button" onClick={() => setInventoryModuleSection("parts")} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Peças & Estoque</button>
+              <button type="button" onClick={() => setInventoryModuleSection("purchases")} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Compras</button>
+              {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/admin", replace: true })}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+            >
+              ← Voltar ao menu principal
+            </button>
+          </div>
+          {cloudError && (
+            <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+              <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
+              <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
+            </section>
+          )}
+          <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+        </>
       )}
-      <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
       <MobileAdminNavigation active="operation" />
     </main>
   );
