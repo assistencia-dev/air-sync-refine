@@ -517,7 +517,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = supabaseAdmin.from("dbs_control_parts")
-        .select("id,sku,name,description,stock_quantity,cost_cents,sale_cents,status,updated_at");
+        .select("id,sku,name,description,stock_quantity,cost_cents,sale_cents,supplier_id,measure_unit_id,status,updated_at");
       return isScopedCollaborator ? noRows : query;
     })(),
     (() => {
@@ -762,6 +762,8 @@ async function hydrateDbsControlStateFromCanonicalDb(
     stock_quantity: Number(row.stock_quantity || 0),
     custo: Number(row.cost_cents || 0) / 100,
     venda: Number(row.sale_cents || 0) / 100,
+    supplier_id: row.supplier_id ? String(row.supplier_id) : null,
+    measure_unit_id: row.measure_unit_id ? String(row.measure_unit_id) : null,
     stock_source: "relational",
     status: row.status || "ativo",
   }));
