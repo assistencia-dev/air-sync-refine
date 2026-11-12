@@ -3336,7 +3336,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
-        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,cost_per_kg_cents,updated_at")
         .eq("scope_key",scopeKey).order("serial_number").limit(500),
     ]);
     for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders]) {
