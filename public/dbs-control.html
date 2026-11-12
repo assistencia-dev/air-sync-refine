@@ -2281,18 +2281,24 @@
       var unitSelect = document.getElementById('peca-unidade');
       if (supplierSelect) {
         var currentSupplier = supplierSelect.value;
-        supplierSelect.innerHTML = '<option value="">Selecione o fornecedor...</option>' +
-          (Array.isArray(data.suppliers) ? data.suppliers : []).map(function (item) {
-            return '<option value="' + String(item.id) + '">' + String(item.name || 'Fornecedor') + '</option>';
-          }).join('');
+        supplierSelect.innerHTML = '<option value="">Selecione o fornecedor...</option>';
+        (Array.isArray(data.suppliers) ? data.suppliers : []).forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = String(item.id || '');
+          option.textContent = String(item.name || 'Fornecedor');
+          supplierSelect.appendChild(option);
+        });
         if (currentSupplier) supplierSelect.value = currentSupplier;
       }
       if (unitSelect) {
         var currentUnit = unitSelect.value;
-        unitSelect.innerHTML = '<option value="">Selecione a unidade...</option>' +
-          (Array.isArray(data.measureUnits) ? data.measureUnits : []).map(function (item) {
-            return '<option value="' + String(item.id) + '">' + String(item.code || '') + ' · ' + String(item.name || '') + '</option>';
-          }).join('');
+        unitSelect.innerHTML = '<option value="">Selecione a unidade...</option>';
+        (Array.isArray(data.measureUnits) ? data.measureUnits : []).forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = String(item.id || '');
+          option.textContent = String(item.code || '') + ' · ' + String(item.name || '');
+          unitSelect.appendChild(option);
+        });
         if (currentUnit) unitSelect.value = currentUnit;
       }
       if (typeof ERP_STATE !== 'undefined') ERP_STATE._dbsControlMasterData = data;
