@@ -241,7 +241,7 @@ function TreasuryPage() {
     <div className="admin-mobile-shell flex min-h-screen flex-col pb-20 lg:pb-0" style={{ background: "#f4f8fc", fontFamily: "'Inter',system-ui,sans-serif" }}>
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
         <div className="flex items-center gap-3"><BrandLogo frameClassName="rounded-lg px-2 py-1" imageClassName="h-9 w-auto max-w-[190px] object-contain" /><span className="hidden h-7 w-px bg-slate-200 sm:block" /><span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#1769D1" }}>Módulo Financeiro · DBS TREASURY</span></div>
-        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar ao painel</button></div>
+        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: profile?.role_key === "FINANCEIRO_LEITURA" ? "/financeiro-acompanhamento" : "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar</button></div>
       </header>
       <section aria-label="Compromissos de compras aprovadas" className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -331,7 +331,7 @@ function TreasuryPage() {
         </div>}
         <iframe className="admin-mobile-iframe" key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 176px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
-      <MobileAdminNavigation active="finance" />
+      {profile?.role_key === "SUPER_ADMIN" && <MobileAdminNavigation active="finance" />}
     </div>
   );
 }
