@@ -1999,7 +1999,7 @@
     persistLocalOnly();
     render('tecnicos');
   };
-  window.salvarPeca = async function (event) {
+  window.dbsSalvarPecaRelacional = async function (event) {
     event.preventDefault();
     var form = document.getElementById('form-peca');
     var id = form && form.dataset.dbsEditId || '';
@@ -4399,7 +4399,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         <div id="tab-pecas" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
                 <h3 style="margin-bottom: 14px;">Cadastrar Peça / Insumo no Estoque</h3>
-                <form id="form-peca" onsubmit="salvarPeca(event)">
+                <form id="form-peca" onsubmit="dbsSalvarPecaRelacional(event)">
                     <div class="form-grid">
                         <div class="form-group"><label>SKU / Código</label><input type="text" id="peca-sku" required></div>
                         <div class="form-group"><label>Descrição Peça</label><input type="text" id="peca-nome" required></div>
@@ -9070,17 +9070,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         // AUXILIARES
         function salvarPeca(e) {
-            e.preventDefault();
-            const sku = document.getElementById('peca-sku').value.trim();
-            const nome = document.getElementById('peca-nome').value.trim();
-            if (!sku || !nome) return;
-            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
-            if (ERP_STATE.pecas.some(p => norm(p.sku) === norm(sku))) {
-                alert('Já existe uma peça com este SKU.');
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            if (typeof window.dbsSalvarPecaRelacional !== 'function') {
+                alert('O cadastro relacional de peças ainda não terminou de carregar.');
                 return;
             }
-            ERP_STATE.pecas.push({ id: crypto.randomUUID(), sku, nome, qtd: 0, custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) });
-            saveState(); document.getElementById('form-peca').reset(); renderizarTudo();
+            return window.dbsSalvarPecaRelacional(e);
         }
         function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${Number(p.custo||0).toFixed(2)}</td><td>R$ ${Number(p.venda||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarServico(e) {
@@ -9099,17 +9094,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
         function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${Number(s.valor||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarCompra(e) {
-            e.preventDefault();
-            const partId = document.getElementById('comp-peca')?.value || '';
-            const part = ERP_STATE.pecas.find(p => String(p.id) === String(partId));
-            const qtd = Number(document.getElementById('comp-qtd').value || 0);
-            const valor = Number(document.getElementById('comp-valor').value || 0);
-            if (!document.getElementById('comp-fornecedor').value.trim() || !partId || !part || qtd <= 0 || valor <= 0) {
-                alert('Informe fornecedor, peça, quantidade e valor total da compra.');
-                return;
-            }
-            ERP_STATE.compras.push({ id: crypto.randomUUID(), fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || part.nome || part.name || '', part_id: partId, qtd, valor, payment_status: document.getElementById('comp-pagamento')?.value || 'unpaid', status: "Enviado" });
-            saveState(); document.getElementById('form-compra').reset(); renderizarTudo();
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            alert('O cadastro antigo de compras foi desativado. Use Compras & Estoque para selecionar fornecedor, peça, unidade e centro de custo relacionais.');
+            if (typeof window.abrirFinanceiroEstoque === 'function') return window.abrirFinanceiroEstoque();
         }
         function renderizarCompras() {
             const select = document.getElementById('comp-peca');
