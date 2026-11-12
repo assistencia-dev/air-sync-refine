@@ -1771,11 +1771,12 @@ function DbsControlPage() {
 
       if (msg.type === "DBS_CONTROL_APPROVE_QUOTE") {
         const requestId = String(msg.requestId || "").slice(0, 160);
-        const quoteNumber = String(msg.quoteNumber || "").trim().slice(0, 80);
+        const quoteId = String(msg.quoteId || "").trim();
+        const quoteUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         try {
-          if (!requestId || !quoteNumber) throw new Error("Número do orçamento inválido.");
-          const { data, error } = await (supabase as any).rpc("dbs_control_approve_quote_by_number", {
-            p_quote_number: quoteNumber,
+          if (!requestId || !quoteUuid.test(quoteId)) throw new Error("O orçamento precisa ter um ID relacional válido para ser aprovado.");
+          const { data, error } = await (supabase as any).rpc("dbs_control_approve_quote_and_create_work_order", {
+            p_quote_id: quoteId,
             p_idempotency_key: "quote-ui:" + requestId,
           });
           if (error) throw error;
