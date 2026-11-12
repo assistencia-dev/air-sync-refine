@@ -122,17 +122,16 @@ function TreasuryPage() {
             bancos: [], movimentacoes: [], auditoria: [], _meta: { version: 5 },
           };
           const costCenters = Array.isArray(cloud?.cost_centers) ? cloud.cost_centers : [];
-          if (costCenters.length) {
-            const currentMeta = stateToHydrate._meta && typeof stateToHydrate._meta === "object" && !Array.isArray(stateToHydrate._meta)
-              ? stateToHydrate._meta as Record<string, unknown>
-              : {};
-            stateToHydrate._meta = {
-              ...currentMeta,
-              centrosCusto: costCenters.map((center: any) => ({
-                id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active",
-              })),
-            };
-          }
+          const currentMeta = stateToHydrate._meta && typeof stateToHydrate._meta === "object" && !Array.isArray(stateToHydrate._meta)
+            ? stateToHydrate._meta as Record<string, unknown>
+            : {};
+          stateToHydrate._meta = {
+            ...currentMeta,
+            centrosCusto: costCenters.map((center: any) => ({
+              id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active",
+            })),
+            dreMaterialCosts: Array.isArray(cloud?.dre_material_costs) ? cloud.dre_material_costs : [],
+          };
           cloudReadyRef.current = true;
           iframeRef.current?.contentWindow?.postMessage(
             { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
@@ -165,11 +164,17 @@ function TreasuryPage() {
           const cloud = await getTreasuryCloudState();
           setPurchaseCommitments(Array.isArray(cloud?.purchase_commitments) ? cloud.purchase_commitments : []);
           setPendingPurchaseApprovals(Array.isArray(cloud?.pending_purchase_approvals) ? cloud.pending_purchase_approvals : []);
-          const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
-          if (state) iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
-            window.location.origin,
-          );
+          const state = cloud?.state && typeof cloud.state === "object" ? cloud.state as Record<string, any> : null;
+          if (state) {
+            state._meta = {
+              ...(state._meta && typeof state._meta === "object" ? state._meta : {}),
+              dreMaterialCosts: Array.isArray(cloud?.dre_material_costs) ? cloud.dre_material_costs : [],
+            };
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
+              window.location.origin,
+            );
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : "Falha ao salvar centro de custo.";
           iframeRef.current?.contentWindow?.postMessage(
