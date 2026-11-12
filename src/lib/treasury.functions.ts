@@ -177,6 +177,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     { data: purchaseCommitments, error: commitmentsError },
     { data: costCenters, error: costCentersError },
     { data: pendingPurchaseApprovals, error: pendingPurchaseApprovalsError },
+    { data: materialCostRows, error: materialCostRowsError },
   ] = await Promise.all([
     supabaseAdmin
       .from("treasury_snapshots")
@@ -212,6 +213,13 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .neq("status", "cancelled")
       .order("purchase_date", { ascending: false })
       .limit(100),
+    admin
+      .from("treasury_vw_dre_competence_by_account")
+      .select("competence_month,account_code,signed_amount_cents")
+      .eq("scope_key", scopeKey)
+      .in("account_code", ["5.1.01", "5.1.02"])
+      .order("competence_month", { ascending: true })
+      .limit(1000),
   ]);
 
   if (snapshotError) throw new Error(snapshotError.message);
@@ -219,6 +227,24 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
+  if (materialCostRowsError) throw new Error("Falha ao carregar custos operacionais do Ledger: " + materialCostRowsError.message);
+  const materialCostsByMonthMap = new Map<string, { competence_month: string; parts_cost_cents: number; gas_cost_cents: number; total_cost_cents: number }>();
+  for (const row of materialCostRows ?? []) {
+    const month = String(row.competence_month ?? "").slice(0, 10);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(month)) continue;
+    const entry = materialCostsByMonthMap.get(month) ?? {
+      competence_month: month,
+      parts_cost_cents: 0,
+      gas_cost_cents: 0,
+      total_cost_cents: 0,
+    };
+    const amount = Number(row.signed_amount_cents ?? 0);
+    if (String(row.account_code) === "5.1.01") entry.parts_cost_cents += amount;
+    if (String(row.account_code) === "5.1.02") entry.gas_cost_cents += amount;
+    entry.total_cost_cents = entry.parts_cost_cents + entry.gas_cost_cents;
+    materialCostsByMonthMap.set(month, entry);
+  }
+  const dreMaterialCosts = Array.from(materialCostsByMonthMap.values()).sort((a, b) => a.competence_month.localeCompare(b.competence_month));
   const costCenterById = new Map((costCenters ?? []).map((center: any) => [String(center.id), center]));
   const pendingPurchaseApprovalsWithCostCenter = (pendingPurchaseApprovals ?? []).map((purchase: any) => {
     const center = costCenterById.get(String(purchase.cost_center_id ?? ""));
@@ -235,6 +261,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       centrosCusto: (costCenters ?? []).map((center: any) => ({
         id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active"
       })),
+      dreMaterialCosts,
     };
   }
   const lastLedgerUpdate = (entries ?? []).reduce((latest: string | null, entry: any) => {
@@ -251,6 +278,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     purchase_commitments: purchaseCommitments ?? [],
     pending_purchase_approvals: pendingPurchaseApprovalsWithCostCenter,
     cost_centers: costCenters ?? [],
+    dre_material_costs: dreMaterialCosts,
     source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
 }
