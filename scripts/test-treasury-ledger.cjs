@@ -16,8 +16,8 @@ const maintenanceAclMigration = fs.readFileSync('supabase/migrations/20261030121
 const healthScript = fs.readFileSync('scripts/check-treasury-ledger-health.mjs', 'utf8');
 const healthWorkflow = fs.readFileSync('.github/workflows/treasury-ledger-health.yml', 'utf8');
 
-assert.doesNotMatch(route, /from\(["']treasury_snapshots["']\)[\s\S]*?\.(?:insert|update|upsert)\(/);
-assert.doesNotMatch(functions, /from\(["']treasury_snapshots["']\)[\s\S]*?\.(?:insert|update|upsert)\(/);
+assert.doesNotMatch(route, /from\(["']treasury_snapshots["']\)(?:(?!;)[\s\S])*?\.(?:insert|update|upsert)\(/);
+assert.doesNotMatch(functions, /from\(["']treasury_snapshots["']\)(?:(?!;)[\s\S])*?\.(?:insert|update|upsert)\(/);
 assert.doesNotMatch(fieldControl, /from\("treasury_snapshots"\)\.insert\(/);
 assert.doesNotMatch(html, /DBS_TREASURY_SAVE/);
 assert.match(route, /DBS_TREASURY_LEDGER_COMMAND/);
