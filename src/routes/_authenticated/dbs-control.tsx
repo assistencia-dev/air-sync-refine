@@ -6,7 +6,7 @@ import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers,
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
 import {
   deleteDbsControlLocalSyncCommand,
   getDbsControlLocalSyncSummary,
@@ -1133,6 +1133,18 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA") {
+        try {
+          const result = await getDbsControlCatalogMasterData();
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_CATALOG_MASTER_DATA", result }, window.location.origin);
+        } catch (err) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_CATALOG_MASTER_DATA_ERROR",
+            error: err instanceof Error ? err.message : "Não foi possível carregar os cadastros de fornecedor e unidade.",
+          }, window.location.origin);
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE") {
         navigate({ to: "/dbs-inventory" });
         return;
@@ -1770,11 +1782,18 @@ function DbsControlPage() {
           } else {
             const cylinderId = String(msg.cylinderId || "");
             if (!validUuid.test(cylinderId)) throw new Error("Botija inválida.");
-            const { data, error } = await (supabase as any).rpc("dbs_control_register_gas_usage", {
+            const grossBefore = Number(msg.grossWeightBeforeKg);
+            const grossAfter = Number(msg.grossWeightAfterKg);
+            if (!Number.isFinite(grossBefore) || !Number.isFinite(grossAfter) || grossBefore <= grossAfter || grossAfter < 0) {
+              throw new Error("Informe a pesagem bruta antes e depois da aplicação; o peso final deve ser menor.");
+            }
+            const { data, error } = await (supabase as any).rpc("dbs_control_register_gas_usage_weighted", {
               p_work_order_id: workOrderId,
               p_cylinder_id: cylinderId,
               p_equipment_reference: String(msg.equipmentReference || "").slice(0, 180),
               p_application_note: String(msg.applicationNote || "").slice(0, 500),
+              p_gross_weight_before_kg: grossBefore,
+              p_gross_weight_after_kg: grossAfter,
               p_idempotency_key: "field-ui:" + requestId,
             });
             if (error) throw error;

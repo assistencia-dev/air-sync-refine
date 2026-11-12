@@ -1141,6 +1141,8 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     const treasuryAdminAuthRequests = new Map();
     let treasuryLedgerSequence = 0;
     const treasuryLedgerRequests = new Map();
+    let treasuryCostCenterSequence = 0;
+    const treasuryCostCenterRequests = new Map();
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
@@ -1157,6 +1159,14 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             if (msg.ok === true) request.resolve(msg.result || null);
             else request.reject(new Error(String(msg.error || "Falha ao gravar o lançamento relacional.")));
         }
+        if (msg.type === "DBS_TREASURY_COST_CENTER_RESULT") {
+            const request = treasuryCostCenterRequests.get(String(msg.requestId || ""));
+            if (!request) return;
+            clearTimeout(request.timeoutId);
+            treasuryCostCenterRequests.delete(String(msg.requestId || ""));
+            if (msg.ok === true) request.resolve(msg.result || null);
+            else request.reject(new Error(String(msg.error || "Falha ao salvar o centro de custo relacional.")));
+        }
     });
 
     function postTreasuryLedgerCommand(command) {
@@ -1168,6 +1178,18 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             }, 30000);
             treasuryLedgerRequests.set(requestId, { resolve, reject, timeoutId });
             treasuryPost("DBS_TREASURY_LEDGER_COMMAND", { requestId, command });
+        });
+    }
+
+    function postTreasuryCostCenter(center) {
+        return new Promise((resolve, reject) => {
+            const requestId = "treasury-cost-center-" + Date.now() + "-" + (++treasuryCostCenterSequence);
+            const timeoutId = setTimeout(() => {
+                treasuryCostCenterRequests.delete(requestId);
+                reject(new Error("O Financeiro não confirmou o cadastro do centro de custo. Tente novamente."));
+            }, 30000);
+            treasuryCostCenterRequests.set(requestId, { resolve, reject, timeoutId });
+            treasuryPost("DBS_TREASURY_SAVE_COST_CENTER", { requestId, center });
         });
     }
 
@@ -2689,11 +2711,25 @@ function showToast(msg) {
         STATE._meta.planoContas.push({id:'pc_'+Date.now(),codigo,nome:nome.trim(),ativo:true});
         logAuditoria('CADASTRO','Plano de Contas','Conta criada: '+codigo+' - '+nome.trim()); render();
     }
-    function adicionarCentroCustoPrompt(){
+    async function adicionarCentroCustoPrompt(){
         const nome=prompt('Nome do centro de custo:'); if(!nome)return;
-        const codigo=prompt('Código (ex.: CC-001):')||'CC-'+String((STATE._meta.centrosCusto||[]).length+1).padStart(3,'0');
-        STATE._meta.centrosCusto.push({id:'cc_'+Date.now(),codigo,nome:nome.trim(),ativo:true});
-        logAuditoria('CADASTRO','Centro de Custo','Centro criado: '+codigo+' - '+nome.trim()); render();
+        const codigo=(prompt('Código (ex.: CC-001):')||'CC-'+String((STATE._meta.centrosCusto||[]).length+1).padStart(3,'0')).trim().toUpperCase();
+        if(!/^[A-Z0-9._-]{1,40}$/.test(codigo) || nome.trim().length<2){
+            alert('Informe um código e um nome válidos para o centro de custo.');
+            return;
+        }
+        try{
+            const saved=await postTreasuryCostCenter({code:codigo,name:nome.trim()});
+            STATE._meta.centrosCusto=Array.isArray(STATE._meta.centrosCusto)?STATE._meta.centrosCusto:[];
+            const existing=STATE._meta.centrosCusto.find(x=>String(x.id)===String(saved.id));
+            const center={id:String(saved.id),codigo:String(saved.code||codigo),nome:String(saved.name||nome.trim()),ativo:true};
+            if(existing)Object.assign(existing,center);else STATE._meta.centrosCusto.push(center);
+            logAuditoria('CADASTRO','Centro de Custo','Centro relacional salvo: '+center.codigo+' - '+center.nome);
+            render();
+            showToast('Centro de custo salvo na base relacional.');
+        }catch(error){
+            alert(error instanceof Error?error.message:'Não foi possível salvar o centro de custo na base compartilhada.');
+        }
     }
     async function alternarFechamentoPeriodo(){
         const periodo=periodoAtualSelecionado(); if(!periodo)return;

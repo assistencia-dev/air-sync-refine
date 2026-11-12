@@ -1,19 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  createDbsPartSale,
-  createDbsPurchase,
-  decideDbsPurchaseApproval,
-  getDbsPhase2InventoryOverview,
-  releaseDbsWorkOrderReservation,
-  reserveDbsWorkOrderParts,
-  settleDbsPartSale,
-  settleDbsPurchase,
-  receiveDbsPurchase,
-  receiveDbsPurchaseItems,
-  reverseDbsInventoryMovement,
-  getDbsInventoryFinancialOverview,
+  createDbsPartSale, createDbsPurchase, createDbsSupplier, createDbsMeasureUnit,
+  createDbsUnitConversion, decideDbsPurchaseApproval, getDbsPhase2InventoryOverview,
+  getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation, reserveDbsWorkOrderParts,
+  setDbsWorkOrderCostCenter, settleDbsPartSale, settleDbsPurchase, receiveDbsPurchase,
+  receiveDbsPurchaseItems, reverseDbsInventoryMovement, getDbsInventoryFinancialOverview,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -51,42 +45,76 @@ function DbsInventoryPage() {
   const [busy, setBusy] = useState(false);
 
   const [message, setMessage] = useState("");
-  const [supplierName, setSupplierName] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [costCenterId, setCostCenterId] = useState("");
   const [purchaseDocument, setPurchaseDocument] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierCnpj, setNewSupplierCnpj] = useState("");
+  const [newSupplierPhone, setNewSupplierPhone] = useState("");
+  const [newUnitCode, setNewUnitCode] = useState("");
+  const [newUnitName, setNewUnitName] = useState("");
+  const [newUnitSymbol, setNewUnitSymbol] = useState("");
+  const [conversionFrom, setConversionFrom] = useState("");
+  const [conversionTo, setConversionTo] = useState("");
+  const [conversionFactor, setConversionFactor] = useState("1");
+  const [costCenterWorkOrderId, setCostCenterWorkOrderId] = useState("");
+  const [costCenterWorkOrderValue, setCostCenterWorkOrderValue] = useState("");
+  const [gasSerialNumber, setGasSerialNumber] = useState("");
+  const [gasType, setGasType] = useState("R410A");
+  const [gasEmployeeId, setGasEmployeeId] = useState("");
+  const [gasVehicleLabel, setGasVehicleLabel] = useState("");
+  const [gasTotalCharges, setGasTotalCharges] = useState("10");
+  const [gasTareWeight, setGasTareWeight] = useState("");
+  const [gasInitialGrossWeight, setGasInitialGrossWeight] = useState("");
   const [quoteImport] = useState(() => {
-    if (typeof window === "undefined") return { quoteId: "", items: [] as any[] };
-    const params = new URLSearchParams(window.location.search);
-    try {
-      const parsed = JSON.parse(params.get("purchase_items") || "[]");
-      return { quoteId: params.get("quote_id") || "", items: Array.isArray(parsed) ? parsed : [] };
-    } catch {
-      return { quoteId: params.get("quote_id") || "", items: [] as any[] };
-    }
+    if (typeof window === "undefined") return { quoteId: "" };
+    return { quoteId: new URLSearchParams(window.location.search).get("quote_id") || "" };
   });
-  const [purchaseLines, setPurchaseLines] = useState<Array<{ partId: string; sku: string; description: string; quantity: string; unitCost: string }>>(
-    () => quoteImport.items.length
-      ? quoteImport.items.map((item: any) => ({ partId: "", sku: String(item.sku || ""), description: String(item.description || ""), quantity: String(item.quantity || 1), unitCost: "" }))
-      : [{ partId: "", sku: "", description: "", quantity: "1", unitCost: "" }]
+  const [purchaseLines, setPurchaseLines] = useState<Array<{ partId:string; description:string; quantity:string; unitCost:string; purchaseUnitId:string; conversionFactor:number }>>(
+    [{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]
   );
+  const quotePurchase = useQuery({
+    queryKey: ["dbs-quote-purchase-items", quoteImport.quoteId],
+    queryFn: () => getDbsQuotePurchaseItems({ data: { quoteId: quoteImport.quoteId } }),
+    enabled: Boolean(quoteImport.quoteId),
+    retry: 1,
+  });
 
   const data = overview.data;
   const parts = data?.parts ?? [];
+  const suppliers = data?.suppliers ?? [];
+  const measureUnits = data?.measureUnits ?? [];
+  const unitConversions = data?.unitConversions ?? [];
+  const costCenters = data?.costCenters ?? [];
+  const gasCylinders = data?.gasCylinders ?? [];
+  const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
   const sales = data?.sales ?? [];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
 
   useEffect(() => {
-    if (!parts.length || !quoteImport.items.length) return;
-    setPurchaseLines((current) => current.map((line) => {
-      if (line.partId) return line;
-      const match = line.sku
-        ? parts.find((part: any) => String(part.sku || "").trim().toLocaleLowerCase("pt-BR") === line.sku.trim().toLocaleLowerCase("pt-BR"))
-        : null;
-      return match ? { ...line, partId: match.id } : line;
-    }));
-  }, [parts, quoteImport.items.length]);
+    if (!quotePurchase.data || !parts.length) return;
+    const lines = quotePurchase.data.items.map((item: any) => {
+      const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
+      return {
+        partId: String(item.part_id),
+        description: String(item.description || part?.name || ""),
+        quantity: String(item.quantity || 1),
+        unitCost: "",
+        purchaseUnitId: String(part?.measure_unit_id || ""),
+        conversionFactor: 1,
+      };
+    });
+    if (lines.length) setPurchaseLines(lines);
+    if (quotePurchase.data.quote?.cost_center_id) setCostCenterId(String(quotePurchase.data.quote.cost_center_id));
+  }, [quotePurchase.data, parts]);
+
+  useEffect(() => {
+    if (!supplierId && suppliers.length === 1) setSupplierId(String(suppliers[0].id));
+    if (!costCenterId && costCenters.length === 1) setCostCenterId(String(costCenters[0].id));
+  }, [suppliers, costCenters, supplierId, costCenterId]);
 
   const availableParts = parts.filter((part: any) =>
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
@@ -111,30 +139,31 @@ function DbsInventoryPage() {
 
   async function submitPurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const items = purchaseLines.map((line) => ({
-      partId: line.partId,
-      quantity: Number(line.quantity),
-      unitCostCents: Math.round(Number(line.unitCost) * 100),
-    }));
-    if (!supplierName.trim()) {
-      setMessage("Informe o fornecedor da compra.");
+    if (!supplierId || !costCenterId) {
+      setMessage("Selecione fornecedor e centro de custo cadastrados.");
       return;
     }
-    if (items.some((item) => !item.partId || !(item.quantity > 0) || !(item.unitCostCents > 0))) {
-      setMessage("Confira cada peça, quantidade e custo unitário. Peças cotadas sem SKU correspondente precisam ser vinculadas manualmente ao catálogo.");
+    const items = purchaseLines.map((line) => ({
+      partId: line.partId,
+      purchaseUnitId: line.purchaseUnitId,
+      quantity: Number(line.quantity),
+      unitCostCents: Math.round(Number(line.unitCost) * 100),
+      conversionFactor: Number(line.conversionFactor),
+    }));
+    if (items.some((item) => !item.partId || !item.purchaseUnitId || !(item.quantity > 0) || !(item.unitCostCents > 0) || !(item.conversionFactor > 0))) {
+      setMessage("Cada item precisa de peça relacional, unidade de compra e conversão ativa para a unidade-base.");
       return;
     }
     const saved = await runAction(() => createDbsPurchase({ data: {
-      supplierName: supplierName.trim(),
+      supplierId, costCenterId,
       documentNumber: purchaseDocument.trim() || undefined,
       purchaseDate,
       idempotencyKey: "purchase-register:" + crypto.randomUUID(),
       items,
-    } }), "Compra registrada. Contas a pagar foram lançadas; o estoque só será atualizado após o recebimento.");
+    } }), "Compra registrada com fornecedor, centro de custo e unidades relacionais. O estoque entra somente no recebimento.");
     if (saved) {
-      setSupplierName("");
       setPurchaseDocument("");
-      setPurchaseLines([{ partId: "", sku: "", description: "", quantity: "1", unitCost: "" }]);
+      setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
     }
   }
 
@@ -142,14 +171,96 @@ function DbsInventoryPage() {
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
   }
 
+  function conversionFor(partIdValue: string, purchaseUnitId: string): number {
+    const part = parts.find((entry: any) => String(entry.id) === partIdValue);
+    if (!part || !part.measure_unit_id || !purchaseUnitId) return 0;
+    if (String(part.measure_unit_id) === purchaseUnitId) return 1;
+    const conversion = unitConversions.find((row: any) =>
+      String(row.from_unit_id) === purchaseUnitId && String(row.to_unit_id) === String(part.measure_unit_id)
+    );
+    return conversion ? Number(conversion.factor) : 0;
+  }
+
+  async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const saved = await runAction(() => createDbsSupplier({ data: { name:newSupplierName, cnpj:newSupplierCnpj, phone:newSupplierPhone } }), "Fornecedor cadastrado.");
+    if (saved) { setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone(""); await overview.refetch(); }
+  }
+  async function addMeasureUnit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const saved = await runAction(() => createDbsMeasureUnit({ data: { code:newUnitCode, name:newUnitName, symbol:newUnitSymbol||newUnitCode } }), "Unidade de medida cadastrada.");
+    if (saved) { setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol(""); await overview.refetch(); }
+  }
+  async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const saved = await runAction(() => createDbsUnitConversion({ data: { fromUnitId:conversionFrom, toUnitId:conversionTo, factor:Number(conversionFactor) } }), "Conversão de unidade cadastrada.");
+    if (saved) { setConversionFactor("1"); await overview.refetch(); }
+  }
+
+  async function linkOrderCostCenter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!costCenterWorkOrderId||!costCenterWorkOrderValue){setMessage("Selecione a OS e o centro de custo.");return;}
+    const saved=await runAction(()=>setDbsWorkOrderCostCenter({data:{workOrderId:costCenterWorkOrderId,costCenterId:costCenterWorkOrderValue}}),"Centro de custo vinculado à ordem de serviço.");
+    if(saved){setCostCenterWorkOrderId("");setCostCenterWorkOrderValue("");}
+  }
+
+  async function assignWeightedGasCylinder(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const tare=Number(gasTareWeight), gross=Number(gasInitialGrossWeight), charges=Number(gasTotalCharges);
+    if(!gasSerialNumber.trim()||!gasType.trim()||!gasEmployeeId||!Number.isInteger(charges)||charges<=0||
+      !Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
+      setMessage("Informe série, refrigerante, técnico, quantidade de cargas, tara e peso bruto inicial válidos.");
+      return;
+    }
+    await runAction(async()=>{
+      const {data,error}=await (supabase as any).rpc("dbs_control_assign_gas_cylinder_weighted",{
+        p_serial_number:gasSerialNumber.trim(),
+        p_refrigerant_type:gasType.trim().toUpperCase(),
+        p_employee_id:gasEmployeeId,
+        p_total_charges:charges,
+        p_vehicle_label:gasVehicleLabel.trim()||null,
+        p_tare_weight_kg:tare,
+        p_initial_gross_weight_kg:gross,
+      });
+      if(error) throw new Error(error.message);
+      return data;
+    },"Cilindro cadastrado e vinculado ao técnico com tara e pesagem inicial.");
+    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
+  }
+
+  async function initializeExistingCylinderWeights(cylinder:any) {
+    const tareRaw=window.prompt("Tara do vasilhame (kg):","");
+    if(tareRaw===null)return;
+    const grossRaw=window.prompt("Peso bruto atual da botija (kg):","");
+    if(grossRaw===null)return;
+    const tare=Number(tareRaw.replace(",",".")),gross=Number(grossRaw.replace(",","."));
+    if(!Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
+      setMessage("Pesagem inválida: o peso bruto deve ser maior que a tara.");
+      return;
+    }
+    await runAction(async()=>{
+      const {data,error}=await (supabase as any).rpc("dbs_control_initialize_existing_gas_cylinder_weights",{
+        p_cylinder_id:cylinder.id,p_tare_weight_kg:tare,p_initial_gross_weight_kg:gross
+      });
+      if(error)throw new Error(error.message);
+      return data;
+    },"Tara e pesagem inicial do cilindro registradas.");
+  }
+
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!partId || !workOrderId || Number(quantity) <= 0) return;
-    await runAction(() => reserveDbsWorkOrderParts({ data: {
-      workOrderId,
-      idempotencyKey: "reserve:" + crypto.randomUUID(),
-      items: [{ partId, quantity: Number(quantity) }],
-    } }), "Reserva registrada com sucesso.");
+    if (!partId || !workOrderId || !costCenterId || Number(quantity) <= 0) {
+      setMessage("Selecione OS, peça, quantidade e centro de custo.");
+      return;
+    }
+    await runAction(async () => {
+      await setDbsWorkOrderCostCenter({ data: { workOrderId, costCenterId } });
+      return reserveDbsWorkOrderParts({ data: {
+        workOrderId,
+        idempotencyKey: "reserve:" + crypto.randomUUID(),
+        items: [{ partId, quantity: Number(quantity) }],
+      } });
+    }, "Centro de custo vinculado à OS e reserva registrada.");
   }
 
   async function createSale(event: React.FormEvent<HTMLFormElement>) {
@@ -231,6 +342,83 @@ function DbsInventoryPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Vendas registradas</p><p className="mt-1 text-2xl font-black">{sales.length}</p></div>
           </section>
 
+          <section className="mb-5 grid gap-4 lg:grid-cols-3">
+            <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-black">Cadastro de fornecedor</h2>
+              <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
+              <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
+            </form>
+            <form onSubmit={addMeasureUnit} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-black">Unidade de medida</h2>
+              <p className="mt-1 text-xs text-slate-500">Cadastre unidades-base e unidades de compra (UN, CX, KG, L, M...).</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm"/>
+                <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm"/>
+              </div>
+              <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar unidade</button>
+            </form>
+            <form onSubmit={addUnitConversion} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-black">Conversão de unidades</h2>
+              <p className="mt-1 text-xs text-slate-500">Defina quantas unidades-base existem em uma unidade de compra.</p>
+              <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
+            </form>
+          </section>
+          {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo no DBS TREASURY.</p>}
+          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <form onSubmit={linkOrderCostCenter} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-black">Vincular centro de custo à OS</h2>
+              <p className="mt-1 text-xs text-slate-500">Defina a classificação operacional antes do consumo de peças do carro ou gás.</p>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
+                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <option value="">Selecione a OS</option>
+                  {workOrders.map((order:any)=><option key={order.id} value={order.id}>{order.protocol||order.id} · {order.status}</option>)}
+                </select>
+              </label>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo
+                <select required value={costCenterWorkOrderValue} onChange={e=>setCostCenterWorkOrderValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <option value="">Selecione o centro de custo</option>
+                  {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+                </select>
+              </label>
+              <button disabled={busy||!workOrders.length||!costCenters.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-50">Vincular à OS</button>
+            </form>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-black">Cilindros sob custódia</h2><span className="text-xs text-slate-500">{gasCylinders.length} cadastrados</span></div>
+              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. A pesagem na OS atualiza o saldo do cilindro.</p>
+              {gasCylinders.length ? <div className="mt-3 space-y-2">
+                {gasCylinders.map((cylinder:any)=>{
+                  const employee=employees.find((entry:any)=>String(entry.id)===String(cylinder.employee_id));
+                  const tare=Number(cylinder.tare_weight_kg),gross=Number(cylinder.current_gross_weight_kg);
+                  return <div key={cylinder.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
+                    <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
+                    <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                    {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
+                  </div>;
+                })}
+              </div> : <p className="mt-3 text-sm text-slate-500">Nenhum cilindro cadastrado.</p>}
+            </div>
+          </section>
+          <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. Informe tara e peso bruto inicial para habilitar consumo pesado na OS.</p></div>
+            <form onSubmit={assignWeightedGasCylinder} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
+              <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
+              <label className="text-xs font-bold text-slate-600">Veículo<input value={gasVehicleLabel} onChange={e=>setGasVehicleLabel(e.target.value)} placeholder="Veículo / placa" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
+            </form>
+          </section>
           <div className="mb-5 flex gap-2">
             <button type="button" onClick={() => setTab("sales")} className={tab === "sales" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Vendas avulsas</button>
             <button type="button" onClick={() => setTab("reservations")} className={tab === "reservations" ? "rounded-xl bg-sky-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold"}>Reservas de OS</button>
@@ -248,8 +436,17 @@ function DbsInventoryPage() {
             </div>
             <form onSubmit={submitPurchase} className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <label className="text-xs font-bold text-slate-600">Fornecedor *
-                  <input required maxLength={180} value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Nome do fornecedor" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                <label className="text-xs font-bold text-slate-600">Fornecedor cadastrado *
+                  <select required value={supplierId} onChange={e=>setSupplierId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione o fornecedor</option>
+                    {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Centro de custo *
+                  <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione o centro de custo</option>
+                    {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+                  </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Nº da cotação / documento
                   <input maxLength={100} value={purchaseDocument} onChange={e => setPurchaseDocument(e.target.value)} placeholder="Referência do fornecedor" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
@@ -258,34 +455,46 @@ function DbsInventoryPage() {
                   <input type="date" required value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
                 </label>
               </div>
+              <p className="text-xs text-slate-500">As compras usam fornecedores e centros de custo relacionais. O custo é convertido para a unidade-base da peça antes de atualizar o estoque.</p>
               <div className="overflow-x-auto rounded-xl border border-slate-100">
-                <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça do catálogo</th><th className="p-3">Qtd.</th><th className="p-3">Custo unitário (R$)</th><th className="p-3">Total</th><th className="p-3"> </th></tr></thead>
+                <table className="w-full min-w-[1080px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça relacional</th><th className="p-3">Unidade da compra</th><th className="p-3">Qtd.</th><th className="p-3">Custo unitário (R$)</th><th className="p-3">Conversão</th><th className="p-3">Total</th><th className="p-3"> </th></tr></thead>
                   <tbody>{purchaseLines.map((line, index) => {
                     const part = parts.find((entry: any) => String(entry.id) === line.partId);
+                    const factor = conversionFor(line.partId,line.purchaseUnitId);
                     const lineTotal = Number(line.quantity || 0) * Number(line.unitCost || 0);
+                    const purchaseUnit = measureUnits.find((u:any)=>String(u.id)===line.purchaseUnitId);
+                    const baseUnit = measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                     return <tr key={index} className="border-t border-slate-100">
                       <td className="p-2">
                         <select required value={line.partId} onChange={e => {
                           const selected = parts.find((entry: any) => String(entry.id) === e.target.value);
-                          updatePurchaseLine(index, { partId: e.target.value, sku: String(selected?.sku || ""), description: String(selected?.name || selected?.description || "") });
+                          const baseUnitId=String(selected?.measure_unit_id||"");
+                          updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
                         }} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
                           <option value="">Selecione a peça cadastrada</option>
-                          {parts.filter((entry: any) => String(entry.status || "ativo").toLowerCase() !== "inativo").map((entry: any) => <option key={entry.id} value={entry.id}>{entry.sku ? entry.sku + " · " : ""}{entry.name || entry.description || entry.id}</option>)}
+                          {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku ? entry.sku+" · " : ""}{entry.name||entry.description||entry.id}</option>)}
                         </select>
-                        {line.description && <p className="mt-1 text-xs text-slate-500">Da cotação: {line.description}{line.sku ? " · SKU " + line.sku : ""}</p>}
-                        {line.sku && !part && <p className="mt-1 text-xs font-bold text-amber-700">SKU não localizado automaticamente: selecione a peça correta.</p>}
+                        {line.description && <p className="mt-1 text-xs text-slate-500">{line.description}</p>}
+                        {part && !part.measure_unit_id && <p className="mt-1 text-xs font-bold text-rose-700">Cadastre a unidade-base da peça antes de comprar.</p>}
                       </td>
-                      <td className="p-2"><input aria-label="Quantidade" type="number" min="0.001" step="0.001" required value={line.quantity} onChange={e => updatePurchaseLine(index, { quantity: e.target.value })} className="min-h-10 w-24 rounded-lg border border-slate-200 px-2" /></td>
-                      <td className="p-2"><input aria-label="Custo unitário em reais" type="number" min="0.01" step="0.01" required value={line.unitCost} onChange={e => updatePurchaseLine(index, { unitCost: e.target.value })} placeholder="0,00" className="min-h-10 w-36 rounded-lg border border-slate-200 px-2" /></td>
-                      <td className="p-2 whitespace-nowrap font-bold">{money(Math.round(lineTotal * 100))}</td>
-                      <td className="p-2"><button type="button" disabled={purchaseLines.length === 1} onClick={() => setPurchaseLines(current => current.filter((_, i) => i !== index))} className="rounded-lg border border-rose-200 px-2 py-2 text-xs font-bold text-rose-700 disabled:opacity-30">Remover</button></td>
+                      <td className="p-2">
+                        <select required value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
+                          <option value="">Unidade</option>
+                          {measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-2"><input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" required value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="min-h-10 w-24 rounded-lg border border-slate-200 px-2"/></td>
+                      <td className="p-2"><input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" required value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="min-h-10 w-36 rounded-lg border border-slate-200 px-2"/></td>
+                      <td className="p-2 whitespace-nowrap text-xs">{factor>0 ? ("1 "+String(purchaseUnit?.symbol||"")+" = "+String(factor)+" "+String(baseUnit?.symbol||"")) : <span className="font-bold text-rose-700">Sem conversão ativa</span>}</td>
+                      <td className="p-2 whitespace-nowrap font-bold">{money(Math.round(lineTotal*100))}</td>
+                      <td className="p-2"><button type="button" disabled={purchaseLines.length===1} onClick={()=>setPurchaseLines(current=>current.filter((_,i)=>i!==index))} className="rounded-lg border border-rose-200 px-2 py-2 text-xs font-bold text-rose-700 disabled:opacity-30">Remover</button></td>
                     </tr>;
                   })}</tbody>
                 </table>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button type="button" onClick={() => setPurchaseLines(current => [...current, { partId: "", sku: "", description: "", quantity: "1", unitCost: "" }])} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold">+ Adicionar peça</button>
+                <button type="button" onClick={() => setPurchaseLines(current => [...current, { partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }])} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold">+ Adicionar peça</button>
                 <div className="text-right"><p className="text-xs font-bold text-slate-500">Total estimado da compra</p><p className="text-xl font-black">{money(Math.round(purchaseLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0) * 100))}</p></div>
                 <button disabled={busy || !parts.length} className="min-h-11 rounded-xl bg-sky-700 px-5 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Registrando..." : "Registrar pedido de compra"}</button>
               </div>
@@ -305,7 +514,7 @@ function DbsInventoryPage() {
                 <tbody>{(data?.purchases ?? []).map((purchase: any) => {
                   const remaining = Math.max(0, Number(purchase.total_cents ?? 0) - Number(purchase.paid_cents ?? 0));
                   return <tr key={purchase.id} className="border-t border-slate-100">
-                    <td className="p-3 font-bold">{purchase.supplier_name}</td>
+                    <td className="p-3 font-bold">{suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name || purchase.supplier_name}</td>
                     <td className="p-3">{purchase.purchase_date ? new Date(purchase.purchase_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="p-3">{money(purchase.total_cents)}</td>
                     <td className="p-3">
@@ -459,6 +668,11 @@ function DbsInventoryPage() {
               <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
                 <option value="">Selecione uma OS</option>
                 {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
+              </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
+              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <option value="">Selecione o centro de custo</option>
+                {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
               </select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
               <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">

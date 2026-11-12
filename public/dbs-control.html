@@ -1908,6 +1908,8 @@
       document.getElementById('peca-qtd').value = Number(row.qtd ?? row.stock_quantity ?? 0);
       document.getElementById('peca-custo').value = Number(row.custo ?? (Number(row.cost_cents || 0) / 100)).toFixed(2);
       document.getElementById('peca-venda').value = Number(row.venda ?? (Number(row.sale_cents || 0) / 100)).toFixed(2);
+      document.getElementById('peca-fornecedor').value = row.supplier_id || row.supplierId || '';
+      document.getElementById('peca-unidade').value = row.measure_unit_id || row.measureUnitId || '';
       document.getElementById('peca-status').value = ['inativo','inativa','arquivado','arquivada','excluido','excluida','deleted'].includes(String(row.status || 'ativo').toLowerCase()) ? 'inativo' : 'ativo';
     } else if (kind === 'servicos') {
       document.getElementById('serv-nome').value = row.nome || row.name || '';
@@ -1997,14 +1999,30 @@
     persistLocalOnly();
     render('tecnicos');
   };
-  window.salvarPeca = async function (event) {
+  window.dbsSalvarPecaRelacional = async function (event) {
     event.preventDefault();
     var form = document.getElementById('form-peca');
     var id = form && form.dataset.dbsEditId || '';
     var existingPart = id ? findRow('pecas', id) : null;
     var currentStock = existingPart ? Number(existingPart.qtd ?? existingPart.stock_quantity ?? 0) : 0;
-    var value = { sku: document.getElementById('peca-sku').value.trim(), nome: document.getElementById('peca-nome').value.trim(), qtd: id ? currentStock : 0, custo: Number(document.getElementById('peca-custo').value || 0), venda: Number(document.getElementById('peca-venda').value || 0), status: document.getElementById('peca-status').value === 'inativo' ? 'inativo' : 'ativo' };
-    if (!value.sku || !value.nome) return;
+    var value = {
+      sku: document.getElementById('peca-sku').value.trim(),
+      nome: document.getElementById('peca-nome').value.trim(),
+      qtd: id ? currentStock : 0,
+      stock_quantity: id ? currentStock : 0,
+      stock_source: 'relational',
+      opening_quantity: 0,
+      custo: Number(document.getElementById('peca-custo').value || 0),
+      venda: Number(document.getElementById('peca-venda').value || 0),
+      supplier_id: document.getElementById('peca-fornecedor').value || null,
+      measure_unit_id: document.getElementById('peca-unidade').value || null,
+      require_master_data: true,
+      status: document.getElementById('peca-status').value === 'inativo' ? 'inativo' : 'ativo'
+    };
+    if (!value.sku || !value.nome || !value.supplier_id || !value.measure_unit_id) {
+      alert('Selecione o fornecedor e a unidade de medida cadastrados.');
+      return;
+    }
     if (findDuplicate('pecas', value.sku, id)) { alert('Já existe uma peça com este SKU.'); return; }
     var row = id ? findRow('pecas', id) : null;
     if (row) Object.assign(row, value);
@@ -2045,32 +2063,12 @@
     }
     render('servicos');
   };
-  window.salvarCompra = async function (event) {
-    event.preventDefault();
-    var form = document.getElementById('form-compra');
-    var id = form && form.dataset.dbsEditId || '';
-    var partSelect = document.getElementById('comp-peca');
-    var partId = partSelect && partSelect.value || '';
-    var selectedPart = partId ? (ERP_STATE.pecas || []).find(function (part) { return String(part.id) === String(partId); }) : null;
-    var value = { fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || (selectedPart && (selectedPart.nome || selectedPart.name)) || '', part_id: partId, part_sku: selectedPart && selectedPart.sku ? String(selectedPart.sku).trim() : '', qtd: Number(document.getElementById('comp-qtd').value || 0), valor: Number(document.getElementById('comp-valor').value || 0), status: document.getElementById('comp-status').value === 'received' ? 'received' : 'draft' };
-    if (!value.fornecedor || !value.part_id || !value.qtd || value.qtd <= 0 || !Number.isFinite(value.valor) || value.valor <= 0) return;
-    var existing = id ? findRow('compras', id) : null;
-    if (existing && existing.ledger_entry_id) { alert('Esta compra já entrou no estoque e no Financeiro; faça uma devolução/estorno para corrigir.'); return; }
-    var row = existing;
-    if (row) Object.assign(row, value);
-    else {
-      var state = appState();
-      row = { id: crypto.randomUUID(), ...value, deleted: false };
-      (state.compras || (state.compras = [])).push(row);
-    }
-    clearEdit('compras');
-    try {
-      await confirmCatalogMutation('compras', row);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'A compra foi preservada, mas aguarda confirmação da nuvem.');
-    }
-    render('compras');
+  window.salvarCompra = function (event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    alert('O cadastro antigo por texto livre foi substituído. Abra Compras & Estoque para selecionar fornecedor, peça, unidade e centro de custo relacionais.');
+    return window.abrirFinanceiroEstoque();
   };
+
 
   function persistLocalOnly() {
     if (typeof window.persistDbsControlLocalStateOnly === 'function') window.persistDbsControlLocalStateOnly();
@@ -2275,7 +2273,40 @@
     alert(action === 'update' ? 'Técnico atualizado com segurança.' : action === 'restore' ? 'Técnico restaurado.' : action === 'archive' ? 'Técnico arquivado. O histórico foi preservado.' : 'Técnico excluído logicamente. O histórico foi preservado.');
   }
   window.addEventListener('message', function (event) {
-    if (event && event.data && event.data.type === 'DBS_CONTROL_TECHNICIAN_MUTATED') handleTechnicianMutation(event.data);
+    if (!event || event.source !== window.parent || event.origin !== window.location.origin || !event.data) return;
+    if (event.data.type === 'DBS_CONTROL_TECHNICIAN_MUTATED') handleTechnicianMutation(event.data);
+    if (event.data.type === 'DBS_CONTROL_CATALOG_MASTER_DATA') {
+      var data = event.data.result || {};
+      var supplierSelect = document.getElementById('peca-fornecedor');
+      var unitSelect = document.getElementById('peca-unidade');
+      if (supplierSelect) {
+        var currentSupplier = supplierSelect.value;
+        supplierSelect.innerHTML = '<option value="">Selecione o fornecedor...</option>';
+        (Array.isArray(data.suppliers) ? data.suppliers : []).forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = String(item.id || '');
+          option.textContent = String(item.name || 'Fornecedor');
+          supplierSelect.appendChild(option);
+        });
+        if (currentSupplier) supplierSelect.value = currentSupplier;
+      }
+      if (unitSelect) {
+        var currentUnit = unitSelect.value;
+        unitSelect.innerHTML = '<option value="">Selecione a unidade...</option>';
+        (Array.isArray(data.measureUnits) ? data.measureUnits : []).forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = String(item.id || '');
+          option.textContent = String(item.code || '') + ' · ' + String(item.name || '');
+          unitSelect.appendChild(option);
+        });
+        if (currentUnit) unitSelect.value = currentUnit;
+      }
+      if (typeof ERP_STATE !== 'undefined') ERP_STATE._dbsControlMasterData = data;
+      window.dispatchEvent(new CustomEvent('dbs:catalog-master-data', { detail: data }));
+    }
+    if (event.data.type === 'DBS_CONTROL_CATALOG_MASTER_DATA_ERROR') {
+      alert(event.data.error || 'Não foi possível carregar fornecedores e unidades de medida.');
+    }
   });
 
   var previousOnload = window.onload;
@@ -2283,9 +2314,13 @@
     if (typeof previousOnload === 'function') previousOnload.apply(this, arguments);
     setupCatalogUi();
     render('tecnicos'); render('pecas'); render('servicos'); render('compras');
+    if (window.parent !== window) window.parent.postMessage({ type: 'DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA' }, window.location.origin);
   };
   if (document.readyState !== 'loading') {
-    setTimeout(function () { setupCatalogUi(); render('tecnicos'); render('pecas'); render('servicos'); render('compras'); }, 0);
+    setTimeout(function () {
+      setupCatalogUi(); render('tecnicos'); render('pecas'); render('servicos'); render('compras');
+      if (window.parent !== window) window.parent.postMessage({ type: 'DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA' }, window.location.origin);
+    }, 0);
   }
 })();
 </script>
@@ -4370,10 +4405,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         <div id="tab-pecas" class="tab-view">
             <div class="data-card" style="padding: 20px; margin-bottom:20px;">
                 <h3 style="margin-bottom: 14px;">Cadastrar Peça / Insumo no Estoque</h3>
-                <form id="form-peca" onsubmit="salvarPeca(event)">
+                <form id="form-peca" onsubmit="dbsSalvarPecaRelacional(event)">
                     <div class="form-grid">
                         <div class="form-group"><label>SKU / Código</label><input type="text" id="peca-sku" required></div>
                         <div class="form-group"><label>Descrição Peça</label><input type="text" id="peca-nome" required></div>
+                        <div class="form-group"><label>Fornecedor cadastrado *</label><select id="peca-fornecedor" required><option value="">Carregando fornecedores...</option></select></div>
+                        <div class="form-group"><label>Unidade de medida *</label><select id="peca-unidade" required><option value="">Carregando unidades...</option></select></div>
                         <div class="form-group"><label>Saldo atual (somente leitura)</label><input type="number" id="peca-qtd" value="0" readonly title="O estoque entra por Compras e baixa ao aplicar a peça em uma OS"></div>
                         <div class="form-group"><label>Preço Custo (R$)</label><input type="number" id="peca-custo" value="22.00" step="0.01" required></div>
                         <div class="form-group"><label>Preço Venda (R$)</label><input type="number" id="peca-venda" value="65.00" step="0.01" required></div>
@@ -4415,20 +4452,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         <!-- COMPRAS -->
         <div id="tab-compras" class="tab-view">
-            <div class="data-card" style="padding: 20px; margin-bottom:20px;">
-                <h3 style="margin-bottom: 14px;">Registrar compra</h3>
-                <form id="form-compra" onsubmit="salvarCompra(event)">
-                    <div class="form-grid">
-                        <div class="form-group"><label>Fornecedor</label><input type="text" id="comp-fornecedor" required></div>
-                        <div class="form-group"><label>Peça do estoque</label><select id="comp-peca" required><option value="">Selecione a peça que entrou no estoque</option></select></div>
-                        <div class="form-group"><label>Descrição complementar</label><input type="text" id="comp-item" placeholder="NF, lote ou observação"></div>
-                        <div class="form-group"><label>Qtd</label><input type="number" id="comp-qtd" value="1" min="0.001" step="0.001" required></div>
-                        <div class="form-group"><label>Status da compra</label><select id="comp-status"><option value="draft" selected>Pedido enviado · aguardando recebimento</option><option value="received">Recebido · lançar no estoque</option></select></div>
-                        <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="comp-valor" value="450.00" step="0.01" required></div>
-                        <div class="form-group"><label>Financeiro</label><div style="padding:10px 12px;border:1px solid #dbe3ee;border-radius:10px;font-size:12px;color:#475569;">A compra gera Contas a Pagar. Registre a quitação no DBS Treasury para atualizar o caixa.</div></div>
-                    </div>
-                    <div style="margin-top: 14px; text-align: right;"><button type="submit" class="btn btn-success">Registrar Compra</button></div>
-                </form>
+            <div class="data-card" style="padding:20px;margin-bottom:20px;">
+                <h3 style="margin-bottom:8px;">Compras relacionais, recebimento e contas a pagar</h3>
+                <p style="font-size:12px;color:#64748b;margin-bottom:14px;">Novos pedidos devem ser vinculados a um fornecedor cadastrado, peças do catálogo, unidade de compra, conversão e centro de custo. O recebimento físico e as aprovações são executados no fluxo relacional.</p>
+                <button type="button" class="btn btn-primary" onclick="abrirFinanceiroEstoque()">Abrir Compras &amp; Estoque</button>
             </div>
             <div class="data-card">
                 <div class="data-header"><h3>Pedidos de Compra Registrados</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Contas a pagar e balanço</button></div>
@@ -9049,17 +9076,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         // AUXILIARES
         function salvarPeca(e) {
-            e.preventDefault();
-            const sku = document.getElementById('peca-sku').value.trim();
-            const nome = document.getElementById('peca-nome').value.trim();
-            if (!sku || !nome) return;
-            const norm = value => String(value || '').trim().toLocaleLowerCase('pt-BR');
-            if (ERP_STATE.pecas.some(p => norm(p.sku) === norm(sku))) {
-                alert('Já existe uma peça com este SKU.');
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            if (typeof window.dbsSalvarPecaRelacional !== 'function') {
+                alert('O cadastro relacional de peças ainda não terminou de carregar.');
                 return;
             }
-            ERP_STATE.pecas.push({ id: crypto.randomUUID(), sku, nome, qtd: 0, custo: parseFloat(document.getElementById('peca-custo').value), venda: parseFloat(document.getElementById('peca-venda').value) });
-            saveState(); document.getElementById('form-peca').reset(); renderizarTudo();
+            return window.dbsSalvarPecaRelacional(e);
         }
         function renderizarPecas() { document.getElementById('peca-table-body').innerHTML = ERP_STATE.pecas.map(p => `<tr><td><strong>${p.sku}</strong></td><td>${p.nome}</td><td>${p.qtd} UN</td><td>R$ ${Number(p.custo||0).toFixed(2)}</td><td>R$ ${Number(p.venda||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarServico(e) {
@@ -9078,17 +9100,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
         function renderizarServicos() { document.getElementById('serv-table-body').innerHTML = ERP_STATE.servicos.map(s => `<tr><td><strong>${s.nome}</strong></td><td>${s.horas}h</td><td>R$ ${Number(s.valor||0).toFixed(2)}</td></tr>`).join(''); }
         function salvarCompra(e) {
-            e.preventDefault();
-            const partId = document.getElementById('comp-peca')?.value || '';
-            const part = ERP_STATE.pecas.find(p => String(p.id) === String(partId));
-            const qtd = Number(document.getElementById('comp-qtd').value || 0);
-            const valor = Number(document.getElementById('comp-valor').value || 0);
-            if (!document.getElementById('comp-fornecedor').value.trim() || !partId || !part || qtd <= 0 || valor <= 0) {
-                alert('Informe fornecedor, peça, quantidade e valor total da compra.');
-                return;
-            }
-            ERP_STATE.compras.push({ id: crypto.randomUUID(), fornecedor: document.getElementById('comp-fornecedor').value.trim(), item: document.getElementById('comp-item').value.trim() || part.nome || part.name || '', part_id: partId, qtd, valor, payment_status: document.getElementById('comp-pagamento')?.value || 'unpaid', status: "Enviado" });
-            saveState(); document.getElementById('form-compra').reset(); renderizarTudo();
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            alert('O cadastro antigo de compras foi desativado. Use Compras & Estoque para selecionar fornecedor, peça, unidade e centro de custo relacionais.');
+            if (typeof window.abrirFinanceiroEstoque === 'function') return window.abrirFinanceiroEstoque();
         }
         function renderizarCompras() {
             const select = document.getElementById('comp-peca');

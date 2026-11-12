@@ -136,6 +136,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     { data: snapshot, error: snapshotError },
     { data: entries, error: entriesError },
     { data: purchaseCommitments, error: commitmentsError },
+    { data: costCenters, error: costCentersError },
   ] = await Promise.all([
     supabaseAdmin
       .from("treasury_snapshots")
@@ -156,12 +157,28 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .eq("scope_key", scopeKey)
       .order("commitment_date", { ascending: true })
       .limit(500),
+    admin
+      .from("dbs_control_cost_centers")
+      .select("id,code,name,status")
+      .eq("scope_key", scopeKey)
+      .eq("status", "active")
+      .order("code", { ascending: true })
+      .limit(500),
   ]);
 
   if (snapshotError) throw new Error(snapshotError.message);
   if (entriesError) throw new Error(entriesError.message);
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
+  if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   const state = mergeLedgerState(snapshot?.state, entries ?? []);
+  if (state) {
+    state._meta = {
+      ...state._meta,
+      centrosCusto: (costCenters ?? []).map((center: any) => ({
+        id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active"
+      })),
+    };
+  }
   const lastLedgerUpdate = (entries ?? []).reduce((latest: string | null, entry: any) => {
     const current = entry.updated_at ?? null;
     if (!current) return latest;
@@ -174,7 +191,8 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     updated_at: snapshot?.updated_at ?? lastLedgerUpdate,
     ledger_entry_count: entries?.length ?? 0,
     purchase_commitments: purchaseCommitments ?? [],
-    source: state ? "legacy_read_plus_relational_ledger" : "relational_ledger",
+    cost_centers: costCenters ?? [],
+    source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
 }
 
@@ -244,4 +262,32 @@ export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
       p_lines: data.lines,
     });
     return { ...(asObject(result) as any), scope_key: scopeKey };
+  });
+
+
+export const saveTreasuryCostCenter = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { code: string; name: string }) => {
+    const code=String(input?.code ?? "").trim().toUpperCase();
+    const name=String(input?.name ?? "").trim();
+    if(!/^[A-Z0-9._-]{1,40}$/.test(code)) throw new Error("Informe um código válido para o centro de custo.");
+    if(name.length<2||name.length>180) throw new Error("Informe o nome do centro de custo.");
+    return {code,name};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireTreasuryUser(context);
+    const scopeKey=user.company_id? `company:${user.company_id}` : `user:${user.id}`;
+    const admin=supabaseAdmin as any;
+    const saved=await admin.from("dbs_control_cost_centers").upsert({
+      company_id:user.company_id,
+      scope_key:scopeKey,
+      code:data.code,
+      name:data.name,
+      status:"active",
+      created_by:user.id,
+      updated_by:user.id,
+      updated_at:new Date().toISOString(),
+    },{onConflict:"scope_key,normalized_code"}).select("id,code,name,status").single();
+    if(saved.error) throw new Error(saved.error.message);
+    return {id:String(saved.data.id),code:String(saved.data.code),name:String(saved.data.name),ativo:saved.data.status==="active"};
   });
