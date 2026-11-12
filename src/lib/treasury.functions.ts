@@ -248,20 +248,33 @@ export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const user = await requireTreasuryUser(context);
     const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
+    const metadata = asObject(data.metadata);
+    const costCenterId = String(data.cost_center_id || metadata.cost_center_id || "").trim() || null;
+    const entryType = data.entry_type ?? "manual";
+    const requiresCostCenter = entryType.startsWith("purchase_") || entryType.startsWith("work_order_");
+    if (requiresCostCenter && !costCenterId) {
+      throw new Error("Este lançamento exige centro de custo.");
+    }
+    if (costCenterId) {
+      const center = await (supabaseAdmin as any).from("dbs_control_cost_centers")
+        .select("id").eq("id", costCenterId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
+      if (center.error) throw new Error(center.error.message);
+      if (!center.data) throw new Error("Centro de custo inexistente, inativo ou de outra empresa.");
+    }
     const result = await postLedgerWithRetry({
       p_scope_key: scopeKey,
       p_company_id: user.company_id ?? null,
       p_competence_date: data.competence_date,
       p_document_date: data.document_date ?? null,
-      p_entry_type: data.entry_type ?? "manual",
+      p_entry_type: entryType,
       p_description: data.description.trim(),
       p_idempotency_key: data.idempotency_key,
       p_external_key: data.external_key ?? null,
       p_created_by: user.id,
       p_status: data.status ?? "posted",
       p_metadata: {
-        ...(data.metadata ?? {}),
-        ...(data.cost_center_id ? { cost_center_id: data.cost_center_id } : {}),
+        ...metadata,
+        ...(costCenterId ? { cost_center_id: costCenterId } : {}),
       },
       p_lines: data.lines,
     });
