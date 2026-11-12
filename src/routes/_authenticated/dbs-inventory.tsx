@@ -24,13 +24,11 @@ type DbsInventorySection = "parts" | "purchases";
 type DbsInventoryPageProps = {
   embedded?: boolean;
   initialSection?: DbsInventorySection;
-  onClose?: () => void;
 };
 
 export function DbsInventoryPage({
   embedded = false,
   initialSection = "parts",
-  onClose,
 }: DbsInventoryPageProps = {}) {
   const overview = useQuery({
     queryKey: ["dbs-phase2-inventory-overview"],
@@ -399,22 +397,24 @@ export function DbsInventoryPage({
   return (
     <main className={embedded ? "min-h-full bg-slate-50 px-4 py-5 text-slate-900 sm:px-6" : "min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6"}>
       <div className="mx-auto max-w-7xl">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <header className={embedded ? "mb-4 border-b border-slate-200 pb-4" : "mb-6 flex flex-wrap items-center justify-between gap-3"}>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · FASE 2</p>
-            <h1 className="mt-1 text-2xl font-black">Compras, estoque e balanço de custos</h1>
-            <p className="mt-1 text-sm text-slate-500">Cotações convertidas em pedidos, custos por OS, recebimentos e obrigações do Ledger.</p>
+            {!embedded && <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · FASE 2</p>}
+            <h1 className={embedded ? "text-xl font-black" : "mt-1 text-2xl font-black"}>{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
+            <p className="mt-1 text-sm text-slate-500">{moduleSection === "parts"
+              ? "Cadastro de peças, saldos, movimentações, estoque dos técnicos e custos por OS."
+              : "Pedidos a fornecedores, aprovação financeira, recebimentos, contas a pagar e pagamentos."}</p>
           </div>
-          {embedded
-            ? <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</button>
-            : <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>}
+          {!embedded && <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>}
         </header>
 
-        <nav aria-label="Módulos de materiais" className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-          <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Peças & Estoque</button>
-          <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Compras</button>
-          <span className="ml-auto self-center px-2 text-xs text-slate-500">Operação integrada ao DBS Treasury</span>
-        </nav>
+        {!embedded && (
+          <nav aria-label="Módulos de materiais" className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+            <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Peças & Estoque</button>
+            <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Compras</button>
+            <span className="ml-auto self-center px-2 text-xs text-slate-500">Operação integrada ao DBS Treasury</span>
+          </nav>
+        )}
 
         {message && <div role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">{message}</div>}
         {overview.isLoading && <p className="rounded-xl bg-white p-5 text-sm text-slate-500">Carregando dados do estoque...</p>}

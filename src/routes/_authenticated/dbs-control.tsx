@@ -2323,39 +2323,65 @@ function DbsControlPage() {
 
   return (
     <main className="flex min-h-[100dvh] flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
-      {inventoryModuleSection ? (
+      <div className="admin-mobile-hostbar flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
+        <div className="flex min-w-0 items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+          <span className="shrink-0">DBS CONTROL</span>
+          <button
+            type="button"
+            aria-pressed={inventoryModuleSection === "parts"}
+            onClick={() => setInventoryModuleSection("parts")}
+            className={inventoryModuleSection === "parts"
+              ? "min-h-9 rounded-lg bg-sky-700 px-3 text-[10px] font-black text-white"
+              : "min-h-9 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100"}
+          >
+            Peças & Estoque
+          </button>
+          <button
+            type="button"
+            aria-pressed={inventoryModuleSection === "purchases"}
+            onClick={() => setInventoryModuleSection("purchases")}
+            className={inventoryModuleSection === "purchases"
+              ? "min-h-9 rounded-lg bg-sky-700 px-3 text-[10px] font-black text-white"
+              : "min-h-9 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100"}
+          >
+            Compras
+          </button>
+          {cloudError && <span role="status" title={cloudError} className="hidden rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800 sm:inline">Sincronização em recuperação</span>}
+        </div>
+        {inventoryModuleSection ? (
+          <button
+            type="button"
+            onClick={() => setInventoryModuleSection(null)}
+            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+          >
+            ← Visão geral do DBS Control
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/admin", replace: true })}
+            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+          >
+            ← Menu principal
+          </button>
+        )}
+      </div>
+      {cloudError && (
+        <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+          <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
+          <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
+        </section>
+      )}
+      <div className={`min-h-0 flex-1 ${inventoryModuleSection ? "hidden" : "flex"}`}>
+        <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+      </div>
+      {inventoryModuleSection && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <DbsInventoryPage
             embedded
             initialSection={inventoryModuleSection}
-            onClose={() => setInventoryModuleSection(null)}
           />
         </div>
-      ) : (
-        <>
-          <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-              <span>DBS CONTROL</span>
-              <button type="button" onClick={() => setInventoryModuleSection("parts")} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Peças & Estoque</button>
-              <button type="button" onClick={() => setInventoryModuleSection("purchases")} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Compras</button>
-              {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/admin", replace: true })}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-            >
-              ← Voltar ao menu principal
-            </button>
-          </div>
-          {cloudError && (
-            <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
-              <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
-              <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
-            </section>
-          )}
-          <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
-        </>
       )}
       <MobileAdminNavigation active="operation" />
     </main>

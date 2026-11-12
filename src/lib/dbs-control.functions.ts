@@ -3323,8 +3323,8 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,client_id,status,total_cents,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100),
       (supabaseAdmin as any).from("dbs_control_sale_settlements")
-        .select("id,sale_id,amount_cents,payment_method,created_at,scope_key")
-        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
+        .select("id,sale_id,amount_cents,payment_method,received_at,scope_key")
+        .eq("scope_key", scopeKey).order("received_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
         .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,received_total_cents,paid_cents,ledger_entry_id,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
