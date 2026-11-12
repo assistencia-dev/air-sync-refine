@@ -142,8 +142,12 @@
     }
   }
 
-  function approveQuoteThroughAuthenticatedBridge(quoteNumber) {
+  function approveQuoteThroughAuthenticatedBridge(quoteId) {
     return new Promise(function (resolve, reject) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(quoteId || ""))) {
+        reject(new Error("Orçamento sem vínculo relacional válido. Reabra e salve a proposta no sistema para gerar o identificador relacional."));
+        return;
+      }
       var requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'quote-' + Date.now() + '-' + Math.random().toString(36).slice(2);
       var settled = false;
       var finish = function (error, result) {
@@ -163,7 +167,7 @@
         finish(new Error('A aprovação ainda não foi confirmada pelo servidor. Atualize a lista antes de tentar novamente.'));
       }, 30000);
       window.addEventListener('message', onMessage);
-      window.parent.postMessage({ type: 'DBS_CONTROL_APPROVE_QUOTE', quoteNumber: quoteNumber, requestId: requestId }, '*');
+      window.parent.postMessage({ type: 'DBS_CONTROL_APPROVE_QUOTE', quoteId: String(quoteId), requestId: requestId }, '*');
     });
   }
 
@@ -172,8 +176,13 @@
     var q = ERP_STATE.orcamentos.find(function (x) { return x.id === id; }); if (!q) return;
     if (status !== 'Aprovado') return;
     if (q.status === 'Convertido em OS' || q.osId) { alert('Este orçamento já está vinculado a uma OS.'); return; }
+    var relationalQuoteId = String(q.relationalQuoteId || "");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(relationalQuoteId)) {
+      alert('Este orçamento ainda não possui vínculo relacional. Reabra e salve a proposta pela tela atual antes de aprovar; a aprovação por número legado foi desativada.');
+      return;
+    }
     try {
-      var result = await approveQuoteThroughAuthenticatedBridge(q.id);
+      var result = await approveQuoteThroughAuthenticatedBridge(relationalQuoteId);
       q.status = 'Convertido em OS';
       q.osId = result.protocol || result.work_order_id || 'OS vinculada';
       await persistCommercialMutation();
