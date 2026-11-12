@@ -2298,8 +2298,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261105-purchase-finance-bridge-1`
-    : "/dbs-control.html?v=20261105-purchase-finance-bridge-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-operational-2`
+    : "/dbs-control.html?v=20261112-materials-operational-2"
 
   if (employeeMode) {
     return (
@@ -2320,7 +2320,7 @@ function DbsControlPage() {
       <div className="admin-mobile-hostbar flex min-h-10 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
           <span>DBS CONTROL</span>
-          <button type="button" onClick={() => navigate({ to: "/dbs-inventory" })} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Estoque & Vendas</button>
+          <button type="button" onClick={() => navigate({ to: "/dbs-inventory" })} className="min-h-8 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100">Peças, Estoque e Compras</button>
           {cloudError && <span role="status" title={cloudError} className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800">Sincronização em recuperação</span>}
         </div>
         <button

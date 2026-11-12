@@ -3307,9 +3307,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders] = await Promise.all([
+    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
@@ -3338,8 +3338,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
         .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
         .eq("scope_key",scopeKey).order("serial_number").limit(500),
+      (supabaseAdmin as any).from("dbs_control_car_stock")
+        .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
+        .eq("scope_key",scopeKey).eq("status","active").order("updated_at",{ascending:false}).limit(1000),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders]) {
+    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     const [accessRows,pontoEmployees] = await Promise.all([
@@ -3386,6 +3389,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       unitConversions: unitConversions.data ?? [],
       costCenters: costCenters.data ?? [],
       gasCylinders: gasCylinders.data ?? [],
+      carStock: carStock.data ?? [],
       employees: employees.data ?? [],
     };
   });
@@ -3409,6 +3413,134 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
     }).select("id,name,status").single();
     if(saved.error) throw new Error(saved.error.message);
     return saved.data;
+  });
+
+
+export const createDbsCostCenter = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { code: string; name: string }) => {
+    const code = String(input?.code ?? "").trim().toUpperCase();
+    const name = String(input?.name ?? "").trim();
+    if (!/^[A-Z0-9._-]{1,40}$/.test(code)) throw new Error("Informe um código válido para o centro de custo.");
+    if (name.length < 2 || name.length > 180) throw new Error("Informe o nome do centro de custo.");
+    return { code, name };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const saved = await (supabaseAdmin as any).from("dbs_control_cost_centers").upsert({
+      company_id: user.company_id, scope_key: scopeKey, code: data.code, name: data.name,
+      status: "active", created_by: user.id, updated_by: user.id, updated_at: new Date().toISOString(),
+    }, { onConflict: "scope_key,normalized_code" }).select("id,code,name,status").single();
+    if (saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
+export const createDbsPartCatalog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; costCents: number; saleCents: number }) => {
+    const sku = String(input?.sku ?? "").trim().toUpperCase();
+    const name = String(input?.name ?? "").trim();
+    const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
+    if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    return {
+      sku, name, description,
+      supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
+      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade-base"),
+      costCents: input.costCents, saleCents: input.saleCents,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const [supplier, unit, duplicate] = await Promise.all([
+      admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      admin.from("dbs_control_parts").select("id").eq("sku", data.sku).limit(1).maybeSingle(),
+    ]);
+    for (const result of [supplier, unit, duplicate]) if (result.error) throw new Error(result.error.message);
+    if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
+    if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
+    if (duplicate.data) throw new Error("Já existe uma peça cadastrada com este SKU.");
+    const saved = await admin.from("dbs_control_parts").insert({
+      sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
+      measure_unit_id: data.measureUnitId, stock_quantity: 0, reserved_quantity: 0,
+      cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
+    }).select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version").single();
+    if (saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
+export const updateDbsPartCatalog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; costCents: number; saleCents: number }) => {
+    const sku = String(input?.sku ?? "").trim().toUpperCase();
+    const name = String(input?.name ?? "").trim();
+    const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) throw new Error("Versão da peça inválida. Atualize a tela e tente novamente.");
+    if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    return {
+      partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
+      sku, name, description,
+      supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
+      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade-base"),
+      costCents: input.costCents, saleCents: input.saleCents,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const [existing, supplier, unit, duplicate] = await Promise.all([
+      admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
+      admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      admin.from("dbs_control_parts").select("id").eq("sku", data.sku).neq("id", data.partId).limit(1).maybeSingle(),
+    ]);
+    for (const result of [existing, supplier, unit, duplicate]) if (result.error) throw new Error(result.error.message);
+    if (!existing.data) throw new Error("Peça não encontrada.");
+    if (Number(existing.data.version) !== data.expectedVersion) throw new Error("A peça foi alterada por outro usuário. Atualize a tela e tente novamente.");
+    if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
+    if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
+    if (duplicate.data) throw new Error("Já existe outra peça cadastrada com este SKU.");
+    if (Number(existing.data.stock_quantity) > 0 && Number(existing.data.cost_cents ?? 0) !== data.costCents) {
+      throw new Error("O custo médio de uma peça com saldo não pode ser alterado manualmente. Faça o ajuste por recebimento/estorno.");
+    }
+    const saved = await admin.from("dbs_control_parts").update({
+      sku: data.sku, name: data.name, description: data.description,
+      supplier_id: data.supplierId, measure_unit_id: data.measureUnitId,
+      cost_cents: data.costCents, sale_cents: data.saleCents,
+      version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
+    }).eq("id", data.partId).eq("version", data.expectedVersion)
+      .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version").maybeSingle();
+    if (saved.error) throw new Error(saved.error.message);
+    if (!saved.data) throw new Error("A peça mudou durante a gravação. Atualize a tela e tente novamente.");
+    return saved.data;
+  });
+
+export const transferDbsStockToTechnician = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { employeeId: string; partId: string; quantity: number; vehicleLabel?: string; idempotencyKey: string }) => {
+    if (!Number.isFinite(input?.quantity) || input.quantity <= 0) throw new Error("Informe uma quantidade de transferência maior que zero.");
+    if (!input?.idempotencyKey || input.idempotencyKey.trim().length < 8) throw new Error("Chave de segurança da transferência inválida.");
+    return {
+      employeeId: requireInventoryId(input.employeeId, "Técnico"),
+      partId: requireInventoryId(input.partId, "Peça"), quantity: input.quantity,
+      vehicleLabel: String(input.vehicleLabel ?? "").trim().slice(0, 120) || "Veículo do colaborador",
+      idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
+    };
+  })
+  .handler(async ({ context, data }) => {
+    await requireDbsInventoryAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_transfer_to_car_stock", {
+      p_employee_id: data.employeeId, p_part_id: data.partId, p_quantity: data.quantity,
+      p_vehicle_label: data.vehicleLabel, p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
   });
 
 export const createDbsMeasureUnit = createServerFn({ method: "POST" })
