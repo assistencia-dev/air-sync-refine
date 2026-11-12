@@ -627,7 +627,7 @@ begin
  'total_charges',total_charges,'used_charges',used_charges,'remaining_charges',remaining_charges,'refill_count',refill_count,
  'vehicle_label',vehicle_label,'status',status,
  'tare_weight_kg',tare_weight_kg,'initial_gross_weight_kg',initial_gross_weight_kg,
- 'current_gross_weight_kg',current_gross_weight_kg,
+ 'current_gross_weight_kg',current_gross_weight_kg,'cost_per_kg_cents',cost_per_kg_cents,
  'remaining_net_weight_kg',case when tare_weight_kg is not null and current_gross_weight_kg is not null
    then greatest(current_gross_weight_kg-tare_weight_kg,0) else null end) order by assigned_at desc)
  from public.dbs_control_gas_cylinders where employee_id=v_employee and status='active'), '[]'::jsonb);
