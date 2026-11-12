@@ -370,3 +370,12 @@ assert.match(treasuryFunctions, /dbs_treasury_purchase_commitments/);
 assert.match(treasuryPage, /Compromissos de compras aprovadas/);
 assert.match(phase2Ui, /reverseDbsInventoryMovement/);
 assert.match(phase2Ui, /Histórico imutável de movimentações/);
+
+// Purchase date and supplier CNPJ validators must use real regex escapes.
+// A doubled backslash made every purchase fail "data inválida" and rejected formatted CNPJs.
+assert.doesNotMatch(functions, /\/\^\\\\\\\\d\{4\}/, 'purchase date regex must not be double-escaped');
+assert.match(functions, /\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(purchaseDate\)/);
+assert.match(functions, /const cnpj=String\(input\?\.cnpj\|\|""\)\.replace\(\/\\D\/g,""\)/);
+assert.equal(/^\d{4}-\d{2}-\d{2}$/.test('2026-11-12'), true);
+assert.equal('12.345.678/0001-90'.replace(/\D/g, '').length, 14);
+console.log('purchase/supplier validator regex checks passed');

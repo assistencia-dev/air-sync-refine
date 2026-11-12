@@ -296,13 +296,31 @@ export function DbsInventoryPage({
 
   async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const saved = await runAction(() => createDbsSupplier({ data: { name:newSupplierName, cnpj:newSupplierCnpj, phone:newSupplierPhone } }), "Fornecedor cadastrado.");
-    if (saved) { setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone(""); await overview.refetch(); }
+    let createdId = "";
+    const saved = await runAction(async () => {
+      const created: any = await createDbsSupplier({ data: { name:newSupplierName, cnpj:newSupplierCnpj, phone:newSupplierPhone } });
+      createdId = String(created?.id ?? "");
+    }, "Fornecedor cadastrado e disponível no cadastro da peça e em Compras.");
+    if (saved) {
+      setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone("");
+      // Pre-select the new supplier where it is still empty so it is usable at once.
+      if (createdId) {
+        setCatalogPartSupplierId((current) => current || createdId);
+        setSupplierId((current) => current || createdId);
+      }
+    }
   }
   async function addMeasureUnit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const saved = await runAction(() => createDbsMeasureUnit({ data: { code:newUnitCode, name:newUnitName, symbol:newUnitSymbol||newUnitCode } }), "Unidade de medida cadastrada.");
-    if (saved) { setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol(""); await overview.refetch(); }
+    let createdId = "";
+    const saved = await runAction(async () => {
+      const created: any = await createDbsMeasureUnit({ data: { code:newUnitCode, name:newUnitName, symbol:newUnitSymbol||newUnitCode } });
+      createdId = String(created?.id ?? "");
+    }, "Unidade de medida cadastrada e disponível como unidade-base.");
+    if (saved) {
+      setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol("");
+      if (createdId) setCatalogPartUnitId((current) => current || createdId);
+    }
   }
   async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
