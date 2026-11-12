@@ -35,8 +35,8 @@ const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
 assert.match(phase2Ui, /createDbsPurchase/);
 assert.match(phase2Ui, /export function DbsInventoryPage/);
-assert.match(phase2Ui, /moduleSection === "parts" \\? "Peças & Estoque" : "Compras"/);
-assert.match(phase2Ui, /!embedded &&/);
+assert.ok(phase2Ui.includes('{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}'));
+assert.ok(phase2Ui.includes("{!embedded &&"));
 
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
@@ -227,9 +227,14 @@ assert.match(settlement, /revoke all on function public\.dbs_control_settle_purc
 assert.match(settlement, /grant execute on function public\.dbs_control_settle_purchase.*to service_role/i);
 assert.match(functions, /export const settleDbsPurchase/);
 assert.match(functions, /export const getDbsInventoryFinancialOverview/);
-const saleSettlementsQuery = functions.match(/\\.from\\("dbs_control_sale_settlements"\\)([\\s\\S]*?)\\.limit\\(200\\)/)?.[0] ?? "";
-assert.match(saleSettlementsQuery, /received_at/);
-assert.doesNotMatch(saleSettlementsQuery, /created_at/);
+const saleSettlementsStart = functions.indexOf('.from("dbs_control_sale_settlements")');
+const saleSettlementsEnd = functions.indexOf(".limit(200)", saleSettlementsStart);
+const saleSettlementsQuery = saleSettlementsStart >= 0 && saleSettlementsEnd > saleSettlementsStart
+  ? functions.slice(saleSettlementsStart, saleSettlementsEnd)
+  : "";
+assert.ok(saleSettlementsQuery.includes('.select("id,sale_id,amount_cents,payment_method,received_at,scope_key")'));
+assert.ok(saleSettlementsQuery.includes('.order("received_at", { ascending: false })'));
+assert.ok(!saleSettlementsQuery.includes("created_at"));
 
 assert.match(functions, /payment_status: 'unpaid'/);
 assert.match(functions, /paid_cents/);
@@ -248,8 +253,8 @@ assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
 assert.match(controlRoute, /setInventoryModuleSection\("purchases"\)/);
 assert.match(controlRoute, /<DbsInventoryPage/);
-assert.match(controlRoute, /admin-mobile-hostbar/);
-assert.match(controlRoute, /inventoryModuleSection \\? "hidden" : "flex"/);
+assert.ok(controlRoute.includes('className="admin-mobile-hostbar'));
+assert.ok(controlRoute.includes('className={`min-h-0 flex-1 ${inventoryModuleSection ? "hidden" : "flex"}`}'));
 
 assert.match(controlRoute, /initialSection=\{inventoryModuleSection\}/);
 assert.match(mainHtml, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
