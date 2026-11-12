@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
@@ -404,6 +405,52 @@ function mergeDbsControlStates(
   return merged;
 }
 
+type DbsMaterialsSection = "parts" | "purchases";
+
+function mountDbsMaterialsPortal(frame: HTMLIFrameElement | null, section: DbsMaterialsSection): HTMLElement | null {
+  const frameDocument = frame?.contentDocument;
+  if (!frameDocument) return null;
+  const tabId = section === "purchases" ? "tab-compras" : "tab-pecas";
+  const tab = frameDocument.getElementById(tabId);
+  if (!tab) return null;
+
+  // Keep the real DBS CONTROL tab and menu. Legacy static forms are hidden,
+  // not deleted; the operational React module is mounted inside that tab.
+  for (const child of Array.from(tab.children) as HTMLElement[]) {
+    if (child.dataset.dbsMaterialsReactRoot === "true") continue;
+    if (child.dataset.dbsMaterialsPreviousHidden == null) {
+      child.dataset.dbsMaterialsPreviousHidden = child.hidden ? "true" : "false";
+    }
+    child.hidden = true;
+  }
+
+  let root = tab.querySelector<HTMLElement>('[data-dbs-materials-react-root="true"]');
+  if (!root) {
+    root = frameDocument.createElement("div");
+    root.dataset.dbsMaterialsReactRoot = "true";
+    root.style.width = "100%";
+    root.style.minHeight = "100%";
+    tab.appendChild(root);
+  }
+
+  // Mirror the authenticated app's CSS into this same-origin iframe so the
+  // portal renders with the same utility classes as the surrounding product.
+  for (const source of Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style'))) {
+    const key = source.tagName.toLowerCase() === "link"
+      ? (source as HTMLLinkElement).href
+      : (source.textContent || "").slice(0, 120);
+    if (!key) continue;
+    const alreadyCopied = Array.from(frameDocument.head.querySelectorAll("[data-dbs-parent-style]"))
+      .some((node) => node.getAttribute("data-dbs-parent-style") === key);
+    if (alreadyCopied) continue;
+    const clone = source.cloneNode(true) as HTMLElement;
+    clone.setAttribute("data-dbs-parent-style", key);
+    frameDocument.head.appendChild(clone);
+  }
+
+  return root;
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -437,7 +484,9 @@ function DbsControlPage() {
   const employeeFrameDocumentRef = useRef<Document | null>(null);
   const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [inventoryModuleSection, setInventoryModuleSection] = useState<"parts" | "purchases" | null>(null);
+  const [inventoryModuleSection, setInventoryModuleSection] = useState<DbsMaterialsSection | null>(null);
+  const [inventoryPortalTarget, setInventoryPortalTarget] = useState<HTMLElement | null>(null);
+  const [inventoryQuoteId, setInventoryQuoteId] = useState("");
 
   // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
   // autenticado reaplica apenas a apresentação do colaborador no carregamento
@@ -449,6 +498,9 @@ function DbsControlPage() {
     // and sends DBS_CONTROL_READY again, so the first cloud hydration is never
     // lost just because of load ordering.
     frame?.contentWindow?.postMessage({ type: "DBS_CONTROL_PARENT_READY" }, window.location.origin);
+    setInventoryPortalTarget(null);
+    setInventoryModuleSection(null);
+    setInventoryQuoteId("");
     if (!employeeModeRef.current) return;
     const frameDocument = frame?.contentDocument;
     if (!frameDocument) return;
@@ -1147,12 +1199,22 @@ function DbsControlPage() {
         }
         return;
       }
-      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE") {
-        setInventoryModuleSection("purchases");
-        return;
-      }
-      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
-        setInventoryModuleSection(msg.section === "purchases" ? "purchases" : "parts");
+      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
+        if (employeeModeRef.current) return;
+        const section: DbsMaterialsSection = msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.section === "purchases"
+          ? "purchases"
+          : "parts";
+        const target = mountDbsMaterialsPortal(iframeRef.current, section);
+        if (!target) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_MATERIALS_PORTAL_ERROR",
+            error: "A aba de materiais não foi encontrada no DBS CONTROL. Atualize a tela e tente novamente.",
+          }, window.location.origin);
+          return;
+        }
+        setInventoryModuleSection(section);
+        setInventoryQuoteId(String(msg.quoteId || ""));
+        setInventoryPortalTarget(target);
         return;
       }
       if (msg.type === "DBS_CONTROL_BACK_TO_MAIN") {
@@ -2304,8 +2366,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-inline-3`
-    : "/dbs-control.html?v=20261112-materials-inline-3"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-tabs-5`
+    : "/dbs-control.html?v=20261112-materials-tabs-5"
 
   if (employeeMode) {
     return (
@@ -2323,65 +2385,23 @@ function DbsControlPage() {
 
   return (
     <main className="flex min-h-[100dvh] flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
-      <div className="admin-mobile-hostbar flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] shadow-[0_2px_14px_rgba(16,42,67,0.035)] backdrop-blur-xl">
-        <div className="flex min-w-0 items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-          <span className="shrink-0">DBS CONTROL</span>
-          <button
-            type="button"
-            aria-pressed={inventoryModuleSection === "parts"}
-            onClick={() => setInventoryModuleSection("parts")}
-            className={inventoryModuleSection === "parts"
-              ? "min-h-9 rounded-lg bg-sky-700 px-3 text-[10px] font-black text-white"
-              : "min-h-9 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100"}
-          >
-            Peças & Estoque
-          </button>
-          <button
-            type="button"
-            aria-pressed={inventoryModuleSection === "purchases"}
-            onClick={() => setInventoryModuleSection("purchases")}
-            className={inventoryModuleSection === "purchases"
-              ? "min-h-9 rounded-lg bg-sky-700 px-3 text-[10px] font-black text-white"
-              : "min-h-9 rounded-lg border border-sky-200 bg-sky-50 px-3 text-[10px] font-black text-sky-800 hover:bg-sky-100"}
-          >
-            Compras
-          </button>
-          {cloudError && <span role="status" title={cloudError} className="hidden rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-800 sm:inline">Sincronização em recuperação</span>}
-        </div>
-        {inventoryModuleSection ? (
-          <button
-            type="button"
-            onClick={() => setInventoryModuleSection(null)}
-            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-          >
-            ← Visão geral do DBS Control
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/admin", replace: true })}
-            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 shadow-sm transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-          >
-            ← Menu principal
-          </button>
-        )}
+      <div className="min-h-0 flex-1">
+        <iframe
+          ref={iframeRef}
+          title="DBS CONTROL"
+          src={src}
+          onLoad={handleEmployeeFrameLoad}
+          className="admin-mobile-iframe min-h-0 h-full w-full border-0"
+          allow="camera; geolocation"
+        />
       </div>
-      {cloudError && (
-        <section role="status" aria-live="polite" className="mx-4 mt-3 shrink-0 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
-          <p className="text-sm font-bold text-amber-800">Sincronização em recuperação</p>
-          <p className="mt-1 break-words text-xs text-amber-900">{cloudError}</p>
-        </section>
-      )}
-      <div className={`min-h-0 flex-1 ${inventoryModuleSection ? "hidden" : "flex"}`}>
-        <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="admin-mobile-iframe min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
-      </div>
-      {inventoryModuleSection && (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <DbsInventoryPage
-            embedded
-            initialSection={inventoryModuleSection}
-          />
-        </div>
+      {inventoryPortalTarget && inventoryModuleSection && createPortal(
+        <DbsInventoryPage
+          embedded
+          initialSection={inventoryModuleSection}
+          initialQuoteId={inventoryQuoteId}
+        />,
+        inventoryPortalTarget,
       )}
       <MobileAdminNavigation active="operation" />
     </main>
