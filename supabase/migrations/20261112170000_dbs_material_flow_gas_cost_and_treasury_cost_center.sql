@@ -4,9 +4,13 @@ alter table public.dbs_control_gas_cylinders
   add column if not exists cost_per_kg_cents integer;
 alter table public.dbs_control_gas_usage
   add column if not exists unit_cost_cents_per_kg integer,
-  add column if not exists gas_cost_cents bigint;
+  add column if not exists gas_cost_cents bigint,
+  add column if not exists ledger_entry_id uuid;
 alter table public.dbs_control_work_order_financials
   add column if not exists gas_cost_cents bigint not null default 0;
+
+create unique index if not exists dbs_control_gas_usage_ledger_entry_uidx
+  on public.dbs_control_gas_usage(ledger_entry_id) where ledger_entry_id is not null;
 
 do $$
 begin
@@ -94,6 +98,7 @@ as $$
 declare
   v_actor uuid:=auth.uid();
   v_actor_company uuid;
+  v_actor_scope text;
   v_cylinder public.dbs_control_gas_cylinders%rowtype;
 begin
   if v_actor is null or not public.dbs_control_is_admin_actor(v_actor) then
@@ -107,6 +112,9 @@ begin
   if not found then
     raise exception 'DBS_GAS_COST_UPDATE_FORBIDDEN' using errcode='42501';
   end if;
+  v_actor_scope:=case when v_actor_company is not null
+    then 'company:'||v_actor_company::text
+    else 'user:'||v_actor::text end;
 
   select * into v_cylinder
     from public.dbs_control_gas_cylinders
@@ -115,7 +123,7 @@ begin
   if not found then
     raise exception 'DBS_GAS_CYLINDER_NOT_FOUND' using errcode='23503';
   end if;
-  if v_actor_company is not null and v_cylinder.company_id is distinct from v_actor_company then
+  if v_cylinder.scope_key is distinct from v_actor_scope then
     raise exception 'DBS_GAS_COMPANY_MISMATCH' using errcode='42501';
   end if;
 
@@ -209,6 +217,9 @@ declare
   v_cylinder public.dbs_control_gas_cylinders%rowtype;
   v_existing public.dbs_control_gas_usage%rowtype;
   v_scope record;
+  v_usage_id uuid;
+  v_ledger jsonb;
+  v_ledger_id uuid;
   v_consumed numeric(12,3);
   v_cost bigint;
 begin
@@ -322,7 +333,48 @@ begin
     nullif(trim(p_equipment_reference),''),nullif(trim(p_application_note),''),
     trim(p_idempotency_key),v_actor,p_gross_weight_before_kg,p_gross_weight_after_kg,
     v_consumed,v_cylinder.cost_per_kg_cents,v_cost
+  ) returning id into v_usage_id;
+
+  -- The gas cost enters the Treasury DRE as a balanced, immutable COGS entry.
+  -- It is posted only for this new idempotent usage, never for a replay.
+  v_ledger:=public.post_treasury_ledger_entry(
+    v_scope.scope_key,v_scope.company_id,current_date,current_date,
+    'work_order_gas_cogs',
+    'Consumo de gás refrigerante · OS '||coalesce(v_os.protocol,p_work_order_id::text),
+    'work-order-gas:'||md5(trim(p_idempotency_key)),
+    'work-order-gas:'||md5(trim(p_idempotency_key)),
+    v_actor,'posted',
+    jsonb_build_object(
+      'source','dbs_control_gas_usage_weighted',
+      'work_order_id',p_work_order_id,
+      'gas_usage_id',v_usage_id,
+      'cylinder_id',p_cylinder_id,
+      'cost_center_id',v_os.cost_center_id,
+      'gas_consumed_kg',v_consumed,
+      'unit_cost_cents_per_kg',v_cylinder.cost_per_kg_cents
+    ),
+    jsonb_build_array(
+      jsonb_build_object(
+        'account_code','5.1.02',
+        'account_name','Custo de gás refrigerante aplicado',
+        'account_type','expense',
+        'debit_cents',v_cost,
+        'credit_cents',0
+      ),
+      jsonb_build_object(
+        'account_code','1.1.05',
+        'account_name','Estoque de gás refrigerante',
+        'account_type','asset',
+        'debit_cents',0,
+        'credit_cents',v_cost
+      )
+    )
   );
+  v_ledger_id:=nullif(v_ledger->>'entry_id','')::uuid;
+  if v_ledger_id is null then
+    raise exception 'DBS_GAS_LEDGER_POST_FAILED' using errcode='23514';
+  end if;
+  update public.dbs_control_gas_usage set ledger_entry_id=v_ledger_id where id=v_usage_id;
 
   insert into public.dbs_control_work_order_financials(
     work_order_id,company_id,scope_key,parts_cost_cents,gas_cost_cents,status,metadata
@@ -347,6 +399,7 @@ begin
     'gas_consumed_kg',v_consumed,
     'unit_cost_cents_per_kg',v_cylinder.cost_per_kg_cents,
     'gas_cost_cents',v_cost,
+    'ledger_entry_id',v_ledger_id,
     'remaining_charges',v_cylinder.remaining_charges-1,
     'used_charges',v_cylinder.used_charges+1,
     'gross_weight_after_kg',p_gross_weight_after_kg,
