@@ -20,6 +20,7 @@ type TreasuryLedgerCommand = {
   description: string;
   status?: "draft" | "posted";
   external_key?: string | null;
+  cost_center_id?: string | null;
   metadata?: Record<string, unknown>;
   lines: TreasuryLineInput[];
 };
@@ -258,7 +259,10 @@ export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
       p_external_key: data.external_key ?? null,
       p_created_by: user.id,
       p_status: data.status ?? "posted",
-      p_metadata: data.metadata ?? {},
+      p_metadata: {
+        ...(data.metadata ?? {}),
+        ...(data.cost_center_id ? { cost_center_id: data.cost_center_id } : {}),
+      },
       p_lines: data.lines,
     });
     return { ...(asObject(result) as any), scope_key: scopeKey };
