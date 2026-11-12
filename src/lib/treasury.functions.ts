@@ -38,6 +38,27 @@ async function requireTreasuryReader(context: { userId: string }) {
   return data;
 }
 
+async function resolveTreasuryScopeOwner(user: { id: string; company_id: string | null; role_key?: string }) {
+  if (user.role_key !== "FINANCEIRO_LEITURA") return user;
+  const { data: access, error: accessError } = await (supabaseAdmin as any)
+    .from("treasury_viewer_access")
+    .select("owner_user_id,enabled")
+    .eq("viewer_user_id", user.id)
+    .maybeSingle();
+  if (accessError) throw new Error(accessError.message);
+  if (!access || access.enabled !== true) {
+    throw new Error("Este acesso financeiro está desativado ou sem vínculo com o responsável.");
+  }
+  const { data: owner, error: ownerError } = await supabaseAdmin
+    .from("users")
+    .select("id,company_id,status")
+    .eq("id", access.owner_user_id)
+    .maybeSingle();
+  if (ownerError) throw new Error(ownerError.message);
+  if (!owner || owner.status !== "ativo") throw new Error("O responsável pelo Financeiro não está ativo.");
+  return owner;
+}
+
 async function requireTreasuryAdmin(context: { userId: string }) {
   const user = await requireTreasuryReader(context);
   if (user.role_key !== "SUPER_ADMIN") {
@@ -51,7 +72,9 @@ async function requirePurchaseApprovalActor(context: { userId: string }) {
   if (!["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(user.role_key)) {
     throw new Error("Aprovação de compras restrita ao Financeiro.");
   }
-  return user;
+  const owner = await resolveTreasuryScopeOwner(user);
+  const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
+  return { user, owner, scopeKey };
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -227,7 +250,8 @@ export const getTreasuryCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireTreasuryReader(context);
-    return readTreasuryScope(user);
+    const owner = await resolveTreasuryScopeOwner(user);
+    return readTreasuryScope(owner);
   });
 
 function isTransientTreasuryError(error: unknown) {
@@ -346,7 +370,15 @@ export const decideDbsPurchaseApprovalFromTreasury = createServerFn({ method: "P
     return { purchaseId, decision, reason: reason || null, expectedVersion: input.expectedVersion };
   })
   .handler(async ({ context, data }) => {
-    const user = await requirePurchaseApprovalActor(context);
+    const { user, scopeKey } = await requirePurchaseApprovalActor(context);
+    const { data: purchase, error: purchaseError } = await (supabaseAdmin as any)
+      .from("dbs_control_purchases")
+      .select("id")
+      .eq("id", data.purchaseId)
+      .eq("scope_key", scopeKey)
+      .maybeSingle();
+    if (purchaseError) throw new Error(purchaseError.message);
+    if (!purchase) throw new Error("Compra não encontrada no escopo financeiro vinculado.");
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
