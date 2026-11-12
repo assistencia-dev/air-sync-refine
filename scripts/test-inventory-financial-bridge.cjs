@@ -37,7 +37,7 @@ assert.match(phase2Ui, /createDbsPurchase/);
 assert.match(phase2Ui, /export function DbsInventoryPage/);
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
-assert.match(phase2Ui, /embedded \?: boolean/);
+assert.match(phase2Ui, /embedded\?: boolean/);
 assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
 assert.match(phase2Ui, /Aprovação financeira/);
 assert.match(phase2Ui, /decision: "approved"/);
