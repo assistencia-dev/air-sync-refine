@@ -2587,7 +2587,7 @@ export const auditDbsControlDatabase = createServerFn({ method: "GET" })
     const syncHealth=syncHealthResult.data??null;
     const recentSyncMetrics=syncMetricsResult.data??[];
     const norm=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("pt-BR");
-    const digits=(v:unknown)=>String(v??"").replace(/\\D/g,"");
+    const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
     const groups=(rows:any[],key:(x:any)=>string)=>{
       const m=new Map<string,any[]>();
       for(const row of rows){const k=key(row);if(!k)continue;const a=m.get(k)??[];a.push(row);m.set(k,a);}
@@ -3168,7 +3168,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
     if (!input?.supplierId || !input?.costCenterId) throw new Error("Selecione o fornecedor cadastrado e o centro de custo.");
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(purchaseDate) || Number.isNaN(Date.parse(purchaseDate + "T12:00:00Z"))) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || Number.isNaN(Date.parse(purchaseDate + "T12:00:00Z"))) {
       throw new Error("Informe uma data de compra válida.");
     }
     if (!input?.idempotencyKey || input.idempotencyKey.trim().length < 8) throw new Error("Chave de segurança da compra inválida.");
@@ -3395,7 +3395,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { name: string; cnpj?: string; phone?: string }) => {
     const name=String(input?.name||"").trim();
-    const cnpj=String(input?.cnpj||"").replace(/\\D/g,"");
+    const cnpj=String(input?.cnpj||"").replace(/\D/g,"");
     if(name.length<2||name.length>180) throw new Error("Informe o nome do fornecedor.");
     if(cnpj && ![11,14].includes(cnpj.length)) throw new Error("CNPJ/CPF do fornecedor inválido.");
     return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
