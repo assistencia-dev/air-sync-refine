@@ -39,7 +39,7 @@ assert.match(phase2Ui, /Aprovação financeira/);
 assert.match(phase2Ui, /decision: "approved"/);
 assert.match(phase2Ui, /decision: "rejected"/);
 assert.match(phase2Ui, /purchase\.approval_status !== "approved"/);
-assert.match(phase2Ui, /purchase_items/);
+assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
 assert.match(functions, /export const createDbsPurchase/);
 assert.match(functions, /dbs_control_register_purchase/);
 assert.match(quoteBuilder, /data-purchase=/);
