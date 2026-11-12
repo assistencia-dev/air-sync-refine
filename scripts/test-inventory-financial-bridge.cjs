@@ -25,6 +25,7 @@ const gasCostMigration = fs.readFileSync('supabase/migrations/20261112170000_dbs
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
+const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
 const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
 const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_dbs_inventory_scope_sku_and_financial_reconciliation.sql', 'utf8');
@@ -358,6 +359,22 @@ assert.match(treasuryFunctions, /cost_center_code,cost_center_name/);
 assert.match(treasuryPage, /Centro: \{item\.cost_center_code/);
 assert.match(treasuryPage, /purchase\.cost_center_code/);
 assert.match(treasuryPage, /DBS_TREASURY_SAVE_COST_CENTER/);
+assert.match(treasuryFunctions, /treasury_vw_dre_competence_by_account/);
+assert.match(treasuryFunctions, /dreMaterialCosts/);
+assert.match(treasuryPage, /dreMaterialCosts/);
+assert.match(treasuryHtml, /dre-val-custos-os/);
+assert.match(treasuryHtml, /custosMateriaisOS/);
+assert.match(treasuryHtml, /custosDir - custosMateriaisOS/);
+assert.match(phase2Ui, /Custo de materiais por ordem de serviço/);
+assert.match(phase2Ui, /gas_cost_cents/);
+assert.match(gasCostMigration, /work_order_gas_cogs/);
+assert.match(gasCostMigration, /account_code','5\\.1\\.02'/);
+assert.match(gasCostMigration, /account_code','1\\.1\\.05'/);
+assert.match(gasCostMigration, /ledger_entry_id uuid/);
+assert.match(gasCostMigration, /DBS_GAS_USAGE_IMMUTABLE/);
+assert.match(gasCostMigration, /DBS_GAS_COST_AND_LEDGER_REQUIRED/);
+assert.match(gasCostMigration, /DBS_GAS_LEDGER_POST_FAILED/);
+assert.doesNotMatch(quoteBuilder, /oq-quick-product|oq-product-form|ERP_STATE\\.pecas\\.push\\(product\\)/);
 assert.match(fs.readFileSync("public/dbs-control-os-viewer.js", "utf8"), /grossWeightAfterKg/);
 assert.match(fs.readFileSync("public/treasury.html", "utf8"), /postTreasuryCostCenter/);
 
