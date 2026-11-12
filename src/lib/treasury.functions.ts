@@ -193,7 +193,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .limit(5000),
     admin
       .from("dbs_treasury_purchase_commitments")
-      .select("purchase_id,supplier_name,document_number,commitment_date,purchase_status,payment_status,total_cents,paid_cents,outstanding_cents,received_total_cents,payable_ledger_entry_id")
+      .select("purchase_id,supplier_name,document_number,commitment_date,purchase_status,payment_status,total_cents,paid_cents,outstanding_cents,received_total_cents,payable_ledger_entry_id,cost_center_id,cost_center_code,cost_center_name")
       .eq("scope_key", scopeKey)
       .order("commitment_date", { ascending: true })
       .limit(500),
@@ -219,6 +219,15 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
+  const costCenterById = new Map((costCenters ?? []).map((center: any) => [String(center.id), center]));
+  const pendingPurchaseApprovalsWithCostCenter = (pendingPurchaseApprovals ?? []).map((purchase: any) => {
+    const center = costCenterById.get(String(purchase.cost_center_id ?? ""));
+    return {
+      ...purchase,
+      cost_center_code: center?.code ? String(center.code) : null,
+      cost_center_name: center?.name ? String(center.name) : null,
+    };
+  });
   const state = mergeLedgerState(snapshot?.state, entries ?? []);
   if (state) {
     state._meta = {
@@ -240,7 +249,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     updated_at: snapshot?.updated_at ?? lastLedgerUpdate,
     ledger_entry_count: entries?.length ?? 0,
     purchase_commitments: purchaseCommitments ?? [],
-    pending_purchase_approvals: pendingPurchaseApprovals ?? [],
+    pending_purchase_approvals: pendingPurchaseApprovalsWithCostCenter,
     cost_centers: costCenters ?? [],
     source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
