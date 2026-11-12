@@ -46,28 +46,6 @@
     if (typeof ERP_STATE === "undefined" || !Array.isArray(ERP_STATE.orcamentos)) {
       if (typeof ERP_STATE !== "undefined") ERP_STATE.orcamentos = ERP_STATE.orcamentos || [];
     }
-    var nav = document.querySelector(".nav-menu");
-    if (nav && !document.getElementById("dbs-smart-purchases-nav")) {
-      var purchaseSection = document.createElement("div");
-      purchaseSection.className = "nav-section";
-      purchaseSection.textContent = "Gestão integrada";
-      var purchaseItem = document.createElement("li");
-      purchaseItem.id = "dbs-smart-purchases-nav";
-      purchaseItem.className = "nav-item";
-      purchaseItem.setAttribute("role", "link");
-      purchaseItem.setAttribute("tabindex", "0");
-      purchaseItem.innerHTML = '<span aria-hidden="true">▣</span><span>Compras & Custos</span>';
-      var openPurchases = function () {
-        var target = new URL("/dbs-inventory", window.location.origin);
-        window.open(target.toString(), "_blank", "noopener");
-      };
-      purchaseItem.addEventListener("click", openPurchases);
-      purchaseItem.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPurchases(); }
-      });
-      nav.appendChild(purchaseSection);
-      nav.appendChild(purchaseItem);
-    }
     var tab = $("tab-orcamentos");
     if (!tab || tab.dataset.flexReady === "1") return;
     tab.dataset.flexReady = "1";
@@ -377,7 +355,11 @@
       var items = quoteItems(q); var label = items.map(function (x) { return x.descricao || "Item"; }).join(", ");
       var hasParts = items.some(function (item) { return item.tipo === "peca"; });
       var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> <button type="button" class="btn btn-secondary btn-sm" data-accept="' + esc(q.id) + '">Aceite Web</button> ';
-      if (hasParts) actions += '<button type="button" class="btn btn-primary btn-sm" data-purchase="' + esc(q.id) + '">Comprar peças</button> ';
+      if (hasParts && q.status === "Aprovado") {
+        actions += '<button type="button" class="btn btn-primary btn-sm" data-purchase="' + esc(q.id) + '">Enviar peças para Compras</button> ';
+      } else if (hasParts) {
+        actions += '<button type="button" class="btn btn-secondary btn-sm" disabled title="A proposta precisa estar aprovada antes de gerar o pedido de compra">Comprar peças após aprovação</button> ';
+      }
       if (q.status === "Rascunho") actions += '<button type="button" class="btn btn-secondary btn-sm" data-status="Aprovado" data-id="' + esc(q.id) + '">Aprovar</button>';
       if (q.status === "Aprovado") actions += '<button type="button" class="btn btn-success btn-sm" data-os="' + esc(q.id) + '">Gerar OS</button>';
       return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td><span class="oq-status" data-status="' + esc(q.status || "Rascunho") + '">' + esc(q.status || "Rascunho") + '</span></td><td class="oq-row-actions">' + actions + '</td></tr>';
@@ -396,10 +378,16 @@
   function sendQuotePartsToPurchase(id) {
     var quote = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
     if (!quote) return;
+    if (quote.status !== "Aprovado") {
+      alert("Aprove a proposta antes de enviar os materiais para Compras.");
+      return;
+    }
     var relationalQuoteKey = quote.relationalQuoteId || quote.id;
-    var target = new URL("/dbs-inventory", window.location.origin);
-    target.searchParams.set("quote_id", String(relationalQuoteKey));
-    window.open(target.toString(), "_blank", "noopener,noreferrer");
+    if (typeof window.abrirModuloMateriais !== "function") {
+      alert("A aba Compras do DBS CONTROL não está disponível. Atualize o painel e tente novamente.");
+      return;
+    }
+    window.abrirModuloMateriais("purchases", String(relationalQuoteKey));
   }
 
   function pdf(id) {
