@@ -55,7 +55,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(mainHtml, /20261112-materials-tabs-5/);
+assert.match(controlRoute, /20261112-materials-tabs-5/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
