@@ -116,6 +116,18 @@ function TreasuryPage() {
             passivos: [], recorrencias: [], recebimentos: [], contasPagar: [],
             bancos: [], movimentacoes: [], auditoria: [], _meta: { version: 5 },
           };
+          const costCenters = Array.isArray(cloud?.cost_centers) ? cloud.cost_centers : [];
+          if (costCenters.length) {
+            const currentMeta = stateToHydrate._meta && typeof stateToHydrate._meta === "object" && !Array.isArray(stateToHydrate._meta)
+              ? stateToHydrate._meta as Record<string, unknown>
+              : {};
+            stateToHydrate._meta = {
+              ...currentMeta,
+              centrosCusto: costCenters.map((center: any) => ({
+                id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active",
+              })),
+            };
+          }
           cloudReadyRef.current = true;
           iframeRef.current?.contentWindow?.postMessage(
             { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
