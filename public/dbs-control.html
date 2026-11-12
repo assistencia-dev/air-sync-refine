@@ -1956,12 +1956,21 @@
   window.editarServico = function (id) { beginEdit('servicos', id); };
   window.editarCompra = function (id) { beginEdit('compras', id); };
 
-  window.abrirFinanceiroEstoque = function () {
+  window.abrirModuloMateriais = function (section) {
+    var selectedSection = section === 'purchases' ? 'purchases' : 'parts';
     if (window.parent !== window) {
-      window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_INVENTORY_FINANCE' }, '*');
+      window.parent.postMessage({
+        type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE',
+        section: selectedSection
+      }, window.location.origin);
       return;
     }
-    window.location.href = '/dbs-inventory';
+    // The legacy shell is always hosted by the authenticated DBS CONTROL app.
+    // Do not navigate away to a standalone route from this static screen.
+    console.warn('DBS CONTROL: módulo de materiais precisa ser aberto pelo painel autenticado.');
+  };
+  window.abrirFinanceiroEstoque = function (section) {
+    return window.abrirModuloMateriais(section || 'purchases');
   };
   window.salvarTecnico = function (event) {
     event.preventDefault();
@@ -2065,8 +2074,7 @@
   };
   window.salvarCompra = function (event) {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
-    alert('O cadastro antigo por texto livre foi substituído. Abra Compras & Estoque para selecionar fornecedor, peça, unidade e centro de custo relacionais.');
-    return window.abrirFinanceiroEstoque();
+    return window.abrirModuloMateriais('purchases');
   };
 
 
@@ -4420,7 +4428,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 </form>
             </div>
             <div class="data-card">
-                <div class="data-header"><h3>Insumos e Peças no Estoque Matriz</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Ver custos e financeiro</button></div>
+                <div class="data-header"><h3>Insumos e Peças no Estoque Matriz</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque('parts')">Abrir gestão de estoque</button></div>
                 <table>
                     <thead><tr><th>SKU</th><th>Descrição</th><th>Estoque</th><th>Custo</th><th>Venda</th></tr></thead>
                     <tbody id="peca-table-body"></tbody>
@@ -4455,10 +4463,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             <div class="data-card" style="padding:20px;margin-bottom:20px;">
                 <h3 style="margin-bottom:8px;">Compras relacionais, recebimento e contas a pagar</h3>
                 <p style="font-size:12px;color:#64748b;margin-bottom:14px;">Novos pedidos devem ser vinculados a um fornecedor cadastrado, peças do catálogo, unidade de compra, conversão e centro de custo. O recebimento físico e as aprovações são executados no fluxo relacional.</p>
-                <button type="button" class="btn btn-primary" onclick="abrirFinanceiroEstoque()">Abrir Compras &amp; Estoque</button>
+                <button type="button" class="btn btn-primary" onclick="abrirFinanceiroEstoque('purchases')">Abrir Compras</button>
             </div>
             <div class="data-card">
-                <div class="data-header"><h3>Pedidos de Compra Registrados</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque()">Contas a pagar e balanço</button></div>
+                <div class="data-header"><h3>Pedidos de Compra Registrados</h3><button type="button" class="btn btn-secondary" onclick="abrirFinanceiroEstoque('purchases')">Contas a pagar e balanço</button></div>
                 <table>
                     <thead><tr><th>Fornecedor</th><th>Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr></thead>
                     <tbody id="comp-table-body"></tbody>
@@ -6403,6 +6411,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (document.body.classList.contains('dbs-control-employee-mode')
                     && !['tab-dashboard', 'tab-pwa'].includes(employeeTab)
                     && !(document.body.classList.contains('dbs-control-can-issue-os') && employeeTab === 'tab-nova-os')) {
+                    return false;
+                }
+                if (!document.body.classList.contains('dbs-control-employee-mode')
+                    && employeeTab === 'tab-pecas') {
+                    window.abrirModuloMateriais('parts');
+                    return false;
+                }
+                if (!document.body.classList.contains('dbs-control-employee-mode')
+                    && employeeTab === 'tab-compras') {
+                    window.abrirModuloMateriais('purchases');
                     return false;
                 }
                 const target = document.getElementById(String(tabId || ''));

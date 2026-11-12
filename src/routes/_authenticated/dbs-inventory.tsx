@@ -20,7 +20,18 @@ function money(cents: unknown) {
     .format(Number(cents ?? 0) / 100);
 }
 
-function DbsInventoryPage() {
+type DbsInventorySection = "parts" | "purchases";
+type DbsInventoryPageProps = {
+  embedded?: boolean;
+  initialSection?: DbsInventorySection;
+  onClose?: () => void;
+};
+
+export function DbsInventoryPage({
+  embedded = false,
+  initialSection = "parts",
+  onClose,
+}: DbsInventoryPageProps = {}) {
   const overview = useQuery({
     queryKey: ["dbs-phase2-inventory-overview"],
     queryFn: () => getDbsPhase2InventoryOverview(),
@@ -31,7 +42,11 @@ function DbsInventoryPage() {
     queryFn: () => getDbsInventoryFinancialOverview(),
     retry: 1,
   });
+  const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   const [tab, setTab] = useState<"sales" | "reservations">("sales");
+  useEffect(() => {
+    setModuleSection(initialSection);
+  }, [initialSection]);
   const [partId, setPartId] = useState("");
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -382,7 +397,7 @@ function DbsInventoryPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6">
+    <main className={embedded ? "min-h-full bg-slate-50 px-4 py-5 text-slate-900 sm:px-6" : "min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6"}>
       <div className="mx-auto max-w-7xl">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -390,14 +405,27 @@ function DbsInventoryPage() {
             <h1 className="mt-1 text-2xl font-black">Compras, estoque e balanço de custos</h1>
             <p className="mt-1 text-sm text-slate-500">Cotações convertidas em pedidos, custos por OS, recebimentos e obrigações do Ledger.</p>
           </div>
-          <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>
+          {embedded
+            ? <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</button>
+            : <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>}
         </header>
+
+        <nav aria-label="Módulos de materiais" className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Peças & Estoque</button>
+          <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Compras</button>
+          <span className="ml-auto self-center px-2 text-xs text-slate-500">Operação integrada ao DBS Treasury</span>
+        </nav>
 
         {message && <div role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">{message}</div>}
         {overview.isLoading && <p className="rounded-xl bg-white p-5 text-sm text-slate-500">Carregando dados do estoque...</p>}
-        {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</div>}
+        {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <p className="font-bold">Não foi possível carregar Peças & Estoque e Compras.</p>
+          <p className="mt-1 break-words">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</p>
+          <button type="button" onClick={() => { void overview.refetch(); void financial.refetch(); }} className="mt-3 min-h-10 rounded-lg border border-rose-300 bg-white px-4 text-xs font-black text-rose-800">Tentar carregar novamente</button>
+        </div>}
 
         {data && <>
+          {moduleSection === "parts" && <>
           {financial.isLoading && <p className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Carregando balanço de custos e rentabilidade...</p>}
           {financial.error && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Não foi possível carregar o balanço financeiro: {financial.error instanceof Error ? financial.error.message : "Falha ao consultar os indicadores."}</div>}
           {financial.data && <section className="mb-5">
@@ -679,6 +707,8 @@ function DbsInventoryPage() {
           </div>
 
 
+          </>}
+          {moduleSection === "purchases" && <>
           <section className="mb-5 rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -848,6 +878,8 @@ function DbsInventoryPage() {
               </table>
             </div>
           </div>
+          </>}
+          {moduleSection === "parts" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
               <h2 className="text-lg font-black">Histórico imutável de movimentações</h2>
@@ -948,6 +980,7 @@ function DbsInventoryPage() {
               </table></div>
             </div>
           </section>}
+          </>}
         </>}
       </div>
     </main>
