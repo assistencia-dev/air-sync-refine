@@ -24,7 +24,7 @@ type TreasuryLedgerCommand = {
   lines: TreasuryLineInput[];
 };
 
-async function requireTreasuryUser(context: { userId: string }) {
+async function requireTreasuryReader(context: { userId: string }) {
   const { data, error } = await supabaseAdmin
     .from("users")
     .select("id, company_id, role_key, status")
@@ -32,10 +32,49 @@ async function requireTreasuryUser(context: { userId: string }) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data || data.status !== "ativo" || data.role_key !== "SUPER_ADMIN") {
-    throw new Error("Acesso ao Financeiro restrito ao SUPER_ADMIN.");
+  if (!data || data.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(data.role_key)) {
+    throw new Error("Acesso ao Financeiro não autorizado.");
   }
   return data;
+}
+
+async function resolveTreasuryScopeOwner(user: { id: string; company_id: string | null; role_key?: string }) {
+  if (user.role_key !== "FINANCEIRO_LEITURA") return user;
+  const { data: access, error: accessError } = await (supabaseAdmin as any)
+    .from("treasury_viewer_access")
+    .select("owner_user_id,enabled")
+    .eq("viewer_user_id", user.id)
+    .maybeSingle();
+  if (accessError) throw new Error(accessError.message);
+  if (!access || access.enabled !== true) {
+    throw new Error("Este acesso financeiro está desativado ou sem vínculo com o responsável.");
+  }
+  const { data: owner, error: ownerError } = await supabaseAdmin
+    .from("users")
+    .select("id,company_id,status")
+    .eq("id", access.owner_user_id)
+    .maybeSingle();
+  if (ownerError) throw new Error(ownerError.message);
+  if (!owner || owner.status !== "ativo") throw new Error("O responsável pelo Financeiro não está ativo.");
+  return owner;
+}
+
+async function requireTreasuryAdmin(context: { userId: string }) {
+  const user = await requireTreasuryReader(context);
+  if (user.role_key !== "SUPER_ADMIN") {
+    throw new Error("Lançamentos manuais do Treasury são restritos ao SUPER_ADMIN.");
+  }
+  return user;
+}
+
+async function requirePurchaseApprovalActor(context: { userId: string }) {
+  const user = await requireTreasuryReader(context);
+  if (!["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(user.role_key)) {
+    throw new Error("Aprovação de compras restrita ao Financeiro.");
+  }
+  const owner = await resolveTreasuryScopeOwner(user);
+  const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
+  return { user, owner, scopeKey };
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -137,6 +176,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     { data: entries, error: entriesError },
     { data: purchaseCommitments, error: commitmentsError },
     { data: costCenters, error: costCentersError },
+    { data: pendingPurchaseApprovals, error: pendingPurchaseApprovalsError },
   ] = await Promise.all([
     supabaseAdmin
       .from("treasury_snapshots")
@@ -164,12 +204,21 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .eq("status", "active")
       .order("code", { ascending: true })
       .limit(500),
+    admin
+      .from("dbs_control_purchases")
+      .select("id,supplier_name,document_number,purchase_date,total_cents,approval_status,version,cost_center_id")
+      .eq("scope_key", scopeKey)
+      .eq("approval_status", "pending")
+      .neq("status", "cancelled")
+      .order("purchase_date", { ascending: false })
+      .limit(100),
   ]);
 
   if (snapshotError) throw new Error(snapshotError.message);
   if (entriesError) throw new Error(entriesError.message);
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
+  if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
   const state = mergeLedgerState(snapshot?.state, entries ?? []);
   if (state) {
     state._meta = {
@@ -191,6 +240,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     updated_at: snapshot?.updated_at ?? lastLedgerUpdate,
     ledger_entry_count: entries?.length ?? 0,
     purchase_commitments: purchaseCommitments ?? [],
+    pending_purchase_approvals: pendingPurchaseApprovals ?? [],
     cost_centers: costCenters ?? [],
     source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
@@ -199,8 +249,9 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
 export const getTreasuryCloudState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireTreasuryUser(context);
-    return readTreasuryScope(user);
+    const user = await requireTreasuryReader(context);
+    const owner = await resolveTreasuryScopeOwner(user);
+    return readTreasuryScope(owner);
   });
 
 function isTransientTreasuryError(error: unknown) {
@@ -245,7 +296,7 @@ export const postTreasuryLedgerEntry = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ context, data }) => {
-    const user = await requireTreasuryUser(context);
+    const user = await requireTreasuryAdmin(context);
     const scopeKey = user.company_id ? `company:${user.company_id}` : `user:${user.id}`;
     const result = await postLedgerWithRetry({
       p_scope_key: scopeKey,
@@ -275,7 +326,7 @@ export const saveTreasuryCostCenter = createServerFn({ method: "POST" })
     return {code,name};
   })
   .handler(async ({context,data})=>{
-    const user=await requireTreasuryUser(context);
+    const user=await requireTreasuryAdmin(context);
     const scopeKey=user.company_id? `company:${user.company_id}` : `user:${user.id}`;
     const admin=supabaseAdmin as any;
     const saved=await admin.from("dbs_control_cost_centers").upsert({
@@ -290,4 +341,51 @@ export const saveTreasuryCostCenter = createServerFn({ method: "POST" })
     },{onConflict:"scope_key,normalized_code"}).select("id,code,name,status").single();
     if(saved.error) throw new Error(saved.error.message);
     return {id:String(saved.data.id),code:String(saved.data.code),name:String(saved.data.name),ativo:saved.data.status==="active"};
+  });
+
+
+export const decideDbsPurchaseApprovalFromTreasury = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    purchaseId: string;
+    decision: "approved" | "rejected";
+    reason?: string;
+    expectedVersion: number;
+  }) => {
+    const purchaseId = String(input?.purchaseId ?? "").trim();
+    const decision = input?.decision;
+    const reason = String(input?.reason ?? "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(purchaseId)) {
+      throw new Error("Compra inválida.");
+    }
+    if (decision !== "approved" && decision !== "rejected") {
+      throw new Error("Decisão de aprovação inválida.");
+    }
+    if (decision === "rejected" && (reason.length < 5 || reason.length > 1000)) {
+      throw new Error("Informe o motivo da rejeição (mínimo 5 caracteres).");
+    }
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Versão da compra inválida. Atualize a fila.");
+    }
+    return { purchaseId, decision, reason: reason || null, expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const { user, scopeKey } = await requirePurchaseApprovalActor(context);
+    const { data: purchase, error: purchaseError } = await (supabaseAdmin as any)
+      .from("dbs_control_purchases")
+      .select("id")
+      .eq("id", data.purchaseId)
+      .eq("scope_key", scopeKey)
+      .maybeSingle();
+    if (purchaseError) throw new Error(purchaseError.message);
+    if (!purchase) throw new Error("Compra não encontrada no escopo financeiro vinculado.");
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
+      p_purchase_id: data.purchaseId,
+      p_actor_user_id: user.id,
+      p_decision: data.decision,
+      p_reason: data.reason,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
   });
