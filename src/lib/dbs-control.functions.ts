@@ -3342,11 +3342,20 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
-    const accessRows = scopedUserIds.length
-      ? await (supabaseAdmin as any).from("rh_employee_access").select("employee_id").in("user_id",scopedUserIds).eq("access_enabled",true)
-      : { data: [], error: null };
+    const [accessRows,pontoEmployees] = await Promise.all([
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employee_access").select("employee_id").in("user_id",scopedUserIds).eq("access_enabled",true)
+        : Promise.resolve({data:[],error:null}),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employees").select("id").in("ponto_portal_user_id",scopedUserIds).eq("dbs_control_access_enabled",true).eq("is_active",true)
+        : Promise.resolve({data:[],error:null}),
+    ]);
     if(accessRows.error) throw new Error("Falha ao carregar vínculos de técnicos: " + accessRows.error.message);
-    const employeeIds=[...new Set((accessRows.data??[]).map((row:any)=>String(row.employee_id)).filter(Boolean))];
+    if(pontoEmployees.error) throw new Error("Falha ao carregar vínculos Portal do Ponto: " + pontoEmployees.error.message);
+    const employeeIds=[...new Set([
+      ...(accessRows.data??[]).map((row:any)=>String(row.employee_id)),
+      ...(pontoEmployees.data??[]).map((row:any)=>String(row.id)),
+    ].filter(Boolean))];
     const employees=employeeIds.length
       ? await (supabaseAdmin as any).from("rh_employees").select("id,full_name,is_active,dbs_control_access_enabled").in("id",employeeIds).eq("is_active",true).order("full_name").limit(500)
       : { data: [], error: null };
