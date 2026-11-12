@@ -3227,7 +3227,6 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         }
       }
       const baseQuantity = Number((item.quantity * item.conversionFactor).toFixed(4));
-      const baseUnitCost = Math.max(1, Math.round(item.unitCostCents / item.conversionFactor));
       resolvedItems.push({
         part_id: item.partId,
         purchase_unit_id: item.purchaseUnitId,
@@ -3235,7 +3234,8 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         quantity: baseQuantity,
         base_quantity: baseQuantity,
         conversion_factor: item.conversionFactor,
-        unit_cost_cents: baseUnitCost,
+        // The RPC converts this purchase-unit cost to the stock base unit once.
+        unit_cost_cents: item.unitCostCents,
       });
     }
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase", {
