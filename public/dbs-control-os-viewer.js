@@ -181,7 +181,10 @@
       }
       if (msg.type === 'DBS_CONTROL_FIELD_GAS_USE_RESULT') {
         if (!msg.ok) { alert(msg.error || 'Não foi possível registrar a carga de gás.'); return; }
-        if (gasBody) gasBody.insertAdjacentHTML('afterbegin', '<p class="osv-chip">Carga registrada na O.S. Atualizando saldo…</p>');
+        const result=msg.result||{};
+        const costLabel=Number.isFinite(Number(result.total_cost_cents))?' · Custo '+(Number(result.total_cost_cents)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'';
+        const kgLabel=Number.isFinite(Number(result.gas_consumed_kg))?' · '+Number(result.gas_consumed_kg).toFixed(3)+' kg':'';
+        if (gasBody) gasBody.insertAdjacentHTML('afterbegin', '<p class="osv-chip">Gás baixado na O.S.'+esc(kgLabel)+esc(costLabel)+' · Ledger confirmado. Atualizando saldo…</p>');
         window.parent.postMessage({ type: 'DBS_CONTROL_FIELD_INVENTORY_LOAD', workOrderId: plannedId, requestId: fieldRequestId() }, '*');
       }
     };
