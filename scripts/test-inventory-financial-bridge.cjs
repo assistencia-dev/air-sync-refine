@@ -20,6 +20,8 @@ const purchaseLifecycle = fs.readFileSync('supabase/migrations/20261105125808_db
 const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_fix_dbs_control_purchase_receipt_status_lock.sql', 'utf8');
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
 const purchaseApproval = fs.readFileSync('supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql', 'utf8');
+const frontendIntegrations = fs.readFileSync('supabase/migrations/20261111180000_dbs_control_frontend_inventory_cost_center_integrations.sql', 'utf8');
+
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
@@ -112,8 +114,8 @@ assert.doesNotMatch(functions, /from\(["']dbs_control_snapshots["']\)\.(?:insert
 assert.match(importScript, /opening_quantity/);
 assert.match(importScript, /opening_unit_cost_cents/);
 
+assert.match(shellHtml, /id="comp-peca"/);
 for (const html of [mainHtml, shellHtml]) {
-  assert.match(html, /id="comp-peca"/);
   assert.match(html, /String\(p\.id\)\s*===\s*pecaId|String\(p\.id\)\s*===\s*String\(pecaId\)/);
   assert.doesNotMatch(html, /peca\.qtd\s*-=/);
   const inlineScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((match) => match[1]);
@@ -198,8 +200,9 @@ assert.match(functions, /dbs_control_register_purchase/);
 assert.match(functions, /dbs_control_receive_registered_purchase/);
 assert.match(functions, /export const receiveDbsPurchase/);
 assert.match(phase2Ui, /receiveDbsPurchase/);
-assert.match(mainHtml, /id="comp-status"/);
-assert.match(mainHtml, /value="received"/);
+assert.doesNotMatch(mainHtml, /id="comp-fornecedor"/);
+assert.doesNotMatch(mainHtml, /id="comp-status"/);
+assert.match(mainHtml, /O cadastro antigo por texto livre foi substituído/);
 assert.match(settlementIndexes, /dbs_control_purchase_payments_created_by_fk_idx/i);
 assert.match(settlementIndexes, /dbs_control_purchase_payments_ledger_entry_fk_idx/i);
 assert.match(integrationSql, /begin;[\s\S]*rollback;/i);
@@ -227,7 +230,8 @@ assert.match(phase2Ui, /settleDbsPurchase/);
 assert.match(phase2Ui, /gross_margin_pct/);
 assert.match(mainHtml, /id="peca-status"/);
 assert.match(mainHtml, /status: document\.getElementById\('peca-status'\)/);
-assert.match(mainHtml, /status: document.getElementById\('comp-status'\)\.value === 'received'/);
+assert.match(mainHtml, /window\.abrirFinanceiroEstoque/);
+assert.doesNotMatch(mainHtml, /status: document\.getElementById\('comp-status'\)\.value === 'received'/);
 assert.match(mainHtml, /abrirFinanceiroEstoque/);
 assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(integrationSql, /integration_test_status/);
@@ -239,8 +243,8 @@ assert.match(functions, /part_sku: partSku/);
 assert.match(functions, /id: String\(row\.legacy_key \|\| row\.id\)/);
 assert.match(functions, /purchase_id: String\(row\.id\)/);
 
-assert.match(mainHtml, /part_sku: selectedPart && selectedPart\.sku/);
-assert.match(mainHtml, /document\.getElementById\('comp-status'\)\.value === 'received'/);
+assert.doesNotMatch(mainHtml, /part_sku: selectedPart && selectedPart\.sku/);
+assert.doesNotMatch(mainHtml, /document\.getElementById\('comp-status'\)\.value === 'received'/);
 
 assert.match(functions, /requireDbsInventoryAdmin/);
 
@@ -257,6 +261,48 @@ assert.match(integrationSql, /v_part2/i);
 assert.match(integrationSql, /TEST_OS_REVENUE/i);
 assert.match(integrationSql, /gross_margin_pct/);
 assert.match(integrationSql, /rollback;/i);
+
+
+// Relational frontend integration: mandatory supplier/unit selectors, exact unit
+// conversion, relational quote IDs, cost centers and weighed gas usage.
+assert.match(frontendIntegrations, /create table if not exists public\.dbs_control_cost_centers/i);
+assert.match(frontendIntegrations, /supplier_id uuid/);
+assert.match(frontendIntegrations, /measure_unit_id uuid/);
+assert.match(frontendIntegrations, /cost_center_id uuid/);
+assert.match(frontendIntegrations, /dbs_control_fill_cost_center/);
+assert.match(frontendIntegrations, /dbs_control_register_gas_usage_weighted/);
+assert.match(frontendIntegrations, /DBS_GAS_WEIGHT_IDEMPOTENCY_CONFLICT/);
+assert.match(frontendIntegrations, /v_line_total := round\(v_purchase_qty\*v_purchase_unit_cost\)::bigint/i);
+assert.doesNotMatch(frontendIntegrations, /drop\s+(table|schema|column)\b/i);
+assert.match(phase2Ui, /createDbsSupplier/);
+assert.match(phase2Ui, /createDbsMeasureUnit/);
+assert.match(phase2Ui, /createDbsUnitConversion/);
+assert.match(phase2Ui, /supplierId/);
+assert.match(phase2Ui, /costCenterId/);
+assert.match(phase2Ui, /purchaseUnitId/);
+assert.doesNotMatch(phase2Ui, /supplierName/);
+assert.doesNotMatch(phase2Ui, /line\.sku/);
+assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
+assert.match(phase2Ui, /dbs_control_assign_gas_cylinder_weighted/);
+assert.match(phase2Ui, /dbs_control_initialize_existing_gas_cylinder_weights/);
+assert.match(mainHtml, /id="peca-fornecedor"/);
+assert.match(mainHtml, /id="peca-unidade"/);
+assert.match(mainHtml, /require_master_data: true/);
+assert.match(mainHtml, /DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA/);
+assert.match(controlRoute, /DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA/);
+assert.match(controlRoute, /dbs_control_register_gas_usage_weighted/);
+assert.match(controlRoute, /grossWeightBeforeKg/);
+assert.match(quoteBuilder, /id="oq-cost-center"/);
+assert.match(quoteBuilder, /quote\.relationalQuoteId \|\| quote\.id/);
+assert.match(quoteBuilder, /oq-product-supplier/);
+assert.match(quoteBuilder, /oq-product-unit/);
+assert.doesNotMatch(quoteBuilder, /purchase_items/);
+assert.doesNotMatch(quoteBuilder, /sku: String\(catalogItem\.sku/);
+assert.match(treasuryFunctions, /saveTreasuryCostCenter/);
+assert.match(treasuryFunctions, /from\("dbs_control_cost_centers"\)/);
+assert.match(treasuryPage, /DBS_TREASURY_SAVE_COST_CENTER/);
+assert.match(fs.readFileSync("public/dbs-control-os-viewer.js", "utf8"), /grossWeightAfterKg/);
+assert.match(fs.readFileSync("public/treasury.html", "utf8"), /postTreasuryCostCenter/);
 
 console.log('Inventory/Finance bridge: additive schema, purchase receipt, UUID part consumption, cost reconciliation, revenue lifecycle, phase 2 RPC contracts and inline UI syntax verified.');
 
