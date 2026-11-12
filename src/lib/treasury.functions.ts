@@ -231,7 +231,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   const materialCostsByMonthMap = new Map<string, { competence_month: string; parts_cost_cents: number; gas_cost_cents: number; total_cost_cents: number }>();
   for (const row of materialCostRows ?? []) {
     const month = String(row.competence_month ?? "").slice(0, 10);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(month)) continue;
+    if (!/^\d{4}-\\d{2}-\\d{2}$/.test(month)) continue;
     const entry = materialCostsByMonthMap.get(month) ?? {
       competence_month: month,
       parts_cost_cents: 0,
