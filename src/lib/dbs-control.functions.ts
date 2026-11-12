@@ -3330,7 +3330,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
-        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,part_id,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
         .eq("scope_key",scopeKey).order("serial_number").limit(500),
       (supabaseAdmin as any).from("dbs_control_car_stock")
         .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
@@ -3603,19 +3603,67 @@ export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
     return updated.data;
   });
 
+export const linkDbsGasCylinderPart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { cylinderId: string; partId: string }) => ({
+    cylinderId: requireInventoryId(input?.cylinderId, "Cilindro"),
+    partId: requireInventoryId(input?.partId, "Material de gás"),
+  }))
+  .handler(async ({ context, data }) => {
+    await requireDbsInventoryAdmin(context);
+    const admin = supabaseAdmin as any;
+    const cylinder = await admin.from("dbs_control_gas_cylinders")
+      .select("id,scope_key,employee_id").eq("id", data.cylinderId).maybeSingle();
+    if (cylinder.error) throw new Error(cylinder.error.message);
+    if (!cylinder.data) throw new Error("Cilindro não encontrado.");
+    const part = await admin.from("dbs_control_parts")
+      .select("id,name,cost_cents,status,supplier_id,measure_unit_id")
+      .eq("id", data.partId).maybeSingle();
+    if (part.error) throw new Error(part.error.message);
+    if (!part.data || part.data.status !== "ativo" || !part.data.supplier_id || !part.data.measure_unit_id) {
+      throw new Error("Selecione uma peça ativa do catálogo relacional, com fornecedor e unidade-base.");
+    }
+    const [supplier, unit] = await Promise.all([
+      admin.from("dbs_control_suppliers").select("id").eq("id", part.data.supplier_id)
+        .eq("scope_key", cylinder.data.scope_key).eq("status", "active").maybeSingle(),
+      admin.from("dbs_control_measure_units").select("id,code").eq("id", part.data.measure_unit_id)
+        .eq("scope_key", cylinder.data.scope_key).eq("status", "active").maybeSingle(),
+    ]);
+    if (supplier.error) throw new Error(supplier.error.message);
+    if (unit.error) throw new Error(unit.error.message);
+    if (!supplier.data || !unit.data || String(unit.data.code).toUpperCase() !== "KG") {
+      throw new Error("O material do cilindro precisa pertencer ao mesmo escopo e ter unidade-base KG.");
+    }
+    if (!Number.isSafeInteger(part.data.cost_cents) || Number(part.data.cost_cents) <= 0) {
+      throw new Error("Informe custo médio por KG no cadastro da peça antes de vincular o cilindro.");
+    }
+    const saved = await admin.from("dbs_control_gas_cylinders")
+      .update({ part_id: data.partId, refrigerant_type: part.data.name, updated_at: new Date().toISOString() })
+      .eq("id", data.cylinderId)
+      .select("id,part_id,refrigerant_type").single();
+    if (saved.error) throw new Error(saved.error.message);
+    return saved.data;
+  });
+
 export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({context})=>{
     const user=await requireDbsInventoryAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
-    const [suppliers,measureUnits,unitConversions,costCenters]=await Promise.all([
+    const [suppliers,measureUnits,unitConversions,costCenters,parts]=await Promise.all([
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,status").eq("scope_key",scopeKey).eq("status","active").order("name"),
       (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,status").eq("scope_key",scopeKey).eq("status","active").order("code"),
       (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active"),
-      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code")
+      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code"),
+      // O construtor de orçamento usa exclusivamente IDs do catálogo relacional.
+      // Itens antigos sem fornecedor/unidade permanecem disponíveis para edição,
+      // mas não entram como opção válida até serem completados.
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,supplier_id,measure_unit_id,status,version")
+        .eq("status","ativo").order("name").limit(1000)
     ]);
-    for(const result of [suppliers,measureUnits,unitConversions,costCenters]) if(result.error) throw new Error(result.error.message);
-    return {suppliers:suppliers.data??[],measureUnits:measureUnits.data??[],unitConversions:unitConversions.data??[],costCenters:costCenters.data??[]};
+    for(const result of [suppliers,measureUnits,unitConversions,costCenters,parts]) if(result.error) throw new Error(result.error.message);
+    return {suppliers:suppliers.data??[],measureUnits:measureUnits.data??[],unitConversions:unitConversions.data??[],costCenters:costCenters.data??[],parts:parts.data??[]};
   });
 
 
