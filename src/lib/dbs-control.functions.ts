@@ -3307,7 +3307,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock] = await Promise.all([
+    const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version")
         .order("name").limit(500),
@@ -3319,17 +3319,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_work_order_reservations")
         .select("id,work_order_id,part_id,quantity,unit_cost_cents,status,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
-      (supabaseAdmin as any).from("dbs_control_sales")
-        .select("id,client_id,status,total_cents,created_at,scope_key")
-        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100),
-      (supabaseAdmin as any).from("dbs_control_sale_settlements")
-        .select("id,sale_id,amount_cents,payment_method,received_at,scope_key")
-        .eq("scope_key", scopeKey).order("received_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,payment_status,approval_status,approved_by,approved_at,rejected_by,rejected_at,rejection_reason,version,total_cents,received_total_cents,paid_cents,ledger_entry_id,created_at")
+        .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,approval_status,rejection_reason,version,total_cents,received_total_cents,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
-        .select("work_order_id,revenue_cents,parts_cost_cents,status,updated_at")
+        .select("work_order_id,parts_cost_cents,status,updated_at")
         .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,legal_name,trade_name,cnpj,phone,status").eq("scope_key",scopeKey).order("name").limit(500),
       (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system").eq("scope_key",scopeKey).eq("status","active").order("code").limit(100),
@@ -3342,7 +3336,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
         .eq("scope_key",scopeKey).eq("status","active").order("updated_at",{ascending:false}).limit(1000),
     ]);
-    for (const result of [parts, workOrders, reservations, sales, saleSettlements, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock]) {
+    for (const result of [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     const [accessRows,pontoEmployees] = await Promise.all([
@@ -3378,8 +3372,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
       reservations: reservations.data ?? [],
-      sales: sales.data ?? [],
-      saleSettlements: saleSettlements.data ?? [],
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItems.data ?? [],
       inventoryMovements: inventoryMovements.data ?? [],
