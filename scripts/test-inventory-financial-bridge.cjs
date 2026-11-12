@@ -35,6 +35,9 @@ const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
 assert.match(phase2Ui, /createDbsPurchase/);
 assert.match(phase2Ui, /export function DbsInventoryPage/);
+assert.match(phase2Ui, /moduleSection === "parts" \\? "Peças & Estoque" : "Compras"/);
+assert.match(phase2Ui, /!embedded &&/);
+
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
 assert.match(phase2Ui, /embedded\?: boolean/);
@@ -224,6 +227,10 @@ assert.match(settlement, /revoke all on function public\.dbs_control_settle_purc
 assert.match(settlement, /grant execute on function public\.dbs_control_settle_purchase.*to service_role/i);
 assert.match(functions, /export const settleDbsPurchase/);
 assert.match(functions, /export const getDbsInventoryFinancialOverview/);
+const saleSettlementsQuery = functions.match(/\\.from\\("dbs_control_sale_settlements"\\)([\\s\\S]*?)\\.limit\\(200\\)/)?.[0] ?? "";
+assert.match(saleSettlementsQuery, /received_at/);
+assert.doesNotMatch(saleSettlementsQuery, /created_at/);
+
 assert.match(functions, /payment_status: 'unpaid'/);
 assert.match(functions, /paid_cents/);
 assert.match(phase2Ui, /Compras e contas a pagar/);
@@ -241,6 +248,9 @@ assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(controlRoute, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
 assert.match(controlRoute, /setInventoryModuleSection\("purchases"\)/);
 assert.match(controlRoute, /<DbsInventoryPage/);
+assert.match(controlRoute, /admin-mobile-hostbar/);
+assert.match(controlRoute, /inventoryModuleSection \\? "hidden" : "flex"/);
+
 assert.match(controlRoute, /initialSection=\{inventoryModuleSection\}/);
 assert.match(mainHtml, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
 assert.match(mainHtml, /window\.abrirModuloMateriais/);
