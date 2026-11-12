@@ -667,7 +667,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                     <input type="number" id="dre-input-impostos" value="12.0" step="0.5" oninput="renderDRE()">
                 </div>
                 <div class="filter-group">
-                    <label>Custos Diretos Operacionais (R$)</label>
+                    <label>Outros Custos Diretos Operacionais (fora de peças e gás de OS) (R$)</label>
                     <input type="number" id="dre-input-custos" value="15000.00" oninput="renderDRE()">
                 </div>
                 <button class="btn btn-dark" onclick="window.print()"><i class="fa-solid fa-file-pdf"></i> Imprimir Relatório</button>
@@ -687,7 +687,8 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                         <tr class="dre-row-subtotal"><td>(=) RECEITA LÍQUIDA OPERACIONAL</td><td id="dre-val-recliquida">R$ 0,00</td></tr>
 
                         <tr class="dre-row-header"><td colspan="2">2. CUSTOS E DESPESAS OPERACIONAIS</td></tr>
-                        <tr><td class="dre-indent">(-) Custos Diretos Operacionais</td><td class="dre-val-neg" id="dre-val-custos">R$ 0,00</td></tr>
+                        <tr><td class="dre-indent">(-) Outros Custos Diretos Operacionais</td><td class="dre-val-neg" id="dre-val-custos">R$ 0,00</td></tr>
+                        <tr><td class="dre-indent">(-) Peças e gás aplicados em Ordens de Serviço (Ledger)</td><td class="dre-val-neg" id="dre-val-custos-os">R$ 0,00</td></tr>
                         <tr><td class="dre-indent">(-) Contas Fixas Mensais (Sistemas, Aluguel, etc.)</td><td class="dre-val-neg" id="dre-val-recorrencias">R$ 0,00</td></tr>
                         <tr><td class="dre-indent">(-) Contas a Pagar Lançadas no Mês</td><td class="dre-val-neg" id="dre-val-pagar-mes">R$ 0,00</td></tr>
                         <tr class="dre-row-subtotal"><td>(=) RESULTADO OPERACIONAL (EBITDA)</td><td id="dre-val-ebitda">R$ 0,00</td></tr>
@@ -2559,6 +2560,9 @@ function showToast(msg) {
         const recBrutaManual = parseFloat(document.getElementById('dre-input-receita').value) || 0;
         const pctImp = parseFloat(document.getElementById('dre-input-impostos').value) || 0;
         const custosDir = parseFloat(document.getElementById('dre-input-custos').value) || 0;
+        const materialCostRow = (STATE._meta && Array.isArray(STATE._meta.dreMaterialCosts) ? STATE._meta.dreMaterialCosts : [])
+            .find(row => String(row.competence_month || '').slice(0, 7) === selectedPeriod) || {};
+        const custosMateriaisOS = Number(materialCostRow.total_cost_cents || 0) / 100;
 
         const impostosManual = recBrutaManual * (pctImp / 100);
         const recTotalLiquida = (recCadastrada + recBrutaManual) - impostosManual;
@@ -2570,7 +2574,7 @@ function showToast(msg) {
             else if (r.frequencia === 'Anual') totalRecorrencias += (r.valor / 12);
         });
 
-        const ebitda = recTotalLiquida - custosDir - totalRecorrencias - contasPagarMes;
+        const ebitda = recTotalLiquida - custosDir - custosMateriaisOS - totalRecorrencias - contasPagarMes;
 
         let totalPassivosMes = 0;
         STATE.passivos.forEach(pass => {
@@ -2587,6 +2591,7 @@ function showToast(msg) {
         document.getElementById('dre-val-impostos').innerText = `R$ ${impostosManual.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         document.getElementById('dre-val-recliquida').innerText = `R$ ${recTotalLiquida.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         document.getElementById('dre-val-custos').innerText = `R$ ${custosDir.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+        document.getElementById('dre-val-custos-os').innerText = `R$ ${custosMateriaisOS.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         document.getElementById('dre-val-recorrencias').innerText = `R$ ${totalRecorrencias.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         document.getElementById('dre-val-pagar-mes').innerText = `R$ ${contasPagarMes.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         
