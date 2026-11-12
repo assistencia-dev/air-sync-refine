@@ -3417,7 +3417,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     const code=String(input?.code||"").trim().toUpperCase();
     const name=String(input?.name||"").trim();
     const decimals=Number(input?.decimalPlaces??3);
-    if(!/^[A-Z0-9_-]{1,12}$/.test(code)||name.length<1||name.length>80||!Number.isInteger(decimals)||decimals<0||decimals>4)
+    if(!/^[A-Z0-9_-]{1,12}$/.test(code)||name.length<2||name.length>80||!Number.isInteger(decimals)||decimals<0||decimals>4)
       throw new Error("Código, nome ou precisão da unidade inválidos.");
     return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
   })
