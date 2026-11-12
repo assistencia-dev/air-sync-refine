@@ -555,7 +555,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
       const query = (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select(isScopedCollaborator
           ? "work_order_id,status,updated_at"
-          : "work_order_id,revenue_cents,parts_cost_cents,status,revenue_entry_id,revenue_reversal_entry_id,updated_at");
+          : "work_order_id,revenue_cents,parts_cost_cents,gas_cost_cents,status,revenue_entry_id,revenue_reversal_entry_id,updated_at");
       if (!isScopedCollaborator) return query;
       return inScope(scopedOrderIds) ? query.in("work_order_id", scopedOrderIds) : noRows;
     })(),
@@ -863,6 +863,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     const financial = financialsByOrderId.get(String(row.id));
     const revenueCents = financial ? Number(financial.revenue_cents || 0) : 0;
     const partsCostCents = financial ? Number(financial.parts_cost_cents || 0) : 0;
+    const gasCostCents = financial ? Number(financial.gas_cost_cents || 0) : 0;
     const assignedEmployeeId = row.assigned_employee_id ? String(row.assigned_employee_id) : null;
     const mappedStatus = statusMap[String(row.status || "").trim().toLowerCase()] || row.status || "Em Atendimento";
     return {
@@ -907,8 +908,11 @@ async function hydrateDbsControlStateFromCanonicalDb(
       valor: Number(row.total_cents || 0) / 100,
       revenue_cents: revenueCents,
       parts_cost_cents: partsCostCents,
+      gas_cost_cents: gasCostCents,
+      total_material_cost_cents: partsCostCents + gasCostCents,
       custoPecas: partsCostCents / 100,
-      lucroBruto: (revenueCents - partsCostCents) / 100,
+      custoGas: gasCostCents / 100,
+      lucroBruto: (revenueCents - partsCostCents - gasCostCents) / 100,
       financial_status: financial?.status || "pending",
       revenue_entry_id: financial?.revenue_entry_id || null,
       revenue_reversal_entry_id: financial?.revenue_reversal_entry_id || null,
@@ -3323,14 +3327,14 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,approval_status,rejection_reason,version,total_cents,received_total_cents,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
-        .select("work_order_id,parts_cost_cents,status,updated_at")
+        .select("work_order_id,parts_cost_cents,gas_cost_cents,status,updated_at")
         .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,legal_name,trade_name,cnpj,phone,status").eq("scope_key",scopeKey).order("name").limit(500),
       (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system").eq("scope_key",scopeKey).eq("status","active").order("code").limit(100),
       (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
-        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,cost_per_kg_cents,updated_at")
         .eq("scope_key",scopeKey).order("serial_number").limit(500),
       (supabaseAdmin as any).from("dbs_control_car_stock")
         .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
