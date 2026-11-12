@@ -674,6 +674,9 @@ BEGIN
     RETURN jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,
       'cylinder_id',p_cylinder_id,'gas_consumed_kg',v_existing.gas_consumed_kg,
       'gross_weight_after_kg',v_existing.gross_weight_after_kg,
+      'cost_per_kg_cents',v_existing.cost_per_kg_cents,
+      'total_cost_cents',v_existing.total_cost_cents,
+      'ledger_entry_id',v_existing.ledger_entry_id,
       'remaining_net_weight_kg',greatest(v_existing.gross_weight_after_kg-v_cylinder.tare_weight_kg,0));
   END IF;
   IF p_gross_weight_after_kg<v_cylinder.tare_weight_kg THEN
@@ -694,7 +697,7 @@ BEGIN
     UPDATE public.dbs_control_gas_cylinders SET current_gross_weight_kg=p_gross_weight_after_kg,updated_at=now()
      WHERE id=p_cylinder_id;
     v_total:=round(v_consumed*v_cylinder.cost_per_kg_cents)::bigint;
-    v_scope:=public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+    SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
     v_ledger:=public.post_treasury_ledger_entry(
       v_scope.scope_key,v_scope.company_id,current_date,current_date,
       'work_order_gas_cogs','Consumo de gás · OS '||coalesce(v_os.protocol,p_work_order_id::text),
