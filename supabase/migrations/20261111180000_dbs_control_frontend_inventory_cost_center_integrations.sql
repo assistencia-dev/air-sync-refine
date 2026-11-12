@@ -558,7 +558,6 @@ BEGIN
   ELSIF TG_TABLE_NAME='dbs_control_work_order_financials' THEN
     SELECT wo.cost_center_id INTO v_center FROM public.dbs_control_work_orders wo WHERE wo.id=NEW.work_order_id;
     NEW.cost_center_id:=coalesce(NEW.cost_center_id,v_center);
-    IF NEW.cost_center_id IS NULL THEN RAISE EXCEPTION 'DBS_OS_FINANCIAL_COST_CENTER_REQUIRED' USING ERRCODE='23514'; END IF;
   ELSIF TG_TABLE_NAME IN ('dbs_control_work_order_parts','dbs_control_work_order_reservations','dbs_control_reservation_consumptions','dbs_control_car_stock_consumptions','dbs_control_gas_usage') THEN
     v_work_order:=NEW.work_order_id;
     SELECT wo.cost_center_id INTO v_center FROM public.dbs_control_work_orders wo WHERE wo.id=v_work_order;
