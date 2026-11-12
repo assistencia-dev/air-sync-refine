@@ -355,11 +355,7 @@
       var items = quoteItems(q); var label = items.map(function (x) { return x.descricao || "Item"; }).join(", ");
       var hasParts = items.some(function (item) { return item.tipo === "peca"; });
       var actions = '<button type="button" class="btn btn-secondary btn-sm" data-pdf="' + esc(q.id) + '">PDF</button> <button type="button" class="btn btn-secondary btn-sm" data-accept="' + esc(q.id) + '">Aceite Web</button> ';
-      if (hasParts && q.status === "Aprovado") {
-        actions += '<button type="button" class="btn btn-primary btn-sm" data-purchase="' + esc(q.id) + '">Enviar peças para Compras</button> ';
-      } else if (hasParts) {
-        actions += '<button type="button" class="btn btn-secondary btn-sm" disabled title="A proposta precisa estar aprovada antes de gerar o pedido de compra">Comprar peças após aprovação</button> ';
-      }
+      if (hasParts) actions += '<button type="button" class="btn btn-primary btn-sm" data-purchase="' + esc(q.id) + '">Enviar peças para Compras</button> ';
       if (q.status === "Rascunho") actions += '<button type="button" class="btn btn-secondary btn-sm" data-status="Aprovado" data-id="' + esc(q.id) + '">Aprovar</button>';
       if (q.status === "Aprovado") actions += '<button type="button" class="btn btn-success btn-sm" data-os="' + esc(q.id) + '">Gerar OS</button>';
       return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.data || "-") + '</td><td>' + esc(c.nome || c.razaoSocial || c.nomeFantasia || "-") + '</td><td title="' + esc(label) + '">' + items.length + ' item(ns)</td><td>' + money(q.total) + '</td><td>' + esc(q.validade || "-") + '</td><td><span class="oq-status" data-status="' + esc(q.status || "Rascunho") + '">' + esc(q.status || "Rascunho") + '</span></td><td class="oq-row-actions">' + actions + '</td></tr>';
@@ -378,10 +374,6 @@
   function sendQuotePartsToPurchase(id) {
     var quote = (ERP_STATE.orcamentos || []).find(function (entry) { return String(entry.id) === String(id); });
     if (!quote) return;
-    if (quote.status !== "Aprovado") {
-      alert("Aprove a proposta antes de enviar os materiais para Compras.");
-      return;
-    }
     var relationalQuoteKey = quote.relationalQuoteId || quote.id;
     if (typeof window.abrirModuloMateriais !== "function") {
       alert("A aba Compras do DBS CONTROL não está disponível. Atualize o painel e tente novamente.");
