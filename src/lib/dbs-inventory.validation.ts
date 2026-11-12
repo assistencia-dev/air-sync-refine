@@ -19,8 +19,13 @@ function calculateCnpjDigit(base: string, weights: number[]): number {
 }
 
 export function normalizeBrazilianTaxId(value: unknown): string | null {
-  const digits = String(value ?? "").replace(/\D/g, "");
-  if (!digits) return null;
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  if (!/^[0-9./\-\s]+$/.test(raw)) {
+    throw new Error("Informe apenas números e os separadores usuais no CPF/CNPJ.");
+  }
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) throw new Error("Informe um CPF/CNPJ válido.");
 
   if (allDigitsEqual(digits)) {
     throw new Error("Informe um CPF/CNPJ válido.");

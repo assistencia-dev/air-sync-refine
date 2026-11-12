@@ -384,6 +384,7 @@ const { normalizeBrazilianTaxId, isValidIsoCalendarDate } = validationSandbox.ex
 assert.equal(normalizeBrazilianTaxId("529.982.247-25"), "52998224725");
 assert.equal(normalizeBrazilianTaxId("11.222.333/0001-81"), "11222333000181");
 assert.equal(normalizeBrazilianTaxId(""), null);
+assert.throws(() => normalizeBrazilianTaxId("FORNECEDOR ABC"), /apenas números/);
 assert.throws(() => normalizeBrazilianTaxId("529.982.247-24"), /CPF válido/);
 assert.throws(() => normalizeBrazilianTaxId("11.222.333/0001-82"), /CNPJ válido/);
 assert.throws(() => normalizeBrazilianTaxId("000.000.000-00"), /CPF\/CNPJ válido/);
