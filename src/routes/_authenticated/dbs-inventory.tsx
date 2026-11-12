@@ -815,7 +815,8 @@ export function DbsInventoryPage({
               {!(data?.purchases ?? []).length && <p className="p-5 text-sm text-slate-500">Nenhum pedido de compra registrado neste escopo.</p>}
             </div>
           </section>
-                    {moduleSection === "parts" && <>
+          </>}
+          {moduleSection === "parts" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
               <h2 className="text-lg font-black">Histórico imutável de movimentações</h2>
