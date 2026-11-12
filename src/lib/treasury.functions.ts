@@ -170,13 +170,15 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (entriesError) throw new Error(entriesError.message);
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
-  const state = mergeLedgerState(snapshot?.state, entries ?? []) || cloneState(null);
-  state._meta = {
-    ...state._meta,
-    centrosCusto: (costCenters ?? []).map((center: any) => ({
-      id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active"
-    })),
-  };
+  const state = mergeLedgerState(snapshot?.state, entries ?? []);
+  if (state) {
+    state._meta = {
+      ...state._meta,
+      centrosCusto: (costCenters ?? []).map((center: any) => ({
+        id: String(center.id), codigo: String(center.code), nome: String(center.name), ativo: center.status === "active"
+      })),
+    };
+  }
   const lastLedgerUpdate = (entries ?? []).reduce((latest: string | null, entry: any) => {
     const current = entry.updated_at ?? null;
     if (!current) return latest;
@@ -190,7 +192,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     ledger_entry_count: entries?.length ?? 0,
     purchase_commitments: purchaseCommitments ?? [],
     cost_centers: costCenters ?? [],
-    source: state ? "legacy_read_plus_relational_ledger" : "relational_ledger",
+    source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
 }
 
