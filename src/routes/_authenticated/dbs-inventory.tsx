@@ -288,7 +288,6 @@ export function DbsInventoryPage({
       setTransferQuantity("1");
       setTransferPartId("");
       await overview.refetch();
-      await financial.refetch();
     }
   }
 
