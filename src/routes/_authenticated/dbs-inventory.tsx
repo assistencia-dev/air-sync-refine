@@ -8,6 +8,7 @@ import {
   getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation, reserveDbsWorkOrderParts,
   setDbsWorkOrderCostCenter, settleDbsPartSale, settleDbsPurchase, receiveDbsPurchase,
   receiveDbsPurchaseItems, reverseDbsInventoryMovement, getDbsInventoryFinancialOverview,
+  createDbsCostCenter, createDbsPartCatalog, updateDbsPartCatalog, transferDbsStockToTechnician,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -46,6 +47,20 @@ function DbsInventoryPage() {
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [catalogPartId, setCatalogPartId] = useState("");
+  const [catalogPartName, setCatalogPartName] = useState("");
+  const [catalogPartSku, setCatalogPartSku] = useState("");
+  const [catalogPartDescription, setCatalogPartDescription] = useState("");
+  const [catalogPartSupplierId, setCatalogPartSupplierId] = useState("");
+  const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
+  const [catalogPartCost, setCatalogPartCost] = useState("");
+  const [catalogPartSale, setCatalogPartSale] = useState("");
+  const [newCostCenterCode, setNewCostCenterCode] = useState("");
+  const [newCostCenterName, setNewCostCenterName] = useState("");
+  const [transferEmployeeId, setTransferEmployeeId] = useState("");
+  const [transferPartId, setTransferPartId] = useState("");
+  const [transferQuantity, setTransferQuantity] = useState("1");
+  const [transferVehicleLabel, setTransferVehicleLabel] = useState("");
   const [costCenterId, setCostCenterId] = useState("");
   const [purchaseDocument, setPurchaseDocument] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -88,6 +103,7 @@ function DbsInventoryPage() {
   const unitConversions = data?.unitConversions ?? [];
   const costCenters = data?.costCenters ?? [];
   const gasCylinders = data?.gasCylinders ?? [];
+  const carStock = data?.carStock ?? [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
@@ -179,6 +195,98 @@ function DbsInventoryPage() {
       String(row.from_unit_id) === purchaseUnitId && String(row.to_unit_id) === String(part.measure_unit_id)
     );
     return conversion ? Number(conversion.factor) : 0;
+  }
+
+  function selectCatalogPart(partIdValue: string) {
+    setCatalogPartId(partIdValue);
+    const part = parts.find((entry: any) => String(entry.id) === partIdValue);
+    if (!part) {
+      setCatalogPartName("");
+      setCatalogPartSku("");
+      setCatalogPartDescription("");
+      setCatalogPartSupplierId("");
+      setCatalogPartUnitId("");
+      setCatalogPartCost("");
+      setCatalogPartSale("");
+      return;
+    }
+    setCatalogPartName(String(part.name ?? ""));
+    setCatalogPartSku(String(part.sku ?? ""));
+    setCatalogPartDescription(String(part.description ?? ""));
+    setCatalogPartSupplierId(String(part.supplier_id ?? ""));
+    setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
+    setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
+    setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
+  }
+
+  async function saveCatalogPart(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!catalogPartSupplierId || !catalogPartUnitId || !catalogPartName.trim() || !catalogPartSku.trim()) {
+      setMessage("Informe código, nome, fornecedor e unidade-base da peça.");
+      return;
+    }
+    const payload = {
+      sku: catalogPartSku.trim(),
+      name: catalogPartName.trim(),
+      description: catalogPartDescription.trim() || undefined,
+      supplierId: catalogPartSupplierId,
+      measureUnitId: catalogPartUnitId,
+      costCents: Math.round(Number(catalogPartCost || 0) * 100),
+      saleCents: Math.round(Number(catalogPartSale || 0) * 100),
+    };
+    let saved = false;
+    if (catalogPartId) {
+      const selected = parts.find((entry: any) => String(entry.id) === catalogPartId);
+      if (!selected) {
+        setMessage("A peça selecionada não está mais disponível. Atualize a tela.");
+        return;
+      }
+      saved = await runAction(() => updateDbsPartCatalog({ data: {
+        partId: catalogPartId,
+        expectedVersion: Number(selected.version),
+        ...payload,
+      } }), "Cadastro da peça atualizado sem alterar o saldo físico.");
+    } else {
+      saved = await runAction(() => createDbsPartCatalog({ data: payload }), "Peça cadastrada no catálogo relacional. O saldo inicial permanece zero até o recebimento físico.");
+    }
+    if (saved) {
+      selectCatalogPart("");
+      await overview.refetch();
+    }
+  }
+
+  async function addCostCenter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const saved = await runAction(() => createDbsCostCenter({ data: {
+      code: newCostCenterCode,
+      name: newCostCenterName,
+    } }), "Centro de custo salvo e disponível para compras, OS e consumo.");
+    if (saved) {
+      setNewCostCenterCode("");
+      setNewCostCenterName("");
+      await overview.refetch();
+    }
+  }
+
+  async function transferStockToTechnician(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!transferEmployeeId || !transferPartId || !(Number(transferQuantity) > 0)) {
+      setMessage("Selecione técnico, peça e quantidade para transferir.");
+      return;
+    }
+    const saved = await runAction(() => transferDbsStockToTechnician({ data: {
+      employeeId: transferEmployeeId,
+      partId: transferPartId,
+      quantity: Number(transferQuantity),
+      vehicleLabel: transferVehicleLabel.trim() || "Veículo do colaborador",
+      idempotencyKey: "car-stock-transfer:" + crypto.randomUUID(),
+    } }), "Transferência confirmada: o estoque central foi reduzido e o material ficou sob custódia do técnico.");
+    if (saved) {
+      setTransferQuantity("1");
+      setTransferPartId("");
+      await overview.refetch();
+      await financial.refetch();
+    }
   }
 
   async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
@@ -342,7 +450,7 @@ function DbsInventoryPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Vendas registradas</p><p className="mt-1 text-2xl font-black">{sales.length}</p></div>
           </section>
 
-          <section className="mb-5 grid gap-4 lg:grid-cols-3">
+          <section className="mb-5 grid gap-4 lg:grid-cols-4">
             <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Cadastro de fornecedor</h2>
               <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
@@ -350,6 +458,13 @@ function DbsInventoryPage() {
               <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
               <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
+            </form>
+            <form onSubmit={addCostCenter} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-black">Centro de custo</h2>
+              <p className="mt-1 text-xs text-slate-500">Cadastre a classificação que será usada nas compras, OS e consumo.</p>
+              <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
             </form>
             <form onSubmit={addMeasureUnit} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Unidade de medida</h2>
@@ -370,7 +485,146 @@ function DbsInventoryPage() {
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
             </form>
           </section>
-          {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo no DBS TREASURY.</p>}
+          {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo nesta tela.</p>}
+          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+              <div className="mb-3">
+                <p className="text-xs font-black uppercase tracking-wider text-sky-700">Catálogo relacional</p>
+                <h2 className="mt-1 text-lg font-black">Cadastrar ou completar uma peça</h2>
+                <p className="mt-1 text-xs text-slate-500">Vincule fornecedor e unidade-base. A peça entra sem saldo; quantidade só nasce no recebimento.</p>
+              </div>
+              <label className="block text-xs font-bold text-slate-600">Editar peça existente ou cadastrar nova
+                <select value={catalogPartId} onChange={e=>selectCatalogPart(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <option value="">Nova peça / insumo</option>
+                  {parts.map((part:any)=><option key={part.id} value={part.id}>{part.sku ? part.sku+" · " : ""}{part.name||part.description||part.id}</option>)}
+                </select>
+              </label>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-bold text-slate-600">SKU / código *
+                  <input required maxLength={80} value={catalogPartSku} onChange={e=>setCatalogPartSku(e.target.value.toUpperCase())} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Nome da peça / insumo *
+                  <input required maxLength={180} value={catalogPartName} onChange={e=>setCatalogPartName(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Fornecedor *
+                  <select required value={catalogPartSupplierId} onChange={e=>setCatalogPartSupplierId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione fornecedor</option>
+                    {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Unidade-base *
+                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione unidade</option>
+                    {measureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
+                  <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
+                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+              </div>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
+                <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
+              </label>
+              <button disabled={busy || !suppliers.length || !measureUnits.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
+                {busy ? "Salvando..." : catalogPartId ? "Salvar cadastro da peça" : "Cadastrar peça no catálogo"}
+              </button>
+            </form>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-5">
+                <h2 className="text-lg font-black">Catálogo de peças e insumos</h2>
+                <p className="mt-1 text-xs text-slate-500">{parts.length} itens relacionais · selecione um item à esquerda para completar o cadastro</p>
+              </div>
+              <div className="max-h-[520px] overflow-auto">
+                <table className="w-full min-w-[620px] text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
+                  <tbody>{parts.map((part:any)=>{
+                    const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
+                    const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                    return <tr key={part.id} className="border-t border-slate-100">
+                      <td className="p-3"><button type="button" onClick={()=>selectCatalogPart(String(part.id))} className="text-left font-bold text-sky-800 hover:underline">{part.name||part.description||"Peça"}<span className="block text-xs font-normal text-slate-500">{part.sku||"Sem SKU"}</span></button></td>
+                      <td className="p-3">{supplier?.name||<span className="font-semibold text-amber-700">Vincular</span>}</td>
+                      <td className="p-3">{unit?.symbol||unit?.code||<span className="font-semibold text-amber-700">Definir</span>}</td>
+                      <td className="p-3">{money(part.cost_cents)}</td>
+                      <td className="p-3 font-bold">{Number(part.stock_quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+                {!parts.length && <p className="p-5 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
+              </div>
+            </div>
+          </section>
+
+          <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+            <div className="mb-4">
+              <p className="text-xs font-black uppercase tracking-wider text-sky-700">Controle físico de materiais</p>
+              <h2 className="mt-1 text-lg font-black">Estoque central e estoque dos técnicos</h2>
+              <p className="mt-1 text-xs text-slate-500">Transferir reduz o saldo central e cria saldo sob custódia do técnico. O consumo no atendimento baixa o veículo e registra o custo da OS.</p>
+            </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Peças no catálogo</p><p className="text-2xl font-black">{parts.length}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Saldo físico central</p><p className="text-2xl font-black">{parts.reduce((sum:number,part:any)=>sum+Number(part.stock_quantity||0),0).toLocaleString("pt-BR")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Saldos em veículos</p><p className="text-2xl font-black">{carStock.reduce((sum:number,row:any)=>sum+Number(row.quantity||0),0).toLocaleString("pt-BR")}</p></div>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+              <div className="overflow-x-auto rounded-xl border border-slate-100">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Material</th><th className="p-3">Saldo físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th><th className="p-3">Custo médio</th></tr></thead>
+                  <tbody>{parts.map((part:any)=>{
+                    const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                    const physical=Number(part.stock_quantity||0),reserved=Number(part.reserved_quantity||0);
+                    return <tr key={part.id} className="border-t border-slate-100">
+                      <td className="p-3"><strong>{part.name||part.description||"Peça"}</strong><span className="block text-xs text-slate-500">{part.sku||"Sem SKU"}</span></td>
+                      <td className="p-3">{physical.toLocaleString("pt-BR")} {unit?.symbol||""}</td>
+                      <td className="p-3">{reserved.toLocaleString("pt-BR")}</td>
+                      <td className="p-3 font-bold">{Math.max(0,physical-reserved).toLocaleString("pt-BR")}</td>
+                      <td className="p-3">{money(part.cost_cents)}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+              <form onSubmit={transferStockToTechnician} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h3 className="font-black">Transferir para veículo</h3>
+                <p className="mt-1 text-xs text-slate-500">Somente saldo livre pode ser transferido. A operação fica registrada no histórico.</p>
+                <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
+                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                  </select>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
+                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                    <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
+                  </select>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
+                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
+                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                </label>
+                <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+              </form>
+            </div>
+            <div className="mt-5 overflow-x-auto rounded-xl border border-slate-100">
+              <div className="border-b border-slate-100 p-3"><h3 className="font-black">Materiais sob custódia dos técnicos</h3></div>
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Técnico</th><th className="p-3">Veículo</th><th className="p-3">Material</th><th className="p-3">Quantidade</th><th className="p-3">Custo unitário</th></tr></thead>
+                <tbody>{carStock.map((row:any)=>{
+                  const employee=employees.find((entry:any)=>String(entry.id)===String(row.employee_id));
+                  const part=parts.find((entry:any)=>String(entry.id)===String(row.part_id));
+                  const unit=measureUnits.find((entry:any)=>String(entry.id)===String(part?.measure_unit_id));
+                  return <tr key={row.id} className="border-t border-slate-100">
+                    <td className="p-3 font-semibold">{employee?.full_name||"Técnico"}</td><td className="p-3">{row.vehicle_label||"Veículo"}</td>
+                    <td className="p-3">{part?.name||part?.sku||"Peça"}</td><td className="p-3 font-bold">{Number(row.quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td><td className="p-3">{money(row.unit_cost_cents)}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+              {!carStock.length && <p className="p-4 text-sm text-slate-500">Nenhum material transferido para veículos ainda.</p>}
+            </div>
+          </section>
+
           <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <form onSubmit={linkOrderCostCenter} className="rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-black">Vincular centro de custo à OS</h2>
