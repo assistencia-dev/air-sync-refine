@@ -58,7 +58,7 @@ async function requireNativeOperator(context: { userId: string }) {
     error ||
     !data ||
     data.status !== "ativo" ||
-    (!["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? "") && !["DBS123", "DBSASSISTENCIA123"].includes(data.username ?? ""))
+    (!["SUPER_ADMIN", "ADMIN_OPERACIONAL"].includes(data.role_key ?? ""))
   ) {
     throw new Error("Acesso restrito ao operador nativo DBS.");
   }
@@ -433,7 +433,7 @@ export const createRhTopup = createServerFn({ method: "POST" })
     if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
     const { data: topup, error } = await supabaseAdmin
       .from("rh_topups")
-      .insert({ ...data, created_by: operator.id })
+      .insert({ benefit_type: data.benefit_type, employee_id: data.employee_id, amount_cents: data.amount_cents, paid_at: data.paid_at, created_by: operator.id })
       .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
       .single();
     if (error) throw new Error(error.message);
@@ -1360,7 +1360,7 @@ export const getRhEmployeeFichaUrl = createServerFn({ method: "POST" })
     if (!employee?.ficha_storage_path) throw new Error("Nenhuma ficha anexada.");
     const signed = await supabaseAdmin.storage
       .from("rh-files")
-      .createSignedUrl(employee.ficha_storage_path, 3600);
+      .createSignedUrl(employee.ficha_storage_path, 60);
     if (!signed.data?.signedUrl)
       throw new Error(signed.error?.message ?? "Não foi possível gerar o download.");
     return { url: signed.data.signedUrl, file_name: employee.ficha_file_name };

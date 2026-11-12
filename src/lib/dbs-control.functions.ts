@@ -1152,7 +1152,7 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     const { error: uploadError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET)
       .upload(path, bytes, { contentType: data.contentType, cacheControl: "3600", upsert: false });
     if (uploadError) throw new Error(`Falha no upload do anexo: ${uploadError.message}`);
-    const { data: signed, error: signedError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
+    const { data: signed, error: signedError } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 300);
     if (signedError || !signed?.signedUrl) {
       await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).remove([path]);
       throw new Error("O arquivo foi enviado, mas não foi possível preparar a leitura segura.");

@@ -124,7 +124,7 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   const gps = validatePontoGps(data, employee, data.punch_type);
   // punched_at permanece omitido intencionalmente: o DEFAULT now() do PostgreSQL
   // grava o timestamp UTC autoritativo no servidor de banco.
-  const payload = { ...data, work_date: serverWorkDate, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
+  const payload = { punch_type: data.punch_type, latitude: data.latitude ?? null, longitude: data.longitude ?? null, gps_accuracy_m: data.gps_accuracy_m ?? null, photo_data: data.photo_data ?? null, note: data.note ?? null, work_date: serverWorkDate, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
   const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
   await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });

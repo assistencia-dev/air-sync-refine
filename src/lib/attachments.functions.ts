@@ -72,7 +72,7 @@ export const listTicketAttachments = createServerFn({ method: "POST" })
         if (/^https?:\/\//i.test(path)) {
           url = path;
         } else {
-          const signed = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(path, 3600);
+          const signed = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(path, 300);
           url = signed.data?.signedUrl ?? null;
         }
       }

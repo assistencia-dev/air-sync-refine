@@ -65,7 +65,7 @@
     if(window.__dbsFieldOrderDetailsBridge)return;
     window.__dbsFieldOrderDetailsBridge=true;
     window.addEventListener("message",(event)=>{
-      if(event.source!==window.parent)return;
+      if(event.source!==window.parent||event.origin!==window.location.origin)return;
       const msg=event.data||{};
       if(msg.type!=="DBS_CONTROL_FIELD_ORDER_DETAILS_RESULT")return;
       if(!msg.ok){alert(msg.error||"Não foi possível carregar o histórico do FieldControl.");return;}
@@ -189,7 +189,7 @@
     document.getElementById("dbs-fc-preview").onclick=()=>send("sync_preview");
     document.getElementById("dbs-fc-apply").onclick=()=>{if(!confirm("A sincronização é não destrutiva e fará upsert dos dados do FieldControl na base DBS. Continuar?"))return;send("sync_apply");};
     window.addEventListener("message",(event)=>{
-      if(event.source!==window.parent)return;
+      if(event.source!==window.parent||event.origin!==window.location.origin)return;
       const m=event.data||{};
       if(m.type!=="DBS_CONTROL_FIELDCONTROL_RESULT")return;
       if(!m.ok){statusEl.textContent="Erro";statusEl.style.background="#fee2e2";statusEl.style.color="#991b1b";msgEl.textContent=m.error||"Falha na integração FieldControl.";return;}
@@ -207,7 +207,7 @@
       const s=result.summary||{};
       sumEl.style.display="block";
       const rows=[["Clientes",s.customers?.fetched,s.customers?.upserted],["Locais",s.sites?.fetched,s.sites?.upserted],["Equipamentos",s.equipment?.fetched,s.equipment?.upserted],["Serviços",s.services?.fetched,s.services?.upserted],["OS",s.orders?.fetched,s.orders?.upserted],["Técnicos",s.employees?.fetched,"—"]];
-      sumEl.innerHTML='<div style="font-weight:900;color:#0f172a;margin-bottom:8px">'+(m.action==="sync_apply"?"Sincronização concluída":"Pré-visualização da sincronização")+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">'+rows.map(x=>'<div style="padding:9px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc"><small style="display:block;font-size:9px;color:#64748b;font-weight:800;text-transform:uppercase">'+x[0]+'</small><b style="display:block;margin-top:3px;color:#0f172a">'+String(x[1]??0)+'</b><span style="font-size:9px;color:#64748b">'+(m.action==="sync_apply"?"gravados: "+String(x[2]??0):"encontrados")+'</span></div>').join("")+'</div>';
+      sumEl.innerHTML='<div style="font-weight:900;color:#0f172a;margin-bottom:8px">'+(m.action==="sync_apply"?"Sincronização concluída":"Pré-visualização da sincronização")+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">'+rows.map(x=>'<div style="padding:9px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc"><small style="display:block;font-size:9px;color:#64748b;font-weight:800;text-transform:uppercase">'+x[0]+'</small><b style="display:block;margin-top:3px;color:#0f172a">'+esc(String(x[1]??0))+'</b><span style="font-size:9px;color:#64748b">'+(m.action==="sync_apply"?"gravados: "+esc(String(x[2]??0)):"encontrados")+'</span></div>').join("")+'</div>';
       msgEl.textContent=result.errors?.length?result.errors.join(" | "):(m.action==="sync_apply"?"Base DBS CONTROL atualizada sem apagar registros.":"Nenhum dado foi alterado.");
       if(m.action==="sync_apply")statusEl.textContent="Sincronizado";
     });
