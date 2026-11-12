@@ -3451,15 +3451,17 @@ export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
     const center=await (supabaseAdmin as any).from("dbs_control_cost_centers").select("id").eq("id",data.costCenterId).eq("scope_key",scopeKey).eq("status","active").maybeSingle();
     if(center.error) throw new Error(center.error.message);
     if(!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
-    const scopedUsers= user.company_id
-      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id",user.company_id).eq("status","ativo")
-      : {data:[{id:user.id}],error:null};
-    if(scopedUsers.error) throw new Error(scopedUsers.error.message);
-    const scopedUserIds=(scopedUsers.data??[]).map((row:any)=>row.id);
-    if(!scopedUserIds.length) throw new Error("Não há usuários ativos neste escopo.");
+    const workOrderScope=await (supabaseAdmin as any).rpc("dbs_control_inventory_scope_for_work_order",{
+      p_work_order_id:data.workOrderId
+    });
+    if(workOrderScope.error) throw new Error(workOrderScope.error.message);
+    const resolvedScope=Array.isArray(workOrderScope.data)?workOrderScope.data[0]:workOrderScope.data;
+    if(!resolvedScope||String(resolvedScope.scope_key||"")!==scopeKey){
+      throw new Error("OS não pertence ao escopo administrativo atual.");
+    }
     const updated=await (supabaseAdmin as any).from("dbs_control_work_orders")
       .update({cost_center_id:data.costCenterId,updated_at:new Date().toISOString()})
-      .eq("id",data.workOrderId).in("created_by_user_id",scopedUserIds)
+      .eq("id",data.workOrderId)
       .select("id,cost_center_id").maybeSingle();
     if(updated.error) throw new Error(updated.error.message);
     if(!updated.data) throw new Error("OS não encontrada para esta operação.");
