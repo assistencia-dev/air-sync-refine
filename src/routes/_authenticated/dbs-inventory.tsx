@@ -67,6 +67,7 @@ function DbsInventoryPage() {
   const [gasTotalCharges, setGasTotalCharges] = useState("10");
   const [gasTareWeight, setGasTareWeight] = useState("");
   const [gasInitialGrossWeight, setGasInitialGrossWeight] = useState("");
+  const [gasCostPerKg, setGasCostPerKg] = useState("");
   const [quoteImport] = useState(() => {
     if (typeof window === "undefined") return { quoteId: "" };
     return { quoteId: new URLSearchParams(window.location.search).get("quote_id") || "" };
@@ -206,9 +207,9 @@ function DbsInventoryPage() {
 
   async function assignWeightedGasCylinder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const tare=Number(gasTareWeight), gross=Number(gasInitialGrossWeight), charges=Number(gasTotalCharges);
+    const tare=Number(gasTareWeight), gross=Number(gasInitialGrossWeight), charges=Number(gasTotalCharges), costPerKg=Math.round(Number(gasCostPerKg)*100);
     if(!gasSerialNumber.trim()||!gasType.trim()||!gasEmployeeId||!Number.isInteger(charges)||charges<=0||
-      !Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
+      !Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare||!Number.isSafeInteger(costPerKg)||costPerKg<=0){
       setMessage("Informe série, refrigerante, técnico, quantidade de cargas, tara e peso bruto inicial válidos.");
       return;
     }
@@ -221,11 +222,12 @@ function DbsInventoryPage() {
         p_vehicle_label:gasVehicleLabel.trim()||null,
         p_tare_weight_kg:tare,
         p_initial_gross_weight_kg:gross,
+        p_cost_per_kg_cents:costPerKg,
       });
       if(error) throw new Error(error.message);
       return data;
     },"Cilindro cadastrado e vinculado ao técnico com tara e pesagem inicial.");
-    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
+    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");setGasCostPerKg("");
   }
 
   async function initializeExistingCylinderWeights(cylinder:any) {
@@ -233,14 +235,16 @@ function DbsInventoryPage() {
     if(tareRaw===null)return;
     const grossRaw=window.prompt("Peso bruto atual da botija (kg):","");
     if(grossRaw===null)return;
-    const tare=Number(tareRaw.replace(",",".")),gross=Number(grossRaw.replace(",","."));
-    if(!Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare){
-      setMessage("Pesagem inválida: o peso bruto deve ser maior que a tara.");
+    const costRaw=window.prompt("Custo do gás por kg (R$):",Number(cylinder.cost_per_kg_cents||0)>0?(Number(cylinder.cost_per_kg_cents)/100).toFixed(2):"");
+    if(costRaw===null)return;
+    const tare=Number(tareRaw.replace(",",".")),gross=Number(grossRaw.replace(",",".")),costPerKg=Math.round(Number(costRaw.replace(",","."))*100);
+    if(!Number.isFinite(tare)||!Number.isFinite(gross)||tare<0||gross<=tare||!Number.isSafeInteger(costPerKg)||costPerKg<=0){
+      setMessage("Pesagem e custo por kg inválidos: peso bruto deve ser maior que tara e custo maior que zero.");
       return;
     }
     await runAction(async()=>{
       const {data,error}=await (supabase as any).rpc("dbs_control_initialize_existing_gas_cylinder_weights",{
-        p_cylinder_id:cylinder.id,p_tare_weight_kg:tare,p_initial_gross_weight_kg:gross
+        p_cylinder_id:cylinder.id,p_tare_weight_kg:tare,p_initial_gross_weight_kg:gross,p_cost_per_kg_cents:costPerKg
       });
       if(error)throw new Error(error.message);
       return data;
@@ -391,7 +395,7 @@ function DbsInventoryPage() {
             </form>
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-black">Cilindros sob custódia</h2><span className="text-xs text-slate-500">{gasCylinders.length} cadastrados</span></div>
-              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. A pesagem na OS atualiza o saldo do cilindro.</p>
+              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. Cada aplicação calcula kg consumidos e gera custo no Treasury pela taxa/kg vinculada ao centro de custo da OS.</p>
               {gasCylinders.length ? <div className="mt-3 space-y-2">
                 {gasCylinders.map((cylinder:any)=>{
                   const employee=employees.find((entry:any)=>String(entry.id)===String(cylinder.employee_id));
@@ -400,6 +404,7 @@ function DbsInventoryPage() {
                     <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
                     <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
                     <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                    <p className="text-xs text-slate-600">Custo de referência: {money(cylinder.cost_per_kg_cents)}/kg</p>
                     {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
                   </div>;
                 })}
@@ -416,6 +421,7 @@ function DbsInventoryPage() {
               <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Custo do gás por kg (R$) *<input required type="number" min="0.01" step="0.01" value={gasCostPerKg} onChange={e=>setGasCostPerKg(e.target.value)} placeholder="Ex.: 95,00" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
               <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
             </form>
           </section>
