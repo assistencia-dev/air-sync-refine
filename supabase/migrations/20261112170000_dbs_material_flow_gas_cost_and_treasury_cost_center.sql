@@ -12,7 +12,7 @@ alter table public.dbs_control_work_order_financials
 create unique index if not exists dbs_control_gas_usage_ledger_entry_uidx
   on public.dbs_control_gas_usage(ledger_entry_id) where ledger_entry_id is not null;
 
-do $$
+do $
 begin
   if not exists (select 1 from pg_constraint where conname='dbs_control_gas_cylinders_cost_per_kg_positive') then
     alter table public.dbs_control_gas_cylinders
@@ -35,7 +35,62 @@ begin
       check (gas_cost_cents >= 0);
   end if;
 end
-$$;
+$;
+
+do $
+begin
+  if not exists (
+    select 1 from pg_constraint where conname='dbs_control_gas_usage_ledger_entry_fk'
+  ) then
+    alter table public.dbs_control_gas_usage
+      add constraint dbs_control_gas_usage_ledger_entry_fk
+      foreign key (ledger_entry_id) references public.treasury_ledger_entries(id)
+      on delete restrict;
+  end if;
+end
+$;
+
+create or replace function public.dbs_control_gas_usage_require_cost()
+returns trigger
+language plpgsql
+security definer
+set search_path=public,pg_temp
+as $
+begin
+  if new.unit_cost_cents_per_kg is null or new.unit_cost_cents_per_kg<=0
+     or new.gas_cost_cents is null or new.gas_cost_cents<=0
+     or new.ledger_entry_id is null then
+    raise exception 'DBS_GAS_COST_AND_LEDGER_REQUIRED' using errcode='23514';
+  end if;
+  return new;
+end
+$;
+
+create or replace function public.dbs_control_gas_usage_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path=public,pg_temp
+as $
+begin
+  raise exception 'DBS_GAS_USAGE_IMMUTABLE' using errcode='55000';
+end
+$;
+
+drop trigger if exists trg_dbs_control_gas_usage_require_cost on public.dbs_control_gas_usage;
+create trigger trg_dbs_control_gas_usage_require_cost
+before insert on public.dbs_control_gas_usage
+for each row execute function public.dbs_control_gas_usage_require_cost();
+
+drop trigger if exists trg_dbs_control_gas_usage_immutable on public.dbs_control_gas_usage;
+create trigger trg_dbs_control_gas_usage_immutable
+before update or delete on public.dbs_control_gas_usage
+for each row execute function public.dbs_control_gas_usage_immutable();
+
+drop trigger if exists trg_dbs_control_gas_usage_no_truncate on public.dbs_control_gas_usage;
+create trigger trg_dbs_control_gas_usage_no_truncate
+before truncate on public.dbs_control_gas_usage
+for each statement execute function public.dbs_control_gas_usage_immutable();
 
 create or replace function public.dbs_control_assign_gas_cylinder_weighted(
   p_serial_number text,
@@ -217,7 +272,7 @@ declare
   v_cylinder public.dbs_control_gas_cylinders%rowtype;
   v_existing public.dbs_control_gas_usage%rowtype;
   v_scope record;
-  v_usage_id uuid;
+  v_usage_id uuid:=gen_random_uuid();
   v_ledger jsonb;
   v_ledger_id uuid;
   v_consumed numeric(12,3);
@@ -324,17 +379,6 @@ begin
          updated_at=now()
    where id=p_cylinder_id;
 
-  insert into public.dbs_control_gas_usage(
-    cylinder_id,work_order_id,employee_id,equipment_reference,application_note,
-    idempotency_key,created_by,gross_weight_before_kg,gross_weight_after_kg,
-    gas_consumed_kg,unit_cost_cents_per_kg,gas_cost_cents
-  ) values (
-    p_cylinder_id,p_work_order_id,v_employee,
-    nullif(trim(p_equipment_reference),''),nullif(trim(p_application_note),''),
-    trim(p_idempotency_key),v_actor,p_gross_weight_before_kg,p_gross_weight_after_kg,
-    v_consumed,v_cylinder.cost_per_kg_cents,v_cost
-  ) returning id into v_usage_id;
-
   -- The gas cost enters the Treasury DRE as a balanced, immutable COGS entry.
   -- It is posted only for this new idempotent usage, never for a replay.
   v_ledger:=public.post_treasury_ledger_entry(
@@ -374,7 +418,17 @@ begin
   if v_ledger_id is null then
     raise exception 'DBS_GAS_LEDGER_POST_FAILED' using errcode='23514';
   end if;
-  update public.dbs_control_gas_usage set ledger_entry_id=v_ledger_id where id=v_usage_id;
+
+  insert into public.dbs_control_gas_usage(
+    id,cylinder_id,work_order_id,employee_id,equipment_reference,application_note,
+    idempotency_key,created_by,gross_weight_before_kg,gross_weight_after_kg,
+    gas_consumed_kg,unit_cost_cents_per_kg,gas_cost_cents,ledger_entry_id
+  ) values (
+    v_usage_id,p_cylinder_id,p_work_order_id,v_employee,
+    nullif(trim(p_equipment_reference),''),nullif(trim(p_application_note),''),
+    trim(p_idempotency_key),v_actor,p_gross_weight_before_kg,p_gross_weight_after_kg,
+    v_consumed,v_cylinder.cost_per_kg_cents,v_cost,v_ledger_id
+  );
 
   insert into public.dbs_control_work_order_financials(
     work_order_id,company_id,scope_key,parts_cost_cents,gas_cost_cents,status,metadata
