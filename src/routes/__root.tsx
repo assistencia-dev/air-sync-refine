@@ -149,7 +149,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <head>
-        <script src="/module-recovery.js?v=20261026-1" data-preview={import.meta.env.DEV ? "true" : "false"} />
+        <script src="/module-recovery.js?v=20261113-pwa-recovery-2" data-preview={import.meta.env.DEV ? "true" : "false"} />
         <HeadContent />
       </head>
       <body>

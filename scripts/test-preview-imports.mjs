@@ -18,14 +18,14 @@ try {
   for (const path of [
     '/node_modules/@tanstack/react-router/dist/esm/ScriptOnce.js?v=9414a7c0',
     '/node_modules/@tanstack/react-router/dist/esm/HeadContent.js?v=9414a7c0',
-    '/module-recovery.js?v=20261026-1',
+    '/module-recovery.js?v=20261113-pwa-recovery-2',
     '/login',
   ]) {
     const response = await fetch('http://127.0.0.1:8091' + path, { signal: AbortSignal.timeout(30000) });
     const body = await response.text();
     assert.equal(response.status, 200, `${path}: ${body.slice(0, 500)}`);
     if (path.endsWith('/login')) {
-      assert.ok(body.includes('/module-recovery.js?v=20261026-1'));
+      assert.ok(body.includes('/module-recovery.js?v=20261113-pwa-recovery-2'));
       assert.ok(body.includes('data-preview="true"'));
     } else {
       assert.match(response.headers.get('content-type'), /javascript/);
