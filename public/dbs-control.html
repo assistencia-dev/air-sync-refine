@@ -6420,28 +6420,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     && !(document.body.classList.contains('dbs-control-can-issue-os') && employeeTab === 'tab-nova-os')) {
                     return false;
                 }
-                if (!document.body.classList.contains('dbs-control-employee-mode')
-                    && (employeeTab === 'tab-pecas' || employeeTab === 'tab-compras')
-                    && window.parent !== window) {
-                    // Navegação direta no documento autenticado pai: não depende
-                    // do listener React nem da montagem de portal no iframe legado.
-                    const section = employeeTab === 'tab-compras' ? 'purchases' : 'parts';
-                    const destination = new URL('/dbs-inventory', window.location.origin);
-                    destination.searchParams.set('section', section);
-                    if (quoteId) destination.searchParams.set('quote_id', String(quoteId));
-                    try {
-                        window.parent.location.assign(destination.toString());
-                    } catch (error) {
-                        // Fallback restrito à mesma origem quando o navegador bloquear
-                        // a navegação direta a partir do iframe.
-                        window.parent.postMessage({
-                            type: 'DBS_CONTROL_NAVIGATE_INVENTORY',
-                            section: section,
-                            quoteId: quoteId ? String(quoteId) : ''
-                        }, window.location.origin);
-                    }
-                    return false;
-                }
                 const target = document.getElementById(String(tabId || ''));
                 if (!target) {
                     console.error('DBS CONTROL: aba não encontrada:', tabId);
@@ -6496,8 +6474,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (title) title.textContent = meta[0];
                     if (subtitle) subtitle.textContent = meta[1];
                 }
-                // Ao abrir uma aba, renderiza apenas seu conteúdo com os dados atuais.
-                if (typeof renderizarAbaAtiva === 'function') renderizarAbaAtiva(tabId);
+                // Peças & Estoque e Compras são telas React próprias, montadas
+                // dentro de suas respectivas abas do DBS CONTROL. Não há troca de rota.
+                const materialsSection = employeeTab === 'tab-compras'
+                    ? 'purchases'
+                    : employeeTab === 'tab-pecas' ? 'parts' : null;
+                if (materialsSection && !employeeMode && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE',
+                        section: materialsSection,
+                        quoteId: quoteId ? String(quoteId) : ''
+                    }, window.location.origin);
+                } else if (typeof renderizarAbaAtiva === 'function') {
+                    renderizarAbaAtiva(tabId);
+                }
                 // Atualiza os seletores ao abrir formulários; sem isso Nova OS pode
                 // aparecer vazia mesmo quando os cadastros existem na base.
                 if (typeof atualizarSelects === 'function') {
