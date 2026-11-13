@@ -57,7 +57,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(controlRoute, /20261113-inventory-route-2/);
+assert.match(controlRoute, /20261113-inventory-tabs-3/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -396,15 +396,19 @@ assert.equal(isValidIsoCalendarDate("2026-02-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-00"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-1"), false);
-// Inventory and purchases leave the legacy iframe through an explicit
-// same-origin parent navigation, with a postMessage fallback and route parsing.
-const materialsRouteSource = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
-assert.ok(mainHtml.includes("new URL('/dbs-inventory', window.location.origin)"));
-assert.match(mainHtml, /window\.parent\.location\.assign\(destination\.toString\(\)\)/);
-assert.match(mainHtml, /type: 'DBS_CONTROL_NAVIGATE_INVENTORY'/);
-assert.match(controlRoute, /msg\.type === "DBS_CONTROL_NAVIGATE_INVENTORY"/);
-assert.match(controlRoute, /window\.location\.assign\(destination\.toString\(\)\)/);
-assert.match(materialsRouteSource, /validateSearch:[\s\S]*section: search\.section === "purchases"/);
-assert.match(materialsRouteSource, /Route\.useSearch\(\)/);
+// Inventory and purchases are independent screens inside their own
+// DBS CONTROL tabs; neither menu redirects away from the operational shell.
+assert.match(mainHtml, /employeeTab === 'tab-compras'/);
+assert.match(mainHtml, /employeeTab === 'tab-pecas'/);
+assert.match(mainHtml, /type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE'/);
+assert.doesNotMatch(mainHtml, /DBS_CONTROL_NAVIGATE_INVENTORY/);
+assert.doesNotMatch(mainHtml, /window\.parent\.location\.assign/);
+assert.doesNotMatch(controlRoute, /DBS_CONTROL_NAVIGATE_INVENTORY/);
+assert.match(controlRoute, /inventoryPortals\.parts && createPortal/);
+assert.match(controlRoute, /inventoryPortals\.purchases && createPortal/);
+assert.match(controlRoute, /initialSection="parts"/);
+assert.match(controlRoute, /initialSection="purchases"/);
+assert.match(controlRoute, /data-dbs-materials-react-root/);
+assert.match(controlRoute, /20261113-inventory-tabs-3/);
 
 console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
