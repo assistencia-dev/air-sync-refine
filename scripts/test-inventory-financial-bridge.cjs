@@ -399,7 +399,7 @@ assert.equal(isValidIsoCalendarDate("2026-11-1"), false);
 // Inventory and purchases leave the legacy iframe through an explicit
 // same-origin parent navigation, with a postMessage fallback and route parsing.
 const materialsRouteSource = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
-assert.match(mainHtml, /new URL\('\/dbs-inventory', window\.location\.origin\)/);
+assert.ok(mainHtml.includes("new URL('/dbs-inventory', window.location.origin)"));
 assert.match(mainHtml, /window\.parent\.location\.assign\(destination\.toString\(\)\)/);
 assert.match(mainHtml, /type: 'DBS_CONTROL_NAVIGATE_INVENTORY'/);
 assert.match(controlRoute, /msg\.type === "DBS_CONTROL_NAVIGATE_INVENTORY"/);
