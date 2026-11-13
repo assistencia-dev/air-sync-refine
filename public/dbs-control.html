@@ -6423,11 +6423,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (!document.body.classList.contains('dbs-control-employee-mode')
                     && (employeeTab === 'tab-pecas' || employeeTab === 'tab-compras')
                     && window.parent !== window) {
+                    // Abrir o módulo React autenticado como rota própria evita
+                    // depender de montagem de portal dentro da aba legada.
                     window.parent.postMessage({
-                        type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE',
+                        type: 'DBS_CONTROL_NAVIGATE_INVENTORY',
                         section: employeeTab === 'tab-compras' ? 'purchases' : 'parts',
                         quoteId: quoteId ? String(quoteId) : ''
                     }, window.location.origin);
+                    return false;
                 }
                 const target = document.getElementById(String(tabId || ''));
                 if (!target) {
