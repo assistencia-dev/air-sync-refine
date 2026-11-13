@@ -1199,6 +1199,15 @@ function DbsControlPage() {
         }
         return;
       }
+      if (msg.type === "DBS_CONTROL_NAVIGATE_INVENTORY") {
+        if (employeeModeRef.current) return;
+        const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
+        navigate({
+          to: "/dbs-inventory",
+          search: { section, quote_id: String(msg.quoteId || "") || undefined },
+        });
+        return;
+      }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.section === "purchases"
@@ -2366,8 +2375,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261112-materials-tabs-5`
-    : "/dbs-control.html?v=20261112-materials-tabs-5"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-route-1`
+    : "/dbs-control.html?v=20261113-inventory-route-1"
 
   if (employeeMode) {
     return (
