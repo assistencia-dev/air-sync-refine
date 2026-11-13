@@ -57,7 +57,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(controlRoute, /20261113-inventory-route-1/);
+assert.match(controlRoute, /20261113-inventory-route-2/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -396,13 +396,14 @@ assert.equal(isValidIsoCalendarDate("2026-02-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-00"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-1"), false);
-// Inventory and purchases navigation must leave the legacy iframe tab and open
-// the authenticated React route with the requested section preserved.
+// Inventory and purchases leave the legacy iframe through an explicit
+// same-origin parent navigation, with a postMessage fallback and route parsing.
 const materialsRouteSource = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
+assert.match(mainHtml, /new URL\('\/dbs-inventory', window\.location\.origin\)/);
+assert.match(mainHtml, /window\.parent\.location\.assign\(destination\.toString\(\)\)/);
 assert.match(mainHtml, /type: 'DBS_CONTROL_NAVIGATE_INVENTORY'/);
-assert.match(mainHtml, /return false;\s*\}/);
 assert.match(controlRoute, /msg\.type === "DBS_CONTROL_NAVIGATE_INVENTORY"/);
-assert.match(controlRoute, /to: "\/dbs-inventory",\s*search: \{ section, quote_id:/);
+assert.match(controlRoute, /window\.location\.assign\(destination\.toString\(\)\)/);
 assert.match(materialsRouteSource, /validateSearch:[\s\S]*section: search\.section === "purchases"/);
 assert.match(materialsRouteSource, /Route\.useSearch\(\)/);
 
