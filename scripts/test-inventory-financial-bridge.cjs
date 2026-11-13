@@ -67,7 +67,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(controlRoute, /20261113-menu-pages-4/);
+assert.match(controlRoute, /20261113-inventory-layout-5/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -279,7 +279,7 @@ assert.match(mainHtml, /function voltarMenuPrincipalAdmin/);
 assert.match(mainHtml, /DBS_CONTROL_BACK_TO_ADMIN_MENU/);
 assert.match(controlUx, /window\.switchTab\(id,item\)/);
 assert.doesNotMatch(controlUx, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
-assert.match(mainHtml, /dbs-control-ux\.js\?v=20261113-menu-pages-4/);
+assert.match(mainHtml, /dbs-control-ux\.js\?v=20261113-inventory-layout-5/);
 assert.match(controlRoute, /inventoryPortals\.purchases\.quoteId/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
@@ -430,6 +430,6 @@ assert.match(controlRoute, /inventoryPortals\.purchases && createPortal/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
 assert.match(controlRoute, /data-dbs-materials-react-root/);
-assert.match(controlRoute, /20261113-menu-pages-4/);
+assert.match(controlRoute, /20261113-inventory-layout-5/);
 
 console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
