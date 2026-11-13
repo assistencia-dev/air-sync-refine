@@ -396,4 +396,14 @@ assert.equal(isValidIsoCalendarDate("2026-02-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-31"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-00"), false);
 assert.equal(isValidIsoCalendarDate("2026-11-1"), false);
+// Inventory and purchases navigation must leave the legacy iframe tab and open
+// the authenticated React route with the requested section preserved.
+const materialsRouteSource = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
+assert.match(mainHtml, /type: 'DBS_CONTROL_NAVIGATE_INVENTORY'/);
+assert.match(mainHtml, /return false;\s*\}/);
+assert.match(controlRoute, /msg\.type === "DBS_CONTROL_NAVIGATE_INVENTORY"/);
+assert.match(controlRoute, /to: "\/dbs-inventory",\s*search: \{ section, quote_id:/);
+assert.match(materialsRouteSource, /validateSearch:[\s\S]*section: search\.section === "purchases"/);
+assert.match(materialsRouteSource, /Route\.useSearch\(\)/);
+
 console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
