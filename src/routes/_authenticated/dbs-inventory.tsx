@@ -11,8 +11,17 @@ import {
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
-  component: DbsInventoryPage,
+  validateSearch: (search: Record<string, unknown>): { section: DbsInventorySection; quote_id?: string } => ({
+    section: search.section === "purchases" ? "purchases" : "parts",
+    quote_id: typeof search.quote_id === "string" && search.quote_id ? search.quote_id : undefined,
+  }),
+  component: DbsInventoryRoute,
 });
+
+function DbsInventoryRoute() {
+  const search = Route.useSearch();
+  return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+}
 
 function money(cents: unknown) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
