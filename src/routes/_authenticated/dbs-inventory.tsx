@@ -437,7 +437,7 @@ export function DbsInventoryPage({
               <h2 className="text-lg font-black">Custo de materiais por ordem de serviço</h2>
               <p className="mt-1 text-sm text-slate-500">O DBS Control registra o custo operacional das peças consumidas e envia essa informação para o cálculo do Financeiro. Receita, lucro, contas a pagar e pagamentos são acompanhados exclusivamente no DBS Treasury.</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Registro</th><th className="p-3">Custo de materiais</th><th className="p-3">Atualizado em</th></tr></thead>
                 <tbody>{workOrderFinancials.map((row: any) => {
@@ -451,6 +451,16 @@ export function DbsInventoryPage({
                 })}</tbody>
               </table>
               {!workOrderFinancials.length && <p className="p-5 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}
+            </div>
+            <div className="grid gap-2 p-3 md:hidden">
+              {workOrderFinancials.map((row:any)=>{
+                const order=workOrders.find((entry:any)=>String(entry.id)===String(row.work_order_id));
+                return <article key={row.work_order_id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{order?.protocol||String(row.work_order_id).slice(0,8)}</p><p className="text-xs text-slate-500">{row.status||"Registrado"}</p></div><p className="text-sm font-black">{money(row.parts_cost_cents)}</p></div>
+                  <p className="mt-2 text-xs text-slate-500">Atualizado: {row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR"):"—"}</p>
+                </article>;
+              })}
+              {!workOrderFinancials.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}
             </div>
             </section>
           </details>
@@ -659,8 +669,9 @@ export function DbsInventoryPage({
                 <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
               </form>
             </div>
-            <div className="mt-5 overflow-x-auto rounded-xl border border-slate-100">
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-100">
               <div className="border-b border-slate-100 p-3"><h3 className="font-black">Materiais sob custódia dos técnicos</h3></div>
+              <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Técnico</th><th className="p-3">Veículo</th><th className="p-3">Material</th><th className="p-3">Quantidade</th><th className="p-3">Custo unitário</th></tr></thead>
                 <tbody>{carStock.map((row:any)=>{
@@ -673,7 +684,19 @@ export function DbsInventoryPage({
                   </tr>;
                 })}</tbody>
               </table>
-              {!carStock.length && <p className="p-4 text-sm text-slate-500">Nenhum material transferido para veículos ainda.</p>}
+              </div>
+              <div className="grid gap-2 p-3 md:hidden">
+                {carStock.map((row:any)=>{
+                  const employee=employees.find((entry:any)=>String(entry.id)===String(row.employee_id));
+                  const part=parts.find((entry:any)=>String(entry.id)===String(row.part_id));
+                  const unit=measureUnits.find((entry:any)=>String(entry.id)===String(part?.measure_unit_id));
+                  return <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2"><div><p className="font-bold">{part?.name||part?.sku||"Peça"}</p><p className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {row.vehicle_label||"Veículo"}</p></div><p className="text-sm font-black">{Number(row.quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</p></div>
+                    <p className="mt-2 text-xs text-slate-500">Custo unitário: {money(row.unit_cost_cents)}</p>
+                  </article>;
+                })}
+                {!carStock.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum material transferido para veículos ainda.</p>}
+              </div>
             </div>
           </section>
 
@@ -772,7 +795,7 @@ export function DbsInventoryPage({
                     const baseUnit = measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                     return <tr key={index} className="border-t border-slate-100">
                       <td className="p-2">
-                        <select required value={line.partId} onChange={e => {
+                        <select value={line.partId} onChange={e => {
                           const selected = parts.find((entry: any) => String(entry.id) === e.target.value);
                           const baseUnitId=String(selected?.measure_unit_id||"");
                           updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
@@ -784,13 +807,13 @@ export function DbsInventoryPage({
                         {part && !part.measure_unit_id && <p className="mt-1 text-xs font-bold text-rose-700">Cadastre a unidade-base da peça antes de comprar.</p>}
                       </td>
                       <td className="p-2">
-                        <select required value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
+                        <select value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
                           <option value="">Unidade</option>
                           {measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
                         </select>
                       </td>
-                      <td className="p-2"><input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" required value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="min-h-10 w-24 rounded-lg border border-slate-200 px-2"/></td>
-                      <td className="p-2"><input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" required value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="min-h-10 w-36 rounded-lg border border-slate-200 px-2"/></td>
+                      <td className="p-2"><input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="min-h-10 w-24 rounded-lg border border-slate-200 px-2"/></td>
+                      <td className="p-2"><input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="min-h-10 w-36 rounded-lg border border-slate-200 px-2"/></td>
                       <td className="p-2 whitespace-nowrap text-xs">{factor>0 ? ("1 "+String(purchaseUnit?.symbol||"")+" = "+String(factor)+" "+String(baseUnit?.symbol||"")) : <span className="font-bold text-rose-700">Sem conversão ativa</span>}</td>
                       <td className="p-2 whitespace-nowrap font-bold">{money(Math.round(lineTotal*100))}</td>
                       <td className="p-2"><button type="button" disabled={purchaseLines.length===1} onClick={()=>setPurchaseLines(current=>current.filter((_,i)=>i!==index))} className="rounded-lg border border-rose-200 px-2 py-2 text-xs font-bold text-rose-700 disabled:opacity-30">Remover</button></td>
@@ -811,7 +834,7 @@ export function DbsInventoryPage({
                       <button type="button" disabled={purchaseLines.length===1} onClick={()=>setPurchaseLines(current=>current.filter((_,i)=>i!==index))} className="min-h-9 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 disabled:opacity-30">Remover</button>
                     </div>
                     <label className="block text-xs font-bold text-slate-600">Peça cadastrada *
-                      <select required value={line.partId} onChange={e=>{
+                      <select value={line.partId} onChange={e=>{
                         const selected=parts.find((entry:any)=>String(entry.id)===e.target.value);
                         const baseUnitId=String(selected?.measure_unit_id||"");
                         updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
@@ -823,15 +846,15 @@ export function DbsInventoryPage({
                     {part&&!part.measure_unit_id&&<p className="mt-1 text-xs font-bold text-rose-700">Cadastre a unidade-base da peça antes de comprar.</p>}
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <label className="text-xs font-bold text-slate-600">Unidade da compra *
-                        <select required value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm">
+                        <select value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm">
                           <option value="">Unidade</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
                         </select>
                       </label>
                       <label className="text-xs font-bold text-slate-600">Quantidade *
-                        <input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" required value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm"/>
+                        <input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm"/>
                       </label>
                       <label className="col-span-2 text-xs font-bold text-slate-600">Custo unitário na unidade de compra (R$) *
-                        <input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" required value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                        <input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
                       </label>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
@@ -988,7 +1011,7 @@ export function DbsInventoryPage({
               <h2 className="text-lg font-black">Histórico imutável de movimentações</h2>
               <p className="mt-1 text-sm text-slate-500">Movimentos não podem ser editados ou apagados. Correções elegíveis são registradas por estorno, com motivo e contrapartida no Ledger.</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
                   <th className="p-3">Data</th><th className="p-3">Peça</th><th className="p-3">Tipo</th><th className="p-3">Quantidade</th><th className="p-3">Saldo após</th><th className="p-3">Correção</th>
@@ -1023,6 +1046,30 @@ export function DbsInventoryPage({
                 })}</tbody>
               </table>
             </div>
+            <div className="grid gap-2 p-3 md:hidden">
+              {(data?.inventoryMovements??[]).map((movement:any)=>{
+                const part=parts.find((entry:any)=>String(entry.id)===String(movement.part_id));
+                const movements=data?.inventoryMovements??[];
+                const alreadyReversed=movements.some((entry:any)=>entry.reversal_of_movement_id===movement.id);
+                const canReverse=["receipt","consume","return","adjustment"].includes(String(movement.movement_type))
+                  &&!movement.work_order_id&&!movement.work_order_part_id
+                  &&!movement.reversal_of_movement_id&&!alreadyReversed;
+                const reason=String(movementReversalReasons[movement.id]??"");
+                return <article key={movement.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{part?.name??part?.sku??movement.part_id}</p><p className="text-xs text-slate-500">{movement.created_at?new Date(movement.created_at).toLocaleString("pt-BR"):"—"}</p></div><span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold">{movement.movement_type==="reversal"?"Estorno":movement.movement_type}</span></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 text-xs"><div><p className="text-slate-500">Quantidade</p><p className="font-bold">{Number(movement.quantity_delta).toLocaleString("pt-BR")}</p></div><div><p className="text-slate-500">Saldo após</p><p className="font-bold">{Number(movement.balance_after).toLocaleString("pt-BR")}</p></div></div>
+                  <div className="mt-3">
+                    {movement.reversal_of_movement_id?<span className="text-xs font-bold text-emerald-700">Estorno rastreado</span>:
+                      alreadyReversed?<span className="text-xs font-bold text-slate-500">Já estornado</span>:
+                      canReverse?<div className="space-y-2">
+                        <input aria-label="Motivo do estorno" maxLength={1000} value={reason} onChange={e=>setMovementReversalReasons(prev=>({...prev,[movement.id]:e.target.value}))} placeholder="Motivo obrigatório (mín. 5 caracteres)" className="min-h-10 w-full rounded-lg border border-slate-200 px-3 text-xs"/>
+                        <button type="button" disabled={busy||reason.trim().length<5} onClick={()=>void runAction(()=>reverseDbsInventoryMovement({data:{movementId:movement.id,idempotencyKey:"inventory-reversal:"+movement.id+":"+crypto.randomUUID(),reason}}),"Estorno registrado no histórico e no Ledger.")} className="min-h-10 w-full rounded-lg bg-amber-700 px-3 text-xs font-black text-white disabled:opacity-40">Registrar estorno</button>
+                      </div>:<span className="text-xs text-slate-500">Correção pelo fluxo vinculado</span>}
+                  </div>
+                </article>;
+              })}
+              {!(data?.inventoryMovements??[]).length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma movimentação registrada ainda.</p>}
+            </div>
           </section>
           <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
             <form onSubmit={reserveParts} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
@@ -1048,13 +1095,21 @@ export function DbsInventoryPage({
             </form>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Reservas recentes</h2></div>
-              <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm">
+              <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
                 <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">
                   <td className="p-3 font-mono text-xs">{String(reservation.id).slice(0, 8)}</td><td className="p-3 font-mono text-xs">{String(reservation.work_order_id).slice(0, 8)}</td><td className="p-3">{reservation.quantity}</td><td className="p-3">{money(Number(reservation.quantity) * Number(reservation.unit_cost_cents))}</td><td className="p-3">{reservation.status}</td>
                   <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => releaseDbsWorkOrderReservation({ data: { reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() } }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
                 </tr>)}</tbody>
               </table></div>
+              <div className="grid gap-2 p-3 md:hidden">
+                {reservations.map((reservation:any)=><article key={reservation.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{String(reservation.id).slice(0,8)}</p><p className="mt-1 text-xs text-slate-500">OS {String(reservation.work_order_id).slice(0,8)}</p></div><span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold">{reservation.status}</span></div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 text-xs"><div><p className="text-slate-500">Quantidade</p><p className="font-bold">{reservation.quantity}</p></div><div><p className="text-slate-500">Custo capturado</p><p className="font-bold">{money(Number(reservation.quantity)*Number(reservation.unit_cost_cents))}</p></div></div>
+                  {reservation.status==="reserved"&&<button type="button" disabled={busy} onClick={()=>void runAction(()=>releaseDbsWorkOrderReservation({data:{reservationId:reservation.id,idempotencyKey:"release:"+crypto.randomUUID()}}),"Reserva liberada.")} className="mt-3 min-h-10 w-full rounded-lg border border-rose-200 text-xs font-bold text-rose-700">Liberar reserva</button>}
+                </article>)}
+                {!reservations.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma reserva registrada ainda.</p>}
+              </div>
             </div>
           </section>
           </>}
