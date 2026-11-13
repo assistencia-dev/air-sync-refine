@@ -427,7 +427,12 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
-          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-black text-slate-800">
+              Ver custos de materiais por ordem de serviço
+              <span className="ml-2 text-xs font-normal text-slate-500">Relatório operacional por OS</span>
+            </summary>
+            <section className="mb-0 overflow-hidden border-t border-slate-100 bg-white">
             <div className="border-b border-slate-100 p-5">
               <h2 className="text-lg font-black">Custo de materiais por ordem de serviço</h2>
               <p className="mt-1 text-sm text-slate-500">O DBS Control registra o custo operacional das peças consumidas e envia essa informação para o cálculo do Financeiro. Receita, lucro, contas a pagar e pagamentos são acompanhados exclusivamente no DBS Treasury.</p>
@@ -447,14 +452,22 @@ export function DbsInventoryPage({
               </table>
               {!workOrderFinancials.length && <p className="p-5 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}
             </div>
-          </section>
+            </section>
+          </details>
           <section className="mb-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Unidades livres no estoque</p><p className="mt-1 text-2xl font-black">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p></div>
           </section>
 
-          <section className="mb-5 grid gap-4 lg:grid-cols-4">
+          <details open={!suppliers.length || !measureUnits.length || !costCenters.length} className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-black text-slate-800 sm:px-5">
+              Cadastros auxiliares
+              <span className="ml-2 block text-xs font-normal text-slate-500 sm:inline">
+                {suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões
+              </span>
+            </summary>
+            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-3 sm:p-4 lg:grid-cols-4">
             <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Cadastro de fornecedor</h2>
               <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
@@ -488,7 +501,8 @@ export function DbsInventoryPage({
               <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
             </form>
-          </section>
+            </section>
+          </details>
           {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo nesta tela.</p>}
           <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
@@ -541,7 +555,7 @@ export function DbsInventoryPage({
                 <h2 className="text-lg font-black">Catálogo de peças e insumos</h2>
                 <p className="mt-1 text-xs text-slate-500">{parts.length} itens relacionais · selecione um item à esquerda para completar o cadastro</p>
               </div>
-              <div className="max-h-[520px] overflow-auto">
+              <div className="hidden max-h-[520px] overflow-auto md:block">
                 <table className="w-full min-w-[620px] text-left text-sm">
                   <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
                   <tbody>{parts.map((part:any)=>{
@@ -558,6 +572,23 @@ export function DbsInventoryPage({
                 </table>
                 {!parts.length && <p className="p-5 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
               </div>
+              <div className="grid gap-2 p-3 md:hidden">
+                {parts.map((part:any) => {
+                  const supplier = suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
+                  const unit = measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                  return <button key={part.id} type="button" onClick={()=>selectCatalogPart(String(part.id))} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
+                    <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
+                    <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                      <span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span>
+                      <span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span>
+                      <span>Custo: <strong>{money(part.cost_cents)}</strong></span>
+                      <span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span>
+                    </span>
+                  </button>;
+                })}
+                {!parts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
+              </div>
             </div>
           </section>
 
@@ -573,7 +604,7 @@ export function DbsInventoryPage({
               <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Saldos em veículos</p><p className="text-2xl font-black">{carStock.reduce((sum:number,row:any)=>sum+Number(row.quantity||0),0).toLocaleString("pt-BR")}</p></div>
             </div>
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-              <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[560px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Material</th><th className="p-3">Saldo físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th><th className="p-3">Custo médio</th></tr></thead>
                   <tbody>{parts.map((part:any)=>{
@@ -588,6 +619,23 @@ export function DbsInventoryPage({
                     </tr>;
                   })}</tbody>
                 </table>
+              </div>
+              <div className="grid gap-2 md:hidden">
+                {parts.map((part:any) => {
+                  const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                  const physical=Number(part.stock_quantity||0), reserved=Number(part.reserved_quantity||0);
+                  return <article key={part.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div><p className="font-bold text-slate-900">{part.name||part.description||"Peça"}</p><p className="text-xs text-slate-500">{part.sku||"Sem SKU"}</p></div>
+                      <p className="text-right text-sm font-black text-sky-800">{Math.max(0,physical-reserved).toLocaleString("pt-BR")} <span className="text-xs font-medium">{unit?.symbol||""} livres</span></p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-xs">
+                      <div><p className="text-slate-500">Físico</p><p className="font-bold">{physical.toLocaleString("pt-BR")}</p></div>
+                      <div><p className="text-slate-500">Reservado</p><p className="font-bold">{reserved.toLocaleString("pt-BR")}</p></div>
+                      <div><p className="text-slate-500">Custo médio</p><p className="font-bold">{money(part.cost_cents)}</p></div>
+                    </div>
+                  </article>;
+                })}
               </div>
               <form onSubmit={transferStockToTechnician} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <h3 className="font-black">Transferir para veículo</h3>
@@ -713,7 +761,7 @@ export function DbsInventoryPage({
                 </label>
               </div>
               <p className="text-xs text-slate-500">As compras usam fornecedores e centros de custo relacionais. O custo é convertido para a unidade-base da peça antes de atualizar o estoque.</p>
-              <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[1080px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça relacional</th><th className="p-3">Unidade da compra</th><th className="p-3">Qtd.</th><th className="p-3">Custo unitário (R$)</th><th className="p-3">Conversão</th><th className="p-3">Total</th><th className="p-3"> </th></tr></thead>
                   <tbody>{purchaseLines.map((line, index) => {
@@ -750,6 +798,49 @@ export function DbsInventoryPage({
                   })}</tbody>
                 </table>
               </div>
+              <div className="space-y-3 md:hidden">
+                {purchaseLines.map((line,index) => {
+                  const part=parts.find((entry:any)=>String(entry.id)===line.partId);
+                  const factor=conversionFor(line.partId,line.purchaseUnitId);
+                  const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===line.purchaseUnitId);
+                  const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
+                  const lineTotal=Number(line.quantity||0)*Number(line.unitCost||0);
+                  return <article key={index} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-sm font-black text-slate-800">Item {index+1}</p>
+                      <button type="button" disabled={purchaseLines.length===1} onClick={()=>setPurchaseLines(current=>current.filter((_,i)=>i!==index))} className="min-h-9 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 disabled:opacity-30">Remover</button>
+                    </div>
+                    <label className="block text-xs font-bold text-slate-600">Peça cadastrada *
+                      <select required value={line.partId} onChange={e=>{
+                        const selected=parts.find((entry:any)=>String(entry.id)===e.target.value);
+                        const baseUnitId=String(selected?.measure_unit_id||"");
+                        updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
+                      }} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                        <option value="">Selecione a peça cadastrada</option>
+                        {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku?entry.sku+" · ":""}{entry.name||entry.description||entry.id}</option>)}
+                      </select>
+                    </label>
+                    {part&&!part.measure_unit_id&&<p className="mt-1 text-xs font-bold text-rose-700">Cadastre a unidade-base da peça antes de comprar.</p>}
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <label className="text-xs font-bold text-slate-600">Unidade da compra *
+                        <select required value={line.purchaseUnitId} disabled={!part} onChange={e=>updatePurchaseLine(index,{purchaseUnitId:e.target.value,conversionFactor:conversionFor(line.partId,e.target.value)})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm">
+                          <option value="">Unidade</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-bold text-slate-600">Quantidade *
+                        <input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" required value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm"/>
+                      </label>
+                      <label className="col-span-2 text-xs font-bold text-slate-600">Custo unitário na unidade de compra (R$) *
+                        <input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" required value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                      </label>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
+                      <span className={factor>0?"text-slate-600":"font-bold text-rose-700"}>{factor>0?("1 "+String(purchaseUnit?.symbol||"")+" = "+String(factor)+" "+String(baseUnit?.symbol||"")):"Sem conversão ativa"}</span>
+                      <span className="text-sm font-black text-slate-900">{money(Math.round(lineTotal*100))}</span>
+                    </div>
+                  </article>;
+                })}
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button type="button" onClick={() => setPurchaseLines(current => [...current, { partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }])} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold">+ Adicionar peça</button>
                 <div className="text-right"><p className="text-xs font-bold text-slate-500">Total estimado da compra</p><p className="text-xl font-black">{money(Math.round(purchaseLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0) * 100))}</p></div>
@@ -766,7 +857,7 @@ export function DbsInventoryPage({
               </div>
               <Link to="/treasury" className="min-h-10 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black text-sky-800 hover:bg-sky-100">Abrir Financeiro / DBS Treasury</Link>
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
                   <th className="p-3">Fornecedor</th><th className="p-3">Documento / cotação</th><th className="p-3">Data</th><th className="p-3">Total do pedido</th><th className="p-3">Análise financeira</th><th className="p-3">Recebimento físico</th>
@@ -831,6 +922,63 @@ export function DbsInventoryPage({
                 })}</tbody>
               </table>
               {!(data?.purchases ?? []).length && <p className="p-5 text-sm text-slate-500">Nenhum pedido de compra registrado neste escopo.</p>}
+            </div>
+            <div className="space-y-3 p-3 md:hidden">
+              {(data?.purchases ?? []).map((purchase:any) => {
+                const lines=(data?.purchaseItems??[]).filter((item:any)=>String(item.purchase_id)===String(purchase.id));
+                const outstanding=lines.filter((item:any)=>Number(item.quantity)>Number(item.quantity_received??0));
+                const selected=outstanding.filter((item:any)=>Number(purchaseReceiptQuantities[item.id]??0)>0);
+                const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>Number(item.quantity)-Number(item.quantity_received??0));
+                const approval=purchase.approval_status;
+                const supplierName=suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name||purchase.supplier_name;
+                return <article key={purchase.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><p className="font-black text-slate-900">{supplierName}</p><p className="mt-0.5 break-words text-xs text-slate-500">{purchase.document_number||"Sem documento"} · {purchase.purchase_date?new Date(purchase.purchase_date+"T12:00:00").toLocaleDateString("pt-BR"):"—"}</p></div>
+                    <p className="shrink-0 text-sm font-black text-slate-900">{money(purchase.total_cents)}</p>
+                  </div>
+                  <div className="mt-3 border-t border-slate-100 pt-3 text-xs">
+                    {approval==="approved"?<p className="font-bold text-emerald-700">Aprovada no Financeiro</p>:
+                      approval==="rejected"?<div className="text-rose-700"><p className="font-bold">Rejeitada</p>{purchase.rejection_reason&&<p className="mt-1">{purchase.rejection_reason}</p>}</div>:
+                      approval==="legacy_received"?<p className="font-semibold text-slate-500">Registro anterior</p>:
+                      <p className="font-bold text-amber-700">Aguardando DBS Treasury</p>}
+                    <div className="mt-2">
+                      {purchase.status==="received"?<span className="font-bold text-emerald-700">Recebimento completo</span>:
+                        approval!=="approved"?<span className="text-slate-500">Recebimento liberado após aprovação financeira.</span>:
+                        !lines.length?<span className="text-rose-700">Pedido sem itens cadastrados.</span>:
+                        !outstanding.length?<span className="font-bold text-emerald-700">Todos os itens conferidos.</span>:
+                        <details className="mt-2">
+                          <summary className="min-h-10 cursor-pointer rounded-lg bg-sky-700 px-3 py-2.5 text-center text-xs font-black text-white">Conferir {outstanding.length} item(ns) pendente(s)</summary>
+                          <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            {outstanding.map((item:any)=>{
+                              const part=parts.find((entry:any)=>String(entry.id)===String(item.part_id));
+                              const remaining=Math.max(0,Number(item.quantity)-Number(item.quantity_received??0));
+                              return <label key={item.id} className="block text-xs font-semibold text-slate-700">
+                                <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
+                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.quantity).toLocaleString("pt-BR")} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} · Falta: {remaining.toLocaleString("pt-BR")}</span>
+                                <input aria-label={"Quantidade recebida de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remaining} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora (máx. "+remaining+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                              </label>;
+                            })}
+                            <button type="button" disabled={busy||!selected.length||overReceived} onClick={async()=>{
+                              const saved=await runAction(()=>receiveDbsPurchaseItems({data:{
+                                purchaseId:purchase.id,
+                                idempotencyKey:"purchase-receive:"+purchase.id+":"+crypto.randomUUID(),
+                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])})),
+                              }}),"Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
+                              if(saved)setPurchaseReceiptQuantities(prev=>{
+                                const next={...prev};
+                                for(const item of selected)delete next[item.id];
+                                return next;
+                              });
+                            }} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
+                            {overReceived&&<p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
+                          </div>
+                        </details>}
+                      {purchase.status==="partially_received"&&<p className="mt-2 font-semibold text-amber-700">Recebimento parcial · {money(purchase.received_total_cents??0)} em materiais recebidos</p>}
+                    </div>
+                  </div>
+                </article>;
+              })}
+              {!(data?.purchases??[]).length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum pedido de compra registrado neste escopo.</p>}
             </div>
           </section>
           </>}
