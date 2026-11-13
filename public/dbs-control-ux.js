@@ -560,7 +560,7 @@
         "tab-importacao":["Importar planilha",()=>document.getElementById("import-arquivo")?.click()],
         "tab-equipamentos":["+ Novo equipamento",()=>scrollToFirstForm("form-equipamento")],
         "tab-tecnicos":["+ Novo técnico",()=>scrollToFirstForm("form-tecnico")],
-        "tab-pecas":["+ Nova peça",()=>scrollToFirstForm("form-peca")],
+        "tab-pecas":["+ Nova peça",()=>scrollToFirstForm("dbs-inventory-catalog-form")],
         "tab-servicos":["+ Novo serviço",()=>scrollToFirstForm("form-servico")],
         "tab-compras":["+ Nova compra",()=>scrollToFirstForm("form-compra")],
         "tab-pwa":["Atualizar OS",()=>typeof window.renderizarPWA==="function"&&window.renderizarPWA()]

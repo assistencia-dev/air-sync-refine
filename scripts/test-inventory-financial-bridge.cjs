@@ -33,6 +33,7 @@ const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_db
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
+const controlUxSource = fs.readFileSync('public/dbs-control-ux.js', 'utf8');
 const controlRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
@@ -43,6 +44,10 @@ assert.ok(phase2Ui.includes("initialQuoteId?: string"));
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
 assert.match(phase2Ui, /embedded\?: boolean/);
+assert.match(phase2Ui, /id="dbs-inventory-catalog-form"/, "O atalho Nova peça deve apontar para o formulário relacional visível.");
+assert.doesNotMatch(phase2Ui, /<details open=\{!suppliers\.length \|\| !measureUnits\.length \|\| !costCenters\.length\}/, "Os quatro cadastros auxiliares não podem ocupar a tela automaticamente.");
+assert.match(phase2Ui, /2xl:grid-cols-4/, "Cadastros auxiliares só devem ocupar quatro colunas em telas realmente largas.");
+assert.match(controlUxSource, /tab-pecas":\["\+ Nova peça",\(\)=>scrollToFirstForm\("dbs-inventory-catalog-form"\)\]/, "O botão superior Nova peça deve levar ao formulário relacional que está visível.");
 assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
 assert.match(phase2Ui, /Enviar pedido para aprovação financeira/);
 assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
