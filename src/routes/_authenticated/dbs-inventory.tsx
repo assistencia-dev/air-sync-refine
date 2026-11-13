@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
@@ -55,6 +56,8 @@ export function DbsInventoryPage({
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
   const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
+  const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -121,6 +124,9 @@ export function DbsInventoryPage({
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
+  const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
+    purchase.approval_status === "pending" && purchase.status !== "cancelled"
+  );
 
   useEffect(() => {
     if (!quotePurchase.data || !parts.length) return;
@@ -167,6 +173,32 @@ export function DbsInventoryPage({
     }
   }
 
+
+  async function decidePurchaseApproval(purchase: any, decision: "approved" | "rejected") {
+    const purchaseId = String(purchase.id ?? "");
+    const reason = String(purchaseRejectionReasons[purchaseId] ?? "").trim();
+    if (decision === "rejected" && reason.length < 5) {
+      setMessage("Informe o motivo da rejeição com pelo menos 5 caracteres.");
+      return;
+    }
+    setPurchaseApprovalBusyId(purchaseId);
+    const saved = await runAction(() => decideDbsPurchaseApprovalFromTreasury({ data: {
+      purchaseId,
+      decision,
+      reason: decision === "rejected" ? reason : undefined,
+      expectedVersion: Number(purchase.version),
+    } }), decision === "approved"
+      ? "Compra aprovada. O compromisso foi lançado no DBS Treasury e o recebimento físico foi liberado."
+      : "Compra rejeitada. O pedido foi bloqueado para recebimento.");
+    if (saved) {
+      setPurchaseRejectionReasons((current) => {
+        const next = { ...current };
+        delete next[purchaseId];
+        return next;
+      });
+    }
+    setPurchaseApprovalBusyId(null);
+  }
 
   async function submitPurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -759,12 +791,50 @@ export function DbsInventoryPage({
           </section>
           </>}
           {moduleSection === "purchases" && <>
+          <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">Decisão financeira</p>
+                <h2 className="mt-1 text-lg font-black text-slate-900">Pedidos aguardando aprovação</h2>
+                <p className="mt-1 text-xs text-slate-500">A aprovação registra o compromisso no Ledger. O estoque só é liberado depois da conferência física.</p>
+              </div>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800">{pendingPurchases.length} pendente(s)</span>
+            </div>
+            <div className="grid gap-3 p-4">
+              {pendingPurchases.length ? pendingPurchases.map((purchase: any) => {
+                const id = String(purchase.id);
+                const reason = String(purchaseRejectionReasons[id] ?? "");
+                const center = costCenters.find((item: any) => String(item.id) === String(purchase.cost_center_id));
+                const isSaving = busy && purchaseApprovalBusyId === id;
+                return (
+                  <article key={id} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)_auto] md:items-center">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-900">{String(purchase.supplier_name ?? "Fornecedor")}</p>
+                      <p className="mt-1 break-words text-xs text-slate-500">{String(purchase.document_number ?? "Pedido sem documento")} · {purchase.purchase_date ? new Date(String(purchase.purchase_date) + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</p>
+                      <p className="mt-2 text-sm font-black text-slate-900">{money(purchase.total_cents)}</p>
+                      <p className="text-xs text-slate-500">Centro de custo: {center?.code ? String(center.code) + " · " : ""}{center?.name ?? "Não informado"}</p>
+                    </div>
+                    <label className="block text-xs font-bold text-slate-600">Motivo da rejeição
+                      <input aria-label={"Motivo da rejeição da compra " + id} value={reason} onChange={(event) => setPurchaseRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} maxLength={1000} placeholder="Obrigatório para rejeitar" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-normal" />
+                    </label>
+                    <div className="flex flex-wrap gap-2 md:flex-col">
+                      <button type="button" disabled={busy || purchaseApprovalBusyId !== null} onClick={() => void decidePurchaseApproval(purchase, "approved")} className="min-h-10 flex-1 rounded-lg bg-emerald-700 px-4 text-xs font-black text-white transition hover:bg-emerald-800 disabled:opacity-40">{isSaving ? "Salvando..." : "Aprovar"}</button>
+                      <button type="button" disabled={busy || purchaseApprovalBusyId !== null || reason.trim().length < 5} onClick={() => void decidePurchaseApproval(purchase, "rejected")} className="min-h-10 flex-1 rounded-lg border border-rose-200 bg-white px-4 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:opacity-40">Rejeitar</button>
+                    </div>
+                  </article>
+                );
+              }) : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center">
+                <p className="text-sm font-bold text-slate-700">Nenhum pedido aguardando aprovação financeira</p>
+                <p className="mt-1 text-xs text-slate-500">Os novos pedidos registrados nesta tela aparecerão aqui para análise.</p>
+              </div>}
+            </div>
+          </section>
           <section className="mb-5 rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-sky-700">Fluxo de suprimentos</p>
                 <h2 className="mt-1 text-lg font-black">Nova compra / pedido ao fornecedor</h2>
-                <p className="mt-1 text-sm text-slate-500">Registre o preço cotado, fornecedor, peças e centro de custo. O pedido segue ao DBS Treasury para aprovação; o estoque só entra após o recebimento físico.</p>
+                <p className="mt-1 text-sm text-slate-500">Registre o preço cotado, fornecedor, peças e centro de custo. O pedido segue para aprovação financeira nesta tela; o estoque só entra após o recebimento físico.</p>
               </div>
               {quoteImport.quoteId && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-800">Origem: cotação {quoteImport.quoteId}</span>}
               {quoteImport.quoteId && quotePurchase.isLoading && <p role="status" className="w-full rounded-lg bg-sky-50 p-3 text-xs text-sky-800">Importando peças relacionais da cotação…</p>}
@@ -909,7 +979,7 @@ export function DbsInventoryPage({
                       {approval === "approved" ? <span className="font-bold text-emerald-700">Aprovada no Financeiro</span> :
                         approval === "rejected" ? <div className="max-w-56 text-rose-700"><span className="font-bold">Rejeitada</span>{purchase.rejection_reason && <p className="mt-1 text-xs">{purchase.rejection_reason}</p>}</div> :
                         approval === "legacy_received" ? <span className="font-semibold text-slate-500">Registro anterior</span> :
-                        <span className="font-bold text-amber-700">Aguardando DBS Treasury</span>}
+                        <span className="font-bold text-amber-700">Aguardando aprovação financeira</span>}
                     </td>
                     <td className="p-3">
                       {purchase.status === "received" ? <span className="font-bold text-emerald-700">Recebimento completo</span> :
@@ -972,7 +1042,7 @@ export function DbsInventoryPage({
                     {approval==="approved"?<p className="font-bold text-emerald-700">Aprovada no Financeiro</p>:
                       approval==="rejected"?<div className="text-rose-700"><p className="font-bold">Rejeitada</p>{purchase.rejection_reason&&<p className="mt-1">{purchase.rejection_reason}</p>}</div>:
                       approval==="legacy_received"?<p className="font-semibold text-slate-500">Registro anterior</p>:
-                      <p className="font-bold text-amber-700">Aguardando DBS Treasury</p>}
+                      <p className="font-bold text-amber-700">Aguardando aprovação financeira</p>}
                     <div className="mt-2">
                       {purchase.status==="received"?<span className="font-bold text-emerald-700">Recebimento completo</span>:
                         approval!=="approved"?<span className="text-slate-500">Recebimento liberado após aprovação financeira.</span>:

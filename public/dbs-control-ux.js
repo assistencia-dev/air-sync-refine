@@ -911,17 +911,6 @@
       event.stopImmediatePropagation();
       return;
     }
-    // The legacy tabs remain in the menu for continuity, but the relational
-    // materials workspace is now the single operational entry point.
-    if (!employeeMode && (id === 'tab-pecas' || id === 'tab-compras')) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      window.parent.postMessage({
-        type: 'DBS_CONTROL_OPEN_INVENTORY_FINANCE',
-        section: id === 'tab-pecas' ? 'catalog' : 'purchases'
-      }, window.location.origin);
-      return;
-    }
     event.preventDefault();
     event.stopImmediatePropagation();
     // No modo colaborador, a camada direta é determinística e não depende de

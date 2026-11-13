@@ -1202,9 +1202,7 @@ function DbsControlPage() {
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
         if (employeeModeRef.current) return;
-        const section: DbsMaterialsSection = msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.section === "purchases"
-          ? "purchases"
-          : "parts";
+        const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
         const target = mountDbsMaterialsPortal(iframeRef.current, section);
         if (!target) {
           iframeRef.current?.contentWindow?.postMessage({
@@ -1221,6 +1219,10 @@ function DbsControlPage() {
       }
       if (msg.type === "DBS_CONTROL_BACK_TO_MAIN") {
         navigate({ to: "/folha-ponto", replace: true });
+        return;
+      }
+      if (msg.type === "DBS_CONTROL_BACK_TO_ADMIN_MENU") {
+        navigate({ to: "/admin", replace: true });
         return;
       }
       if (msg.type === "DBS_CONTROL_LOGOUT") {
@@ -2368,8 +2370,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-tabs-3`
-    : "/dbs-control.html?v=20261113-inventory-tabs-3"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-menu-pages-4`
+    : "/dbs-control.html?v=20261113-menu-pages-4"
 
   if (employeeMode) {
     return (
