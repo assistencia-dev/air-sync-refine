@@ -437,30 +437,30 @@ export function DbsInventoryPage({
 
 
   return (
-    <main className={embedded ? "min-h-full bg-slate-50 px-4 py-5 text-slate-900 sm:px-6" : "min-h-[100dvh] bg-slate-50 px-4 py-5 text-slate-900 sm:px-6"}>
+    <main className={embedded ? "min-h-full bg-[#f4f7fb] px-4 py-5 text-slate-900 sm:px-6 lg:px-7" : "min-h-[100dvh] bg-[#f4f7fb] px-4 py-5 text-slate-900 sm:px-6 lg:px-7"}>
       <div className="mx-auto max-w-7xl">
-        <header className={embedded ? "mb-4 border-b border-slate-200 pb-4" : "mb-6 flex flex-wrap items-center justify-between gap-3"}>
-          <div>
-            {!embedded && <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · FASE 2</p>}
-            <h1 className={embedded ? "text-xl font-black" : "mt-1 text-2xl font-black"}>{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
-            <p className="mt-1 text-sm text-slate-500">{moduleSection === "parts"
-              ? "Cadastro, movimentação, estoque central e dos técnicos, reservas e custos de material por OS."
-              : "Solicitações a fornecedores e recebimento físico. Aprovação, contas a pagar e pagamentos ficam no DBS Treasury."}</p>
+        <header className={embedded ? "mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6" : "mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"}>
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · MATERIAIS E SUPRIMENTOS</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{moduleSection === "parts"
+              ? "Catálogo de materiais, saldo disponível, reservas, movimentações e custos vinculados às ordens de serviço."
+              : "Pedidos a fornecedores, análise financeira e conferência do recebimento físico dos materiais."}</p>
           </div>
-          {!embedded && <Link to="/dbs-control" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700">← Voltar ao DBS CONTROL</Link>}
+          {!embedded && <Link to="/dbs-control" className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800">← Voltar ao DBS CONTROL</Link>}
         </header>
 
         {!embedded && (
-          <nav aria-label="Módulos de materiais" className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-            <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Peças & Estoque</button>
-            <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-sky-700 px-5 text-sm font-black text-white" : "min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50"}>Compras</button>
-            <span className="ml-auto self-center px-2 text-xs text-slate-500">Operação integrada ao DBS Treasury</span>
+          <nav aria-label="Módulos de materiais" className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+            <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-[#0f4f91] px-5 text-sm font-black text-white shadow-sm" : "min-h-11 rounded-xl px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"}>Peças & Estoque</button>
+            <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-[#0f4f91] px-5 text-sm font-black text-white shadow-sm" : "min-h-11 rounded-xl px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"}>Compras</button>
+            <span className="ml-auto hidden self-center px-2 text-xs font-medium text-slate-500 sm:block">Estoque · suprimentos · DBS Treasury</span>
           </nav>
         )}
 
-        {message && <div role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">{message}</div>}
-        {overview.isLoading && <p className="rounded-xl bg-white p-5 text-sm text-slate-500">Carregando dados do estoque...</p>}
-        {overview.error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        {message && <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950 shadow-sm"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-600" />{message}</div>}
+        {overview.isLoading && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-medium text-slate-500 shadow-sm">Carregando dados de materiais e compras...</div>}
+        {overview.error && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm leading-6 text-rose-800 shadow-sm">
           <p className="font-bold">Não foi possível carregar Peças & Estoque e Compras.</p>
           <p className="mt-1 break-words">{overview.error instanceof Error ? overview.error.message : "Falha ao carregar dados."}</p>
           <button type="button" onClick={() => { void overview.refetch(); }} className="mt-3 min-h-10 rounded-lg border border-rose-300 bg-white px-4 text-xs font-black text-rose-800">Tentar carregar novamente</button>
@@ -468,10 +468,13 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
-          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-black text-slate-800">
-              Ver custos de materiais por ordem de serviço
-              <span className="ml-2 text-xs font-normal text-slate-500">Relatório operacional por OS</span>
+          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 transition hover:bg-slate-50">
+              <span className="min-w-0">
+                <span className="block text-base font-black text-slate-900">Custos de materiais por ordem de serviço</span>
+                <span className="mt-1 block text-sm font-normal text-slate-500">Relatório operacional por OS · consulte o custo registrado em cada atendimento</span>
+              </span>
+              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Ver relatório</span>
             </summary>
             <section className="mb-0 overflow-hidden border-t border-slate-100 bg-white">
             <div className="border-b border-slate-100 p-5">
@@ -483,7 +486,7 @@ export function DbsInventoryPage({
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Registro</th><th className="p-3">Custo de materiais</th><th className="p-3">Atualizado em</th></tr></thead>
                 <tbody>{workOrderFinancials.map((row: any) => {
                   const order = workOrders.find((entry: any) => String(entry.id) === String(row.work_order_id));
-                  return <tr key={row.work_order_id} className="border-t border-slate-100">
+                  return <tr key={row.work_order_id} className="border-t border-slate-100 transition hover:bg-sky-50/40">
                     <td className="p-3 font-bold">{order?.protocol || String(row.work_order_id).slice(0, 8)}</td>
                     <td className="p-3">{row.status || "Registrado"}</td>
                     <td className="p-3 font-bold">{money(row.parts_cost_cents)}</td>
@@ -505,93 +508,96 @@ export function DbsInventoryPage({
             </div>
             </section>
           </details>
-          <section className="mb-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Unidades livres no estoque</p><p className="mt-1 text-2xl font-black">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p></div>
+          <section aria-label="Resumo do estoque" className="mb-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Peças cadastradas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{parts.length}</p><p className="mt-1 text-xs text-slate-500">Itens no catálogo relacional</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Reservas ativas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{reservations.filter((r: any) => r.status === "reserved").length}</p><p className="mt-1 text-xs text-slate-500">Separadas para ordens de serviço</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Unidades livres no estoque</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p><p className="mt-1 text-xs text-slate-500">Disponíveis para nova reserva</p></div>
           </section>
 
-          <details open={!suppliers.length || !measureUnits.length || !costCenters.length} className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-black text-slate-800 sm:px-5">
-              Cadastros auxiliares
-              <span className="ml-2 block text-xs font-normal text-slate-500 sm:inline">
-                {suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões
+          <details className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition hover:bg-slate-50 sm:px-5">
+              <span className="min-w-0">
+                <span className="flex flex-wrap items-center gap-2 text-base font-black text-slate-900">
+                  Configurações de cadastro
+                  {(!suppliers.length || !measureUnits.length || !costCenters.length) ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">Configuração pendente</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">Cadastros prontos</span>}
+                </span>
+                <span className="mt-1 block text-sm font-normal text-slate-500">{suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões</span>
               </span>
+              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Gerenciar</span>
             </summary>
-            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-3 sm:p-4 lg:grid-cols-4">
+            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/70 p-4 sm:p-5 sm:grid-cols-2 2xl:grid-cols-4">
             <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Cadastro de fornecedor</h2>
               <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
-              <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
-              <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
-              <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
             </form>
             <form onSubmit={addCostCenter} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Centro de custo</h2>
               <p className="mt-1 text-xs text-slate-500">Cadastre a classificação que será usada nas compras, OS e consumo.</p>
-              <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
-              <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
             </form>
             <form onSubmit={addMeasureUnit} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Unidade de medida</h2>
               <p className="mt-1 text-xs text-slate-500">Cadastre unidades-base e unidades de compra (UN, CX, KG, L, M...).</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm"/>
-                <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm"/>
+                <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               </div>
-              <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar unidade</button>
             </form>
             <form onSubmit={addUnitConversion} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Conversão de unidades</h2>
               <p className="mt-1 text-xs text-slate-500">Defina quantas unidades-base existem em uma unidade de compra.</p>
-              <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
-              <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
-              <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+              <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
             </form>
             </section>
           </details>
-          {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo nesta tela.</p>}
-          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-            <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
-              <div className="mb-3">
-                <p className="text-xs font-black uppercase tracking-wider text-sky-700">Catálogo relacional</p>
-                <h2 className="mt-1 text-lg font-black">Cadastrar ou completar uma peça</h2>
-                <p className="mt-1 text-xs text-slate-500">Vincule fornecedor e unidade-base. A peça entra sem saldo; quantidade só nasce no recebimento.</p>
+          <section className="mb-6 grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
+            <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200/80 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-5 border-b border-slate-100 pb-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">CATÁLOGO RELACIONAL</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Cadastrar ou editar peça</h2>
+                <p className="mt-2 text-sm leading-5 text-slate-500">Vincule o fornecedor e a unidade-base. O saldo é criado somente no recebimento físico.</p>
               </div>
               <label className="block text-xs font-bold text-slate-600">Editar peça existente ou cadastrar nova
-                <select value={catalogPartId} onChange={e=>selectCatalogPart(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <select value={catalogPartId} onChange={e=>selectCatalogPart(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                   <option value="">Nova peça / insumo</option>
                   {parts.map((part:any)=><option key={part.id} value={part.id}>{part.sku ? part.sku+" · " : ""}{part.name||part.description||part.id}</option>)}
                 </select>
               </label>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-bold text-slate-600">SKU / código *
-                  <input required maxLength={80} value={catalogPartSku} onChange={e=>setCatalogPartSku(e.target.value.toUpperCase())} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input required maxLength={80} value={catalogPartSku} onChange={e=>setCatalogPartSku(e.target.value.toUpperCase())} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Nome da peça / insumo *
-                  <input required maxLength={180} value={catalogPartName} onChange={e=>setCatalogPartName(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input required maxLength={180} value={catalogPartName} onChange={e=>setCatalogPartName(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Fornecedor *
-                  <select required value={catalogPartSupplierId} onChange={e=>setCatalogPartSupplierId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                  <select required value={catalogPartSupplierId} onChange={e=>setCatalogPartSupplierId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione fornecedor</option>
                     {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Unidade-base *
-                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione unidade</option>
                     {measureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
               </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
@@ -602,13 +608,17 @@ export function DbsInventoryPage({
               </button>
             </form>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="border-b border-slate-100 p-5">
-                <h2 className="text-lg font-black">Catálogo de peças e insumos</h2>
-                <p className="mt-1 text-xs text-slate-500">{parts.length} itens relacionais · selecione um item à esquerda para completar o cadastro</p>
+              <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 p-5 sm:p-6">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">BASE DE MATERIAIS</p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Catálogo de peças e insumos</h2>
+                  <p className="mt-1 text-sm text-slate-500">Selecione um item para editar seus dados.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">{parts.length} {parts.length === 1 ? "item" : "itens"}</span>
               </div>
               <div className="hidden max-h-[520px] overflow-auto md:block">
-                <table className="w-full min-w-[620px] text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
+                <table className="w-full min-w-[600px] text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
                   <tbody>{parts.map((part:any)=>{
                     const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                     const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
@@ -646,7 +656,7 @@ export function DbsInventoryPage({
           <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
             <div className="mb-4">
               <p className="text-xs font-black uppercase tracking-wider text-sky-700">Controle físico de materiais</p>
-              <h2 className="mt-1 text-lg font-black">Estoque central e estoque dos técnicos</h2>
+              <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Estoque central e estoque dos técnicos</h2>
               <p className="mt-1 text-xs text-slate-500">Transferir reduz o saldo central e cria saldo sob custódia do técnico. O consumo no atendimento baixa o veículo e registra o custo da OS.</p>
             </div>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -692,20 +702,20 @@ export function DbsInventoryPage({
                 <h3 className="font-black">Transferir para veículo</h3>
                 <p className="mt-1 text-xs text-slate-500">Somente saldo livre pode ser transferido. A operação fica registrada no histórico.</p>
                 <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
-                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
                   </select>
                 </label>
                 <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
-                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
                   </select>
                 </label>
                 <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
-                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
                 <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
-                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
                 <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
               </form>
@@ -746,13 +756,13 @@ export function DbsInventoryPage({
               <h2 className="text-lg font-black">Vincular centro de custo à OS</h2>
               <p className="mt-1 text-xs text-slate-500">Defina a classificação operacional antes do consumo de peças do carro ou gás.</p>
               <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
-                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                   <option value="">Selecione a OS</option>
                   {workOrders.map((order:any)=><option key={order.id} value={order.id}>{order.protocol||order.id} · {order.status}</option>)}
                 </select>
               </label>
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo
-                <select required value={costCenterWorkOrderValue} onChange={e=>setCostCenterWorkOrderValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                <select required value={costCenterWorkOrderValue} onChange={e=>setCostCenterWorkOrderValue(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                   <option value="">Selecione o centro de custo</option>
                   {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
                 </select>
@@ -779,26 +789,29 @@ export function DbsInventoryPage({
           <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. Informe tara e peso bruto inicial para habilitar consumo pesado na OS.</p></div>
             <form onSubmit={assignWeightedGasCylinder} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
-              <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"><option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
-              <label className="text-xs font-bold text-slate-600">Veículo<input value={gasVehicleLabel} onChange={e=>setGasVehicleLabel(e.target.value)} placeholder="Veículo / placa" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
-              <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/></label>
+              <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
+              <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
+              <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
+              <label className="text-xs font-bold text-slate-600">Veículo<input value={gasVehicleLabel} onChange={e=>setGasVehicleLabel(e.target.value)} placeholder="Veículo / placa" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
+              <label className="text-xs font-bold text-slate-600">Total de cargas *<input required type="number" min="1" step="1" value={gasTotalCharges} onChange={e=>setGasTotalCharges(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
+              <label className="text-xs font-bold text-slate-600">Tara do vasilhame (kg) *<input required type="number" min="0" step="0.001" value={gasTareWeight} onChange={e=>setGasTareWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
+              <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
               <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
             </form>
           </section>
           </>}
           {moduleSection === "purchases" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">Decisão financeira</p>
-                <h2 className="mt-1 text-lg font-black text-slate-900">Pedidos aguardando aprovação</h2>
-                <p className="mt-1 text-xs text-slate-500">A aprovação registra o compromisso no Ledger. O estoque só é liberado depois da conferência física.</p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">ETAPA 1 · APROVAÇÃO FINANCEIRA</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Pedidos aguardando aprovação</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-600">A aprovação registra o compromisso no DBS Treasury. O estoque só é liberado depois da conferência física dos itens.</p>
               </div>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800">{pendingPurchases.length} pendente(s)</span>
+              <div className="flex min-w-[126px] items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-800">{pendingPurchases.length}</span>
+                <span className="text-xs font-bold leading-4 text-amber-900">Pedidos<br/>pendentes</span>
+              </div>
             </div>
             <div className="grid gap-3 p-4">
               {pendingPurchases.length ? pendingPurchases.map((purchase: any) => {
@@ -807,7 +820,7 @@ export function DbsInventoryPage({
                 const center = costCenters.find((item: any) => String(item.id) === String(purchase.cost_center_id));
                 const isSaving = busy && purchaseApprovalBusyId === id;
                 return (
-                  <article key={id} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)_auto] md:items-center">
+                  <article key={id} className="grid gap-4 rounded-2xl border border-slate-200 border-l-4 border-l-amber-400 bg-white p-4 shadow-sm sm:p-5 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.8fr)_140px] md:items-center">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-slate-900">{String(purchase.supplier_name ?? "Fornecedor")}</p>
                       <p className="mt-1 break-words text-xs text-slate-500">{String(purchase.document_number ?? "Pedido sem documento")} · {purchase.purchase_date ? new Date(String(purchase.purchase_date) + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</p>
@@ -829,40 +842,42 @@ export function DbsInventoryPage({
               </div>}
             </div>
           </section>
-          <section className="mb-5 rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+          <section className="mb-6 overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-sm">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 to-white p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-sky-700">Fluxo de suprimentos</p>
-                <h2 className="mt-1 text-lg font-black">Nova compra / pedido ao fornecedor</h2>
+                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Nova compra / pedido ao fornecedor</h2>
                 <p className="mt-1 text-sm text-slate-500">Registre o preço cotado, fornecedor, peças e centro de custo. O pedido segue para aprovação financeira nesta tela; o estoque só entra após o recebimento físico.</p>
               </div>
-              {quoteImport.quoteId && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-800">Origem: cotação {quoteImport.quoteId}</span>}
+              {quoteImport.quoteId && <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800">Origem: cotação {quoteImport.quoteId}</span>}
               {quoteImport.quoteId && quotePurchase.isLoading && <p role="status" className="w-full rounded-lg bg-sky-50 p-3 text-xs text-sky-800">Importando peças relacionais da cotação…</p>}
               {quoteImport.quoteId && quotePurchase.error && <p role="alert" className="w-full rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">Não foi possível importar as peças desta cotação: {quotePurchase.error instanceof Error ? quotePurchase.error.message : "Falha ao consultar a cotação."}</p>}
               {quoteImport.quoteId && quotePurchase.data && !quotePurchase.data.items.length && <p role="alert" className="w-full rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Esta cotação não possui peças do catálogo relacional. Adicione as peças manualmente antes de registrar o pedido.</p>}
             </div>
-            <form onSubmit={submitPurchase} className="grid gap-4">
-              <div className="grid gap-3 md:grid-cols-3">
+            </div>
+            <form onSubmit={submitPurchase} className="grid gap-5 p-5 sm:p-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <label className="text-xs font-bold text-slate-600">Fornecedor cadastrado *
-                  <select required value={supplierId} onChange={e=>setSupplierId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <select required value={supplierId} onChange={e=>setSupplierId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione o fornecedor</option>
                     {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Centro de custo *
-                  <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+                  <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                     <option value="">Selecione o centro de custo</option>
                     {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Nº da cotação / documento
-                  <input maxLength={100} value={purchaseDocument} onChange={e => setPurchaseDocument(e.target.value)} placeholder="Referência do fornecedor" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  <input maxLength={100} value={purchaseDocument} onChange={e => setPurchaseDocument(e.target.value)} placeholder="Referência do fornecedor" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" />
                 </label>
                 <label className="text-xs font-bold text-slate-600">Data da compra *
-                  <input type="date" required value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+                  <input type="date" required value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" />
                 </label>
               </div>
-              <p className="text-xs text-slate-500">As compras usam fornecedores e centros de custo relacionais. O custo é convertido para a unidade-base da peça antes de atualizar o estoque.</p>
+              <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm leading-5 text-sky-950"><strong className="font-bold">Como funciona:</strong> a compra usa fornecedor e centro de custo cadastrados. O valor é convertido para a unidade-base; o estoque só muda após aprovação e recebimento.</div>
               <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[1080px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça relacional</th><th className="p-3">Unidade da compra</th><th className="p-3">Qtd.</th><th className="p-3">Custo unitário (R$)</th><th className="p-3">Conversão</th><th className="p-3">Total</th><th className="p-3"> </th></tr></thead>
@@ -917,7 +932,7 @@ export function DbsInventoryPage({
                         const selected=parts.find((entry:any)=>String(entry.id)===e.target.value);
                         const baseUnitId=String(selected?.measure_unit_id||"");
                         updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
-                      }} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                      }} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                         <option value="">Selecione a peça cadastrada</option>
                         {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku?entry.sku+" · ":""}{entry.name||entry.description||entry.id}</option>)}
                       </select>
@@ -933,7 +948,7 @@ export function DbsInventoryPage({
                         <input aria-label="Quantidade na unidade de compra" type="number" min="0.001" step="0.001" value={line.quantity} onChange={e=>updatePurchaseLine(index,{quantity:e.target.value})} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-2 text-sm"/>
                       </label>
                       <label className="col-span-2 text-xs font-bold text-slate-600">Custo unitário na unidade de compra (R$) *
-                        <input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
+                        <input aria-label="Custo unitário na unidade de compra em reais" type="number" min="0.01" step="0.01" value={line.unitCost} onChange={e=>updatePurchaseLine(index,{unitCost:e.target.value})} placeholder="0,00" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                       </label>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
@@ -943,18 +958,18 @@ export function DbsInventoryPage({
                   </article>;
                 })}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button type="button" onClick={() => setPurchaseLines(current => [...current, { partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }])} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold">+ Adicionar peça</button>
-                <div className="text-right"><p className="text-xs font-bold text-slate-500">Total estimado da compra</p><p className="text-xl font-black">{money(Math.round(purchaseLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0) * 100))}</p></div>
-                <button disabled={busy || !parts.length} className="min-h-11 rounded-xl bg-sky-700 px-5 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Registrando..." : "Enviar pedido para aprovação financeira"}</button>
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <button type="button" onClick={() => setPurchaseLines(current => [...current, { partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }])} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800">+ Adicionar peça</button>
+                <div className="text-right"><p className="text-xs font-bold text-slate-500">Total estimado da compra</p><p className="mt-1 text-2xl font-black tracking-tight text-slate-950">{money(Math.round(purchaseLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0) * 100))}</p></div>
+                <button disabled={busy || !parts.length} className="min-h-12 rounded-xl bg-[#0f4f91] px-6 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#0a3e75] disabled:opacity-50">{busy ? "Registrando..." : "Enviar pedido para aprovação financeira"}</button>
               </div>
             </form>
           </section>
 
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-white p-5 sm:p-6">
               <div>
-                <h2 className="text-lg font-black">Pedidos e recebimento físico</h2>
+                <h2 className="text-xl font-black tracking-tight text-slate-950">Pedidos e recebimento físico</h2>
                 <p className="mt-1 text-sm text-slate-500">Acompanhe a liberação e confira as quantidades recebidas. Nenhum pagamento é feito nesta tela.</p>
               </div>
               <Link to="/treasury" className="min-h-10 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black text-sky-800 hover:bg-sky-100">Abrir Financeiro / DBS Treasury</Link>
@@ -1154,21 +1169,21 @@ export function DbsInventoryPage({
             <form onSubmit={reserveParts} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-black">Reservar peças para OS</h2>
               <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
-              <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+              <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione uma OS</option>
                 {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
               </select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
-              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione o centro de custo</option>
                 {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
               </select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
-              <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
+              <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione uma peça</option>
                 {availableParts.map((part: any) => <option key={part.id} value={part.id}>{part.name ?? part.description ?? part.id} · disponível {Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)}</option>)}
               </select>
-              <label className="mt-3 block text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" /></label>
               <button disabled={busy || !availableParts.length || !workOrders.length} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
               <p className="mt-3 text-xs text-slate-500">A reserva bloqueia a disponibilidade, mas não baixa o estoque físico. A baixa ocorre ao concluir a OS.</p>
             </form>
