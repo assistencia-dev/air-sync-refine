@@ -2371,7 +2371,7 @@ function DbsControlPage() {
 
   if (employeeMode) {
     return (
-      <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#f4f8fc]">
+      <main className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#f4f8fc]">
         {cloudError && (
           <section role="status" aria-live="polite" className="pointer-events-none absolute inset-x-3 top-3 z-20 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 shadow-sm backdrop-blur">
             <p className="text-xs font-bold text-amber-800">Sincronização em recuperação</p>
@@ -2384,7 +2384,7 @@ function DbsControlPage() {
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
+    <main className="flex h-[100dvh] min-h-0 flex-col overflow-hidden admin-mobile-shell bg-[#f4f8fc] pb-20 lg:pb-0">
       <div className="min-h-0 flex-1">
         <iframe
           ref={iframeRef}

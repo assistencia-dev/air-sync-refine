@@ -11,6 +11,7 @@ const folhaPontoRoute = fs.readFileSync("src/routes/_authenticated/folha-ponto.t
 const rhFunctions = fs.readFileSync("src/lib/rh.functions.ts", "utf8");
 const adminSurface = fs.readFileSync("src/routes/_authenticated/admin.tsx", "utf8");
 const mobileAdminNavigation = fs.readFileSync("src/components/MobileAdminNavigation.tsx", "utf8");
+const appStyles = fs.readFileSync("src/styles.css", "utf8");
 const treasuryRouteSource = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
 const financeViewerRoute = fs.readFileSync("src/routes/_authenticated/financeiro-acompanhamento.tsx", "utf8");
 const rhDashboardRoute = fs.readFileSync("src/routes/admin/rh-dashboard.tsx", "utf8");
@@ -46,6 +47,11 @@ assert.match(mobileAdminNavigation, /aria-label="Navegação administrativa"/, "
 assert.match(mobileAdminNavigation, /Dúvidas e treinamento[\s\S]*?Encerrar sessão/, "O menu mobile deve concentrar treinamento e saída sem duplicar a navegação desktop.");
 assert.match(adminSurface, /MobileAdminNavigation active=\{requestedTab === "passage"/, "O painel administrativo deve usar o shell mobile unificado.");
 assert.match(route, /MobileAdminNavigation active="operation"/, "O DBS CONTROL deve usar a mesma navegação mobile administrativa.");
+assert.match(route, /className="flex h-\\[100dvh\\] min-h-0 flex-col overflow-hidden admin-mobile-shell/, "O shell administrativo do DBS CONTROL deve ter altura definida para preencher o viewport.");
+assert.match(route, /className="relative flex h-\\[100dvh\\] min-h-0 flex-col overflow-hidden bg-\\[#f4f8fc\\]/, "O shell do colaborador também deve preencher a altura útil da tela.");
+assert.match(appStyles, /\\.admin-mobile-shell > div > \\.admin-mobile-iframe \\{[^}]*height: calc\\(100dvh - 82px/, "O iframe administrativo deve ser dimensionado através do contêiner intermediário real.");
+assert.doesNotMatch(appStyles, /\\.admin-mobile-iframe \\{ height: calc\\(100dvh - 140px/, "O iframe não pode manter uma altura menor e deixar uma faixa vazia.");
+assert.doesNotMatch(appStyles, /\\.admin-mobile-shell > \\.admin-mobile-iframe/, "A regra de altura não pode apontar para uma relação pai-filho inexistente.");
 assert.match(rhDashboardRoute, /MobileAdminNavigation active="people"/, "O RH deve usar a mesma navegação mobile administrativa.");
 assert.match(treasuryRouteSource, /MobileAdminNavigation active="finance"/, "O Treasury deve usar a mesma navegação mobile administrativa.");
 assert.match(financeViewerRoute, /MobileAdminNavigation active="finance"/, "A visão financeira deve usar a mesma navegação mobile administrativa.");
