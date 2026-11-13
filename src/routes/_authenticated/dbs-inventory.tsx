@@ -953,10 +953,10 @@ export function DbsInventoryPage({
                 const selected=outstanding.filter((item:any)=>Number(purchaseReceiptQuantities[item.id]??0)>0);
                 const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>Number(item.quantity)-Number(item.quantity_received??0));
                 const approval=purchase.approval_status;
-                const supplierName=suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name||purchase.supplier_name;
+                const purchaseSupplierDisplayName=suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name||purchase.supplier_name;
                 return <article key={purchase.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="font-black text-slate-900">{supplierName}</p><p className="mt-0.5 break-words text-xs text-slate-500">{purchase.document_number||"Sem documento"} · {purchase.purchase_date?new Date(purchase.purchase_date+"T12:00:00").toLocaleDateString("pt-BR"):"—"}</p></div>
+                    <div className="min-w-0"><p className="font-black text-slate-900">{purchaseSupplierDisplayName}</p><p className="mt-0.5 break-words text-xs text-slate-500">{purchase.document_number||"Sem documento"} · {purchase.purchase_date?new Date(purchase.purchase_date+"T12:00:00").toLocaleDateString("pt-BR"):"—"}</p></div>
                     <p className="shrink-0 text-sm font-black text-slate-900">{money(purchase.total_cents)}</p>
                   </div>
                   <div className="mt-3 border-t border-slate-100 pt-3 text-xs">
