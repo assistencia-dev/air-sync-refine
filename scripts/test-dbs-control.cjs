@@ -271,7 +271,7 @@ assert.match(html, /employee-execution-body canvas\.sig-canvas\[data-dbs-drawing
 assert.match(html, /catch\(error => \(\{ field: 'fotoAntes'/, "Falha de upload de foto deve ser tratada sem perder a conclusão da OS.");
 assert.match(html, /Fotos, assinatura, checklist, observações, peças e localização são opcionais/, "A interface deve informar ao técnico quais evidências são opcionais.");
 assert.match(html, /switchTab\('tab-dashboard', dashboardNav \|\| undefined\)/, "O login do colaborador deve abrir automaticamente o dashboard de progresso.");
-assert.match(route, /className="flex min-h-\[100dvh\] flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve reservar a altura do celular sem cortar o iframe quando o aviso de sincronização aparece.");
+assert.match(route, /className="relative flex h-\[100dvh\] min-h-0 flex-col overflow-hidden/, "O shell autenticado do DBS CONTROL deve ocupar a altura total da tela sem cortar o iframe quando o aviso de sincronização aparece.");
 assert.match(route, /className="min-h-0 w-full flex-1 border-0"/, "O iframe do DBS CONTROL deve ocupar o espaço restante em telas móveis.");
 assert.match(html, /const collaboratorSession = new URLSearchParams\(window\.location\.search\)\.get\('mode'\) === 'employee';[\s\S]*?if \(collaboratorSession && \(!DBS_CONTROL_CLOUD_READY/, "O modo colaborador deve aguardar a hidratação filtrada antes de renderizar OS do cache local.");
 assert.match(html, /Release the filtered view before rendering/, "A hidratação filtrada deve liberar o portal do colaborador antes da renderização da mesma mensagem.");
