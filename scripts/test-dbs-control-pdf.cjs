@@ -138,6 +138,22 @@ async function main() {
     id: "os-6", protocolo: "OS-6", clienteId: "client-1", tipo: "Corretiva", status: "Concluída",
   });
 
+  // Problem description and technician execution must survive together in the
+  // same PDF; execution must never replace the customer's original report.
+  const withProblemAndExecution = await render({
+    id: "os-7", protocolo: "OS-7", clienteId: "client-1", tipo: "Corretiva", status: "Em Atendimento",
+    desc: "Cliente relata que o equipamento não refrigera e apresenta ruído.",
+    diagnostico: "Capacitor de partida com falha.",
+    trabalhoExecutado: "Realizada inspeção elétrica e substituição do capacitor.",
+  });
+
+  // Older OS records may store the original request in sintoma.
+  const legacyProblem = await render({
+    id: "os-8", protocolo: "OS-8", clienteId: "client-1", tipo: "Corretiva", status: "Em Atendimento",
+    sintoma: "Equipamento desarma após alguns minutos de funcionamento.",
+    trabalhoExecutado: "Executada medição de corrente e tensão.",
+  });
+
   assert.match(noEquipment.text, /Todos os equipamentos da unidade/);
   assert.match(multipleEquipment.text, /TAG-001/);
   assert.match(multipleEquipment.text, /TAG-002/);
@@ -151,8 +167,14 @@ async function main() {
   assert.ok(withPhotos.imageCount >= 5, "logo, duas evidências e as duas assinaturas devem ser renderizados");
   assert.doesNotMatch(withoutPhotos.text, /Evidência: Antes do Atendimento/);
   assert.doesNotMatch(withoutPhotos.text, /Evidência: Após Execução/);
+  assert.match(withProblemAndExecution.text, /PROBLEMA RELATADO PELO CLIENTE/);
+  assert.match(withProblemAndExecution.text, /Cliente relata que o equipamento não refrigera e apresenta ruído\./);
+  assert.match(withProblemAndExecution.text, /Capacitor de partida com falha\./);
+  assert.match(withProblemAndExecution.text, /Realizada inspeção elétrica e substituição do capacitor\./);
+  assert.match(legacyProblem.text, /Equipamento desarma após alguns minutos de funcionamento\./);
+  assert.match(legacyProblem.text, /Executada medição de corrente e tensão\./);
 
-  console.log("DBS Control PDF: no equipment, multiple equipment, corrective, preventive checklist, parts and photo evidence scenarios passed.");
+  console.log("DBS Control PDF: equipment, checklist, parts, photo evidence and customer problem + technician execution scenarios passed.");
 }
 
 main().catch(error => {
