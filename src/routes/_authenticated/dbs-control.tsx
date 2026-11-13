@@ -1202,10 +1202,10 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_NAVIGATE_INVENTORY") {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
-        navigate({
-          to: "/dbs-inventory",
-          search: { section, quote_id: String(msg.quoteId || "") || undefined },
-        });
+        const destination = new URL("/dbs-inventory", window.location.origin);
+        destination.searchParams.set("section", section);
+        if (msg.quoteId) destination.searchParams.set("quote_id", String(msg.quoteId));
+        window.location.assign(destination.toString());
         return;
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
@@ -2375,8 +2375,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-route-1`
-    : "/dbs-control.html?v=20261113-inventory-route-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-route-2`
+    : "/dbs-control.html?v=20261113-inventory-route-2"
 
   if (employeeMode) {
     return (
