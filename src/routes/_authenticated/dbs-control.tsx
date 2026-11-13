@@ -484,9 +484,12 @@ function DbsControlPage() {
   const employeeFrameDocumentRef = useRef<Document | null>(null);
   const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [inventoryModuleSection, setInventoryModuleSection] = useState<DbsMaterialsSection | null>(null);
-  const [inventoryPortalTarget, setInventoryPortalTarget] = useState<HTMLElement | null>(null);
-  const [inventoryQuoteId, setInventoryQuoteId] = useState("");
+  // Cada menu mantém sua própria raiz React e seu próprio estado dentro
+  // da aba correspondente do iframe. Alternar de tela não troca a rota.
+  const [inventoryPortals, setInventoryPortals] = useState<Partial<Record<DbsMaterialsSection, {
+    target: HTMLElement;
+    quoteId: string;
+  }>>>({});
 
   // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
   // autenticado reaplica apenas a apresentação do colaborador no carregamento
@@ -498,9 +501,7 @@ function DbsControlPage() {
     // and sends DBS_CONTROL_READY again, so the first cloud hydration is never
     // lost just because of load ordering.
     frame?.contentWindow?.postMessage({ type: "DBS_CONTROL_PARENT_READY" }, window.location.origin);
-    setInventoryPortalTarget(null);
-    setInventoryModuleSection(null);
-    setInventoryQuoteId("");
+    setInventoryPortals({});
     if (!employeeModeRef.current) return;
     const frameDocument = frame?.contentDocument;
     if (!frameDocument) return;
@@ -1199,15 +1200,6 @@ function DbsControlPage() {
         }
         return;
       }
-      if (msg.type === "DBS_CONTROL_NAVIGATE_INVENTORY") {
-        if (employeeModeRef.current) return;
-        const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
-        const destination = new URL("/dbs-inventory", window.location.origin);
-        destination.searchParams.set("section", section);
-        if (msg.quoteId) destination.searchParams.set("quote_id", String(msg.quoteId));
-        window.location.assign(destination.toString());
-        return;
-      }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.section === "purchases"
@@ -1221,9 +1213,10 @@ function DbsControlPage() {
           }, window.location.origin);
           return;
         }
-        setInventoryModuleSection(section);
-        setInventoryQuoteId(String(msg.quoteId || ""));
-        setInventoryPortalTarget(target);
+        setInventoryPortals((current) => ({
+          ...current,
+          [section]: { target, quoteId: String(msg.quoteId || "") },
+        }));
         return;
       }
       if (msg.type === "DBS_CONTROL_BACK_TO_MAIN") {
@@ -2375,8 +2368,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-route-2`
-    : "/dbs-control.html?v=20261113-inventory-route-2"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261113-inventory-tabs-3`
+    : "/dbs-control.html?v=20261113-inventory-tabs-3"
 
   if (employeeMode) {
     return (
@@ -2404,13 +2397,17 @@ function DbsControlPage() {
           allow="camera; geolocation"
         />
       </div>
-      {inventoryPortalTarget && inventoryModuleSection && createPortal(
+      {inventoryPortals.parts && createPortal(
+        <DbsInventoryPage embedded initialSection="parts" />,
+        inventoryPortals.parts.target,
+      )}
+      {inventoryPortals.purchases && createPortal(
         <DbsInventoryPage
           embedded
-          initialSection={inventoryModuleSection}
-          initialQuoteId={inventoryQuoteId}
+          initialSection="purchases"
+          initialQuoteId={inventoryPortals.purchases.quoteId}
         />,
-        inventoryPortalTarget,
+        inventoryPortals.purchases.target,
       )}
       <MobileAdminNavigation active="operation" />
     </main>
