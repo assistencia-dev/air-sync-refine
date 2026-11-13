@@ -1,14 +1,16 @@
 /* Runs before the application module graph, including TanStack Router, is loaded. */
 (function () {
   const preview = document.currentScript?.dataset.preview === "true";
-  const recoveryKey = "dbs-module-recovery-20261026-1";
+  const recoveryKey = "dbs-module-recovery-20261113-2";
   let recovered = false;
   try { recovered = sessionStorage.getItem(recoveryKey) === "1"; } catch (_) {
     recovered = new URL(location.href).searchParams.has("dbs_module_retry");
   }
 
-  async function releasePreviewWorker() {
-    if (!preview) return;
+  // Only touch resources owned by this application. In production this cleanup
+  // runs after a confirmed startup module failure; in Preview it runs up front
+  // because Vite's live dependency graph must never be served by the PWA worker.
+  async function releaseDbsPwaRuntime() {
     try {
       if ("serviceWorker" in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -19,14 +21,16 @@
           return url.origin === location.origin && url.pathname === "/sw.js";
         }).map(registration => registration.unregister()));
       }
+    } catch (_) { /* Browser storage restrictions must not block application startup. */ }
+    try {
       if (typeof caches !== "undefined") {
         const names = await caches.keys();
         await Promise.all(names.filter(name => name.startsWith("dbs-air-static-")).map(name => caches.delete(name)));
       }
-    } catch (_) { /* Browser storage restrictions must not block application startup. */ }
+    } catch (_) { /* Cache Storage may be unavailable in private/restricted contexts. */ }
   }
 
-  const released = releasePreviewWorker();
+  const previewCleanup = preview ? releaseDbsPwaRuntime() : Promise.resolve();
   let startupFinished = false;
   window.addEventListener("dbs:app-ready", () => { startupFinished = true; });
   function isModuleFailure(error) {
@@ -42,8 +46,10 @@
       url.searchParams.set("dbs_module_retry", "1");
     }
     event?.preventDefault();
-    // The cleanup is best effort; a stalled browser API must not leave the screen blank.
-    await Promise.race([released, new Promise(resolve => setTimeout(resolve, 1500))]);
+    // Preview already began cleanup. In production, clear only DBS-owned worker
+    // and static-asset caches after a module failure, then retry at most once.
+    const cleanup = preview ? previewCleanup : releaseDbsPwaRuntime();
+    await Promise.race([cleanup, new Promise(resolve => setTimeout(resolve, 1500))]);
     location.replace(url.href);
   }
   window.addEventListener("unhandledrejection", event => { void recover(event.reason, event); });

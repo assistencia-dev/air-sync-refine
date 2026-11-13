@@ -468,13 +468,10 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
-          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
-              <span className="min-w-0">
-                <span className="block text-base font-black text-slate-900">Custos de materiais por OS</span>
-                <span className="mt-1 block text-sm font-normal text-slate-500">Relatório operacional · consulte o custo de cada ordem de serviço</span>
-              </span>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Abrir relatório</span>
+          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-black text-slate-800">
+              Ver custos de materiais por ordem de serviço
+              <span className="ml-2 text-xs font-normal text-slate-500">Relatório operacional por OS</span>
             </summary>
             <section className="mb-0 overflow-hidden border-t border-slate-100 bg-white">
             <div className="border-b border-slate-100 p-5">
@@ -508,25 +505,20 @@ export function DbsInventoryPage({
             </div>
             </section>
           </details>
-          <section aria-label="Resumo do estoque" className="mb-6 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Peças cadastradas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-900">{parts.length}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Reservas ativas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-900">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Unidades livres no estoque</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-900">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p></div>
+          <section className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Peças cadastradas</p><p className="mt-1 text-2xl font-black">{parts.length}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Reservas ativas</p><p className="mt-1 text-2xl font-black">{reservations.filter((r: any) => r.status === "reserved").length}</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-bold text-slate-500">Unidades livres no estoque</p><p className="mt-1 text-2xl font-black">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p></div>
           </section>
 
-          <details className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
-              <span className="min-w-0">
-                <span className="flex flex-wrap items-center gap-2 text-base font-black text-slate-900">
-                  Cadastros auxiliares
-                  {(!suppliers.length || !measureUnits.length || !costCenters.length) ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">Configuração pendente</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">Cadastros prontos</span>}
-                </span>
-                <span className="mt-1 block text-sm font-normal text-slate-500">{suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões</span>
+          <details open={!suppliers.length || !measureUnits.length || !costCenters.length} className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <summary className="cursor-pointer list-none px-4 py-4 text-sm font-black text-slate-800 sm:px-5">
+              Cadastros auxiliares
+              <span className="ml-2 block text-xs font-normal text-slate-500 sm:inline">
+                {suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões
               </span>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Configurar</span>
             </summary>
-            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-4 sm:p-5 sm:grid-cols-2 2xl:grid-cols-4">
-            {(!suppliers.length || !measureUnits.length || !costCenters.length) && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:col-span-2 2xl:col-span-4">Para registrar compras, mantenha fornecedor, unidade de medida e centro de custo cadastrados nesta área.</div>}
+            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-3 sm:p-4 lg:grid-cols-4">
             <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
               <h2 className="font-black">Cadastro de fornecedor</h2>
               <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
@@ -562,46 +554,47 @@ export function DbsInventoryPage({
             </form>
             </section>
           </details>
-          <section className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
-            <form id="dbs-inventory-catalog-form" onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
+          {(!suppliers.length || !measureUnits.length || !costCenters.length) && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Para registrar compras, cadastre fornecedor, unidade de medida e centro de custo nesta tela.</p>}
+          <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
               <div className="mb-3">
                 <p className="text-xs font-black uppercase tracking-wider text-sky-700">Catálogo relacional</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">Cadastrar ou completar uma peça</h2>
+                <h2 className="mt-1 text-lg font-black">Cadastrar ou completar uma peça</h2>
                 <p className="mt-1 text-xs text-slate-500">Vincule fornecedor e unidade-base. A peça entra sem saldo; quantidade só nasce no recebimento.</p>
               </div>
-              <label className="block text-sm font-bold text-slate-700">Editar peça existente ou cadastrar nova
+              <label className="block text-xs font-bold text-slate-600">Editar peça existente ou cadastrar nova
                 <select value={catalogPartId} onChange={e=>selectCatalogPart(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm">
                   <option value="">Nova peça / insumo</option>
                   {parts.map((part:any)=><option key={part.id} value={part.id}>{part.sku ? part.sku+" · " : ""}{part.name||part.description||part.id}</option>)}
                 </select>
               </label>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="text-sm font-bold text-slate-700">SKU / código *
+                <label className="text-xs font-bold text-slate-600">SKU / código *
                   <input required maxLength={80} value={catalogPartSku} onChange={e=>setCatalogPartSku(e.target.value.toUpperCase())} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
                 </label>
-                <label className="text-sm font-bold text-slate-700">Nome da peça / insumo *
+                <label className="text-xs font-bold text-slate-600">Nome da peça / insumo *
                   <input required maxLength={180} value={catalogPartName} onChange={e=>setCatalogPartName(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
                 </label>
-                <label className="text-sm font-bold text-slate-700">Fornecedor *
+                <label className="text-xs font-bold text-slate-600">Fornecedor *
                   <select required value={catalogPartSupplierId} onChange={e=>setCatalogPartSupplierId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
                     <option value="">Selecione fornecedor</option>
                     {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
-                <label className="text-sm font-bold text-slate-700">Unidade-base *
+                <label className="text-xs font-bold text-slate-600">Unidade-base *
                   <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm">
                     <option value="">Selecione unidade</option>
                     {measureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
                   </select>
                 </label>
-                <label className="text-sm font-bold text-slate-700">Custo de referência (R$)
+                <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
                 </label>
-                <label className="text-sm font-bold text-slate-700">Preço de venda (R$)
+                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"/>
                 </label>
               </div>
-              <label className="mt-3 block text-sm font-bold text-slate-700">Descrição complementar
+              <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
               </label>
               <button disabled={busy || !suppliers.length || !measureUnits.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
@@ -610,7 +603,7 @@ export function DbsInventoryPage({
             </form>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 p-5">
-                <h2 className="text-xl font-black text-slate-900">Catálogo de peças e insumos</h2>
+                <h2 className="text-lg font-black">Catálogo de peças e insumos</h2>
                 <p className="mt-1 text-xs text-slate-500">{parts.length} itens relacionais · selecione um item à esquerda para completar o cadastro</p>
               </div>
               <div className="hidden max-h-[520px] overflow-auto md:block">

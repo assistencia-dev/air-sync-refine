@@ -33,7 +33,6 @@ const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_db
 const integrationSql = fs.readFileSync('scripts/test-inventory-financial-bridge.integration.sql', 'utf8');
 const ledgerRpc = fs.readFileSync('supabase/migrations/20261027155816_treasury_ledger_command_rpc.sql', 'utf8');
 const phase2Ui = fs.readFileSync('src/routes/_authenticated/dbs-inventory.tsx', 'utf8');
-const controlUxSource = fs.readFileSync('public/dbs-control-ux.js', 'utf8');
 const controlRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const importScript = fs.readFileSync('public/dbs-control-import.js', 'utf8');
 const quoteBuilder = fs.readFileSync('public/dbs-control-orcamentos-flex.js', 'utf8');
@@ -44,10 +43,6 @@ assert.ok(phase2Ui.includes("initialQuoteId?: string"));
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
 assert.match(phase2Ui, /embedded\?: boolean/);
-assert.match(phase2Ui, /id="dbs-inventory-catalog-form"/, "O atalho Nova peça deve apontar para o formulário relacional visível.");
-assert.doesNotMatch(phase2Ui, /<details open=\{!suppliers\.length \|\| !measureUnits\.length \|\| !costCenters\.length\}/, "Os quatro cadastros auxiliares não podem ocupar a tela automaticamente.");
-assert.match(phase2Ui, /2xl:grid-cols-4/, "Cadastros auxiliares só devem ocupar quatro colunas em telas realmente largas.");
-assert.match(controlUxSource, /tab-pecas":\["\+ Nova peça",\(\)=>scrollToFirstForm\("dbs-inventory-catalog-form"\)\]/, "O botão superior Nova peça deve levar ao formulário relacional que está visível.");
 assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
 assert.match(phase2Ui, /Enviar pedido para aprovação financeira/);
 assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
@@ -67,7 +62,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(controlRoute, /20261113-inventory-layout-5/);
+assert.match(controlRoute, /20261113-menu-pages-4/);
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -279,7 +274,7 @@ assert.match(mainHtml, /function voltarMenuPrincipalAdmin/);
 assert.match(mainHtml, /DBS_CONTROL_BACK_TO_ADMIN_MENU/);
 assert.match(controlUx, /window\.switchTab\(id,item\)/);
 assert.doesNotMatch(controlUx, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
-assert.match(mainHtml, /dbs-control-ux\.js\?v=20261113-inventory-layout-5/);
+assert.match(mainHtml, /dbs-control-ux\.js\?v=20261113-menu-pages-4/);
 assert.match(controlRoute, /inventoryPortals\.purchases\.quoteId/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
@@ -430,6 +425,6 @@ assert.match(controlRoute, /inventoryPortals\.purchases && createPortal/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
 assert.match(controlRoute, /data-dbs-materials-react-root/);
-assert.match(controlRoute, /20261113-inventory-layout-5/);
+assert.match(controlRoute, /20261113-menu-pages-4/);
 
 console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");

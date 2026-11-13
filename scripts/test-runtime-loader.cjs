@@ -2,6 +2,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 
+const rootRoute = fs.readFileSync('src/routes/__root.tsx', 'utf8');
+assert.match(rootRoute, /service worker updated; current screen kept open/);
+assert.doesNotMatch(rootRoute, /const onControllerChange = \(\) => \{[\s\S]{0,300}window\.location\.reload\(\)/,
+  'A troca do Service Worker não pode forçar reload durante a atualização.');
+
 async function workerTests() {
   const handlers = {};
   let responsePromise;
@@ -81,11 +86,17 @@ async function bootstrapTests() {
   assert.equal(app.replacements.length, 0, 'Do not discard an already-open form');
   app = bootstrap(false);
   await flush();
-  assert.deepEqual(app.unregistered, [], 'Keep production PWA registrations');
-  assert.deepEqual(app.deleted, [], 'Keep production asset caches');
+  assert.deepEqual(app.unregistered, [], 'Keep production PWA registrations during normal startup');
+  assert.deepEqual(app.deleted, [], 'Keep production asset caches during normal startup');
   app.handlers.unhandledrejection({ reason: Error('Database unavailable') });
   await flush();
   assert.equal(app.replacements.length, 0, 'Database errors must not trigger module recovery');
+  app = bootstrap(false);
+  app.handlers.unhandledrejection(event);
+  await flush();
+  assert.deepEqual(app.unregistered, ['/sw.js'], 'A production module failure may release only the DBS service worker');
+  assert.deepEqual(app.deleted, ['dbs-air-static-v3'], 'A production module failure clears only DBS static caches');
+  assert.equal(app.replacements.length, 1, 'A module recovery performs exactly one bounded navigation');
   app = bootstrap(true, true);
   app.handlers.unhandledrejection(event);
   await flush();

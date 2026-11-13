@@ -171,14 +171,16 @@ function RootComponent() {
     // Preview modules are served live by Vite and must never be controlled by a PWA worker.
     if (import.meta.env.DEV || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     let disposed = false;
-    let refreshing = false;
     let registration: ServiceWorkerRegistration | undefined;
 
-    // Apply a newly installed worker to the open PWA instead of leaving its old UI running.
+    // A controller change means the new worker is active, not that the running
+    // document must reload. Its already-loaded code can finish safely; a later
+    // navigation/reload will request the current HTML and hashed assets. Forcing
+    // a reload here can interrupt startup and create a blank-screen loop during
+    // deployments when an old route chunk is still in flight.
     const onControllerChange = () => {
-      if (refreshing || disposed) return;
-      refreshing = true;
-      window.location.reload();
+      if (disposed) return;
+      console.info("DBS AIR: service worker updated; current screen kept open.");
     };
     const updateWorker = async () => {
       try {
