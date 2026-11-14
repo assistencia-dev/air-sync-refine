@@ -303,7 +303,7 @@ assert.doesNotMatch(inventoryOverview, /revenue_cents|paid_cents|payment_status/
 assert.match(functions, /payment_status: "unpaid"/);
 assert.match(functions, /paid_cents/);
 assert.match(phase2Ui, /Pedidos aguardando recebimento/);
-assert.match(phase2Ui, /Custo de materiais por ordem de serviço/);
+assert.match(phase2Ui, /Custos de materiais por OS/);
 assert.match(functions, /workOrderFinancials: workOrderFinancials\.data/);
 assert.match(functions, /dbs_control_work_order_financials/);
 assert.match(phase2Ui, /Abrir Financeiro \/ DBS Treasury/);
