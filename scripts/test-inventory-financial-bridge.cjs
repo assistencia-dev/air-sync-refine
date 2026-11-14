@@ -51,7 +51,7 @@ assert.match(phase2Ui, /Pedidos e recebimento físico/);
 assert.match(phase2Ui, /Abrir Financeiro \/ DBS Treasury/);
 assert.match(phase2Ui, /decideDbsPurchaseApprovalFromTreasury/);
 assert.match(phase2Ui, /Fila de aprovação financeira de compras/);
-assert.match(phase2Ui, /O que você precisa fazer\\?/);
+assert.ok(phase2Ui.includes("O que você precisa fazer?"));
 assert.match(phase2Ui, /aria-label="Tarefas de estoque"/);
 assert.match(phase2Ui, /partsView === "catalog"/);
 assert.match(phase2Ui, /partsView === "stock"/);
