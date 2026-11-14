@@ -600,6 +600,7 @@ export function DbsInventoryPage({
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
             </form>
             </section>
+          </details>
           </>}
           {partsView === "catalog" && <>
           <section className="mb-6 grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
