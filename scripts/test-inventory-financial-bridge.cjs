@@ -43,21 +43,43 @@ assert.ok(phase2Ui.includes("initialQuoteId?: string"));
 assert.match(phase2Ui, /moduleSection === "parts"/);
 assert.match(phase2Ui, /moduleSection === "purchases"/);
 assert.match(phase2Ui, /embedded\?: boolean/);
-assert.match(phase2Ui, /Nova compra \/ pedido ao fornecedor/);
+
 assert.match(phase2Ui, /Enviar pedido para aprovação financeira/);
 assert.match(phase2Ui, /getDbsQuotePurchaseItems/);
 assert.match(phase2Ui, /receiveDbsPurchaseItems/);
-assert.match(phase2Ui, /Pedidos e recebimento físico/);
+
 assert.match(phase2Ui, /Abrir Financeiro \/ DBS Treasury/);
 assert.match(phase2Ui, /decideDbsPurchaseApprovalFromTreasury/);
 assert.match(phase2Ui, /Fila de aprovação financeira de compras/);
-assert.ok(phase2Ui.includes("O que você precisa fazer?"));
-assert.match(phase2Ui, /aria-label="Tarefas de estoque"/);
+assert.match(phase2Ui, /dbs-operations-page/);
+assert.match(phase2Ui, /dbs-op-tabs/);
+assert.match(phase2Ui, /SheetContent/);
+assert.match(phase2Ui, /activeDrawer === "new-part"/);
+assert.match(phase2Ui, /activeDrawer==="new-purchase"/);
+assert.match(phase2Ui, /activeDrawer==="reservation"/);
+assert.match(phase2Ui, /catalogSearch/);
+assert.match(phase2Ui, /visibleParts/);
+assert.match(phase2Ui, /settingsView === "suppliers"/);
+assert.match(phase2Ui, /settingsView === "cost-centers"/);
+assert.match(phase2Ui, /settingsView === "units"/);
+assert.match(phase2Ui, /settingsView === "conversions"/);
+assert.match(phase2Ui, /Saldo físico central/);
+assert.match(phase2Ui, /Saldos em veículos/);
+assert.match(phase2Ui, /Pedidos em aberto/);
+assert.match(phase2Ui, /Recebimento físico/);
+assert.match(phase2Ui, /purchasesAwaitingReceipt/);
+assert.match(controlUx, /dbs-inventory-open-drawer/);
+assert.match(controlUx, /dbs-materials-clean-ui/);
+assert.match(controlRoute, /20261114-erp-clean-ui-1/);
+assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-1/);
+
+
+
 assert.match(phase2Ui, /partsView === "catalog"/);
 assert.match(phase2Ui, /partsView === "stock"/);
 assert.match(phase2Ui, /partsView === "reservations"/);
 assert.match(phase2Ui, /partsView === "settings"/);
-assert.match(phase2Ui, /aria-label="Etapas da compra"/);
+
 assert.match(phase2Ui, /purchasesView === "new"/);
 assert.match(phase2Ui, /purchasesView === "approval"/);
 assert.match(phase2Ui, /purchasesView === "orders"/);
@@ -68,11 +90,11 @@ assert.match(phase2Ui, /onSubmit={reserveParts}/);
 assert.match(phase2Ui, /onSubmit={submitPurchase}/);
 assert.match(phase2Ui, /receiveDbsPurchaseItems/);
 assert.match(phase2Ui, /CATÁLOGO RELACIONAL/);
-assert.match(phase2Ui, /Configurações de cadastro/);
+
 assert.doesNotMatch(phase2Ui, /<details open=\{!suppliers\.length/);
-assert.match(phase2Ui, /xl:grid-cols-\[minmax\(360px,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
-assert.match(phase2Ui, /ETAPA 1 · APROVAÇÃO FINANCEIRA/);
-assert.match(phase2Ui, /ETAPA 2|Nova compra \/ pedido ao fornecedor/);
+
+
+
 assert.match(treasuryPage, /VISÃO DE CONTAS A PAGAR/);
 assert.match(treasuryPage, /Total pendente/);
 assert.match(treasuryPage, /Saldo em aberto/);
@@ -87,7 +109,7 @@ assert.match(quoteBuilder, /sendQuotePartsToPurchase/);
 assert.match(quoteBuilder, /window\.abrirModuloMateriais\("purchases"/);
 assert.doesNotMatch(quoteBuilder, /\/dbs-inventory|window\.open|dbs-smart-purchases-nav/);
 assert.match(mainHtml, /dbs-control-orcamentos-flex\.js\?v=20261111-relational-quotes-1/);
-assert.match(controlRoute, /20261113-menu-pages-4/);
+
 
 
 for (const migration of [bridge, hardening, openingBalance, openingBalanceHardening]) {
@@ -209,7 +231,7 @@ assert.match(phase2, /dbs_control_consume_work_order_reservations\(/i);
 assert.match(phase2, /atendimento com pendência/i);
 assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
 assert.doesNotMatch(phase2Ui, /Vendas avulsas|Vendas recentes|Registrar venda|settleDbsPartSale|createDbsPartSale/);
-assert.match(phase2Ui, /Reservas recentes/);
+
 assert.match(phase2Ui, /reserveDbsWorkOrderParts/);
 assert.match(ledgerRpc, /insert into public\.treasury_accounts/i);
 assert.match(ledgerRpc, /on conflict \(scope_key, code\) do update/i);

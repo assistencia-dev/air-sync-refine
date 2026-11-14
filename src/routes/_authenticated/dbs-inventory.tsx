@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
@@ -49,11 +50,48 @@ export function DbsInventoryPage({
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders";
+  type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
+  type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
   const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
+  const [settingsView, setSettingsView] = useState<SettingsView>("suppliers");
+  const [activeDrawer, setActiveDrawer] = useState<InventoryDrawer>(null);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "stock" | "setup">("all");
   useEffect(() => {
     setModuleSection(initialSection);
   }, [initialSection]);
+  useEffect(() => {
+    const openFromHeader = (event: Event) => {
+      const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
+      if (drawer === "part") {
+        setModuleSection("parts");
+        setPartsView("catalog");
+        setCatalogPartId("");
+        setCatalogPartSku("");
+        setCatalogPartName("");
+        setCatalogPartDescription("");
+        setCatalogPartSupplierId("");
+        setCatalogPartUnitId("");
+        setCatalogPartCost("");
+        setCatalogPartSale("");
+        setActiveDrawer("new-part");
+      } else if (drawer === "purchase") {
+        setModuleSection("purchases");
+        setPurchasesView("new");
+        setActiveDrawer("new-purchase");
+      }
+    };
+    window.addEventListener("dbs-inventory-open-drawer", openFromHeader as EventListener);
+    return () => window.removeEventListener("dbs-inventory-open-drawer", openFromHeader as EventListener);
+  }, []);
+  useEffect(() => {
+    if (initialQuoteId) {
+      setModuleSection("purchases");
+      setPurchasesView("new");
+      setActiveDrawer("new-purchase");
+    }
+  }, [initialQuoteId]);
   const [partId, setPartId] = useState("");
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -134,6 +172,15 @@ export function DbsInventoryPage({
   const purchasesAwaitingReceipt = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "approved" && purchase.status !== "received" && purchase.status !== "cancelled"
   );
+  const visibleParts = parts.filter((part: any) => {
+    const query = catalogSearch.trim().toLocaleLowerCase("pt-BR");
+    const supplierName = suppliers.find((row: any) => String(row.id) === String(part.supplier_id))?.name ?? "";
+    const matchesQuery = !query || [part.name, part.description, part.sku, supplierName].some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(query));
+    const matchesFilter = catalogFilter === "all"
+      || (catalogFilter === "stock" && Number(part.stock_quantity ?? 0) > 0)
+      || (catalogFilter === "setup" && (!part.supplier_id || !part.measure_unit_id));
+    return matchesQuery && matchesFilter;
+  });
 
   useEffect(() => {
     if (!quotePurchase.data || !parts.length) return;
@@ -234,6 +281,8 @@ export function DbsInventoryPage({
     if (saved) {
       setPurchaseDocument("");
       setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
+      setActiveDrawer(null);
+      await overview.refetch();
     }
   }
 
@@ -305,6 +354,7 @@ export function DbsInventoryPage({
     }
     if (saved) {
       selectCatalogPart("");
+      setActiveDrawer(null);
       await overview.refetch();
     }
   }
@@ -318,6 +368,7 @@ export function DbsInventoryPage({
     if (saved) {
       setNewCostCenterCode("");
       setNewCostCenterName("");
+      setActiveDrawer(null);
       await overview.refetch();
     }
   }
@@ -338,6 +389,7 @@ export function DbsInventoryPage({
     if (saved) {
       setTransferQuantity("1");
       setTransferPartId("");
+      setActiveDrawer(null);
       await overview.refetch();
     }
   }
@@ -351,6 +403,7 @@ export function DbsInventoryPage({
     }, "Fornecedor cadastrado e disponível no cadastro da peça e em Compras.");
     if (saved) {
       setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone("");
+      setActiveDrawer(null);
       // Pre-select the new supplier where it is still empty so it is usable at once.
       if (createdId) {
         setCatalogPartSupplierId((current) => current || createdId);
@@ -367,20 +420,21 @@ export function DbsInventoryPage({
     }, "Unidade de medida cadastrada e disponível como unidade-base.");
     if (saved) {
       setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol("");
+      setActiveDrawer(null);
       if (createdId) setCatalogPartUnitId((current) => current || createdId);
     }
   }
   async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const saved = await runAction(() => createDbsUnitConversion({ data: { fromUnitId:conversionFrom, toUnitId:conversionTo, factor:Number(conversionFactor) } }), "Conversão de unidade cadastrada.");
-    if (saved) { setConversionFactor("1"); await overview.refetch(); }
+    if (saved) { setConversionFactor("1"); setActiveDrawer(null); await overview.refetch(); }
   }
 
   async function linkOrderCostCenter(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if(!costCenterWorkOrderId||!costCenterWorkOrderValue){setMessage("Selecione a OS e o centro de custo.");return;}
     const saved=await runAction(()=>setDbsWorkOrderCostCenter({data:{workOrderId:costCenterWorkOrderId,costCenterId:costCenterWorkOrderValue}}),"Centro de custo vinculado à ordem de serviço.");
-    if(saved){setCostCenterWorkOrderId("");setCostCenterWorkOrderValue("");}
+    if(saved){setCostCenterWorkOrderId("");setCostCenterWorkOrderValue("");setActiveDrawer(null);}
   }
 
   async function assignWeightedGasCylinder(event: React.FormEvent<HTMLFormElement>) {
@@ -391,7 +445,7 @@ export function DbsInventoryPage({
       setMessage("Informe série, refrigerante, técnico, quantidade de cargas, tara e peso bruto inicial válidos.");
       return;
     }
-    await runAction(async()=>{
+    const saved=await runAction(async()=>{
       const {data,error}=await (supabase as any).rpc("dbs_control_assign_gas_cylinder_weighted",{
         p_serial_number:gasSerialNumber.trim(),
         p_refrigerant_type:gasType.trim().toUpperCase(),
@@ -404,7 +458,11 @@ export function DbsInventoryPage({
       if(error) throw new Error(error.message);
       return data;
     },"Cilindro cadastrado e vinculado ao técnico com tara e pesagem inicial.");
-    setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
+    if (saved) {
+      setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
+      setActiveDrawer(null);
+      await overview.refetch();
+    }
   }
 
   async function initializeExistingCylinderWeights(cylinder:any) {
@@ -432,7 +490,7 @@ export function DbsInventoryPage({
       setMessage("Selecione OS, peça, quantidade e centro de custo.");
       return;
     }
-    await runAction(async () => {
+    const saved = await runAction(async () => {
       await setDbsWorkOrderCostCenter({ data: { workOrderId, costCenterId } });
       return reserveDbsWorkOrderParts({ data: {
         workOrderId,
@@ -440,61 +498,30 @@ export function DbsInventoryPage({
         items: [{ partId, quantity: Number(quantity) }],
       } });
     }, "Centro de custo vinculado à OS e reserva registrada.");
+    if (saved) setActiveDrawer(null);
   }
 
 
   return (
-    <main className={embedded ? "min-h-full bg-[#f4f7fb] px-4 py-5 text-slate-900 sm:px-6 lg:px-7" : "min-h-[100dvh] bg-[#f4f7fb] px-4 py-5 text-slate-900 sm:px-6 lg:px-7"}>
-      <div className="mx-auto max-w-7xl">
-        <header className={embedded ? "mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6" : "mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"}>
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-700">DBS CONTROL · MATERIAIS E SUPRIMENTOS</p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{moduleSection === "parts"
-              ? "Catálogo de materiais, saldo disponível, reservas, movimentações e custos vinculados às ordens de serviço."
-              : "Pedidos a fornecedores, análise financeira e conferência do recebimento físico dos materiais."}</p>
+    <main className="dbs-operations-page min-h-full bg-[#f8fafc] px-4 py-4 text-slate-900 sm:px-6 lg:px-7">
+      <div className="mx-auto max-w-[1440px]">
+        {!embedded && <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
+          <div className="flex items-center gap-2">
+            <Link to="/dbs-control" className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">Menu principal</Link>
+            <button type="button" onClick={()=>moduleSection==="parts"?(setCatalogPartId(""),setActiveDrawer("new-part")):setActiveDrawer("new-purchase")} className="inline-flex min-h-10 items-center rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">{moduleSection==="parts"?"+ Nova peça":"+ Nova compra"}</button>
           </div>
-          {!embedded && <Link to="/dbs-control" className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800">← Voltar ao DBS CONTROL</Link>}
-        </header>
-
-        {!embedded && (
-          <nav aria-label="Módulos de materiais" className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-            <button type="button" aria-pressed={moduleSection === "parts"} onClick={() => setModuleSection("parts")} className={moduleSection === "parts" ? "min-h-11 rounded-xl bg-[#0f4f91] px-5 text-sm font-black text-white shadow-sm" : "min-h-11 rounded-xl px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"}>Peças & Estoque</button>
-            <button type="button" aria-pressed={moduleSection === "purchases"} onClick={() => setModuleSection("purchases")} className={moduleSection === "purchases" ? "min-h-11 rounded-xl bg-[#0f4f91] px-5 text-sm font-black text-white shadow-sm" : "min-h-11 rounded-xl px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"}>Compras</button>
-            <span className="ml-auto hidden self-center px-2 text-xs font-medium text-slate-500 sm:block">Estoque · suprimentos · DBS Treasury</span>
-          </nav>
-        )}
-
-        {moduleSection === "parts" && (
-          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" aria-label="Áreas de Peças e Estoque">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">PEÇAS & ESTOQUE</p>
-                <h2 className="mt-0.5 text-base font-bold text-slate-900">O que você precisa fazer?</h2>
-              </div>
-              <span className="text-xs text-slate-500">Escolha uma área para continuar</span>
-            </div>
-            <nav className="grid grid-cols-2 gap-2 xl:grid-cols-4" aria-label="Tarefas de estoque">
-              {([
-                ["catalog", "Peças", "Cadastrar e localizar materiais", "01"],
-                ["stock", "Estoque", "Saldos, transferências e cilindros", "02"],
-                ["reservations", "Reservas para OS", "Separar material para atendimento", "03"],
-                ["settings", "Cadastros básicos", "Fornecedores, unidades e custos", "04"],
-              ] as const).map(([key, title, description, number]) => (
-                <button key={key} type="button" aria-pressed={partsView === key} onClick={() => setPartsView(key)}
-                  className={partsView === key
-                    ? "flex min-h-[76px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 px-3 py-3 text-left shadow-sm ring-1 ring-sky-100"
-                    : "flex min-h-[76px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
-                  <span className={partsView === key ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0f4f91] text-xs font-black text-white" : "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-black text-slate-500"}>{number}</span>
-                  <span className="min-w-0">
-                    <span className={partsView === key ? "block text-sm font-black text-sky-950" : "block text-sm font-bold text-slate-800"}>{title}</span>
-                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span>
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </section>
-        )}
+        </header>}
+        {!embedded && <nav aria-label="Módulos" className="mb-5 flex gap-6 border-b border-slate-200">
+          <button type="button" aria-pressed={moduleSection==="parts"} onClick={()=>{setModuleSection("parts");setActiveDrawer(null);}} className={moduleSection==="parts"?"dbs-op-tab is-active":"dbs-op-tab"}>Peças & Estoque</button>
+          <button type="button" aria-pressed={moduleSection==="purchases"} onClick={()=>{setModuleSection("purchases");setActiveDrawer(null);}} className={moduleSection==="purchases"?"dbs-op-tab is-active":"dbs-op-tab"}>Compras</button>
+        </nav>}
+        {moduleSection === "parts" && <nav aria-label="Peças e Estoque" className="dbs-op-tabs mb-5">
+          <button type="button" role="tab" aria-selected={partsView==="catalog"} onClick={()=>setPartsView("catalog")} className={partsView==="catalog"?"dbs-op-tab is-active":"dbs-op-tab"}>Catálogo de Peças</button>
+          <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoque & Veículos</button>
+          <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>
+          <button type="button" role="tab" aria-selected={partsView==="settings"} onClick={()=>setPartsView("settings")} className={partsView==="settings"?"dbs-op-tab is-active":"dbs-op-tab"}>Cadastros Básicos {(!suppliers.length||!measureUnits.length||!costCenters.length)&&<span className="dbs-op-dot" aria-label="Configuração pendente"/>}</button>
+        </nav>}
         {message && <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950 shadow-sm"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-600" />{message}</div>}
         {overview.isLoading && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-medium text-slate-500 shadow-sm">Carregando dados de materiais e compras...</div>}
         {overview.error && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm leading-6 text-rose-800 shadow-sm">
@@ -506,110 +533,10 @@ export function DbsInventoryPage({
         {data && <>
           {moduleSection === "parts" && <>
           {partsView === "catalog" && <>
-          <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 transition hover:bg-slate-50">
-              <span className="min-w-0">
-                <span className="block text-base font-black text-slate-900">Custos de materiais por ordem de serviço</span>
-                <span className="mt-1 block text-sm font-normal text-slate-500">Relatório operacional por OS · consulte o custo registrado em cada atendimento</span>
-              </span>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Ver relatório</span>
-            </summary>
-            <section className="mb-0 overflow-hidden border-t border-slate-100 bg-white">
-            <div className="border-b border-slate-100 p-5">
-              <h2 className="text-lg font-black">Custo de materiais por ordem de serviço</h2>
-              <p className="mt-1 text-sm text-slate-500">O DBS Control registra o custo operacional das peças consumidas e envia essa informação para o cálculo do Financeiro. Receita, lucro, contas a pagar e pagamentos são acompanhados exclusivamente no DBS Treasury.</p>
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">OS</th><th className="p-3">Registro</th><th className="p-3">Custo de materiais</th><th className="p-3">Atualizado em</th></tr></thead>
-                <tbody>{workOrderFinancials.map((row: any) => {
-                  const order = workOrders.find((entry: any) => String(entry.id) === String(row.work_order_id));
-                  return <tr key={row.work_order_id} className="border-t border-slate-100 transition hover:bg-sky-50/40">
-                    <td className="p-3 font-bold">{order?.protocol || String(row.work_order_id).slice(0, 8)}</td>
-                    <td className="p-3">{row.status || "Registrado"}</td>
-                    <td className="p-3 font-bold">{money(row.parts_cost_cents)}</td>
-                    <td className="p-3">{row.updated_at ? new Date(row.updated_at).toLocaleString("pt-BR") : "—"}</td>
-                  </tr>;
-                })}</tbody>
-              </table>
-              {!workOrderFinancials.length && <p className="p-5 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}
-            </div>
-            <div className="grid gap-2 p-3 md:hidden">
-              {workOrderFinancials.map((row:any)=>{
-                const order=workOrders.find((entry:any)=>String(entry.id)===String(row.work_order_id));
-                return <article key={row.work_order_id} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{order?.protocol||String(row.work_order_id).slice(0,8)}</p><p className="text-xs text-slate-500">{row.status||"Registrado"}</p></div><p className="text-sm font-black">{money(row.parts_cost_cents)}</p></div>
-                  <p className="mt-2 text-xs text-slate-500">Atualizado: {row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR"):"—"}</p>
-                </article>;
-              })}
-              {!workOrderFinancials.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}
-            </div>
-            </section>
-          </details>
-          <section aria-label="Resumo do estoque" className="mb-6 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Peças cadastradas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{parts.length}</p><p className="mt-1 text-xs text-slate-500">Itens no catálogo relacional</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Reservas ativas</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{reservations.filter((r: any) => r.status === "reserved").length}</p><p className="mt-1 text-xs text-slate-500">Separadas para ordens de serviço</p></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Unidades livres no estoque</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p><p className="mt-1 text-xs text-slate-500">Disponíveis para nova reserva</p></div>
-          </section>
-
-          </>}
-          {partsView === "settings" && <>
-          <details open className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition hover:bg-slate-50 sm:px-5">
-              <span className="min-w-0">
-                <span className="flex flex-wrap items-center gap-2 text-base font-black text-slate-900">
-                  Configurações de cadastro
-                  {(!suppliers.length || !measureUnits.length || !costCenters.length) ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800">Configuração pendente</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">Cadastros prontos</span>}
-                </span>
-                <span className="mt-1 block text-sm font-normal text-slate-500">{suppliers.length} fornecedores · {costCenters.length} centros de custo · {measureUnits.length} unidades · {unitConversions.length} conversões</span>
-              </span>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">Gerenciar</span>
-            </summary>
-            <section className="grid gap-4 border-t border-slate-100 bg-slate-50/70 p-4 sm:p-5 sm:grid-cols-2 2xl:grid-cols-4">
-            <form onSubmit={addSupplier} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="font-black">Cadastro de fornecedor</h2>
-              <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
-              <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
-            </form>
-            <form onSubmit={addCostCenter} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="font-black">Centro de custo</h2>
-              <p className="mt-1 text-xs text-slate-500">Cadastre a classificação que será usada nas compras, OS e consumo.</p>
-              <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
-            </form>
-            <form onSubmit={addMeasureUnit} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="font-black">Unidade de medida</h2>
-              <p className="mt-1 text-xs text-slate-500">Cadastre unidades-base e unidades de compra (UN, CX, KG, L, M...).</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              </div>
-              <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar unidade</button>
-            </form>
-            <form onSubmit={addUnitConversion} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="font-black">Conversão de unidades</h2>
-              <p className="mt-1 text-xs text-slate-500">Defina quantas unidades-base existem em uma unidade de compra.</p>
-              <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
-              <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
-              <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
-            </form>
-            </section>
-          </details>
-          </>}
-          {partsView === "catalog" && <>
-          <section className="mb-6 grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
-            <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200/80 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-5 border-b border-slate-100 pb-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">CATÁLOGO RELACIONAL</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Cadastrar ou editar peça</h2>
-                <p className="mt-2 text-sm leading-5 text-slate-500">Vincule o fornecedor e a unidade-base. O saldo é criado somente no recebimento físico.</p>
-              </div>
+<Sheet open={activeDrawer === "new-part"} onOpenChange={(open)=>setActiveDrawer(open?"new-part":null)}>
+  <SheetContent side="right" className="w-[96vw] max-w-[560px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+    <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle className="text-xl font-semibold tracking-tight text-slate-900">{catalogPartId ? "Editar peça" : "Nova peça"}</SheetTitle></SheetHeader>
+    <form onSubmit={saveCatalogPart} className="space-y-4">
               <label className="block text-xs font-bold text-slate-600">Editar peça existente ou cadastrar nova
                 <select value={catalogPartId} onChange={e=>selectCatalogPart(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                   <option value="">Nova peça / insumo</option>
@@ -649,23 +576,121 @@ export function DbsInventoryPage({
                 {busy ? "Salvando..." : catalogPartId ? "Salvar cadastro da peça" : "Cadastrar peça no catálogo"}
               </button>
             </form>
+  </SheetContent>
+</Sheet>
+          
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4">
+              <div><h2 className="text-base font-semibold text-slate-900">Catálogo de peças</h2><p className="mt-1 text-xs text-slate-500">{visibleParts.length} resultados · {parts.length} itens cadastrados</p></div>
+              <button type="button" onClick={()=>{selectCatalogPart("");setActiveDrawer("new-part");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova peça</button>
+            </div>
+            <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
+              <input type="search" aria-label="Buscar peças" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Buscar por nome, SKU ou fornecedor..." className="min-h-10 rounded-lg border border-slate-200 bg-[#f8fafc] px-3 text-sm focus:border-sky-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <select aria-label="Filtrar peças" value={catalogFilter} onChange={e=>setCatalogFilter(e.target.value as "all"|"stock"|"setup")} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todas as peças</option><option value="stock">Com saldo físico</option><option value="setup">Cadastro incompleto</option></select>
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Peça / SKU</th><th className="px-4 py-3">Fornecedor</th><th className="px-4 py-3">Unidade</th><th className="px-4 py-3">Custo</th><th className="px-4 py-3">Saldo central</th></tr></thead>
+                <tbody>{visibleParts.map((part:any)=>{
+                  const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
+                  const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                  return <tr key={part.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3"><button type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="text-left font-medium text-slate-900 hover:text-sky-800">{part.name||part.description||"Peça"}<span className="mt-0.5 block text-xs font-normal text-slate-500">{part.sku||"Sem SKU"}</span></button></td>
+                    <td className="px-4 py-3 text-slate-600">{supplier?.name||<span className="text-amber-700">Vincular</span>}</td>
+                    <td className="px-4 py-3 text-slate-600">{unit?.symbol||unit?.code||<span className="text-amber-700">Definir</span>}</td>
+                    <td className="px-4 py-3 text-slate-700">{money(part.cost_cents)}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900">{Number(part.stock_quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+              {!visibleParts.length&&<p className="px-5 py-10 text-center text-sm text-slate-500">{catalogSearch||catalogFilter!=="all"?"Nenhuma peça encontrada.":"Nenhuma peça cadastrada ainda."}</p>}
+            </div>
+            <div className="grid gap-2 p-3 md:hidden">
+              {visibleParts.map((part:any)=>{
+                const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
+                const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
+                return <button key={part.id} type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="rounded-lg border border-slate-100 p-3 text-left">
+                  <span className="block text-sm font-medium text-slate-900">{part.name||part.description||"Peça"}</span><span className="mt-1 block text-xs text-slate-500">{part.sku||"Sem SKU"}</span>
+                  <span className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600"><span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span><span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span><span>Custo: <strong>{money(part.cost_cents)}</strong></span><span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span></span>
+                </button>;
+              })}
+              {!visibleParts.length&&<p className="py-8 text-center text-sm text-slate-500">Nenhuma peça encontrada.</p>}
+            </div>
+          </section>
+          
+
+          </>}
+          {partsView === "settings" && <>
+            <nav className="dbs-op-tabs mb-5" aria-label="Cadastros básicos">
+              <button type="button" role="tab" aria-selected={settingsView==="suppliers"} onClick={()=>setSettingsView("suppliers")} className={settingsView==="suppliers"?"dbs-op-tab is-active":"dbs-op-tab"}>Fornecedores <span className="dbs-op-count">{suppliers.length}</span></button>
+              <button type="button" role="tab" aria-selected={settingsView==="cost-centers"} onClick={()=>setSettingsView("cost-centers")} className={settingsView==="cost-centers"?"dbs-op-tab is-active":"dbs-op-tab"}>Centros de custo <span className="dbs-op-count">{costCenters.length}</span></button>
+              <button type="button" role="tab" aria-selected={settingsView==="units"} onClick={()=>setSettingsView("units")} className={settingsView==="units"?"dbs-op-tab is-active":"dbs-op-tab"}>Unidades <span className="dbs-op-count">{measureUnits.length}</span></button>
+              <button type="button" role="tab" aria-selected={settingsView==="conversions"} onClick={()=>setSettingsView("conversions")} className={settingsView==="conversions"?"dbs-op-tab is-active":"dbs-op-tab"}>Conversões <span className="dbs-op-count">{unitConversions.length}</span></button>
+            </nav>
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div><h2 className="text-base font-semibold text-slate-900">{settingsView==="suppliers"?"Fornecedores":settingsView==="cost-centers"?"Centros de custo":settingsView==="units"?"Unidades de medida":"Conversões de unidades"}</h2>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="mt-1 text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
+                <button type="button" onClick={()=>setActiveDrawer(settingsView==="suppliers"?"supplier":settingsView==="cost-centers"?"cost-center":settingsView==="units"?"unit":"conversion")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
+              </div>
+              {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
+              {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
+              {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{unit.name}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
+              {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));return <div key={conversion.id} className="flex items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"}</p></div><strong className="text-sm font-semibold text-slate-800">{Number(conversion.factor).toLocaleString("pt-BR")} ×</strong></div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
+            </section>
+            <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Novo fornecedor</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
+              <h2 className="font-black">Cadastro de fornecedor</h2>
+              <p className="mt-1 text-xs text-slate-500">O fornecedor cadastrado é compartilhado pelo catálogo e por Compras.</p>
+              <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
+            </form></SheetContent></Sheet>
+            <Sheet open={activeDrawer==="cost-center"} onOpenChange={(open)=>setActiveDrawer(open?"cost-center":null)}><SheetContent side="right" className="w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Novo centro de custo</SheetTitle></SheetHeader><form onSubmit={addCostCenter} className="space-y-3">
+              <h2 className="font-black">Centro de custo</h2>
+              <p className="mt-1 text-xs text-slate-500">Cadastre a classificação que será usada nas compras, OS e consumo.</p>
+              <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
+            </form></SheetContent></Sheet>
+            <Sheet open={activeDrawer==="unit"} onOpenChange={(open)=>setActiveDrawer(open?"unit":null)}><SheetContent side="right" className="w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova unidade</SheetTitle></SheetHeader><form onSubmit={addMeasureUnit} className="space-y-3">
+              <h2 className="font-black">Unidade de medida</h2>
+              <p className="mt-1 text-xs text-slate-500">Cadastre unidades-base e unidades de compra (UN, CX, KG, L, M...).</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              </div>
+              <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar unidade</button>
+            </form></SheetContent></Sheet>
+            <Sheet open={activeDrawer==="conversion"} onOpenChange={(open)=>setActiveDrawer(open?"conversion":null)}><SheetContent side="right" className="w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova conversão</SheetTitle></SheetHeader><form onSubmit={addUnitConversion} className="space-y-3">
+              <h2 className="font-black">Conversão de unidades</h2>
+              <p className="mt-1 text-xs text-slate-500">Defina quantas unidades-base existem em uma unidade de compra.</p>
+              <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
+              <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
+            </form></SheetContent></Sheet>
+          </>}
+          {partsView === "catalog" && <>
+          <section className="mb-6">
+            
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 p-5 sm:p-6">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">BASE DE MATERIAIS</p>
-                  <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Catálogo de peças e insumos</h2>
-                  <p className="mt-1 text-sm text-slate-500">Selecione um item para editar seus dados.</p>
-                </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">{parts.length} {parts.length === 1 ? "item" : "itens"}</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+                <div><h2 className="text-base font-semibold text-slate-900">Catálogo de peças</h2><p className="mt-1 text-xs text-slate-500">{parts.length} itens cadastrados</p></div>
+                <button type="button" onClick={() => { selectCatalogPart(""); setActiveDrawer("new-part"); }} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white hover:bg-[#104982]">+ Nova peça</button>
+              </div>
+              <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
+                <input type="search" aria-label="Buscar peças" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Buscar por nome, SKU ou fornecedor..." className="min-h-10 w-full rounded-lg border border-slate-200 bg-[#f8fafc] px-3 text-sm outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"/>
+                <select aria-label="Filtrar peças" value={catalogFilter} onChange={e=>setCatalogFilter(e.target.value as "all"|"stock"|"setup")} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todas as peças</option><option value="stock">Com saldo físico</option><option value="setup">Cadastro incompleto</option></select>
               </div>
               <div className="hidden max-h-[520px] overflow-auto md:block">
                 <table className="w-full min-w-[600px] text-left text-sm">
                   <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
-                  <tbody>{parts.map((part:any)=>{
+                  <tbody>{visibleParts.map((part:any)=>{
                     const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                     const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
                     return <tr key={part.id} className="border-t border-slate-100">
-                      <td className="p-3"><button type="button" onClick={()=>selectCatalogPart(String(part.id))} className="text-left font-bold text-sky-800 hover:underline">{part.name||part.description||"Peça"}<span className="block text-xs font-normal text-slate-500">{part.sku||"Sem SKU"}</span></button></td>
+                      <td className="p-3"><button type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="text-left font-bold text-sky-800 hover:underline">{part.name||part.description||"Peça"}<span className="block text-xs font-normal text-slate-500">{part.sku||"Sem SKU"}</span></button></td>
                       <td className="p-3">{supplier?.name||<span className="font-semibold text-amber-700">Vincular</span>}</td>
                       <td className="p-3">{unit?.symbol||unit?.code||<span className="font-semibold text-amber-700">Definir</span>}</td>
                       <td className="p-3">{money(part.cost_cents)}</td>
@@ -673,13 +698,13 @@ export function DbsInventoryPage({
                     </tr>;
                   })}</tbody>
                 </table>
-                {!parts.length && <p className="p-5 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
+                {!visibleParts.length && <p className="p-5 text-sm text-slate-500">{catalogSearch || catalogFilter !== "all" ? "Nenhuma peça encontrada." : "Nenhuma peça cadastrada ainda."}</p>}
               </div>
               <div className="grid gap-2 p-3 md:hidden">
-                {parts.map((part:any) => {
+                {visibleParts.map((part:any) => {
                   const supplier = suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                   const unit = measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
-                  return <button key={part.id} type="button" onClick={()=>selectCatalogPart(String(part.id))} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
+                  return <button key={part.id} type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
                     <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
                     <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
                     <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
@@ -690,27 +715,32 @@ export function DbsInventoryPage({
                     </span>
                   </button>;
                 })}
-                {!parts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
+                {!visibleParts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça encontrada.</p>}
               </div>
             </div>
           </section>
           </>}
           {partsView === "stock" && <>
+<section aria-label="Resumo do estoque" className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Peças no catálogo</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.length}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Saldo físico central</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.reduce((sum:number,part:any)=>sum+Number(part.stock_quantity||0),0).toLocaleString("pt-BR")}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Saldos em veículos</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{carStock.reduce((sum:number,row:any)=>sum+Number(row.quantity||0),0).toLocaleString("pt-BR")}</p></div>
+          </section>
+<details className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">Custos de materiais por OS</summary><div className="overflow-x-auto border-t border-slate-100"><table className="w-full min-w-[600px] text-left text-sm"><thead className="bg-[#f8fafc] text-xs font-semibold uppercase text-slate-500"><tr><th className="px-4 py-3">OS</th><th className="px-4 py-3">Registro</th><th className="px-4 py-3">Custo</th><th className="px-4 py-3">Atualizado</th></tr></thead><tbody>{workOrderFinancials.map((row:any)=>{const order=workOrders.find((entry:any)=>String(entry.id)===String(row.work_order_id));return <tr key={row.work_order_id} className="border-t border-slate-100"><td className="px-4 py-3 font-medium">{order?.protocol||String(row.work_order_id).slice(0,8)}</td><td className="px-4 py-3">{row.status||"Registrado"}</td><td className="px-4 py-3 font-semibold">{money(row.parts_cost_cents)}</td><td className="px-4 py-3">{row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR"):"—"}</td></tr>;})}</tbody></table>{!workOrderFinancials.length&&<p className="p-4 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}</div></details>
           <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <p className="text-xs font-black uppercase tracking-wider text-sky-700">Controle físico de materiais</p>
-              <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Estoque central e estoque dos técnicos</h2>
-              <p className="mt-1 text-xs text-slate-500">Transferir reduz o saldo central e cria saldo sob custódia do técnico. O consumo no atendimento baixa o veículo e registra o custo da OS.</p>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-slate-900">Estoque central e estoque dos técnicos</h2>
+              <button type="button" onClick={()=>{setTransferPartId("");setActiveDrawer("transfer");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white hover:bg-[#104982]">+ Transferir</button>
             </div>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Peças no catálogo</p><p className="text-2xl font-black">{parts.length}</p></div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold text-slate-500">Peças no catálogo</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.length}</p></div>
               <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Saldo físico central</p><p className="text-2xl font-black">{parts.reduce((sum:number,part:any)=>sum+Number(part.stock_quantity||0),0).toLocaleString("pt-BR")}</p></div>
               <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Saldos em veículos</p><p className="text-2xl font-black">{carStock.reduce((sum:number,row:any)=>sum+Number(row.quantity||0),0).toLocaleString("pt-BR")}</p></div>
             </div>
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+            <div className="grid gap-4">
               <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[560px] text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Material</th><th className="p-3">Saldo físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th><th className="p-3">Custo médio</th></tr></thead>
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Material</th><th className="p-3">Saldo físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th><th className="p-3">Custo médio</th><th className="p-3 text-right">Ação</th></tr></thead>
                   <tbody>{parts.map((part:any)=>{
                     const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
                     const physical=Number(part.stock_quantity||0),reserved=Number(part.reserved_quantity||0);
@@ -720,6 +750,7 @@ export function DbsInventoryPage({
                       <td className="p-3">{reserved.toLocaleString("pt-BR")}</td>
                       <td className="p-3 font-bold">{Math.max(0,physical-reserved).toLocaleString("pt-BR")}</td>
                       <td className="p-3">{money(part.cost_cents)}</td>
+                      <td className="p-3 text-right"><button type="button" disabled={Math.max(0,physical-reserved)<=0} onClick={()=>{setTransferPartId(String(part.id));setActiveDrawer("transfer");}} className="min-h-8 rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-sky-50 disabled:opacity-40">Transferir</button></td>
                     </tr>;
                   })}</tbody>
                 </table>
@@ -738,30 +769,11 @@ export function DbsInventoryPage({
                       <div><p className="text-slate-500">Reservado</p><p className="font-bold">{reserved.toLocaleString("pt-BR")}</p></div>
                       <div><p className="text-slate-500">Custo médio</p><p className="font-bold">{money(part.cost_cents)}</p></div>
                     </div>
+                    <button type="button" disabled={Math.max(0,physical-reserved)<=0} onClick={()=>{setTransferPartId(String(part.id));setActiveDrawer("transfer");}} className="mt-3 min-h-9 w-full rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-sky-50 disabled:opacity-40">Transferir</button>
                   </article>;
                 })}
               </div>
-              <form onSubmit={transferStockToTechnician} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="font-black">Transferir para veículo</h3>
-                <p className="mt-1 text-xs text-slate-500">Somente saldo livre pode ser transferido. A operação fica registrada no histórico.</p>
-                <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
-                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
-                  </select>
-                </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
-                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
-                  </select>
-                </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
-                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
-                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
-                <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
-              </form>
+              
             </div>
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-100">
               <div className="border-b border-slate-100 p-3"><h3 className="font-black">Materiais sob custódia dos técnicos</h3></div>
@@ -795,7 +807,60 @@ export function DbsInventoryPage({
           </section>
 
           <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-            <form onSubmit={linkOrderCostCenter} className="rounded-2xl border border-slate-200 bg-white p-5">
+            
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-semibold text-slate-900">Centro de custo da OS</h3>
+              <p className="mt-1 text-xs text-slate-500">Vincule a classificação antes do consumo.</p>
+              <button type="button" onClick={()=>setActiveDrawer("link-cost-center")} className="mt-3 min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">Vincular à OS</button>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Cilindros sob custódia</h2><span className="text-xs text-slate-500">{gasCylinders.length} cadastrados</span></div><button type="button" onClick={()=>setActiveDrawer("gas-cylinder")} className="min-h-9 rounded-lg bg-[#1557a0] px-3 text-xs font-semibold text-white hover:bg-[#104982]">+ Cilindro</button></div>
+              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. A pesagem na OS atualiza o saldo do cilindro.</p>
+              {gasCylinders.length ? <div className="mt-3 space-y-2">
+                {gasCylinders.map((cylinder:any)=>{
+                  const employee=employees.find((entry:any)=>String(entry.id)===String(cylinder.employee_id));
+                  const tare=Number(cylinder.tare_weight_kg),gross=Number(cylinder.current_gross_weight_kg);
+                  return <div key={cylinder.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
+                    <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
+                    <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
+                    {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
+                  </div>;
+                })}
+              </div> : <p className="mt-3 text-sm text-slate-500">Nenhum cilindro cadastrado.</p>}
+            </div>
+          </section>
+
+          <Sheet open={activeDrawer==="transfer"} onOpenChange={(open)=>setActiveDrawer(open?"transfer":null)}>
+            <SheetContent side="right" className="w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Transferir material</SheetTitle><SheetDescription>Selecione técnico, veículo, peça e quantidade.</SheetDescription></SheetHeader>
+              <form onSubmit={transferStockToTechnician} className="space-y-4">
+                <h3 className="font-black">Transferir para veículo</h3>
+                <p className="mt-1 text-xs text-slate-500">Somente saldo livre pode ser transferido. A operação fica registrada no histórico.</p>
+                <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
+                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                    <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                  </select>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
+                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                    <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
+                  </select>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
+                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                </label>
+                <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
+                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                </label>
+                <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+              </form>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={activeDrawer==="link-cost-center"} onOpenChange={(open)=>setActiveDrawer(open?"link-cost-center":null)}>
+            <SheetContent side="right" className="w-[96vw] max-w-[480px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Vincular centro de custo à OS</SheetTitle></SheetHeader>
+              <form onSubmit={linkOrderCostCenter} className="space-y-4">
               <h2 className="text-lg font-black">Vincular centro de custo à OS</h2>
               <p className="mt-1 text-xs text-slate-500">Defina a classificação operacional antes do consumo de peças do carro ou gás.</p>
               <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
@@ -812,26 +877,12 @@ export function DbsInventoryPage({
               </label>
               <button disabled={busy||!workOrders.length||!costCenters.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-50">Vincular à OS</button>
             </form>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-black">Cilindros sob custódia</h2><span className="text-xs text-slate-500">{gasCylinders.length} cadastrados</span></div>
-              <p className="mt-1 text-xs text-slate-500">Peso líquido = peso bruto atual menos tara. A pesagem na OS atualiza o saldo do cilindro.</p>
-              {gasCylinders.length ? <div className="mt-3 space-y-2">
-                {gasCylinders.map((cylinder:any)=>{
-                  const employee=employees.find((entry:any)=>String(entry.id)===String(cylinder.employee_id));
-                  const tare=Number(cylinder.tare_weight_kg),gross=Number(cylinder.current_gross_weight_kg);
-                  return <div key={cylinder.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
-                    <div className="flex flex-wrap justify-between gap-2"><strong>{cylinder.refrigerant_type} · Série {cylinder.serial_number}</strong><span className="text-xs text-slate-500">{employee?.full_name||"Técnico"} · {cylinder.vehicle_label||"Veículo não informado"}</span></div>
-                    <p className="mt-1 text-xs text-slate-600">Tara {Number.isFinite(tare)?tare.toFixed(3):"—"} kg · Bruto {Number.isFinite(gross)?gross.toFixed(3):"—"} kg · Líquido {Number.isFinite(gross)&&Number.isFinite(tare)?Math.max(gross-tare,0).toFixed(3):"—"} kg</p>
-                    <p className="text-xs text-slate-600">{cylinder.remaining_charges}/{cylinder.total_charges} cargas restantes · {cylinder.status}</p>
-                    {(!Number.isFinite(tare)||!Number.isFinite(gross)) && <button type="button" disabled={busy} onClick={()=>void initializeExistingCylinderWeights(cylinder)} className="mt-2 min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 disabled:opacity-50">Registrar tara e pesagem inicial</button>}
-                  </div>;
-                })}
-              </div> : <p className="mt-3 text-sm text-slate-500">Nenhum cilindro cadastrado.</p>}
-            </div>
-          </section>
-          <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="mb-3"><h2 className="text-lg font-black">Cadastrar / atribuir cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Atribuição somente pela gestão. Informe tara e peso bruto inicial para habilitar consumo pesado na OS.</p></div>
-            <form onSubmit={assignWeightedGasCylinder} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            </SheetContent>
+          </Sheet>
+          <Sheet open={activeDrawer==="gas-cylinder"} onOpenChange={(open)=>setActiveDrawer(open?"gas-cylinder":null)}>
+            <SheetContent side="right" className="w-[96vw] max-w-[600px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Cadastrar cilindro de gás</SheetTitle><SheetDescription>Informe identificação, técnico e pesagem inicial.</SheetDescription></SheetHeader>
+              <form onSubmit={assignWeightedGasCylinder} className="grid gap-4 sm:grid-cols-2">
               <label className="text-xs font-bold text-slate-600">Número de série *<input required value={gasSerialNumber} onChange={e=>setGasSerialNumber(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
               <label className="text-xs font-bold text-slate-600">Refrigerante *<select required value={gasType} onChange={e=>setGasType(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option>R410A</option><option>R32</option><option>R22</option><option>R134a</option><option>R404A</option><option>R407C</option><option>Outro</option></select></label>
               <label className="text-xs font-bold text-slate-600">Técnico / responsável *<select required value={gasEmployeeId} onChange={e=>setGasEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>
@@ -841,36 +892,16 @@ export function DbsInventoryPage({
               <label className="text-xs font-bold text-slate-600">Peso bruto inicial (kg) *<input required type="number" min="0.001" step="0.001" value={gasInitialGrossWeight} onChange={e=>setGasInitialGrossWeight(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/></label>
               <div className="flex items-end"><button disabled={busy||!employees.length} className="min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white disabled:opacity-50">Atribuir cilindro</button></div>
             </form>
-          </section>
+            </SheetContent>
+          </Sheet>
           </>}
           </>}
           {moduleSection === "purchases" && <>
-          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" aria-label="Etapas de compras">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">COMPRAS</p>
-                <h2 className="mt-0.5 text-base font-bold text-slate-900">Em que etapa está o pedido?</h2>
-              </div>
-              <span className="text-xs text-slate-500">Do pedido ao recebimento</span>
-            </div>
-            <nav className="grid gap-2 md:grid-cols-3" aria-label="Etapas da compra">
-              <button type="button" aria-pressed={purchasesView === "new"} onClick={() => setPurchasesView("new")}
-                className={purchasesView === "new" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
-                <span className={purchasesView === "new" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>01</span>
-                <span className="min-w-0"><span className="block text-sm font-black text-slate-900">Nova compra</span><span className="mt-0.5 block text-xs text-slate-500">Montar e enviar pedido</span></span>
-              </button>
-              <button type="button" aria-pressed={purchasesView === "approval"} onClick={() => setPurchasesView("approval")}
-                className={purchasesView === "approval" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
-                <span className={purchasesView === "approval" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>02</span>
-                <span className="min-w-0"><span className="flex items-center gap-2 text-sm font-black text-slate-900">Aprovações <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">{pendingPurchases.length}</span></span><span className="mt-0.5 block text-xs text-slate-500">Analisar pedidos enviados</span></span>
-              </button>
-              <button type="button" aria-pressed={purchasesView === "orders"} onClick={() => setPurchasesView("orders")}
-                className={purchasesView === "orders" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
-                <span className={purchasesView === "orders" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>03</span>
-                <span className="min-w-0"><span className="flex items-center gap-2 text-sm font-black text-slate-900">Pedidos e recebimento <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-900">{purchasesAwaitingReceipt.length}</span></span><span className="mt-0.5 block text-xs text-slate-500">Acompanhar e conferir materiais</span></span>
-              </button>
-            </nav>
-          </section>
+          <nav className="dbs-op-tabs mb-5" aria-label="Compras">
+            <button type="button" role="tab" aria-selected={purchasesView==="new"} onClick={()=>setPurchasesView("new")} className={purchasesView==="new"?"dbs-op-tab is-active":"dbs-op-tab"}>Pedidos em aberto</button>
+            <button type="button" role="tab" aria-selected={purchasesView==="approval"} onClick={()=>setPurchasesView("approval")} className={purchasesView==="approval"?"dbs-op-tab is-active":"dbs-op-tab"}>Aprovações <span className="dbs-op-count">{pendingPurchases.length}</span></button>
+            <button type="button" role="tab" aria-selected={purchasesView==="orders"} onClick={()=>setPurchasesView("orders")} className={purchasesView==="orders"?"dbs-op-tab is-active":"dbs-op-tab"}>Recebimento físico <span className="dbs-op-count">{purchasesAwaitingReceipt.length}</span></button>
+          </nav>
           {purchasesView === "approval" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5 sm:px-6">
@@ -915,13 +946,14 @@ export function DbsInventoryPage({
           </section>
           </>}
           {purchasesView === "new" && <>
-          <section className="mb-6 overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-sm">
+                      <Sheet open={activeDrawer==="new-purchase"} onOpenChange={(open)=>setActiveDrawer(open?"new-purchase":null)}>
+            <SheetContent side="right" className="w-[98vw] max-w-[820px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle className="text-xl font-semibold tracking-tight text-slate-900">Nova compra</SheetTitle><SheetDescription>Fornecedor, centro de custo, cotação e itens do pedido.</SheetDescription></SheetHeader>
+              <section className="mb-6 overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-sm">
             <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 to-white p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-wider text-sky-700">Fluxo de suprimentos</p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Nova compra / pedido ao fornecedor</h2>
-                <p className="mt-1 text-sm text-slate-500">Registre o preço cotado, fornecedor, peças e centro de custo. O pedido segue para aprovação financeira nesta tela; o estoque só entra após o recebimento físico.</p>
+                <h2 className="text-base font-semibold text-slate-900">Dados da compra</h2>
               </div>
               {quoteImport.quoteId && <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800">Origem: cotação {quoteImport.quoteId}</span>}
               {quoteImport.quoteId && quotePurchase.isLoading && <p role="status" className="w-full rounded-lg bg-sky-50 p-3 text-xs text-sky-800">Importando peças relacionais da cotação…</p>}
@@ -950,7 +982,6 @@ export function DbsInventoryPage({
                   <input type="date" required value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" />
                 </label>
               </div>
-              <div className="rounded-xl border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm leading-5 text-sky-950"><strong className="font-bold">Como funciona:</strong> a compra usa fornecedor e centro de custo cadastrados. O valor é convertido para a unidade-base; o estoque só muda após aprovação e recebimento.</div>
               <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[1080px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Peça relacional</th><th className="p-3">Unidade da compra</th><th className="p-3">Qtd.</th><th className="p-3">Custo unitário (R$)</th><th className="p-3">Conversão</th><th className="p-3">Total</th><th className="p-3"> </th></tr></thead>
@@ -1038,14 +1069,34 @@ export function DbsInventoryPage({
               </div>
             </form>
           </section>
-
-          </>}
-          {purchasesView === "orders" && <>
+            </SheetContent>
+          </Sheet>
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div><h2 className="text-base font-semibold text-slate-900">Pedidos em aberto</h2><p className="mt-1 text-xs text-slate-500">{(data?.purchases ?? []).length} registros</p></div>
+                <button type="button" onClick={()=>setActiveDrawer("new-purchase")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white hover:bg-[#104982]">+ Nova compra</button>
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Fornecedor</th><th className="px-4 py-3">Cotação / documento</th><th className="px-4 py-3">Data</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3">Status</th></tr></thead>
+                  <tbody>{(data?.purchases ?? []).map((purchase:any)=>{
+                    const status=purchase.approval_status==="approved"?"Aprovada":purchase.approval_status==="rejected"?"Rejeitada":purchase.status==="received"?"Recebida":"Aguardando aprovação";
+                    const tone=purchase.approval_status==="approved"||purchase.status==="received"?"bg-emerald-50 text-emerald-700":purchase.approval_status==="rejected"?"bg-rose-50 text-rose-700":"bg-amber-50 text-amber-800";
+                    return <tr key={purchase.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-4 py-3 font-medium text-slate-900">{suppliers.find((item:any)=>String(item.id)===String(purchase.supplier_id))?.name||purchase.supplier_name||"Fornecedor"}</td><td className="px-4 py-3 text-slate-600">{purchase.document_number||"—"}</td><td className="px-4 py-3 text-slate-600">{purchase.purchase_date?new Date(purchase.purchase_date+"T12:00:00").toLocaleDateString("pt-BR"):"—"}</td><td className="px-4 py-3 font-semibold text-slate-900">{money(purchase.total_cents)}</td><td className="px-4 py-3"><span className={"inline-flex rounded-full px-2.5 py-1 text-xs font-medium "+tone}>{status}</span></td></tr>;
+                  })}</tbody>
+                </table>
+                {!(data?.purchases ?? []).length&&<p className="px-5 py-10 text-center text-sm text-slate-500">Nenhum pedido registrado. Use “Nova compra” para começar.</p>}
+              </div>
+              <div className="space-y-2 p-3 md:hidden">
+                {(data?.purchases ?? []).map((purchase:any)=><article key={purchase.id} className="rounded-lg border border-slate-100 p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{suppliers.find((item:any)=>String(item.id)===String(purchase.supplier_id))?.name||purchase.supplier_name||"Fornecedor"}</p><p className="mt-1 text-xs text-slate-500">{purchase.document_number||"Sem documento"} · {purchase.purchase_date?new Date(purchase.purchase_date+"T12:00:00").toLocaleDateString("pt-BR"):"—"}</p></div><strong className="whitespace-nowrap text-sm text-slate-900">{money(purchase.total_cents)}</strong></div></article>)}
+                {!(data?.purchases ?? []).length&&<p className="py-8 text-center text-sm text-slate-500">Nenhum pedido registrado.</p>}
+              </div>
+            </section>
+          </>}          {purchasesView === "orders" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-white p-5 sm:p-6">
               <div>
-                <h2 className="text-xl font-black tracking-tight text-slate-950">Pedidos e recebimento físico</h2>
-                <p className="mt-1 text-sm text-slate-500">Acompanhe a liberação e confira as quantidades recebidas. Nenhum pagamento é feito nesta tela.</p>
+                <h2 className="text-base font-semibold text-slate-900">Pedidos aguardando recebimento</h2>
               </div>
               <Link to="/treasury" className="min-h-10 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black text-sky-800 hover:bg-sky-100">Abrir Financeiro / DBS Treasury</Link>
             </div>
@@ -1054,7 +1105,7 @@ export function DbsInventoryPage({
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>
                   <th className="p-3">Fornecedor</th><th className="p-3">Documento / cotação</th><th className="p-3">Data</th><th className="p-3">Total do pedido</th><th className="p-3">Análise financeira</th><th className="p-3">Recebimento físico</th>
                 </tr></thead>
-                <tbody>{(data?.purchases ?? []).map((purchase: any) => {
+                <tbody>{purchasesAwaitingReceipt.map((purchase: any) => {
                   const lines = (data?.purchaseItems ?? []).filter((item: any) => String(item.purchase_id) === String(purchase.id));
                   const outstanding = lines.filter((item: any) => Number(item.quantity) > Number(item.quantity_received ?? 0));
                   const selected = outstanding.filter((item: any) => Number(purchaseReceiptQuantities[item.id] ?? 0) > 0);
@@ -1113,10 +1164,10 @@ export function DbsInventoryPage({
                   </tr>;
                 })}</tbody>
               </table>
-              {!(data?.purchases ?? []).length && <p className="p-5 text-sm text-slate-500">Nenhum pedido de compra registrado neste escopo.</p>}
+              {!purchasesAwaitingReceipt.length && <p className="p-5 text-sm text-slate-500">Nenhum pedido aprovado aguardando recebimento físico.</p>}
             </div>
             <div className="space-y-3 p-3 md:hidden">
-              {(data?.purchases ?? []).map((purchase:any) => {
+              {purchasesAwaitingReceipt.map((purchase:any) => {
                 const lines=(data?.purchaseItems??[]).filter((item:any)=>String(item.purchase_id)===String(purchase.id));
                 const outstanding=lines.filter((item:any)=>Number(item.quantity)>Number(item.quantity_received??0));
                 const selected=outstanding.filter((item:any)=>Number(purchaseReceiptQuantities[item.id]??0)>0);
@@ -1170,7 +1221,7 @@ export function DbsInventoryPage({
                   </div>
                 </article>;
               })}
-              {!(data?.purchases??[]).length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum pedido de compra registrado neste escopo.</p>}
+              {!purchasesAwaitingReceipt.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum pedido aprovado aguardando recebimento físico.</p>}
             </div>
           </section>
           </>}
@@ -1243,9 +1294,12 @@ export function DbsInventoryPage({
           </section>
           </>}
           {moduleSection === "parts" && partsView === "reservations" && <>
-          <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
-            <form onSubmit={reserveParts} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
-              <h2 className="text-lg font-black">Reservar peças para OS</h2>
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            
+            <Sheet open={activeDrawer==="reservation"} onOpenChange={(open)=>setActiveDrawer(open?"reservation":null)}>
+  <SheetContent side="right" className="w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
+    <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova reserva para OS</SheetTitle><SheetDescription>Selecione a ordem, centro de custo, peça e quantidade.</SheetDescription></SheetHeader>
+    <form onSubmit={reserveParts} className="space-y-4">
               <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
               <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione uma OS</option>
@@ -1265,8 +1319,10 @@ export function DbsInventoryPage({
               <button disabled={busy || !availableParts.length || !workOrders.length} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
               <p className="mt-3 text-xs text-slate-500">A reserva bloqueia a disponibilidade, mas não baixa o estoque físico. A baixa ocorre ao concluir a OS.</p>
             </form>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="border-b border-slate-100 p-5"><h2 className="text-lg font-black">Reservas recentes</h2></div>
+  </SheetContent>
+</Sheet>
+<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 className="text-base font-semibold text-slate-900">Reservas vinculadas às OS</h2><p className="mt-1 text-xs text-slate-500">{reservations.length} registros</p></div><button type="button" onClick={()=>setActiveDrawer("reservation")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova reserva</button></div>
               <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
                 <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">

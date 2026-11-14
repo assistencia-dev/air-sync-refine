@@ -565,8 +565,18 @@
         "tab-compras":["+ Nova compra",()=>scrollToFirstForm("form-compra")],
         "tab-pwa":["Atualizar OS",()=>typeof window.renderizarPWA==="function"&&window.renderizarPWA()]
       };
-      const cfg=actions[id];
-      if(cfg){headerAction.textContent=cfg[0];headerAction.onclick=cfg[1];}
+      const headerMore=document.querySelector("main>header .dbs-secondary-menu");
+      const isMaterialsPage=id==="tab-pecas"||id==="tab-compras";
+      if(headerMore)headerMore.style.display=isMaterialsPage?"none":"";
+      document.body.classList.toggle("dbs-materials-clean-ui",isMaterialsPage);
+      if(isMaterialsPage){
+        const drawer=id==="tab-pecas"?"part":"purchase";
+        headerAction.textContent=id==="tab-pecas"?"+ Nova peça":"+ Nova compra";
+        headerAction.onclick=()=>window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer",{detail:{drawer}}));
+      } else {
+        const cfg=actions[id];
+        if(cfg){headerAction.textContent=cfg[0];headerAction.onclick=cfg[1];}
+      }
     }
 
     function classifyPages(){
