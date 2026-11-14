@@ -47,6 +47,10 @@ export function DbsInventoryPage({
     retry: 1,
   });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
+  type PartsView = "catalog" | "stock" | "reservations" | "settings";
+  type PurchasesView = "new" | "approval" | "orders";
+  const [partsView, setPartsView] = useState<PartsView>("catalog");
+  const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
   useEffect(() => {
     setModuleSection(initialSection);
   }, [initialSection]);
@@ -126,6 +130,9 @@ export function DbsInventoryPage({
   const workOrderFinancials = data?.workOrderFinancials ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
+  );
+  const purchasesAwaitingReceipt = (data?.purchases ?? []).filter((purchase: any) =>
+    purchase.approval_status === "approved" && purchase.status !== "received" && purchase.status !== "cancelled"
   );
 
   useEffect(() => {
@@ -458,6 +465,36 @@ export function DbsInventoryPage({
           </nav>
         )}
 
+        {moduleSection === "parts" && (
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" aria-label="Áreas de Peças e Estoque">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">PEÇAS & ESTOQUE</p>
+                <h2 className="mt-0.5 text-base font-bold text-slate-900">O que você precisa fazer?</h2>
+              </div>
+              <span className="text-xs text-slate-500">Escolha uma área para continuar</span>
+            </div>
+            <nav className="grid grid-cols-2 gap-2 xl:grid-cols-4" aria-label="Tarefas de estoque">
+              {([
+                ["catalog", "Peças", "Cadastrar e localizar materiais", "01"],
+                ["stock", "Estoque", "Saldos, transferências e cilindros", "02"],
+                ["reservations", "Reservas para OS", "Separar material para atendimento", "03"],
+                ["settings", "Cadastros básicos", "Fornecedores, unidades e custos", "04"],
+              ] as const).map(([key, title, description, number]) => (
+                <button key={key} type="button" aria-pressed={partsView === key} onClick={() => setPartsView(key)}
+                  className={partsView === key
+                    ? "flex min-h-[76px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 px-3 py-3 text-left shadow-sm ring-1 ring-sky-100"
+                    : "flex min-h-[76px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
+                  <span className={partsView === key ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0f4f91] text-xs font-black text-white" : "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-black text-slate-500"}>{number}</span>
+                  <span className="min-w-0">
+                    <span className={partsView === key ? "block text-sm font-black text-sky-950" : "block text-sm font-bold text-slate-800"}>{title}</span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </section>
+        )}
         {message && <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950 shadow-sm"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-600" />{message}</div>}
         {overview.isLoading && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-medium text-slate-500 shadow-sm">Carregando dados de materiais e compras...</div>}
         {overview.error && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm leading-6 text-rose-800 shadow-sm">
@@ -468,6 +505,7 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
+          {partsView === "catalog" && <>
           <details className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 transition hover:bg-slate-50">
               <span className="min-w-0">
@@ -514,6 +552,8 @@ export function DbsInventoryPage({
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">Unidades livres no estoque</p><p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{parts.reduce((total: number, part: any) => total + Math.max(0, Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)), 0).toLocaleString("pt-BR")}</p><p className="mt-1 text-xs text-slate-500">Disponíveis para nova reserva</p></div>
           </section>
 
+          </>}
+          {partsView === "settings" && <>
           <details className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition hover:bg-slate-50 sm:px-5">
               <span className="min-w-0">
@@ -560,7 +600,8 @@ export function DbsInventoryPage({
               <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
             </form>
             </section>
-          </details>
+          </>}
+          {partsView === "catalog" && <>
           <section className="mb-6 grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.1fr)]">
             <form onSubmit={saveCatalogPart} className="rounded-2xl border border-sky-200/80 bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-5 border-b border-slate-100 pb-4">
@@ -651,8 +692,8 @@ export function DbsInventoryPage({
                 {!parts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
               </div>
             </div>
-          </section>
-
+          </>}
+          {partsView === "stock" && <>
           <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
             <div className="mb-4">
               <p className="text-xs font-black uppercase tracking-wider text-sky-700">Controle físico de materiais</p>
@@ -800,7 +841,35 @@ export function DbsInventoryPage({
             </form>
           </section>
           </>}
+          </>}
           {moduleSection === "purchases" && <>
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" aria-label="Etapas de compras">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-sky-700">COMPRAS</p>
+                <h2 className="mt-0.5 text-base font-bold text-slate-900">Em que etapa está o pedido?</h2>
+              </div>
+              <span className="text-xs text-slate-500">Do pedido ao recebimento</span>
+            </div>
+            <nav className="grid gap-2 md:grid-cols-3" aria-label="Etapas da compra">
+              <button type="button" aria-pressed={purchasesView === "new"} onClick={() => setPurchasesView("new")}
+                className={purchasesView === "new" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
+                <span className={purchasesView === "new" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>01</span>
+                <span className="min-w-0"><span className="block text-sm font-black text-slate-900">Nova compra</span><span className="mt-0.5 block text-xs text-slate-500">Montar e enviar pedido</span></span>
+              </button>
+              <button type="button" aria-pressed={purchasesView === "approval"} onClick={() => setPurchasesView("approval")}
+                className={purchasesView === "approval" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
+                <span className={purchasesView === "approval" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>02</span>
+                <span className="min-w-0"><span className="flex items-center gap-2 text-sm font-black text-slate-900">Aprovações <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-900">{pendingPurchases.length}</span></span><span className="mt-0.5 block text-xs text-slate-500">Analisar pedidos enviados</span></span>
+              </button>
+              <button type="button" aria-pressed={purchasesView === "orders"} onClick={() => setPurchasesView("orders")}
+                className={purchasesView === "orders" ? "flex min-h-[82px] items-center gap-3 rounded-xl border border-sky-700 bg-sky-50 p-3 text-left ring-1 ring-sky-100" : "flex min-h-[82px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-200 hover:bg-slate-50"}>
+                <span className={purchasesView === "orders" ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0f4f91] text-sm font-black text-white" : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-500"}>03</span>
+                <span className="min-w-0"><span className="flex items-center gap-2 text-sm font-black text-slate-900">Pedidos e recebimento <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-900">{purchasesAwaitingReceipt.length}</span></span><span className="mt-0.5 block text-xs text-slate-500">Acompanhar e conferir materiais</span></span>
+              </button>
+            </nav>
+          </section>
+          {purchasesView === "approval" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5 sm:px-6">
               <div className="min-w-0">
@@ -842,6 +911,8 @@ export function DbsInventoryPage({
               </div>}
             </div>
           </section>
+          </>}
+          {purchasesView === "new" && <>
           <section className="mb-6 overflow-hidden rounded-2xl border border-sky-200/80 bg-white shadow-sm">
             <div className="border-b border-slate-100 bg-gradient-to-r from-sky-50/70 to-white p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -966,6 +1037,8 @@ export function DbsInventoryPage({
             </form>
           </section>
 
+          </>}
+          {purchasesView === "orders" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-white p-5 sm:p-6">
               <div>
@@ -1099,7 +1172,8 @@ export function DbsInventoryPage({
             </div>
           </section>
           </>}
-          {moduleSection === "parts" && <>
+          </>}
+          {moduleSection === "parts" && partsView === "stock" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 p-5">
               <h2 className="text-lg font-black">Histórico imutável de movimentações</h2>
@@ -1165,6 +1239,8 @@ export function DbsInventoryPage({
               {!(data?.inventoryMovements??[]).length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma movimentação registrada ainda.</p>}
             </div>
           </section>
+          </>}
+          {moduleSection === "parts" && partsView === "reservations" && <>
           <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
             <form onSubmit={reserveParts} className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-lg font-black">Reservar peças para OS</h2>
