@@ -76,8 +76,8 @@ assert.match(phase2Ui, /dbs-operations-drawer/);
 assert.match(phase2Ui, /Fornecedor \/ pedido/);
 assert.match(phase2Ui, /Custo médio/);
 assert.match(phase2Ui, /Transferir/);
-assert.match(controlRoute, /20261114-erp-clean-ui-1/);
-assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-1/);
+assert.match(controlRoute, /20261114-erp-clean-ui-2/);
+assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-2/);
 
 
 
