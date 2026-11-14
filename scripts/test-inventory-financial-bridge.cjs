@@ -328,7 +328,7 @@ assert.match(mainHtml, /function voltarMenuPrincipalAdmin/);
 assert.match(mainHtml, /DBS_CONTROL_BACK_TO_ADMIN_MENU/);
 assert.match(controlUx, /window\.switchTab\(id,item\)/);
 assert.doesNotMatch(controlUx, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
-assert.match(mainHtml, /dbs-control-ux\.js\?v=20261113-menu-pages-4/);
+assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-2/);
 assert.match(controlRoute, /inventoryPortals\.purchases\.quoteId/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
@@ -479,6 +479,6 @@ assert.match(controlRoute, /inventoryPortals\.purchases && createPortal/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
 assert.match(controlRoute, /data-dbs-materials-react-root/);
-assert.match(controlRoute, /20261113-menu-pages-4/);
+assert.match(controlRoute, /20261114-erp-clean-ui-2/);
 
 console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
