@@ -693,6 +693,7 @@ export function DbsInventoryPage({
                 {!parts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça cadastrada ainda.</p>}
               </div>
             </div>
+          </section>
           </>}
           {partsView === "stock" && <>
           <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
