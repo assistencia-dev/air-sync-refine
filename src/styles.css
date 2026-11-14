@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -603,3 +604,114 @@ table{font-variant-numeric:tabular-nums}
 .dbs-operations-drawer :is(h1,h2,h3,h4) { font-family:inherit!important; letter-spacing:-.02em; font-weight:600; }
 .dbs-operations-drawer :is(input,select,textarea) { font-family:inherit!important; font-size:13px; border-color:#e2e8f0; border-radius:8px; }
 .dbs-operations-drawer :is(input,select,textarea):focus { outline:none; border-color:#60a5fa; box-shadow:0 0 0 3px rgb(59 130 246 / 11%); }
+
+
+/* DBS Control — typography and visual consistency for inventory and purchasing. */
+.dbs-operations-page,
+.dbs-operations-page *,
+.dbs-operations-drawer,
+.dbs-operations-drawer * {
+  font-family: "Inter", Arial, sans-serif !important;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  font-feature-settings: "cv11", "ss01";
+}
+.dbs-operations-page {
+  color: #172b43;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.dbs-operations-page :is(h1,h2,h3,h4),
+.dbs-operations-drawer :is(h1,h2,h3,h4) {
+  font-family: "Space Grotesk", "Inter", Arial, sans-serif !important;
+  color: #102a43;
+  letter-spacing: -.025em;
+  line-height: 1.25;
+}
+.dbs-operations-page h1 { font-size: 22px; font-weight: 600; }
+.dbs-operations-page h2 { font-size: 17px; font-weight: 600; }
+.dbs-operations-page h3,
+.dbs-operations-drawer h3 { font-size: 15px; font-weight: 600; }
+.dbs-operations-page :is(label, .text-xs) { line-height: 1.45; }
+.dbs-operations-page label { color: #42566d; font-weight: 500; }
+.dbs-operations-page :is(input,select,textarea),
+.dbs-operations-drawer :is(input,select,textarea) {
+  min-height: 42px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  border: 1px solid #d7e1eb;
+  border-radius: 9px;
+  color: #172b43;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(16,42,67,.025);
+}
+.dbs-operations-page textarea,
+.dbs-operations-drawer textarea { min-height: 88px; }
+.dbs-operations-page :is(input,select,textarea):focus,
+.dbs-operations-drawer :is(input,select,textarea):focus {
+  border-color: #4b91d1;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(23,105,209,.12);
+}
+.dbs-operations-page :is(button,.btn) {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+.dbs-operations-page :is(section,article).rounded-2xl,
+.dbs-operations-page :is(section,article).rounded-xl {
+  border-color: #e1e8f0;
+  box-shadow: 0 2px 8px rgba(16,42,67,.035);
+}
+.dbs-operations-page .dbs-op-tabs,
+.dbs-operations-page > div > nav[aria-label="Módulos"] {
+  gap: 18px;
+  border-color: #e1e8f0;
+}
+.dbs-operations-page .dbs-op-tab {
+  min-height: 46px;
+  padding-inline: 3px;
+  color: #63758a;
+  font-size: 13px;
+  font-weight: 500;
+}
+.dbs-operations-page .dbs-op-tab.is-active,
+.dbs-operations-page .dbs-op-tab[aria-selected="true"] {
+  color: #1557a0;
+  border-bottom-color: #1769d1;
+  font-weight: 650;
+}
+.dbs-operations-page table { font-size: 13px; }
+.dbs-operations-page thead th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #64758a;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .035em;
+}
+.dbs-operations-page tbody td { line-height: 1.45; }
+.dbs-operations-page :is(button,a,[role="tab"],summary):focus-visible,
+.dbs-operations-drawer :is(button,a,input,select,textarea):focus-visible {
+  outline: 3px solid rgba(23,105,209,.28);
+  outline-offset: 2px;
+}
+.dbs-operations-drawer { color: #172b43; font-size: 14px; line-height: 1.5; }
+.dbs-operations-drawer :is(button,.btn) { font-size: 13px; font-weight: 600; }
+@media (max-width: 767px) {
+  .dbs-operations-page { padding: 12px !important; font-size: 14px; }
+  .dbs-operations-page h1 { font-size: 20px; }
+  .dbs-operations-page > div > nav[aria-label="Módulos"],
+  .dbs-operations-page .dbs-op-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .dbs-operations-page > div > nav[aria-label="Módulos"] > button,
+  .dbs-operations-page .dbs-op-tabs > button { flex: 0 0 auto; }
+  .dbs-operations-page :is(input,select,textarea) { min-height: 44px; font-size: 16px; }
+  .dbs-operations-page :is(button,.btn) { min-height: 42px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dbs-operations-page *, .dbs-operations-drawer * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
