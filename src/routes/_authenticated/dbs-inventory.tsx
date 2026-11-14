@@ -554,7 +554,7 @@ export function DbsInventoryPage({
 
           </>}
           {partsView === "settings" && <>
-          <details className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <details open className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 transition hover:bg-slate-50 sm:px-5">
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-2 text-base font-black text-slate-900">
