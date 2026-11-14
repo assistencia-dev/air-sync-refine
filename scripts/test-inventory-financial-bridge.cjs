@@ -95,7 +95,8 @@ assert.match(phase2Ui, /onSubmit={transferStockToTechnician}/);
 assert.match(phase2Ui, /onSubmit={reserveParts}/);
 assert.match(phase2Ui, /onSubmit={submitPurchase}/);
 assert.match(phase2Ui, /receiveDbsPurchaseItems/);
-assert.match(phase2Ui, /CATÁLOGO RELACIONAL/);
+assert.match(phase2Ui, /catalogPartSku/);
+assert.match(phase2Ui, /catalogPartSupplierId/);
 
 assert.doesNotMatch(phase2Ui, /<details open=\{!suppliers\.length/);
 
