@@ -1200,6 +1200,25 @@ function DbsControlPage() {
         }
         return;
       }
+      if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_DRAWER") {
+        if (employeeModeRef.current) return;
+        const drawer = msg.drawer === "purchase" ? "purchase" : "part";
+        const section: DbsMaterialsSection = drawer === "purchase" ? "purchases" : "parts";
+        const target = mountDbsMaterialsPortal(iframeRef.current, section);
+        if (!target) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_MATERIALS_PORTAL_ERROR",
+            error: "A tela de materiais não foi encontrada. Atualize o DBS Control e tente novamente.",
+          }, window.location.origin);
+          return;
+        }
+        setInventoryPortals((current) => ({
+          ...current,
+          [section]: { target, quoteId: "" },
+        }));
+        window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer", { detail: { drawer } }));
+        return;
+      }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";

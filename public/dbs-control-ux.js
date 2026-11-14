@@ -531,6 +531,23 @@
       if(form)form.scrollIntoView({behavior:"smooth",block:"start"});
     }
 
+
+    function ensureMaterialsHeaderStyle(){
+      if(document.getElementById("dbs-materials-clean-header"))return;
+      const style=document.createElement("style");
+      style.id="dbs-materials-clean-header";
+      style.textContent=`
+        body.dbs-materials-clean-ui main>header{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:16px!important;min-height:64px!important;padding:10px 16px!important;background:#fff!important;border-bottom:1px solid #e2e8f0!important;box-shadow:none!important}
+        body.dbs-materials-clean-ui main>header .page-title{min-width:0!important}
+        body.dbs-materials-clean-ui main>header #view-title{font-family:Inter,ui-sans-serif,system-ui,sans-serif!important;font-size:17px!important;font-weight:650!important;letter-spacing:-.025em!important;color:#0f172a!important}
+        body.dbs-materials-clean-ui main>header #view-subtitle{display:none!important}
+        body.dbs-materials-clean-ui main>header #dbs-sync-indicator{min-height:34px!important;padding:6px 10px!important;border-radius:999px!important;font-family:Inter,ui-sans-serif,system-ui,sans-serif!important;font-size:11px!important;font-weight:600!important}
+        body.dbs-materials-clean-ui main>header .dbs-admin-session-back{min-height:38px!important;border-radius:8px!important;border-color:#e2e8f0!important;padding:8px 13px!important;font-family:Inter,ui-sans-serif,system-ui,sans-serif!important;font-size:13px!important;font-weight:500!important;box-shadow:none!important}
+        body.dbs-materials-clean-ui main>header .btn-primary{min-height:38px!important;border-radius:8px!important;padding:8px 14px!important;background:#1557a0!important;font-family:Inter,ui-sans-serif,system-ui,sans-serif!important;font-size:13px!important;font-weight:600!important;box-shadow:none!important}
+        body.dbs-materials-clean-ui main>header .dbs-secondary-menu{display:none!important}
+      `;
+      document.head.appendChild(style);
+    }
     function syncPageHeader(){
       const tab=activeTab(), id=tab?.id;
       if(!id||!titleMap[id])return;
@@ -569,10 +586,17 @@
       const isMaterialsPage=id==="tab-pecas"||id==="tab-compras";
       if(headerMore)headerMore.style.display=isMaterialsPage?"none":"";
       document.body.classList.toggle("dbs-materials-clean-ui",isMaterialsPage);
+      if(isMaterialsPage)ensureMaterialsHeaderStyle();
       if(isMaterialsPage){
         const drawer=id==="tab-pecas"?"part":"purchase";
         headerAction.textContent=id==="tab-pecas"?"+ Nova peça":"+ Nova compra";
-        headerAction.onclick=()=>window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer",{detail:{drawer}}));
+        headerAction.onclick=()=>{
+          if(window.parent!==window){
+            window.parent.postMessage({type:"DBS_CONTROL_OPEN_INVENTORY_DRAWER",drawer},window.location.origin);
+          } else {
+            window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer",{detail:{drawer}}));
+          }
+        };
       } else {
         const cfg=actions[id];
         if(cfg){headerAction.textContent=cfg[0];headerAction.onclick=cfg[1];}
