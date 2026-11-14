@@ -177,8 +177,8 @@ export function DbsInventoryPage({
   );
   const visibleParts = parts.filter((part: any) => {
     const query = catalogSearch.trim().toLocaleLowerCase("pt-BR");
-    const supplierName = suppliers.find((row: any) => String(row.id) === String(part.supplier_id))?.name ?? "";
-    const matchesQuery = !query || [part.name, part.description, part.sku, supplierName].some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(query));
+    const catalogSupplierLabel = suppliers.find((row: any) => String(row.id) === String(part.supplier_id))?.name ?? "";
+    const matchesQuery = !query || [part.name, part.description, part.sku, catalogSupplierLabel].some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(query));
     const matchesFilter = catalogFilter === "all"
       || (catalogFilter === "stock" && Number(part.stock_quantity ?? 0) > 0)
       || (catalogFilter === "setup" && (!part.supplier_id || !part.measure_unit_id));
