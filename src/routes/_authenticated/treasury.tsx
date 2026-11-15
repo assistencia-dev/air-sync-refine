@@ -173,34 +173,42 @@ function TreasuryPage() {
       if (msg.type === "DBS_TREASURY_DECIDE_PURCHASE_APPROVAL") {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
         if (!requestId) return;
+        let result: unknown;
         try {
           if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não terminou a sincronização inicial.");
           if (msg.decision !== "approved" && msg.decision !== "rejected") {
             throw new Error("Decisão de aprovação inválida.");
           }
-          const decision = msg.decision;
-          const result = await decideDbsPurchaseApprovalFromTreasury({ data: {
+          result = await decideDbsPurchaseApprovalFromTreasury({ data: {
             purchaseId: String(msg.purchaseId ?? ""),
-            decision,
+            decision: msg.decision,
             reason: typeof msg.reason === "string" ? msg.reason : undefined,
             expectedVersion: Number(msg.expectedVersion),
           } });
-          const cloud = await getTreasuryCloudState();
-          const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
-          iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
-            window.location.origin,
-          );
-          iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_PURCHASE_APPROVAL_RESULT", requestId, ok: true, result },
-            window.location.origin,
-          );
         } catch (err) {
           const message = err instanceof Error ? err.message : "Falha ao registrar a decisão financeira.";
           iframeRef.current?.contentWindow?.postMessage(
             { type: "DBS_TREASURY_PURCHASE_APPROVAL_RESULT", requestId, ok: false, error: message },
             window.location.origin,
           );
+          return;
+        }
+
+        // A decisão já foi confirmada pela transação. Uma falha ao atualizar a
+        // leitura da fila não pode reportá-la falsamente como não concluída.
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "DBS_TREASURY_PURCHASE_APPROVAL_RESULT", requestId, ok: true, result },
+          window.location.origin,
+        );
+        try {
+          const cloud = await getTreasuryCloudState();
+          const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
+            window.location.origin,
+          );
+        } catch (refreshError) {
+          console.warn("DBS Treasury approval completed; queue refresh failed:", refreshError);
         }
         return;
       }
