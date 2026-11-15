@@ -101,7 +101,7 @@ using (
   or exists (
     select 1
     from public.dbs_control_work_orders wo
-    where wo.client_id = id
+    where wo.client_id = public.dbs_control_clients.id
       and private.dbs_my_can_access_work_order(wo.assigned_employee_id, wo.client_id)
   )
 );
@@ -115,7 +115,7 @@ using (
   or exists (
     select 1
     from public.dbs_control_work_orders wo
-    where wo.site_id = id
+    where wo.site_id = public.dbs_control_sites.id
       and private.dbs_my_can_access_work_order(wo.assigned_employee_id, wo.client_id)
   )
 );
@@ -130,7 +130,7 @@ using (
     select 1
     from public.dbs_control_work_order_equipment link
     join public.dbs_control_work_orders wo on wo.id = link.work_order_id
-    where link.equipment_id = id
+    where link.equipment_id = public.dbs_control_equipment.id
       and private.dbs_my_can_access_work_order(wo.assigned_employee_id, wo.client_id)
   )
 );
@@ -153,7 +153,7 @@ using (
     select 1
     from public.dbs_control_work_order_services link
     join public.dbs_control_work_orders wo on wo.id = link.work_order_id
-    where link.service_id = id
+    where link.service_id = public.dbs_control_service_catalog.id
       and private.dbs_my_can_access_work_order(wo.assigned_employee_id, wo.client_id)
   )
 );
@@ -249,7 +249,7 @@ using (
     from public.dbs_control_work_order_parts link
     join public.dbs_control_work_orders wo on wo.id = link.work_order_id
     join public.rh_employees e on e.id = wo.assigned_employee_id
-    where link.part_id = id
+    where link.part_id = public.dbs_control_parts.id
       and private.dbs_my_can_access_work_order(wo.assigned_employee_id, wo.client_id)
       and e.ponto_portal_user_id = public.current_app_user_id()
       and e.ponto_access_enabled = true
