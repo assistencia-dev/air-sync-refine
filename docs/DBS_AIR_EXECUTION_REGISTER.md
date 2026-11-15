@@ -426,3 +426,11 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Navegação de Peças & Estoque e Compras: os dois itens de menu já enviam mensagens distintas `DBS_CONTROL_OPEN_INVENTORY_MODULE` com seção `parts` ou `purchases`; o pai cria um portal React separado em cada aba. Os contratos estáticos continuam presentes e cada seção usa sua própria instância. A validação de UI real no navegador autenticado ainda depende de sessão de teste.
 - O `prebuild` foi ampliado para executar os testes de resiliência DBS, escopo de base, proteção de dados, contratos de performance, integração visual Compras/Estoque, Ledger, PDF/OS, RLS, paridade local das migrations e confirmação do projeto Supabase oficial.
 - Lovable está sincronizado até o SHA atual da `main` e permanece publicado; nenhuma publicação foi iniciada. A confirmação independente do SHA servido no domínio público ainda não está disponível nesta sessão.
+
+
+### Estado operacional de cadastros e gates (2026-11-15)
+
+- Leitura atual da produção: fornecedores ativos 0; unidades de medida ativas 0; centros de custo ativos 0; peças ativas 1; compras 0; recebimentos 0; movimentos de estoque 0. Isso representa cadastros reais ainda não preenchidos, não defeito de persistência. O fluxo foi validado com dados temporários dentro de transação revertida; não foram criados cadastros fictícios permanentes.
+- Projeto Supabase oficial `gdglototcrehvhkvcqsq`: `ACTIVE_HEALTHY`, PostgreSQL 17.6. A comparação local/remota de migrations segue em paridade exata. O branch de preview ainda reporta `MIGRATIONS_FAILED` no metadado, embora `preview_project_status=ACTIVE_HEALTHY`; duas solicitações de rebase retornaram sucesso, mas o status do branch ainda não atualizou. Não foi feita alteração destrutiva nem recriação do branch.
+- Vercel: build do SHA atual recusado por `build-rate-limit`; não há evidência de falha de compilação. Lovable está `ready`, sincronizado com o SHA atual da `main`, `is_published=true`; não foi disparada publicação e o domínio oficial permanece inalterado.
+- Não foram auditados, conciliados ou baixados acompanhamentos de dívidas ainda não cadastrados.
