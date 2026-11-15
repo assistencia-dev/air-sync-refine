@@ -198,13 +198,6 @@ function validateBenefit(input: RhInput) {
   return input;
 }
 
-function normalizeBenefitWorkSchedule(value: unknown) {
-  const raw = String(value ?? "").toLowerCase().replace(/\s+/g, "");
-  if (raw.includes("12x36")) return "12x36";
-  if (raw.includes("6x1")) return "6x1";
-  return "5x2";
-}
-
 function isValidBenefitDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + "T12:00:00.000Z");
@@ -231,7 +224,7 @@ export const listRhEmployees = createServerFn({ method: "GET" })
 
     const { data: registryRows, error: registryError } = await supabaseAdmin
       .from("rh_employees")
-      .select("id, registry_employee_id, is_active, benefit_configured, registration_data")
+      .select("id, registry_employee_id, is_active, benefit_configured")
       .in("id", registryIds);
     if (registryError) throw new Error(registryError.message);
     const registryById = new Map((registryRows ?? []).map((row: any) => [String(row.id), row]));
@@ -246,15 +239,7 @@ export const listRhEmployees = createServerFn({ method: "GET" })
       );
       if (!isCentralRegistry || registry?.is_active !== true) continue;
 
-      const registration = registry?.registration_data && typeof registry.registration_data === "object"
-        ? registry.registration_data as Record<string, unknown>
-        : {};
-      if (!unique.has(registryId)) {
-        unique.set(registryId, {
-          ...employee,
-          work_schedule: normalizeBenefitWorkSchedule(registration.work_shift ?? registration.work_schedule),
-        });
-      }
+      if (!unique.has(registryId)) unique.set(registryId, employee);
     }
     return [...unique.values()];
   });
@@ -528,6 +513,15 @@ export const createRhTopup = createServerFn({ method: "POST" })
       .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
       .single();
     if (error) throw new Error(error.message);
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      actor_user_id: operator.id,
+      employee_id: registry.id,
+      action: "BENEFICIO_CREDITO_REGISTRADO",
+      entity_type: "rh_topups",
+      entity_id: topup.id,
+      after_data: topup,
+    });
+    if (auditError) console.error("Falha ao registrar auditoria do crédito de benefício:", auditError.message);
     return topup;
   });
 
@@ -551,6 +545,30 @@ export const updateRhTopup = createServerFn({ method: "POST" })
     if (beforeError) throw new Error(beforeError.message);
     if (!before) throw new Error("Lançamento não encontrado neste tipo de benefício.");
 
+    const { data: benefitEmployee, error: benefitEmployeeError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, registry_employee_id, is_active, benefit_configured")
+      .eq("id", before.employee_id)
+      .eq("benefit_type", data.benefit_type)
+      .maybeSingle();
+    if (benefitEmployeeError) throw new Error(benefitEmployeeError.message);
+    if (!benefitEmployee || benefitEmployee.is_active !== true || benefitEmployee.benefit_configured !== true || !benefitEmployee.registry_employee_id) {
+      throw new Error("Somente um vínculo de benefício ativo pode ter seus créditos corrigidos.");
+    }
+    const { data: registry, error: registryError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, registry_employee_id, is_active, benefit_configured")
+      .eq("id", benefitEmployee.registry_employee_id)
+      .maybeSingle();
+    if (registryError) throw new Error(registryError.message);
+    const isCentralRegistry = Boolean(registry) && (
+      registry.registry_employee_id === registry.id ||
+      (!registry.registry_employee_id && registry.benefit_configured !== true)
+    );
+    if (!registry || !isCentralRegistry || registry.is_active !== true) {
+      throw new Error("O funcionário não está ativo no Cadastro Central. A correção não foi realizada.");
+    }
+
     const { data: updated, error } = await supabaseAdmin
       .from("rh_topups")
       .update({ amount_cents: data.amount_cents, paid_at: data.paid_at })
@@ -560,14 +578,9 @@ export const updateRhTopup = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    const { data: employee } = await supabaseAdmin
-      .from("rh_employees")
-      .select("registry_employee_id")
-      .eq("id", before.employee_id)
-      .maybeSingle();
     const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
       actor_user_id: operator.id,
-      employee_id: employee?.registry_employee_id ?? before.employee_id,
+      employee_id: registry.id,
       action: "BENEFICIO_RECARGA_EDITADA",
       entity_type: "rh_topups",
       entity_id: updated.id,
