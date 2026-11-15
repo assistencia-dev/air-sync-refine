@@ -417,9 +417,6 @@ export function DbsInventoryPage({
         setCatalogPartSupplierId((current) => current || createdId);
         setSupplierId((current) => current || createdId);
       }
-      // Refresh the relational master-data lists so the saved supplier is
-      // immediately available in the part editor and purchase selectors.
-      await overview.refetch();
     }
   }
   async function addMeasureUnit(event: React.FormEvent<HTMLFormElement>) {
@@ -433,8 +430,6 @@ export function DbsInventoryPage({
       setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol("");
       setActiveDrawer(null);
       if (createdId) setCatalogPartUnitId((current) => current || createdId);
-      // Refresh the unit options before the user continues editing parts or purchases.
-      await overview.refetch();
     }
   }
   async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
