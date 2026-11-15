@@ -4794,6 +4794,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     const isOversized = typeof value === 'string' && value.length > 180000;
                     if (hasStoredPath || isDataUrl || isOversized) next[valueField] = null;
                 });
+                const stripSignedAttachmentLinks = items => Array.isArray(items) ? items.map(attachment => {
+                    const item = { ...attachment };
+                    const storagePath = String(item.storagePath || item.storage_path || '').trim();
+                    if (storagePath) {
+                        ['url', 'signedUrl', 'signed_url', 'publicUrl', 'public_url', 'src', 'dataUrl', 'data_url', 'data', 'base64']
+                            .forEach(field => { delete item[field]; });
+                    }
+                    return item;
+                }) : items;
+                next.fotos = stripSignedAttachmentLinks(next.fotos);
+                next.anexos = stripSignedAttachmentLinks(next.anexos);
+                next.attachments = stripSignedAttachmentLinks(next.attachments);
                 return next;
             });
             return compact;
