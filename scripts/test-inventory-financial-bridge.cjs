@@ -398,6 +398,18 @@ const addSupplierHandler = phase2Ui.slice(phase2Ui.indexOf("async function addSu
 const addMeasureUnitHandler = phase2Ui.slice(phase2Ui.indexOf("async function addMeasureUnit"), phase2Ui.indexOf("async function addUnitConversion"));
 assert.match(addSupplierHandler, /runAction\(/, "Supplier creation must use the shared refresh/error-handling path.");
 assert.match(addMeasureUnitHandler, /runAction\(/, "Unit creation must use the shared refresh/error-handling path.");
+for (const [start, end] of [
+  ["async function submitPurchase", "function updatePurchaseLine"],
+  ["async function saveCatalogPart", "async function addCostCenter"],
+  ["async function addCostCenter", "async function transferStockToTechnician"],
+  ["async function transferStockToTechnician", "async function addSupplier"],
+  ["async function addUnitConversion", "async function linkOrderCostCenter"],
+  ["async function assignWeightedGasCylinder", "async function initializeExistingCylinderWeights"],
+]) {
+  const handler = phase2Ui.slice(phase2Ui.indexOf(start), phase2Ui.indexOf(end));
+  assert.ok(handler.length > 0, `Expected handler boundary: ${start}`);
+  assert.doesNotMatch(handler, /overview\\.refetch\\(\\)/, `${start} must rely on runAction's single shared refresh.`);
+}
 assert.match(phase2Ui, /supplierId/);
 assert.match(phase2Ui, /costCenterId/);
 assert.match(phase2Ui, /purchaseUnitId/);
