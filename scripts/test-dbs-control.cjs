@@ -154,6 +154,13 @@ const missingTabs = [...referencedTabs].filter((id) => !tabIds.has(id));
 assert.deepEqual(missingTabs, [], "Há ações de navegação para abas inexistentes: " + missingTabs.join(", "));
 
 const cloudFunctions = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
+const osAttachmentUploadStart = cloudFunctions.indexOf("export const uploadDbsControlOsAttachment");
+const osAttachmentUploadEnd = cloudFunctions.indexOf("export const getDbsControlDashboardSummary", osAttachmentUploadStart);
+assert.ok(osAttachmentUploadStart >= 0 && osAttachmentUploadEnd > osAttachmentUploadStart, "O upload de evidências da OS deve permanecer no backend autenticado.");
+const osAttachmentUploadHandler = cloudFunctions.slice(osAttachmentUploadStart, osAttachmentUploadEnd);
+assert.ok(osAttachmentUploadHandler.includes("collaboratorScope?.baseActive !== true"), "O upload deve bloquear colaboradores sem base ativa.");
+assert.ok(osAttachmentUploadHandler.includes("allowedClientIds.has(orderClientId)"), "O upload deve respeitar os clientes vinculados à base, mesmo com ID/protocolo direto.");
+assert.ok(osAttachmentUploadHandler.includes("if (!assigned && !technicianMatches)"), "O upload deve continuar restrito à OS do colaborador.");
 const fieldControl = fs.readFileSync("src/lib/fieldcontrol.functions.ts", "utf8");
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016120000_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
