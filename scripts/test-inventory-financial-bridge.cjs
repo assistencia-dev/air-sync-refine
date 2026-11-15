@@ -16,14 +16,14 @@ const openingBalanceHardening = fs.readFileSync('supabase/migrations/20261031042
 const purchaseFkIndex = fs.readFileSync('supabase/migrations/20261031042759_dbs_control_inventory_purchase_fk_index.sql', 'utf8');
 const partCostGuard = fs.readFileSync('supabase/migrations/20261031043439_dbs_control_part_cost_guard.sql', 'utf8');
 const idempotencyGuard = fs.readFileSync('supabase/migrations/20261031051656_dbs_control_inventory_idempotency_guard.sql', 'utf8');
-const phase2 = fs.readFileSync('supabase/migrations/20261103180000_dbs_phase2_sales_reservations.sql', 'utf8');
+const phase2 = fs.readFileSync('supabase/migrations/20261104135123_20261103180000_dbs_phase2_sales_reservations.sql', 'utf8');
 const settlement = fs.readFileSync('supabase/migrations/20261105125017_dbs_control_purchase_settlement_and_financial_overview.sql', 'utf8');
 const settlementIndexes = fs.readFileSync('supabase/migrations/20261105125435_dbs_control_purchase_payment_fk_indexes.sql', 'utf8');
 const purchaseLifecycle = fs.readFileSync('supabase/migrations/20261105125808_dbs_control_purchase_register_and_receipt_lifecycle.sql', 'utf8');
 const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_fix_dbs_control_purchase_receipt_status_lock.sql', 'utf8');
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
 const purchaseApproval = fs.readFileSync('supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql', 'utf8');
-const frontendIntegrations = fs.readFileSync('supabase/migrations/20261111180000_dbs_control_frontend_inventory_cost_center_integrations.sql', 'utf8');
+const frontendIntegrations = fs.readFileSync('supabase/migrations/20261112125903_dbs_control_frontend_inventory_cost_center_integrations.sql', 'utf8');
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
