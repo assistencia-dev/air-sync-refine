@@ -393,9 +393,9 @@ assert.match(phase2Ui, /createDbsSupplier/);
 assert.match(phase2Ui, /createDbsMeasureUnit/);
 assert.match(phase2Ui, /createDbsUnitConversion/);
 assert.equal(
-  phase2Ui.split('{partsView === "catalog" && <>').length - 1,
+  phase2Ui.split('aria-label="Buscar peças"').length - 1,
   1,
-  "Peças & Estoque must render one catalog screen, not duplicate the catalog card and filters.",
+  "Peças & Estoque must render one catalog search/filter surface, not duplicate the catalog card.",
 );
 const runActionHandler = phase2Ui.slice(phase2Ui.indexOf("async function runAction"), phase2Ui.indexOf("async function decidePurchaseApproval"));
 assert.match(runActionHandler, /await overview\.refetch\(\)/, "Successful inventory actions must refresh the relational selectors and lists.");
