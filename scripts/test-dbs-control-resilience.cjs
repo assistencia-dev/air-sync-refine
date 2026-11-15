@@ -51,6 +51,9 @@ assert.match(route, /withDbsControlLocalSyncLock/, "Duas abas não podem enviar 
 assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma transação precisa formar outra intenção, não regravar a primeira.");
 assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
 assert.match(route, /dbsControlConflictIsAutoResolvable/, "Conflitos de OS concluída precisam ser reconhecidos mesmo quando o código legado veio incompleto.");
+assert.match(route, /function dbsControlStateOrderIsDeleted\(/, "OS excluídas precisam sair da fila ativa sem serem reabertas por um rebase antigo.");
+assert.match(route, /function dbsControlConflictChecklistMatches\(/, "Status igual não pode encerrar conflito quando marcações do checklist ainda diferem.");
+assert.match(route, /dbsControlConflictChecklistMatches\(local, canonical\)/, "Uma OS aberta só pode ser auto-quarentenada depois de confirmar também o checklist.");
 assert.match(route, /dbsControlConflictAlreadyApplied/, "Conflitos antigos já refletidos na versão canônica precisam sair da fila ativa sem regravar a OS.");
 assert.match(route, /status: "quarantined"[\s\S]*A intenção original foi preservada para auditoria/, "A intenção stale deve ser preservada em quarentena, nunca apagada.");
 assert.match(route, /dbsControlUserFacingSyncMessage/, "Falhas de infraestrutura não devem despejar detalhes técnicos no painel operacional.");
@@ -101,6 +104,9 @@ assert.match(iframe, /queuedLocally/, "O técnico precisa receber confirmação 
 assert.match(iframe, /Salvo no dispositivo · aguardando sincronização/, "O estado pendente precisa ser visível no próprio aplicativo.");
 assert.match(iframe, /dbsControlConflictIsCompletedLocked/, "Conflitos históricos de OS concluída não podem bloquear a operação.");
 assert.match(iframe, /DBS_CONTROL_SYNC_CONFLICT_CLEARED/, "A limpeza de conflito stale deve remover somente o alerta visual, sem disparar uma nova reconciliação.");
+assert.match(iframe, /function mergeDbsControlTechnicianChecklist\(/, "A reconciliação deve unir marcações técnicas verdadeiras sem apagar marcações canônicas.");
+assert.match(iframe, /function mergeDbsControlChecklistItems\(/, "A reconciliação deve preservar itens de checklist já concluídos na versão canônica.");
+assert.match(iframe, /current\.deleted_at \|\| current\.deletedAt \|\| current\.excluidaEm/, "O rebase de uma OS terminal deve preservar a exclusão canônica.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));
