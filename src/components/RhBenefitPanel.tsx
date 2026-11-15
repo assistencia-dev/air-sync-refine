@@ -345,9 +345,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
                     <span className="mt-1 block text-[10px] text-slate-500">{financeSummary.daysInMonth} dias úteis no calendário do Rio</span>
                   </div>
                   <p className="text-[11px] leading-5 text-slate-400">
-                    {benefitType === "passagem"
-                      ? "VT: tarifa por viagem multiplicada pelas viagens diárias cadastradas."
-                      : "VA: valor diário configurado multiplicado pelos dias úteis de cobertura."}
+                    "VA: valor diário configurado multiplicado pelos dias úteis de cobertura."
                     {" "}Feriados do calendário do Rio de Janeiro são excluídos da estimativa.
                   </p>
                   <button onClick={() => setSection("history")} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">
