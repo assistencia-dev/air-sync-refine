@@ -37,7 +37,6 @@ type Employee = {
   fare_cents: number;
   trips_per_day: number;
   is_active: boolean;
-  work_schedule?: string;
 };
 type Topup = {
   id: string;
@@ -270,7 +269,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
 
         {section === "overview" && !employees.isLoading && !topups.isLoading && (
           <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <Metric label="Colaboradores ativos" value={String(activeEmployees.length)} icon={<UsersRound className="h-4 w-4" />} />
               <Metric label="Precisam renovar" value={String(renewalSoon.length)} icon={<CalendarClock className="h-4 w-4" />} />
               <Metric label="Lançamentos no mês" value={String(monthRows.length)} icon={<Receipt className="h-4 w-4" />} />
