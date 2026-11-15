@@ -41,6 +41,10 @@ assert.match(route, /document\.visibilityState !== "visible" \|\| navigator\.onL
 assert.match(route, /setInterval\(\(\) => \{ void pollSyncCursor\(\); \}, 30000\)/, "O fallback de cursor deve respeitar intervalo de 30 segundos para não saturar o pool.");
 assert.match(route, /const staleConflictCommands = persistedConflictCommands/, "A hidratação precisa localizar todos os conflitos antigos já refletidos na versão canônica.");
 assert.match(route, /for \(const staleCommand of staleConflictCommands\)/, "Conflitos antigos múltiplos precisam ser isolados em uma única hidratação.");
+assert.match(route, /autoQuarantineMessage/, "A migração da regra antiga deve identificar somente a quarentena automática antiga.");
+assert.match(route, /stale_conflict_reopened_for_review/, "Intenções antigas com checklist divergente devem voltar para revisão, não serem apagadas.");
+assert.match(route, /command\.lastError === autoQuarantineMessage/, "Quarentenas manuais ou dispensadas pelo operador não podem ser reabertas.");
+assert.match(route, /!dbsControlStateOrderIsDeleted\(cloudState, conflict\)/, "OS excluída nunca deve ser reaberta pela recuperação de conflito.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
