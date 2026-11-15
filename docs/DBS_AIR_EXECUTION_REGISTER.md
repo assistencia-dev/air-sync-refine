@@ -165,3 +165,43 @@ Ao fechar uma tarefa, registrar problema, causa, arquivos/commit, teste executad
 - Lovable reconheceu o SHA `a75cc451fb01be1ef6c726f15f682ec39423273f`, projeto `ready`. O domínio oficial continua inalterado e não houve publicação.
 - A suíte Node completa de regressão ainda depende do resultado do GitHub Actions; a verificação estática manual acima não deve ser confundida com execução integral dos scripts.
 
+
+
+## Atualização de continuidade — reconciliação de OS e regressão do catálogo (2026-11-15)
+
+### Conflitos históricos de sincronização — auditoria somente leitura
+
+- No Supabase oficial, `dbs_control_sync_commands` apresentou 375 comandos `applied` e 28 comandos `conflict` com código `DBS_OS_CONFLICT`, entre 2026-10-26 e 2026-11-12. Os 28 comandos abrangem 10 OS; nenhum deles tem `applied_at`. Os payloads registram tentativas de gravar o status `em_atendimento` com `expected_version` anterior à versão canônica.
+- A comparação entre payloads históricos, `dbs_control_work_orders` e `dbs_control_work_order_events` identificou duas OS ainda abertas cujo status coincide, mas cujo checklist técnico não foi integralmente persistido: `DBS-2026-000104` e `DBS-2026-000108`. Em ambas, a intenção local contém marcações verdadeiras ausentes do checklist canônico e não foi encontrado evento posterior `work_order_delta` que confirme essas marcações.
+- `DBS-2026-000048` foi excluída por evento `work_order_deleted` depois do conflito. Ela deve permanecer soft-deleted e nunca ser reaberta por reconciliação antiga. As demais OS deste lote já estão concluídas na versão canônica e continuam protegidas.
+- Nenhum comando de conflito, OS ou evento do Treasury foi atualizado, reaplicado, apagado ou marcado como publicado durante esta auditoria. A comparação foi feita por SELECT somente.
+
+### Correção implementada — conflitos não podem ser considerados resolvidos apenas pelo status
+
+- `src/routes/_authenticated/dbs-control.tsx`: a verificação de conflito já aplicado agora exige que, para OS ativa, a versão canônica seja mais nova, o status solicitado coincida e os campos `checklistTecnico`, `checklist` e `parametrosOperacionais` presentes na intenção também coincidam. Uma OS concluída ou excluída é terminal e pode ser retirada da fila ativa somente preservando a intenção histórica em quarentena.
+- Recuperação de quarentenas antigas: apenas itens marcados pela mensagem exata de autoquarentena da regra antiga podem voltar para revisão; isso ocorre quando a OS ainda existe, está ativa e o checklist continua divergente. Quarentenas manuais do operador não são reabertas. Commit: `f9655c144d4cccc6d4ee2329cf71c724142a998f`.
+- `public/dbs-control.html`: o rebase explícito une marcações técnicas verdadeiras sem desmarcar o que já está salvo na nuvem, mantém itens de checklist já concluídos e preserva o status/soft delete/assinatura de OS terminais. Commit: `cf1cf8f11b5ff6038a8f0714a9431ab4fd332b9a`.
+- Testes adicionados/ajustados em `scripts/test-dbs-control-resilience.cjs` para checklist divergente, quarentena antiga, OS excluída e merge monotônico. Commits: `d3a8a5e6a29bf23049a38b03fc9963ba25c43839` e `66cbeaa84bb461078ba2f7f33cd452b3df1f49f6`.
+- A reconciliação das intenções locais ainda exige ação explícita do operador na interface (“Reconciliar mantendo minhas alterações”). Nenhuma OS é regravada automaticamente por esta correção; o histórico original permanece preservado.
+
+### Segurança adicional e regressão da interface
+
+- `src/lib/dbs-control.functions.ts`: upload de evidências de OS para colaborador agora confere também base ativa e `client_id` pertencente aos clientes vinculados à base, mesmo quando a chamada tenta usar ID/protocolo direto. Teste correspondente em `scripts/test-dbs-control.cjs`. Commits: `2254f7cb5185fdf2baf3184b5b01f1d764824293` e `c0c4592a8fa02637422c7247113688aa014e30b3`.
+- `src/routes/_authenticated/dbs-inventory.tsx`: removida a apresentação duplicada do catálogo, mantendo a superfície de busca responsiva e o formulário lateral; teste exige uma única superfície de busca. Commits: `44ff9fe5b25e17a3f8cb318689efbc07abd7f7c2`, `b42707eca690f99230c93aa344c1ec534938c7b8` e `a75cc451fb01be1ef6c726f15f682ec39423273f`.
+- Removidas recargas duplicadas de `overview.refetch()`: os handlers de fornecedor, unidade e demais ações continuam usando a atualização central de `runAction()`. Testes protegem o caminho compartilhado. Commits: `509e204229e3f0b90806a6e351bce5e8b7afda07`, `85390cace1ff3235edcd90032440378a3fcd8788`.
+
+### Validação do SHA final desta execução
+
+- SHA de `main`: `5c79e9adc7bce7aaa9ded0a0f8e310d03a9fd8f8`.
+- GitHub Actions: `Validate`, `verificar`, `DBS Control smoke validation` e `DBS Control outbox worker` concluíram com sucesso neste SHA.
+- `Validate`: verificação de nomes/versões de migrations, recuperação de módulos, fronteira de autenticação, runtime loader, imports do Preview, lint, performance, testes operacionais, RH/Ponto, inventário-financeiro, proteção de dados, ledger reporting, escopo da base, escala RH, build Bun e TypeScript.
+- `verificar`: testes DBS Control, resiliência de sincronização, escopo/base, RH/Ponto, PDF OS, ponte inventário-financeiro, proteção de dados, TypeScript e build Vite.
+- O smoke validation executou os contratos de scripts inline, concorrência/retry/outbox, 50 sessões concorrentes, RH/Ponto, backup/retenção e build; worker de outbox DBS Control concluiu com sucesso.
+- Lovable reconhece o mesmo SHA `5c79e9adc7bce7aaa9ded0a0f8e310d03a9fd8f8`, status `ready`, `is_published=true`. Isso confirma sincronização do projeto Lovable; não é prova isolada do SHA servido no domínio público. Nenhuma publicação foi disparada nesta execução.
+
+### Próximos passos operacionais
+
+1. Em sessão autenticada do colaborador/dispositivo que contém as intenções locais, revisar os conflitos reabertos de `DBS-2026-000104` e `DBS-2026-000108` e usar a ação explícita de reconciliação somente após conferir os checklists; não reenviar OS concluídas nem a OS excluída `DBS-2026-000048`.
+2. Manter a auditoria dos três eventos pendentes de `treasury_ledger_outbox` sem alteração até identificar o contrato/consumidor correto.
+3. Obter dados reais para fornecedores, unidade de medida e centros de custo antes do primeiro pedido produtivo.
+4. Validar visualizador de OS e ciclo real de compras em sessão autenticada antes de liberar publicação pelo Lovable.
