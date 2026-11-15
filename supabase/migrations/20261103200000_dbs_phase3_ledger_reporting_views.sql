@@ -65,7 +65,7 @@ with monthly_cash as (
   join public.treasury_accounts a on a.id=l.account_id
   where e.status='posted'
     and a.account_type='asset'
-    and (a.code='1.1.01' or a.code like '1.1.01.%')
+    and (a.code='1.1.01' or a.code like '1.1.01.%' or a.code like 'bank:%')
   group by e.company_id,e.scope_key,
     date_trunc('month',coalesce(e.document_date,e.competence_date))::date,
     a.id,a.code,a.name
@@ -99,7 +99,7 @@ with monthly_cash as (
   join public.treasury_accounts a on a.id=l.account_id
   where e.status='posted'
     and a.account_type='asset'
-    and (a.code='1.1.01' or a.code like '1.1.01.%')
+    and (a.code='1.1.01' or a.code like '1.1.01.%' or a.code like 'bank:%')
   group by e.company_id,e.scope_key,
     date_trunc('month',coalesce(e.document_date,e.competence_date))::date
 )
