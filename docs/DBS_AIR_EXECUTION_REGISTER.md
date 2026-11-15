@@ -205,3 +205,33 @@ Ao fechar uma tarefa, registrar problema, causa, arquivos/commit, teste executad
 2. Manter a auditoria dos três eventos pendentes de `treasury_ledger_outbox` sem alteração até identificar o contrato/consumidor correto.
 3. Obter dados reais para fornecedores, unidade de medida e centros de custo antes do primeiro pedido produtivo.
 4. Validar visualizador de OS e ciclo real de compras em sessão autenticada antes de liberar publicação pelo Lovable.
+
+
+## Atualização de continuidade — execução consolidada 2026-11-15 (00:33–00:41 BRT)
+
+### Entregas de código concluídas nesta rodada
+
+- **Peças & Estoque:** removida a segunda renderização redundante do catálogo antigo, mantendo o catálogo atual, seus filtros, a listagem responsiva e os drawers de cadastro/edição. A suíte exige exatamente uma área de busca do catálogo. Commits: `44ff9fe5b25e17a3f8cb318689efbc07abd7f7c2`, `b42707eca690f99230c93aa344c1ec534938c7b8` e `a75cc451fb01be1ef6c726f15f682ec39423273f`.
+- **Atualização dos cadastros:** as ações de fornecedor/unidade continuam usando o refetch central de `runAction()`; removidas chamadas adicionais duplicadas. O refetch manual de recuperação foi preservado. Commits: `509e204229e3f0b90806a6e351bce5e8b7afda07` e `85390cace1ff3235edcd90032440378a3fcd8788`.
+- **Visualização de OS:** o carregamento agora complementa os campos legados com `dbs_control_work_order_attachments`, restrito aos IDs de OS que já passaram pela consulta com escopo/limite de colaborador. Os arquivos privados recebem URLs assinadas temporárias e entram na visualização de fotos/anexos; assinatura mais recente também pode preencher a evidência da OS. O viewer continua somente leitura ao abrir.
+- **Proteção de anexos:** URLs assinadas expirantes são removidas dos snapshots do servidor, dos deltas enviados pelo cliente e do cache local quando já existe `storagePath`. Isso evita persistir tokens temporários ou tentar reutilizar links expirados. Commits: `b38753289e915360a0178649d7b4009518dfd399`, `ccc52422a922be39f1333ec27dc561c5b8193bc6`, `863e0a3aeee39c871aa8cb71e0b518b411cf9e3b`, `3cff309c55201eeaff334be2e8d125747989a7eb`, `b390d3a809656fa4c56c441a6bf04140a037fa3d` e `8ef963470c2b382e5d6e658a12cad333de62c164`.
+- **Evidência no Storage:** conferência somente leitura confirmou 31 registros relacionais de assinatura e 31 objetos correspondentes no bucket privado `dbs-control-os`; nenhum objeto ausente. Nenhum arquivo foi alterado, removido ou recadastrado.
+- **Sincronização/confli​tos:** a auto-quarentena de conflito agora exige correspondência também do checklist e parâmetros de execução, não apenas versão/status. Conflitos antigos auto-quarentenados com checklist divergente podem voltar para revisão; marcações técnicas verdadeiras são unidas sem permitir que uma intenção antiga desmarque uma marcação canônica. OS concluída ou excluída não é reaberta por rebase. Upload de evidência de colaborador verifica base ativa, cliente vinculado e técnico atribuído. Essas mudanças são de código e testes; nenhum conflito da fila de produção foi reaplicado, apagado ou atualizado. Commits incluem `b7ddd84da2b4728903a9dfce63b3683a9f4cf574`, `cf1cf8f11b5ff6038a8f0714a9431ab4fd332b9a`, `d3a8a5e6a29bf23049a38b03fc9963ba25c43839`, `c0c4592a8fa02637422c7247113688aa014e30b3`, `f9655c144d4cccc6d4ee2329cf71c724142a998f` e `66cbeaa84bb461078ba2f7f33cd452b3df1f49f6`.
+
+### Validações finais observadas
+
+- SHA atual de `main`: `5c79e9adc7bce7aaa9ded0a0f8e310d03a9fd8f8`.
+- No SHA acima, GitHub Actions concluiu com sucesso: **Validate**, **verificar**, **DBS Control smoke validation** e **DBS Control outbox worker**.
+- O projeto Lovable reconhece o mesmo SHA `5c79e9adc7bce7aaa9ded0a0f8e310d03a9fd8f8`, retornou `ready` e `is_published=true`. O domínio oficial permanece o mesmo. Nenhuma ação de publicação foi iniciada por esta execução; o campo `is_published` não é usado como prova independente do SHA servido pelo domínio público.
+- A suíte Playwright pública alcançou a tela de login sem erro de browser, mas o teste de OS autenticado não executou porque as credenciais/URL da base isolada de E2E não estavam configuradas. Não afirmar validação autenticada ponta a ponta.
+
+### Bloqueios que permanecem
+
+1. **Compras reais:** sem fornecedores e centros de custo produtivos, e com uma única unidade ativa de identificação ambígua; a única peça ativa ainda está sem os vínculos obrigatórios. Não criar valores fictícios nem renomear/remover a unidade atual sem confirmação dos dados corretos.
+2. **Treasury:** três eventos `treasury.ledger_outbox` continuam pendentes, sem consumidor confirmado. Preservar a fila até identificar o contrato de destino; não marcar como publicados nem criar um worker presumido.
+3. **Migrations:** manter a auditoria de drift somente leitura até comparar os SQLs armazenados no histórico do Supabase com os arquivos locais. Não renumerar nem aplicar em lote.
+4. **Validação autenticada:** falta uma sessão E2E isolada com credenciais para executar compra real, visualizar OS autenticada com anexos e testar impressão; o smoke público anônimo não cobre essa operação.
+
+### Regra para a próxima rodada
+
+Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para cadastros produtivos, é necessário usar os dados oficiais da empresa; para Treasury, é necessário confirmar o consumidor/contrato. Não modificar produção para produzir um resultado artificial.
