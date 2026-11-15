@@ -36,7 +36,7 @@ assert.match(rhFunctions, /O benefício não está vinculado ao Cadastro Central
 assert.match(rhFunctions, /BENEFICIO_CREDITO_REGISTRADO/);
 assert.match(rhFunctions, /BENEFICIO_RECARGA_EDITADA/);
 assert.match(employeeRegistry, /saveRhEmployeeRecord/);
-assert.match(employeeRegistry, /Cadastro único/);
+assert.match(employeeRegistry, /Esta é a ficha mestre/);
 assert.doesNotMatch(vtTab + vaTab, /saveRhEmployeeRecord|createRhEmployee/);
 assert.doesNotMatch(panel, /saveRhEmployeeRecord|createRhEmployee/);
 
