@@ -81,13 +81,6 @@ function parseMoneyCents(value: string) {
   return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
 }
 
-function scheduleKind(value: unknown): "5x2" | "6x1" | "12x36" {
-  const raw = String(value ?? "").toLowerCase().replace(/\s+/g, "");
-  if (raw.includes("12x36")) return "12x36";
-  if (raw.includes("6x1")) return "6x1";
-  return "5x2";
-}
-
 function buildCoverage(
   amountCents: number,
   dailyCostCents: number,
@@ -106,22 +99,6 @@ function buildCoverage(
 function getDailyCostCents(employee: Pick<Employee, "fare_cents" | "trips_per_day">, benefitType: RhBenefitType) {
   return Math.max(0, Number(employee.fare_cents) || 0) *
     (benefitType === "passagem" ? Math.max(1, Number(employee.trips_per_day) || 1) : 1);
-}
-
-function buildCoverage(
-  amountCents: number,
-  dailyCostCents: number,
-  paidAt: string,
-  schedule = "5x2",
-): BenefitCoverage {
-  const daysCovered = dailyCostCents > 0 ? Math.floor(amountCents / dailyCostCents) : 0;
-  const renewalDate = daysCovered > 0 ? addScheduledDays(paidAt, daysCovered, schedule) : null;
-  return {
-    dailyCostCents,
-    daysCovered,
-    renewalDate,
-    daysRemaining: renewalDate ? scheduledDaysRemaining(paidAt, renewalDate, schedule) : 0,
-  };
 }
 
 function isSameMonth(value: string, reference: Date) {
@@ -206,7 +183,6 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   const description = benefitType === "alimentacao"
     ? "Crédito diário × dias de trabalho cadastrados no calendário."
     : "Tarifa por viagem × viagens por dia × dias de trabalho.";
-  const dailyLabel = benefitType === "alimentacao" ? "Valor diário" : "Custo diário";
   const latestCoverage = useMemo(() => {
     const latest = new Map<string, Topup>();
     for (const item of rows) {
@@ -216,11 +192,10 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
     return activeEmployees.map((employee) => {
       const lastTopup = latest.get(employee.id);
       const dailyCostCents = getDailyCostCents(employee, benefitType);
-      const schedule = scheduleKind(employee.work_schedule);
       const coverage = lastTopup
-        ? buildCoverage(lastTopup.amount_cents, dailyCostCents, lastTopup.paid_at, schedule)
+        ? buildCoverage(lastTopup.amount_cents, dailyCostCents, lastTopup.paid_at)
         : null;
-      return { employee, lastTopup, coverage, schedule };
+      return { employee, lastTopup, coverage };
     }).sort((a, b) => {
       const aDays = a.coverage?.daysRemaining ?? -1;
       const bDays = b.coverage?.daysRemaining ?? -1;
@@ -674,7 +649,7 @@ function TopupForm({
   const dailyCostCents = employee ? getDailyCostCents(employee, benefitType) : 0;
   const amountCents = parseMoneyCents(amount);
   const coverage = dailyCostCents > 0 && amountCents > 0
-    ? buildCoverage(amountCents, dailyCostCents, paidAt, scheduleKind(employee?.work_schedule))
+    ? buildCoverage(amountCents, dailyCostCents, paidAt)
     : null;
   const mutation = useMutation({
     mutationFn: () => topup
@@ -726,7 +701,7 @@ function TopupForm({
             <span>{dailyLabelFor(benefitType)}: {money(coverage.dailyCostCents)}</span>
             <span>Renovação estimada: {coverage.renewalDate ? dateText(coverage.renewalDate) : "—"}</span>
           </div>
-          {scheduleKind(employee.work_schedule) === "12x36" && <p className="mt-2 text-[10px] text-emerald-100/80">Escala 12x36: estimativa por alternância a partir da data do crédito.</p>}
+
         </div>
       )}
       {(localError || mutation.error) && <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-xs font-semibold text-red-300">{localError ?? (mutation.error instanceof Error ? mutation.error.message : "Não foi possível salvar o crédito.")}</p>}
@@ -793,8 +768,7 @@ function HistoryList({
               const fare = Number(item.employee_fare_cents ?? employee?.fare_cents ?? 0);
               const trips = Number(item.employee_trips_per_day ?? employee?.trips_per_day ?? 1);
               const dailyCost = fare * (benefitType === "passagem" ? Math.max(1, trips) : 1);
-              const schedule = scheduleKind(employee?.work_schedule);
-              const coverage = dailyCost > 0 ? buildCoverage(item.amount_cents, dailyCost, item.paid_at, schedule) : null;
+              const coverage = dailyCost > 0 ? buildCoverage(item.amount_cents, dailyCost, item.paid_at) : null;
               const status = !coverage?.renewalDate ? "Sem parâmetro" : coverage.daysRemaining <= 0 ? "Renovar hoje" : coverage.daysRemaining <= 2 ? "Renovar em breve" : "Em dia";
               const statusClass = status === "Em dia" ? "text-emerald-300" : status === "Renovar em breve" ? "text-amber-300" : "text-rose-300";
               return (
