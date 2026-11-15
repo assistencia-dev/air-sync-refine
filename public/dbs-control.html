@@ -5357,7 +5357,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         if (current.protocolo) next.protocolo = current.protocolo;
                         if (current.protocol) next.protocol = current.protocol;
                         const currentStatus = String(current.status ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                        const currentIsTerminal = ['concluida', 'concluido', 'completed', 'complete'].includes(currentStatus)
+                        const currentIsTerminal = ['concluida', 'concluido', 'completed', 'complete', 'cancelada', 'cancelado', 'cancelled', 'canceled'].includes(currentStatus)
                             || Boolean(current.deleted_at || current.deletedAt || current.excluidaEm);
                         if (currentIsTerminal) {
                             next.status = current.status;
