@@ -348,3 +348,10 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Commits adicionais: `9a1951b70fe74ddb9f3b4a33c716bfd1e018de1f` (regra contábil na view), `356b5c90e69ecd37f8869d0ff4701a48c1188787` (teste), `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80` (teste no prebuild).
 - A compilação do SHA `b1948e388871c278299401dce13982883df73bff` ficou `READY`; o SHA `9a1951b70fe74ddb9f3b4a33c716bfd1e018de1f` também ficou `READY`. O build do SHA `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80`, que executa o novo teste no prebuild, está em fila no momento deste registro.
 - Nenhum SQL foi aplicado ao Supabase oficial. Nenhuma dívida, parcela, baixa, estorno ou lançamento existente foi alterado. Publicação Lovable não foi iniciada.
+
+
+### Resultado do gate de build (2026-11-15)
+
+- Build Vercel do commit `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80`: `READY` / status `success`.
+- Logs confirmam execução real do novo `prebuild`: `test-phase3-ledger-reporting.cjs` passou e `check-supabase-project-ref.cjs` confirmou o projeto oficial `gdglototcrehvhkvcqsq`; depois, Vite/Nitro compilou com sucesso.
+- Esse deployment é um build de CI/Vercel e não uma publicação Lovable. O domínio oficial Lovable não foi alterado.
