@@ -527,6 +527,31 @@ assert.match(attachmentHydrator, /copy\.anexos = existingDocs\.concat/, "Anexos 
 assert.match(attachmentHydrator, /displayedEvidencePaths/, "A galeria não pode duplicar a foto mais recente que já aparece nos campos antes/depois.");
 assert.match(attachmentHydrator, /console\.error\("\[DBS Control\] Falha ao carregar anexos relacionais:/, "Uma falha na consulta de anexos não pode derrubar a hidratação operacional inteira.");
 
+const serverAttachmentStripper = persistence.slice(
+  persistence.indexOf("function stripStoredAttachmentPayloads"),
+  persistence.indexOf("async function hydrateStoredAttachmentUrls"),
+);
+assert.match(serverAttachmentStripper, /copy\.fotos = stripSignedAttachmentLinks/);
+assert.match(serverAttachmentStripper, /copy\.anexos = stripSignedAttachmentLinks/);
+assert.match(serverAttachmentStripper, /delete attachment\[field\]/, "URLs assinadas não podem ser persistidas no snapshot do servidor.");
+
+const clientDeltaSerializer = html.slice(
+  html.indexOf("function dbsControlDeltaRecord"),
+  html.indexOf("function buildDbsControlDelta"),
+);
+assert.match(clientDeltaSerializer, /copy\.fotos = stripSignedAttachmentLinks/);
+assert.match(clientDeltaSerializer, /copy\.anexos = stripSignedAttachmentLinks/);
+assert.match(clientDeltaSerializer, /delete nextAttachment\[field\]/, "URLs temporárias não podem entrar nos deltas da OS.");
+
+const localCacheCompactor = html.slice(
+  html.indexOf("function dbsControlCompactLocalState"),
+  html.indexOf("function persistDbsControlLocalSnapshot"),
+);
+assert.match(localCacheCompactor, /next\.fotos = stripSignedAttachmentLinks/);
+assert.match(localCacheCompactor, /next\.anexos = stripSignedAttachmentLinks/);
+assert.match(localCacheCompactor, /delete item\[field\]/, "URLs assinadas não podem ficar no cache local como links expirados.");
+
+
 assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest\.value->>'protocolo'/, "SQL reconciliation must fall back from ID to protocol.");
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
