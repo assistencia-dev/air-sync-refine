@@ -233,7 +233,7 @@ export const listRhEmployees = createServerFn({ method: "GET" })
     for (const employee of benefitRows ?? []) {
       const registryId = String(employee.registry_employee_id ?? "");
       const registry = registryById.get(registryId);
-      const isCentralRegistry = Boolean(registry) && (
+      const isCentralRegistry = registry !== null && (
         registry.registry_employee_id === registry.id ||
         (!registry.registry_employee_id && registry.benefit_configured !== true)
       );
@@ -275,7 +275,7 @@ export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
       .eq("id", data.registry_employee_id)
       .maybeSingle();
     if (registryError) throw new Error(registryError.message);
-    const isCentralRegistry = Boolean(registry) && (
+    const isCentralRegistry = registry !== null && (
       registry.registry_employee_id === registry.id ||
       (!registry.registry_employee_id && registry.benefit_configured !== true)
     );
@@ -500,7 +500,7 @@ export const createRhTopup = createServerFn({ method: "POST" })
       .eq("id", employee.registry_employee_id)
       .maybeSingle();
     if (registryError) throw new Error(registryError.message);
-    const isCentralRegistry = Boolean(registry) && (
+    const isCentralRegistry = registry !== null && (
       registry.registry_employee_id === registry.id ||
       (!registry.registry_employee_id && registry.benefit_configured !== true)
     );
@@ -561,7 +561,7 @@ export const updateRhTopup = createServerFn({ method: "POST" })
       .eq("id", benefitEmployee.registry_employee_id)
       .maybeSingle();
     if (registryError) throw new Error(registryError.message);
-    const isCentralRegistry = Boolean(registry) && (
+    const isCentralRegistry = registry !== null && (
       registry.registry_employee_id === registry.id ||
       (!registry.registry_employee_id && registry.benefit_configured !== true)
     );
