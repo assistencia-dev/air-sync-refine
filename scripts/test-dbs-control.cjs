@@ -497,6 +497,22 @@ assert.match(persistence, /scope\.scopeKey,/, "A hidratação deve carregar regi
 assert.match(persistence, /dbs_control_apply_work_order_delta/, "OS deve ser aplicada no RPC transacional com idempotência.");
 assert.match(persistence, /expected_version/, "O cliente precisa enviar a versão esperada para rejeitar concorrência silenciosa.");
 assert.match(persistence, /pendingChangesRef|buildDbsControlWorkOrderPatch/, "A camada de persistência deve operar em mudanças por registro.");
+
+const attachmentHydrator = persistence.slice(
+  persistence.indexOf("async function hydrateStoredAttachmentUrls"),
+  persistence.indexOf("// A realtime burst"),
+);
+assert.ok(attachmentHydrator.includes('from("dbs_control_work_order_attachments")'), "A hidratação deve ler os anexos relacionais já gravados para a OS.");
+assert.match(attachmentHydrator, /\.in\("work_order_id", batch\)/, "A leitura dos anexos deve ficar restrita aos IDs de OS já filtrados por escopo.");
+assert.match(attachmentHydrator, /\.range\(page \* 500, page \* 500 \+ 499\)/, "A leitura dos anexos deve paginar sem truncar históricos extensos.");
+assert.match(attachmentHydrator, /createSignedUrl\(path, 3600\)/, "Arquivos privados devem receber URL temporária assinada para visualização.");
+assert.match(attachmentHydrator, /latest\("assinatura"\)/, "A assinatura relacional mais recente deve ser recuperada mesmo quando o campo da OS estiver vazio.");
+assert.match(attachmentHydrator, /latest\("foto_antes"\)[\s\S]*?latest\("foto_depois"\)/, "Fotos antes/depois devem ser ligadas novamente à OS.");
+assert.match(attachmentHydrator, /copy\.fotos = existingPhotos\.concat/, "Fotos relacionais antigas devem permanecer na galeria sem substituir fotos legadas.");
+assert.match(attachmentHydrator, /copy\.anexos = existingDocs\.concat/, "Anexos relacionais adicionais devem permanecer visíveis no viewer.");
+assert.match(attachmentHydrator, /displayedEvidencePaths/, "A galeria não pode duplicar a foto mais recente que já aparece nos campos antes/depois.");
+assert.match(attachmentHydrator, /console\.error\("\[DBS Control\] Falha ao carregar anexos relacionais:/, "Uma falha na consulta de anexos não pode derrubar a hidratação operacional inteira.");
+
 assert.match(protocolReconciliationMigration, /latest\.value->>'id'[\s\S]*latest\.value->>'protocolo'/, "SQL reconciliation must fall back from ID to protocol.");
 assert.match(protocolReconciliationMigration, /v_seen_ids[\s\S]*v_seen_protocols/, "SQL must deduplicate and preserve records by both ID and protocol.");
 assert.match(protocolReconciliationMigration, /'tecnicoId','employeeId','assignedEmployeeId'[\s\S]*'signature_data'[\s\S]*'diagnostico'/, "SQL must protect technician and completed document fields.");
