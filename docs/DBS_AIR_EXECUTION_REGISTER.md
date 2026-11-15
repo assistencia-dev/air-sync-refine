@@ -128,3 +128,29 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 ## Regra de atualização
 
 Ao fechar uma tarefa, registrar problema, causa, arquivos/commit, teste executado, resultado e situação. Reabrir somente diante de evidência nova. Não repetir tentativas sem nova evidência. Não declarar tarefa concluída sem validação.
+
+
+## Atualização de continuidade — execução 2026-11-15 (00:32–00:40 BRT)
+
+### Estado confirmado após a auditoria complementar
+
+- GitHub `main` recebeu os commits `509e204229e3f0b90806a6e351bce5e8b7afda07` e `85390cace1ff3235edcd90032440378a3fcd8788`: remoção de seis recargas redundantes de `overview.refetch()` em ações que já passam por `runAction()`, e teste de regressão para garantir uma única atualização compartilhada.
+- O componente `runAction()` continua sendo o único ponto de atualização após ações bem-sucedidas; a chamada manual de recarga da tela de erro foi preservada. Restaram exatamente duas ocorrências no arquivo: a atualização central e a ação explícita de tentar novamente.
+- O teste `scripts/test-inventory-financial-bridge.cjs` agora protege os seis handlers contra recargas duplicadas.
+- Build Vite/Nitro do commit `85390cace1ff3235edcd90032440378a3fcd8788` concluiu com sucesso no check Vercel. Isso é validação de build; não é publicação oficial do produto.
+- Lovable reconheceu o mesmo SHA `85390cace1ff3235edcd90032440378a3fcd8788`, projeto `ready` e `is_published=true`. Nenhum deploy/publicação foi iniciado pelo assistente e o domínio oficial não foi alterado.
+- A hidratação relacional de anexos da OS está presente em `src/lib/dbs-control.functions.ts`: lê anexos apenas para IDs de OS previamente retornados pelo caminho de consulta com escopo, gera URLs assinadas e combina fotos/anexos com os campos legados. A tabela relacional atualmente contém 31 registros do tipo `assinatura`, ligados a 31 OS. Não houve gravação no banco nesta verificação.
+- A verificação de compras/estoque confirmou que o bloqueio operacional atual é em grande parte cadastral: nenhum fornecedor, nenhum centro de custo, uma unidade ativa (`C001`, nome atual semelhante à descrição de uma peça), cinco peças (uma ativa e quatro inativas), a peça ativa sem fornecedor/unidade vinculados, três cotações em rascunho e nenhuma compra/recebimento/movimentação. A unidade suspeita não foi renomeada nem removida; nenhum dado empresarial foi inventado.
+- A fila `treasury_ledger_outbox` contém três eventos `treasury.ledger.posted` pendentes, com zero tentativas, criados em 2026-11-10. A auditoria de funções/triggers identificou o produtor `treasury_enqueue_posted_entry()` na tabela `treasury_ledger_entries`, mas não identificou consumidor/worker nem trigger de consumo na outbox. Não foram alterados, apagados ou marcados como publicados.
+- A auditoria das migrations continua somente leitura: não foi executado deploy de schema, repair ou renumeração.
+
+### Próxima execução objetiva
+
+1. Validar a nova suíte de regressão no CI; build passou, mas o build sozinho não executa os scripts de teste.
+2. Identificar o contrato/destino dos três eventos Treasury pendentes antes de criar qualquer consumidor.
+3. Obter os dados reais da empresa para fornecedores, unidade correta, centros de custo e vínculos das peças; não usar valores fictícios.
+4. Após os cadastros válidos, executar o fluxo autenticado de compra e recebimento em ambiente controlado.
+5. Validar em sessão autenticada o visualizador de OS, assinaturas, fotos/anexos e impressão sem alterar o status da OS.
+6. Resolver drift de migrations por comparação do SQL aplicado com os arquivos locais; nenhuma aplicação em lote.
+7. Continuar regressão de sincronização, permissões e mobile; publicação pelo Lovable permanece bloqueada até os critérios de aprovação.
+
