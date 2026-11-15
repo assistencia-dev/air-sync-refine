@@ -259,6 +259,12 @@ begin
     raise exception 'TEST_OS_SETUP: não foi encontrada OS de teste sem consumo anterior.';
   end if;
 
+  -- The operational integrity guard requires a cost center on OS-related stock events.
+  -- This assignment is transaction-local and is reverted by the final rollback.
+  update public.dbs_control_work_orders
+     set cost_center_id = v_cost_center
+   where id = v_work_order;
+
   insert into public.dbs_control_reservation_batches(
     scope_key,company_id,work_order_id,idempotency_key,created_by
   ) values(
