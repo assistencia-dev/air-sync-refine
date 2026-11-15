@@ -1445,12 +1445,59 @@ function DbsControlPage() {
             // intenção é preservada como quarentena, mas todas as que já foram
             // refletidas na versão canônica precisam sair da fila ativa na
             // mesma hidratação.
+            const autoQuarantineMessage = "Conflito antigo encerrado pela versão canônica. A intenção original foi preservada para auditoria; nenhuma alteração foi reaplicada.";
             const persistedConflictCommands = [...localSyncCommandsRef.current.values()]
-              .filter((command) => command.status === "conflict" && command.conflicts?.length);
+              .filter((command) => command.conflicts?.length && (
+                command.status === "conflict"
+                || (command.status === "quarantined" && command.lastError === autoQuarantineMessage)
+              ));
             const staleConflictCommands = persistedConflictCommands
               .filter((command) => dbsControlConflictAlreadyApplied(cloudState, command));
+            // The previous rule treated an equal status as proof that the whole
+            // delta was applied. Re-open only old auto-quarantines whose active
+            // OS still has execution checklist differences.
+            const previouslyAutoQuarantined = persistedConflictCommands
+              .filter((command) => command.status === "quarantined" && command.lastError === autoQuarantineMessage);
+            const reopenForReview = previouslyAutoQuarantined.filter((command) =>
+              !dbsControlConflictAlreadyApplied(cloudState, command)
+              && command.conflicts?.every((conflict) => {
+                const order = dbsControlStateOrderForConflict(cloudState, conflict);
+                return Boolean(order)
+                  && !dbsControlStateOrderIsCompleted(cloudState, conflict)
+                  && !dbsControlStateOrderIsDeleted(cloudState, conflict);
+              })
+            );
+            for (const unresolvedCommand of reopenForReview) {
+              const reviewMessage = "Conflito reaberto para revisão: o status coincide, mas o checklist técnico ainda diverge da versão canônica.";
+              await persistLocalSyncCommand({
+                id: unresolvedCommand.id,
+                changes: unresolvedCommand.changes,
+                requestIds: unresolvedCommand.requestIds,
+                status: "conflict",
+                attempts: unresolvedCommand.attempts,
+                nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                leaseUntil: null,
+                lastError: reviewMessage,
+                conflicts: unresolvedCommand.conflicts,
+              });
+              const reopenedCommand = localSyncCommandsRef.current.get(unresolvedCommand.id);
+              if (reopenedCommand) {
+                localSyncCommandsRef.current.set(unresolvedCommand.id, {
+                  ...reopenedCommand,
+                  status: "conflict",
+                  nextAttemptAt: Number.MAX_SAFE_INTEGER,
+                  leaseUntil: null,
+                  lastError: reviewMessage,
+                });
+              }
+              logSyncEvent("stale_conflict_reopened_for_review", {
+                commandId: unresolvedCommand.id,
+                conflicts: unresolvedCommand.conflicts?.length ?? 0,
+                reason: "canonical_checklist_differs",
+              });
+            }
             if (staleConflictCommands.length > 0) {
-              const quarantineMessage = "Conflito antigo encerrado pela versão canônica. A intenção original foi preservada para auditoria; nenhuma alteração foi reaplicada.";
+              const quarantineMessage = autoQuarantineMessage;
               for (const staleCommand of staleConflictCommands) {
                 await persistLocalSyncCommand({
                   id: staleCommand.id,
@@ -1500,7 +1547,7 @@ function DbsControlPage() {
             if (restoredCommand?.status === "conflict" && restoredCommand.conflicts?.length) {
               const conflictAlreadyApplied = dbsControlConflictAlreadyApplied(cloudState, restoredCommand);
               if (conflictAlreadyApplied) {
-                const quarantineMessage = "Conflito antigo encerrado pela versão canônica. A intenção original foi preservada para auditoria; nenhuma alteração foi reaplicada.";
+                const quarantineMessage = autoQuarantineMessage;
                 await persistLocalSyncCommand({
                   id: restoredCommand.id,
                   changes: restoredCommand.changes,
@@ -1545,7 +1592,10 @@ function DbsControlPage() {
                 const canRebaseCollaboratorCommand = employeeModeRef.current
                   && restoredCommand.conflicts.every((conflict) => dbsControlConflictCode(conflict) === "DBS_OS_CONFLICT")
                   && restoredCommand.conflicts.every((conflict) => Boolean(dbsControlStateOrderForConflict(cloudState, conflict)))
-                  && !restoredCommand.conflicts.some((conflict) => dbsControlStateOrderIsCompleted(cloudState, conflict));
+                  && !restoredCommand.conflicts.some((conflict) =>
+                    dbsControlStateOrderIsCompleted(cloudState, conflict)
+                    || dbsControlStateOrderIsDeleted(cloudState, conflict)
+                  );
                 if (canRebaseCollaboratorCommand) {
                   // Preserve o payload original em quarentena antes do rebase.
                   // O iframe cria uma nova intenção usando a versão canônica; a
