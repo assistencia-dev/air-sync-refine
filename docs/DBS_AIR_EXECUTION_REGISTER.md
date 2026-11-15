@@ -285,3 +285,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Treasury permanece bloqueado para qualquer ação automática: a outbox contém três eventos `treasury.ledger.posted` pendentes e o repositório contém apenas o produtor/trigger e o health RPC, sem consumidor correspondente encontrado. Os eventos e lançamentos permanecem intactos.
 - Cadastros de compras permanecem sem dados reais suficientes (fornecedores/centros de custo e unidade ambígua); nenhum cadastro fictício foi criado.
 - Próximas ações seguras: terminar a comparação de RLS/migrations e a verificação visual/operacional sem escrita; manter a publicação bloqueada até resolver ou formalmente isolar os bloqueios de operação real e executar validação autenticada em ambiente controlado.
+
+
+
+### Auditoria complementar de ACL SQL — `TRUNCATE` (2026-11-15)
+
+- No Supabase oficial, as ACLs padrão em `public` concedem `TRUNCATE` a `anon` em 31 tabelas e a `authenticated` em 56 tabelas; as 100 tabelas públicas consultadas têm RLS ativado. A lista inclui `dbs_control_work_orders`, anexos, equipamentos, eventos, partes, serviços, `rh_employees` e `users`.
+- `TRUNCATE` não é filtrado por RLS. A inspeção não encontrou função `SECURITY DEFINER` executável por `anon` cujo corpo contenha `TRUNCATE`, portanto não foi demonstrado um caminho de exploração pelo endpoint REST nesta auditoria. Ainda assim, a permissão é desnecessária para usuários finais e deve ser removida.
+- As tabelas de estoque imutável, snapshots, sync commands e Treasury já têm ACLs mais restritas; as tabelas de OS/RH não têm o mesmo endurecimento consistente. Os default ACLs de `postgres` e `supabase_admin` também concedem privilégios amplos em novas tabelas `public`.
+- **Nenhum GRANT/REVOKE foi executado.** A remediação requer migration aditiva para revogar `TRUNCATE` (e rever defaults de `public`) após conciliar as 134 versões aplicadas com os arquivos locais e as policies ao vivo; não fazer repair/apply em lote enquanto esse drift persistir.
