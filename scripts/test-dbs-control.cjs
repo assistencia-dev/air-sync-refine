@@ -50,14 +50,14 @@ assert.match(adminSurface, /MobileAdminNavigation active=\{requestedTab === "pas
 assert.match(route, /MobileAdminNavigation active="operation"/, "O DBS CONTROL deve usar a mesma navegação mobile administrativa.");
 assert.ok(route.includes('className="flex h-[100dvh] min-h-0 flex-col overflow-hidden admin-mobile-shell'), "O shell administrativo do DBS CONTROL deve ter altura definida para preencher o viewport.");
 assert.ok(route.includes('className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#f4f8fc]'), "O shell do colaborador também deve preencher a altura útil da tela.");
-assert.ok(appStyles.includes(".admin-mobile-shell > div > .admin-mobile-iframe { display: block; width: 100%; height: calc(100dvh - 82px"), "O iframe administrativo deve ser dimensionado através do contêiner intermediário real.");
-assert.equal(appStyles.includes(".admin-mobile-iframe { height: calc(100dvh - 140px"), false, "O iframe não pode manter uma altura menor e deixar uma faixa vazia.");
-assert.equal(appStyles.includes(".admin-mobile-shell > .admin-mobile-iframe"), false, "A regra de altura não pode apontar para uma relação pai-filho inexistente.");
+assert.ok(appStyles.includes(".treasury-content-frame { height: calc(100dvh - 64px) !important; }"), "O Financeiro deve ocupar a área útil depois de remover o painel superior.");
+assert.ok(appStyles.includes(".treasury-content-frame { height: calc(100dvh - 140px) !important; }"), "O Financeiro deve reservar o espaço da navegação mobile sem criar uma faixa vazia.");
+assert.equal(appStyles.includes(".admin-mobile-shell > .admin-mobile-iframe"), false, "A regra genérica não deve assumir uma relação pai-filho inexistente.");
 assert.match(rhDashboardRoute, /MobileAdminNavigation active="people"/, "O RH deve usar a mesma navegação mobile administrativa.");
 assert.match(treasuryRouteSource, /MobileAdminNavigation active="finance"/, "O Treasury deve usar a mesma navegação mobile administrativa.");
 assert.match(financeViewerRoute, /MobileAdminNavigation active="finance"/, "A visão financeira deve usar a mesma navegação mobile administrativa.");
 assert.match(trainingRoute, /MobileAdminNavigation active="more"/, "A central de treinamento deve retornar ao menu mobile unificado.");
-assert.match(treasuryRouteSource, /className="admin-mobile-iframe"/, "O iframe financeiro deve reservar espaço para a navegação inferior no celular.");
+assert.match(treasuryRouteSource, /className="admin-mobile-iframe treasury-content-frame"/, "O Financeiro deve usar o dimensionamento compacto da nova experiência.");
 assert.match(trainingRoute, /createFileRoute\(["']\/_authenticated\/treinamento["']\)/, "A central de treinamento precisa ter uma rota autenticada própria.");
 assert.match(trainingRoute, /POP operacional DBS Air/, "O POP operacional deve estar disponível na central de treinamento.");
 assert.match(trainingRoute, /Sincronização/, "A central de treinamento deve documentar o fluxo de sincronização.");
@@ -692,7 +692,7 @@ assert.match(treasuryHtml, /DBS_TREASURY_VERIFY_ADMIN_PASSWORD/, "As alteraçõe
 assert.match(treasuryHtml, /async function validarDatasRetroativas/, "As validações de datas devem aguardar a reautenticação sem aplicar alterações antes da resposta.");
 assert.match(treasuryHtml, /await verifyTreasuryAdminPasswordInParent\(senha\)/, "A senha real do administrador precisa ser validada no portal antes da edição retroativa.");
 assert.match(treasuryHtml, /async function alternarFechamentoPeriodo/, "Reabrir um mês financeiro deve aguardar a reautenticação do administrador.");
-assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261027-ledger-1"/, "A atualização do Ledger deve invalidar o cache do HTML.");
+assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261115-approval-menu-1"/, "A nova função de aprovação deve invalidar o cache do HTML.");
 assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautenticação deve ser conferida pelo Supabase Auth.");
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
 assert.doesNotMatch(treasuryRoute, /treasury_snapshots.*(?:update|insert|upsert)/s, "A rota não pode escrever snapshots financeiros.");
