@@ -328,3 +328,14 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Correção aditiva no SQL: os dois filtros das views por conta passaram a incluir também `a.code like 'bank:%'`. O teste `scripts/test-phase3-ledger-reporting.cjs` agora protege esse contrato.
 - Commits: `b842eb421da2d977d37c7a1ef38638f08d2e2d61` (migration) e `bd19b4dc1d5eaaa8358bc7c131f44f4c19665b96` (regressão).
 - A migration ainda não foi aplicada no Supabase oficial porque a divergência do histórico remoto/local permanece em reconciliação. Nenhuma linha do Ledger, dívida, parcela, outbox ou outro dado de produção foi alterada. A correção aguarda validação CI e aplicação segura em ambiente de migração reconciliado.
+
+
+### Treasury — relatório derivado do Ledger conectado à tela (2026-11-15)
+
+- A leitura server-side de Treasury agora monta um conjunto de relatório por escopo autorizado, carregando partidas e plano de contas em blocos de até 250 IDs; inclui referências de estorno e só expõe ao relatório lançamentos com status `posted`. O acesso continua passando por `requireTreasuryReader` e pelo escopo da empresa/responsável.
+- A rota `/treasury` envia o relatório ao iframe existente; a tela ganhou um painel adicional com DRE por competência e entradas/saídas de caixa pela data documental, sem remover o DRE legado.
+- Parcelamentos (`installment_payment`) e estornos de parcelamento (`installment_reversal`) são excluídos das despesas operacionais do DRE; permanecem considerados nas movimentações de caixa. Não houve alteração de status, valor, histórico ou lançamento existente.
+- Correção complementar: a cobertura de contas caixa reconhece tanto códigos padrão `1.1.01` quanto contas dinâmicas `bank:<id>`; a leitura de relatório inclui `reversed_entry_id` e filtra rascunhos.
+- Teste `scripts/test-phase3-ledger-reporting.cjs` ampliado para verificar a migration, segurança `security_invoker`, contas dinâmicas, filtragem de lançamentos postados, passagem dos dados ao iframe e exclusão de principal de parcelamento das despesas operacionais. Verificação estática executada nesta sessão: 9/9 contratos passaram. O workflow Vercel do SHA de teste ainda estava em execução na última consulta; build READY já confirmado para o commit de integração anterior `84d25e4646770cac0c6efa95c53dcd67eaf983a4`.
+- Commits desta sequência: `462d2c61ef5e55d8364477f73414897b7c5e3e8d`, `882d6fced6a029e7003420960ad6d64c5032cb50`, `36e5231f189514f7a5b40a871a51146c696ad1b0`, `84d25e4646770cac0c6efa95c53dcd67eaf983a4`, `bc30806da5ce324eb36a5c6af12dd38e02acb4a8`, `e0c7d262da059fa4e9e82e19d8d6755c00a03049`, `b1948e388871c278299401dce13982883df73bff`.
+- **Ainda pendente:** a migration SQL das views não foi aplicada no Supabase oficial devido à divergência de histórico; não houve teste autenticado no iframe. Nenhuma publicação Lovable foi iniciada e o domínio oficial permanece intocado.
