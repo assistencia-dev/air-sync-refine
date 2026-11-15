@@ -45,6 +45,9 @@ assert.match(route, /autoQuarantineMessage/, "A migração da regra antiga deve 
 assert.match(route, /stale_conflict_reopened_for_review/, "Intenções antigas com checklist divergente devem voltar para revisão, não serem apagadas.");
 assert.match(route, /command\.lastError === autoQuarantineMessage/, "Quarentenas manuais ou dispensadas pelo operador não podem ser reabertas.");
 assert.match(route, /!dbsControlStateOrderIsDeleted\(cloudState, conflict\)/, "OS excluída nunca deve ser reaberta pela recuperação de conflito.");
+assert.match(route, /function dbsControlStateOrderIsCancelled\(/, "OS cancelada também precisa ser reconhecida como estado terminal na quarentena.");
+assert.match(route, /dbsControlStateOrderIsCancelled\(state, conflict\)/, "Conflitos antigos de OS cancelada não podem voltar para a fila de reenvio.");
+assert.match(route, /\["cancelada", "cancelado", "cancelled", "canceled", "cancel"\]/, "A detecção terminal deve cobrir os status de cancelamento legados e normalizados.");
 assert.match(route, /applyDbsControlDelta/, "A reconciliação precisa persistir somente deltas relacionais.");
 assert.match(route, /getDbsControlSyncCursor/, "A recuperação precisa ter um cursor leve além do websocket.");
 assert.match(route, /hydrateLocalSyncQueue/, "A sessão precisa hidratar a fila local durável antes de aceitar novos deltas.");
@@ -114,6 +117,8 @@ assert.match(iframe, /DBS_CONTROL_SYNC_CONFLICT_CLEARED/, "A limpeza de conflito
 assert.match(iframe, /function mergeDbsControlTechnicianChecklist\(/, "A reconciliação deve unir marcações técnicas verdadeiras sem apagar marcações canônicas.");
 assert.match(iframe, /function mergeDbsControlChecklistItems\(/, "A reconciliação deve preservar itens de checklist já concluídos na versão canônica.");
 assert.match(iframe, /current\.deleted_at \|\| current\.deletedAt \|\| current\.excluidaEm/, "O rebase de uma OS terminal deve preservar a exclusão canônica.");
+assert.match(iframe, /'cancelada', 'cancelado', 'cancelled', 'canceled'/, "O rebase não pode reabrir uma OS cancelada quando reaplica um payload antigo.");
+assert.match(iframe, /if \(currentIsTerminal\) \{[\s\S]*?next\.status = current\.status/, "O status terminal canônico deve prevalecer sobre o status antigo do dispositivo.");
 
 function retryDelay(attempt) {
   return Math.min(3600, Math.max(5, 30 * (2 ** Math.max(0, Math.min(attempt - 1, 6)))));
