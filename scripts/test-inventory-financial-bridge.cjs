@@ -276,6 +276,13 @@ assert.doesNotMatch(mainHtml, /O cadastro antigo por texto livre foi substituíd
 assert.match(settlementIndexes, /dbs_control_purchase_payments_created_by_fk_idx/i);
 assert.match(settlementIndexes, /dbs_control_purchase_payments_ledger_entry_fk_idx/i);
 assert.match(integrationSql, /begin;[\s\S]*rollback;/i);
+assert.match(integrationSql, /insert into public\.dbs_control_suppliers/i);
+assert.match(integrationSql, /insert into public\.dbs_control_measure_units/i);
+assert.match(integrationSql, /insert into public\.dbs_control_cost_centers/i);
+assert.match(integrationSql, /'supplier_id', v_supplier/i);
+assert.match(integrationSql, /'cost_center_id', v_cost_center/i);
+assert.match(integrationSql, /measure_unit_id = v_measure_unit/i);
+assert.match(integrationSql, /set cost_center_id = v_cost_center/i);
 assert.match(integrationSql, /dbs_control_register_purchase/i);
 assert.match(integrationSql, /dbs_control_settle_purchase/i);
 assert.match(integrationSql, /TEST_MOVEMENT_IDEMPOTENCY/i);
