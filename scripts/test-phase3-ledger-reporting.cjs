@@ -27,6 +27,7 @@ assert.match(migration, /from public\.treasury_ledger_entries/i);
 assert.match(migration, /join public\.treasury_ledger_lines/i);
 assert.match(migration, /join public\.treasury_accounts/i);
 assert.match(migration, /where e\.status='posted'/i);
+assert.ok(migration.includes("and e.entry_type not in ('installment_payment','installment_reversal')"), "debt principal payments must not inflate operating DRE");
 assert.match(migration, /e\.competence_date/i);
 assert.match(migration, /a\.account_type='revenue'/i);
 assert.match(migration, /a\.account_type='expense'/i);
