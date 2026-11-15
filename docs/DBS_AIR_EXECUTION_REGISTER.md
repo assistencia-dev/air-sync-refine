@@ -46,6 +46,28 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 - **Cadastros produtivos verificados em 2026-11-15:** 0 fornecedores ativos, 0 centros de custo ativos, 1 unidade ativa, 5 peças no catálogo (1 ativa e nenhuma peça ativa vinculada a unidade-base), 3 cotações, 0 compras, 0 itens de compra, 0 recebimentos e 0 movimentos de estoque. A única unidade cadastrada tem código `C001` e nome `CORTINA DE AR VIX 150CM ONE BR`, aparentando ser um item de catálogo, não uma unidade de medida. Não corrigir nem apagar esse registro sem confirmação do dado correto.
 - Portanto, a lógica de backend foi testada transacionalmente, mas ainda não foi possível comprovar um pedido de negócio real: faltam fornecedor, centro de custo, unidade de medida correta e vínculos das peças. Não inserir valores inventados em produção.
 
+### Fase 4 — Ordem de Serviço e visualização
+
+**Componente existente auditado; testes de PDF passaram; validação autenticada ponta a ponta pendente.**
+
+- `public/dbs-control-os-viewer.js` está incluído pelo `public/dbs-control.html` e abre a OS em visualização interna a partir do `ERP_STATE` hidratado, sem baixar automaticamente nem gravar o registro ao abrir.
+- O viewer já apresenta fotos antes/depois, galerias de imagem, documentos/anexos (incluindo PDF), assinaturas de cliente e técnico, histórico, preview do PDF, impressão e download.
+- Ações de alteração de status, consumo de estoque de veículo/gás e confirmação de instalação são chamadas somente por ações explícitas do usuário, usando os fluxos já existentes.
+- `scripts/test-dbs-control-pdf.cjs` passou no CI do SHA `d5c1465`, cobrindo equipamentos, checklist, peças, fotos/evidências, assinaturas e preservação do problema original junto à execução do técnico.
+- Ainda falta uma sessão autenticada de navegador para testar abrir uma OS real, navegar pelos anexos e imprimir sem alterar seu status.
+
+### Fase 5 — Sincronização, Outbox e conflitos
+
+**Auditoria somente leitura concluída; há conflitos históricos que exigem reconciliação cuidadosa.**
+
+- `dbs_control_sync_commands`: 375 comandos `applied` e 28 com `DBS_OS_CONFLICT` entre 2026-10-26 e 2026-11-12.
+- `dbs_control_outbox`: 1.963 eventos publicados (work orders created/updated e entidades created/updated); nenhuma linha pendente, failed ou em DLQ nos agregados consultados. Os eventos publicados aparecem com no máximo uma tentativa.
+- `dbs_control_outbox_dlq`: 0 registros; nenhum DLQ sem resolução.
+- Entre os 28 conflitos de OS, 23 foram ligados a OS relacionais atuais e estão com `expected_version` antigo em relação à versão atual; 11 dessas OS estão em status terminal e 12 em status não terminal. Cinco comandos não puderam ser ligados a uma OS atual nem pelo ID nem pelo protocolo do payload.
+- Os conflitos não foram reexecutados, descartados nem reconciliados; payload antigo pode conter valores obsoletos e não deve sobrescrever a versão atual. A investigação é somente leitura.
+- `dbs_control_inventory_outbox` está vazia, coerente com ausência de movimentos de estoque reais no banco. O worker de DBS Control concluiu com sucesso no CI.
+- A fila Treasury é independente e permanece no bloqueio descrito na Fase 3.
+
 ### Fase 3 — Financeiro / DBS Treasury
 
 **Integrações contábeis do fluxo aprovadas no teste transacional; fila Outbox Treasury permanece bloqueada.**
