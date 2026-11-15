@@ -5258,6 +5258,42 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
 
+        function mergeDbsControlTechnicianChecklist(currentChecklist, incomingChecklist) {
+            const current = currentChecklist && typeof currentChecklist === 'object' && !Array.isArray(currentChecklist)
+                ? currentChecklist : {};
+            const incoming = incomingChecklist && typeof incomingChecklist === 'object' && !Array.isArray(incomingChecklist)
+                ? incomingChecklist : {};
+            const merged = JSON.parse(JSON.stringify(current));
+            Object.entries(incoming).forEach(([group, checks]) => {
+                if (!checks || typeof checks !== 'object' || Array.isArray(checks)) return;
+                const currentGroup = merged[group] && typeof merged[group] === 'object' && !Array.isArray(merged[group])
+                    ? merged[group] : {};
+                const nextGroup = { ...currentGroup };
+                Object.entries(checks).forEach(([label, value]) => {
+                    nextGroup[label] = currentGroup[label] === true || value === true ? true : value;
+                });
+                merged[group] = nextGroup;
+            });
+            return merged;
+        }
+
+        function mergeDbsControlChecklistItems(currentItems, incomingItems) {
+            const identity = item => String(item?.id ?? item?.titulo ?? item?.label ?? item?.nome ?? '').trim().toLocaleLowerCase('pt-BR');
+            const merged = new Map((Array.isArray(currentItems) ? currentItems : []).map(item => [identity(item), item]).filter(([id]) => id));
+            (Array.isArray(incomingItems) ? incomingItems : []).forEach(item => {
+                const id = identity(item);
+                if (!id) return;
+                const current = merged.get(id) || {};
+                const next = { ...current, ...(item || {}) };
+                ['concluido', 'done', 'checked', 'ok'].forEach(field => {
+                    if (current[field] === true || item?.[field] === true) next[field] = true;
+                });
+                if (current.concluido === true && current.concluidoEm) next.concluidoEm = current.concluidoEm;
+                merged.set(id, next);
+            });
+            return Array.from(merged.values());
+        }
+
         function mergeDbsControlConflictState(cloudState, changes) {
             const merged = JSON.parse(JSON.stringify(cloudState && typeof cloudState === 'object' ? cloudState : {}));
             const identity = row => {
@@ -5277,13 +5313,39 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (!id) return;
                     const current = byIdentity.get(id);
                     const next = { ...(current || {}), ...(row || {}) };
-                    // The cloud version is authoritative after the conflict. Local
-                    // fields are replayed against that version on the next delta.
+                    // A conflict rebase must not erase checkbox marks that were
+                    // already committed by another device. True technician marks
+                    // are merged monotonically; a stale false cannot uncheck a
+                    // canonical true mark.
+                    if (key === 'ordens' && current) {
+                        next.checklistTecnico = mergeDbsControlTechnicianChecklist(
+                            current.checklistTecnico,
+                            row?.checklistTecnico
+                        );
+                        next.checklist = mergeDbsControlChecklistItems(current.checklist, row?.checklist);
+                    }
+                    // The cloud version and terminal state remain authoritative.
+                    // A stale local row may never revive a soft-deleted OS or
+                    // reopen a completed/signed OS during a manual rebase.
                     if (current && current.version !== undefined) next.version = current.version;
                     if (key === 'ordens' && current) {
                         next.id = current.id;
                         if (current.protocolo) next.protocolo = current.protocolo;
                         if (current.protocol) next.protocol = current.protocol;
+                        const currentStatus = String(current.status ?? '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        const currentIsTerminal = ['concluida', 'concluido', 'completed', 'complete'].includes(currentStatus)
+                            || Boolean(current.deleted_at || current.deletedAt || current.excluidaEm);
+                        if (currentIsTerminal) {
+                            next.status = current.status;
+                            if (current.deleted_at) next.deleted_at = current.deleted_at;
+                            if (current.deletedAt) next.deletedAt = current.deletedAt;
+                            if (current.excluidaEm) next.excluidaEm = current.excluidaEm;
+                            if (current.completedAt) next.completedAt = current.completedAt;
+                            if (current.concluidoEm) next.concluidoEm = current.concluidoEm;
+                            if (current.assinatura) next.assinatura = current.assinatura;
+                            if (current.signature_name) next.signature_name = current.signature_name;
+                            if (current.assinaturaStoragePath) next.assinaturaStoragePath = current.assinaturaStoragePath;
+                        }
                     }
                     byIdentity.set(id, next);
                 });
