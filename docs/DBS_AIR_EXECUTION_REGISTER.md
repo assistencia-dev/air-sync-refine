@@ -364,3 +364,17 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Perfil `COLABORADOR`: `current_role_key() = COLABORADOR`; RLS retornou 44 OS e 27 anexos visíveis. Consultas diretas às tabelas de compras e Ledger retornaram `permission denied`, confirmando ausência de privilégio de leitura financeira para esse perfil.
 - A consulta direta do colaborador à tabela de vínculo base-cliente também foi negada, como esperado. A validação de que cada OS visível pertence à base RH ainda precisa ser comprovada por uma consulta administrativa comparativa; as policies atuais limitam por empregado atribuído, mas não expressam diretamente a relação de base/cliente. Não foi alterada nenhuma policy ou grant.
 - Todos os testes foram somente leitura e encerrados com rollback; nenhum registro, usuário, dívida, parcela, baixa ou lançamento foi criado ou alterado.
+
+
+### Correção aplicada — isolamento de base/empresa nas policies RLS (2026-11-15)
+
+- Evidência reproduzida antes da correção: um usuário `COLABORADOR` tinha 44 OS e 27 anexos visíveis por PostgREST/RLS, embora as OS estivessem atribuídas a empregados cuja base RH pertencia a outra empresa. O backend já filtrava esse escopo, mas as policies diretas permitiam o acesso por atribuição sem validar a empresa da base.
+- Migration aditiva aplicada ao Supabase oficial: `20261115042021_dbs_control_collaborator_base_scope_rls_hardening`. Cria helpers SECURITY DEFINER para validar empregado, base ativa, mesma empresa e vínculo base-cliente; atualiza policies de OS, clientes, locais, equipamentos, catálogo de serviços, anexos, eventos, peças e relações da OS. Preserva as exigências de Ponto/autor nos INSERTs. Não altera linhas de OS, anexos, clientes ou vínculos.
+- Teste transacional pré-aplicação com `BEGIN ... ROLLBACK` passou. Verificação pós-aplicação com identidades autenticadas existentes:
+  - SUPER_ADMIN continua vendo 1.807 OS e 31 anexos.
+  - COLABORADOR com base de outra empresa passou de 44 OS/27 anexos para 0 OS, 0 anexos, 0 clientes, 0 locais, 0 equipamentos, 0 peças, 0 eventos, 0 peças de OS e 0 serviços de OS.
+  - COLABORADOR com base válida continua vendo 2 OS, 1 anexo, 67 clientes, 67 locais, 274 equipamentos e 16 eventos.
+  - Consultas de colaborador a Compras e Ledger continuam sem privilégio SELECT.
+- A migration foi renomeada no GitHub para corresponder exatamente à versão remota `20261115042021`. Teste `scripts/test-dbs-control-base-scope-rls.cjs` adicionado ao `prebuild` junto ao teste do Ledger.
+- Commits da correção: `9c24f2343cee09cc4fb57e49e6188fb17423ad43`, `aed12a23f4b8246f2b669c0755ff8ccda0be4b42`, `9d99ae5f1b51520fc37ddb804c1c004dec2f62da`, `45789bf0f2b9e642fdc1b3b5de2d17490fbaa7b7`, `baaf1de34399e791f5c792d8225d15343dd1c315`, `f235b1ad8c646143dc00f1d165c8cd7659632750`.
+- Os testes autenticados foram somente leitura; a prévia de DDL foi revertida por rollback. A migration final foi aplicada porque a exposição direta foi comprovada e o teste transacional confirmou o escopo esperado. Nenhuma baixa, parcela, dívida ou lançamento financeiro foi alterado.
