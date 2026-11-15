@@ -100,9 +100,14 @@ assert.ok(osViewer.includes("fotoAntes") && osViewer.includes("fotoDepois"), "A 
 assert.ok(osViewer.includes("[...L(o.anexos), ...L(o.attachments)"), "A visualização deve contemplar anexos legados e atuais.");
 assert.ok(osViewer.includes("Assinaturas") && osViewer.includes("Histórico"), "A visualização deve manter assinaturas e histórico.");
 assert.ok(osViewer.includes("setAttribute('role', 'dialog')"), "A visualização deve ser um diálogo acessível.");
-assert.equal(osViewer.includes("localStorage.") || osViewer.includes("sessionStorage.") ||
-  osViewer.includes("supabase.") || osViewer.includes("ERP_STATE.ordens ="), false,
-  "Abrir/visualizar OS não pode gravar dados nem chamar RPCs de alteração.");
+const osViewerMutationMethods = [".insert(", ".update(", ".upsert(", ".delete("];
+assert.equal(
+  osViewer.includes("localStorage.") || osViewer.includes("sessionStorage.") ||
+  osViewer.includes("supabase.") || osViewer.includes("ERP_STATE.ordens =") ||
+  osViewerMutationMethods.some((method) => osViewer.includes(method)),
+  false,
+  "Abrir/visualizar OS não pode gravar dados nem chamar RPCs de alteração.",
+);
 
 const firstPartyScripts = [
   "public/dbs-control-ux.js",
