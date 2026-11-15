@@ -23,7 +23,7 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 - Confirmado que GitHub `main` está na linha de commits de correção e que o projeto Lovable reconhece os commits recentes.
 - `.env`, `supabase/config.toml` e `src/integrations/supabase/project-config.ts` mantêm o Supabase oficial.
 - Não foi feita alteração de domínio, configuração Supabase, tabela ou migration de produção.
-- A última confirmação do Lovable retornou `status=ready`, `is_published=true` e SHA sincronizado `4ab6a6b9742cfe413dae98ea895dfbe67d6395a4`. Depois disso, o GitHub recebeu commits adicionais; confirmar a sincronização antes de qualquer publicação.
+- Verificação em 2026-11-15: GitHub `main` e Lovable reconhecem o mesmo SHA `d5c14650b09eb64c2dcbc672084c86c97f8be111`; Lovable retornou `status=ready`, `is_published=true`. Isso confirma o estado do projeto Lovable, não comprova sozinho que o domínio público serve esse SHA.
 - O smoke test público do navegador alcançou `/login` com título Portal DBS Air e sem erro de browser. Sem credenciais E2E, isso não comprova navegação autenticada nas telas internas.
 
 ### Fase 1 — Interface e navegação
@@ -35,15 +35,31 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 - `scripts/test-inventory-financial-bridge.cjs`: adicionadas asserções para esse comportamento.
 - A estrutura das telas existentes de Peças & Estoque e Compras e os formulários de fornecedores/unidades/centros de custo permanecem no componente existente.
 
+### Correção de auditoria — atualização de cadastros mestres
+
+- Foi inicialmente suspeitado que os handlers de fornecedor e unidade não atualizavam as listas após salvar. A leitura completa confirmou que ambos usam `runAction`, e a própria função compartilhada executa `await overview.refetch()` após qualquer ação concluída.
+- As chamadas extras `overview.refetch()` que chegaram a ser adicionadas foram removidas para evitar requisições duplicadas. O teste foi ajustado para proteger a atualização central de `runAction` e confirmar que os dois cadastros usam esse caminho.
+- Commits: `9e454a7ca1297e629f2774e46212a80f75fef2ed` (remove duplicidade) e `c4a2e6581c88ae9cd374e2de48a28211a30868a4` (teste do caminho compartilhado).
+
+### Fase 4 — Visualização da OS
+
+**Funcionalidade existente encontrada e contratos estáticos/PDF verificados.**
+
+- `public/dbs-control-os-viewer.js` implementa overlay de visualização somente leitura com dados hidratados do `ERP_STATE`.
+- A tabela de OS já chama `abrirVisualizacaoOS(id)`; o script publica `window.abrirVisualizacaoOS`.
+- A visualização inclui dados da OS, cliente/local, equipamentos, relato, diagnóstico, execução, checklist, peças, fotos, anexos, assinaturas e histórico. Possui pré-visualização de PDF, impressão e download explícito; abrir uma OS não força download.
+- O teste automatizado de PDF cobre equipamentos, checklist, peças, evidências fotográficas, assinaturas e preservação conjunta do problema relatado pelo cliente e execução técnica.
+- A navegação/visualização interna em sessão autenticada ainda precisa ser confirmada manualmente; o smoke público sem credenciais só alcançou a tela de login.
+
 ### Fase 2 — Compras e Estoque
 
 **Fluxo transacional completo aprovado em teste com rollback; operação real depende de cadastros válidos.**
 
 - `scripts/test-inventory-financial-bridge.integration.sql` foi ajustado para montar fornecedor, unidade, centro de custo, unidades-base das peças e centro de custo da OS somente dentro da transação de teste.
-- A execução no Supabase oficial terminou com `integration_test_status = PASS` e `ROLLBACK`.
+- Execução verificada em 2026-11-15 no Supabase oficial: `integration_test_status = PASS`; o arquivo termina com `ROLLBACK`. Consultas logo após a execução confirmaram 0 fornecedores, 0 centros de custo, 0 compras, 0 itens de compra, 0 recebimentos, 0 movimentos e 0 reservas — nenhum cadastro ou movimento de teste permaneceu persistido.
 - O teste percorreu: compra em rascunho sem movimento de estoque nem AP prematuro; idempotência; aprovação financeira e obrigação no Ledger; recebimento com movimentação única por item; custo médio ponderado; pagamento parcial e saldo de AP; reserva/consumo de peça na OS; COGS; replay sem baixa duplicada; fechamento da OS e receita; sete métricas do painel.
 - Consultas de contagem antes/depois confirmaram que os registros de teste não permaneceram no banco.
-- **Cadastros produtivos verificados em 2026-11-15:** 0 fornecedores ativos, 0 centros de custo ativos, 1 unidade ativa, 5 peças no catálogo (1 ativa e nenhuma peça ativa vinculada a unidade-base), 3 cotações, 0 compras, 0 itens de compra, 0 recebimentos e 0 movimentos de estoque. A única unidade cadastrada tem código `C001` e nome `CORTINA DE AR VIX 150CM ONE BR`, aparentando ser um item de catálogo, não uma unidade de medida. Não corrigir nem apagar esse registro sem confirmação do dado correto.
+- **Cadastros produtivos verificados em 2026-11-15:** 0 fornecedores ativos, 0 centros de custo ativos, 1 unidade ativa, 5 peças no catálogo (1 ativa e nenhuma peça ativa vinculada a unidade-base), 3 cotações, 0 compras, 0 itens de compra, 0 recebimentos e 0 movimentos de estoque. A única unidade é `C001`, nome `CORTINA DE AR VIX 150CM ONE BR 220`, símbolo `UN`, precisão 3, `is_system=false`. O símbolo indica unidade “UN”, mas o código/nome se parecem com SKU/descrição de peça; não renomear nem apagar sem confirmação do valor correto.
 - Portanto, a lógica de backend foi testada transacionalmente, mas ainda não foi possível comprovar um pedido de negócio real: faltam fornecedor, centro de custo, unidade de medida correta e vínculos das peças. Não inserir valores inventados em produção.
 
 ### Fase 4 — Ordem de Serviço e visualização
@@ -78,6 +94,10 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 - A rotina de saúde alerta corretamente os 3 eventos antigos. Não os marcar como publicados, apagar ou alterar para silenciar o alerta. Identificar o consumidor/contrato de destino antes de implementar processamento.
 - O worker `dbs-control-outbox-worker` é da fila de sincronização DBS Control e não deve ser tratado como consumidor da fila Treasury.
 
+- `9e454a7ca1297e629f2774e46212a80f75fef2ed` — removeu recargas duplicadas; a atualização já é centralizada em `runAction`.
+- `c4a2e6581c88ae9cd374e2de48a28211a30868a4` — adicionou teste do caminho compartilhado de atualização de listas.
+- `d5c14650b09eb64c2dcbc672084c86c97f8be111` — adicionou este registro mestre de continuidade.
+
 ## Commits desta execução
 
 - `1966ef9546f675249f526eb1546ad264c3aa7c81` — removeu import CSS redundante e corrigiu a causa da falha do build.
@@ -91,7 +111,7 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 
 - No commit `1966ef9`: Validate, TypeScript, build Vite, lint, testes operacionais, RH, estoque/financeiro, proteção de dados e fase 3 passaram; smoke de DBS Control e worker de sincronização passaram.
 - No commit `652ca26`: Validate, verificar e DBS Control smoke concluíram com sucesso.
-- No commit `6e4b29c`: workflows foram iniciados; registrar aqui as conclusões depois de finalizarem.
+- No SHA `d5c14650b09eb64c2dcbc672084c86c97f8be111`: Validate, verificar, DBS Control smoke validation e DBS Control outbox worker concluíram com sucesso. O Validate incluiu lint, testes operacionais/performance/RH/estoque-financeiro/proteção de dados/ledger reporting, build Vite e TypeScript; o verificar incluiu contratos DBS Control/PDF/financeiro, TypeScript e build Vite.
 - O smoke de navegador público só valida o acesso público/redirecionamento para login; não afirma que a sessão autenticada percorreu a operação.
 
 ## Bloqueios e próximos passos
