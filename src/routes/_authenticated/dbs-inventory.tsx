@@ -175,6 +175,11 @@ export function DbsInventoryPage({
   const purchasesOpen = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.status !== "received" && purchase.status !== "cancelled" && purchase.approval_status !== "rejected"
   );
+  const activePartsMissingMasterData = parts.filter((part: any) =>
+    part.status === "ativo" && (!part.supplier_id || !part.measure_unit_id)
+  ).length;
+  const purchaseSetupIncomplete =
+    suppliers.length === 0 || measureUnits.length === 0 || costCenters.length === 0 || activePartsMissingMasterData > 0;
   const visibleParts = parts.filter((part: any) => {
     const query = catalogSearch.trim().toLocaleLowerCase("pt-BR");
     const catalogSupplierLabel = suppliers.find((row: any) => String(row.id) === String(part.supplier_id))?.name ?? "";
@@ -941,6 +946,19 @@ export function DbsInventoryPage({
           </section>
           </>}
           {purchasesView === "new" && <>
+            {purchaseSetupIncomplete && <section aria-label="Cadastros necessários para compras" className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-amber-950">Prepare os cadastros antes da primeira compra</h2>
+                <p className="mt-1 text-xs leading-5 text-amber-900">
+                  Fornecedores: {suppliers.length} · Unidades de medida: {measureUnits.length} · Centros de custo: {costCenters.length}
+                  {activePartsMissingMasterData > 0 ? ` · Peças ativas sem fornecedor ou unidade-base: ${activePartsMissingMasterData}` : ""}.
+                  Confira os cadastros e vincule fornecedor e unidade-base às peças existentes antes de registrar pedidos.
+                </p>
+              </div>
+              <button type="button" onClick={() => { setModuleSection("parts"); setPartsView("settings"); setSettingsView("suppliers"); setActiveDrawer(null); }} className="min-h-10 shrink-0 rounded-lg border border-amber-300 bg-white px-4 text-xs font-semibold text-amber-950 hover:bg-amber-100">
+                Abrir Cadastros Básicos
+              </button>
+            </section>}
                       <Sheet open={activeDrawer==="new-purchase"} onOpenChange={(open)=>setActiveDrawer(open?"new-purchase":null)}>
             <SheetContent side="right" className="dbs-operations-drawer w-[98vw] max-w-[820px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
               <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle className="text-xl font-semibold tracking-tight text-slate-900">Nova compra</SheetTitle><SheetDescription>Fornecedor, centro de custo, cotação e itens do pedido.</SheetDescription></SheetHeader>
