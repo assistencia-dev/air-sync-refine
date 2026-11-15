@@ -293,7 +293,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       activeRevenueAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "revenue").length,
       activeExpenseAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "expense").length,
       activeCashAccounts: activeLedgerAccounts.filter((account: any) =>
-        account.accountType === "asset" && /^(?:1\\.1\\.01(?:\\.|$)|bank:)/.test(account.code)
+        account.accountType === "asset" && /^(?:1\.1\.01(?:\.|$)|bank:)/.test(account.code)
       ).length,
     },
   };
