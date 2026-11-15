@@ -24,7 +24,7 @@
     "test:treasury-health": "node scripts/check-treasury-ledger-health.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
     "test:phase3-ledger-reporting": "node scripts/test-phase3-ledger-reporting.cjs",
-    "prebuild": "node scripts/test-phase3-ledger-reporting.cjs && node scripts/test-dbs-control-base-scope-rls.cjs && node scripts/check-migration-drift.mjs --local-only && node scripts/check-supabase-project-ref.cjs",
+    "prebuild": "node scripts/test-dbs-control-resilience.cjs && node scripts/test-dbs-control-base-scope.cjs && node scripts/test-inventory-financial-bridge.cjs && node scripts/test-treasury-ledger.cjs && node scripts/test-phase3-ledger-reporting.cjs && node scripts/test-dbs-control-base-scope-rls.cjs && node scripts/check-migration-drift.mjs --local-only && node scripts/check-supabase-project-ref.cjs",
     "test:dbs-control-pdf": "node scripts/test-dbs-control-pdf.cjs"
   },
   "dependencies": {
