@@ -56,6 +56,9 @@ assert.match(route, /queuedChangesRef/, "Uma edição que chega durante uma tran
 assert.match(route, /handleOffline/, "A interface precisa sinalizar a perda de conexão antes do próximo salvamento.");
 assert.match(route, /dbsControlConflictIsAutoResolvable/, "Conflitos de OS concluída precisam ser reconhecidos mesmo quando o código legado veio incompleto.");
 assert.match(route, /function dbsControlStateOrderIsDeleted\(/, "OS excluídas precisam sair da fila ativa sem serem reabertas por um rebase antigo.");
+assert.match(route, /function dbsControlStateOrderIsCancelled\(/, "OS canceladas precisam ser reconhecidas como terminais.");
+assert.match(route, /!dbsControlStateOrderIsCancelled\(cloudState, conflict\)/, "OS canceladas não podem ser reabertas ao recuperar quarentenas antigas.");
+assert.match(route, /\|\| dbsControlStateOrderIsCancelled\(cloudState, conflict\)/, "O rebase do colaborador não pode ressuscitar OS canceladas.");
 assert.match(route, /function dbsControlConflictChecklistMatches\(/, "Status igual não pode encerrar conflito quando marcações do checklist ainda diferem.");
 assert.match(route, /dbsControlConflictChecklistMatches\(local, canonical\)/, "Uma OS aberta só pode ser auto-quarentenada depois de confirmar também o checklist.");
 assert.match(route, /dbsControlConflictAlreadyApplied/, "Conflitos antigos já refletidos na versão canônica precisam sair da fila ativa sem regravar a OS.");
