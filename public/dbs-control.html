@@ -4845,12 +4845,24 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         function dbsControlDeltaRecord(item, key) {
             const copy = JSON.parse(JSON.stringify(item || {}));
             // Evidências binárias são enviadas pelo fluxo de Storage. Se já existe
-            // um caminho, nunca duplicar a base64 dentro do delta relacional.
+            // um caminho, nunca duplicar base64 nem URLs assinadas no delta.
             if (key === 'ordens') {
                 if (copy.assinaturaStoragePath || copy.assinatura_path || copy.signature_path
                     || (typeof copy.assinatura === 'string' && copy.assinatura.startsWith('data:'))) copy.assinatura = null;
                 if (copy.fotoAntesStoragePath || (typeof copy.fotoAntes === 'string' && copy.fotoAntes.startsWith('data:'))) copy.fotoAntes = null;
                 if (copy.fotoDepoisStoragePath || (typeof copy.fotoDepois === 'string' && copy.fotoDepois.startsWith('data:'))) copy.fotoDepois = null;
+                const stripSignedAttachmentLinks = items => Array.isArray(items) ? items.map(attachment => {
+                    const nextAttachment = { ...attachment };
+                    const storagePath = String(nextAttachment.storagePath || nextAttachment.storage_path || '').trim();
+                    if (storagePath) {
+                        ['url', 'signedUrl', 'signed_url', 'publicUrl', 'public_url', 'src', 'dataUrl', 'data_url', 'data', 'base64']
+                            .forEach(field => { delete nextAttachment[field]; });
+                    }
+                    return nextAttachment;
+                }) : items;
+                copy.fotos = stripSignedAttachmentLinks(copy.fotos);
+                copy.anexos = stripSignedAttachmentLinks(copy.anexos);
+                copy.attachments = stripSignedAttachmentLinks(copy.attachments);
             }
             return copy;
         }
