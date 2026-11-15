@@ -158,6 +158,8 @@ const osAttachmentUploadStart = cloudFunctions.indexOf("export const uploadDbsCo
 const osAttachmentUploadEnd = cloudFunctions.indexOf("export const getDbsControlDashboardSummary", osAttachmentUploadStart);
 assert.ok(osAttachmentUploadStart >= 0 && osAttachmentUploadEnd > osAttachmentUploadStart, "O upload de evidências da OS deve permanecer no backend autenticado.");
 const osAttachmentUploadHandler = cloudFunctions.slice(osAttachmentUploadStart, osAttachmentUploadEnd);
+assert.ok(osAttachmentUploadHandler.includes("employee?.dbs_control_base_id"), "O upload deve reconhecer a base configurada no cadastro RH do colaborador.");
+assert.ok(osAttachmentUploadHandler.includes("resolvedBaseId !== configuredBaseId"), "O upload deve falhar fechado se a base RH não puder ser resolvida.");
 assert.ok(osAttachmentUploadHandler.includes("collaboratorScope?.baseActive !== true"), "O upload deve bloquear colaboradores sem base ativa.");
 assert.ok(osAttachmentUploadHandler.includes("allowedClientIds.has(orderClientId)"), "O upload deve respeitar os clientes vinculados à base, mesmo com ID/protocolo direto.");
 assert.ok(osAttachmentUploadHandler.includes("if (!assigned && !technicianMatches)"), "O upload deve continuar restrito à OS do colaborador.");
