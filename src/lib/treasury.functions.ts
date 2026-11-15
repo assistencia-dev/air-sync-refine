@@ -219,6 +219,85 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
+
+  const ledgerEntryIds = (entries ?? []).map((entry: any) => String(entry.id)).filter(Boolean);
+  const ledgerLineChunks: string[][] = [];
+  for (let index = 0; index < ledgerEntryIds.length; index += 250) {
+    ledgerLineChunks.push(ledgerEntryIds.slice(index, index + 250));
+  }
+  const [ledgerLineResults, ledgerAccountsResult] = await Promise.all([
+    Promise.all(ledgerLineChunks.map((entryIds) => admin
+      .from("treasury_ledger_lines")
+      .select("id,entry_id,account_id,line_no,debit_cents,credit_cents,memo")
+      .in("entry_id", entryIds)
+      .order("line_no", { ascending: true }))),
+    admin
+      .from("treasury_accounts")
+      .select("id,code,name,account_type,currency_code,is_active")
+      .eq("scope_key", scopeKey)
+      .order("code", { ascending: true })
+      .limit(500),
+  ]);
+  const ledgerLineError = ledgerLineResults.find((result: any) => result.error)?.error;
+  if (ledgerLineError) throw new Error("Falha ao carregar partidas do Ledger: " + ledgerLineError.message);
+  if (ledgerAccountsResult.error) throw new Error("Falha ao carregar plano de contas do Ledger: " + ledgerAccountsResult.error.message);
+
+  const ledgerAccounts = (ledgerAccountsResult.data ?? []).map((account: any) => ({
+    id: String(account.id),
+    code: String(account.code ?? ""),
+    name: String(account.name ?? ""),
+    accountType: String(account.account_type ?? ""),
+    currencyCode: String(account.currency_code ?? "BRL"),
+    isActive: account.is_active === true,
+  }));
+  const ledgerAccountById = new Map(ledgerAccounts.map((account: any) => [account.id, account]));
+  const ledgerLines = ledgerLineResults.flatMap((result: any) => result.data ?? []);
+  const ledgerLinesByEntry = new Map<string, any[]>();
+  for (const line of ledgerLines) {
+    const entryId = String(line.entry_id ?? "");
+    if (!entryId) continue;
+    const rows = ledgerLinesByEntry.get(entryId) ?? [];
+    rows.push({
+      id: String(line.id),
+      lineNo: Number(line.line_no) || 0,
+      accountId: String(line.account_id),
+      account: ledgerAccountById.get(String(line.account_id)) ?? null,
+      debitCents: Number(line.debit_cents) || 0,
+      creditCents: Number(line.credit_cents) || 0,
+      memo: String(line.memo ?? ""),
+    });
+    ledgerLinesByEntry.set(entryId, rows);
+  }
+  const ledgerReportEntries = (entries ?? []).map((entry: any) => {
+    const lines = ledgerLinesByEntry.get(String(entry.id)) ?? [];
+    return {
+      id: String(entry.id),
+      competenceDate: String(entry.competence_date ?? ""),
+      documentDate: entry.document_date ? String(entry.document_date) : null,
+      displayDate: String(entry.document_date ?? entry.competence_date ?? ""),
+      entryType: String(entry.entry_type ?? ""),
+      status: String(entry.status ?? ""),
+      description: String(entry.description ?? ""),
+      reversedEntryId: entry.reversed_entry_id ? String(entry.reversed_entry_id) : null,
+      createdAt: String(entry.created_at ?? ""),
+      lines,
+      debitCents: lines.reduce((sum: number, line: any) => sum + line.debitCents, 0),
+      creditCents: lines.reduce((sum: number, line: any) => sum + line.creditCents, 0),
+    };
+  });
+  const activeLedgerAccounts = ledgerAccounts.filter((account: any) => account.isActive);
+  const ledgerReport = {
+    entries: ledgerReportEntries,
+    accounts: ledgerAccounts,
+    accountCoverage: {
+      activeRevenueAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "revenue").length,
+      activeExpenseAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "expense").length,
+      activeCashAccounts: activeLedgerAccounts.filter((account: any) =>
+        account.accountType === "asset" && /^1\\.1\\.01(?:\\.|$)/.test(account.code)
+      ).length,
+    },
+  };
+
   const state = mergeLedgerState(snapshot?.state, entries ?? []);
   if (state) {
     state._meta = {
@@ -239,6 +318,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     state_version: snapshot?.state_version ?? 5,
     updated_at: snapshot?.updated_at ?? lastLedgerUpdate,
     ledger_entry_count: entries?.length ?? 0,
+    ledger_report: ledgerReport,
     purchase_commitments: purchaseCommitments ?? [],
     pending_purchase_approvals: pendingPurchaseApprovals ?? [],
     cost_centers: costCenters ?? [],
