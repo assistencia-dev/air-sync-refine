@@ -1269,11 +1269,13 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
       // Match the same base boundary used by OS hydration: an assigned OS from
       // another client/base must not accept evidence uploads through a direct
       // UUID or protocol request that bypasses the filtered list.
-      const hasConfiguredBase = Boolean(String(collaboratorScope?.baseId ?? "").trim());
-      if (hasConfiguredBase) {
+      const configuredBaseId = String(employee?.dbs_control_base_id ?? "").trim();
+      if (configuredBaseId) {
+        const resolvedBaseId = String(collaboratorScope?.baseId ?? "").trim();
         const allowedClientIds = new Set((collaboratorScope?.clientIds ?? []).map((id: unknown) => String(id).trim()).filter(Boolean));
         const orderClientId = String(order?.client_id ?? order?.clienteId ?? "").trim();
-        if (collaboratorScope?.baseActive !== true || !orderClientId || !allowedClientIds.has(orderClientId)) {
+        if (resolvedBaseId !== configuredBaseId || collaboratorScope?.baseActive !== true ||
+            !orderClientId || !allowedClientIds.has(orderClientId)) {
           throw new Error("Esta OS não pertence à base ativa vinculada ao seu acesso.");
         }
       }
