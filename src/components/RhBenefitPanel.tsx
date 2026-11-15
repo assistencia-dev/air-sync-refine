@@ -3,9 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CalendarClock,
-  CheckCircle2,
   CircleDollarSign,
-  Clock3,
   Pencil,
   Plus,
   Receipt,
@@ -13,7 +11,6 @@ import {
   ShieldCheck,
   Trash2,
   UsersRound,
-  Utensils,
   WalletCards,
 } from "lucide-react";
 import {
@@ -26,7 +23,11 @@ import {
   updateRhTopup,
   type RhBenefitType,
 } from "@/lib/rh.functions";
-import { isRJHoliday } from "@/utils/rjHolidays";
+import {
+  addBusinessDaysRio,
+  businessDaysInRioDeJaneiroMonth,
+  businessDaysRemainingRio,
+} from "@/utils/rhBenefitCalendar";
 
 type Employee = {
   id: string;
@@ -87,44 +88,19 @@ function scheduleKind(value: unknown): "5x2" | "6x1" | "12x36" {
   return "5x2";
 }
 
-function isScheduledWorkday(date: Date, schedule: string, anchorDate: string) {
-  if (isRJHoliday(date)) return false;
-  const weekday = date.getDay();
-  if (schedule === "6x1") return weekday !== 0;
-  if (schedule === "12x36") {
-    const anchor = new Date(anchorDate + "T12:00:00");
-    const current = new Date(date);
-    const difference = Math.round((current.getTime() - anchor.getTime()) / 86_400_000);
-    return difference > 0 && difference % 2 === 0;
-  }
-  return weekday >= 1 && weekday <= 5;
-}
-
-function addScheduledDays(startDate: string, days: number, schedule: string) {
-  const result = new Date(startDate + "T12:00:00");
-  let remaining = Math.max(0, Math.floor(days));
-  let safety = 0;
-  while (remaining > 0 && safety < 900) {
-    result.setDate(result.getDate() + 1);
-    if (isScheduledWorkday(result, schedule, startDate)) remaining -= 1;
-    safety += 1;
-  }
-  return localISODate(result);
-}
-
-function scheduledDaysRemaining(startDate: string, renewalDate: string, schedule: string) {
-  const today = new Date(localISODate() + "T12:00:00");
-  const target = new Date(renewalDate + "T12:00:00");
-  if (target <= today) return 0;
-  let remaining = 0;
-  let safety = 0;
-  const cursor = new Date(today);
-  while (cursor < target && safety < 900) {
-    cursor.setDate(cursor.getDate() + 1);
-    if (cursor < target && isScheduledWorkday(cursor, schedule, startDate)) remaining += 1;
-    safety += 1;
-  }
-  return remaining;
+function buildCoverage(
+  amountCents: number,
+  dailyCostCents: number,
+  paidAt: string,
+): BenefitCoverage {
+  const daysCovered = dailyCostCents > 0 ? Math.floor(amountCents / dailyCostCents) : 0;
+  const renewalDate = daysCovered > 0 ? localISODate(addBusinessDaysRio(paidAt, daysCovered)) : null;
+  return {
+    dailyCostCents,
+    daysCovered,
+    renewalDate,
+    daysRemaining: renewalDate ? businessDaysRemainingRio(renewalDate) : 0,
+  };
 }
 
 function getDailyCostCents(employee: Pick<Employee, "fare_cents" | "trips_per_day">, benefitType: RhBenefitType) {
@@ -154,12 +130,14 @@ function isSameMonth(value: string, reference: Date) {
 
 export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) {
   const qc = useQueryClient();
-  const [section, setSection] = useState<"overview" | "employees" | "topups" | "history">("overview");
+  const [section, setSection] = useState<"overview" | "employees" | "topups" | "history" | "finance">("overview");
   const [employeeModal, setEmployeeModal] = useState<"new" | Employee | null>(null);
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupEdit, setTopupEdit] = useState<Topup | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [financePeriod, setFinancePeriod] = useState<"month" | "last30" | "all">("month");
+  const [financeEmployeeId, setFinanceEmployeeId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const employees = useQuery({
     queryKey: ["rh-employees", benefitType],
@@ -174,6 +152,56 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   const monthRows = rows.filter((item) => isSameMonth(item.paid_at, new Date()));
   const monthTotal = monthRows.reduce((sum, item) => sum + item.amount_cents, 0);
   const totalMoved = rows.reduce((sum, item) => sum + item.amount_cents, 0);
+  const financeSummary = useMemo(() => {
+    const today = new Date();
+    const todayIso = localISODate(today);
+    const last30 = new Date(today);
+    last30.setDate(last30.getDate() - 29);
+    const last30Iso = localISODate(last30);
+    const periodRows = rows.filter((item) => {
+      if (financePeriod === "all") return true;
+      if (financePeriod === "month") return isSameMonth(item.paid_at, today);
+      return item.paid_at >= last30Iso && item.paid_at <= todayIso;
+    }).filter((item) => !financeEmployeeId || item.employee_id === financeEmployeeId);
+    const selectedEmployees = activeEmployees.filter((employee) => !financeEmployeeId || employee.id === financeEmployeeId);
+    const periodTotalCents = periodRows.reduce((sum, item) => sum + item.amount_cents, 0);
+    const accumulatedTotalCents = rows
+      .filter((item) => !financeEmployeeId || item.employee_id === financeEmployeeId)
+      .reduce((sum, item) => sum + item.amount_cents, 0);
+    const daysInMonth = businessDaysInRioDeJaneiroMonth();
+    const collaborators = selectedEmployees.map((employee) => {
+      const employeeRows = rows.filter((item) => item.employee_id === employee.id);
+      const periodItems = periodRows.filter((item) => item.employee_id === employee.id);
+      const periodInvestedCents = periodItems.reduce((sum, item) => sum + item.amount_cents, 0);
+      const dailyCostCents = getDailyCostCents(employee, benefitType);
+      const lastTopUpAt = employeeRows.reduce<string | null>((latest, item) =>
+        !latest || item.paid_at > latest ? item.paid_at : latest, null);
+      return {
+        id: employee.id,
+        fullName: employee.full_name,
+        unit: employee.unit,
+        dailyCostCents,
+        projectedMonthlyCents: dailyCostCents * daysInMonth,
+        topUpCount: periodItems.length,
+        periodInvestedCents,
+        totalInvestedCents: employeeRows.reduce((sum, item) => sum + item.amount_cents, 0),
+        lastTopUpAt,
+      };
+    }).sort((a, b) => b.periodInvestedCents - a.periodInvestedCents || a.fullName.localeCompare(b.fullName));
+    const dailyCostTotalCents = selectedEmployees.reduce((sum, employee) => sum + getDailyCostCents(employee, benefitType), 0);
+    return {
+      periodTotalCents,
+      accumulatedTotalCents,
+      dailyCostTotalCents,
+      projectedMonthlyCents: selectedEmployees.reduce((sum, employee) => sum + getDailyCostCents(employee, benefitType) * daysInMonth, 0),
+      topUpCount: periodRows.length,
+      daysInMonth,
+      collaborators: collaborators.map((item) => ({
+        ...item,
+        sharePercent: periodTotalCents > 0 ? Math.round((item.periodInvestedCents / periodTotalCents) * 100) : 0,
+      })),
+    };
+  }, [activeEmployees, benefitType, financeEmployeeId, financePeriod, rows]);
   const title = benefitType === "alimentacao" ? "Vale Alimentação" : "Vale Passagem";
   const description = benefitType === "alimentacao"
     ? "Crédito diário × dias de trabalho cadastrados no calendário."
@@ -235,6 +263,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
           ["employees", "Colaboradores", UsersRound],
           ["topups", "Novo lançamento", Plus],
           ["history", "Histórico", Receipt],
+          ["finance", "Financeiro", CircleDollarSign],
         ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
@@ -271,6 +300,7 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
               <Metric label="Precisam renovar" value={String(renewalSoon.length)} icon={<CalendarClock className="h-4 w-4" />} />
               <Metric label="Lançamentos no mês" value={String(monthRows.length)} icon={<Receipt className="h-4 w-4" />} />
               <Metric label="Movimentado no mês" value={money(monthTotal)} icon={<CircleDollarSign className="h-4 w-4" />} />
+              <Metric label="Projeção mensal" value={money(financeSummary.projectedMonthlyCents)} icon={<CalendarClock className="h-4 w-4" />} />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
@@ -319,6 +349,11 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
                   <div className="border-l-2 border-sky-400 pl-3">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Custo diário configurado</span>
                     <strong className="mt-1 block text-xl font-black text-slate-100">{money(activeEmployees.reduce((sum, employee) => sum + getDailyCostCents(employee, benefitType), 0))}</strong>
+                  </div>
+                  <div className="border-l-2 border-emerald-400 pl-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Projeção mensal do time</span>
+                    <strong className="mt-1 block text-xl font-black text-slate-100">{money(financeSummary.projectedMonthlyCents)}</strong>
+                    <span className="mt-1 block text-[10px] text-slate-500">{financeSummary.daysInMonth} dias úteis no calendário do Rio</span>
                   </div>
                   <p className="text-[11px] leading-5 text-slate-400">
                     {benefitType === "passagem"
@@ -384,6 +419,18 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
             search={historySearch}
             onSearchChange={setHistorySearch}
             onEdit={(item) => { setTopupEdit(item); setTopupOpen(true); }}
+          />
+        )}
+
+        {section === "finance" && (
+          <FinancePanel
+            benefitType={benefitType}
+            period={financePeriod}
+            employeeId={financeEmployeeId}
+            onPeriodChange={setFinancePeriod}
+            onEmployeeChange={setFinanceEmployeeId}
+            employees={activeEmployees}
+            summary={financeSummary}
           />
         )}
       </div>
@@ -784,3 +831,114 @@ function HistoryList({
     </div>
   );
 }
+
+function FinancePanel({
+  benefitType,
+  period,
+  employeeId,
+  onPeriodChange,
+  onEmployeeChange,
+  employees,
+  summary,
+}: {
+  benefitType: RhBenefitType;
+  period: "month" | "last30" | "all";
+  employeeId: string;
+  onPeriodChange: (value: "month" | "last30" | "all") => void;
+  onEmployeeChange: (value: string) => void;
+  employees: Employee[];
+  summary: {
+    periodTotalCents: number;
+    accumulatedTotalCents: number;
+    dailyCostTotalCents: number;
+    projectedMonthlyCents: number;
+    topUpCount: number;
+    daysInMonth: number;
+    collaborators: Array<{
+      id: string;
+      fullName: string;
+      unit: string;
+      dailyCostCents: number;
+      projectedMonthlyCents: number;
+      topUpCount: number;
+      periodInvestedCents: number;
+      totalInvestedCents: number;
+      lastTopUpAt: string | null;
+      sharePercent: number;
+    }>;
+  };
+}) {
+  const periodLabel = period === "month" ? "Mês atual" : period === "last30" ? "Últimos 30 dias" : "Histórico completo";
+  return (
+    <div>
+      <div className="mb-5">
+        <p className="text-[10px] font-black uppercase tracking-[.15em] text-amber-300">Controle financeiro</p>
+        <h3 className="mt-1 text-lg font-black text-slate-50">Investimento e projeção</h3>
+        <p className="mt-1 text-xs text-slate-400">Recargas efetivamente lançadas, custo diário configurado e previsão para o mês.</p>
+      </div>
+      <div className="mb-5 grid gap-3 rounded-xl border border-slate-800 bg-[#141F33] p-4 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+          Período
+          <select value={period} onChange={(event) => onPeriodChange(event.target.value as "month" | "last30" | "all")} className="min-h-10 rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-xs font-semibold text-slate-100">
+            <option value="month">Mês atual</option>
+            <option value="last30">Últimos 30 dias</option>
+            <option value="all">Histórico completo</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+          Colaborador
+          <select value={employeeId} onChange={(event) => onEmployeeChange(event.target.value)} className="min-h-10 rounded-lg border border-slate-700 bg-[#0F172A] px-3 text-xs font-semibold text-slate-100">
+            <option value="">Todos os colaboradores</option>
+            {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.full_name} · {employee.unit}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label={`Investido · ${periodLabel}`} value={money(summary.periodTotalCents)} icon={<WalletCards className="h-4 w-4" />} />
+        <Metric label="Acumulado geral" value={money(summary.accumulatedTotalCents)} icon={<CircleDollarSign className="h-4 w-4" />} />
+        <Metric label="Custo diário do time" value={money(summary.dailyCostTotalCents)} icon={<UsersRound className="h-4 w-4" />} />
+        <Metric label="Projeção mensal" value={money(summary.projectedMonthlyCents)} icon={<CalendarClock className="h-4 w-4" />} />
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full text-sm">
+          <thead className="bg-[#141F33] text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-4 py-3">Colaborador</th>
+              <th className="px-4 py-3">Lançamentos</th>
+              <th className="px-4 py-3">Investido no período</th>
+              <th className="px-4 py-3">Acumulado</th>
+              <th className="px-4 py-3">Projeção mensal</th>
+              <th className="px-4 py-3">Último crédito</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.collaborators.map((item) => (
+              <tr key={item.id} className="border-t border-slate-800">
+                <td className="px-4 py-3">
+                  <strong className="block text-slate-100">{item.fullName}</strong>
+                  <small className="text-slate-500">{item.unit} · {money(item.dailyCostCents)}/dia</small>
+                </td>
+                <td className="px-4 py-3 text-slate-300">{item.topUpCount}</td>
+                <td className="px-4 py-3">
+                  <strong className="text-slate-100">{money(item.periodInvestedCents)}</strong>
+                  <small className="block text-slate-500">{item.sharePercent}% do período</small>
+                </td>
+                <td className="px-4 py-3 font-semibold text-slate-300">{money(item.totalInvestedCents)}</td>
+                <td className="px-4 py-3">
+                  <strong className="text-slate-100">{money(item.projectedMonthlyCents)}</strong>
+                  <small className="block text-slate-500">{summary.daysInMonth} dias úteis</small>
+                </td>
+                <td className="px-4 py-3 text-slate-300">{dateText(item.lastTopUpAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!summary.collaborators.length && <p className="p-8 text-center text-xs text-slate-400">Nenhum colaborador ativo neste benefício para o filtro selecionado.</p>}
+      </div>
+      <p className="mt-3 text-[10px] leading-5 text-slate-500">
+        O investimento corresponde aos créditos registrados; a projeção é calculada pelo custo diário dos cadastros ativos multiplicado pelos {summary.daysInMonth} dias úteis do calendário do Rio de Janeiro no mês atual. {benefitType === "passagem" ? "No VT, o custo diário é tarifa × viagens por dia." : "No VA, o custo diário é o valor diário configurado."}
+      </p>
+    </div>
+  );
+}
+
