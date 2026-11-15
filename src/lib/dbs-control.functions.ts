@@ -1022,6 +1022,19 @@ function stripStoredAttachmentPayloads(state: Record<string, unknown>) {
     if (copy.assinaturaStoragePath) copy.assinatura = null;
     if (copy.fotoAntesStoragePath) copy.fotoAntes = null;
     if (copy.fotoDepoisStoragePath) copy.fotoDepois = null;
+    const stripSignedAttachmentLinks = (items: unknown) => Array.isArray(items) ? items.map((item: any) => {
+      const attachment = { ...item };
+      const storagePath = String(attachment.storagePath ?? attachment.storage_path ?? "").trim();
+      if (storagePath) {
+        for (const field of ["url", "signedUrl", "signed_url", "publicUrl", "public_url", "src", "dataUrl", "data_url", "data", "base64"]) {
+          delete attachment[field];
+        }
+      }
+      return attachment;
+    }) : items;
+    copy.fotos = stripSignedAttachmentLinks(copy.fotos);
+    copy.anexos = stripSignedAttachmentLinks(copy.anexos);
+    copy.attachments = stripSignedAttachmentLinks(copy.attachments);
     return copy;
   });
   return next;
