@@ -10,6 +10,9 @@ declare
   v_scope text;
   v_part uuid;
   v_part2 uuid;
+  v_supplier uuid;
+  v_measure_unit uuid;
+  v_cost_center uuid;
   v_before_stock numeric;
   v_before_cost integer;
   v_before_stock2 numeric;
@@ -59,6 +62,28 @@ begin
 
   v_scope := case when v_company is not null then 'company:' || v_company::text else 'user:' || v_actor::text end;
 
+  -- Master data is created only inside this rollback-only test transaction.
+  insert into public.dbs_control_suppliers (
+    company_id, scope_key, name, status, created_by, updated_by
+  ) values (
+    v_company, v_scope, 'Fornecedor teste ' || substr(md5(v_key),1,10),
+    'active', v_actor, v_actor
+  ) returning id into v_supplier;
+
+  insert into public.dbs_control_measure_units (
+    company_id, scope_key, code, name, symbol, decimal_places, status, created_by, updated_by
+  ) values (
+    v_company, v_scope, 'TST' || upper(substr(md5(v_key),1,8)),
+    'Unidade de teste', 'un', 0, 'active', v_actor, v_actor
+  ) returning id into v_measure_unit;
+
+  insert into public.dbs_control_cost_centers (
+    company_id, scope_key, code, name, status, created_by, updated_by
+  ) values (
+    v_company, v_scope, 'TST-' || upper(substr(md5(v_key),1,8)),
+    'Centro de custo teste', 'active', v_actor, v_actor
+  ) returning id into v_cost_center;
+
   select id, stock_quantity, cost_cents
     into v_part, v_before_stock, v_before_cost
     from public.dbs_control_parts
@@ -78,12 +103,16 @@ begin
   end if;
 
   -- Reactivation is transaction-local; the full test rolls back.
-  update public.dbs_control_parts set status = 'ativo' where id in (v_part, v_part2);
+  update public.dbs_control_parts
+     set status = 'ativo', measure_unit_id = v_measure_unit
+   where id in (v_part, v_part2);
 
   v_payload := jsonb_build_object(
     'actor_user_id', v_actor,
     'company_id', v_company,
     'scope_key', v_scope,
+    'supplier_id', v_supplier,
+    'cost_center_id', v_cost_center,
     'supplier_name', 'Fornecedor de teste automatizado',
     'document_number', 'TEST-' || replace(v_key, ':', '-'),
     'purchase_date', current_date,
@@ -91,8 +120,8 @@ begin
     'idempotency_key', v_key,
     'legacy_key', v_key,
     'items', jsonb_build_array(
-      jsonb_build_object('part_id', v_part, 'quantity', 2, 'unit_cost_cents', 12345),
-      jsonb_build_object('part_id', v_part2, 'quantity', 1, 'unit_cost_cents', 11111)
+      jsonb_build_object('part_id', v_part, 'quantity', 2, 'purchase_unit_id', v_measure_unit, 'conversion_factor', 1, 'unit_cost_cents', 12345),
+      jsonb_build_object('part_id', v_part2, 'quantity', 1, 'purchase_unit_id', v_measure_unit, 'conversion_factor', 1, 'unit_cost_cents', 11111)
     )
   );
 
