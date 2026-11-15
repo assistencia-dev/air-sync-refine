@@ -265,3 +265,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - A função não filtra dbs_control_base_id nem a relação do cliente. Portanto, a hipótese de diferença entre o escopo das telas/handlers e o escopo REST/RLS continua tecnicamente plausível, mas não está provada como acesso indevido: ainda falta definir se a regra oficial de autorização por base/cliente deve ser aplicada também à consulta direta.
 - Nenhuma policy, função, grant, migration ou registro foi alterado. Nenhum JWT de colaborador foi usado para consultar OS de outro escopo.
 - Próxima ação segura: comparar a regra de escopo efetivamente usada pelo backend de leitura e pelos vínculos RH com a matriz oficial de permissões antes de propor migration. Não restringir RLS por suposição, pois isso poderia retirar acesso legítimo a OS atribuída.
+
+
+### Correção complementar — base de outra empresa não pode virar “sem base” (2026-11-15)
+
+- `getCollaboratorBaseScope` preserva o `dbs_control_base_id` quando detecta divergência entre `dbs_control_bases.company_id` e `users.company_id`, retornando `baseActive=false`, `canIssueWorkOrders=false` e `clientIds=[]`. Antes, zerava o `baseId`, fazendo `filterCollaboratorState` tratar o caso como colaborador sem base e liberar o fallback legado de OS atribuída.
+- O banco oficial foi consultado somente para verificar o estado atual: 3 colaboradores ativos com acesso DBS, todos vinculados a bases ativas e sem incompatibilidade empresa/base. As 46 OS atribuídas a esses colaboradores pertencem aos clientes das respectivas bases; nenhum registro fora de escopo foi encontrado.
+- `scripts/test-dbs-control-base-scope.cjs` agora exige que a base permaneça vinculada no ramo de divergência de empresa. Commits: `31d6b1da93731317d5ad287f5386388a19d96f48` (correção do serviço) e `f36555f55e7d4d00c7ff60e90bf3666a4c66e7ce` (teste).
+- No SHA `f36555f55e7d4d00c7ff60e90bf3666a4c66e7ce`, os workflows `Validate`, `verificar`, `DBS Control smoke validation` e `DBS Control outbox worker` concluíram com sucesso. `Validate` passou lint, performance, testes operacionais/RH/Ponto/inventário-financeiro/proteção de dados/Ledger/escopo RH, build Bun e TypeScript. `verificar` passou os testes DBS Control/resiliência/base/PDF/financeiro, TypeScript e Vite build.
+- Lovable sincronizado com o mesmo SHA, status `ready`; nenhuma publicação foi iniciada, nenhum domínio foi alterado e nenhum dado/RLS/migration de produção foi modificado.
