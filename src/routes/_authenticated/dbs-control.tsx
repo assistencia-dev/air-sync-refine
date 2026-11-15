@@ -173,8 +173,8 @@ function dbsControlStateOrderIsCancelled(state: unknown, conflict: unknown) {
     .trim()
     .toLocaleLowerCase("pt-BR")
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g, "")
-    .replace(/[\\s-]+/g, "_");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
   return ["cancelada", "cancelado", "cancelled", "canceled", "cancel"].includes(status);
 }
 
