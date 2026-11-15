@@ -38,6 +38,7 @@ assert.match(migration, /a\.code like 'bank:%'/i, "cash flow must include the ba
 assert.ok(treasuryFns.includes('status === "posted"'), "reports must exclude draft Ledger entries");
 assert.ok(treasuryFns.includes(String.raw`/^(?:1\.1\.01(?:\.|$)|bank:)/`), "cash account coverage must recognize standard and bank:<id> codes");
 assert.match(treasuryFns, /filter\(\(entry: any\) => entry\.status === "posted"\)/, "reports must exclude draft Ledger entries");
+assert.match(treasuryFns, /ledgerEntryIds = \(entries \?\? \[\]\)\.filter\(\(entry: any\) => entry\.status === "posted"\)/, "only posted Ledger entries should load report lines");
 assert.match(treasuryFns, /reversed_entry_id/, "Ledger report entries must include reversal references");
 assert.match(treasuryRoute, /ledgerReport: cloud\?\.ledger_report \?\? null/, "scoped Ledger reports must reach the Finance iframe");
 assert.match(treasuryHtml, /LEDGER_REPORT = msg\.ledgerReport/, "Finance iframe must receive the Ledger report");
