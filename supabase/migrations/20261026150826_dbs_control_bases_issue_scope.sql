@@ -93,9 +93,6 @@ begin
     raise exception 'DBS_OS_ISSUE_CLIENT_REQUIRED: cliente da OS é obrigatório.' using errcode = '22023';
   end if;
 
-  -- O vínculo do RH é a única autorização para emissão: acesso ao DBS CONTROL
-  -- sozinho não libera a função. A consulta contempla os dois modelos de
-  -- vínculo existentes (ponto_portal_user_id e rh_employee_access).
   select e.id, e.dbs_control_base_id, u.company_id
     into v_employee_id, v_base_id, v_employee_company_id
   from public.rh_employees e
@@ -147,8 +144,6 @@ begin
     raise exception 'DBS_OS_ISSUE_SITE_INVALID: local não pertence ao cliente selecionado.' using errcode = '42501';
   end if;
 
-  -- A função transacional existente continua sendo a fonte única de gravação;
-  -- este wrapper apenas aplica o escopo e força o responsável para o emissor.
   v_patch := coalesce(p_payload->'patch', '{}'::jsonb)
     || jsonb_build_object(
       'client_id', v_client_id,

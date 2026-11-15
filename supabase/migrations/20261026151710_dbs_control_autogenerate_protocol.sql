@@ -31,47 +31,6 @@ begin
   v_definition := replace(v_definition, v_old_protocol_line, v_new_protocol_line);
   v_definition := replace(
     v_definition,
-    $old$  v_old_status text;$old$,
-    $new$  v_old_status text;
-  v_current_found boolean := false;$new$
-  );
-  v_definition := replace(
-    v_definition,
-    $oldblock$  if v_order_id is not null then
-    select w.* into v_current
-    from public.dbs_control_work_orders w
-    where w.id = v_order_id
-    for update;
-  elsif v_protocol is not null then
-    select w.* into v_current
-    from public.dbs_control_work_orders w
-    where w.protocol = v_protocol
-    limit 1
-    for update;
-    if found then v_order_id := v_current.id; end if;
-  end if;
-
-  if found then$oldblock$,
-    $newblock$  if v_order_id is not null then
-    select w.* into v_current
-    from public.dbs_control_work_orders w
-    where w.id = v_order_id
-    for update;
-    v_current_found := found;
-  elsif v_protocol is not null then
-    select w.* into v_current
-    from public.dbs_control_work_orders w
-    where w.protocol = v_protocol
-    limit 1
-    for update;
-    v_current_found := found;
-    if v_current_found then v_order_id := v_current.id; end if;
-  end if;
-
-  if v_current_found then$newblock$
-  );
-  v_definition := replace(
-    v_definition,
     $old$    if v_candidate.protocol is null or v_candidate.client_id is null then$old$,
     $new$    if v_candidate.client_id is null then$new$
   );

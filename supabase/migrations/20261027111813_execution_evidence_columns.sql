@@ -1,7 +1,3 @@
--- Additive execution evidence fields for DBS Control.
--- No existing rows are deleted or rewritten. The trigger copies only fields
--- explicitly present in the relational delta command payload.
-
 ALTER TABLE public.dbs_control_work_orders
   ADD COLUMN IF NOT EXISTS execution_checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS completion_status_code text,
@@ -23,26 +19,19 @@ BEGIN
   IF NEW.idempotency_key IS NULL THEN
     RETURN NEW;
   END IF;
-
   SELECT COALESCE(sc.payload->'patch', '{}'::jsonb)
     INTO v_patch
   FROM public.dbs_control_sync_commands sc
   WHERE sc.idempotency_key = NEW.idempotency_key
   ORDER BY sc.created_at DESC
   LIMIT 1;
-
-  IF v_patch IS NULL THEN
-    RETURN NEW;
-  END IF;
-
+  IF v_patch IS NULL THEN RETURN NEW; END IF;
   IF v_patch ? 'execution_checklist' THEN
     NEW.execution_checklist := COALESCE(v_patch->'execution_checklist', '{}'::jsonb);
   END IF;
-
   IF v_patch ? 'completion_status_code' THEN
     NEW.completion_status_code := NULLIF(btrim(v_patch->>'completion_status_code'), '');
   END IF;
-
   IF v_patch ? 'geolocation_captured_at' THEN
     v_geo := NULLIF(btrim(v_patch->>'geolocation_captured_at'), '');
     IF v_geo IS NULL THEN
@@ -51,7 +40,6 @@ BEGIN
       NEW.geolocation_captured_at := v_geo::timestamptz;
     END IF;
   END IF;
-
   RETURN NEW;
 END;
 $function$;

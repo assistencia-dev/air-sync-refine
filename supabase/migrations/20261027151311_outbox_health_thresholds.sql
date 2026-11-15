@@ -1,6 +1,3 @@
--- Additive Outbox health thresholds. This migration only replaces the
--- JSON health projection and preserves all tables, rows, and function signatures.
-
 CREATE OR REPLACE FUNCTION public.dbs_control_sync_health()
 RETURNS jsonb
 LANGUAGE sql

@@ -1,5 +1,3 @@
--- Expande o manifesto para registrar todos os buckets de documentos cobertos.
--- A coluna antiga permanece para compatibilidade com leitores já publicados.
 begin;
 
 alter table public.dbs_control_backup_manifests

@@ -1,6 +1,3 @@
--- Additive indexes for collaborator RLS scope lookups.
--- No tables or rows are removed; the helper remains idempotent and stable.
-
 CREATE INDEX IF NOT EXISTS idx_users_auth_status_active
   ON public.users (auth_id, status)
   WHERE status = 'ativo';

@@ -35,11 +35,8 @@ begin
     raise exception 'state deve ser um objeto JSON' using errcode = '22023';
   end if;
 
-  -- Serializa também a primeira gravação, quando ainda não existe linha para bloquear.
-  -- A chave inclui o escopo para não bloquear empresas/usuários diferentes entre si.
   perform pg_advisory_xact_lock(hashtextextended(v_scope_key, 0));
 
-  -- A linha é bloqueada até o commit; gravações do mesmo escopo são serializadas.
   select s.state into v_current_state
   from public.dbs_control_snapshots s
   where s.scope_key = v_scope_key
@@ -54,7 +51,6 @@ begin
   v_incoming_orders := case when jsonb_typeof(v_incoming_state->'ordens') = 'array'
     then v_incoming_state->'ordens' else '[]'::jsonb end;
 
-  -- Para cada OS enviada, preserva status/documentos se a versão salva já estava concluída.
   for v_order in select value from jsonb_array_elements(v_incoming_orders)
   loop
     v_key := coalesce(
@@ -85,8 +81,6 @@ begin
         'concluidoEm','completedAt','diagnostico','laudo','observacao'
       ]
       loop
-        -- Para documentos concluídos, o valor já persistido prevalece inclusive
-        -- quando um cliente atrasado envia um valor antigo não vazio.
         if nullif(trim(coalesce(v_latest->>v_latest_key,'')), '') is not null then
           v_order := v_order || jsonb_build_object(v_latest_key, v_latest->v_latest_key);
         end if;
@@ -99,7 +93,6 @@ begin
     end if;
   end loop;
 
-  -- OS presentes na última versão mas ausentes num autosave atrasado não são removidas.
   for v_order in select value from jsonb_array_elements(v_latest_orders)
   loop
     v_key := coalesce(
@@ -113,11 +106,7 @@ begin
     end if;
   end loop;
 
-  if v_current_state is not null then
-    v_incoming_state := v_incoming_state || jsonb_build_object('ordens', v_merged_orders);
-  else
-    v_incoming_state := v_incoming_state || jsonb_build_object('ordens', v_merged_orders);
-  end if;
+  v_incoming_state := v_incoming_state || jsonb_build_object('ordens', v_merged_orders);
 
   insert into public.dbs_control_snapshots
     (scope_key, company_id, owner_user_id, state, state_version, updated_by, updated_at)
