@@ -29,7 +29,7 @@ assert.match(panel, /"VA: valor diário configurado multiplicado pelos dias úte
 
 assert.match(rhFunctions, /function isValidBenefitDate/);
 assert.match(rhFunctions, /function validateBenefit/);
-assert.match(rhFunctions, /const isCentralRegistry = Boolean\(registry\)/);
+assert.match(rhFunctions, /const isCentralRegistry = registry !== null/);
 assert.match(rhFunctions, /Cadastros auxiliares de benefício não podem ser reutilizados/);
 assert.match(rhFunctions, /O funcionário está inativo no Cadastro de Funcionários/);
 assert.match(rhFunctions, /O benefício não está vinculado ao Cadastro Central/);
