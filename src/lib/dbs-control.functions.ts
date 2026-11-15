@@ -170,7 +170,10 @@ async function getCollaboratorBaseScope(employee: any) {
   if (baseResult.error) throw new Error(baseResult.error.message);
   if (linksResult.error) throw new Error(linksResult.error.message);
   if (baseResult.data?.company_id && employee?.user_company_id && String(baseResult.data.company_id) !== String(employee.user_company_id)) {
-    return { baseId: null, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[], companyId: null };
+    // A configured base from another company is not equivalent to no base.
+    // Keep its ID bound so downstream filters enforce an empty scope instead
+    // of falling back to legacy assigned-work-order access.
+    return { baseId, baseName: null, baseActive: false, canIssueWorkOrders: false, clientIds: [] as string[], companyId: null };
   }
   // Status é normalizado para tolerar valores legados com caixa/espaços
   // diferentes sem relaxar a regra de base ativa.
