@@ -167,6 +167,17 @@ function dbsControlStateOrderIsDeleted(state: unknown, conflict: unknown) {
   return Boolean(order?.deleted_at ?? order?.deletedAt ?? order?.excluidaEm);
 }
 
+function dbsControlStateOrderIsCancelled(state: unknown, conflict: unknown) {
+  const order = dbsControlStateOrderForConflict(state, conflict) as any;
+  const status = String(order?.status ?? order?.situacao ?? order?.statusOS ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\\s-]+/g, "_");
+  return ["cancelada", "cancelado", "cancelled", "canceled", "cancel"].includes(status);
+}
+
 function dbsControlStableConflictValue(value: unknown): string {
   if (Array.isArray(value)) return "[" + value.map(dbsControlStableConflictValue).join(",") + "]";
   if (value && typeof value === "object") {
@@ -212,7 +223,7 @@ function dbsControlConflictChangeForOrder(command: Pick<DbsControlLocalSyncComma
 
 /**
  * A conflict can be quarantined automatically only when it is terminal
- * (completed/deleted), or when the newer canonical version matches both the
+ * (completed/cancelled/deleted), or when the newer canonical version matches both the
  * requested status and every execution checklist field carried by the local
  * intent. Equal status alone is not proof that the technician's checklist
  * was saved. Unresolved differences remain available for explicit review.
@@ -224,7 +235,9 @@ function dbsControlConflictAlreadyApplied(state: unknown, command: Pick<DbsContr
   return conflicts.every((conflict) => {
     const canonical = dbsControlStateOrderForConflict(state, conflict) as any;
     if (!canonical) return false;
-    if (dbsControlStateOrderIsCompleted(state, conflict) || dbsControlStateOrderIsDeleted(state, conflict)) return true;
+    if (dbsControlStateOrderIsCompleted(state, conflict)
+      || dbsControlStateOrderIsDeleted(state, conflict)
+      || dbsControlStateOrderIsCancelled(state, conflict)) return true;
 
     const local = dbsControlConflictChangeForOrder(command, conflict) as any;
     if (!local) return false;
