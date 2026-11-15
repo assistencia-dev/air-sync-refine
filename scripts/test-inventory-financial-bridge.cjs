@@ -87,6 +87,10 @@ assert.match(phase2Ui, /partsView === "reservations"/);
 assert.match(phase2Ui, /partsView === "settings"/);
 
 assert.match(phase2Ui, /purchasesView === "new"/);
+assert.match(phase2Ui, /purchaseSetupIncomplete/);
+assert.match(phase2Ui, /Cadastros necessários para compras/);
+assert.match(phase2Ui, /Abrir Cadastros Básicos/);
+assert.match(phase2Ui, /activePartsMissingMasterData/);
 assert.match(phase2Ui, /purchasesView === "approval"/);
 assert.match(phase2Ui, /purchasesView === "orders"/);
 assert.match(phase2Ui, /purchasesAwaitingReceipt/);
