@@ -220,7 +220,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
 
-  const ledgerEntryIds = (entries ?? []).map((entry: any) => String(entry.id)).filter(Boolean);
+  const ledgerEntryIds = (entries ?? []).filter((entry: any) => entry.status === "posted").map((entry: any) => String(entry.id)).filter(Boolean);
   const ledgerLineChunks: string[][] = [];
   for (let index = 0; index < ledgerEntryIds.length; index += 250) {
     ledgerLineChunks.push(ledgerEntryIds.slice(index, index + 250));
