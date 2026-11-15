@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/treasury")({
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html?v=20261027-ledger-1";
+const TREASURY_URL = "/treasury.html?v=20261115-approval-menu-1";
 
 
 function TreasuryPage() {
@@ -175,7 +175,10 @@ function TreasuryPage() {
         if (!requestId) return;
         try {
           if (!cloudReadyRef.current) throw new Error("O Financeiro ainda não terminou a sincronização inicial.");
-          const decision = msg.decision === "approved" || msg.decision === "rejected" ? msg.decision : "";
+          if (msg.decision !== "approved" && msg.decision !== "rejected") {
+            throw new Error("Decisão de aprovação inválida.");
+          }
+          const decision = msg.decision;
           const result = await decideDbsPurchaseApprovalFromTreasury({ data: {
             purchaseId: String(msg.purchaseId ?? ""),
             decision,
@@ -252,7 +255,7 @@ function TreasuryPage() {
             <div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /><p className="text-sm font-semibold text-slate-600">Sincronizando DBS TREASURY com a nuvem…</p></div>
           )}
         </div>}
-        <iframe className="admin-mobile-iframe" key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
+        <iframe className="admin-mobile-iframe treasury-content-frame" key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
       {profile?.role_key === "SUPER_ADMIN" && <MobileAdminNavigation active="finance" />}
     </div>
