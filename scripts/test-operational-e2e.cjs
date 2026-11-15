@@ -10,6 +10,7 @@ const checks = [
   "scripts/test-dbs-control-resilience.cjs",
   "scripts/test-dbs-control-50-sessions.cjs",
   "scripts/test-rh-point-integrity.cjs",
+  "scripts/test-rh-benefits.cjs",
   "scripts/test-rh-collaborator-scale.cjs",
   "scripts/test-data-protection.cjs",
   "scripts/test-treasury-ledger.cjs",
