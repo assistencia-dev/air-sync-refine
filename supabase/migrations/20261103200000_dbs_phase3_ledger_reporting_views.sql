@@ -28,6 +28,7 @@ from public.treasury_ledger_entries e
 join public.treasury_ledger_lines l on l.entry_id=e.id
 join public.treasury_accounts a on a.id=l.account_id
 where e.status='posted'
+  and e.entry_type not in ('installment_payment','installment_reversal')
   and a.account_type in ('revenue','expense')
 group by e.company_id,e.scope_key,date_trunc('month',e.competence_date)::date,
   a.id,a.code,a.name,a.account_type;
