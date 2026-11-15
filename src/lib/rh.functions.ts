@@ -531,6 +531,53 @@ export const createRhTopup = createServerFn({ method: "POST" })
     return topup;
   });
 
+export const updateRhTopup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { id: string; benefit_type: RhBenefitType; amount_cents: number; paid_at: string }) => {
+    validateBenefit(input);
+    if (!input.id || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 || !isValidBenefitDate(input.paid_at)) {
+      throw new Error("Informe um valor e uma data válidos para corrigir a recarga.");
+    }
+    return input;
+  })
+  .handler(async ({ context, data }) => {
+    const operator = await requireNativeOperator(context);
+    const { data: before, error: beforeError } = await supabaseAdmin
+      .from("rh_topups")
+      .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
+      .eq("id", data.id)
+      .eq("benefit_type", data.benefit_type)
+      .maybeSingle();
+    if (beforeError) throw new Error(beforeError.message);
+    if (!before) throw new Error("Lançamento não encontrado neste tipo de benefício.");
+
+    const { data: updated, error } = await supabaseAdmin
+      .from("rh_topups")
+      .update({ amount_cents: data.amount_cents, paid_at: data.paid_at })
+      .eq("id", data.id)
+      .eq("benefit_type", data.benefit_type)
+      .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
+      .single();
+    if (error) throw new Error(error.message);
+
+    const { data: employee } = await supabaseAdmin
+      .from("rh_employees")
+      .select("registry_employee_id")
+      .eq("id", before.employee_id)
+      .maybeSingle();
+    const { error: auditError } = await supabaseAdmin.from("rh_audit_log").insert({
+      actor_user_id: operator.id,
+      employee_id: employee?.registry_employee_id ?? before.employee_id,
+      action: "BENEFICIO_RECARGA_EDITADA",
+      entity_type: "rh_topups",
+      entity_id: updated.id,
+      before_data: before,
+      after_data: updated,
+    });
+    if (auditError) console.error("Falha ao registrar auditoria da correção da recarga:", auditError.message);
+    return updated;
+  });
+
 export const deleteRhTopup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { id: string; benefit_type: RhBenefitType }) => {
