@@ -25,7 +25,7 @@ assert.match(panel, /Investido no período/);
 assert.match(panel, /Acumulado geral/);
 assert.match(panel, /buildCoverage/);
 assert.match(panel, /benefitType === "passagem" \? Math\.max\(1, Number\(employee\.trips_per_day\)/);
-assert.match(panel, /"VA: o valor diário configurado multiplicado pelos dias úteis de cobertura\."/);
+assert.match(panel, /"VA: valor diário configurado multiplicado pelos dias úteis de cobertura\."/);
 
 assert.match(rhFunctions, /function isValidBenefitDate/);
 assert.match(rhFunctions, /function validateBenefit/);
