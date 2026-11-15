@@ -1029,7 +1029,62 @@ function stripStoredAttachmentPayloads(state: Record<string, unknown>) {
 
 async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
   const next = normalizeState(state);
-  next.ordens = await Promise.all((next.ordens as any[]).map(async (order) => {
+  const orders = Array.isArray(next.ordens) ? next.ordens as any[] : [];
+  const orderIds = [...new Set(orders.map((order) => String(order?.id ?? "").trim()).filter(Boolean))];
+
+  // Keep the established storage-path hydration for legacy records and add
+  // the relational attachment table as the durable source for photos/files.
+  // IDs come only from the already scope-filtered work-order result, including
+  // the employee/base boundary applied by fetchAllDbsControlWorkOrders.
+  const attachmentRows: any[] = [];
+  if (orderIds.length) {
+    for (let offset = 0; offset < orderIds.length; offset += 100) {
+      const batch = orderIds.slice(offset, offset + 100);
+      for (let page = 0; ; page += 1) {
+        const { data, error } = await supabaseAdmin
+          .from("dbs_control_work_order_attachments")
+          .select("id,work_order_id,storage_path,file_name,file_type,attachment_type,created_at")
+          .in("work_order_id", batch)
+          .order("created_at", { ascending: true })
+          .range(page * 500, page * 500 + 499);
+        if (error) {
+          // Attachment hydration must never prevent the operational OS list
+          // from loading. Existing path-based signatures/photos are still
+          // hydrated below; the next cloud refresh retries this read.
+          console.error("[DBS Control] Falha ao carregar anexos relacionais:", error.message);
+          attachmentRows.length = 0;
+          offset = orderIds.length;
+          break;
+        }
+        const rows = data ?? [];
+        attachmentRows.push(...rows);
+        if (rows.length < 500) break;
+      }
+    }
+  }
+
+  const signedRows: any[] = [];
+  for (let offset = 0; offset < attachmentRows.length; offset += 40) {
+    const batch = attachmentRows.slice(offset, offset + 40);
+    signedRows.push(...await Promise.all(batch.map(async (attachment) => {
+      const path = String(attachment?.storage_path ?? "").trim();
+      if (!path) return { ...attachment, signedUrl: null };
+      const { data, error } = await supabaseAdmin.storage
+        .from(DBS_CONTROL_ATTACHMENT_BUCKET)
+        .createSignedUrl(path, 3600);
+      return { ...attachment, signedUrl: error ? null : data?.signedUrl ?? null };
+    })));
+  }
+
+  const attachmentsByOrder = new Map<string, any[]>();
+  for (const attachment of signedRows) {
+    const orderId = String(attachment?.work_order_id ?? "");
+    const list = attachmentsByOrder.get(orderId) ?? [];
+    list.push(attachment);
+    attachmentsByOrder.set(orderId, list);
+  }
+
+  next.ordens = await Promise.all(orders.map(async (order) => {
     const copy = { ...order };
     const fields = [["assinaturaStoragePath", "assinatura"], ["fotoAntesStoragePath", "fotoAntes"], ["fotoDepoisStoragePath", "fotoDepois"]] as const;
     for (const [pathField, valueField] of fields) {
@@ -1037,6 +1092,62 @@ async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
       if (!path) continue;
       const { data, error } = await supabaseAdmin.storage.from(DBS_CONTROL_ATTACHMENT_BUCKET).createSignedUrl(path, 3600);
       if (!error && data?.signedUrl) copy[valueField] = data.signedUrl;
+    }
+
+    const attachments = attachmentsByOrder.get(String(copy.id)) ?? [];
+    const latest = (type: string) => [...attachments].reverse().find((item) => item.attachment_type === type);
+    const signature = latest("assinatura");
+    if (signature?.storage_path) {
+      copy.assinaturaStoragePath = String(signature.storage_path);
+      copy.assinatura_path = String(signature.storage_path);
+      copy.signature_path = String(signature.storage_path);
+      if (signature.signedUrl) copy.assinatura = signature.signedUrl;
+    }
+
+    const before = latest("foto_antes");
+    if (before?.storage_path) {
+      copy.fotoAntesStoragePath = String(before.storage_path);
+      if (before.signedUrl) copy.fotoAntes = before.signedUrl;
+    }
+    const after = latest("foto_depois");
+    if (after?.storage_path) {
+      copy.fotoDepoisStoragePath = String(after.storage_path);
+      if (after.signedUrl) copy.fotoDepois = after.signedUrl;
+    }
+
+    const photoFiles = attachments
+      .filter((item) => item.attachment_type === "foto_antes" || item.attachment_type === "foto_depois")
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.file_name ?? "Foto da OS"),
+        type: String(item.file_type ?? "image/*"),
+        url: item.signedUrl ?? null,
+        signedUrl: item.signedUrl ?? null,
+        storagePath: String(item.storage_path ?? ""),
+        attachmentType: String(item.attachment_type),
+        createdAt: item.created_at ?? null,
+      }));
+    if (photoFiles.length) {
+      const existingPhotos = Array.isArray(copy.fotos) ? copy.fotos : [];
+      const existingPaths = new Set(existingPhotos.map((item: any) => String(item?.storagePath ?? item?.storage_path ?? "")));
+      copy.fotos = existingPhotos.concat(photoFiles.filter((item) => !existingPaths.has(item.storagePath)));
+    }
+
+    const otherFiles = attachments
+      .filter((item) => !["assinatura", "foto_antes", "foto_depois"].includes(String(item.attachment_type)))
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.file_name ?? "Anexo da OS"),
+        type: String(item.file_type ?? ""),
+        url: item.signedUrl ?? null,
+        signedUrl: item.signedUrl ?? null,
+        storagePath: String(item.storage_path ?? ""),
+        createdAt: item.created_at ?? null,
+      }));
+    if (otherFiles.length) {
+      const existingDocs = Array.isArray(copy.anexos) ? copy.anexos : [];
+      const existingPaths = new Set(existingDocs.map((item: any) => String(item?.storagePath ?? item?.storage_path ?? "")));
+      copy.anexos = existingDocs.concat(otherFiles.filter((item) => !existingPaths.has(item.storagePath)));
     }
     return copy;
   }));
