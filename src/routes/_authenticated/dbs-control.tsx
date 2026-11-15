@@ -162,6 +162,33 @@ function dbsControlStateOrderIsCompleted(state: unknown, conflict: unknown) {
   return ["concluida", "concluido", "completed", "complete"].includes(status);
 }
 
+function dbsControlStateOrderIsDeleted(state: unknown, conflict: unknown) {
+  const order = dbsControlStateOrderForConflict(state, conflict) as any;
+  return Boolean(order?.deleted_at ?? order?.deletedAt ?? order?.excluidaEm);
+}
+
+function dbsControlStableConflictValue(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(dbsControlStableConflictValue).join(",") + "]";
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return "{" + Object.keys(record).sort().map((key) =>
+      JSON.stringify(key) + ":" + dbsControlStableConflictValue(record[key])
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value) ?? String(value);
+}
+
+function dbsControlConflictChecklistMatches(local: any, canonical: any) {
+  // A newer version and an equal status do not prove that execution details
+  // were committed. In particular, technician checklist marks must match
+  // before an open OS conflict can be quarantined as already applied.
+  const fields = ["checklistTecnico", "checklist", "parametrosOperacionais"];
+  return fields.every((field) =>
+    !Object.prototype.hasOwnProperty.call(local, field)
+    || dbsControlStableConflictValue(local[field]) === dbsControlStableConflictValue(canonical?.[field])
+  );
+}
+
 function dbsControlComparableStatus(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -184,13 +211,12 @@ function dbsControlConflictChangeForOrder(command: Pick<DbsControlLocalSyncComma
 }
 
 /**
- * A conflict can survive a browser reload even after another device has
- * already committed the same status (or completed the OS).  It is safe to
- * stop presenting that stale intent as a live blocker only when the
- * canonical row exists, its version is newer than the local expected version,
- * and its status matches the status that the local command requested.  The
- * command is quarantined, never deleted, so the original payload remains
- * available for audit without being replayed over newer data.
+ * A conflict can be quarantined automatically only when it is terminal
+ * (completed/deleted), or when the newer canonical version matches both the
+ * requested status and every execution checklist field carried by the local
+ * intent. Equal status alone is not proof that the technician's checklist
+ * was saved. Unresolved differences remain available for explicit review.
+ * The original payload is always preserved in quarantine, never deleted.
  */
 function dbsControlConflictAlreadyApplied(state: unknown, command: Pick<DbsControlLocalSyncCommand, "changes" | "conflicts">) {
   const conflicts = Array.isArray(command.conflicts) ? command.conflicts : [];
@@ -198,7 +224,7 @@ function dbsControlConflictAlreadyApplied(state: unknown, command: Pick<DbsContr
   return conflicts.every((conflict) => {
     const canonical = dbsControlStateOrderForConflict(state, conflict) as any;
     if (!canonical) return false;
-    if (dbsControlStateOrderIsCompleted(state, conflict)) return true;
+    if (dbsControlStateOrderIsCompleted(state, conflict) || dbsControlStateOrderIsDeleted(state, conflict)) return true;
 
     const local = dbsControlConflictChangeForOrder(command, conflict) as any;
     if (!local) return false;
@@ -214,7 +240,12 @@ function dbsControlConflictAlreadyApplied(state: unknown, command: Pick<DbsContr
 
     const requestedStatus = dbsControlComparableStatus(local?.status ?? local?.situacao ?? local?.statusOS);
     const canonicalStatus = dbsControlComparableStatus(canonical?.status ?? canonical?.situacao ?? canonical?.statusOS);
-    return Boolean(requestedStatus && canonicalStatus && requestedStatus === canonicalStatus);
+    return Boolean(
+      requestedStatus
+      && canonicalStatus
+      && requestedStatus === canonicalStatus
+      && dbsControlConflictChecklistMatches(local, canonical)
+    );
   });
 }
 
