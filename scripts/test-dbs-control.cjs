@@ -109,6 +109,7 @@ const firstPartyScripts = [
   "public/dbs-control-orcamentos-flex.js",
   "public/dbs-control-orcamentos-pdf.js",
   "public/dbs-control-pdf.js",
+  "public/dbs-control-os-viewer.js",
   "public/dbs-control-observations.js",
 ];
 
