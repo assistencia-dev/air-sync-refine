@@ -1253,6 +1253,17 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
     if (user.role_key === "COLABORADOR") {
       const employee = collaboratorEmployee;
       if (!employee) throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+      // Match the same base boundary used by OS hydration: an assigned OS from
+      // another client/base must not accept evidence uploads through a direct
+      // UUID or protocol request that bypasses the filtered list.
+      const hasConfiguredBase = Boolean(String(collaboratorScope?.baseId ?? "").trim());
+      if (hasConfiguredBase) {
+        const allowedClientIds = new Set((collaboratorScope?.clientIds ?? []).map((id: unknown) => String(id).trim()).filter(Boolean));
+        const orderClientId = String(order?.client_id ?? order?.clienteId ?? "").trim();
+        if (collaboratorScope?.baseActive !== true || !orderClientId || !allowedClientIds.has(orderClientId)) {
+          throw new Error("Esta OS não pertence à base ativa vinculada ao seu acesso.");
+        }
+      }
       const assigned = String(order?.employeeId ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? "") === String(employee.id);
       const techs = Array.isArray(state?.tecnicos) ? state!.tecnicos as any[] : [];
       const technicianMatches = techs.some((item) => String(item?.id ?? "") === String(order?.tecnicoId ?? "") &&
