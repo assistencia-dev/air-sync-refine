@@ -394,3 +394,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 
 - Build Vercel `dpl_B4TWgsp6oyygtiCRAcctZp8MGDeZ`, commit `7731f2df487c3e6585fed557a84a98958aab1291`: `READY`, status `success`. Esse build executou o `prebuild` com os testes `test-phase3-ledger-reporting.cjs` e `test-dbs-control-base-scope-rls.cjs`, além da confirmação do Supabase oficial.
 - Lovable sincronizado até `7731f2df487c3e6585fed557a84a98958aab1291`; a `main` está apenas com commit documental posterior. `is_published=true`, mas nenhuma nova publicação foi disparada; domínio oficial preservado.
+
+
+### Reconciliação integral do histórico de migrations (2026-11-15)
+
+- Recuperados do campo remoto `supabase_migrations.schema_migrations.statements` os SQLs originais das versões ausentes; versões e nomes de arquivos reconciliados com o histórico oficial, sem executar novamente as migrations antigas.
+- Comparação final por versão e nome: **141 migrations locais ativas / 141 remotas; 0 somente no banco; 0 somente no repositório; 0 divergências de nome; 0 versões duplicadas**.
+- Sete arquivos locais antigos foram preservados em `supabase/migrations/superseded/` e removidos apenas da fila ativa, com README explicando a substituição. Os seis arquivos Enterprise/RLS estão cobertos por migrations remotas aplicadas e os objetos correspondentes existem no banco (catálogo de status, DLQ, 70 policies hardening, 14 índices e funções Outbox). A migration antiga `dbs_purchase_orders_partial_receipts` foi arquivada porque o modelo ativo é `dbs_control_purchases` / `dbs_control_purchase_receipts`, coberto pelas migrations aplicadas `20261111133659`, `20261111134918`, `20261111140750`, `20261111141203` e `20261112142603`.
+- `scripts/check-migration-drift.mjs --local-only` foi adicionado ao `prebuild` para bloquear nomes inválidos e versões duplicadas antes de compilar. A auditoria remota manual confirmou paridade exata com o histórico oficial.
+- Nenhuma migration histórica foi reaplicada durante a recuperação; nenhuma tabela/linha de produção foi apagada ou reescrita. As únicas migrations novas aplicadas nesta sessão foram as três aditivas de RLS de base, views Ledger e leitura escopada do Ledger, já registradas com seus arquivos correspondentes.
