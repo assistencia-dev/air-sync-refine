@@ -22,6 +22,7 @@ const route = fs.readFileSync("src/routes/_authenticated/dbs-control.tsx", "utf8
 const ux = fs.readFileSync("public/dbs-control-ux.js", "utf8");
 const pdf = fs.readFileSync("public/dbs-control-pdf.js", "utf8");
 const observations = fs.readFileSync("public/dbs-control-observations.js", "utf8");
+const osViewer = fs.readFileSync("public/dbs-control-os-viewer.js", "utf8");
 const theme = fs.readFileSync("public/dbs-control-theme.css", "utf8");
 const employeeNavigation = fs.readFileSync("public/dbs-control-employee-nav.js", "utf8");
 
@@ -82,6 +83,24 @@ for (const match of html.matchAll(scriptTag)) {
   }
 }
 assert.ok(parsedInlineScripts > 0, "Nenhum script inline foi validado.");
+
+// OS viewer contract: opening an order is a read-only in-page action. It must
+// stay connected to the current ERP_STATE, preserve existing row actions, and
+// expose preview/print/download without mutating the work order.
+assert.match(html, /dbs-control-os-viewer\\.js\\?v=/, "O visualizador interno de OS deve continuar carregado pelo HTML operacional.");
+assert.match(html, /onclick="abrirVisualizacaoOS\\(/, "As linhas de OS devem abrir a visualização interna, sem obrigar download.");
+assert.match(osViewer, /window\\.abrirVisualizacaoOS = open/, "O visualizador deve expor o handler usado pela tabela de OS.");
+assert.match(osViewer, /function open\\(osId\\)/, "O handler deve abrir a OS selecionada pelo identificador.");
+assert.match(osViewer, /const st = S\\(\\)/, "A visualização deve usar o estado já hidratado do DBS Control.");
+assert.match(osViewer, /L\\(st\\.ordens\\)\\.find/, "A visualização deve localizar a OS no estado relacional já carregado.");
+assert.match(osViewer, /data-act="preview"/, "A OS deve oferecer pré-visualização de PDF.");
+assert.match(osViewer, /data-act="print"/, "A OS deve oferecer impressão.");
+assert.match(osViewer, /data-act="download"/, "O download de PDF deve continuar sendo uma ação explícita.");
+assert.match(osViewer, /fotoAntes[\\s\\S]*?fotoDepois/, "A visualização deve preservar as evidências antes/depois.");
+assert.match(osViewer, /o\\.anexos[\\s\\S]*?o\\.attachments/, "A visualização deve contemplar anexos legados e atuais.");
+assert.match(osViewer, /Assinaturas[\\s\\S]*?Histórico/, "A visualização deve manter assinaturas e histórico.");
+assert.match(osViewer, /role', 'dialog'|role", "dialog"/, "A visualização deve ser um diálogo acessível.");
+assert.doesNotMatch(osViewer, /localStorage\\.(?:setItem|removeItem|clear)\\s*\\(|sessionStorage\\.(?:setItem|removeItem|clear)\\s*\\(|supabase\\.rpc\\s*\\(|\\.from\\([^)]*\\)\\.(?:insert|update|upsert|delete)\\s*\\(/i, "Abrir/visualizar OS não pode gravar dados nem chamar RPCs de alteração.");
 
 const firstPartyScripts = [
   "public/dbs-control-ux.js",
