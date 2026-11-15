@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
+const vm = require("node:vm");
 
 const fns = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const treasuryFns = fs.readFileSync("src/lib/treasury.functions.ts", "utf8");
@@ -67,5 +68,47 @@ assert.match(fns, /dbs_control_release_work_order_reservation_serialized/);
 assert.match(reservationGuard, /v_status in/i);
 assert.doesNotMatch(reservationGuard, /drop\s+(table|view|function)|truncate\s/i);
 
+
+
+const renderMatch = treasuryHtml.match(/function renderLedgerDre\(\) \{[\s\S]*?\n    \}\n\n    \/\/ ===== Livro Caixa/);
+assert.ok(renderMatch, "Ledger DRE renderer must be extractable for behavioral tests");
+const nodes = new Map();
+const sandbox = {
+  LEDGER_REPORT: {
+    entries: [
+      { status: "posted", entryType: "service_revenue", competenceDate: "2026-11-10", displayDate: "2026-11-10", lines: [
+        { account: { accountType: "revenue", code: "revenue:service" }, debitCents: 0, creditCents: 10000 },
+      ] },
+      { status: "posted", entryType: "operating_expense", competenceDate: "2026-11-11", displayDate: "2026-11-11", lines: [
+        { account: { accountType: "expense", code: "expense:rent" }, debitCents: 2500, creditCents: 0 },
+      ] },
+      { status: "posted", entryType: "installment_payment", competenceDate: "2026-11-12", displayDate: "2026-11-12", lines: [
+        { account: { accountType: "expense", code: "expense:passivo" }, debitCents: 3000, creditCents: 0 },
+        { account: { accountType: "asset", code: "bank:account-1" }, debitCents: 0, creditCents: 3000 },
+      ] },
+      { status: "posted", entryType: "installment_reversal", competenceDate: "2026-11-13", displayDate: "2026-11-13", lines: [
+        { account: { accountType: "expense", code: "expense:passivo" }, debitCents: 0, creditCents: 3000 },
+        { account: { accountType: "asset", code: "bank:account-1" }, debitCents: 3000, creditCents: 0 },
+      ] },
+      { status: "draft", entryType: "service_revenue", competenceDate: "2026-11-14", displayDate: "2026-11-14", lines: [
+        { account: { accountType: "revenue", code: "revenue:draft" }, debitCents: 0, creditCents: 5000 },
+      ] },
+    ],
+  },
+  document: {
+    getElementById(id) {
+      if (!nodes.has(id)) nodes.set(id, { value: id === "global-period-filter" ? "2026-11" : "", textContent: "", style: {} });
+      return nodes.get(id);
+    },
+  },
+};
+vm.runInNewContext(renderMatch[0], sandbox);
+sandbox.renderLedgerDre();
+assert.equal(nodes.get("ledger-dre-revenue").textContent, "R$ 100,00");
+assert.equal(nodes.get("ledger-dre-expenses").textContent, "R$ 25,00");
+assert.equal(nodes.get("ledger-dre-result").textContent, "R$ 75,00");
+assert.equal(nodes.get("ledger-cash-in").textContent, "R$ 30,00");
+assert.equal(nodes.get("ledger-cash-out").textContent, "R$ 30,00");
+assert.equal(nodes.get("ledger-dre-empty").style.display, "none");
 
 console.log("Phase 3 Ledger reporting: DRE by competence, cash flow by document date, security_invoker and read-only source invariants verified.");
