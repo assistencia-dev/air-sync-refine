@@ -235,3 +235,13 @@ Ao fechar uma tarefa, registrar problema, causa, arquivos/commit, teste executad
 ### Regra para a próxima rodada
 
 Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para cadastros produtivos, é necessário usar os dados oficiais da empresa; para Treasury, é necessário confirmar o consumidor/contrato. Não modificar produção para produzir um resultado artificial.
+
+
+### Complemento final — proteção de OS canceladas (2026-11-15)
+
+- A revisão terminal foi ampliada para incluir OS canceladas, além de concluídas e excluídas. `dbsControlStateOrderIsCancelled` normaliza acentos/espaços e reconhece `cancelada`, `cancelado`, `cancelled` e `canceled`.
+- A proteção se aplica em todos os caminhos: autoquarentena de conflitos já refletidos; recuperação de quarentenas antigas; rebase de sessão de colaborador; e merge do estado do iframe. Quando a versão canônica é terminal, o status canônico prevalece sobre um payload antigo do dispositivo.
+- Commits: `52e3a4aa5db6b41b120c7089e3db91bb96280316` (classificação cancelada), `55810241d0da2ba7d78652e8f9e9aeb85eaa76fa` (normalização Unicode corrigida), `df48c157ad0247964d0f835b74a01c24fafa7a9e` (preservação de status no iframe), `685a21e2d16fc620907d0c55fe19ee69a92b1af4` (todos os guardas de recuperação/rebase), `b643001efda710f475ade3296b61694ebc8f912e` e `df07d81ec1dd9783132df3f5161fc95e7a763035` (testes de regressão).
+- Validação do SHA `df07d81ec1dd9783132df3f5161fc95e7a763035`: Validate, verificar, DBS Control smoke validation e DBS Control outbox worker concluíram com sucesso. O Validate passou build Bun, TypeScript, lint, performance e testes operacionais/RH/Ponto/inventário-financeiro/proteção de dados/Ledger/escopo; verificar passou testes DBS Control/resiliência/base/PDF/financeiro, TypeScript e Vite build; smoke passou os contratos inline, retry/outbox, concorrência, RH/Ponto, backup/retenção e build; worker concluiu com sucesso.
+- Lovable reconheceu o mesmo SHA `df07d81ec1dd9783132df3f5161fc95e7a763035`, status `ready`. `is_published=true` foi observado, mas não prova sozinho o SHA servido no domínio público. Não houve publicação iniciada nem alteração de domínio.
+- Nenhuma OS ou comando de conflito foi alterado no Supabase. As duas OS abertas com checklist divergente permanecem para revisão explícita; OS concluídas, canceladas e excluídas permanecem terminais.
