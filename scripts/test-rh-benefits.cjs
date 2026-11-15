@@ -64,7 +64,7 @@ const nextAfterGoodFriday = addBusinessDaysRio("2026-04-02", 1);
 assert.equal(nextAfterGoodFriday.getFullYear(), 2026);
 assert.equal(nextAfterGoodFriday.getMonth(), 3);
 assert.equal(nextAfterGoodFriday.getDate(), 6);
-assert.equal(businessDaysRemainingRio("2026-04-06", "2026-04-02"), 2);
+assert.equal(businessDaysRemainingRio("2026-04-06", "2026-04-02"), 1, "The renewal date is not counted as a remaining covered workday.");
 assert.equal(businessDaysInRioDeJaneiroMonthFor(2026, 4), 19);
 
 console.log("RH benefits: shared VT/VA workflow, central registry guards, audited top-ups and Rio business-day calendar passed.");
