@@ -290,7 +290,6 @@ export function DbsInventoryPage({
       setPurchaseDocument("");
       setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
       setActiveDrawer(null);
-      await overview.refetch();
     }
   }
 
@@ -363,7 +362,6 @@ export function DbsInventoryPage({
     if (saved) {
       selectCatalogPart("");
       setActiveDrawer(null);
-      await overview.refetch();
     }
   }
 
@@ -377,7 +375,6 @@ export function DbsInventoryPage({
       setNewCostCenterCode("");
       setNewCostCenterName("");
       setActiveDrawer(null);
-      await overview.refetch();
     }
   }
 
@@ -398,7 +395,6 @@ export function DbsInventoryPage({
       setTransferQuantity("1");
       setTransferPartId("");
       setActiveDrawer(null);
-      await overview.refetch();
     }
   }
 
@@ -435,7 +431,7 @@ export function DbsInventoryPage({
   async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const saved = await runAction(() => createDbsUnitConversion({ data: { fromUnitId:conversionFrom, toUnitId:conversionTo, factor:Number(conversionFactor) } }), "Conversão de unidade cadastrada.");
-    if (saved) { setConversionFactor("1"); setActiveDrawer(null); await overview.refetch(); }
+    if (saved) { setConversionFactor("1"); setActiveDrawer(null); }
   }
 
   async function linkOrderCostCenter(event: React.FormEvent<HTMLFormElement>) {
@@ -469,7 +465,6 @@ export function DbsInventoryPage({
     if (saved) {
       setGasSerialNumber("");setGasVehicleLabel("");setGasTotalCharges("10");setGasTareWeight("");setGasInitialGrossWeight("");
       setActiveDrawer(null);
-      await overview.refetch();
     }
   }
 
