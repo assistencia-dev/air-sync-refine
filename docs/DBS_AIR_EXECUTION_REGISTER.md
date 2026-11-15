@@ -388,3 +388,9 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Os arquivos locais foram renomeados para corresponder exatamente às versões remotas: `20261115042153_dbs_phase3_ledger_reporting_views.sql` e `20261115042316_treasury_reporting_select_scope.sql`. O teste `test-phase3-ledger-reporting.cjs` agora valida o escopo read-only e o `prebuild` executa os testes de Ledger e RLS.
 - Commits: `30e17259ffcc0917c71ed978dc23f02914ca40b0`, `ff7469da10d05acaf98fad483383a317a7028f37`, `2b33de60275979fe8bcab6b9944d7b73b68bb7df`, `350e3fdbe9316ee359278ebb857cfcf2e01541e3`, `a6284f3cb7610e08ca4d8a7be626f02bab5323cf`, `32e9894ce523d8e7cec06e4df57da7283ffe0814`, `7731f2df487c3e6585fed557a84a98958aab1291`.
 - Nenhum registro financeiro foi alterado. O usuário ainda não cadastrou todos os acompanhamentos de dívidas; esses itens não foram auditados nem usados para baixa/reconciliação.
+
+
+### Gate de regressão após RLS e views (2026-11-15)
+
+- Build Vercel `dpl_B4TWgsp6oyygtiCRAcctZp8MGDeZ`, commit `7731f2df487c3e6585fed557a84a98958aab1291`: `READY`, status `success`. Esse build executou o `prebuild` com os testes `test-phase3-ledger-reporting.cjs` e `test-dbs-control-base-scope-rls.cjs`, além da confirmação do Supabase oficial.
+- Lovable sincronizado até `7731f2df487c3e6585fed557a84a98958aab1291`; a `main` está apenas com commit documental posterior. `is_published=true`, mas nenhuma nova publicação foi disparada; domínio oficial preservado.
