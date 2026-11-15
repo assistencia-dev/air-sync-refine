@@ -29,6 +29,7 @@ assert.match(migration, /a\.account_type='revenue'/i);
 assert.match(migration, /a\.account_type='expense'/i);
 assert.match(migration, /coalesce\(e\.document_date,e\.competence_date\)/i);
 assert.match(migration, /a\.code='1\.1\.01'/i);
+assert.match(migration, /a\.code like 'bank:%'/i, "cash flow must include the bank:<id> account codes used by Treasury");
 assert.match(migration, /opening_balance_cents/i);
 assert.match(migration, /closing_balance_cents/i);
 assert.match(migration, /rows between unbounded preceding and current row/i);
