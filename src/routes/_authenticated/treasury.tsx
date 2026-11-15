@@ -130,7 +130,7 @@ function TreasuryPage() {
           }
           cloudReadyRef.current = true;
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
+            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null },
             window.location.origin,
           );
           setCloudError(null);
@@ -161,7 +161,7 @@ function TreasuryPage() {
           setPurchaseCommitments(Array.isArray(cloud?.purchase_commitments) ? cloud.purchase_commitments : []);
           const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
           if (state) iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0 },
+            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null },
             window.location.origin,
           );
         } catch (err) {
