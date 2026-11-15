@@ -112,15 +112,18 @@ Atualizado em 2026-11-15. Este arquivo preserva a continuidade entre sessões; a
 - No commit `1966ef9`: Validate, TypeScript, build Vite, lint, testes operacionais, RH, estoque/financeiro, proteção de dados e fase 3 passaram; smoke de DBS Control e worker de sincronização passaram.
 - No commit `652ca26`: Validate, verificar e DBS Control smoke concluíram com sucesso.
 - No SHA `d5c14650b09eb64c2dcbc672084c86c97f8be111`: Validate, verificar, DBS Control smoke validation e DBS Control outbox worker concluíram com sucesso. O Validate incluiu lint, testes operacionais/performance/RH/estoque-financeiro/proteção de dados/ledger reporting, build Vite e TypeScript; o verificar incluiu contratos DBS Control/PDF/financeiro, TypeScript e build Vite.
-- O smoke de navegador público só valida o acesso público/redirecionamento para login; não afirma que a sessão autenticada percorreu a operação.
+- No SHA `4ab6a6b`, o smoke Playwright abriu o domínio público, alcançou a tela de login e terminou sem erros de browser; isso não comprova navegação autenticada nem interação com dados.
+- Na última leitura, `main` e `Lovable.latest_commit_sha` estavam sincronizados em `2e16a74bd6ff27f041f44d0be7d31864dd22de50`; projeto `ready`, `is_published=true`, domínio mantido. O sinal `is_published` não foi usado como prova do SHA atualmente servido em produção.
 
 ## Bloqueios e próximos passos
 
-1. Confirmar conclusão do CI do SHA atual e sincronização do mesmo SHA no Lovable. Não publicar automaticamente.
+1. Confirmar conclusão do CI disparado pelo último commit de registro e manter o SHA sincronizado no Lovable. Não publicar automaticamente.
 2. Resolver com evidência o destino/consumidor dos 3 eventos pendentes de `treasury_ledger_outbox`; não mascarar o alerta.
 3. Reconciliar histórico de migrations antes de qualquer deploy de schema: a auditoria leu 134 versões aplicadas no Supabase e 125 arquivos locais, com diferenças de versionamento/nome. Isso pode refletir renumerações históricas; não renomear, reparar ou aplicar migrations em lote sem comparar o SQL armazenado em `supabase_migrations.schema_migrations.statements` com os arquivos.
-4. Depois de dados mestres legítimos serem cadastrados pela operação, validar o ciclo de compra real em sessão autenticada.
-5. Prosseguir para Fase 4 (visualização da OS, anexos/fotos/assinaturas/PDF e ciclo de custo), Fase 5 (sincronização, permissões, backups), Fase 6 (regressão/mobile) e Fase 7 (publicação pelo Lovable).
+4. Cadastrar fornecedores, unidade de medida válida e centros de custo a partir dos dados reais da empresa; revisar os vínculos de fornecedor/unidade das peças já existentes.
+5. Validar o ciclo de compra real em sessão autenticada depois dos cadastros mestres.
+6. Concluir o ciclo de custo da OS (reserva/consumo, histórico e Treasury); a visualização interna, anexos, fotos, assinaturas e PDF já estão no código e têm testes automatizados parciais.
+7. Concluir Fase 5 (reconciliação dos conflitos de OS, permissões e backups), Fase 6 (regressão/mobile) e Fase 7 (publicação pelo Lovable).
 
 ## Regra de atualização
 
