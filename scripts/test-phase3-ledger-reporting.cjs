@@ -7,7 +7,7 @@ const treasuryFns = fs.readFileSync("src/lib/treasury.functions.ts", "utf8");
 const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
 const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 const migration = fs.readFileSync(
-  "supabase/migrations/20261103200000_dbs_phase3_ledger_reporting_views.sql",
+  "supabase/migrations/20261115042153_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
 );
 const reservationGuard = fs.readFileSync(
