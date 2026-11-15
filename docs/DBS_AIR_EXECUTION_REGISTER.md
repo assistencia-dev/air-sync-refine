@@ -320,3 +320,11 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - A migration local `20261016100000_dbs_control_os_document_retention.sql` também não tem correspondência de nome e a tabela `dbs_control_work_order_revisions` não existe. O histórico operacional corrente usa `dbs_control_work_order_events`; não criar a tabela de revisão sem confirmar que o requisito append-only continua desejado.
 - A migration de alias `20261018120000_dbs_control_snapshot_safe_v2_alias.sql` não corresponde por nome, mas a função `dbs_control_save_snapshot_safe_v2(jsonb)` existe no banco; não duplicar sua criação.
 - **Não foi executado `db push`, `repair`, migration SQL ou gravação em `schema_migrations`.** Não renumerar arquivos nem aplicar em lote. A divergência deve ser reconciliada por comparação do SQL de cada registro remoto com os arquivos locais antes de qualquer migração adicional.
+
+
+### Correção de fluxo de caixa — contas bancárias dinâmicas (2026-11-15)
+
+- Revisão do modelo real do Treasury confirmou que as contas bancárias são criadas com código `bank:<uuid>` (ex.: `bank:banco_...`), enquanto as views de fluxo de caixa da migration `20261103200000_dbs_phase3_ledger_reporting_views.sql` filtravam somente `1.1.01` e `1.1.01.%`. Assim, o fluxo de caixa poderia omitir movimentos das contas bancárias efetivamente usadas pelo módulo.
+- Correção aditiva no SQL: os dois filtros das views por conta passaram a incluir também `a.code like 'bank:%'`. O teste `scripts/test-phase3-ledger-reporting.cjs` agora protege esse contrato.
+- Commits: `b842eb421da2d977d37c7a1ef38638f08d2e2d61` (migration) e `bd19b4dc1d5eaaa8358bc7c131f44f4c19665b96` (regressão).
+- A migration ainda não foi aplicada no Supabase oficial porque a divergência do histórico remoto/local permanece em reconciliação. Nenhuma linha do Ledger, dívida, parcela, outbox ou outro dado de produção foi alterada. A correção aguarda validação CI e aplicação segura em ambiente de migração reconciliado.
