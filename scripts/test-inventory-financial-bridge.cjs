@@ -27,6 +27,7 @@ const frontendIntegrations = fs.readFileSync('supabase/migrations/20261112125903
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
+const treasuryHtml = fs.readFileSync('public/treasury.html', 'utf8');
 const inventoryValueFix = fs.readFileSync('supabase/migrations/20261105130610_fix_dbs_inventory_value_includes_inactive_stock.sql', 'utf8');
 const workOrderScopeFix = fs.readFileSync('supabase/migrations/20261105131450_fix_dbs_work_order_consumption_scope_company_reference.sql', 'utf8');
 const scopeSkuMigration = fs.readFileSync('supabase/migrations/20261105135208_dbs_inventory_scope_sku_and_financial_reconciliation.sql', 'utf8');
@@ -106,12 +107,18 @@ assert.doesNotMatch(phase2Ui, /<details open=\{!suppliers\.length/);
 
 
 
-assert.match(treasuryPage, /VISÃO DE CONTAS A PAGAR/);
-assert.match(treasuryPage, /Total pendente/);
-assert.match(treasuryPage, /Saldo em aberto/);
+assert.doesNotMatch(treasuryPage, /Compromissos de compras aprovadas/, "The old oversized commitments banner must stay removed.");
+assert.match(treasuryPage, /treasury-content-frame/);
 assert.doesNotMatch(phase2Ui, /settleDbsPurchase|settleDbsPartSale|createDbsPartSale/);
-assert.doesNotMatch(treasuryPage, /Fila de aprovação financeira de compras/);
-assert.doesNotMatch(treasuryPage, /decideDbsPurchaseApprovalFromTreasury/);
+assert.match(treasuryPage, /DBS_TREASURY_DECIDE_PURCHASE_APPROVAL/);
+assert.match(treasuryPage, /decideDbsPurchaseApprovalFromTreasury/);
+assert.match(treasuryPage, /pendingPurchaseApprovals/);
+assert.match(treasuryHtml, /id="mod-aprovacoes"/);
+assert.match(treasuryHtml, /Aprovação de compras/);
+assert.match(treasuryHtml, /purchase-approval-menu-count/);
+assert.match(treasuryHtml, /postTreasuryPurchaseApproval/);
+assert.match(treasuryHtml, /submitPurchaseApprovalRejection/);
+assert.match(treasuryHtml, /DBS_TREASURY_PURCHASE_APPROVAL_RESULT/);
 assert.doesNotMatch(phase2Ui, /gross_margin_pct|paid_cents|payment_status|settlementAmounts/);
 assert.match(functions, /export const createDbsPurchase/);
 assert.match(functions, /dbs_control_register_purchase/);
