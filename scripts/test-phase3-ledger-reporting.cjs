@@ -10,6 +10,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20261115042153_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
 );
+const readScopeMigration = fs.readFileSync(
+  "supabase/migrations/20261115042316_treasury_reporting_select_scope.sql",
+  "utf8",
+);
 const reservationGuard = fs.readFileSync(
   "supabase/migrations/20261103210000_dbs_phase2_reservation_sync_guard.sql",
   "utf8",
@@ -29,6 +33,12 @@ assert.match(migration, /join public\.treasury_ledger_lines/i);
 assert.match(migration, /join public\.treasury_accounts/i);
 assert.match(migration, /where e\.status='posted'/i);
 assert.ok(migration.includes("and e.entry_type not in ('installment_payment','installment_reversal')"), "debt principal payments must not inflate operating DRE");
+assert.match(readScopeMigration, /create or replace function private\.dbs_my_treasury_scope_keys/i);
+assert.match(readScopeMigration, /'FINANCEIRO_LEITURA'::public\.role_key/i);
+assert.match(readScopeMigration, /'SUPER_ADMIN'::public\.role_key/i);
+assert.match(readScopeMigration, /grant select on public\.treasury_ledger_entries to authenticated/i);
+assert.match(readScopeMigration, /scope_key in \(select private\.dbs_my_treasury_scope_keys\(\)\)/i);
+assert.doesNotMatch(readScopeMigration, /grant (insert|update|delete) on public\.treasury_ledger_/i, "Ledger reporting grants must remain read-only");
 assert.match(migration, /e\.competence_date/i);
 assert.match(migration, /a\.account_type='revenue'/i);
 assert.match(migration, /a\.account_type='expense'/i);
