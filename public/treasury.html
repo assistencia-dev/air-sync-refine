@@ -708,6 +708,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                     <div class="proj-card"><div class="proj-title">Receitas do mês</div><div class="proj-val" id="ledger-dre-revenue">R$ 0,00</div></div>
                     <div class="proj-card"><div class="proj-title">Despesas operacionais</div><div class="proj-val" id="ledger-dre-expenses">R$ 0,00</div></div>
                     <div class="proj-card"><div class="proj-title">Resultado do mês</div><div class="proj-val" id="ledger-dre-result">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Entradas de caixa</div><div class="proj-val" id="ledger-cash-in">R$ 0,00</div></div>
                     <div class="proj-card"><div class="proj-title">Saídas de caixa</div><div class="proj-val" id="ledger-cash-out">R$ 0,00</div></div>
                 </div>
                 <div id="ledger-dre-empty" style="padding:10px 0;color:var(--text-muted);font-size:12px;display:none;">Nenhum lançamento postado encontrado para o período selecionado.</div>
@@ -2624,6 +2625,7 @@ function showToast(msg) {
         const selectedPeriod = document.getElementById('global-period-filter')?.value || '';
         let revenueCents = 0;
         let expenseCents = 0;
+        let cashInCents = 0;
         let cashOutCents = 0;
         let hasPeriodEntry = false;
 
@@ -2646,7 +2648,10 @@ function showToast(msg) {
                     }
                 }
                 const cashAccount = account.accountType === 'asset' && (/^bank:/.test(String(account.code || '')) || /^1\.1\.01(?:\.|$)/.test(String(account.code || '')));
-                if (cashMonth === selectedPeriod && cashAccount) cashOutCents += credit - debit;
+                if (cashMonth === selectedPeriod && cashAccount) {
+                    cashInCents += debit;
+                    cashOutCents += credit;
+                }
             }
         }
 
@@ -2654,6 +2659,7 @@ function showToast(msg) {
             'ledger-dre-revenue': revenueCents,
             'ledger-dre-expenses': expenseCents,
             'ledger-dre-result': revenueCents - expenseCents,
+            'ledger-cash-in': cashInCents,
             'ledger-cash-out': cashOutCents,
         };
         Object.entries(values).forEach(([id, value]) => {
