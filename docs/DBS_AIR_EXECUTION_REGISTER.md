@@ -355,3 +355,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Build Vercel do commit `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80`: `READY` / status `success`.
 - Logs confirmam execução real do novo `prebuild`: `test-phase3-ledger-reporting.cjs` passou e `check-supabase-project-ref.cjs` confirmou o projeto oficial `gdglototcrehvhkvcqsq`; depois, Vite/Nitro compilou com sucesso.
 - Esse deployment é um build de CI/Vercel e não uma publicação Lovable. O domínio oficial Lovable não foi alterado.
+
+
+### Verificação RLS com identidade autenticada existente (2026-11-15)
+
+- Executadas consultas somente leitura em transações encerradas com `ROLLBACK`, usando `SET LOCAL ROLE authenticated` e o `auth_id` de usuários existentes (sem criar contas ou alterar dados).
+- Perfil `SUPER_ADMIN`: `current_role_key() = SUPER_ADMIN`; RLS retornou 1.807 OS e 31 anexos visíveis.
+- Perfil `COLABORADOR`: `current_role_key() = COLABORADOR`; RLS retornou 44 OS e 27 anexos visíveis. Consultas diretas às tabelas de compras e Ledger retornaram `permission denied`, confirmando ausência de privilégio de leitura financeira para esse perfil.
+- A consulta direta do colaborador à tabela de vínculo base-cliente também foi negada, como esperado. A validação de que cada OS visível pertence à base RH ainda precisa ser comprovada por uma consulta administrativa comparativa; as policies atuais limitam por empregado atribuído, mas não expressam diretamente a relação de base/cliente. Não foi alterada nenhuma policy ou grant.
+- Todos os testes foram somente leitura e encerrados com rollback; nenhum registro, usuário, dívida, parcela, baixa ou lançamento foi criado ou alterado.
