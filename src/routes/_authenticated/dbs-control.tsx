@@ -1477,7 +1477,8 @@ function DbsControlPage() {
                 const order = dbsControlStateOrderForConflict(cloudState, conflict);
                 return Boolean(order)
                   && !dbsControlStateOrderIsCompleted(cloudState, conflict)
-                  && !dbsControlStateOrderIsDeleted(cloudState, conflict);
+                  && !dbsControlStateOrderIsDeleted(cloudState, conflict)
+                  && !dbsControlStateOrderIsCancelled(cloudState, conflict);
               })
             );
             for (const unresolvedCommand of reopenForReview) {
@@ -1608,6 +1609,7 @@ function DbsControlPage() {
                   && !restoredCommand.conflicts.some((conflict) =>
                     dbsControlStateOrderIsCompleted(cloudState, conflict)
                     || dbsControlStateOrderIsDeleted(cloudState, conflict)
+                    || dbsControlStateOrderIsCancelled(cloudState, conflict)
                   );
                 if (canRebaseCollaboratorCommand) {
                   // Preserve o payload original em quarentena antes do rebase.
