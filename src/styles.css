@@ -714,3 +714,11 @@ table{font-variant-numeric:tabular-nums}
 @media (prefers-reduced-motion: reduce) {
   .dbs-operations-page *, .dbs-operations-drawer * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+
+/* DBS Treasury: the compact in-menu approvals area replaces the former
+   oversized commitments banner, so the financial workspace can use its height. */
+.treasury-content-frame { height: calc(100dvh - 64px) !important; }
+@media (max-width: 767px) {
+  .treasury-content-frame { height: calc(100dvh - 140px) !important; }
+}
