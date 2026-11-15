@@ -417,3 +417,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 
 - Rebase solicitado no branch de desenvolvimento Supabase `163cf106-a7e2-420d-a5de-010672d0c127` sobre a produção; a ação retornou `success=true`. Na consulta seguinte o projeto de preview permaneceu `ACTIVE_HEALTHY` e o branch estava `CREATING_PROJECT` durante a recriação. Não houve alteração no projeto oficial de produção além das três migrations aditivas já registradas.
 - O último build Vercel bem-sucedido continua sendo `dpl_B4TWgsp6oyygtiCRAcctZp8MGDeZ` / commit `7731f2df487c3e6585fed557a84a98958aab1291`. O build disparado após a reconciliação foi recusado pelo limite de builds da conta, não por erro de compilação; por isso a última alteração de scripts/migrations ainda precisa de uma execução de build quando o limite permitir. Os testes CJS de Ledger e RLS foram executados isoladamente no ambiente de validação e passaram; a paridade das 141 migrations foi verificada por comparação direta com o histórico remoto.
+
+
+### Regressão adicional e navegação (2026-11-15)
+
+- Executados com sucesso os contratos estáticos `test-phase3-ledger-reporting.cjs`, `test-dbs-control-base-scope-rls.cjs`, `test-dbs-control-base-scope.cjs`, `test-data-protection.cjs`, `test-performance-contracts.cjs` e `test-dbs-control-pdf.cjs`.
+- Todas as referências de migrations usadas pelos scripts em `scripts/` foram atualizadas para os nomes reconciliados e verificadas contra a árvore atual do GitHub; nenhuma referência aponta para arquivo inexistente.
+- Navegação de Peças & Estoque e Compras: os dois itens de menu já enviam mensagens distintas `DBS_CONTROL_OPEN_INVENTORY_MODULE` com seção `parts` ou `purchases`; o pai cria um portal React separado em cada aba. Os contratos estáticos continuam presentes e cada seção usa sua própria instância. A validação de UI real no navegador autenticado ainda depende de sessão de teste.
+- O `prebuild` foi ampliado para executar os testes de resiliência DBS, escopo de base, proteção de dados, contratos de performance, integração visual Compras/Estoque, Ledger, PDF/OS, RLS, paridade local das migrations e confirmação do projeto Supabase oficial.
+- Lovable está sincronizado até o SHA atual da `main` e permanece publicado; nenhuma publicação foi iniciada. A confirmação independente do SHA servido no domínio público ainda não está disponível nesta sessão.
