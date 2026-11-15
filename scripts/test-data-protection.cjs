@@ -4,7 +4,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const backup = fs.readFileSync(path.join(root, "scripts/backup-supabase.mjs"), "utf8");
-const retention = fs.readFileSync(path.join(root, "supabase/migrations/superseded/20261016100000_dbs_control_os_document_retention.sql"), "utf8");
+const retention = fs.readFileSync(path.join(root, "supabase/migrations/20261016100000_dbs_control_os_document_retention.sql"), "utf8");
 const integrity = fs.readFileSync(path.join(root, "supabase/migrations/20261026164116_operational_integrity_indexes_and_backup_manifest.sql"), "utf8");
 const bucketMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261026164612_backup_manifest_document_buckets.sql"), "utf8");
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/daily-supabase-backup.yml"), "utf8");
