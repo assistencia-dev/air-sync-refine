@@ -154,3 +154,14 @@ Ao fechar uma tarefa, registrar problema, causa, arquivos/commit, teste executad
 6. Resolver drift de migrations por comparação do SQL aplicado com os arquivos locais; nenhuma aplicação em lote.
 7. Continuar regressão de sincronização, permissões e mobile; publicação pelo Lovable permanece bloqueada até os critérios de aprovação.
 
+
+
+## Atualização adicional — correções de interface e validação (2026-11-15)
+
+- Corrigida uma duplicação real na tela Catálogo de Peças: havia dois cartões completos de catálogo com busca/filtro; foi removido o cartão antigo, mantendo o formulário lateral de cadastro/edição e o cartão responsivo mais recente. Commit: `44ff9fe5b25e17a3f8cb318689efbc07abd7f7c2`.
+- O teste de regressão agora exige exatamente uma superfície de busca do catálogo. Commit: `a75cc451fb01be1ef6c726f15f682ec39423273f`.
+- Verificação estática executada sobre os arquivos atuais: uma busca do catálogo; apenas duas chamadas de `overview.refetch()` (atualização central de `runAction()` e botão explícito de tentar novamente); viewer de OS carregado pelo HTML; handler de visualização presente; ações de preview, impressão e download presentes; nenhuma chamada RPC de alteração no viewer. Todos os contratos verificados passaram.
+- Build Vite/Nitro do commit `a75cc451fb01be1ef6c726f15f682ec39423273f` concluiu com estado `READY`. O prebuild confirmou explicitamente o Supabase `gdglototcrehvhkvcqsq`. É apenas validação de build; não é publicação oficial.
+- Lovable reconheceu o SHA `a75cc451fb01be1ef6c726f15f682ec39423273f`, projeto `ready`. O domínio oficial continua inalterado e não houve publicação.
+- A suíte Node completa de regressão ainda depende do resultado do GitHub Actions; a verificação estática manual acima não deve ser confundida com execução integral dos scripts.
+
