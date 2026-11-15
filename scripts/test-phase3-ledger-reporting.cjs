@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 
 const fns = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
 const treasuryFns = fs.readFileSync("src/lib/treasury.functions.ts", "utf8");
+const treasuryRoute = fs.readFileSync("src/routes/_authenticated/treasury.tsx", "utf8");
+const treasuryHtml = fs.readFileSync("public/treasury.html", "utf8");
 const migration = fs.readFileSync(
   "supabase/migrations/20261103200000_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
@@ -32,7 +34,15 @@ assert.match(migration, /coalesce\(e\.document_date,e\.competence_date\)/i);
 assert.match(migration, /a\.code='1\.1\.01'/i);
 assert.match(migration, /a\.code like 'bank:%'/i, "cash flow must include the bank:<id> account codes used by Treasury");
 assert.ok(treasuryFns.includes('status === "posted"'), "reports must exclude draft Ledger entries");
-assert.ok(treasuryFns.includes("bank:)/.test(account.code)"), "cash account coverage must recognize bank:<id> codes");
+assert.ok(treasuryFns.includes(String.raw`/^(?:1\.1\.01(?:\.|$)|bank:)/`), "cash account coverage must recognize standard and bank:<id> codes");
+assert.match(treasuryFns, /filter\(\(entry: any\) => entry\.status === "posted"\)/, "reports must exclude draft Ledger entries");
+assert.match(treasuryFns, /reversed_entry_id/, "Ledger report entries must include reversal references");
+assert.match(treasuryRoute, /ledgerReport: cloud\?\.ledger_report \?\? null/, "scoped Ledger reports must reach the Finance iframe");
+assert.match(treasuryHtml, /LEDGER_REPORT = msg\.ledgerReport/, "Finance iframe must receive the Ledger report");
+assert.match(treasuryHtml, /renderLedgerDre\(\)/, "Finance DRE must render the Ledger report");
+assert.match(treasuryHtml, /ledger-cash-in/);
+assert.match(treasuryHtml, /ledger-cash-out/);
+assert.match(treasuryHtml, /installment_payment.*installment_reversal|installment_reversal.*installment_payment/s, "debt principal payments must remain outside operating expenses");
 assert.ok(treasuryFns.includes("reversed_entry_id"), "Ledger report entries must include reversal references");
 assert.match(migration, /opening_balance_cents/i);
 assert.match(migration, /closing_balance_cents/i);
