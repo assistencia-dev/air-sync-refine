@@ -167,6 +167,7 @@ const fieldControl = fs.readFileSync("src/lib/fieldcontrol.functions.ts", "utf8"
 const atomicSnapshotMigration = fs.readFileSync("supabase/migrations/20261016134345_dbs_control_snapshot_atomic_save.sql", "utf8");
 const protocolReconciliationMigration = fs.readFileSync("supabase/migrations/20261017222141_dbs_control_snapshot_reconcile_by_protocol.sql", "utf8");
 const deltaMigration = fs.readFileSync("supabase/migrations/20261026132126_dbs_control_delta_outbox_v2.sql", "utf8");
+const completedOsGuardMigration = fs.readFileSync("supabase/migrations/20261018010515_dbs_control_relational_os_guard.sql", "utf8");
 const legacyBackfillMigration = fs.readFileSync("supabase/migrations/20261026140453_dbs_control_legacy_relational_backfill.sql", "utf8");
 const legacyHistoryRepairMigration = fs.readFileSync("supabase/migrations/20261026141455_dbs_control_legacy_history_repair.sql", "utf8");
 const deletedAtMigration = fs.readFileSync("supabase/migrations/20261026141618_dbs_control_deleted_at_backfill.sql", "utf8");
@@ -327,7 +328,7 @@ assert.match(theme, /employee-observation-field/, "O tema deve contemplar a áre
 assert.match(html, /employee-observation-field/, "A execução deve oferecer campo complementar separado para observações técnicas.");
 assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
-assert.match(deltaMigration, /DBS_OS_COMPLETED_LOCKED/, "OS concluída deve preservar campos assinados contra autosaves antigos.");
+assert.match(completedOsGuardMigration, /DBS_OS_COMPLETED_LOCKED/, "A guarda relacional deve preservar OS concluída e campos assinados contra autosaves antigos.");
 assert.match(deltaMigration, /v_expected is null or v_expected <> v_current\.version/, "A RPC deve rejeitar gravações sem a versão esperada ou com versão antiga.");
 assert.match(deltaMigration, /dbs_control_apply_work_order_parts_in_tx/, "Peças e estoque devem ser aplicados no caminho relacional transacional.");
 assert.match(deltaMigration, /DBS_OS_STOCK_INSUFFICIENT/, "Estoque insuficiente deve rejeitar a intenção sem desconto parcial.");
