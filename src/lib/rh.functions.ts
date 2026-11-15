@@ -198,12 +198,25 @@ function validateBenefit(input: RhInput) {
   return input;
 }
 
+function normalizeBenefitWorkSchedule(value: unknown) {
+  const raw = String(value ?? "").toLowerCase().replace(/\s+/g, "");
+  if (raw.includes("12x36")) return "12x36";
+  if (raw.includes("6x1")) return "6x1";
+  return "5x2";
+}
+
+function isValidBenefitDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T12:00:00.000Z");
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export const listRhEmployees = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator(validateBenefit)
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
-    const { data: employees, error } = await supabaseAdmin
+    const { data: benefitRows, error } = await supabaseAdmin
       .from("rh_employees")
       .select("id, registry_employee_id, benefit_type, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured, created_at, updated_at")
       .eq("is_active", true)
@@ -213,10 +226,35 @@ export const listRhEmployees = createServerFn({ method: "GET" })
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
 
+    const registryIds = [...new Set((benefitRows ?? []).map((row: any) => row.registry_employee_id).filter(Boolean))] as string[];
+    if (!registryIds.length) return [];
+
+    const { data: registryRows, error: registryError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, registry_employee_id, is_active, benefit_configured, registration_data")
+      .in("id", registryIds);
+    if (registryError) throw new Error(registryError.message);
+    const registryById = new Map((registryRows ?? []).map((row: any) => [String(row.id), row]));
+
     const unique = new Map<string, any>();
-    for (const employee of employees ?? []) {
-      const key = employee.registry_employee_id ?? employee.id;
-      if (!unique.has(key)) unique.set(key, employee);
+    for (const employee of benefitRows ?? []) {
+      const registryId = String(employee.registry_employee_id ?? "");
+      const registry = registryById.get(registryId);
+      const isCentralRegistry = Boolean(registry) && (
+        registry.registry_employee_id === registry.id ||
+        (!registry.registry_employee_id && registry.benefit_configured !== true)
+      );
+      if (!isCentralRegistry || registry?.is_active !== true) continue;
+
+      const registration = registry?.registration_data && typeof registry.registration_data === "object"
+        ? registry.registration_data as Record<string, unknown>
+        : {};
+      if (!unique.has(registryId)) {
+        unique.set(registryId, {
+          ...employee,
+          work_schedule: normalizeBenefitWorkSchedule(registration.work_shift ?? registration.work_schedule),
+        });
+      }
     }
     return [...unique.values()];
   });
@@ -226,10 +264,14 @@ export const listRhEmployeeRegistryForBenefits = createServerFn({ method: "GET" 
   .handler(async ({ context }) => {
     await requireNativeOperator(context);
     const { data, error } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, is_active, registration_data, registry_employee_id")
+      .select("id, full_name, unit, is_active, registration_data, registry_employee_id, benefit_configured")
+      .eq("is_active", true)
       .order("full_name");
     if (error) throw new Error(error.message);
-    return (data ?? []).filter((row: any) => row.registry_employee_id === row.id || !row.registry_employee_id);
+    return (data ?? []).filter((row: any) =>
+      row.registry_employee_id === row.id ||
+      (!row.registry_employee_id && row.benefit_configured !== true)
+    );
   });
 
 export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
@@ -244,12 +286,17 @@ export const configureRhEmployeeBenefit = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireNativeOperator(context);
     const { data: registry, error: registryError } = await supabaseAdmin.from("rh_employees")
-      .select("id, full_name, unit, is_active")
+      .select("id, full_name, unit, is_active, registry_employee_id, benefit_configured")
       .eq("id", data.registry_employee_id)
-      .eq("registry_employee_id", data.registry_employee_id)
       .maybeSingle();
     if (registryError) throw new Error(registryError.message);
-    if (!registry) throw new Error("Funcionário não encontrado no Cadastro de Funcionários.");
+    const isCentralRegistry = Boolean(registry) && (
+      registry.registry_employee_id === registry.id ||
+      (!registry.registry_employee_id && registry.benefit_configured !== true)
+    );
+    if (!registry || !isCentralRegistry) {
+      throw new Error("Selecione um funcionário válido do Cadastro Central. Cadastros auxiliares de benefício não podem ser reutilizados.");
+    }
     if (!registry.is_active) throw new Error("O funcionário está inativo no Cadastro de Funcionários.");
 
     const { data: existing, error: existingError } = await supabaseAdmin.from("rh_employees").select("id")
@@ -394,9 +441,39 @@ export const listRhTopups = createServerFn({ method: "GET" })
       .from("rh_topups")
       .select("id, benefit_type, employee_id, amount_cents, paid_at, created_at")
       .eq("benefit_type", data.benefit_type)
-      .order("paid_at", { ascending: false });
+      .order("paid_at", { ascending: false })
+      .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return topups ?? [];
+    if (!topups?.length) return [];
+
+    const employeeIds = [...new Set(topups.map((row: any) => String(row.employee_id)))];
+    const { data: employees, error: employeesError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, registry_employee_id, full_name, unit, fare_cents, trips_per_day, is_active, benefit_configured")
+      .in("id", employeeIds);
+    if (employeesError) throw new Error(employeesError.message);
+    const employeeById = new Map((employees ?? []).map((row: any) => [String(row.id), row]));
+    const registryIds = [...new Set((employees ?? []).map((row: any) => row.registry_employee_id).filter(Boolean))] as string[];
+    const { data: registries, error: registryError } = registryIds.length
+      ? await supabaseAdmin.from("rh_employees").select("id, is_active").in("id", registryIds)
+      : { data: [], error: null };
+    if (registryError) throw new Error(registryError.message);
+    const registryById = new Map((registries ?? []).map((row: any) => [String(row.id), row]));
+
+    return topups.map((topup: any) => {
+      const employee = employeeById.get(String(topup.employee_id));
+      const registry = employee?.registry_employee_id
+        ? registryById.get(String(employee.registry_employee_id))
+        : null;
+      return {
+        ...topup,
+        employee_full_name: employee?.full_name ?? null,
+        employee_unit: employee?.unit ?? null,
+        employee_fare_cents: employee?.fare_cents ?? null,
+        employee_trips_per_day: employee?.trips_per_day ?? 1,
+        employee_active: employee?.is_active === true && registry?.is_active === true,
+      };
+    });
   });
 
 export const createRhTopup = createServerFn({ method: "POST" })
@@ -413,24 +490,38 @@ export const createRhTopup = createServerFn({ method: "POST" })
         !input.employee_id ||
         !Number.isInteger(input.amount_cents) ||
         input.amount_cents <= 0 ||
-        !input.paid_at
+        !isValidBenefitDate(input.paid_at)
       ) {
-        throw new Error("Informe colaborador, valor e data da recarga.");
+        throw new Error("Informe colaborador, valor e uma data válida para a recarga.");
       }
       return input;
     },
   )
   .handler(async ({ context, data }) => {
     const operator = await requireNativeOperator(context);
-    const { data: employee } = await supabaseAdmin
+    const { data: employee, error: employeeError } = await supabaseAdmin
       .from("rh_employees")
-      .select("id")
+      .select("id, registry_employee_id, benefit_configured, is_active")
       .eq("id", data.employee_id)
       .eq("benefit_type", data.benefit_type)
       .eq("benefit_configured", true)
       .eq("is_active", true)
       .maybeSingle();
-    if (!employee) throw new Error("Colaborador não encontrado ou inativo.");
+    if (employeeError) throw new Error(employeeError.message);
+    if (!employee?.registry_employee_id) throw new Error("O benefício não está vinculado ao Cadastro Central.");
+    const { data: registry, error: registryError } = await supabaseAdmin
+      .from("rh_employees")
+      .select("id, registry_employee_id, benefit_configured, is_active")
+      .eq("id", employee.registry_employee_id)
+      .maybeSingle();
+    if (registryError) throw new Error(registryError.message);
+    const isCentralRegistry = Boolean(registry) && (
+      registry.registry_employee_id === registry.id ||
+      (!registry.registry_employee_id && registry.benefit_configured !== true)
+    );
+    if (!registry || !isCentralRegistry || registry.is_active !== true) {
+      throw new Error("O funcionário não está ativo no Cadastro Central. A recarga não foi registrada.");
+    }
     const { data: topup, error } = await supabaseAdmin
       .from("rh_topups")
       .insert({ benefit_type: data.benefit_type, employee_id: data.employee_id, amount_cents: data.amount_cents, paid_at: data.paid_at, created_by: operator.id })
