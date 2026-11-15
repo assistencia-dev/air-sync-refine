@@ -253,3 +253,15 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Isso cria uma possível diferença entre o escopo de tela/API server-side e as consultas REST diretas por usuário autenticado, caso exista OS atribuída fora dos clientes da base RH ou uma base inativa. Não foi executado teste de REST com JWT de colaborador nem leitura de conteúdo fora do escopo; portanto, registrar como lacuna de autorização a validar, sem afirmar exploração confirmada.
 - Nenhuma policy, grant, tabela ou dado foi alterado. Antes de corrigir, comparar o SQL das policies aplicadas com as migrations do repositório, definir como tratar colaborador sem base configurada e com base inativa, então preparar migration aditiva para alinhar SELECT/UPDATE/INSERT de OS, anexos e tabelas dependentes, executar supabase db advisors e testes por perfil. A migration não deve ser aplicada até resolver o drift histórico e validar a matriz de permissões.
 - **Proteção de cancelamento:** os caminhos de autoquarentena, recuperação de quarentena antiga, rebase do colaborador e merge do iframe agora também preservam OS canceladas (cancelada, cancelado, cancelled, canceled). Commits adicionais: 52e3a4aa5db6b41b120c7089e3db91bb96280316, 55810241d0da2ba7d78652e8f9e9aeb85eaa76fa, df48c157ad0247964d0f835b74a01c24fafa7a9e, 685a21e2d16fc620907d0c55fe19ee69a92b1af4, b643001efda710f475ade3296b61694ebc8f912e e df07d81ec1dd9783132df3f5161fc95e7a763035.
+
+## Continuidade — etapa de segurança de OS/RLS (2026-11-15)
+
+- SHA conferido na main: 78b17f5e3ab7601e58b0ded5ea36579e730f1bae; Lovable reconhece o mesmo SHA e estado ready.
+- GitHub Actions no commit de registro anterior concluiu Validate, verificar, DBS Control smoke validation e DBS Control outbox worker. Isso valida os workflows daquele SHA; não substitui teste autenticado por perfil.
+- Consulta somente leitura às policies de produção confirmou:
+  - dbs_control_work_orders: SELECT/UPDATE de colaborador via private.dbs_my_employee_ids(), além de filtro de excluída/cancelada.
+  - dbs_control_work_order_attachments: SELECT via atribuição da OS ao empregado retornado pela mesma função; INSERT exige usuário autenticado que envia o anexo e empregado ativo com acesso Ponto/DBS habilitado.
+  - private.dbs_my_employee_ids() considera vínculo direto ponto_portal_user_id e vínculo rh_employee_access, exigindo dbs_control_access_enabled=true e is_active=true.
+- A função não filtra dbs_control_base_id nem a relação do cliente. Portanto, a hipótese de diferença entre o escopo das telas/handlers e o escopo REST/RLS continua tecnicamente plausível, mas não está provada como acesso indevido: ainda falta definir se a regra oficial de autorização por base/cliente deve ser aplicada também à consulta direta.
+- Nenhuma policy, função, grant, migration ou registro foi alterado. Nenhum JWT de colaborador foi usado para consultar OS de outro escopo.
+- Próxima ação segura: comparar a regra de escopo efetivamente usada pelo backend de leitura e pelos vínculos RH com a matriz oficial de permissões antes de propor migration. Não restringir RLS por suposição, pois isso poderia retirar acesso legítimo a OS atribuída.
