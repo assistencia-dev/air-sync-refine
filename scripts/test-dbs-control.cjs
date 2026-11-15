@@ -100,8 +100,8 @@ assert.ok(osViewer.includes("fotoAntes") && osViewer.includes("fotoDepois"), "A 
 assert.ok(osViewer.includes("[...L(o.anexos), ...L(o.attachments)"), "A visualização deve contemplar anexos legados e atuais.");
 assert.ok(osViewer.includes("Assinaturas") && osViewer.includes("Histórico"), "A visualização deve manter assinaturas e histórico.");
 assert.ok(osViewer.includes("setAttribute('role', 'dialog')"), "A visualização deve ser um diálogo acessível.");
-assert.equal(osViewer.includes("localStorage.setItem(") || osViewer.includes("sessionStorage.setItem(") ||
-  osViewer.includes("supabase.rpc(") || /from\\([^)]*\\)\\.(insert|update|upsert|delete)\\(/i.test(osViewer), false,
+assert.equal(osViewer.includes("localStorage.") || osViewer.includes("sessionStorage.") ||
+  osViewer.includes("supabase.") || osViewer.includes("ERP_STATE.ordens ="), false,
   "Abrir/visualizar OS não pode gravar dados nem chamar RPCs de alteração.");
 
 const firstPartyScripts = [
