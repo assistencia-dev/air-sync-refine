@@ -27,6 +27,14 @@ const required = [
   ['scope resolved after employee base', /const collaboratorScope = collaboratorEmployee \? await getCollaboratorBaseScope\(collaboratorEmployee\) : null;[\s\S]*const scope = await resolveDbsControlScope\(user, collaboratorScope\)/i],
 ];
 
+const companyMismatchBlock = control.slice(
+  control.indexOf("if (baseResult.data?.company_id"),
+  control.indexOf("// Status é normalizado", control.indexOf("if (baseResult.data?.company_id")),
+);
+if (!/return \{\s*baseId,\s*baseName: null,\s*baseActive: false,\s*canIssueWorkOrders: false,\s*clientIds: \[\] as string\[\],\s*companyId: null\s*\}/.test(companyMismatchBlock)) {
+  throw new Error('A base configurada de outra empresa deve permanecer vinculada com escopo vazio, sem fallback de OS atribuída.');
+}
+
 for (const [name, pattern] of required) {
   const haystack = [migration, rh, control, html, route].join('\n');
   if (!pattern.test(haystack)) throw new Error(`Missing base-scope contract: ${name}`);
