@@ -185,7 +185,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .maybeSingle(),
     admin
       .from("treasury_ledger_entries")
-      .select("id, scope_key, competence_date, document_date, entry_type, status, description, idempotency_key, metadata, updated_at, created_at")
+      .select("id, scope_key, competence_date, document_date, entry_type, status, description, idempotency_key, metadata, reversed_entry_id, updated_at, created_at")
       .eq("scope_key", scopeKey)
       .in("status", ["draft", "posted"])
       .order("competence_date", { ascending: true })
@@ -268,7 +268,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     });
     ledgerLinesByEntry.set(entryId, rows);
   }
-  const ledgerReportEntries = (entries ?? []).map((entry: any) => {
+  const ledgerReportEntries = (entries ?? []).filter((entry: any) => entry.status === "posted").map((entry: any) => {
     const lines = ledgerLinesByEntry.get(String(entry.id)) ?? [];
     return {
       id: String(entry.id),
@@ -293,7 +293,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       activeRevenueAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "revenue").length,
       activeExpenseAccounts: activeLedgerAccounts.filter((account: any) => account.accountType === "expense").length,
       activeCashAccounts: activeLedgerAccounts.filter((account: any) =>
-        account.accountType === "asset" && /^1\\.1\\.01(?:\\.|$)/.test(account.code)
+        account.accountType === "asset" && /^(?:1\\.1\\.01(?:\\.|$)|bank:)/.test(account.code)
       ).length,
     },
   };
