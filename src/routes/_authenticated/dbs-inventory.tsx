@@ -582,43 +582,7 @@ export function DbsInventoryPage({
   </SheetContent>
 </Sheet>
           
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4">
-              <div><h2 className="text-base font-semibold text-slate-900">Catálogo de peças</h2><p className="mt-1 text-xs text-slate-500">{visibleParts.length} resultados · {parts.length} itens cadastrados</p></div>
-            </div>
-            <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
-              <input type="search" aria-label="Buscar peças" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Buscar por nome, SKU ou fornecedor..." className="min-h-10 rounded-lg border border-slate-200 bg-[#f8fafc] px-3 text-sm focus:border-sky-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <select aria-label="Filtrar peças" value={catalogFilter} onChange={e=>setCatalogFilter(e.target.value as "all"|"stock"|"setup")} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todas as peças</option><option value="stock">Com saldo físico</option><option value="setup">Cadastro incompleto</option></select>
-            </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Peça / SKU</th><th className="px-4 py-3">Fornecedor</th><th className="px-4 py-3">Unidade</th><th className="px-4 py-3">Custo</th><th className="px-4 py-3">Saldo central</th></tr></thead>
-                <tbody>{visibleParts.map((part:any)=>{
-                  const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
-                  const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
-                  return <tr key={part.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3"><button type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="text-left font-medium text-slate-900 hover:text-sky-800">{part.name||part.description||"Peça"}<span className="mt-0.5 block text-xs font-normal text-slate-500">{part.sku||"Sem SKU"}</span></button></td>
-                    <td className="px-4 py-3 text-slate-600">{supplier?.name||<span className="text-amber-700">Vincular</span>}</td>
-                    <td className="px-4 py-3 text-slate-600">{unit?.symbol||unit?.code||<span className="text-amber-700">Definir</span>}</td>
-                    <td className="px-4 py-3 text-slate-700">{money(part.cost_cents)}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{Number(part.stock_quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td>
-                  </tr>;
-                })}</tbody>
-              </table>
-              {!visibleParts.length&&<p className="px-5 py-10 text-center text-sm text-slate-500">{catalogSearch||catalogFilter!=="all"?"Nenhuma peça encontrada.":"Nenhuma peça cadastrada ainda."}</p>}
-            </div>
-            <div className="grid gap-2 p-3 md:hidden">
-              {visibleParts.map((part:any)=>{
-                const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
-                const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
-                return <button key={part.id} type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="rounded-lg border border-slate-100 p-3 text-left">
-                  <span className="block text-sm font-medium text-slate-900">{part.name||part.description||"Peça"}</span><span className="mt-1 block text-xs text-slate-500">{part.sku||"Sem SKU"}</span>
-                  <span className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600"><span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span><span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span><span>Custo: <strong>{money(part.cost_cents)}</strong></span><span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span></span>
-                </button>;
-              })}
-              {!visibleParts.length&&<p className="py-8 text-center text-sm text-slate-500">Nenhuma peça encontrada.</p>}
-            </div>
-          </section>
+          
           
 
           </>}
