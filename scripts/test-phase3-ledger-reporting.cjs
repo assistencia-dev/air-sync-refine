@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const assert = require("node:assert/strict");
 
 const fns = fs.readFileSync("src/lib/dbs-control.functions.ts", "utf8");
+const treasuryFns = fs.readFileSync("src/lib/treasury.functions.ts", "utf8");
 const migration = fs.readFileSync(
   "supabase/migrations/20261103200000_dbs_phase3_ledger_reporting_views.sql",
   "utf8",
@@ -30,6 +31,9 @@ assert.match(migration, /a\.account_type='expense'/i);
 assert.match(migration, /coalesce\(e\.document_date,e\.competence_date\)/i);
 assert.match(migration, /a\.code='1\.1\.01'/i);
 assert.match(migration, /a\.code like 'bank:%'/i, "cash flow must include the bank:<id> account codes used by Treasury");
+assert.ok(treasuryFns.includes('status === "posted"'), "reports must exclude draft Ledger entries");
+assert.ok(treasuryFns.includes("bank:)/.test(account.code)"), "cash account coverage must recognize bank:<id> codes");
+assert.ok(treasuryFns.includes("reversed_entry_id"), "Ledger report entries must include reversal references");
 assert.match(migration, /opening_balance_cents/i);
 assert.match(migration, /closing_balance_cents/i);
 assert.match(migration, /rows between unbounded preceding and current row/i);
