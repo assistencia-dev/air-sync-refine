@@ -1115,8 +1115,14 @@ async function hydrateStoredAttachmentUrls(state: Record<string, unknown>) {
       if (after.signedUrl) copy.fotoDepois = after.signedUrl;
     }
 
+    const displayedEvidencePaths = new Set(
+      [copy.fotoAntesStoragePath, copy.fotoDepoisStoragePath].map((value) => String(value ?? "")).filter(Boolean),
+    );
     const photoFiles = attachments
-      .filter((item) => item.attachment_type === "foto_antes" || item.attachment_type === "foto_depois")
+      .filter((item) =>
+        (item.attachment_type === "foto_antes" || item.attachment_type === "foto_depois")
+        && !displayedEvidencePaths.has(String(item.storage_path ?? "")),
+      )
       .map((item) => ({
         id: String(item.id),
         name: String(item.file_name ?? "Foto da OS"),
