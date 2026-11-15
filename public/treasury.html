@@ -698,6 +698,20 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                     </tbody>
                 </table>
             </div>
+            <div class="panel" id="ledger-dre-panel">
+                <div class="panel-header">
+                    <div class="panel-title"><i class="fa-solid fa-scale-balanced" style="color:var(--brand-primary);"></i> DRE e Fluxo de Caixa — Ledger</div>
+                    <span class="badge badge-pending">Dados contabilizados</span>
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px;">Apuração baseada exclusivamente em lançamentos postados no Ledger. DRE por competência; caixa pela data documental. Principal de parcelamentos aparece no fluxo de caixa, não como despesa operacional.</p>
+                <div class="projection-grid">
+                    <div class="proj-card"><div class="proj-title">Receitas do mês</div><div class="proj-val" id="ledger-dre-revenue">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Despesas operacionais</div><div class="proj-val" id="ledger-dre-expenses">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Resultado do mês</div><div class="proj-val" id="ledger-dre-result">R$ 0,00</div></div>
+                    <div class="proj-card"><div class="proj-title">Saídas de caixa</div><div class="proj-val" id="ledger-cash-out">R$ 0,00</div></div>
+                </div>
+                <div id="ledger-dre-empty" style="padding:10px 0;color:var(--text-muted);font-size:12px;display:none;">Nenhum lançamento postado encontrado para o período selecionado.</div>
+            </div>
         </section>
 
         <!-- PROJEÇÃO -->
@@ -1290,6 +1304,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
         const msg = event.data || {};
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
+        LEDGER_REPORT = msg.ledgerReport && typeof msg.ledgerReport === "object" ? msg.ledgerReport : null;
         if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
             // Preserva o estado local do notebook antes de qualquer hidratação pela nuvem.
             try {
@@ -1310,6 +1325,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
         treasuryPost("DBS_TREASURY_CLOUD_READY", { hasState: !!msg.state });
     });
     let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION, planoContas: [], centrosCusto: [], orcamentos: [], conciliacoes: [], fechamentos: [], snapshots: [] } };
+    let LEDGER_REPORT = null;
 
     function normalizeTreasuryState(state) {
         const normalized = { ...state };
@@ -2599,6 +2615,53 @@ function showToast(msg) {
         const liqEl = document.getElementById('dre-val-liquido');
         liqEl.innerText = `R$ ${liquido.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
         liqEl.className = liquido >= 0 ? 'dre-val-pos' : 'dre-val-neg';
+        renderLedgerDre();
+    }
+
+    function renderLedgerDre() {
+        const report = LEDGER_REPORT && typeof LEDGER_REPORT === "object" ? LEDGER_REPORT : null;
+        const entries = Array.isArray(report?.entries) ? report.entries : [];
+        const selectedPeriod = document.getElementById('global-period-filter')?.value || '';
+        let revenueCents = 0;
+        let expenseCents = 0;
+        let cashOutCents = 0;
+        let hasPeriodEntry = false;
+
+        const money = (centsValue) => 'R$ ' + (Number(centsValue || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        for (const entry of entries) {
+            if (entry.status !== 'posted' || !Array.isArray(entry.lines)) continue;
+            const competenceMonth = String(entry.competenceDate || '').slice(0, 7);
+            const cashMonth = String(entry.displayDate || entry.documentDate || entry.competenceDate || '').slice(0, 7);
+            if (competenceMonth === selectedPeriod || cashMonth === selectedPeriod) hasPeriodEntry = true;
+
+            for (const line of entry.lines) {
+                const account = line.account && typeof line.account === 'object' ? line.account : null;
+                if (!account) continue;
+                const debit = Number(line.debitCents) || 0;
+                const credit = Number(line.creditCents) || 0;
+                if (competenceMonth === selectedPeriod) {
+                    if (account.accountType === 'revenue') revenueCents += credit - debit;
+                    if (account.accountType === 'expense' && !['installment_payment', 'installment_reversal'].includes(String(entry.entryType || ''))) {
+                        expenseCents += debit - credit;
+                    }
+                }
+                const cashAccount = account.accountType === 'asset' && (/^bank:/.test(String(account.code || '')) || /^1\.1\.01(?:\.|$)/.test(String(account.code || '')));
+                if (cashMonth === selectedPeriod && cashAccount) cashOutCents += credit - debit;
+            }
+        }
+
+        const values = {
+            'ledger-dre-revenue': revenueCents,
+            'ledger-dre-expenses': expenseCents,
+            'ledger-dre-result': revenueCents - expenseCents,
+            'ledger-cash-out': cashOutCents,
+        };
+        Object.entries(values).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = money(value);
+        });
+        const empty = document.getElementById('ledger-dre-empty');
+        if (empty) empty.style.display = hasPeriodEntry ? 'none' : 'block';
     }
 
     // ===== Livro Caixa: motor de conciliação =====
