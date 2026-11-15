@@ -339,3 +339,12 @@ Prosseguir pelo próximo bloqueio que tenha solução segura no código. Para ca
 - Teste `scripts/test-phase3-ledger-reporting.cjs` ampliado para verificar a migration, segurança `security_invoker`, contas dinâmicas, filtragem de lançamentos postados, passagem dos dados ao iframe e exclusão de principal de parcelamento das despesas operacionais. Verificação estática executada nesta sessão: 9/9 contratos passaram. O workflow Vercel do SHA de teste ainda estava em execução na última consulta; build READY já confirmado para o commit de integração anterior `84d25e4646770cac0c6efa95c53dcd67eaf983a4`.
 - Commits desta sequência: `462d2c61ef5e55d8364477f73414897b7c5e3e8d`, `882d6fced6a029e7003420960ad6d64c5032cb50`, `36e5231f189514f7a5b40a871a51146c696ad1b0`, `84d25e4646770cac0c6efa95c53dcd67eaf983a4`, `bc30806da5ce324eb36a5c6af12dd38e02acb4a8`, `e0c7d262da059fa4e9e82e19d8d6755c00a03049`, `b1948e388871c278299401dce13982883df73bff`.
 - **Ainda pendente:** a migration SQL das views não foi aplicada no Supabase oficial devido à divergência de histórico; não houve teste autenticado no iframe. Nenhuma publicação Lovable foi iniciada e o domínio oficial permanece intocado.
+
+
+### Gate de build — teste de DRE/Fluxo de Caixa (2026-11-15)
+
+- O teste `scripts/test-phase3-ledger-reporting.cjs` passou a integrar o `prebuild`, antes da checagem do Supabase oficial. Assim, qualquer build que execute `prebuild` valida os contratos do relatório Ledger e falha antes da compilação caso haja regressão.
+- O painel Ledger mantém o DRE legado intacto e acrescenta uma visão derivada dos lançamentos postados, com entradas e saídas de caixa separadas. Principal de parcelamentos não é classificado como despesa operacional; continua como saída de caixa. O SQL da view DRE recebeu a mesma regra.
+- Commits adicionais: `9a1951b70fe74ddb9f3b4a33c716bfd1e018de1f` (regra contábil na view), `356b5c90e69ecd37f8869d0ff4701a48c1188787` (teste), `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80` (teste no prebuild).
+- A compilação do SHA `b1948e388871c278299401dce13982883df73bff` ficou `READY`; o SHA `9a1951b70fe74ddb9f3b4a33c716bfd1e018de1f` também ficou `READY`. O build do SHA `e0f12c2d0e1e11d61f1f1e2f61f38552d31ded80`, que executa o novo teste no prebuild, está em fila no momento deste registro.
+- Nenhum SQL foi aplicado ao Supabase oficial. Nenhuma dívida, parcela, baixa, estorno ou lançamento existente foi alterado. Publicação Lovable não foi iniciada.
