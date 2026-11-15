@@ -54,6 +54,51 @@
         .nav-item { padding: 9px 20px; color: #94A3B8; text-decoration: none; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s; }
         .nav-item:hover { color: #F8FAFC; background: rgba(255,255,255,0.03); }
         .nav-item.active { background: rgba(37, 99, 235, 0.12); color: #60A5FA; font-weight: 600; border-right: 3px solid #3B82F6; }
+        .approval-menu-count { margin-left: auto; min-width: 21px; padding: 2px 6px; border-radius: 999px; background: #f59e0b; color: #111827; text-align: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .approval-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .approval-page-kicker { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+        .approval-page-title { margin-top: 4px; color: #0f172a; font-size: 21px; font-weight: 800; letter-spacing: -.04em; }
+        .approval-page-description { margin-top: 4px; color: #64748b; font-size: 12px; line-height: 1.5; }
+        .approval-summary { display: flex; align-items: center; gap: 14px; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+        .approval-summary-label { display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .approval-summary-value { display: block; margin-top: 2px; color: #0f172a; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .approval-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
+        .approval-toolbar input { width: min(100%, 340px); min-height: 38px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; color: #0f172a; background: #fff; }
+        .approval-list { display: grid; gap: 8px; padding: 12px; }
+        .approval-row { display: grid; grid-template-columns: minmax(220px,1.5fr) minmax(130px,.8fr) minmax(130px,.8fr) auto; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #e8edf3; border-radius: 10px; background: #fff; }
+        .approval-row:hover { border-color: #cbdcf4; background: #fbfdff; }
+        .approval-row-title { color: #0f172a; font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+        .approval-row-muted { margin-top: 3px; color: #64748b; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+        .approval-row-label { display: block; color: #94a3b8; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+        .approval-row-value { display: block; margin-top: 3px; color: #334155; font-size: 12px; font-weight: 700; }
+        .approval-row-amount { color: #0f172a; font-size: 15px; font-weight: 850; font-variant-numeric: tabular-nums; }
+        .approval-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
+        .approval-action { min-height: 36px; border-radius: 8px; padding: 7px 11px; font-size: 11px; font-weight: 800; cursor: pointer; }
+        .approval-action:disabled { cursor: wait; opacity: .55; }
+        .approval-action-approve { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; }
+        .approval-action-reject { border: 1px solid #fecaca; background: #fff7f7; color: #b91c1c; }
+        .approval-empty { padding: 38px 18px; text-align: center; color: #64748b; }
+        .approval-empty strong { display: block; margin-bottom: 4px; color: #334155; font-size: 13px; }
+        .approval-modal[hidden] { display: none; }
+        .approval-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 18px; }
+        .approval-modal-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.55); }
+        .approval-modal-card { position: relative; z-index: 1; width: min(100%, 480px); border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; padding: 20px; box-shadow: 0 24px 70px rgba(15,23,42,.24); }
+        .approval-modal-card textarea { width: 100%; min-height: 112px; margin-top: 10px; border: 1px solid #cbd5e1; border-radius: 9px; padding: 10px; font-size: 13px; resize: vertical; }
+        @media(max-width:900px) {
+          .approval-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+          .approval-row-main { grid-column: 1 / -1; }
+          .approval-actions { grid-column: 1 / -1; justify-content: flex-start; }
+          .approval-summary { width: 100%; justify-content: space-between; }
+        }
+        @media(max-width:520px) {
+          .approval-page-title { font-size: 19px; }
+          .approval-toolbar { align-items: stretch; flex-direction: column; }
+          .approval-toolbar input { width: 100%; }
+          .approval-row { grid-template-columns: minmax(0,1fr); gap: 10px; }
+          .approval-row-main,.approval-actions { grid-column: auto; }
+          .approval-actions { display: grid; grid-template-columns: 1fr 1fr; }
+          .approval-action { min-height: 42px; }
+        }
 
         .sidebar-footer { padding: 16px 20px; background: #080D1A; font-size: 11px; color: #475569; border-top: 1px solid #1E293B; }
 
@@ -567,6 +612,10 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             <div class="nav-item" onclick="switchModule('mod-recorrencias', this)">
                 <i class="fa-solid fa-arrows-rotate"></i> Contas Fixas
             </div>
+            <div class="nav-item" onclick="switchModule('mod-aprovacoes', this)">
+                <i class="fa-solid fa-clipboard-check"></i> Aprovação de compras
+                <span class="approval-menu-count" id="purchase-approval-menu-count" aria-label="Pedidos aguardando aprovação" hidden>0</span>
+            </div>
         </div>
 
         <div class="menu-group">
@@ -651,6 +700,33 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
                         <div class="panel-title"><i class="fa-solid fa-clock" style="color:var(--amber);"></i> Próximas Saídas de Caixa</div>
                     </div>
                     <div id="dash-recorrencias-proximas"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- APROVAÇÃO DE COMPRAS -->
+        <section id="mod-aprovacoes" class="module-section">
+            <div class="approval-page-heading">
+                <div>
+                    <p class="approval-page-kicker">Gestão financeira · Compras</p>
+                    <h2 class="approval-page-title">Aprovação de compras</h2>
+                    <p class="approval-page-description">Revise os pedidos enviados pelo módulo de Compras e registre sua decisão financeira.</p>
+                </div>
+                <div class="approval-summary" aria-live="polite">
+                    <div><span class="approval-summary-label">Aguardando decisão</span><strong class="approval-summary-value" id="purchase-approval-total-count">0</strong></div>
+                    <div><span class="approval-summary-label">Valor dos pedidos</span><strong class="approval-summary-value" id="purchase-approval-total-value">R$ 0,00</strong></div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="approval-toolbar">
+                    <div>
+                        <strong style="display:block;color:#0f172a;font-size:13px;">Fila de aprovação</strong>
+                        <span style="display:block;margin-top:3px;color:#64748b;font-size:11px;">A aprovação gera o compromisso no Financeiro e libera o recebimento físico.</span>
+                    </div>
+                    <input id="purchase-approval-search" type="search" placeholder="Buscar fornecedor ou pedido" aria-label="Buscar pedidos para aprovação" oninput="renderPurchaseApprovals()">
+                </div>
+                <div class="approval-list" id="purchase-approval-list" aria-live="polite">
+                    <div class="approval-empty"><strong>Carregando pedidos</strong>Aguardando sincronização com o Financeiro.</div>
                 </div>
             </div>
         </section>
@@ -1133,6 +1209,19 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     </div>
 </div>
 
+<div class="approval-modal" id="purchase-approval-reject-modal" aria-hidden="true" hidden>
+    <div class="approval-modal-backdrop" onclick="closePurchaseApprovalRejection()"></div>
+    <section class="approval-modal-card" role="dialog" aria-modal="true" aria-labelledby="purchase-approval-reject-title">
+        <h2 id="purchase-approval-reject-title" style="color:#0f172a;font-size:17px;font-weight:800;">Rejeitar pedido de compra</h2>
+        <p style="margin-top:5px;color:#64748b;font-size:12px;line-height:1.5;">Informe o motivo para manter a decisão registrada no histórico da compra.</p>
+        <textarea id="purchase-approval-reject-reason" maxlength="1000" minlength="5" placeholder="Descreva o motivo da rejeição (mínimo 5 caracteres)"></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+            <button type="button" class="btn btn-secondary" onclick="closePurchaseApprovalRejection()">Cancelar</button>
+            <button type="button" class="btn btn-danger" onclick="submitPurchaseApprovalRejection()">Confirmar rejeição</button>
+        </div>
+    </section>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
@@ -1158,6 +1247,8 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     const treasuryLedgerRequests = new Map();
     let treasuryCostCenterSequence = 0;
     const treasuryCostCenterRequests = new Map();
+    let treasuryPurchaseApprovalSequence = 0;
+    const treasuryPurchaseApprovalRequests = new Map();
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
@@ -1181,6 +1272,15 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             treasuryCostCenterRequests.delete(String(msg.requestId || ""));
             if (msg.ok === true) request.resolve(msg.result || null);
             else request.reject(new Error(String(msg.error || "Falha ao salvar o centro de custo relacional.")));
+            return;
+        }
+        if (msg.type === "DBS_TREASURY_PURCHASE_APPROVAL_RESULT") {
+            const request = treasuryPurchaseApprovalRequests.get(String(msg.requestId || ""));
+            if (!request) return;
+            clearTimeout(request.timeoutId);
+            treasuryPurchaseApprovalRequests.delete(String(msg.requestId || ""));
+            if (msg.ok === true) request.resolve(msg.result || null);
+            else request.reject(new Error(String(msg.error || "Falha ao registrar a decisão financeira.")));
         }
     });
 
@@ -1205,6 +1305,20 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
             }, 30000);
             treasuryCostCenterRequests.set(requestId, { resolve, reject, timeoutId });
             treasuryPost("DBS_TREASURY_SAVE_COST_CENTER", { requestId, center });
+        });
+    }
+
+    function postTreasuryPurchaseApproval(purchaseId, decision, reason, expectedVersion) {
+        return new Promise((resolve, reject) => {
+            const requestId = "treasury-purchase-approval-" + Date.now() + "-" + (++treasuryPurchaseApprovalSequence);
+            const timeoutId = setTimeout(() => {
+                treasuryPurchaseApprovalRequests.delete(requestId);
+                reject(new Error("O Financeiro não confirmou a decisão. Atualize a fila antes de tentar novamente."));
+            }, 30000);
+            treasuryPurchaseApprovalRequests.set(requestId, { resolve, reject, timeoutId });
+            treasuryPost("DBS_TREASURY_DECIDE_PURCHASE_APPROVAL", {
+                requestId, purchaseId, decision, reason, expectedVersion,
+            });
         });
     }
 
@@ -1305,6 +1419,8 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
         const msg = event.data || {};
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
+        PENDING_PURCHASE_APPROVALS = Array.isArray(msg.pendingPurchaseApprovals) ? msg.pendingPurchaseApprovals : [];
+        renderPurchaseApprovals();
         LEDGER_REPORT = msg.ledgerReport && typeof msg.ledgerReport === "object" ? msg.ledgerReport : null;
         if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
             // Preserva o estado local do notebook antes de qualquer hidratação pela nuvem.
@@ -1327,6 +1443,9 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     });
     let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION, planoContas: [], centrosCusto: [], orcamentos: [], conciliacoes: [], fechamentos: [], snapshots: [] } };
     let LEDGER_REPORT = null;
+    let PENDING_PURCHASE_APPROVALS = [];
+    let purchaseApprovalBusyId = "";
+    let purchaseApprovalRejectingId = "";
 
     function normalizeTreasuryState(state) {
         const normalized = { ...state };
@@ -1455,8 +1574,165 @@ function showToast(msg) {
     function switchModule(modId, btn) {
         document.querySelectorAll('.module-section').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        document.getElementById(modId).classList.add('active');
+        const section = document.getElementById(modId);
+        if (!section) return;
+        section.classList.add('active');
         if (btn) btn.classList.add('active');
+        if (modId === 'mod-aprovacoes') renderPurchaseApprovals();
+    }
+
+    function renderPurchaseApprovals() {
+        const list = document.getElementById('purchase-approval-list');
+        const count = document.getElementById('purchase-approval-total-count');
+        const total = document.getElementById('purchase-approval-total-value');
+        const menuCount = document.getElementById('purchase-approval-menu-count');
+        if (!list || !count || !total || !menuCount) return;
+        const items = Array.isArray(PENDING_PURCHASE_APPROVALS) ? PENDING_PURCHASE_APPROVALS : [];
+        const sumCents = items.reduce((sum, item) => sum + Math.max(0, Number(item?.total_cents) || 0), 0);
+        count.textContent = String(items.length);
+        total.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sumCents / 100);
+        menuCount.textContent = String(items.length);
+        menuCount.hidden = items.length === 0;
+
+        const query = String(document.getElementById('purchase-approval-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
+        const filtered = items.filter(item => [
+            item?.supplier_name, item?.document_number, item?.purchase_date,
+        ].some(value => String(value ?? '').toLocaleLowerCase('pt-BR').includes(query)));
+        list.replaceChildren();
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'approval-empty';
+            const title = document.createElement('strong');
+            title.textContent = 'Nenhum pedido aguardando aprovação';
+            const note = document.createElement('span');
+            note.textContent = 'Quando uma compra for enviada pelo módulo Compras, ela aparecerá nesta função.';
+            empty.append(title, note);
+            list.appendChild(empty);
+            return;
+        }
+        if (!filtered.length) {
+            const empty = document.createElement('div');
+            empty.className = 'approval-empty';
+            const title = document.createElement('strong');
+            title.textContent = 'Nenhum pedido encontrado';
+            const note = document.createElement('span');
+            note.textContent = 'Tente buscar por outro fornecedor ou número de pedido.';
+            empty.append(title, note);
+            list.appendChild(empty);
+            return;
+        }
+        const centers = Array.isArray(STATE?._meta?.centrosCusto) ? STATE._meta.centrosCusto : [];
+        filtered.forEach(item => {
+            const id = String(item?.id ?? '');
+            const isBusy = purchaseApprovalBusyId === id;
+            const row = document.createElement('article');
+            row.className = 'approval-row';
+
+            const main = document.createElement('div');
+            main.className = 'approval-row-main';
+            const supplier = document.createElement('strong');
+            supplier.className = 'approval-row-title';
+            supplier.textContent = String(item?.supplier_name || 'Fornecedor não informado');
+            const documentNumber = document.createElement('p');
+            documentNumber.className = 'approval-row-muted';
+            documentNumber.textContent = String(item?.document_number || 'Pedido sem número');
+            main.append(supplier, documentNumber);
+
+            const date = document.createElement('div');
+            const dateLabel = document.createElement('span');
+            dateLabel.className = 'approval-row-label';
+            dateLabel.textContent = 'Data do pedido';
+            const dateValue = document.createElement('span');
+            dateValue.className = 'approval-row-value';
+            dateValue.textContent = item?.purchase_date ? formatarDataBR(item.purchase_date) : '—';
+            date.append(dateLabel, dateValue);
+
+            const amount = document.createElement('div');
+            const amountLabel = document.createElement('span');
+            amountLabel.className = 'approval-row-label';
+            amountLabel.textContent = 'Valor do pedido';
+            const amountValue = document.createElement('strong');
+            amountValue.className = 'approval-row-amount';
+            amountValue.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(item?.total_cents) || 0) / 100);
+            const center = centers.find(value => String(value?.id) === String(item?.cost_center_id));
+            const centerText = document.createElement('span');
+            centerText.className = 'approval-row-muted';
+            centerText.textContent = center?.nome ? 'Centro de custo: ' + String(center.nome) : 'Centro de custo não identificado';
+            amount.append(amountLabel, amountValue, centerText);
+
+            const actions = document.createElement('div');
+            actions.className = 'approval-actions';
+            const approve = document.createElement('button');
+            approve.type = 'button';
+            approve.className = 'approval-action approval-action-approve';
+            approve.textContent = isBusy ? 'Processando…' : 'Aprovar pedido';
+            approve.disabled = !!purchaseApprovalBusyId;
+            approve.addEventListener('click', () => {
+                if (!window.confirm('Confirmar a aprovação desta compra? O compromisso será lançado no Financeiro e o recebimento ficará liberado.')) return;
+                void decidePurchaseApproval(item, 'approved', '');
+            });
+            const reject = document.createElement('button');
+            reject.type = 'button';
+            reject.className = 'approval-action approval-action-reject';
+            reject.textContent = 'Rejeitar';
+            reject.disabled = !!purchaseApprovalBusyId;
+            reject.addEventListener('click', () => openPurchaseApprovalRejection(id));
+            actions.append(approve, reject);
+            row.append(main, date, amount, actions);
+            list.appendChild(row);
+        });
+    }
+
+    async function decidePurchaseApproval(item, decision, reason) {
+        const id = String(item?.id ?? '');
+        if (!id || purchaseApprovalBusyId) return;
+        purchaseApprovalBusyId = id;
+        renderPurchaseApprovals();
+        try {
+            await postTreasuryPurchaseApproval(id, decision, reason, Number(item.version));
+            showToast(decision === 'approved' ? 'Compra aprovada e enviada ao contas a pagar.' : 'Compra rejeitada e decisão registrada.');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Não foi possível registrar a decisão financeira.');
+        } finally {
+            purchaseApprovalBusyId = '';
+            renderPurchaseApprovals();
+        }
+    }
+
+    function openPurchaseApprovalRejection(purchaseId) {
+        purchaseApprovalRejectingId = String(purchaseId || '');
+        const modal = document.getElementById('purchase-approval-reject-modal');
+        const reason = document.getElementById('purchase-approval-reject-reason');
+        if (!modal || !reason) return;
+        reason.value = '';
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        reason.focus();
+    }
+
+    function closePurchaseApprovalRejection() {
+        const modal = document.getElementById('purchase-approval-reject-modal');
+        if (modal) {
+            modal.hidden = true;
+            modal.setAttribute('aria-hidden', 'true');
+        }
+        purchaseApprovalRejectingId = '';
+    }
+
+    function submitPurchaseApprovalRejection() {
+        const reason = String(document.getElementById('purchase-approval-reject-reason')?.value || '').trim();
+        if (reason.length < 5) {
+            alert('Informe um motivo com pelo menos 5 caracteres.');
+            return;
+        }
+        const item = PENDING_PURCHASE_APPROVALS.find(value => String(value?.id) === purchaseApprovalRejectingId);
+        if (!item) {
+            closePurchaseApprovalRejection();
+            renderPurchaseApprovals();
+            return;
+        }
+        closePurchaseApprovalRejection();
+        void decidePurchaseApproval(item, 'rejected', reason);
     }
 
 
