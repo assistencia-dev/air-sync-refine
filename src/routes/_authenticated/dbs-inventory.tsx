@@ -235,13 +235,14 @@ export function DbsInventoryPage({
     if (!quotePurchase.data || !parts.length) return;
     const lines = quotePurchase.data.items.map((item: any) => {
       const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
+      const purchaseUnitId=String(part?.purchase_measure_unit_id || part?.measure_unit_id || "");
       return {
         partId: String(item.part_id),
         description: String(item.description || part?.name || ""),
         quantity: String(item.quantity || 1),
         unitCost: "",
-        purchaseUnitId: String(part?.purchase_measure_unit_id || part?.measure_unit_id || ""),
-        conversionFactor: 1,
+        purchaseUnitId,
+        conversionFactor: conversionFor(String(item.part_id),purchaseUnitId),
       };
     });
     if (lines.length) setPurchaseLines(lines);
