@@ -3466,6 +3466,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
+    let clientsQuery = (supabaseAdmin as any).from("dbs_control_clients")
+      .select("id,legal_name,trade_name,status").order("trade_name").limit(1000);
+    clientsQuery = companyId ? clientsQuery.eq("company_id", companyId) : clientsQuery.is("company_id", null);
     const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version")
@@ -3494,7 +3497,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_car_stock")
         .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
         .eq("scope_key",scopeKey).eq("status","active").order("updated_at",{ascending:false}).limit(1000),
-      (supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name,status").order("trade_name").limit(1000),
+      clientsQuery,
       (supabaseAdmin as any).from("dbs_control_operational_stocks").select("id,cost_center_id,name,status,created_at").eq("scope_key",scopeKey).order("created_at"),
       (supabaseAdmin as any).from("dbs_control_operational_stock_balances").select("id,stock_id,part_id,quantity,reserved_quantity,version").eq("scope_key",scopeKey).limit(5000),
       (supabaseAdmin as any).from("dbs_control_operational_stock_movements").select("id,part_id,movement_type,quantity,source_stock_id,destination_stock_id,work_order_id,purchase_id,reference,created_by,created_at").eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(500),
@@ -4156,7 +4159,7 @@ export const createDbsOperationalStock = createServerFn({ method: "POST" })
       company_id:user.company_id,scope_key:scopeKey,cost_center_id:data.costCenterId,name:data.name,
       status:"active",created_by:user.id,updated_by:user.id
     }).select("id,cost_center_id,name,status").single();
-    if(saved.error){if(saved.error.code==="23505") throw new Error("Este centro de custo já possui um estoque operacional.");throw new Error(saved.error.message);}
+    if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe um estoque com este nome neste centro de custo.");throw new Error(saved.error.message);}
     return saved.data;
   });
 
