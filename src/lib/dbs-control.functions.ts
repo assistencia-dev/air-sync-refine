@@ -2245,15 +2245,10 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
     const appliedOrders: Array<{ id: string; protocol: string | null; version: number }> = [];
     const conflicts: Array<{ code?: string; protocol: string; message: string }> = [];
     const workOrderLegacyMap = await resolveDbsControlWorkOrderLegacyMap(scope.scopeKey, changes.ordens ?? []);
-    // Drafts created by the collaborator form are new issuance intents, not
-    // legacy aliases for an existing canonical OS. A stale legacy mapping from
-    // an interrupted earlier attempt must never turn a fresh draft into UPDATE.
-    if (user.role_key === "COLABORADOR") {
-      for (const order of changes.ordens ?? []) {
-        const localId = String(order?.id ?? "").trim();
-        if (/^draft-[0-9a-f-]{36}$/i.test(localId)) workOrderLegacyMap.delete(localId);
-      }
-    }
+    // A draft ID with an explicit legacy_id_map entry is already linked to
+    // a canonical OS (for example, a create acknowledged by the server before
+    // the browser lost its response). Keep that mapping for collaborators too.
+    // New drafts have no mapping and remain CREATE intents automatically.
     const mappedCanonicalIds = [...new Set([...workOrderLegacyMap.values()])];
     const canonicalWorkOrders = new Map<string, { id: string; protocol: string | null; version: number; status: string | null }>();
     if (mappedCanonicalIds.length) {
@@ -2330,7 +2325,9 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
             id: mappedCanonical.id,
             protocolo: mappedCanonical.protocol ?? order?.protocolo,
             protocol: mappedCanonical.protocol ?? order?.protocol,
-            version: Number.isFinite(Number(order?.version)) ? Number(order.version) : mappedCanonical.version,
+            // The canonical row is authoritative after resolving a legacy draft.
+            // Never send a stale browser version for an already-created OS.
+            version: mappedCanonical.version,
           }
         : order;
       let currentCanonicalOrder: any = null;
