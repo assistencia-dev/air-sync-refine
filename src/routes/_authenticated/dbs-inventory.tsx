@@ -844,8 +844,37 @@ export function DbsInventoryPage({
               </div>
               
             </div>
+            <section className="mt-6 overflow-hidden rounded-xl border border-sky-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-sky-50/60 p-4">
+                <div><h3 className="font-black text-slate-900">Estoques Operacionais por Centro de Custo</h3><p className="mt-1 text-xs text-slate-600">Saldos independentes do Estoque Central, com reserva e histórico próprios.</p></div>
+                <button type="button" onClick={()=>setActiveDrawer("operational-stock")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-xs font-bold text-white">+ Novo estoque operacional</button>
+              </div>
+              <div className="grid gap-3 p-4 sm:grid-cols-3">
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Estoques ativos</p><p className="text-xl font-black">{operationalStocks.filter((s:any)=>s.status==="active").length}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Centros vinculados</p><p className="text-xl font-black">{new Set(operationalStocks.map((s:any)=>s.cost_center_id)).size}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Movimentações registradas</p><p className="text-xl font-black">{operationalMovements.length}</p></div>
+              </div>
+              <div className="overflow-x-auto px-4 pb-4">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Estoque operacional</th><th className="p-3">Centro de custo</th><th className="p-3">Peça</th><th className="p-3">Físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th></tr></thead>
+                  <tbody>{operationalStocks.filter((s:any)=>s.status==="active").flatMap((stock:any)=>{
+                    const cc=costCenters.find((x:any)=>x.id===stock.cost_center_id);
+                    const rows=operationalBalances.filter((b:any)=>b.stock_id===stock.id);
+                    return rows.length?rows.map((balance:any)=>{const part=parts.find((p:any)=>p.id===balance.part_id);const unit=measureUnits.find((u:any)=>u.id===part?.measure_unit_id);return <tr key={balance.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}</td><td className="p-3">{cc?.code} · {cc?.name}</td><td className="p-3">{part?.sku} · {part?.name}</td><td className="p-3">{Number(balance.quantity).toLocaleString("pt-BR")} {unit?.symbol||""}</td><td className="p-3">{Number(balance.reserved_quantity).toLocaleString("pt-BR")}</td><td className="p-3 font-black">{Math.max(0,Number(balance.quantity)-Number(balance.reserved_quantity)).toLocaleString("pt-BR")}</td></tr>;})
+                    :[<tr key={stock.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}</td><td className="p-3">{cc?.code} · {cc?.name}</td><td colSpan={4} className="p-3 text-slate-400">Sem saldo movimentado</td></tr>];
+                  })}</tbody>
+                </table>
+                {!operationalStocks.length&&<p className="p-4 text-sm text-slate-500">Nenhum estoque operacional cadastrado. Crie um e vincule a um centro de custo ativo.</p>}
+              </div>
+              <div className="border-t border-slate-100 p-4">
+                <h4 className="mb-2 text-sm font-black">Histórico transacional operacional</h4>
+                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{source?.name||"Estoque Central"} → {destination?.name||"Estoque Central"} {(movement.reference?"· "+movement.reference:"")}</p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
+                  {!operationalMovements.length&&<p className="text-xs text-slate-500">O histórico será preenchido pelas transferências e entradas operacionais.</p>}
+                </div>
+              </div>
+            </section>
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-100">
-              <div className="border-b border-slate-100 p-3"><h3 className="font-black">Materiais sob custódia dos técnicos</h3></div>
+              <div className="border-b border-slate-100 p-3"><h3 className="font-black">Custódia legada de veículos e técnicos</h3><p className="text-xs text-slate-500">Registros históricos mantidos para consulta; novas transferências usam Estoques Operacionais.</p></div>
               <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Técnico</th><th className="p-3">Veículo</th><th className="p-3">Material</th><th className="p-3">Quantidade</th><th className="p-3">Custo unitário</th></tr></thead>
