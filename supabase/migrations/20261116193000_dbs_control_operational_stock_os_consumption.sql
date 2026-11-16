@@ -2,7 +2,7 @@
 BEGIN;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
   IF NEW.movement_type='receipt' AND NEW.quantity_delta>0 THEN
     INSERT INTO public.dbs_control_operational_stock_movements(
@@ -16,7 +16,9 @@ BEGIN
     ) ON CONFLICT(scope_key,idempotency_key) DO NOTHING;
   END IF;
   RETURN NEW;
-END $$;
+END $;
+REVOKE ALL ON FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history() FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history() TO service_role;
 
 DROP TRIGGER IF EXISTS dbs_control_mirror_central_receipt_to_operational_history_trg ON public.dbs_control_inventory_movements;
 CREATE TRIGGER dbs_control_mirror_central_receipt_to_operational_history_trg
@@ -25,7 +27,7 @@ FOR EACH ROW EXECUTE FUNCTION public.dbs_control_mirror_central_receipt_to_opera
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_consume_work_order(
   p_actor_user_id uuid,p_work_order_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_actor_company uuid; v_scope text; v_key text:=nullif(btrim(p_idempotency_key),'');
   v_r record; v_balance public.dbs_control_operational_stock_balances%rowtype; v_os_scope record;
   v_count integer:=0; v_total numeric(14,3):=0; v_movement_id uuid;
