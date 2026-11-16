@@ -3,7 +3,7 @@ import { openRhPrint } from "@/lib/rh.exports";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, UserX, AlertTriangle, BriefcaseBusiness, ChevronRight, ClipboardCheck, Filter, History, Save, Search, XCircle, FileDown, FileSpreadsheet } from "lucide-react";
 import { getMyProfile } from "@/lib/admin-profile.functions";
-import { pontoGeolocationErrorMessage } from "@/lib/ponto-geo";
+import { capturePontoPosition, hasPontoCoordinates, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl } from "@/lib/ponto-geo";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
@@ -39,6 +39,7 @@ function PontoRh() {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [search, setSearch] = useState("");
   const [dayEmployee, setDayEmployee] = useState<any>(null);
+  const [selectedMapPunch, setSelectedMapPunch] = useState<any>(null);
   const [occurrenceStatus, setOccurrenceStatus] = useState<RhPontoDayStatus>("PRESENCA");
   const [occurrenceNote, setOccurrenceNote] = useState("");
   const [view, setView] = useState<"gestao" | "acessos">("gestao");
@@ -213,7 +214,7 @@ function PontoRh() {
 
   const active=(employees.data??[]).filter((e:any)=>e.ponto_access_enabled).length;
   const openAccess=(e:any)=>{setSelected(e);setIdentifier(e.portal_user?.username??e.portal_user?.email??"");setRadius(String(e.ponto_raio_m??150));setLat(e.ponto_base_lat?String(e.ponto_base_lat):"");setLng(e.ponto_base_lng?String(e.ponto_base_lng):"");setEntrada(e.ponto_entrada_prevista??"");setSaida(e.ponto_saida_prevista??"");setAlmocoIni(e.ponto_almoco_inicio_previsto??"");setAlmocoFim(e.ponto_almoco_fim_previsto??"");};
-  const openDay=(r:any)=>{setDayEmployee(r);setOccurrenceStatus(r.status as RhPontoDayStatus);setOccurrenceNote(r.note??"");};
+  const openDay=(r:any)=>{setDayEmployee(r);setOccurrenceStatus(r.status as RhPontoDayStatus);setOccurrenceNote(r.note??"");setSelectedMapPunch(r.records.find((record:any)=>hasPontoCoordinates(record))??null);};
 
   return <div className="space-y-5">
     <header className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
@@ -240,8 +241,8 @@ function PontoRh() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Controle do dia</p><h3 className="mt-1 text-xl font-black text-slate-900">{new Date(selectedDay+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}</h3></div><div className="flex items-center gap-2 text-xs font-bold text-slate-400"><History className="h-4 w-4"/>Marcações originais preservadas</div></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
-        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">GPS</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full px-2.5 py-1 text-[10px] font-black "+(row.records.some((record:any)=>hasPontoCoordinates(record))?"bg-sky-50 text-sky-700":"bg-slate-100 text-slate-500")}>{row.records.filter((record:any)=>hasPontoCoordinates(record)).length}/4 com GPS</span>{row.records.some((record:any)=>hasPontoCoordinates(record))&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa</button>}</td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
       </section>
     </> : <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Configuração</p><h3 className="mt-1 text-xl font-black text-slate-900">Acessos e jornada</h3><p className="mt-1 text-xs text-slate-500">{active} acessos liberados · login, GPS e horários previstos continuam aqui.</p></div>
@@ -252,7 +253,41 @@ function PontoRh() {
       <div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Gestão do dia</p><h3 className="mt-1 text-2xl font-black text-slate-900">{dayEmployee.employee.full_name}</h3><p className="text-xs text-slate-500">{selectedDay} · {dayEmployee.employee.unit}</p></div><button onClick={()=>setDayEmployee(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">×</button></div>
       <div className="mt-5 grid gap-3 sm:grid-cols-4">{["entrada","almoco_saida","almoco_retorno","saida"].map((t:string)=>{const r=dayEmployee.records.find((x:any)=>x.punch_type===t);return <div key={t} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><p className="text-[10px] font-black uppercase text-slate-400">{labels[t]}</p><p className="mt-1 text-lg font-black text-slate-900">{punchTime(r)}</p>{r?.inside_radius===false&&<p className="text-[10px] font-bold text-red-600">Fora do raio</p>}</div>})}</div>
       <div className="mt-4 grid gap-3 sm:grid-cols-4">{[["Trabalhado",fmt(dayEmployee.summary.worked_minutes),""],["Atraso",fmt(dayEmployee.summary.late_minutes),"text-amber-700"],["Saída antecipada",fmt(dayEmployee.summary.early_leave_minutes),""],["Hora extra",fmt(dayEmployee.summary.overtime_minutes),"text-emerald-700"]].map((x:any)=><div key={x[0]} className="rounded-xl border border-slate-100 p-3"><p className="text-[10px] font-black uppercase text-slate-400">{x[0]}</p><p className={"mt-1 font-black "+x[2]}>{x[1]}</p></div>)}</div>
-      <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-sky-600"/><h4 className="text-sm font-black text-slate-900">Classificar ocorrência</h4></div><p className="mt-1 text-xs text-slate-500">O sistema registra a decisão administrativa e preserva todas as marcações originais.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-[10px] font-black uppercase text-slate-500">Situação<select value={occurrenceStatus} onChange={e=>setOccurrenceStatus(e.target.value as RhPontoDayStatus)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold">{["PRESENCA","SEM_MARCACAO","ATRASO","SAIDA_ANTECIPADA","FALTA","FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].map(s=><option key={s} value={s}>{statusLabel[s]}</option>)}</select></label><label className="text-[10px] font-black uppercase text-slate-500">Motivo / observação<textarea value={occurrenceNote} onChange={e=>setOccurrenceNote(e.target.value)} rows={3} placeholder="Ex.: atestado recebido, falta comunicada, compensação aprovada..." className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label></div><div className="mt-3 flex justify-end"><button onClick={()=>occurrence.mutate()} disabled={occurrence.isPending} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white"><Save className="h-4 w-4"/>{occurrence.isPending?"Registrando...":"Registrar situação"}</button></div>{occurrence.error&&<p className="mt-3 rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">{occurrence.error instanceof Error?occurrence.error.message:"Não foi possível registrar."}</p>}</div>
+      <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div><div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-sky-700"/><h4 className="text-sm font-black text-slate-900">Localização das marcações</h4></div><p className="mt-1 text-xs text-slate-500">Mapa baseado nas coordenadas realmente gravadas em cada batida. Não é a localização atual do colaborador.</p></div>
+          <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-black text-sky-800">{dayEmployee.records.filter((record:any)=>hasPontoCoordinates(record)).length} marcação(ões) com GPS</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {(["entrada","almoco_saida","almoco_retorno","saida"] as const).map((type) => {
+            const record = dayEmployee.records.find((item:any)=>item.punch_type===type);
+            const available = hasPontoCoordinates(record);
+            const active = selectedMapPunch?.id === record?.id;
+            return <button key={type} type="button" disabled={!available} onClick={()=>setSelectedMapPunch(record)} className={"min-h-12 rounded-xl border px-3 py-2 text-left transition "+(active?"border-sky-600 bg-sky-100":"border-slate-200 bg-white")+" disabled:cursor-not-allowed disabled:opacity-50"}>
+              <span className="block text-[10px] font-black uppercase text-slate-500">{labels[type]}</span>
+              <span className="mt-1 block text-xs font-black text-slate-900">{record?punchTime(record):"Sem batida"}</span>
+              <span className={"mt-1 block text-[10px] font-bold "+(available?"text-emerald-700":"text-slate-400")}>{available?"GPS registrado":"Sem coordenadas"}</span>
+            </button>;
+          })}
+        </div>
+        {selectedMapPunch && hasPontoCoordinates(selectedMapPunch) ? (() => {
+          const embedUrl = pontoGoogleMapsEmbedUrl(selectedMapPunch);
+          const openUrl = pontoGoogleMapsUrl(selectedMapPunch);
+          return <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-xs font-black text-slate-900">{labels[selectedMapPunch.punch_type]??"Marcação"} · {punchTime(selectedMapPunch)}</p><p className="mt-1 text-[10px] text-slate-500">Coordenadas salvas: {Number(selectedMapPunch.latitude).toFixed(6)}, {Number(selectedMapPunch.longitude).toFixed(6)}</p></div>
+              {openUrl&&<a href={openUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"><MapPin className="h-3.5 w-3.5"/>Abrir no Google Maps</a>}
+            </div>
+            {embedUrl&&<iframe title={"Mapa da marcação "+(labels[selectedMapPunch.punch_type]??"")} src={embedUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" className="h-64 w-full border-0 sm:h-72" allowFullScreen/>}
+            <div className="grid gap-2 border-t border-slate-100 bg-slate-50 p-3 text-[11px] sm:grid-cols-3">
+              <p><b>Precisão do GPS:</b> {selectedMapPunch.gps_accuracy_m!=null?"±"+Math.round(Number(selectedMapPunch.gps_accuracy_m))+" m":"Não informada"}</p>
+              <p><b>Distância da base:</b> {selectedMapPunch.distance_m!=null?Math.round(Number(selectedMapPunch.distance_m))+" m":"Não calculada"}</p>
+              <p><b>Geocerca:</b> {selectedMapPunch.inside_radius===true?"Dentro do raio":selectedMapPunch.inside_radius===false?"Fora do raio":"Não avaliada"}</p>
+            </div>
+          </div>;
+        })() : <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center"><MapPin className="mx-auto h-6 w-6 text-slate-300"/><p className="mt-2 text-xs font-bold text-slate-600">Selecione uma marcação com GPS para visualizar o mapa.</p><p className="mt-1 text-[10px] text-slate-400">Batidas antigas sem coordenadas não recebem uma localização estimada.</p></div>}
+      </section>
+      <div className="mt-5 rounded-2xl border border-slate-200 p-4><div className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-sky-600"/><h4 className="text-sm font-black text-slate-900">Classificar ocorrência</h4></div><p className="mt-1 text-xs text-slate-500">O sistema registra a decisão administrativa e preserva todas as marcações originais.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-[10px] font-black uppercase text-slate-500">Situação<select value={occurrenceStatus} onChange={e=>setOccurrenceStatus(e.target.value as RhPontoDayStatus)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold">{["PRESENCA","SEM_MARCACAO","ATRASO","SAIDA_ANTECIPADA","FALTA","FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].map(s=><option key={s} value={s}>{statusLabel[s]}</option>)}</select></label><label className="text-[10px] font-black uppercase text-slate-500">Motivo / observação<textarea value={occurrenceNote} onChange={e=>setOccurrenceNote(e.target.value)} rows={3} placeholder="Ex.: atestado recebido, falta comunicada, compensação aprovada..." className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label></div><div className="mt-3 flex justify-end"><button onClick={()=>occurrence.mutate()} disabled={occurrence.isPending} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white"><Save className="h-4 w-4"/>{occurrence.isPending?"Registrando...":"Registrar situação"}</button></div>{occurrence.error&&<p className="mt-3 rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">{occurrence.error instanceof Error?occurrence.error.message:"Não foi possível registrar."}</p>}</div>
       <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><History className="h-4 w-4 text-slate-500"/><h4 className="text-sm font-black text-slate-900">Histórico administrativo</h4></div><div className="mt-3 space-y-2">{(management.data??[]).filter((r:any)=>r.employee_id===dayEmployee.employee.id&&r.details?.work_date===selectedDay).slice().reverse().map((r:any,i:number)=><div key={r.created_at+"-"+i} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between gap-3"><span className={"rounded-full border px-2 py-1 text-[10px] font-black "+(statusClass[r.details?.status]??"")}>{statusLabel[r.details?.status]??r.details?.status}</span><span className="text-[10px] text-slate-400">{new Date(r.created_at).toLocaleString("pt-BR")}</span></div><p className="mt-1 text-xs text-slate-600">{r.details?.note||"Sem observação."}</p></div>)}{!(management.data??[]).some((r:any)=>r.employee_id===dayEmployee.employee.id&&r.details?.work_date===selectedDay)&&<p className="text-xs text-slate-400">Nenhuma ocorrência administrativa registrada.</p>}</div></div>
     </div></div>}
 
@@ -280,13 +315,7 @@ function PontoColaborador() {
       const workDate = localDateISO();
       if (!window.isSecureContext) throw new Error("A localização exige uma conexão segura (HTTPS). Abra a folha de ponto pelo endereço oficial https://air-sync-refine.lovable.app/.");
       if (!navigator.geolocation) throw new Error("Este navegador não disponibiliza geolocalização. Abra a folha de ponto no navegador atualizado do celular.");
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          error => reject(new Error(pontoGeolocationErrorMessage(error))),
-          { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-        )
-      );
+      const pos = await capturePontoPosition(navigator.geolocation);
       const baseLat = query.data?.employee.ponto_base_lat;
       const baseLng = query.data?.employee.ponto_base_lng;
       const R = 6371000;
@@ -311,8 +340,9 @@ function PontoColaborador() {
         }
       });
     },
-    onSuccess: () => {
-      setStatus({type:"success", text:"Marcação registrada com sucesso. Sua evidência de localização foi gravada."});
+    onSuccess: (record:any) => {
+      const accuracy = record?.gps_accuracy_m != null ? " Precisão registrada: ±"+Math.round(Number(record.gps_accuracy_m))+" m." : "";
+      setStatus({type:"success", text:"Marcação registrada com sucesso. A localização foi gravada nesta batida."+accuracy});
       qc.invalidateQueries({ queryKey: ["my-ponto"] });
     },
     onError: e => setStatus({type:"error", text:friendlyError(e)})
@@ -398,7 +428,7 @@ function PontoColaborador() {
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 py-4 text-sm font-black text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45 sm:mt-0 sm:w-auto"
           >
             <MapPin className="h-5 w-5"/>
-            {punch.isPending ? "Validando localização..." : next ? "Registrar "+labels[next] : "Jornada completa"}
+            {punch.isPending ? "Buscando GPS preciso..." : next ? "Registrar "+labels[next] : "Jornada completa"}
           </button>
         </div>
 
@@ -423,7 +453,7 @@ function PontoColaborador() {
               <p className="text-xs text-slate-400">{new Date(r.work_date+"T12:00:00").toLocaleDateString("pt-BR")} · {formatTime(r.punched_at)}</p>
             </div>
             <span className={"inline-flex w-fit rounded-full border px-2.5 py-1 text-[10px] font-black "+(r.inside_radius === false ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>{r.inside_radius === false ? "Fora do raio" : r.inside_radius === true ? "Dentro do raio" : "GPS capturado"}</span>
-            <span className="text-[11px] font-bold text-slate-400">{r.gps_accuracy_m != null ? "Precisão "+Math.round(Number(r.gps_accuracy_m))+"m" : ""}</span>
+            <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold text-slate-400">{r.gps_accuracy_m != null ? "Precisão ±"+Math.round(Number(r.gps_accuracy_m))+"m" : "Precisão indisponível"}</span>{hasPontoCoordinates(r)&&<a href={pontoGoogleMapsUrl(r)??undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-black text-sky-700 underline underline-offset-2"><MapPin className="h-3 w-3"/>Ver localização</a>}</div>
           </div>
         ))}
       </div>
