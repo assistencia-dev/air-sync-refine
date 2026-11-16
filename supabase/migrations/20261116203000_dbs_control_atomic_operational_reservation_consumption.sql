@@ -209,7 +209,7 @@ BEGIN
     SELECT EXISTS(SELECT 1 FROM public.dbs_control_operational_reservations
       WHERE work_order_id=v_order_id AND status='reserved') INTO v_has_operational_reservations;
 
-    IF v_has_reservations THEN
+    IF v_has_reservations OR v_has_operational_reservations THEN
       v_payload:=jsonb_set(v_payload,'{parts}',coalesce((
         SELECT jsonb_agg(jsonb_set(i.value,'{quantity}',to_jsonb(greatest(0,
           coalesce(nullif(i.value->>'quantity','')::numeric,nullif(i.value->>'qtd','')::numeric,0)
