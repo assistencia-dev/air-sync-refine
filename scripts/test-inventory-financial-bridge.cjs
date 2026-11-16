@@ -560,6 +560,10 @@ assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_operational_stock_consume_work_order/);
 assert.doesNotMatch([operationalStocksMigration,operationalConsumptionMigration,multipleOperationalStocksMigration,atomicOperationalConsumptionMigration].join("\\n"), /SECURITY DEFINER SET search_path=public/i);
+for (const migration of [operationalStocksMigration,operationalConsumptionMigration,multipleOperationalStocksMigration,atomicOperationalConsumptionMigration]) {
+  assert.equal((migration.match(/\\$\\$/g)||[]).length % 2, 0, "Every PL/pgSQL dollar-quoted body must have a closing delimiter.");
+  assert.doesNotMatch(migration, /AS \\$(?!\\$)/, "A function body must not use a single-dollar delimiter.");
+}
 assert.ok(operationalConsumptionMigration.includes("REVOKE ALL ON FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history() FROM PUBLIC,anon,authenticated"));
 assert.ok(atomicOperationalConsumptionMigration.includes("REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_consume_work_order"));
 assert.match(atomicOperationalConsumptionMigration, /rh_employee_access/);
