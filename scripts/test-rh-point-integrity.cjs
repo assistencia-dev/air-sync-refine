@@ -29,7 +29,15 @@ assert.match(ponto, /distance_m: gps\.distance_m, inside_radius: gps\.inside_rad
 assert.match(geo, /punchType === "entrada" && !hasBaseLat/, "a Entrada deve exigir base GPS cadastrada");
 assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
 assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS capturado"/, "a interface deve distinguir captura GPS de geocerca validada");
-assert.match(workspace, /navigator\.geolocation\.getCurrentPosition/, "o cliente deve capturar a localização do dispositivo");
+assert.match(workspace, /capturePontoPosition\(navigator\.geolocation\)/, "o cliente deve buscar uma posição GPS nova durante a batida");
+assert.match(geo, /watchPosition/, "a captura deve aguardar uma leitura GPS atualizada");
+assert.match(geo, /clearWatch\(watchId\)/, "a leitura GPS deve ser encerrada após cada batida");
+assert.match(geo, /maximumAge: 0/, "a captura não deve reaproveitar uma localização antiga");
+assert.match(geo, /targetAccuracyMeters \?\? 80/, "a captura deve buscar precisão adequada antes de concluir");
+assert.match(workspace, /Localização das marcações/, "o painel do RH deve apresentar o mapa das batidas");
+assert.match(workspace, /pontoGoogleMapsEmbedUrl/, "o mapa deve usar as coordenadas persistidas");
+assert.match(workspace, /Ver mapa/, "o painel diário deve oferecer acesso direto ao mapa");
+assert.match(workspace, /Ver localização/, "o histórico do colaborador deve permitir conferir sua própria batida");
 assert.match(workspace, /timeout: 30000/, "a captura GPS deve tolerar a aquisição inicial do sinal");
 assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
 assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
