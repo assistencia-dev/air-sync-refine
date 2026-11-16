@@ -12,11 +12,12 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_operational_reservation_consumptio
   ledger_entry_id uuid REFERENCES public.treasury_ledger_entries(id) ON DELETE RESTRICT,
   created_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(work_order_id),
   UNIQUE(scope_key,idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS dbs_control_operational_reservation_consumptions_scope_idx
   ON public.dbs_control_operational_reservation_consumptions(scope_key,created_at DESC);
+CREATE INDEX IF NOT EXISTS dbs_control_operational_reservation_consumptions_os_idx
+  ON public.dbs_control_operational_reservation_consumptions(work_order_id,created_at DESC);
 ALTER TABLE public.dbs_control_operational_reservation_consumptions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.dbs_control_operational_reservation_consumptions FROM PUBLIC,anon,authenticated;
 GRANT ALL ON public.dbs_control_operational_reservation_consumptions TO service_role;
@@ -74,7 +75,8 @@ BEGIN
 
   PERFORM pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||p_work_order_id::text,0));
   SELECT * INTO v_existing FROM public.dbs_control_operational_reservation_consumptions
-    WHERE work_order_id=p_work_order_id FOR UPDATE;
+    WHERE scope_key=v_scope.scope_key AND work_order_id=p_work_order_id
+      AND idempotency_key=v_key FOR UPDATE;
   IF FOUND THEN
     RETURN jsonb_build_object('ok',true,'replayed',true,'work_order_id',p_work_order_id,
       'consumed_reservations',0,'quantity',0,'cost_cents',v_existing.total_cost_cents,
