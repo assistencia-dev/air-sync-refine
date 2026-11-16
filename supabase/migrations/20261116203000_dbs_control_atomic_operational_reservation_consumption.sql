@@ -26,7 +26,6 @@ CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_consume_work_ord
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $
 DECLARE
   v_actor_company uuid;
-  v_actor_scope text;
   v_scope record;
   v_key text:=nullif(btrim(p_idempotency_key),'');
   v_r record;
@@ -40,23 +39,37 @@ DECLARE
   v_ledger jsonb;
   v_ledger_id uuid;
 BEGIN
-  IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN
+  IF p_actor_user_id IS NULL THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_FORBIDDEN' USING ERRCODE='42501';
   END IF;
   IF p_work_order_id IS NULL OR v_key IS NULL OR char_length(v_key) NOT BETWEEN 8 AND 240 THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_INPUT_INVALID' USING ERRCODE='22023';
   END IF;
 
+  SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+  IF NOT FOUND OR NOT EXISTS(
+    SELECT 1 FROM public.dbs_control_work_orders
+    WHERE id=p_work_order_id AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_OS_SCOPE_INVALID' USING ERRCODE='42501';
+  END IF;
+  IF NOT public.dbs_control_is_admin_actor(p_actor_user_id) AND NOT EXISTS (
+    SELECT 1
+    FROM public.users u
+    JOIN public.dbs_control_work_orders wo ON wo.id=p_work_order_id
+    LEFT JOIN public.rh_employee_access ea ON ea.user_id=u.id AND ea.access_enabled=true
+    LEFT JOIN public.rh_employees re ON re.ponto_portal_user_id=u.id
+      AND re.dbs_control_access_enabled=true AND re.is_active=true
+    WHERE u.id=p_actor_user_id AND u.status='ativo' AND u.role_key::text='COLABORADOR'
+      AND wo.assigned_employee_id=coalesce(ea.employee_id,re.id)
+      AND coalesce(u.company_id,wo.company_id)=wo.company_id
+  ) THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
   SELECT company_id INTO v_actor_company FROM public.users
     WHERE id=p_actor_user_id AND status='ativo';
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_ACTOR_INVALID' USING ERRCODE='42501';
-  END IF;
-  v_actor_scope:=CASE WHEN v_actor_company IS NULL THEN 'user:'||p_actor_user_id ELSE 'company:'||v_actor_company END;
-  SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
-  IF NOT FOUND OR v_scope.scope_key IS DISTINCT FROM v_actor_scope
-     OR NOT EXISTS(SELECT 1 FROM public.dbs_control_work_orders WHERE id=p_work_order_id AND deleted_at IS NULL) THEN
-    RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_OS_SCOPE_INVALID' USING ERRCODE='42501';
+  IF NOT FOUND OR (v_actor_company IS NOT NULL AND v_actor_company IS DISTINCT FROM v_scope.company_id) THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||p_work_order_id::text,0));
@@ -70,7 +83,7 @@ BEGIN
 
   FOR v_r IN
     SELECT * FROM public.dbs_control_operational_reservations
-    WHERE scope_key=v_actor_scope AND work_order_id=p_work_order_id AND status='reserved'
+    WHERE scope_key=v_scope.scope_key AND work_order_id=p_work_order_id AND status='reserved'
     ORDER BY part_id,stock_id,id FOR UPDATE
   LOOP
     SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=v_r.part_id FOR UPDATE;
