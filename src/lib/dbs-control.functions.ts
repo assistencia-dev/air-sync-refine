@@ -2333,10 +2333,13 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
       let currentCanonicalOrder: any = null;
       if (user.role_key === "COLABORADOR") {
         const localOrderId = isDbsControlUuid(order?.id) ? String(order.id) : null;
-        const currentOrder = localOrderId || protocol
+        // A resolved legacy draft must be treated as the existing canonical OS,
+        // not as a fresh collaborator issuance.
+        const resolvedOrderId = mappedCanonical?.id ?? localOrderId;
+        const currentOrder = resolvedOrderId || protocol
           ? await supabaseAdmin.from("dbs_control_work_orders")
             .select("id, version, assigned_employee_id, client_id, observation,servico_executado")
-            .eq(localOrderId ? "id" : "protocol", localOrderId ?? protocol)
+            .eq(resolvedOrderId ? "id" : "protocol", resolvedOrderId ?? protocol)
             .maybeSingle()
           : { data: null, error: null };
         if (currentOrder.error) throw new Error(`Falha ao ler o histórico da OS ${orderLabel}: ${currentOrder.error.message}`);
@@ -2403,13 +2406,17 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         idempotency_key: idempotencyKey,
         actor_user_id: user.id,
         company_id: scope.companyId,
-        // A emissão de colaborador é sempre CREATE: o UUID local do formulário
-        // não é um ID canônico e a RPC dbs_control_issue_work_order rejeita
-        // qualquer work_order_id para impedir que uma emissão vire atualização.
-        work_order_id: !isNewCollaboratorOrder && isDbsControlUuid(order?.id) ? String(order.id) : undefined,
-        protocol: protocol || undefined,
+        // Only genuinely new collaborator drafts use the issuance RPC.
+        // Explicitly mapped drafts must update their canonical OS idempotently.
+        work_order_id: !isNewCollaboratorOrder
+          ? (mappedCanonical?.id ?? (isDbsControlUuid(order?.id) ? String(order.id) : undefined))
+          : undefined,
+        protocol: mappedCanonical?.protocol ?? protocol || undefined,
         operation: "upsert",
-        expected_version: Number.isFinite(expectedVersion) && expectedVersion > 0 ? expectedVersion : undefined,
+        expected_version: Number.isFinite(Number(mappedCanonical?.version ?? expectedVersion))
+          && Number(mappedCanonical?.version ?? expectedVersion) > 0
+          ? Number(mappedCanonical?.version ?? expectedVersion)
+          : undefined,
         event_type: "work_order_delta",
         patch,
         parts,
