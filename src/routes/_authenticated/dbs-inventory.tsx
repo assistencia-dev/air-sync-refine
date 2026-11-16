@@ -731,12 +731,12 @@ export function DbsInventoryPage({
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
-                <button type="button" onClick={()=>setActiveDrawer(settingsView==="suppliers"?"supplier":settingsView==="cost-centers"?"cost-center":settingsView==="units"?"unit":"conversion")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
+                <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
               </div>
-              {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
-              {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
-              {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{unit.name}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
-              {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));return <div key={conversion.id} className="flex items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"}</p></div><strong className="text-sm font-semibold text-slate-800">{Number(conversion.factor).toLocaleString("pt-BR")} ×</strong></div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
+              {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>{inventoryRecordActions("supplier",supplier,supplier.name)}</div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
+              {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>{inventoryRecordActions("cost_center",center,center.name)}</div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
+              {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{unit.name} {unit.is_system&&<span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Padrão</span>}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>{inventoryRecordActions("measure_unit",unit,unit.name)}</div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
+              {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));const label=(from?.code||"Compra")+" → "+(to?.code||"Base");return <div key={conversion.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"} · {Number(conversion.factor).toLocaleString("pt-BR")} ×</p></div>{inventoryRecordActions("unit_conversion",conversion,label)}</div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
             </section>
             <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Novo fornecedor</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
               <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
@@ -778,7 +778,7 @@ export function DbsInventoryPage({
               </div>
               <div className="hidden max-h-[520px] overflow-auto md:block">
                 <table className="w-full min-w-[600px] text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th><th className="p-3 text-right">Ações</th></tr></thead>
                   <tbody>{visibleParts.map((part:any)=>{
                     const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                     const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
@@ -788,6 +788,7 @@ export function DbsInventoryPage({
                       <td className="p-3">{unit?.symbol||unit?.code||<span className="font-semibold text-amber-700">Definir</span>}</td>
                       <td className="p-3">{money(part.cost_cents)}</td>
                       <td className="p-3 font-bold">{Number(part.stock_quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td>
+                      <td className="p-3 text-right">{inventoryRecordActions("part",part,part.name||part.sku||"Peça")}</td>
                     </tr>;
                   })}</tbody>
                 </table>
@@ -797,16 +798,19 @@ export function DbsInventoryPage({
                 {visibleParts.map((part:any) => {
                   const supplier = suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                   const unit = measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
-                  return <button key={part.id} type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
-                    <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
-                    <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
-                      <span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span>
-                      <span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span>
-                      <span>Custo: <strong>{money(part.cost_cents)}</strong></span>
-                      <span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span>
-                    </span>
-                  </button>;
+                  return <article key={part.id} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
+                    <button type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="block w-full text-left">
+                      <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
+                      <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                        <span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span>
+                        <span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span>
+                        <span>Custo: <strong>{money(part.cost_cents)}</strong></span>
+                        <span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span>
+                      </span>
+                    </button>
+                    <div className="mt-3 border-t border-slate-100 pt-3">{inventoryRecordActions("part",part,part.name||part.sku||"Peça")}</div>
+                  </article>;
                 })}
                 {!visibleParts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça encontrada.</p>}
               </div>
