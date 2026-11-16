@@ -554,7 +554,7 @@ assert.doesNotMatch(multipleOperationalStocksMigration, /DROP FUNCTION/);
 assert.ok(multipleOperationalStocksMigration.includes("v_os.cost_center_id IS DISTINCT FROM p_cost_center_id"));
 assert.match(multipleOperationalStocksMigration, /DBS_OPERATIONAL_STOCK_SELECTION_REQUIRED/);
 assert.match(multipleOperationalStocksMigration, /Compatibility overload: old callers remain safe/);
-assert.match(multipleOperationalStocksMigration, /CREATE OR REPLACE FUNCTION public\\.dbs_control_operational_stock_reserve\\(/);
+assert.ok(multipleOperationalStocksMigration.includes("CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve("));
 assert.match(multipleOperationalStocksMigration, /Global lock order shared with transfer: part -> operational stock -> balance/);
 assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
