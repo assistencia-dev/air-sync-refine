@@ -4184,16 +4184,16 @@ export const transferDbsOperationalStock = createServerFn({ method: "POST" })
 
 export const reserveDbsOperationalStockForWorkOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input:{workOrderId:string;costCenterId:string;partId:string;quantity:number;purpose:"TROCA_PECA"|"ATIVO_EQUIPAMENTO";idempotencyKey:string})=>{
+  .validator((input:{workOrderId:string;costCenterId:string;stockId:string;partId:string;quantity:number;purpose:"TROCA_PECA"|"ATIVO_EQUIPAMENTO";idempotencyKey:string})=>{
     if(!Number.isFinite(input?.quantity)||input.quantity<=0||!input?.idempotencyKey||input.idempotencyKey.trim().length<8||
       !["TROCA_PECA","ATIVO_EQUIPAMENTO"].includes(input.purpose)) throw new Error("Dados da reserva operacional inválidos.");
-    return {workOrderId:requireInventoryId(input.workOrderId,"OS"),costCenterId:requireInventoryId(input.costCenterId,"Centro de custo"),
+    return {workOrderId:requireInventoryId(input.workOrderId,"OS"),costCenterId:requireInventoryId(input.costCenterId,"Centro de custo"),stockId:requireInventoryId(input.stockId,"Estoque operacional"),
       partId:requireInventoryId(input.partId,"Peça"),quantity:input.quantity,purpose:input.purpose,idempotencyKey:input.idempotencyKey.trim()};
   })
   .handler(async ({context,data})=>{
     const user=await requireDbsInventoryAdmin(context);
     const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_operational_stock_reserve",{
-      p_actor_user_id:user.id,p_work_order_id:data.workOrderId,p_cost_center_id:data.costCenterId,
+      p_actor_user_id:user.id,p_work_order_id:data.workOrderId,p_cost_center_id:data.costCenterId,p_stock_id:data.stockId,
       p_part_id:data.partId,p_quantity:data.quantity,p_purpose:data.purpose,p_idempotency_key:data.idempotencyKey
     });
     if(error) throw new Error(error.message);
