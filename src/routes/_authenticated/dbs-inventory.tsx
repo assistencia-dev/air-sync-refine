@@ -132,6 +132,7 @@ export function DbsInventoryPage({
   const [reservationStockId, setReservationStockId] = useState("");
   const [reservationPurpose, setReservationPurpose] = useState<"TROCA_PECA"|"ATIVO_EQUIPAMENTO">("TROCA_PECA");
   const [reservationClientFilter, setReservationClientFilter] = useState("");
+  const [reservationClientSearch, setReservationClientSearch] = useState("");
   const [reservationDateFrom, setReservationDateFrom] = useState("");
   const [reservationDateTo, setReservationDateTo] = useState("");
   const [reservationFiltersApplied, setReservationFiltersApplied] = useState(false);
@@ -878,7 +879,7 @@ export function DbsInventoryPage({
               </div>
               <div className="border-t border-slate-100 p-4">
                 <h4 className="mb-2 text-sm font-black">Histórico transacional operacional</h4>
-                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{source?.name||"Estoque Central"} → {destination?.name||"Estoque Central"} {(movement.reference?"· "+movement.reference:"")}</p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
+                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{source?.name||"Estoque Central"} → {destination?.name||"Estoque Central"} {(movement.reference?"· "+movement.reference:"")}<span className="block text-slate-500">Responsável: {String(movement.created_by||"—").slice(0,8)}</span></p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
                   {!operationalMovements.length&&<p className="text-xs text-slate-500">O histórico será preenchido pelas transferências e entradas operacionais.</p>}
                 </div>
               </div>
@@ -1443,8 +1444,9 @@ export function DbsInventoryPage({
     <form onSubmit={reserveParts} className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">Filtre as OS antes de pesquisar *</p>
-                <label className="block text-xs font-bold text-slate-600">Cliente
-                  <select value={reservationClientFilter} onChange={e=>{setReservationClientFilter(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Todos os clientes (use período para restringir)</option>{clients.filter((cl:any)=>cl.status!=="inativo").map((cl:any)=><option key={cl.id} value={cl.id}>{cl.trade_name||cl.legal_name}</option>)}</select>
+                <label className="block text-xs font-bold text-slate-600">Buscar cliente
+                  <input list="dbs-reservation-clients" value={reservationClientSearch} onChange={e=>{const value=e.target.value;setReservationClientSearch(value);const found=clients.find((cl:any)=>(cl.trade_name||cl.legal_name)===value);setReservationClientFilter(found?String(found.id):"");setReservationFiltersApplied(false);setWorkOrderId("");}} placeholder="Digite nome ou razão social" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"/>
+                  <datalist id="dbs-reservation-clients">{clients.filter((cl:any)=>cl.status!=="inativo").map((cl:any)=><option key={cl.id} value={cl.trade_name||cl.legal_name}/>)}</datalist>
                 </label>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <label className="text-xs font-bold text-slate-600">Data inicial<input type="date" value={reservationDateFrom} onChange={e=>{setReservationDateFrom(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label>
