@@ -239,7 +239,7 @@ export function DbsInventoryPage({
         description: String(item.description || part?.name || ""),
         quantity: String(item.quantity || 1),
         unitCost: "",
-        purchaseUnitId: String(part?.measure_unit_id || ""),
+        purchaseUnitId: String(part?.purchase_measure_unit_id || part?.measure_unit_id || ""),
         conversionFactor: 1,
       };
     });
