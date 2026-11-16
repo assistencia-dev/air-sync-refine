@@ -16,7 +16,7 @@ BEGIN
     ) ON CONFLICT(scope_key,idempotency_key) DO NOTHING;
   END IF;
   RETURN NEW;
-END $;
+END $$;
 REVOKE ALL ON FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history() FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_mirror_central_receipt_to_operational_history() TO service_role;
 
