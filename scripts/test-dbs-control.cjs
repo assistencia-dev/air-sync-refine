@@ -215,7 +215,7 @@ assert.doesNotMatch(html, /if \(msg\.status === 'error'\) DBS_CONTROL_DASHBOARD_
 assert.match(route, /applyDbsControlDelta/, "A rota deve persistir deltas no contrato relacional.");
 assert.match(route, /collaboratorVersionConflict/, "Conflito de versão durante a execução do colaborador deve ter caminho de rebase seguro.");
 assert.match(route, /DBS_CONTROL_CONFLICT_RECONCILED/, "O rebase do colaborador deve hidratar a versão canônica antes de reenviar o delta.");
-assert.match(route, /duplicateProtocolConflicts[\s\\S]*?sameClient[\s\\S]*?sameDescription[\s\\S]*?draftChanges = \{\}/, "Uma OS já criada com o mesmo cliente e descrição deve ser reconhecida sem replay do draft duplicado.");
+assert.match(route, /duplicateProtocolConflicts[\s\S]*?sameClient[\s\S]*?sameDescription[\s\S]*?draftChanges = \{\}/, "Uma OS já criada com o mesmo cliente e descrição deve ser reconhecida sem replay do draft duplicado.");
 assert.match(route, /A OS já existe na versão canônica; intenção original preservada em quarentena sem criar duplicata/, "A intenção duplicada deve permanecer auditável em quarentena.");
 assert.match(route, /dbsControlStateOrderIsCompleted/, "O rebase automático nunca pode atravessar a proteção de OS concluída.");
 assert.match(cloudFunctions, /export const deleteDbsControlWorkOrder/, "A exclusão de OS deve usar uma intenção relacional própria, sem autosave de snapshot.");
