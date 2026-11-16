@@ -59,6 +59,49 @@ BEGIN
   RETURN jsonb_build_object('ok',true,'replayed',false,'reservation_id',v_reservation,'stock_id',v_stock.id);
 END $$;
 
+-- Compatibility overload: old callers remain safe when a center has exactly one active stock.
+-- When multiple operational stocks exist, an explicit stock selection is mandatory.
+CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve(
+  p_actor_user_id uuid,p_work_order_id uuid,p_cost_center_id uuid,p_part_id uuid,
+  p_quantity numeric,p_purpose text,p_idempotency_key text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $
+DECLARE
+  v_actor_company uuid;
+  v_scope text;
+  v_stock_id uuid;
+  v_other_stock_id uuid;
+BEGIN
+  IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  SELECT company_id INTO v_actor_company FROM public.users
+    WHERE id=p_actor_user_id AND status='ativo';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_ACTOR_INVALID' USING ERRCODE='42501';
+  END IF;
+  v_scope:=CASE WHEN v_actor_company IS NULL THEN 'user:'||p_actor_user_id ELSE 'company:'||v_actor_company END;
+  SELECT id INTO v_stock_id FROM public.dbs_control_operational_stocks
+    WHERE scope_key=v_scope AND cost_center_id=p_cost_center_id AND status='active'
+    ORDER BY id LIMIT 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_NOT_CONFIGURED' USING ERRCODE='23503';
+  END IF;
+  SELECT id INTO v_other_stock_id FROM public.dbs_control_operational_stocks
+    WHERE scope_key=v_scope AND cost_center_id=p_cost_center_id AND status='active'
+      AND id<>v_stock_id
+    ORDER BY id LIMIT 1;
+  IF v_other_stock_id IS NOT NULL THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_SELECTION_REQUIRED' USING ERRCODE='22023';
+  END IF;
+  RETURN public.dbs_control_operational_stock_reserve(
+    p_actor_user_id,p_work_order_id,p_cost_center_id,v_stock_id,p_part_id,
+    p_quantity,p_purpose,p_idempotency_key
+  );
+END $;
+
+REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,numeric,text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,numeric,text,text) TO service_role;
+
 REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,uuid,numeric,text,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,uuid,numeric,text,text) TO service_role;
 COMMIT;
