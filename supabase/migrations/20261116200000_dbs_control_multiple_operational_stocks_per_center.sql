@@ -64,7 +64,7 @@ END $$;
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve(
   p_actor_user_id uuid,p_work_order_id uuid,p_cost_center_id uuid,p_part_id uuid,
   p_quantity numeric,p_purpose text,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_actor_company uuid;
   v_scope text;
@@ -97,7 +97,7 @@ BEGIN
     p_actor_user_id,p_work_order_id,p_cost_center_id,v_stock_id,p_part_id,
     p_quantity,p_purpose,p_idempotency_key
   );
-END $;
+END $$;
 
 REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,numeric,text,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,numeric,text,text) TO service_role;
