@@ -2095,11 +2095,43 @@ function DbsControlPage() {
         const conflictCommand = [...localSyncCommandsRef.current.values()]
           .find((command) => command.status === "conflict" && command.conflicts?.length);
         const draftBatchId = pendingBatchIdRef.current ?? conflictCommand?.id ?? null;
-        const draftChanges = pendingChangesRef.current ?? conflictCommand?.changes ?? null;
+        let draftChanges = pendingChangesRef.current ?? conflictCommand?.changes ?? null;
+        let duplicateAlreadyCreated = false;
         try {
           const latest = await getCloudStateSingleFlight();
           if (!latest?.state || typeof latest.state !== "object") {
             throw new Error("A versão mais recente da OS não está disponível para reconciliação.");
+          }
+          // Do not replay a CREATE rejected as duplicate when the exact OS is
+          // already canonical. Match client, description and (when available)
+          // assigned technician; preserve the original local payload in quarantine.
+          const conflictItems = Array.isArray(msg.conflicts) ? msg.conflicts : [];
+          const duplicateProtocolConflicts = conflictItems.filter((item: any) =>
+            dbsControlConflictCode(item) === "DBS_OS_PROTOCOL_EXISTS"
+          );
+          const localOrders = Array.isArray(draftChanges?.ordens) ? draftChanges.ordens : [];
+          const canonicalOrders = Array.isArray((latest.state as any).ordens) ? (latest.state as any).ordens : [];
+          const normalizeMatchValue = (value: unknown) => String(value ?? "")
+            .trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+          if (duplicateProtocolConflicts.length && localOrders.length && duplicateProtocolConflicts.every((conflict: any) => {
+            const local = localOrders.find((order: any) =>
+              normalizeMatchValue(order?.id) === normalizeMatchValue(conflict?.protocol)
+            );
+            if (!local) return false;
+            const clientId = normalizeMatchValue(local?.clienteId ?? local?.client_id ?? local?.clientId);
+            const description = normalizeMatchValue(local?.descricao ?? local?.description ?? local?.servico);
+            const employeeId = normalizeMatchValue(local?.employeeId ?? local?.employee_id ?? local?.assignedEmployeeId ?? local?.assigned_employee_id);
+            if (!clientId || !description) return false;
+            const matches = canonicalOrders.filter((order: any) => {
+              const sameClient = normalizeMatchValue(order?.clienteId ?? order?.client_id ?? order?.clientId) === clientId;
+              const sameDescription = normalizeMatchValue(order?.descricao ?? order?.description ?? order?.servico) === description;
+              const canonicalEmployee = normalizeMatchValue(order?.employeeId ?? order?.employee_id ?? order?.assignedEmployeeId ?? order?.assigned_employee_id);
+              return sameClient && sameDescription && (!employeeId || !canonicalEmployee || canonicalEmployee === employeeId);
+            });
+            return matches.length === 1;
+          })) {
+            duplicateAlreadyCreated = true;
+            draftChanges = {};
           }
           if (draftBatchId) {
             const originalCommand = localSyncCommandsRef.current.get(draftBatchId);
@@ -2112,7 +2144,9 @@ function DbsControlPage() {
                 attempts: originalCommand.attempts,
                 nextAttemptAt: Number.MAX_SAFE_INTEGER,
                 leaseUntil: null,
-                lastError: "Intenção preservada em quarentena antes da reconciliação manual; a nova gravação usará a versão canônica.",
+                lastError: duplicateAlreadyCreated
+                  ? "A OS já existe na versão canônica; intenção original preservada em quarentena sem criar duplicata."
+                  : "Intenção preservada em quarentena antes da reconciliação manual; a nova gravação usará a versão canônica.",
                 conflicts: originalCommand.conflicts,
               });
             }
@@ -2126,7 +2160,7 @@ function DbsControlPage() {
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_CONFLICT_RECONCILED",
             state: latest.state,
-            changes: draftChanges ?? {},
+            changes: duplicateAlreadyCreated ? {} : draftChanges ?? {},
             conflicts: Array.isArray(msg.conflicts) ? msg.conflicts : [],
             updated_at: latest.updated_at ?? null,
           }, "*");
