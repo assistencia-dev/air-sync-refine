@@ -576,6 +576,8 @@ assert.match(atomicOperationalConsumptionMigration, /'5\.1\.01'/);
 assert.match(atomicOperationalConsumptionMigration, /'1\.1\.03'/);
 assert.match(atomicOperationalConsumptionMigration, /parts_cost_cents=dbs_control_work_order_financials\.parts_cost_cents\+excluded\.parts_cost_cents/i);
 assert.match(atomicOperationalConsumptionMigration, /operational_reservation_consumptions/);
+assert.doesNotMatch(atomicOperationalConsumptionMigration, /UNIQUE\\(work_order_id\\)/i);
+assert.ok(atomicOperationalConsumptionMigration.includes("AND idempotency_key=v_key"));
 assert.match(atomicOperationalConsumptionMigration, /UNION ALL[\s\S]*dbs_control_operational_reservations/i);
 assert.match(functions, /dbs_control_consume_all_work_order_reservations/);
 assert.doesNotMatch(functions, /const operational = await .*dbs_control_operational_stock_consume_work_order/);
