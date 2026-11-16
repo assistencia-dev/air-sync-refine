@@ -3095,7 +3095,13 @@ export const consumeDbsWorkOrderReservations = createServerFn({ method: "POST" }
       p_idempotency_key: data.idempotencyKey,
     });
     if (error) throw new Error(error.message);
-    return result;
+    const operational = await (supabaseAdmin as any).rpc("dbs_control_operational_stock_consume_work_order", {
+      p_actor_user_id: user.id,
+      p_work_order_id: data.workOrderId,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (operational.error) throw new Error(operational.error.message);
+    return { legacy: result, operational: operational.data };
   });
 
 export const createDbsPartSale = createServerFn({ method: "POST" })
