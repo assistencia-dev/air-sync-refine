@@ -191,6 +191,8 @@ export function DbsInventoryPage({
   const operationalMovements = data?.operationalMovements ?? [];
   const operationalReservations = data?.operationalReservations ?? [];
   const clients = data?.clients ?? [];
+  const employees = data?.employees ?? [];
+  const workOrders = data?.workOrders ?? [];
   const selectedOperationalStock = operationalStocks.find((stock:any)=>String(stock.cost_center_id)===String(costCenterId)&&stock.status==="active");
   const selectedOperationalBalance = operationalBalances.find((row:any)=>String(row.stock_id)===String(selectedOperationalStock?.id)&&String(row.part_id)===String(partId));
   const selectedPart = activeParts.find((part:any)=>String(part.id)===String(partId));
@@ -200,8 +202,6 @@ export function DbsInventoryPage({
       const date=String(order.created_at??"").slice(0,10);
       return (!reservationClientFilter||String(order.client_id)===reservationClientFilter)&&(!reservationDateFrom||date>=reservationDateFrom)&&(!reservationDateTo||date<=reservationDateTo);
     }) : [];
-  const employees = data?.employees ?? [];
-  const workOrders = data?.workOrders ?? [];
   const reservations = [...(data?.reservations ?? []).map((r:any)=>({...r,is_operational:false})), ...(data?.operationalReservations ?? []).map((r:any)=>({...r,is_operational:true}))];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
