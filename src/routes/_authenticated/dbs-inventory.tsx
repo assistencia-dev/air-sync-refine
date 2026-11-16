@@ -763,7 +763,7 @@ export function DbsInventoryPage({
             
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-                <div><h2 className="text-base font-semibold text-slate-900">Catálogo de peças</h2><p className="mt-1 text-xs text-slate-500">{parts.length} itens cadastrados</p></div>
+                <div><p className="text-xs text-slate-500">{parts.length} itens cadastrados no catálogo</p></div>
               </div>
               <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
                 <input type="search" aria-label="Buscar peças" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Buscar por nome, SKU ou fornecedor..." className="min-h-10 w-full rounded-lg border border-slate-200 bg-[#f8fafc] px-3 text-sm outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"/>
