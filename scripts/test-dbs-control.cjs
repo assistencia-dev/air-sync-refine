@@ -178,6 +178,9 @@ const timestampMigration = fs.readFileSync("supabase/migrations/20261026153546_d
 const collaboratorIndependentAccessMigration = fs.readFileSync("supabase/migrations/20261026160914_dbs_control_collaborator_independent_access.sql", "utf8");
 const collaboratorPrivateScopeMigration = fs.readFileSync("supabase/migrations/20261026161106_dbs_control_private_employee_scope.sql", "utf8");
 assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
+assert.match(cloudFunctions, /resolveDbsControlWorkOrderLegacyMap\(scope\.scopeKey, changes\.ordens \?\? \[\]\)/, "A sincronização deve resolver IDs locais de OS pelo mapa legado.");
+assert.match(cloudFunctions, /version: mappedCanonical\.version/, "Uma OS já vinculada deve usar sempre a versão canônica mais recente.");
+assert.doesNotMatch(cloudFunctions, /if \(user\.role_key === "COLABORADOR"\)[\s\S]{0,260}workOrderLegacyMap\.delete\(localId\)/, "O fluxo do colaborador não pode descartar um vínculo legado explícito de uma OS já criada.");
 assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
 assert.match(atomicSnapshotMigration, /pg_advisory_xact_lock\(hashtextextended\(v_scope_key, 0\)\)/i, "A primeira gravação também deve ser serializada quando ainda não existe snapshot.");
