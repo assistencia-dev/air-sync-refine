@@ -24,6 +24,8 @@ BEGIN
   SELECT company_id INTO v_actor_company FROM public.users WHERE id=p_actor_user_id AND status='ativo';
   v_scope:=CASE WHEN v_actor_company IS NULL THEN 'user:'||p_actor_user_id ELSE 'company:'||v_actor_company END;
   PERFORM pg_advisory_xact_lock(hashtextextended(v_scope||':op-reserve:'||v_key,0));
+  -- Serialize operational reservations with OS completion and release for this order.
+  PERFORM pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||p_work_order_id::text,0));
   SELECT id INTO v_existing FROM public.dbs_control_operational_reservations WHERE scope_key=v_scope AND idempotency_key=v_key;
   IF v_existing IS NOT NULL THEN RETURN jsonb_build_object('ok',true,'replayed',true,'reservation_id',v_existing); END IF;
   SELECT wo.id,wo.status INTO v_os FROM public.dbs_control_work_orders wo
