@@ -602,5 +602,14 @@ assert.match(phase2Ui, /purchase_measure_unit_id \|\| part\?\.measure_unit_id/);
 assert.match(phase2Ui, /Regra configurada:/);
 assert.match(phase2Ui, /Estoque Central/);
 assert.match(phase2Ui, /Estoque Operacional/);
+assert.ok(phase2Ui.includes('inventoryRecordActions("part",part,part.name||part.sku||"Peça")'));
+assert.ok(phase2Ui.includes('inventoryRecordActions("supplier",supplier,supplier.name)'));
+assert.ok(phase2Ui.includes('inventoryRecordActions("cost_center",center,center.name)'));
+assert.ok(phase2Ui.includes('inventoryRecordActions("measure_unit",unit,unit.name)'));
+assert.ok(phase2Ui.includes('inventoryRecordActions("unit_conversion",conversion,label)'));
+assert.match(functions, /operationalBalance = await admin\.from\("dbs_control_operational_stock_balances"\)/);
+assert.match(functions, /purchase_measure_unit_id.*unidades de compra de peças/);
+assert.match(functions, /dbs_control_operational_stock_movements.*histórico operacional/);
+assert.match(functions, /dbs_control_operational_stocks/);
 
 console.log("inventory financial bridge, operational stock isolation, OS reservation purpose and unit conversion checks passed");
