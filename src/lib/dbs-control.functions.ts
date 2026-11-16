@@ -4219,3 +4219,22 @@ export const releaseDbsOperationalStockReservation = createServerFn({ method: "P
     if(error) throw new Error(error.message);
     return result;
   });
+
+
+export const setDbsOperationalStockStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{stockId:string;status:"active"|"inactive"})=>{
+    if(!["active","inactive"].includes(input?.status)) throw new Error("Status do estoque operacional inválido.");
+    return {stockId:requireInventoryId(input.stockId,"Estoque operacional"),status:input.status};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const {data:saved,error}=await (supabaseAdmin as any).from("dbs_control_operational_stocks")
+      .update({status:data.status,updated_by:user.id,updated_at:new Date().toISOString()})
+      .eq("id",data.stockId).eq("scope_key",scopeKey)
+      .select("id,cost_center_id,name,status").maybeSingle();
+    if(error) throw new Error(error.message);
+    if(!saved) throw new Error("Estoque operacional não encontrado neste escopo.");
+    return saved;
+  });
