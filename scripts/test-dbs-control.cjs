@@ -217,6 +217,7 @@ assert.match(route, /collaboratorVersionConflict/, "Conflito de versão durante 
 assert.match(route, /DBS_CONTROL_CONFLICT_RECONCILED/, "O rebase do colaborador deve hidratar a versão canônica antes de reenviar o delta.");
 assert.match(route, /duplicateProtocolConflicts[\s\S]*?sameClient[\s\S]*?sameDescription[\s\S]*?draftChanges = \{\}/, "Uma OS já criada com o mesmo cliente e descrição deve ser reconhecida sem replay do draft duplicado.");
 assert.match(route, /A OS já existe na versão canônica; intenção original preservada em quarentena sem criar duplicata/, "A intenção duplicada deve permanecer auditável em quarentena.");
+assert.match(route, /já existe uma os com este protocolo/, "A reconciliação também deve reconhecer a mensagem legada de protocolo já existente.");
 assert.match(route, /dbsControlStateOrderIsCompleted/, "O rebase automático nunca pode atravessar a proteção de OS concluída.");
 assert.match(cloudFunctions, /export const deleteDbsControlWorkOrder/, "A exclusão de OS deve usar uma intenção relacional própria, sem autosave de snapshot.");
 assert.match(cloudFunctions, /event_type: "work_order_deleted"/, "A exclusão deve gerar evento auditável na mesma transação da OS.");
