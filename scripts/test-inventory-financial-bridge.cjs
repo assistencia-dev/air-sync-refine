@@ -554,6 +554,9 @@ assert.match(multipleOperationalStocksMigration, /Global lock order shared with 
 assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_operational_stock_consume_work_order/);
+assert.match(atomicOperationalConsumptionMigration, /rh_employee_access/);
+assert.match(atomicOperationalConsumptionMigration, /assigned_employee_id=coalesce\\(ea\\.employee_id,re\\.id\\)/);
+assert.match(atomicOperationalConsumptionMigration, /DBS_OPERATIONAL_CONSUMPTION_FORBIDDEN/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_apply_work_order_delta_with_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /v_has_operational_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /dbs-os-reservations:/);
