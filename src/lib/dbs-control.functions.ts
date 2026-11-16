@@ -2411,7 +2411,7 @@ export const applyDbsControlDelta = createServerFn({ method: "POST" })
         work_order_id: !isNewCollaboratorOrder
           ? (mappedCanonical?.id ?? (isDbsControlUuid(order?.id) ? String(order.id) : undefined))
           : undefined,
-        protocol: mappedCanonical?.protocol ?? protocol || undefined,
+        protocol: (mappedCanonical?.protocol ?? protocol) || undefined,
         operation: "upsert",
         expected_version: Number.isFinite(Number(mappedCanonical?.version ?? expectedVersion))
           && Number(mappedCanonical?.version ?? expectedVersion) > 0
