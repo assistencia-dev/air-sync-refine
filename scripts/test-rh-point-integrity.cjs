@@ -38,7 +38,7 @@ assert.match(workspace, /Localização das marcações/, "o painel do RH deve ap
 assert.match(workspace, /pontoGoogleMapsEmbedUrl/, "o mapa deve usar as coordenadas persistidas");
 assert.match(workspace, /Ver mapa/, "o painel diário deve oferecer acesso direto ao mapa");
 assert.match(workspace, /Ver localização/, "o histórico do colaborador deve permitir conferir sua própria batida");
-assert.match(workspace, /timeout: 30000/, "a captura GPS deve tolerar a aquisição inicial do sinal");
+assert.match(geo, /timeoutMs \?\? 30_000/, "a captura GPS deve tolerar a aquisição inicial do sinal");
 assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
 assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
 
