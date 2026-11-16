@@ -3829,6 +3829,7 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
     let query = admin.from(table).select(
       data.entity === "part" ? "id,status,stock_quantity,reserved_quantity,version"
       : data.entity === "measure_unit" ? "id,status,is_system,version"
+      : data.entity === "cost_center" ? "id,status"
       : "id,status,version"
     ).eq("id", data.id);
     if (!isPart) query = query.eq("scope_key", scopeKey);
