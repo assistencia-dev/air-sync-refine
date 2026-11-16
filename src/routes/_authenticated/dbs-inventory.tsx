@@ -10,9 +10,9 @@ import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
   createDbsOperationalStock, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
-  reserveDbsWorkOrderParts, setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
+  setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog, transferDbsStockToTechnician,
+  updateDbsPartCatalog,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -124,7 +124,6 @@ export function DbsInventoryPage({
   const [catalogPartSale, setCatalogPartSale] = useState("");
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
-  const [transferEmployeeId, setTransferEmployeeId] = useState("");
   const [transferSourceStockId, setTransferSourceStockId] = useState("central");
   const [transferDestinationStockId, setTransferDestinationStockId] = useState("");
   const [operationalStockName, setOperationalStockName] = useState("");
