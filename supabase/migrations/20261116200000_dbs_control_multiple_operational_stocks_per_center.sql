@@ -5,7 +5,7 @@ ALTER TABLE public.dbs_control_operational_stocks
 CREATE UNIQUE INDEX IF NOT EXISTS dbs_control_operational_stocks_name_per_center_uidx
   ON public.dbs_control_operational_stocks(scope_key,cost_center_id,lower(btrim(name)));
 
-DROP FUNCTION IF EXISTS public.dbs_control_operational_stock_reserve(uuid,uuid,uuid,uuid,numeric,text,text);
+-- Keep the original seven-argument overload intact for older callers; add the explicit-stock overload below.
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve(
   p_actor_user_id uuid,p_work_order_id uuid,p_cost_center_id uuid,p_stock_id uuid,
   p_part_id uuid,p_quantity numeric,p_purpose text,p_idempotency_key text
@@ -28,10 +28,13 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||p_work_order_id::text,0));
   SELECT id INTO v_existing FROM public.dbs_control_operational_reservations WHERE scope_key=v_scope AND idempotency_key=v_key;
   IF v_existing IS NOT NULL THEN RETURN jsonb_build_object('ok',true,'replayed',true,'reservation_id',v_existing); END IF;
-  SELECT wo.id,wo.status INTO v_os FROM public.dbs_control_work_orders wo
+  SELECT wo.id,wo.status,wo.cost_center_id INTO v_os FROM public.dbs_control_work_orders wo
     WHERE wo.id=p_work_order_id AND wo.deleted_at IS NULL;
   IF NOT FOUND OR lower(coalesce(v_os.status,'')) IN ('concluida','concluída','completed','complete','cancelada','cancelado','cancelled') THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_OS_INVALID' USING ERRCODE='23514';
+  END IF;
+  IF v_os.cost_center_id IS DISTINCT FROM p_cost_center_id THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_COST_CENTER_MISMATCH' USING ERRCODE='23514';
   END IF;
   SELECT * INTO v_os_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
   IF NOT FOUND OR v_os_scope.scope_key IS DISTINCT FROM v_scope THEN
