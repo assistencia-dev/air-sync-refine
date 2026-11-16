@@ -558,6 +558,14 @@ assert.match(atomicOperationalConsumptionMigration, /dbs_control_apply_work_orde
 assert.match(atomicOperationalConsumptionMigration, /v_has_operational_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /FOR UPDATE/);
+assert.match(atomicOperationalConsumptionMigration, /CREATE TABLE IF NOT EXISTS public\\.dbs_control_operational_reservation_consumptions/i);
+assert.match(atomicOperationalConsumptionMigration, /dbs_control_work_order_parts/i);
+assert.match(atomicOperationalConsumptionMigration, /work_order_operational_parts_cogs/i);
+assert.match(atomicOperationalConsumptionMigration, /'5\\.1\\.01'/);
+assert.match(atomicOperationalConsumptionMigration, /'1\\.1\\.03'/);
+assert.match(atomicOperationalConsumptionMigration, /parts_cost_cents=dbs_control_work_order_financials\\.parts_cost_cents\\+excluded\\.parts_cost_cents/i);
+assert.match(atomicOperationalConsumptionMigration, /operational_reservation_consumptions/);
+assert.match(atomicOperationalConsumptionMigration, /UNION ALL[\\s\\S]*dbs_control_operational_reservations/i);
 assert.match(functions, /dbs_control_consume_all_work_order_reservations/);
 assert.doesNotMatch(functions, /const operational = await .*dbs_control_operational_stock_consume_work_order/);
 assert.match(functions, /createDbsOperationalStock/);
