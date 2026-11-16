@@ -24,6 +24,9 @@ const purchaseReceiptFix = fs.readFileSync('supabase/migrations/20261105125833_f
 const purchaseOutboxFix = fs.readFileSync('supabase/migrations/20261105130217_fix_dbs_purchase_outbox_aggregate_fk.sql', 'utf8');
 const purchaseApproval = fs.readFileSync('supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql', 'utf8');
 const frontendIntegrations = fs.readFileSync('supabase/migrations/20261112125903_dbs_control_frontend_inventory_cost_center_integrations.sql', 'utf8');
+const operationalStocksMigration = fs.readFileSync('supabase/migrations/20261116190000_dbs_control_operational_stocks.sql', 'utf8');
+const operationalConsumptionMigration = fs.readFileSync('supabase/migrations/20261116193000_dbs_control_operational_stock_os_consumption.sql', 'utf8');
+const multipleOperationalStocksMigration = fs.readFileSync('supabase/migrations/20261116200000_dbs_control_multiple_operational_stocks_per_center.sql', 'utf8');
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
@@ -65,7 +68,7 @@ assert.match(phase2Ui, /settingsView\s*={2,3}\s*"cost-centers"/);
 assert.match(phase2Ui, /settingsView\s*={2,3}\s*"units"/);
 assert.match(phase2Ui, /settingsView\s*={2,3}\s*"conversions"/);
 assert.match(phase2Ui, /Saldo físico central/);
-assert.match(phase2Ui, /Saldos em veículos/);
+assert.match(phase2Ui, /Custódia legada de veículos/);
 assert.match(phase2Ui, /Pedidos em aberto/);
 assert.match(phase2Ui, /Recebimento físico/);
 assert.match(phase2Ui, /purchasesAwaitingReceipt/);
@@ -534,4 +537,33 @@ assert.match(controlRoute, /initialSection="purchases"/);
 assert.match(controlRoute, /data-dbs-materials-react-root/);
 assert.match(controlRoute, /20261114-erp-clean-ui-2/);
 
-console.log("supplier CPF/CNPJ checksums and strict purchase calendar-date validation passed");
+// Operational stocks are independent balances; only the transaction RPC can transfer stock.
+assert.match(operationalStocksMigration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_operational_stocks/i);
+assert.match(operationalStocksMigration, /dbs_control_operational_stock_balances/i);
+assert.match(operationalStocksMigration, /dbs_control_operational_stock_movements/i);
+assert.match(operationalStocksMigration, /TRANSFERENCIA_CENTRAL_OPERACIONAL/);
+assert.match(operationalStocksMigration, /TRANSFERENCIA_OPERACIONAL_CENTRAL/);
+assert.match(operationalStocksMigration, /TRANSFERENCIA_ENTRE_OPERACIONAIS/);
+assert.match(operationalStocksMigration, /DBS_OPERATIONAL_STOCK_INSUFFICIENT/);
+assert.match(operationalStocksMigration, /dbs_control_operational_stock_reserve/);
+assert.match(operationalConsumptionMigration, /movement_type.*'SAIDA_OS'/s);
+assert.match(operationalConsumptionMigration, /dbs_control_mirror_central_receipt_to_operational_history/);
+assert.match(multipleOperationalStocksMigration, /DROP CONSTRAINT IF EXISTS dbs_control_operational_stocks_scope_key_cost_center_id_key/);
+assert.match(functions, /createDbsOperationalStock/);
+assert.match(functions, /transferDbsOperationalStock/);
+assert.match(functions, /reserveDbsOperationalStockForWorkOrder/);
+assert.match(functions, /releaseDbsOperationalStockReservation/);
+assert.match(functions, /dbs_control_operational_stock_consume_work_order/);
+assert.match(phase2Ui, /Estoques Operacionais por Centro de Custo/);
+assert.match(phase2Ui, /reserveDbsOperationalStockForWorkOrder/);
+assert.match(phase2Ui, /Aplicar filtros e carregar OS/);
+assert.match(phase2Ui, /reservationPurpose/);
+assert.match(phase2Ui, /Ativo \/ Equipamento/);
+assert.match(phase2Ui, /Saldo no estoque operacional/);
+assert.match(phase2Ui, /purchaseMeasureUnitId/);
+assert.match(functions, /purchase_measure_unit_id/);
+assert.match(phase2Ui, /Regra configurada:/);
+assert.match(phase2Ui, /Estoque Central/);
+assert.match(phase2Ui, /Estoque Operacional/);
+
+console.log("inventory financial bridge, operational stock isolation, OS reservation purpose and unit conversion checks passed");
