@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
-  createDbsOperationalStock, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
+  createDbsOperationalStock, setDbsOperationalStockStatus, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
@@ -503,6 +503,12 @@ export function DbsInventoryPage({
     if(saved){setOperationalStockName("");setOperationalStockCostCenterId("");setActiveDrawer(null);}
   }
 
+  async function toggleOperationalStockStatus(stock:any) {
+    const nextStatus=stock.status==="active"?"inactive":"active";
+    await runAction(()=>setDbsOperationalStockStatus({data:{stockId:String(stock.id),status:nextStatus}}),
+      nextStatus==="active"?"Estoque operacional ativado.":"Estoque operacional arquivado sem apagar histórico ou saldos.");
+  }
+
   async function transferStockToTechnician(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const source=transferSourceStockId==="central"?null:transferSourceStockId;
@@ -878,10 +884,10 @@ export function DbsInventoryPage({
               <div className="overflow-x-auto px-4 pb-4">
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Estoque operacional</th><th className="p-3">Centro de custo</th><th className="p-3">Peça</th><th className="p-3">Físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th></tr></thead>
-                  <tbody>{operationalStocks.filter((s:any)=>s.status==="active").flatMap((stock:any)=>{
+                  <tbody>{operationalStocks.flatMap((stock:any)=>{
                     const cc=costCenters.find((x:any)=>x.id===stock.cost_center_id);
                     const rows=operationalBalances.filter((b:any)=>b.stock_id===stock.id);
-                    return rows.length?rows.map((balance:any)=>{const part=parts.find((p:any)=>p.id===balance.part_id);const unit=measureUnits.find((u:any)=>u.id===part?.measure_unit_id);return <tr key={balance.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}</td><td className="p-3">{cc?.code} · {cc?.name}</td><td className="p-3">{part?.sku} · {part?.name}</td><td className="p-3">{Number(balance.quantity).toLocaleString("pt-BR")} {unit?.symbol||""}</td><td className="p-3">{Number(balance.reserved_quantity).toLocaleString("pt-BR")}</td><td className="p-3 font-black">{Math.max(0,Number(balance.quantity)-Number(balance.reserved_quantity)).toLocaleString("pt-BR")}</td></tr>;})
+                    return rows.length?rows.map((balance:any)=>{const part=parts.find((p:any)=>p.id===balance.part_id);const unit=measureUnits.find((u:any)=>u.id===part?.measure_unit_id);return <tr key={balance.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}<span className={stock.status==="active"?"ml-2 rounded-full bg-emerald-50 px-2 py-1 text-[10px] text-emerald-800":"ml-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600"}>{stock.status==="active"?"Ativo":"Arquivado"}</span><button type="button" disabled={busy} onClick={()=>void toggleOperationalStockStatus(stock)} className="mt-1 block text-[10px] font-bold text-sky-700 underline">{stock.status==="active"?"Arquivar":"Reativar"}</button></td><td className="p-3">{cc?.code} · {cc?.name}</td><td className="p-3">{part?.sku} · {part?.name}</td><td className="p-3">{Number(balance.quantity).toLocaleString("pt-BR")} {unit?.symbol||""}</td><td className="p-3">{Number(balance.reserved_quantity).toLocaleString("pt-BR")}</td><td className="p-3 font-black">{Math.max(0,Number(balance.quantity)-Number(balance.reserved_quantity)).toLocaleString("pt-BR")}</td></tr>;})
                     :[<tr key={stock.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}</td><td className="p-3">{cc?.code} · {cc?.name}</td><td colSpan={4} className="p-3 text-slate-400">Sem saldo movimentado</td></tr>];
                   })}</tbody>
                 </table>
