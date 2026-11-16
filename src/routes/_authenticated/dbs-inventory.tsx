@@ -1144,7 +1144,8 @@ export function DbsInventoryPage({
                         <select value={line.partId} onChange={e => {
                           const selected = parts.find((entry: any) => String(entry.id) === e.target.value);
                           const baseUnitId=String(selected?.measure_unit_id||"");
-                          updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
+                          const purchaseUnitId=String(selected?.purchase_measure_unit_id||baseUnitId);
+                          updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId,conversionFactor:purchaseUnitId?conversionFor(String(selected?.id||""),purchaseUnitId):0});
                         }} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
                           <option value="">Selecione a peça cadastrada</option>
                           {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku ? entry.sku+" · " : ""}{entry.name||entry.description||entry.id}</option>)}
@@ -1183,7 +1184,8 @@ export function DbsInventoryPage({
                       <select value={line.partId} onChange={e=>{
                         const selected=parts.find((entry:any)=>String(entry.id)===e.target.value);
                         const baseUnitId=String(selected?.measure_unit_id||"");
-                        updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
+                        const purchaseUnitId=String(selected?.purchase_measure_unit_id||baseUnitId);
+                        updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId,conversionFactor:purchaseUnitId?conversionFor(String(selected?.id||""),purchaseUnitId):0});
                       }} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                         <option value="">Selecione a peça cadastrada</option>
                         {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku?entry.sku+" · ":""}{entry.name||entry.description||entry.id}</option>)}
