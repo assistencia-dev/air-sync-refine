@@ -745,3 +745,36 @@ assert.match(rhFunctions, /__deleted_at/, "A exclusão do técnico deve gravar u
 assert.match(route, /DBS_CONTROL_UPDATE_TECHNICIAN/, "A rota autenticada deve encaminhar a edição do técnico ao servidor.");
 assert.match(route, /DBS_CONTROL_DELETE_TECHNICIAN/, "A rota autenticada deve encaminhar a exclusão lógica do técnico.");
 console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e auditoria verificados.");
+
+
+// Agenda do colaborador: agrupamento puro por data, sem alterar OS ou estado.
+const employeeSchedule = require("../public/dbs-control-employee-days.js");
+const scheduleReference = new Date(2026, 10, 16, 12, 0, 0);
+const scheduleOrders = [
+  { id: "sem-data", data: "" },
+  { id: "amanha", data: "17/11/2026" },
+  { id: "ontem", data: "15/11/2026" },
+  { id: "futuro", data: "2026-11-18" },
+  { id: "hoje-1", data: "16/11/2026" },
+  { id: "hoje-2", data: "2026-11-16" },
+];
+const openDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "abertas", scheduleReference);
+assert.deepEqual(openDayGroups.map((group) => group.key), [
+  "2026-11-15", "2026-11-16", "2026-11-17", "2026-11-18", "sem-data",
+], "OS abertas devem ficar no próprio dia, com datas anteriores recentes primeiro e sem data por último.");
+assert.equal(openDayGroups[1].title.startsWith("Hoje · "), true, "A agenda deve identificar o dia atual.");
+assert.equal(openDayGroups[2].title.startsWith("Amanhã · "), true, "A agenda deve identificar o próximo dia.");
+assert.equal(openDayGroups[1].orders.length, 2, "OS da mesma data devem permanecer no mesmo grupo.");
+assert.deepEqual(openDayGroups.flatMap((group) => group.orders.map((order) => order.id)).sort(),
+  scheduleOrders.map((order) => order.id).sort(),
+  "O agrupamento não pode ocultar nem duplicar ordens.");
+const completedDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "concluidas", scheduleReference);
+assert.deepEqual(completedDayGroups.map((group) => group.key), [
+  "2026-11-18", "2026-11-17", "2026-11-16", "2026-11-15", "sem-data",
+], "O histórico concluído deve mostrar os dias mais recentes primeiro.");
+assert.equal(employeeSchedule.normalizeOrderDate("31/02/2026"), "", "Datas inválidas devem ficar sem data, não em um dia incorreto.");
+assert.match(html, /dbs-control-employee-days\.js\?v=20261116-1/, "O agrupador diário deve ser carregado na tela de operações.");
+assert.match(html, /employee-day-heading/, "Cada dia deve ter cabeçalho visual próprio.");
+assert.match(html, /employeeOrderGroups\.map\(group/, "As ordens do colaborador devem ser renderizadas dentro do respectivo dia.");
+assert.match(route, /20261116-employee-daily-agenda-1/, "A rota deve invalidar o cache antigo da agenda do colaborador.");
+console.log("DBS CONTROL colaborador: agenda diária, ordenação e preservação de OS verificadas.");
