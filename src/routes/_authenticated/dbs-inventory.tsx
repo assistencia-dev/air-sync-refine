@@ -986,10 +986,16 @@ export function DbsInventoryPage({
             <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
               <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Vincular centro de custo à OS</SheetTitle></SheetHeader>
               <form onSubmit={linkOrderCostCenter} className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">Filtros prévios da OS</p>
+                <label className="block text-xs font-bold text-slate-600">Cliente<input list="dbs-reservation-clients" value={reservationClientSearch} onChange={e=>{const v=e.target.value;setReservationClientSearch(v);const match=clients.find((cl:any)=>(cl.trade_name||cl.legal_name)===v);setReservationClientFilter(match?String(match.id):"");setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} placeholder="Nome ou razão social" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/></label>
+                <div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs font-bold text-slate-600">De<input type="date" value={reservationDateFrom} onChange={e=>{setReservationDateFrom(e.target.value);setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label><label className="text-xs font-bold text-slate-600">Até<input type="date" min={reservationDateFrom||undefined} value={reservationDateTo} onChange={e=>{setReservationDateTo(e.target.value);setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label></div>
+                <button type="button" disabled={!reservationClientFilter&&!reservationDateFrom&&!reservationDateTo} onClick={()=>setReservationFiltersApplied(true)} className="mt-2 min-h-9 w-full rounded-lg bg-slate-800 text-xs font-bold text-white disabled:opacity-40">Aplicar filtros</button>
+              </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
-                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                  <option value="">Selecione a OS</option>
-                  {workOrders.map((order:any)=><option key={order.id} value={order.id}>{order.protocol||order.id} · {order.status}</option>)}
+                <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
+                  <option value="">Aplique os filtros para listar OS</option>
+                  {filteredReservationOrders.map((order:any)=>{const cl=clients.find((x:any)=>x.id===order.client_id);return <option key={order.id} value={order.id}>{order.protocol||order.id} · {cl?.trade_name||cl?.legal_name||"Cliente"} · {String(order.created_at||"").slice(0,10)}</option>;})}
                 </select>
               </label>
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo
