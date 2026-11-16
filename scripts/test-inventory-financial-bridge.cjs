@@ -565,7 +565,7 @@ assert.match(functions, /setDbsOperationalStockStatus/);
 assert.match(functions, /transferDbsOperationalStock/);
 assert.match(functions, /reserveDbsOperationalStockForWorkOrder/);
 assert.match(functions, /releaseDbsOperationalStockReservation/);
-assert.match(functions, /dbs_control_operational_stock_consume_work_order/);
+assert.match(atomicOperationalConsumptionMigration, /dbs_control_operational_stock_consume_work_order/);
 assert.match(phase2Ui, /Estoques Operacionais por Centro de Custo/);
 assert.match(phase2Ui, /reserveDbsOperationalStockForWorkOrder/);
 assert.match(phase2Ui, /Aplicar filtros e carregar OS/);
