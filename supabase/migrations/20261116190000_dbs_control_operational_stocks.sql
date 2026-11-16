@@ -84,7 +84,7 @@ ALTER TABLE public.dbs_control_parts
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_transfer(
   p_actor_user_id uuid,p_part_id uuid,p_quantity numeric,p_source_stock_id uuid,
   p_destination_stock_id uuid,p_idempotency_key text,p_reference text DEFAULT NULL
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_actor_company uuid; v_scope text; v_company uuid; v_part public.dbs_control_parts%rowtype;
   v_source record; v_destination record; v_source_balance public.dbs_control_operational_stock_balances%rowtype;
   v_dest_balance public.dbs_control_operational_stock_balances%rowtype; v_type text;
@@ -155,7 +155,7 @@ END $$;
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve(
   p_actor_user_id uuid,p_work_order_id uuid,p_cost_center_id uuid,p_part_id uuid,
   p_quantity numeric,p_purpose text,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_actor_company uuid; v_scope text; v_stock public.dbs_control_operational_stocks%rowtype;
   v_balance public.dbs_control_operational_stock_balances%rowtype; v_os record; v_reservation uuid;
   v_key text:=nullif(btrim(p_idempotency_key),''); v_existing uuid; v_part public.dbs_control_parts%rowtype;
@@ -200,7 +200,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_release_reservation(
   p_actor_user_id uuid,p_reservation_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_r public.dbs_control_operational_reservations%rowtype; v_balance public.dbs_control_operational_stock_balances%rowtype;
   v_actor_company uuid; v_key text:=nullif(btrim(p_idempotency_key),'');
 BEGIN
