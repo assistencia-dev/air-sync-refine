@@ -192,6 +192,7 @@ export function DbsInventoryPage({
   const operationalBalances = data?.operationalBalances ?? [];
   const operationalMovements = data?.operationalMovements ?? [];
   const operationalReservations = data?.operationalReservations ?? [];
+  const movementUsers = data?.movementUsers ?? [];
   const clients = data?.clients ?? [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
@@ -888,7 +889,7 @@ export function DbsInventoryPage({
               </div>
               <div className="border-t border-slate-100 p-4">
                 <h4 className="mb-2 text-sm font-black">Histórico transacional operacional</h4>
-                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{source?.name||"Estoque Central"} → {destination?.name||"Estoque Central"} {(movement.reference?"· "+movement.reference:"")}<span className="block text-slate-500">Responsável: {String(movement.created_by||"—").slice(0,8)}</span></p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
+                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{source?.name||"Estoque Central"} → {destination?.name||"Estoque Central"} {(movement.reference?"· "+movement.reference:"")}<span className="block text-slate-500">Responsável: {movementUsers.find((u:any)=>String(u.id)===String(movement.created_by))?.full_name||movementUsers.find((u:any)=>String(u.id)===String(movement.created_by))?.username||"Usuário do sistema"}</span></p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
                   {!operationalMovements.length&&<p className="text-xs text-slate-500">O histórico será preenchido pelas transferências e entradas operacionais.</p>}
                 </div>
               </div>
