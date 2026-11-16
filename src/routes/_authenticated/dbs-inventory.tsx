@@ -375,21 +375,92 @@ export function DbsInventoryPage({
     }
     if (saved) {
       selectCatalogPart("");
+      setMasterRecordId("");
       setActiveDrawer(null);
     }
   }
 
+  function openNewMasterRecord() {
+    setMasterRecordId("");
+    if (settingsView === "suppliers") {
+      setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone(""); setActiveDrawer("supplier");
+    } else if (settingsView === "cost-centers") {
+      setNewCostCenterCode(""); setNewCostCenterName(""); setActiveDrawer("cost-center");
+    } else if (settingsView === "units") {
+      setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol(""); setActiveDrawer("unit");
+    } else {
+      setConversionFrom(""); setConversionTo(""); setConversionFactor("1"); setActiveDrawer("conversion");
+    }
+  }
+
+  function openEditMasterRecord(entity: Exclude<InventoryRecordEntity, "part">, record: any) {
+    if (entity === "measure_unit" && record.is_system) {
+      setMessage("Unidades padrão do sistema são protegidas contra edição.");
+      return;
+    }
+    setMasterRecordId(String(record.id));
+    if (entity === "supplier") {
+      setNewSupplierName(String(record.name ?? "")); setNewSupplierCnpj(String(record.cnpj ?? "")); setNewSupplierPhone(String(record.phone ?? "")); setActiveDrawer("supplier");
+    } else if (entity === "cost_center") {
+      setNewCostCenterCode(String(record.code ?? "")); setNewCostCenterName(String(record.name ?? "")); setActiveDrawer("cost-center");
+    } else if (entity === "measure_unit") {
+      setNewUnitCode(String(record.code ?? "")); setNewUnitName(String(record.name ?? "")); setNewUnitSymbol(String(record.symbol ?? record.code ?? "")); setActiveDrawer("unit");
+    } else {
+      setConversionFrom(String(record.from_unit_id ?? "")); setConversionTo(String(record.to_unit_id ?? "")); setConversionFactor(String(record.factor ?? "1")); setActiveDrawer("conversion");
+    }
+  }
+
+  async function changeInventoryRecordStatus(entity: InventoryRecordEntity, record: any) {
+    const isActive = entity === "part"
+      ? String(record.status ?? "ativo").toLowerCase() !== "inativo"
+      : String(record.status ?? "active") === "active";
+    await runAction(
+      () => setDbsInventoryRecordStatus({ data: { entity, id: String(record.id), action: isActive ? "archive" : "restore" } }),
+      isActive ? "Cadastro arquivado. O histórico foi preservado." : "Cadastro restaurado e disponível novamente nas operações.",
+    );
+  }
+
+  function requestInventoryDelete(entity: InventoryRecordEntity, record: any, label: string) {
+    setPendingDelete({ entity, id: String(record.id), label });
+  }
+
+  async function confirmInventoryDelete() {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    const saved = await runAction(() => deleteDbsInventoryRecord({ data: { entity: target.entity, id: target.id } }), "Cadastro excluído definitivamente.");
+    if (saved) {
+      setPendingDelete(null);
+      if (masterRecordId === target.id) { setMasterRecordId(""); setActiveDrawer(null); }
+    }
+  }
+
+  function inventoryRecordActions(entity: InventoryRecordEntity, record: any, label: string) {
+    const isActive = entity === "part"
+      ? String(record.status ?? "ativo").toLowerCase() !== "inativo"
+      : String(record.status ?? "active") === "active";
+    const protectedUnit = entity === "measure_unit" && Boolean(record.is_system);
+    return <div className="flex flex-wrap items-center gap-1.5">
+      <button type="button" disabled={protectedUnit} onClick={() => {
+        if (entity === "part") { selectCatalogPart(String(record.id)); setActiveDrawer("new-part"); }
+        else openEditMasterRecord(entity, record);
+      }} aria-label={"Editar " + label} title="Editar cadastro" className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-sky-300 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40">
+        <Pencil className="h-3.5 w-3.5" /> Editar
+      </button>
+      <button type="button" disabled={protectedUnit} onClick={() => void changeInventoryRecordStatus(entity, record)} aria-label={(isActive ? "Arquivar " : "Restaurar ") + label} title={isActive ? "Arquivar cadastro" : "Restaurar cadastro"} className={"inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold " + (isActive ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100") + " disabled:cursor-not-allowed disabled:opacity-40"}>
+        {isActive ? <Archive className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}{isActive ? "Arquivar" : "Restaurar"}
+      </button>
+      <button type="button" disabled={protectedUnit} onClick={() => requestInventoryDelete(entity, record, label)} aria-label={"Excluir " + label} title="Excluir definitivamente" className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40">
+        <Trash2 className="h-3.5 w-3.5" /> Excluir
+      </button>
+    </div>;
+  }
+
   async function addCostCenter(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const saved = await runAction(() => createDbsCostCenter({ data: {
-      code: newCostCenterCode,
-      name: newCostCenterName,
-    } }), "Centro de custo salvo e disponível para compras, OS e consumo.");
-    if (saved) {
-      setNewCostCenterCode("");
-      setNewCostCenterName("");
-      setActiveDrawer(null);
-    }
+    const saved = masterRecordId
+      ? await runAction(() => updateDbsInventoryMasterData({ data: { entity: "cost_center", id: masterRecordId, code: newCostCenterCode, name: newCostCenterName } }), "Centro de custo atualizado.")
+      : await runAction(() => createDbsCostCenter({ data: { code: newCostCenterCode, name: newCostCenterName } }), "Centro de custo salvo e disponível para compras, OS e consumo.");
+    if (saved) { setNewCostCenterCode(""); setNewCostCenterName(""); setMasterRecordId(""); setActiveDrawer(null); }
   }
 
   async function transferStockToTechnician(event: React.FormEvent<HTMLFormElement>) {
@@ -414,38 +485,45 @@ export function DbsInventoryPage({
 
   async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (masterRecordId) {
+      const saved = await runAction(() => updateDbsInventoryMasterData({ data: { entity: "supplier", id: masterRecordId, name: newSupplierName, cnpj: newSupplierCnpj, phone: newSupplierPhone } }), "Fornecedor atualizado.");
+      if (saved) { setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone(""); setMasterRecordId(""); setActiveDrawer(null); }
+      return;
+    }
     let createdId = "";
     const saved = await runAction(async () => {
       const created: any = await createDbsSupplier({ data: { name:newSupplierName, cnpj:newSupplierCnpj, phone:newSupplierPhone } });
       createdId = String(created?.id ?? "");
     }, "Fornecedor cadastrado e disponível no cadastro da peça e em Compras.");
     if (saved) {
-      setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone("");
-      setActiveDrawer(null);
-      // Pre-select the new supplier where it is still empty so it is usable at once.
-      if (createdId) {
-        setCatalogPartSupplierId((current) => current || createdId);
-        setSupplierId((current) => current || createdId);
-      }
+      setNewSupplierName(""); setNewSupplierCnpj(""); setNewSupplierPhone(""); setActiveDrawer(null);
+      if (createdId) { setCatalogPartSupplierId((current) => current || createdId); setSupplierId((current) => current || createdId); }
     }
   }
   async function addMeasureUnit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (masterRecordId) {
+      const selected = measureUnits.find((unit: any) => String(unit.id) === masterRecordId);
+      const saved = await runAction(() => updateDbsInventoryMasterData({ data: { entity: "measure_unit", id: masterRecordId, code: newUnitCode, name: newUnitName, symbol: newUnitSymbol || newUnitCode, decimalPlaces: Number(selected?.decimal_places ?? 3) } }), "Unidade de medida atualizada.");
+      if (saved) { setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol(""); setMasterRecordId(""); setActiveDrawer(null); }
+      return;
+    }
     let createdId = "";
     const saved = await runAction(async () => {
       const created: any = await createDbsMeasureUnit({ data: { code:newUnitCode, name:newUnitName, symbol:newUnitSymbol||newUnitCode } });
       createdId = String(created?.id ?? "");
     }, "Unidade de medida cadastrada e disponível como unidade-base.");
-    if (saved) {
-      setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol("");
-      setActiveDrawer(null);
-      if (createdId) setCatalogPartUnitId((current) => current || createdId);
-    }
+    if (saved) { setNewUnitCode(""); setNewUnitName(""); setNewUnitSymbol(""); setActiveDrawer(null); if (createdId) setCatalogPartUnitId((current) => current || createdId); }
   }
   async function addUnitConversion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (masterRecordId) {
+      const saved = await runAction(() => updateDbsInventoryMasterData({ data: { entity: "unit_conversion", id: masterRecordId, fromUnitId: conversionFrom, toUnitId: conversionTo, factor: Number(conversionFactor) } }), "Conversão de unidade atualizada.");
+      if (saved) { setConversionFactor("1"); setConversionFrom(""); setConversionTo(""); setMasterRecordId(""); setActiveDrawer(null); }
+      return;
+    }
     const saved = await runAction(() => createDbsUnitConversion({ data: { fromUnitId:conversionFrom, toUnitId:conversionTo, factor:Number(conversionFactor) } }), "Conversão de unidade cadastrada.");
-    if (saved) { setConversionFactor("1"); setActiveDrawer(null); }
+    if (saved) { setConversionFactor("1"); setConversionFrom(""); setConversionTo(""); setActiveDrawer(null); }
   }
 
   async function linkOrderCostCenter(event: React.FormEvent<HTMLFormElement>) {
