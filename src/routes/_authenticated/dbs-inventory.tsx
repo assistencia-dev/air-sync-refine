@@ -129,6 +129,7 @@ export function DbsInventoryPage({
   const [transferDestinationStockId, setTransferDestinationStockId] = useState("");
   const [operationalStockName, setOperationalStockName] = useState("");
   const [operationalStockCostCenterId, setOperationalStockCostCenterId] = useState("");
+  const [reservationStockId, setReservationStockId] = useState("");
   const [reservationPurpose, setReservationPurpose] = useState<"TROCA_PECA"|"ATIVO_EQUIPAMENTO">("TROCA_PECA");
   const [reservationClientFilter, setReservationClientFilter] = useState("");
   const [reservationDateFrom, setReservationDateFrom] = useState("");
@@ -193,7 +194,7 @@ export function DbsInventoryPage({
   const clients = data?.clients ?? [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
-  const selectedOperationalStock = operationalStocks.find((stock:any)=>String(stock.cost_center_id)===String(costCenterId)&&stock.status==="active");
+  const selectedOperationalStock = operationalStocks.find((stock:any)=>String(stock.id)===String(reservationStockId)&&stock.status==="active");
   const selectedOperationalBalance = operationalBalances.find((row:any)=>String(row.stock_id)===String(selectedOperationalStock?.id)&&String(row.part_id)===String(partId));
   const selectedPart = activeParts.find((part:any)=>String(part.id)===String(partId));
   const selectedCentralAvailable = Math.max(0,Number(selectedPart?.stock_quantity??0)-Number(selectedPart?.reserved_quantity??0));
@@ -618,7 +619,7 @@ export function DbsInventoryPage({
     const saved = await runAction(async () => {
       await setDbsWorkOrderCostCenter({ data: { workOrderId, costCenterId } });
       return reserveDbsOperationalStockForWorkOrder({data:{
-        workOrderId,costCenterId,partId,quantity:Number(quantity),purpose:reservationPurpose,
+        workOrderId,costCenterId,stockId:reservationStockId,partId,quantity:Number(quantity),purpose:reservationPurpose,
         idempotencyKey:"operational-reserve:"+crypto.randomUUID()
       }});
     }, "Reserva registrada no estoque operacional do centro de custo; o estoque central não foi alterado.");
@@ -1458,10 +1459,16 @@ export function DbsInventoryPage({
               </select>
               {reservationFiltersApplied&&!filteredReservationOrders.length&&<p className="text-xs text-amber-700">Nenhuma OS encontrada com os filtros aplicados.</p>}
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
-              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+              <select required value={costCenterId} onChange={e=>{setCostCenterId(e.target.value);setReservationStockId("");setPartId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione o centro de custo</option>
-                {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+                {activeCostCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
               </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Estoque operacional *</label>
+              <select required value={reservationStockId} onChange={e=>{setReservationStockId(e.target.value);setPartId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                <option value="">Selecione o estoque deste centro</option>
+                {operationalStocks.filter((s:any)=>String(s.cost_center_id)===String(costCenterId)&&s.status==="active").map((s:any)=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {costCenterId&&!operationalStocks.some((s:any)=>String(s.cost_center_id)===String(costCenterId)&&s.status==="active")&&<p className="text-xs font-semibold text-rose-700">Nenhum estoque operacional cadastrado neste centro. Crie em Estoques antes de reservar.</p>}
               <label className="mt-3 block text-xs font-bold text-slate-600">Finalidade do material *</label>
               <select required value={reservationPurpose} onChange={e=>setReservationPurpose(e.target.value as "TROCA_PECA"|"ATIVO_EQUIPAMENTO")} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="TROCA_PECA">Troca de Peça</option><option value="ATIVO_EQUIPAMENTO">Ativo / Equipamento</option></select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
