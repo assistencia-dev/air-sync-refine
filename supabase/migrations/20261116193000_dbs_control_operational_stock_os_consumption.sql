@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_consume_work_ord
   p_actor_user_id uuid,p_work_order_id uuid,p_idempotency_key text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_actor_company uuid; v_scope text; v_key text:=nullif(btrim(p_idempotency_key),'');
-  v_r record; v_balance public.dbs_control_operational_stock_balances%rowtype;
+  v_r record; v_balance public.dbs_control_operational_stock_balances%rowtype; v_os_scope record;
   v_count integer:=0; v_total numeric(14,3):=0; v_movement_id uuid;
 BEGIN
   IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN
@@ -39,8 +39,9 @@ BEGIN
   SELECT company_id INTO v_actor_company FROM public.users WHERE id=p_actor_user_id AND status='ativo';
   v_scope:=CASE WHEN v_actor_company IS NULL THEN 'user:'||p_actor_user_id ELSE 'company:'||v_actor_company END;
   PERFORM pg_advisory_xact_lock(hashtextextended(v_scope||':op-consume:'||p_work_order_id::text||':'||v_key,0));
-  IF NOT EXISTS(SELECT 1 FROM public.dbs_control_work_orders WHERE id=p_work_order_id AND deleted_at IS NULL
-    AND (company_id IS NOT DISTINCT FROM v_actor_company)) THEN
+  SELECT * INTO v_os_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+  IF NOT FOUND OR v_os_scope.scope_key IS DISTINCT FROM v_scope
+     OR NOT EXISTS(SELECT 1 FROM public.dbs_control_work_orders WHERE id=p_work_order_id AND deleted_at IS NULL) THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_CONSUMPTION_OS_SCOPE_INVALID' USING ERRCODE='42501';
   END IF;
   FOR v_r IN
