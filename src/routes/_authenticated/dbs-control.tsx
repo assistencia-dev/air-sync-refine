@@ -2112,7 +2112,7 @@ function DbsControlPage() {
           const localOrders = Array.isArray(draftChanges?.ordens) ? draftChanges.ordens : [];
           const canonicalOrders = Array.isArray((latest.state as any).ordens) ? (latest.state as any).ordens : [];
           const normalizeMatchValue = (value: unknown) => String(value ?? "")
-            .trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+            .trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (duplicateProtocolConflicts.length && localOrders.length && duplicateProtocolConflicts.every((conflict: any) => {
             const local = localOrders.find((order: any) =>
               normalizeMatchValue(order?.id) === normalizeMatchValue(conflict?.protocol)
