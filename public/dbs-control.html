@@ -3761,6 +3761,42 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     body:not(.dbs-control-employee-mode) .tab-view { padding-inline: 8px; }
   }
 </style>
+
+<style id="dbs-employee-daily-agenda-20261116">
+  body.dbs-control-employee-mode .employee-day-group { display:grid; gap:10px; min-width:0; }
+  body.dbs-control-employee-mode .employee-day-heading {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:11px 13px; border:1px solid #dbe7f2; border-radius:13px;
+    background:linear-gradient(135deg,#f8fbff 0%,#eef6fd 100%);
+  }
+  body.dbs-control-employee-mode .employee-day-heading>div { min-width:0; }
+  body.dbs-control-employee-mode .employee-day-caption {
+    display:block; margin-bottom:3px; color:#55718b; font-size:9px;
+    font-weight:900; letter-spacing:.09em; text-transform:uppercase;
+  }
+  body.dbs-control-employee-mode .employee-day-heading h3 {
+    margin:0!important; color:#173e62; font-size:14px!important;
+    font-weight:900; line-height:1.35;
+  }
+  body.dbs-control-employee-mode .employee-day-count {
+    flex:0 0 auto; min-width:48px; padding:6px 9px; border-radius:999px;
+    background:#dceeff; color:#14558a; font-size:10px; font-weight:900;
+    text-align:center; white-space:nowrap;
+  }
+  body.dbs-control-employee-mode .employee-day-today .employee-day-heading {
+    border-color:#b9d8f3; background:linear-gradient(135deg,#eff8ff 0%,#e6f2ff 100%);
+  }
+  body.dbs-control-employee-mode .employee-day-past .employee-day-heading {
+    border-color:#f0d7b5; background:#fffaf2;
+  }
+  body.dbs-control-employee-mode .employee-day-past .employee-day-count {
+    background:#fff0d8; color:#925313;
+  }
+  body.dbs-control-employee-mode .employee-day-undated .employee-day-heading {
+    border-style:dashed; background:#f8fafc;
+  }
+  body.dbs-control-employee-mode .employee-day-orders { display:grid; gap:11px; min-width:0; }
+</style>
 </head>
 <body>
 
@@ -4563,6 +4599,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         </nav>
     </main>
 
+    <script src="/dbs-control-employee-days.js?v=20261116-1"></script>
     <script>
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
@@ -8606,6 +8643,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return [s,'employee-status-active'];
             };
             const escHtml = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+            const employeeOrderGroups = window.DbsEmployeeSchedule?.groupOrdersByDay?.(minhasOSVisiveis, employeeOsTab, new Date())
+                || [{ key: 'all', kind: 'today', title: 'Atendimentos', caption: 'OS atribuídas', orders: minhasOSVisiveis }];
 
             area.innerHTML = `
               <div class="employee-list-summary" aria-label="Resumo das ordens do colaborador">
@@ -8619,7 +8658,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
               </div>
 
               <div class="employee-orders">
-                ${minhasOSVisiveis.length ? minhasOSVisiveis.map(o => {
+                ${minhasOSVisiveis.length ? employeeOrderGroups.map(group => `
+                  <section class="employee-day-group employee-day-${group.kind}" data-employee-day="${escHtml(group.key)}">
+                    <header class="employee-day-heading">
+                      <div><span class="employee-day-caption">${escHtml(group.caption)}</span><h3>${escHtml(group.title)}</h3></div>
+                      <span class="employee-day-count">${group.orders.length} OS</span>
+                    </header>
+                    <div class="employee-day-orders">
+                    ${group.orders.map(o => {
                     const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
@@ -8734,7 +8780,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                           </details>
                         `}
                       </article>`;
-                }).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>' + (employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída' : 'Nenhuma OS em andamento') + '</h3><p>' + (employeeOsTab === 'concluidas' ? 'As ordens finalizadas aparecerão aqui para consulta.' : 'Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.') + '</p></div>'}
+                    }).join('')}
+                    </div>
+                  </section>
+                `).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>' + (employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída' : 'Nenhuma OS em andamento') + '</h3><p>' + (employeeOsTab === 'concluidas' ? 'As ordens finalizadas aparecerão aqui para consulta.' : 'Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.') + '</p></div>'}
               </div>
             `;
 

@@ -81,7 +81,7 @@ assert.match(phase2Ui, /dbs-operations-drawer/);
 assert.match(phase2Ui, /Fornecedor \/ pedido/);
 assert.match(phase2Ui, /Custo médio/);
 assert.match(phase2Ui, /Transferir/);
-assert.match(controlRoute, /20261114-erp-clean-ui-2/);
+assert.match(controlRoute, /20261116-employee-daily-agenda-1/);
 assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-2/);
 
 
@@ -536,7 +536,7 @@ assert.match(controlRoute, /inventoryPortals\.purchases && createPortal/);
 assert.match(controlRoute, /initialSection="parts"/);
 assert.match(controlRoute, /initialSection="purchases"/);
 assert.match(controlRoute, /data-dbs-materials-react-root/);
-assert.match(controlRoute, /20261114-erp-clean-ui-2/);
+assert.match(controlRoute, /20261116-employee-daily-agenda-1/);
 
 // Operational stocks are independent balances; only the transaction RPC can transfer stock.
 assert.match(operationalStocksMigration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_operational_stocks/i);
