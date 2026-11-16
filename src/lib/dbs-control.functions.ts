@@ -3361,13 +3361,15 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     const resolvedItems = [];
     for (const item of data.items) {
       const [part, unit] = await Promise.all([
-        (supabaseAdmin as any).from("dbs_control_parts").select("id,measure_unit_id,status").eq("id", item.partId).maybeSingle(),
+        (supabaseAdmin as any).from("dbs_control_parts").select("id,measure_unit_id,purchase_measure_unit_id,status").eq("id", item.partId).maybeSingle(),
         (supabaseAdmin as any).from("dbs_control_measure_units").select("id,status").eq("id", item.purchaseUnitId).eq("scope_key", scopeKey).maybeSingle(),
       ]);
       if (part.error) throw new Error(part.error.message);
       if (unit.error) throw new Error(unit.error.message);
       if (!part.data || part.data.status !== "ativo" || !part.data.measure_unit_id) throw new Error("A peça precisa estar ativa e possuir unidade-base cadastrada.");
       if (!unit.data || unit.data.status !== "active") throw new Error("Unidade de compra inválida ou inativa.");
+      const configuredPurchaseUnit = part.data.purchase_measure_unit_id || part.data.measure_unit_id;
+      if (String(configuredPurchaseUnit) !== item.purchaseUnitId) throw new Error("A unidade de entrada selecionada não corresponde à unidade de compra configurada para esta peça.");
       if (String(part.data.measure_unit_id) === item.purchaseUnitId) {
         if (Math.abs(item.conversionFactor - 1) > 0.000001) throw new Error("A conversão da unidade-base deve ser 1.");
       } else {
@@ -3618,14 +3620,16 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     const user = await requireDbsInventoryAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
-    const [supplier, unit, duplicate] = await Promise.all([
+    const [supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      data.purchaseMeasureUnitId ? admin.from("dbs_control_measure_units").select("id").eq("id",data.purchaseMeasureUnitId).eq("scope_key",scopeKey).eq("status","active").maybeSingle() : Promise.resolve({data:null,error:null}),
       admin.from("dbs_control_parts").select("id").eq("sku", data.sku).limit(1).maybeSingle(),
     ]);
-    for (const result of [supplier, unit, duplicate]) if (result.error) throw new Error(result.error.message);
+    for (const result of [supplier, unit, purchaseUnit, duplicate]) if (result.error) throw new Error(result.error.message);
     if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
+    if (data.purchaseMeasureUnitId && !purchaseUnit.data) throw new Error("Unidade de compra não encontrada ou inativa neste escopo.");
     if (duplicate.data) throw new Error("Já existe uma peça cadastrada com este SKU.");
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
@@ -3658,17 +3662,19 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     const user = await requireDbsInventoryAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
-    const [existing, supplier, unit, duplicate] = await Promise.all([
+    const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
+      data.purchaseMeasureUnitId ? admin.from("dbs_control_measure_units").select("id").eq("id",data.purchaseMeasureUnitId).eq("scope_key",scopeKey).eq("status","active").maybeSingle() : Promise.resolve({data:null,error:null}),
       admin.from("dbs_control_parts").select("id").eq("sku", data.sku).neq("id", data.partId).limit(1).maybeSingle(),
     ]);
-    for (const result of [existing, supplier, unit, duplicate]) if (result.error) throw new Error(result.error.message);
+    for (const result of [existing, supplier, unit, purchaseUnit, duplicate]) if (result.error) throw new Error(result.error.message);
     if (!existing.data) throw new Error("Peça não encontrada.");
     if (Number(existing.data.version) !== data.expectedVersion) throw new Error("A peça foi alterada por outro usuário. Atualize a tela e tente novamente.");
     if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
+    if (data.purchaseMeasureUnitId && !purchaseUnit.data) throw new Error("Unidade de compra não encontrada ou inativa neste escopo.");
     if (duplicate.data) throw new Error("Já existe outra peça cadastrada com este SKU.");
     if (Number(existing.data.stock_quantity) > 0 && Number(existing.data.cost_cents ?? 0) !== data.costCents) {
       throw new Error("O custo médio de uma peça com saldo não pode ser alterado manualmente. Faça o ajuste por recebimento/estorno.");
