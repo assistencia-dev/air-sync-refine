@@ -106,12 +106,16 @@ BEGIN
   IF v_existing IS NOT NULL THEN RETURN jsonb_build_object('ok',true,'replayed',true,'movement_id',v_existing); END IF;
   SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=p_part_id FOR UPDATE;
   IF NOT FOUND OR v_part.status<>'ativo' THEN RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_PART_INVALID' USING ERRCODE='23503'; END IF;
+  -- Lock operational stock rows in deterministic UUID order to avoid opposing-transfer deadlocks.
+  PERFORM 1 FROM public.dbs_control_operational_stocks s
+    WHERE s.scope_key=v_scope AND s.id IN (p_source_stock_id,p_destination_stock_id)
+    ORDER BY s.id FOR UPDATE;
   IF p_source_stock_id IS NOT NULL THEN
-    SELECT s.id,s.scope_key,s.company_id,s.status INTO v_source FROM public.dbs_control_operational_stocks s WHERE s.id=p_source_stock_id AND s.scope_key=v_scope FOR UPDATE;
+    SELECT s.id,s.scope_key,s.company_id,s.status INTO v_source FROM public.dbs_control_operational_stocks s WHERE s.id=p_source_stock_id AND s.scope_key=v_scope;
     IF NOT FOUND OR v_source.status<>'active' THEN RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_SOURCE_INVALID' USING ERRCODE='23503'; END IF;
   END IF;
   IF p_destination_stock_id IS NOT NULL THEN
-    SELECT s.id,s.scope_key,s.company_id,s.status INTO v_destination FROM public.dbs_control_operational_stocks s WHERE s.id=p_destination_stock_id AND s.scope_key=v_scope FOR UPDATE;
+    SELECT s.id,s.scope_key,s.company_id,s.status INTO v_destination FROM public.dbs_control_operational_stocks s WHERE s.id=p_destination_stock_id AND s.scope_key=v_scope;
     IF NOT FOUND OR v_destination.status<>'active' THEN RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_DESTINATION_INVALID' USING ERRCODE='23503'; END IF;
   END IF;
   IF p_source_stock_id IS NOT NULL THEN
@@ -176,11 +180,12 @@ BEGIN
   IF v_os.company_id IS DISTINCT FROM v_actor_company AND v_actor_company IS NOT NULL THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
+  -- Same lock order as transfer: part, stock, then balance.
+  SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=p_part_id AND status='ativo' FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_PART_INVALID' USING ERRCODE='23503'; END IF;
   SELECT * INTO v_stock FROM public.dbs_control_operational_stocks
     WHERE scope_key=v_scope AND cost_center_id=p_cost_center_id AND status='active' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_NOT_CONFIGURED' USING ERRCODE='23503'; END IF;
-  SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=p_part_id AND status='ativo' FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_PART_INVALID' USING ERRCODE='23503'; END IF;
   SELECT * INTO v_balance FROM public.dbs_control_operational_stock_balances
     WHERE stock_id=v_stock.id AND part_id=p_part_id FOR UPDATE;
   IF NOT FOUND OR v_balance.quantity-v_balance.reserved_quantity<p_quantity THEN
