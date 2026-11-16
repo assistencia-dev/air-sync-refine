@@ -27,6 +27,7 @@ const frontendIntegrations = fs.readFileSync('supabase/migrations/20261112125903
 const operationalStocksMigration = fs.readFileSync('supabase/migrations/20261116190000_dbs_control_operational_stocks.sql', 'utf8');
 const operationalConsumptionMigration = fs.readFileSync('supabase/migrations/20261116193000_dbs_control_operational_stock_os_consumption.sql', 'utf8');
 const multipleOperationalStocksMigration = fs.readFileSync('supabase/migrations/20261116200000_dbs_control_multiple_operational_stocks_per_center.sql', 'utf8');
+const atomicOperationalConsumptionMigration = fs.readFileSync('supabase/migrations/20261116203000_dbs_control_atomic_operational_reservation_consumption.sql', 'utf8');
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
@@ -549,6 +550,16 @@ assert.match(operationalStocksMigration, /dbs_control_operational_stock_reserve/
 assert.match(operationalConsumptionMigration, /movement_type.*'SAIDA_OS'/s);
 assert.match(operationalConsumptionMigration, /dbs_control_mirror_central_receipt_to_operational_history/);
 assert.match(multipleOperationalStocksMigration, /DROP CONSTRAINT IF EXISTS dbs_control_operational_stocks_scope_key_cost_center_id_key/);
+assert.match(multipleOperationalStocksMigration, /Global lock order shared with transfer: part -> operational stock -> balance/);
+assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
+assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
+assert.match(atomicOperationalConsumptionMigration, /dbs_control_operational_stock_consume_work_order/);
+assert.match(atomicOperationalConsumptionMigration, /dbs_control_apply_work_order_delta_with_reservations/);
+assert.match(atomicOperationalConsumptionMigration, /v_has_operational_reservations/);
+assert.match(atomicOperationalConsumptionMigration, /dbs-os-reservations:/);
+assert.match(atomicOperationalConsumptionMigration, /FOR UPDATE/);
+assert.match(functions, /dbs_control_consume_all_work_order_reservations/);
+assert.doesNotMatch(functions, /const operational = await .*dbs_control_operational_stock_consume_work_order/);
 assert.match(functions, /createDbsOperationalStock/);
 assert.match(functions, /setDbsOperationalStockStatus/);
 assert.match(functions, /transferDbsOperationalStock/);
