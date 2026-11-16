@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { distanceMeters, pontoGeolocationErrorMessage, validatePontoGps } from "../src/lib/ponto-geo";
+import { capturePontoPosition, distanceMeters, hasPontoCoordinates, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl, validatePontoGps } from "../src/lib/ponto-geo";
 
 const employee = { ponto_base_lat: -22.9, ponto_base_lng: -43.2, ponto_raio_m: 150 };
 
@@ -58,3 +58,55 @@ assert.throws(
 );
 
 console.log("RH GPS: captura obrigatória, precisão, geocerca server-side, raio e proteção contra valores adulterados passaram.");
+
+
+// O mapa sempre usa as coordenadas persistidas na batida, nunca a posição atual.
+const savedLocation = { latitude: -22.9, longitude: -43.2 };
+assert.equal(hasPontoCoordinates(savedLocation), true);
+assert.equal(hasPontoCoordinates({ latitude: null, longitude: -43.2 }), false);
+assert.equal(pontoGoogleMapsUrl(savedLocation), "https://www.google.com/maps/search/?api=1&query=-22.9,-43.2");
+assert.equal(pontoGoogleMapsEmbedUrl(savedLocation), "https://maps.google.com/maps?q=-22.9,-43.2&z=17&output=embed");
+assert.equal(pontoGoogleMapsUrl({ latitude: 91, longitude: -43.2 }), null);
+
+// A captura termina ao obter precisão adequada e encerra o watch do navegador.
+async function verifyOneShotGpsCapture() {
+  let onPosition: PositionCallback | null = null;
+  let clearedWatch: number | null = null;
+  const mockGeolocation = {
+    watchPosition(success: PositionCallback) {
+      onPosition = success;
+      return 27;
+    },
+    clearWatch(id: number) {
+      clearedWatch = id;
+    },
+  } as unknown as Geolocation;
+
+  const pending = capturePontoPosition(mockGeolocation, {
+    targetAccuracyMeters: 80,
+    maxAccuracyMeters: 150,
+    timeoutMs: 1000,
+  });
+
+  const mockPosition = {
+    coords: {
+      latitude: -22.9,
+      longitude: -43.2,
+      accuracy: 32,
+      altitude: null,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+    },
+    timestamp: Date.now(),
+  } as GeolocationPosition;
+  if (!onPosition) throw new Error("watchPosition não foi iniciado.");
+  onPosition(mockPosition);
+  const captured = await pending;
+  assert.equal(captured.coords.accuracy, 32);
+  assert.equal(clearedWatch, 27, "o rastreamento temporário deve ser encerrado após capturar a posição");
+}
+void verifyOneShotGpsCapture().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
