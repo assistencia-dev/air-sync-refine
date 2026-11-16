@@ -550,6 +550,8 @@ assert.match(operationalStocksMigration, /dbs_control_operational_stock_reserve/
 assert.match(operationalConsumptionMigration, /movement_type.*'SAIDA_OS'/s);
 assert.match(operationalConsumptionMigration, /dbs_control_mirror_central_receipt_to_operational_history/);
 assert.match(multipleOperationalStocksMigration, /DROP CONSTRAINT IF EXISTS dbs_control_operational_stocks_scope_key_cost_center_id_key/);
+assert.doesNotMatch(multipleOperationalStocksMigration, /DROP FUNCTION/);
+assert.ok(multipleOperationalStocksMigration.includes("v_os.cost_center_id IS DISTINCT FROM p_cost_center_id"));
 assert.match(multipleOperationalStocksMigration, /Global lock order shared with transfer: part -> operational stock -> balance/);
 assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
