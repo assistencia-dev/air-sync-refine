@@ -818,6 +818,11 @@ export function DbsInventoryPage({
               <h2 className="text-base font-semibold text-slate-900">Estoque Central · Saldos Operacionais</h2>
               <button type="button" onClick={()=>{setTransferPartId("");setActiveDrawer("transfer");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white hover:bg-[#104982]">+ Transferir</button>
             </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Saldo físico central</p><p className="text-xl font-black">{parts.reduce((sum:number,p:any)=>sum+Number(p.stock_quantity||0),0).toLocaleString("pt-BR")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Reservado no central</p><p className="text-xl font-black">{parts.reduce((sum:number,p:any)=>sum+Number(p.reserved_quantity||0),0).toLocaleString("pt-BR")}</p></div>
+              <div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">Disponível no central</p><p className="text-xl font-black text-sky-900">{parts.reduce((sum:number,p:any)=>sum+Math.max(0,Number(p.stock_quantity||0)-Number(p.reserved_quantity||0)),0).toLocaleString("pt-BR")}</p></div>
+            </div>
             <div className="grid gap-4">
               <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
                 <table className="w-full min-w-[560px] text-left text-sm">
@@ -864,6 +869,9 @@ export function DbsInventoryPage({
               <div className="grid gap-3 p-4 sm:grid-cols-3">
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Estoques ativos</p><p className="text-xl font-black">{operationalStocks.filter((s:any)=>s.status==="active").length}</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Centros vinculados</p><p className="text-xl font-black">{new Set(operationalStocks.map((s:any)=>s.cost_center_id)).size}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Saldo operacional físico</p><p className="text-xl font-black">{operationalBalances.reduce((sum:number,b:any)=>sum+Number(b.quantity||0),0).toLocaleString("pt-BR")}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Reservado operacional</p><p className="text-xl font-black">{operationalBalances.reduce((sum:number,b:any)=>sum+Number(b.reserved_quantity||0),0).toLocaleString("pt-BR")}</p></div>
+                <div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">Disponível operacional</p><p className="text-xl font-black text-sky-900">{operationalBalances.reduce((sum:number,b:any)=>sum+Math.max(0,Number(b.quantity||0)-Number(b.reserved_quantity||0)),0).toLocaleString("pt-BR")}</p></div>
                 <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Movimentações registradas</p><p className="text-xl font-black">{operationalMovements.length}</p></div>
               </div>
               <div className="overflow-x-auto px-4 pb-4">
