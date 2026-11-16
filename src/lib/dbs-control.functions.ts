@@ -3865,7 +3865,13 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
 
     if (data.action === "archive" && data.entity === "part") {
       if (Number(current.data.stock_quantity ?? 0) > 0 || Number(current.data.reserved_quantity ?? 0) > 0) {
-        throw new Error("Esta peça ainda possui saldo ou quantidade reservada. Zere o saldo e libere as reservas antes de arquivar.");
+        throw new Error("Esta peça ainda possui saldo ou quantidade reservada no Estoque Central. Zere o saldo e libere as reservas antes de arquivar.");
+      }
+      const operationalBalance = await admin.from("dbs_control_operational_stock_balances").select("id")
+        .eq("part_id", data.id).or("quantity.gt.0,reserved_quantity.gt.0").limit(1).maybeSingle();
+      if (operationalBalance.error) throw new Error(operationalBalance.error.message);
+      if (operationalBalance.data) {
+        throw new Error("Esta peça ainda possui saldo ou reserva em um Estoque Operacional. Transfira ou consuma o saldo e libere as reservas antes de arquivar.");
       }
       const carStock = await admin.from("dbs_control_car_stock").select("id")
         .eq("part_id", data.id).eq("status", "active").gt("quantity", 0).limit(1).maybeSingle();
@@ -3881,10 +3887,23 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
     }
 
     if (data.action === "archive" && data.entity === "measure_unit") {
-      const linkedPart = await admin.from("dbs_control_parts").select("id")
+      const linkedBaseUnit = await admin.from("dbs_control_parts").select("id")
         .eq("measure_unit_id", data.id).eq("status", "ativo").limit(1).maybeSingle();
-      if (linkedPart.error) throw new Error(linkedPart.error.message);
-      if (linkedPart.data) throw new Error("Reatribua a unidade-base nas peças ativas antes de arquivar esta unidade.");
+      if (linkedBaseUnit.error) throw new Error(linkedBaseUnit.error.message);
+      if (linkedBaseUnit.data) throw new Error("Reatribua a unidade-base nas peças ativas antes de arquivar esta unidade.");
+      const linkedPurchaseUnit = await admin.from("dbs_control_parts").select("id")
+        .eq("purchase_measure_unit_id", data.id).eq("status", "ativo").limit(1).maybeSingle();
+      if (linkedPurchaseUnit.error) throw new Error(linkedPurchaseUnit.error.message);
+      if (linkedPurchaseUnit.data) throw new Error("Reatribua a unidade de compra nas peças ativas antes de arquivar esta unidade.");
+    }
+
+    if (data.action === "archive" && data.entity === "cost_center") {
+      const activeOperationalStock = await admin.from("dbs_control_operational_stocks").select("id")
+        .eq("cost_center_id", data.id).eq("status", "active").limit(1).maybeSingle();
+      if (activeOperationalStock.error) throw new Error(activeOperationalStock.error.message);
+      if (activeOperationalStock.data) {
+        throw new Error("Este centro possui Estoque Operacional ativo. Arquive os estoques primeiro para preservar a operação e o histórico.");
+      }
     }
 
     const status = data.entity === "part"
@@ -3951,6 +3970,9 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
         { table: "dbs_control_inventory_movements", column: "part_id", label: "movimentações de estoque" },
         { table: "dbs_control_work_order_parts", column: "part_id", label: "itens de OS" },
         { table: "dbs_control_work_order_reservations", column: "part_id", label: "reservas de OS" },
+        { table: "dbs_control_operational_stock_balances", column: "part_id", label: "saldos de estoques operacionais" },
+        { table: "dbs_control_operational_stock_movements", column: "part_id", label: "histórico operacional" },
+        { table: "dbs_control_operational_reservations", column: "part_id", label: "reservas operacionais" },
         { table: "dbs_control_car_stock", column: "part_id", label: "estoque de técnicos" },
       );
     } else if (data.entity === "supplier") {
@@ -3960,7 +3982,8 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
       );
     } else if (data.entity === "measure_unit") {
       referenceChecks.push(
-        { table: "dbs_control_parts", column: "measure_unit_id", label: "peças cadastradas" },
+        { table: "dbs_control_parts", column: "measure_unit_id", label: "unidades-base de peças" },
+        { table: "dbs_control_parts", column: "purchase_measure_unit_id", label: "unidades de compra de peças" },
         { table: "dbs_control_purchase_items", column: "purchase_unit_id", label: "itens de compras" },
         { table: "dbs_control_unit_conversions", column: "from_unit_id", label: "conversões de origem" },
         { table: "dbs_control_unit_conversions", column: "to_unit_id", label: "conversões de destino" },
@@ -3970,7 +3993,8 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
         "dbs_control_purchases", "dbs_control_purchase_items", "dbs_control_purchase_receipts",
         "dbs_control_purchase_receipt_items", "dbs_control_inventory_movements", "dbs_control_quotes",
         "dbs_control_work_orders", "dbs_control_work_order_parts", "dbs_control_work_order_reservations",
-        "dbs_control_reservation_consumptions", "dbs_control_car_stock", "dbs_control_car_stock_consumptions",
+        "dbs_control_reservation_consumptions", "dbs_control_operational_stocks",
+        "dbs_control_car_stock", "dbs_control_car_stock_consumptions",
         "dbs_control_gas_usage", "treasury_ledger_entries", "treasury_ledger_lines",
       ]) referenceChecks.push({ table: tableName, column: "cost_center_id", label: "registros financeiros e operacionais" });
     }
