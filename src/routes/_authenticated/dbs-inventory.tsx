@@ -82,6 +82,7 @@ export function DbsInventoryPage({
         setCatalogPartDescription("");
         setCatalogPartSupplierId("");
         setCatalogPartUnitId("");
+        setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
         setCatalogPartSale("");
         setActiveDrawer("new-part");
@@ -118,6 +119,7 @@ export function DbsInventoryPage({
   const [catalogPartDescription, setCatalogPartDescription] = useState("");
   const [catalogPartSupplierId, setCatalogPartSupplierId] = useState("");
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
+  const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
   const [catalogPartSale, setCatalogPartSale] = useState("");
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
@@ -354,6 +356,7 @@ export function DbsInventoryPage({
       setCatalogPartDescription("");
       setCatalogPartSupplierId("");
       setCatalogPartUnitId("");
+      setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
       setCatalogPartSale("");
       return;
@@ -363,6 +366,7 @@ export function DbsInventoryPage({
     setCatalogPartDescription(String(part.description ?? ""));
     setCatalogPartSupplierId(String(part.supplier_id ?? ""));
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
+    setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
     setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
   }
@@ -379,6 +383,7 @@ export function DbsInventoryPage({
       description: catalogPartDescription.trim() || undefined,
       supplierId: catalogPartSupplierId,
       measureUnitId: catalogPartUnitId,
+      purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
       saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
@@ -675,10 +680,14 @@ export function DbsInventoryPage({
                     {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Unidade-base *
-                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione unidade</option>
-                    {measureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
+                <label className="text-xs font-bold text-slate-600">Unidade de controle / consumo *
+                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione unidade de estoque</option>{activeMeasureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Unidade de compra / entrada (opcional)
+                  <select value={catalogPartPurchaseUnitId} onChange={e=>setCatalogPartPurchaseUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Igual à unidade de controle</option>{activeMeasureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
