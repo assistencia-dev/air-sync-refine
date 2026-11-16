@@ -3089,19 +3089,13 @@ export const consumeDbsWorkOrderReservations = createServerFn({ method: "POST" }
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_consume_work_order_reservations_serialized", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_consume_all_work_order_reservations", {
       p_work_order_id: data.workOrderId,
       p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
     });
     if (error) throw new Error(error.message);
-    const operational = await (supabaseAdmin as any).rpc("dbs_control_operational_stock_consume_work_order", {
-      p_actor_user_id: user.id,
-      p_work_order_id: data.workOrderId,
-      p_idempotency_key: data.idempotencyKey,
-    });
-    if (operational.error) throw new Error(operational.error.message);
-    return { legacy: result, operational: operational.data };
+    return result;
   });
 
 export const createDbsPartSale = createServerFn({ method: "POST" })
