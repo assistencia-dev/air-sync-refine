@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_reserve(
   p_part_id uuid,p_quantity numeric,p_purpose text,p_idempotency_key text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_actor_company uuid; v_scope text; v_stock public.dbs_control_operational_stocks%rowtype;
-  v_balance public.dbs_control_operational_stock_balances%rowtype; v_os record; v_reservation uuid;
+  v_balance public.dbs_control_operational_stock_balances%rowtype; v_os record; v_os_scope record; v_reservation uuid;
   v_key text:=nullif(btrim(p_idempotency_key),''); v_existing uuid; v_part public.dbs_control_parts%rowtype;
 BEGIN
   IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN
@@ -26,12 +26,13 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(v_scope||':op-reserve:'||v_key,0));
   SELECT id INTO v_existing FROM public.dbs_control_operational_reservations WHERE scope_key=v_scope AND idempotency_key=v_key;
   IF v_existing IS NOT NULL THEN RETURN jsonb_build_object('ok',true,'replayed',true,'reservation_id',v_existing); END IF;
-  SELECT wo.id,wo.status,wo.company_id INTO v_os FROM public.dbs_control_work_orders wo
+  SELECT wo.id,wo.status INTO v_os FROM public.dbs_control_work_orders wo
     WHERE wo.id=p_work_order_id AND wo.deleted_at IS NULL;
   IF NOT FOUND OR lower(coalesce(v_os.status,'')) IN ('concluida','concluída','completed','complete','cancelada','cancelado','cancelled') THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_OS_INVALID' USING ERRCODE='23514';
   END IF;
-  IF v_os.company_id IS DISTINCT FROM v_actor_company THEN
+  SELECT * INTO v_os_scope FROM public.dbs_control_inventory_scope_for_work_order(p_work_order_id);
+  IF NOT FOUND OR v_os_scope.scope_key IS DISTINCT FROM v_scope THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
   SELECT * INTO v_stock FROM public.dbs_control_operational_stocks
