@@ -8,10 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
+  createDbsOperationalStock, setDbsOperationalStockStatus, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
-  reserveDbsWorkOrderParts, setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
+  setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog, transferDbsStockToTechnician,
+  updateDbsPartCatalog,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -56,7 +57,7 @@ export function DbsInventoryPage({
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders";
   type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
-  type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | null;
+  type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
   const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
   const [settingsView, setSettingsView] = useState<SettingsView>("suppliers");
@@ -81,6 +82,7 @@ export function DbsInventoryPage({
         setCatalogPartDescription("");
         setCatalogPartSupplierId("");
         setCatalogPartUnitId("");
+        setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
         setCatalogPartSale("");
         setActiveDrawer("new-part");
@@ -101,6 +103,7 @@ export function DbsInventoryPage({
     }
   }, [initialQuoteId]);
   const [partId, setPartId] = useState("");
+  const [reservationPartSearch, setReservationPartSearch] = useState("");
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
@@ -117,11 +120,22 @@ export function DbsInventoryPage({
   const [catalogPartDescription, setCatalogPartDescription] = useState("");
   const [catalogPartSupplierId, setCatalogPartSupplierId] = useState("");
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
+  const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
   const [catalogPartSale, setCatalogPartSale] = useState("");
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
-  const [transferEmployeeId, setTransferEmployeeId] = useState("");
+  const [transferSourceStockId, setTransferSourceStockId] = useState("central");
+  const [transferDestinationStockId, setTransferDestinationStockId] = useState("");
+  const [operationalStockName, setOperationalStockName] = useState("");
+  const [operationalStockCostCenterId, setOperationalStockCostCenterId] = useState("");
+  const [reservationStockId, setReservationStockId] = useState("");
+  const [reservationPurpose, setReservationPurpose] = useState<"TROCA_PECA"|"ATIVO_EQUIPAMENTO">("TROCA_PECA");
+  const [reservationClientFilter, setReservationClientFilter] = useState("");
+  const [reservationClientSearch, setReservationClientSearch] = useState("");
+  const [reservationDateFrom, setReservationDateFrom] = useState("");
+  const [reservationDateTo, setReservationDateTo] = useState("");
+  const [reservationFiltersApplied, setReservationFiltersApplied] = useState(false);
   const [transferPartId, setTransferPartId] = useState("");
   const [transferQuantity, setTransferQuantity] = useState("1");
   const [transferVehicleLabel, setTransferVehicleLabel] = useState("");
@@ -174,9 +188,24 @@ export function DbsInventoryPage({
   const activeCostCenters = costCenters.filter((center: any) => String(center.status ?? "active") === "active");
   const gasCylinders = data?.gasCylinders ?? [];
   const carStock = data?.carStock ?? [];
+  const operationalStocks = data?.operationalStocks ?? [];
+  const operationalBalances = data?.operationalBalances ?? [];
+  const operationalMovements = data?.operationalMovements ?? [];
+  const operationalReservations = data?.operationalReservations ?? [];
+  const movementUsers = data?.movementUsers ?? [];
+  const clients = data?.clients ?? [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
-  const reservations = data?.reservations ?? [];
+  const selectedOperationalStock = operationalStocks.find((stock:any)=>String(stock.id)===String(reservationStockId)&&stock.status==="active");
+  const selectedOperationalBalance = operationalBalances.find((row:any)=>String(row.stock_id)===String(selectedOperationalStock?.id)&&String(row.part_id)===String(partId));
+  const selectedPart = activeParts.find((part:any)=>String(part.id)===String(partId));
+  const selectedCentralAvailable = Math.max(0,Number(selectedPart?.stock_quantity??0)-Number(selectedPart?.reserved_quantity??0));
+  const filteredReservationOrders = reservationFiltersApplied && (reservationClientFilter||reservationDateFrom||reservationDateTo)
+    ? workOrders.filter((order:any)=>{
+      const date=String(order.created_at??"").slice(0,10);
+      return (!reservationClientFilter||String(order.client_id)===reservationClientFilter)&&(!reservationDateFrom||date>=reservationDateFrom)&&(!reservationDateTo||date<=reservationDateTo);
+    }) : [];
+  const reservations = [...(data?.reservations ?? []).map((r:any)=>({...r,is_operational:false})), ...(data?.operationalReservations ?? []).map((r:any)=>({...r,is_operational:true}))];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
@@ -208,13 +237,14 @@ export function DbsInventoryPage({
     if (!quotePurchase.data || !parts.length) return;
     const lines = quotePurchase.data.items.map((item: any) => {
       const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
+      const purchaseUnitId=String(part?.purchase_measure_unit_id || part?.measure_unit_id || "");
       return {
         partId: String(item.part_id),
         description: String(item.description || part?.name || ""),
         quantity: String(item.quantity || 1),
         unitCost: "",
-        purchaseUnitId: String(part?.measure_unit_id || ""),
-        conversionFactor: 1,
+        purchaseUnitId,
+        conversionFactor: conversionFor(String(item.part_id),purchaseUnitId),
       };
     });
     if (lines.length) setPurchaseLines(lines);
@@ -330,6 +360,7 @@ export function DbsInventoryPage({
       setCatalogPartDescription("");
       setCatalogPartSupplierId("");
       setCatalogPartUnitId("");
+      setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
       setCatalogPartSale("");
       return;
@@ -339,6 +370,7 @@ export function DbsInventoryPage({
     setCatalogPartDescription(String(part.description ?? ""));
     setCatalogPartSupplierId(String(part.supplier_id ?? ""));
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
+    setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
     setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
   }
@@ -355,6 +387,7 @@ export function DbsInventoryPage({
       description: catalogPartDescription.trim() || undefined,
       supplierId: catalogPartSupplierId,
       measureUnitId: catalogPartUnitId,
+      purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
       saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
@@ -463,24 +496,31 @@ export function DbsInventoryPage({
     if (saved) { setNewCostCenterCode(""); setNewCostCenterName(""); setMasterRecordId(""); setActiveDrawer(null); }
   }
 
+  async function createOperationalStock(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!operationalStockCostCenterId||operationalStockName.trim().length<2){setMessage("Informe o centro de custo e o nome do estoque operacional.");return;}
+    const saved=await runAction(()=>createDbsOperationalStock({data:{costCenterId:operationalStockCostCenterId,name:operationalStockName.trim()}}),"Estoque operacional criado e vinculado ao centro de custo.");
+    if(saved){setOperationalStockName("");setOperationalStockCostCenterId("");setActiveDrawer(null);}
+  }
+
+  async function toggleOperationalStockStatus(stock:any) {
+    const nextStatus=stock.status==="active"?"inactive":"active";
+    await runAction(()=>setDbsOperationalStockStatus({data:{stockId:String(stock.id),status:nextStatus}}),
+      nextStatus==="active"?"Estoque operacional ativado.":"Estoque operacional arquivado sem apagar histórico ou saldos.");
+  }
+
   async function transferStockToTechnician(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!transferEmployeeId || !transferPartId || !(Number(transferQuantity) > 0)) {
-      setMessage("Selecione técnico, peça e quantidade para transferir.");
-      return;
+    const source=transferSourceStockId==="central"?null:transferSourceStockId;
+    const destination=transferDestinationStockId==="central"?null:transferDestinationStockId;
+    if(!transferPartId||!(Number(transferQuantity)>0)||(!source&&!destination)||transferSourceStockId===transferDestinationStockId){
+      setMessage("Selecione peça, quantidade, origem e destino diferentes.");return;
     }
-    const saved = await runAction(() => transferDbsStockToTechnician({ data: {
-      employeeId: transferEmployeeId,
-      partId: transferPartId,
-      quantity: Number(transferQuantity),
-      vehicleLabel: transferVehicleLabel.trim() || "Veículo do colaborador",
-      idempotencyKey: "car-stock-transfer:" + crypto.randomUUID(),
-    } }), "Transferência confirmada: o estoque central foi reduzido e o material ficou sob custódia do técnico.");
-    if (saved) {
-      setTransferQuantity("1");
-      setTransferPartId("");
-      setActiveDrawer(null);
-    }
+    const saved=await runAction(()=>transferDbsOperationalStock({data:{
+      partId:transferPartId,quantity:Number(transferQuantity),sourceStockId:source,destinationStockId:destination,
+      idempotencyKey:"operational-transfer:"+crypto.randomUUID(),reference:transferVehicleLabel.trim()
+    }}),"Transferência transacional concluída e registrada no histórico.");
+    if(saved){setTransferQuantity("1");setTransferPartId("");setTransferSourceStockId("central");setTransferDestinationStockId("");setActiveDrawer(null);}
   }
 
   async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
@@ -581,18 +621,17 @@ export function DbsInventoryPage({
 
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!partId || !workOrderId || !costCenterId || Number(quantity) <= 0) {
+    if (!partId || !workOrderId || !costCenterId || !reservationStockId || Number(quantity) <= 0) {
       setMessage("Selecione OS, peça, quantidade e centro de custo.");
       return;
     }
     const saved = await runAction(async () => {
       await setDbsWorkOrderCostCenter({ data: { workOrderId, costCenterId } });
-      return reserveDbsWorkOrderParts({ data: {
-        workOrderId,
-        idempotencyKey: "reserve:" + crypto.randomUUID(),
-        items: [{ partId, quantity: Number(quantity) }],
-      } });
-    }, "Centro de custo vinculado à OS e reserva registrada.");
+      return reserveDbsOperationalStockForWorkOrder({data:{
+        workOrderId,costCenterId,stockId:reservationStockId,partId,quantity:Number(quantity),purpose:reservationPurpose,
+        idempotencyKey:"operational-reserve:"+crypto.randomUUID()
+      }});
+    }, "Reserva registrada no estoque operacional do centro de custo; o estoque central não foi alterado.");
     if (saved) setActiveDrawer(null);
   }
 
@@ -613,7 +652,7 @@ export function DbsInventoryPage({
         </nav>}
         {moduleSection === "parts" && <nav aria-label="Peças e Estoque" className="dbs-op-tabs mb-5">
           <button type="button" role="tab" aria-selected={partsView==="catalog"} onClick={()=>setPartsView("catalog")} className={partsView==="catalog"?"dbs-op-tab is-active":"dbs-op-tab"}>Catálogo de Peças</button>
-          <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoque & Veículos</button>
+          <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoques</button>
           <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>
           <button type="button" role="tab" aria-selected={partsView==="settings"} onClick={()=>setPartsView("settings")} className={partsView==="settings"?"dbs-op-tab is-active":"dbs-op-tab"}>Cadastros Básicos {(!suppliers.length||!measureUnits.length||!costCenters.length)&&<span className="dbs-op-dot" aria-label="Configuração pendente"/>}</button>
         </nav>}
@@ -651,10 +690,14 @@ export function DbsInventoryPage({
                     {suppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                   </select>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Unidade-base *
-                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione unidade</option>
-                    {measureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
+                <label className="text-xs font-bold text-slate-600">Unidade de controle / consumo *
+                  <select required value={catalogPartUnitId} onChange={e=>setCatalogPartUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione unidade de estoque</option>{activeMeasureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-600">Unidade de compra / entrada (opcional)
+                  <select value={catalogPartPurchaseUnitId} onChange={e=>setCatalogPartPurchaseUnitId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Igual à unidade de controle</option>{activeMeasureUnits.map((unit:any)=><option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}
                   </select>
                 </label>
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
@@ -687,38 +730,39 @@ export function DbsInventoryPage({
             </nav>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                <div><h2 className="text-base font-semibold text-slate-900">{settingsView==="suppliers"?"Fornecedores":settingsView==="cost-centers"?"Centros de custo":settingsView==="units"?"Unidades de medida":"Conversões de unidades"}</h2>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="mt-1 text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
-                <button type="button" onClick={()=>setActiveDrawer(settingsView==="suppliers"?"supplier":settingsView==="cost-centers"?"cost-center":settingsView==="units"?"unit":"conversion")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
+                <div>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
+                <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
               </div>
-              {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
-              {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
-              {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="px-5 py-3"><p className="text-sm font-medium text-slate-900">{unit.name}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
-              {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));return <div key={conversion.id} className="flex items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"}</p></div><strong className="text-sm font-semibold text-slate-800">{Number(conversion.factor).toLocaleString("pt-BR")} ×</strong></div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
+              {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>{inventoryRecordActions("supplier",supplier,supplier.name)}</div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
+              {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>{inventoryRecordActions("cost_center",center,center.name)}</div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
+              {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{unit.name} {unit.is_system&&<span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Padrão</span>}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>{inventoryRecordActions("measure_unit",unit,unit.name)}</div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
+              {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));const label=(from?.code||"Compra")+" → "+(to?.code||"Base");return <div key={conversion.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"} · {Number(conversion.factor).toLocaleString("pt-BR")} ×</p></div>{inventoryRecordActions("unit_conversion",conversion,label)}</div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
             </section>
-            <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Novo fornecedor</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
+            <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar fornecedor" : "Novo fornecedor"}</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
               <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <input value={newSupplierCnpj} onChange={e=>setNewSupplierCnpj(e.target.value)} placeholder="CNPJ / CPF (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <input value={newSupplierPhone} onChange={e=>setNewSupplierPhone(e.target.value)} placeholder="Telefone (opcional)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar fornecedor</button>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">{masterRecordId ? "Salvar fornecedor" : "Cadastrar fornecedor"}</button>
             </form></SheetContent></Sheet>
-            <Sheet open={activeDrawer==="cost-center"} onOpenChange={(open)=>setActiveDrawer(open?"cost-center":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Novo centro de custo</SheetTitle></SheetHeader><form onSubmit={addCostCenter} className="space-y-3">
+            <Sheet open={activeDrawer==="cost-center"} onOpenChange={(open)=>setActiveDrawer(open?"cost-center":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar centro de custo" : "Novo centro de custo"}</SheetTitle></SheetHeader><form onSubmit={addCostCenter} className="space-y-3">
               <input required maxLength={40} value={newCostCenterCode} onChange={e=>setNewCostCenterCode(e.target.value.toUpperCase())} placeholder="Código (ex.: OPERACAO)" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               <input required maxLength={180} value={newCostCenterName} onChange={e=>setNewCostCenterName(e.target.value)} placeholder="Nome do centro de custo" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar centro de custo</button>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">{masterRecordId ? "Salvar alterações" : "Salvar centro de custo"}</button>
             </form></SheetContent></Sheet>
-            <Sheet open={activeDrawer==="unit"} onOpenChange={(open)=>setActiveDrawer(open?"unit":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova unidade</SheetTitle></SheetHeader><form onSubmit={addMeasureUnit} className="space-y-3">
+            <Sheet open={activeDrawer==="unit"} onOpenChange={(open)=>setActiveDrawer(open?"unit":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar unidade" : "Nova unidade"}</SheetTitle></SheetHeader><form onSubmit={addMeasureUnit} className="space-y-3">
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <input required value={newUnitCode} onChange={e=>setNewUnitCode(e.target.value.toUpperCase())} placeholder="Código (UN)" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 <input required value={newUnitSymbol} onChange={e=>setNewUnitSymbol(e.target.value)} placeholder="Símbolo" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
               </div>
               <input required value={newUnitName} onChange={e=>setNewUnitName(e.target.value)} placeholder="Nome da unidade" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Cadastrar unidade</button>
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">{masterRecordId ? "Salvar unidade" : "Cadastrar unidade"}</button>
             </form></SheetContent></Sheet>
-            <Sheet open={activeDrawer==="conversion"} onOpenChange={(open)=>setActiveDrawer(open?"conversion":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova conversão</SheetTitle></SheetHeader><form onSubmit={addUnitConversion} className="space-y-3">
+            <Sheet open={activeDrawer==="conversion"} onOpenChange={(open)=>setActiveDrawer(open?"conversion":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar conversão" : "Nova conversão"}</SheetTitle></SheetHeader><form onSubmit={addUnitConversion} className="space-y-3">
               <select required value={conversionFrom} onChange={e=>setConversionFrom(e.target.value)} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade de compra</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
               <select required value={conversionTo} onChange={e=>setConversionTo(e.target.value)} className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"><option value="">Unidade-base</option>{measureUnits.map((u:any)=><option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}</select>
               <input required type="number" min="0.0001" step="0.0001" value={conversionFactor} onChange={e=>setConversionFactor(e.target.value)} placeholder="Fator (ex.: 12)" className="mt-2 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">Salvar conversão</button>
+              {conversionFrom && conversionTo && conversionFrom!==conversionTo && Number(conversionFactor)>0 && <p className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-950">Regra configurada: <strong>1 {(measureUnits.find((u:any)=>String(u.id)===conversionFrom)?.symbol||measureUnits.find((u:any)=>String(u.id)===conversionFrom)?.code)} ({measureUnits.find((u:any)=>String(u.id)===conversionFrom)?.name})</strong> equivale a <strong>{Number(conversionFactor).toLocaleString("pt-BR")} {(measureUnits.find((u:any)=>String(u.id)===conversionTo)?.symbol||measureUnits.find((u:any)=>String(u.id)===conversionTo)?.code)} ({measureUnits.find((u:any)=>String(u.id)===conversionTo)?.name})</strong> no estoque.</p>}
+              <button disabled={busy} className="mt-3 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-bold text-white">{masterRecordId ? "Salvar conversão" : "Cadastrar conversão"}</button>
             </form></SheetContent></Sheet>
           </>}
           {partsView === "catalog" && <>
@@ -726,7 +770,7 @@ export function DbsInventoryPage({
             
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-                <div><h2 className="text-base font-semibold text-slate-900">Catálogo de peças</h2><p className="mt-1 text-xs text-slate-500">{parts.length} itens cadastrados</p></div>
+                <div><p className="text-xs text-slate-500">{parts.length} itens cadastrados no catálogo</p></div>
               </div>
               <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-[minmax(0,1fr)_190px]">
                 <input type="search" aria-label="Buscar peças" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Buscar por nome, SKU ou fornecedor..." className="min-h-10 w-full rounded-lg border border-slate-200 bg-[#f8fafc] px-3 text-sm outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"/>
@@ -734,7 +778,7 @@ export function DbsInventoryPage({
               </div>
               <div className="hidden max-h-[520px] overflow-auto md:block">
                 <table className="w-full min-w-[600px] text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50/95 text-[11px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-3">Peça / SKU</th><th className="p-3">Fornecedor</th><th className="p-3">Unidade</th><th className="p-3">Custo</th><th className="p-3">Saldo central</th><th className="p-3 text-right">Ações</th></tr></thead>
                   <tbody>{visibleParts.map((part:any)=>{
                     const supplier=suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                     const unit=measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
@@ -744,6 +788,7 @@ export function DbsInventoryPage({
                       <td className="p-3">{unit?.symbol||unit?.code||<span className="font-semibold text-amber-700">Definir</span>}</td>
                       <td className="p-3">{money(part.cost_cents)}</td>
                       <td className="p-3 font-bold">{Number(part.stock_quantity||0).toLocaleString("pt-BR")} {unit?.symbol||""}</td>
+                      <td className="p-3 text-right">{inventoryRecordActions("part",part,part.name||part.sku||"Peça")}</td>
                     </tr>;
                   })}</tbody>
                 </table>
@@ -753,16 +798,19 @@ export function DbsInventoryPage({
                 {visibleParts.map((part:any) => {
                   const supplier = suppliers.find((row:any)=>String(row.id)===String(part.supplier_id));
                   const unit = measureUnits.find((row:any)=>String(row.id)===String(part.measure_unit_id));
-                  return <button key={part.id} type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
-                    <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
-                    <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
-                      <span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span>
-                      <span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span>
-                      <span>Custo: <strong>{money(part.cost_cents)}</strong></span>
-                      <span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span>
-                    </span>
-                  </button>;
+                  return <article key={part.id} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
+                    <button type="button" onClick={()=>{selectCatalogPart(String(part.id));setActiveDrawer("new-part");}} className="block w-full text-left">
+                      <span className="block font-bold text-slate-900">{part.name||part.description||"Peça"}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{part.sku||"Sem SKU"} · Toque para editar</span>
+                      <span className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                        <span>Fornecedor: <strong>{supplier?.name||"Vincular"}</strong></span>
+                        <span>Unidade: <strong>{unit?.symbol||unit?.code||"Definir"}</strong></span>
+                        <span>Custo: <strong>{money(part.cost_cents)}</strong></span>
+                        <span>Saldo: <strong>{Number(part.stock_quantity||0).toLocaleString("pt-BR")}</strong></span>
+                      </span>
+                    </button>
+                    <div className="mt-3 border-t border-slate-100 pt-3">{inventoryRecordActions("part",part,part.name||part.sku||"Peça")}</div>
+                  </article>;
                 })}
                 {!visibleParts.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma peça encontrada.</p>}
               </div>
@@ -772,14 +820,19 @@ export function DbsInventoryPage({
           {partsView === "stock" && <>
 <section aria-label="Resumo do estoque" className="mb-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Peças no catálogo</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.length}</p></div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Saldo físico central</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.reduce((sum:number,part:any)=>sum+Number(part.stock_quantity||0),0).toLocaleString("pt-BR")}</p></div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Saldos em veículos</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{carStock.reduce((sum:number,row:any)=>sum+Number(row.quantity||0),0).toLocaleString("pt-BR")}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">SKUs com saldo central</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{parts.filter((part:any)=>Number(part.stock_quantity||0)>0).length}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Estoques operacionais ativos</p><p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{operationalStocks.filter((stock:any)=>stock.status==="active").length}</p></div>
           </section>
 <details className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">Custos de materiais por OS</summary><div className="overflow-x-auto border-t border-slate-100"><table className="w-full min-w-[600px] text-left text-sm"><thead className="bg-[#f8fafc] text-xs font-semibold uppercase text-slate-500"><tr><th className="px-4 py-3">OS</th><th className="px-4 py-3">Registro</th><th className="px-4 py-3">Custo</th><th className="px-4 py-3">Atualizado</th></tr></thead><tbody>{workOrderFinancials.map((row:any)=>{const order=workOrders.find((entry:any)=>String(entry.id)===String(row.work_order_id));return <tr key={row.work_order_id} className="border-t border-slate-100"><td className="px-4 py-3 font-medium">{order?.protocol||String(row.work_order_id).slice(0,8)}</td><td className="px-4 py-3">{row.status||"Registrado"}</td><td className="px-4 py-3 font-semibold">{money(row.parts_cost_cents)}</td><td className="px-4 py-3">{row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR"):"—"}</td></tr>;})}</tbody></table>{!workOrderFinancials.length&&<p className="p-4 text-sm text-slate-500">Os custos aparecerão aqui quando materiais forem consumidos e vinculados às OS.</p>}</div></details>
           <section className="mb-5 overflow-hidden rounded-2xl border border-sky-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-slate-900">Estoque central e estoque dos técnicos</h2>
+              <h2 className="text-base font-semibold text-slate-900">Estoque Central</h2>
               <button type="button" onClick={()=>{setTransferPartId("");setActiveDrawer("transfer");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white hover:bg-[#104982]">+ Transferir</button>
+            </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">SKUs com saldo físico</p><p className="text-xl font-black">{parts.filter((p:any)=>Number(p.stock_quantity||0)>0).length}</p></div>
+              <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">SKUs com reserva central</p><p className="text-xl font-black">{parts.filter((p:any)=>Number(p.reserved_quantity||0)>0).length}</p></div>
+              <div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">SKUs disponíveis no central</p><p className="text-xl font-black text-sky-900">{parts.filter((p:any)=>Number(p.stock_quantity||0)-Number(p.reserved_quantity||0)>0).length}</p></div>
             </div>
             <div className="grid gap-4">
               <div className="hidden overflow-x-auto rounded-xl border border-slate-100 md:block">
@@ -819,8 +872,40 @@ export function DbsInventoryPage({
               </div>
               
             </div>
+            <section className="mt-6 overflow-hidden rounded-xl border border-sky-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-sky-50/60 p-4">
+                <div><h3 className="font-black text-slate-900">Estoques Operacionais por Centro de Custo</h3><p className="mt-1 text-xs text-slate-600">Saldos independentes do Estoque Central, com reserva e histórico próprios.</p></div>
+                <button type="button" onClick={()=>setActiveDrawer("operational-stock")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-xs font-bold text-white">+ Novo estoque operacional</button>
+              </div>
+              <div className="grid gap-3 p-4 sm:grid-cols-3">
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Estoques ativos</p><p className="text-xl font-black">{operationalStocks.filter((s:any)=>s.status==="active").length}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Centros vinculados</p><p className="text-xl font-black">{new Set(operationalStocks.map((s:any)=>s.cost_center_id)).size}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">SKUs com saldo operacional</p><p className="text-xl font-black">{new Set(operationalBalances.filter((b:any)=>Number(b.quantity||0)>0).map((b:any)=>b.part_id)).size}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">SKUs com reserva operacional</p><p className="text-xl font-black">{new Set(operationalBalances.filter((b:any)=>Number(b.reserved_quantity||0)>0).map((b:any)=>b.part_id)).size}</p></div>
+                <div className="rounded-xl bg-sky-50 p-3"><p className="text-xs text-sky-800">SKUs disponíveis operacionais</p><p className="text-xl font-black text-sky-900">{new Set(operationalBalances.filter((b:any)=>Number(b.quantity||0)-Number(b.reserved_quantity||0)>0).map((b:any)=>b.part_id)).size}</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Movimentações recentes</p><p className="text-xl font-black">{operationalMovements.length}</p></div>
+              </div>
+              <div className="overflow-x-auto px-4 pb-4">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Estoque operacional</th><th className="p-3">Centro de custo</th><th className="p-3">Peça</th><th className="p-3">Físico</th><th className="p-3">Reservado</th><th className="p-3">Disponível</th></tr></thead>
+                  <tbody>{operationalStocks.flatMap((stock:any)=>{
+                    const cc=costCenters.find((x:any)=>x.id===stock.cost_center_id);
+                    const rows=operationalBalances.filter((b:any)=>b.stock_id===stock.id);
+                    return rows.length?rows.map((balance:any,index:number)=>{const part=parts.find((p:any)=>p.id===balance.part_id);const unit=measureUnits.find((u:any)=>u.id===part?.measure_unit_id);return <tr key={balance.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}<span className={stock.status==="active"?"ml-2 rounded-full bg-emerald-50 px-2 py-1 text-[10px] text-emerald-800":"ml-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600"}>{stock.status==="active"?"Ativo":"Arquivado"}</span>{index===0&&<button type="button" disabled={busy} onClick={()=>void toggleOperationalStockStatus(stock)} className="mt-1 block text-[10px] font-bold text-sky-700 underline">{stock.status==="active"?"Arquivar":"Reativar"}</button>}</td><td className="p-3">{cc?.code} · {cc?.name}</td><td className="p-3">{part?.sku} · {part?.name}</td><td className="p-3">{Number(balance.quantity).toLocaleString("pt-BR")} {unit?.symbol||""}</td><td className="p-3">{Number(balance.reserved_quantity).toLocaleString("pt-BR")}</td><td className="p-3 font-black">{Math.max(0,Number(balance.quantity)-Number(balance.reserved_quantity)).toLocaleString("pt-BR")}</td></tr>;})
+                    :[<tr key={stock.id} className="border-t border-slate-100"><td className="p-3 font-semibold">{stock.name}<span className={stock.status==="active"?"ml-2 rounded-full bg-emerald-50 px-2 py-1 text-[10px] text-emerald-800":"ml-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600"}>{stock.status==="active"?"Ativo":"Arquivado"}</span><button type="button" disabled={busy} onClick={()=>void toggleOperationalStockStatus(stock)} className="mt-1 block text-[10px] font-bold text-sky-700 underline">{stock.status==="active"?"Arquivar":"Reativar"}</button></td><td className="p-3">{cc?.code} · {cc?.name}</td><td colSpan={4} className="p-3 text-slate-400">Sem saldo movimentado</td></tr>];
+                  })}</tbody>
+                </table>
+                {!operationalStocks.length&&<p className="p-4 text-sm text-slate-500">Nenhum estoque operacional cadastrado. Crie um e vincule a um centro de custo ativo.</p>}
+              </div>
+              <div className="border-t border-slate-100 p-4">
+                <h4 className="mb-2 text-sm font-black">Histórico transacional operacional</h4>
+                <div className="space-y-2">{operationalMovements.slice(0,12).map((movement:any)=>{const part=parts.find((p:any)=>p.id===movement.part_id);const source=operationalStocks.find((s:any)=>s.id===movement.source_stock_id);const destination=operationalStocks.find((s:any)=>s.id===movement.destination_stock_id);const order=workOrders.find((o:any)=>String(o.id)===String(movement.work_order_id));const route=movement.movement_type==="ENTRADA"?"Compra → Estoque Central":movement.movement_type==="SAIDA_OS"?(source?.name||"Estoque Operacional")+" → OS "+(order?.protocol||String(movement.work_order_id||"").slice(0,8)):(source?.name||"Estoque Central")+" → "+(destination?.name||"Estoque Central");const purchaseLabel=movement.movement_type==="ENTRADA"&&movement.purchase_id?" · Compra "+String(movement.purchase_id).slice(0,8):"";return <div key={movement.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-xs"><div><strong>{movement.movement_type}</strong><span className="ml-2 text-slate-600">{part?.sku} · {part?.name}</span><p className="mt-1 text-slate-500">{route}{purchaseLabel} {(movement.reference?"· "+movement.reference:"")}<span className="block text-slate-500">Responsável: {movementUsers.find((u:any)=>String(u.id)===String(movement.created_by))?.full_name||movementUsers.find((u:any)=>String(u.id)===String(movement.created_by))?.username||"Usuário do sistema"}</span></p></div><div className="text-right"><strong>{Number(movement.quantity).toLocaleString("pt-BR")}</strong><p className="text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</p></div></div>;})}
+                  {!operationalMovements.length&&<p className="text-xs text-slate-500">O histórico será preenchido pelas transferências e entradas operacionais.</p>}
+                </div>
+              </div>
+            </section>
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-100">
-              <div className="border-b border-slate-100 p-3"><h3 className="font-black">Materiais sob custódia dos técnicos</h3></div>
+              <div className="border-b border-slate-100 p-3"><h3 className="font-black">Custódia legada de veículos e técnicos</h3><p className="text-xs text-slate-500">Registros históricos mantidos para consulta; novas transferências usam Estoques Operacionais.</p></div>
               <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Técnico</th><th className="p-3">Veículo</th><th className="p-3">Material</th><th className="p-3">Quantidade</th><th className="p-3">Custo unitário</th></tr></thead>
@@ -877,25 +962,44 @@ export function DbsInventoryPage({
 
           <Sheet open={activeDrawer==="transfer"} onOpenChange={(open)=>setActiveDrawer(open?"transfer":null)}>
             <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
-              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Transferir material</SheetTitle><SheetDescription>Selecione técnico, veículo, peça e quantidade.</SheetDescription></SheetHeader>
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Transferir entre estoques</SheetTitle><SheetDescription>Movimentação atômica com validação de saldo, responsável e histórico.</SheetDescription></SheetHeader>
               <form onSubmit={transferStockToTechnician} className="space-y-4">
-                <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
-                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                <label className="block text-xs font-bold text-slate-600">Origem *
+                  <select required value={transferSourceStockId} onChange={e=>{setTransferSourceStockId(e.target.value);if(e.target.value===transferDestinationStockId)setTransferDestinationStockId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="central">Estoque Central</option>{operationalStocks.filter((s:any)=>s.status==="active").map((s:any)=>{const cc=costCenters.find((c:any)=>c.id===s.cost_center_id);return <option key={s.id} value={s.id}>{cc?.code} · {s.name}</option>;})}
                   </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
-                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
+                <label className="block text-xs font-bold text-slate-600">Destino *
+                  <select required value={transferDestinationStockId} onChange={e=>setTransferDestinationStockId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione destino</option><option value="central" disabled={transferSourceStockId==="central"}>Estoque Central</option>{operationalStocks.filter((s:any)=>s.status==="active"&&s.id!==transferSourceStockId).map((s:any)=>{const cc=costCenters.find((c:any)=>c.id===s.cost_center_id);return <option key={s.id} value={s.id}>{cc?.code} · {s.name}</option>;})}
                   </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
-                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <label className="block text-xs font-bold text-slate-600">Peça / insumo *
+                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione material</option>{activeParts.map((part:any)=>{const b=operationalBalances.find((x:any)=>x.stock_id===transferSourceStockId&&x.part_id===part.id);const free=transferSourceStockId==="central"?Math.max(0,Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)):Math.max(0,Number(b?.quantity||0)-Number(b?.reserved_quantity||0));return <option key={part.id} value={part.id}>{part.sku||part.name} · disponível {free.toLocaleString("pt-BR")}</option>;})}
+                  </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
-                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <label className="block text-xs font-bold text-slate-600">Quantidade *
+                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
                 </label>
-                <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+                <label className="block text-xs font-bold text-slate-600">Referência / documento
+                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={180} placeholder="OS, nota ou justificativa" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
+                </label>
+                <button disabled={busy||!transferPartId||!transferDestinationStockId||transferSourceStockId===transferDestinationStockId||!operationalStocks.length} className="min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+              </form>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={activeDrawer==="operational-stock"} onOpenChange={open=>setActiveDrawer(open?"operational-stock":null)}>
+            <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-6">
+              <SheetHeader className="mb-5 border-b border-slate-100 pb-4"><SheetTitle>Novo estoque operacional</SheetTitle><SheetDescription>Cada estoque pertence a um único centro de custo.</SheetDescription></SheetHeader>
+              <form onSubmit={createOperationalStock} className="space-y-4">
+                <label className="block text-xs font-bold text-slate-600">Centro de custo *
+                  <select required value={operationalStockCostCenterId} onChange={e=>setOperationalStockCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"><option value="">Selecione centro de custo</option>{activeCostCenters.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.code} · {cc.name}</option>)}</select>
+                </label>
+                <label className="block text-xs font-bold text-slate-600">Nome do estoque *
+                  <input required minLength={2} maxLength={160} value={operationalStockName} onChange={e=>setOperationalStockName(e.target.value)} placeholder="Ex.: Almoxarifado DML, Viatura 01, Base RJ" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
+                </label>
+                <button disabled={busy||!activeCostCenters.length} className="min-h-11 w-full rounded-xl bg-sky-700 text-sm font-black text-white disabled:opacity-40">Criar estoque operacional</button>
               </form>
             </SheetContent>
           </Sheet>
@@ -903,10 +1007,16 @@ export function DbsInventoryPage({
             <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
               <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Vincular centro de custo à OS</SheetTitle></SheetHeader>
               <form onSubmit={linkOrderCostCenter} className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">Filtros prévios da OS</p>
+                <label className="block text-xs font-bold text-slate-600">Cliente<input list="dbs-reservation-clients" value={reservationClientSearch} onChange={e=>{const v=e.target.value;setReservationClientSearch(v);const match=clients.find((cl:any)=>(cl.trade_name||cl.legal_name)===v);setReservationClientFilter(match?String(match.id):"");setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} placeholder="Nome ou razão social" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/></label>
+                <div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs font-bold text-slate-600">De<input type="date" value={reservationDateFrom} onChange={e=>{setReservationDateFrom(e.target.value);setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label><label className="text-xs font-bold text-slate-600">Até<input type="date" min={reservationDateFrom||undefined} value={reservationDateTo} onChange={e=>{setReservationDateTo(e.target.value);setReservationFiltersApplied(false);setCostCenterWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label></div>
+                <button type="button" disabled={!reservationClientFilter&&!reservationDateFrom&&!reservationDateTo} onClick={()=>setReservationFiltersApplied(true)} className="mt-2 min-h-9 w-full rounded-lg bg-slate-800 text-xs font-bold text-white disabled:opacity-40">Aplicar filtros</button>
+              </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Ordem de serviço
-                <select required value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                  <option value="">Selecione a OS</option>
-                  {workOrders.map((order:any)=><option key={order.id} value={order.id}>{order.protocol||order.id} · {order.status}</option>)}
+                <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={costCenterWorkOrderId} onChange={e=>setCostCenterWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
+                  <option value="">Aplique os filtros para listar OS</option>
+                  {filteredReservationOrders.map((order:any)=>{const cl=clients.find((x:any)=>x.id===order.client_id);return <option key={order.id} value={order.id}>{order.protocol||order.id} · {cl?.trade_name||cl?.legal_name||"Cliente"} · {String(order.created_at||"").slice(0,10)}</option>;})}
                 </select>
               </label>
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo
@@ -1055,7 +1165,8 @@ export function DbsInventoryPage({
                         <select value={line.partId} onChange={e => {
                           const selected = parts.find((entry: any) => String(entry.id) === e.target.value);
                           const baseUnitId=String(selected?.measure_unit_id||"");
-                          updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
+                          const purchaseUnitId=String(selected?.purchase_measure_unit_id||baseUnitId);
+                          updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId,conversionFactor:purchaseUnitId?conversionFor(String(selected?.id||""),purchaseUnitId):0});
                         }} className="min-h-10 w-full rounded-lg border border-slate-200 px-2 text-sm">
                           <option value="">Selecione a peça cadastrada</option>
                           {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku ? entry.sku+" · " : ""}{entry.name||entry.description||entry.id}</option>)}
@@ -1094,7 +1205,8 @@ export function DbsInventoryPage({
                       <select value={line.partId} onChange={e=>{
                         const selected=parts.find((entry:any)=>String(entry.id)===e.target.value);
                         const baseUnitId=String(selected?.measure_unit_id||"");
-                        updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId:baseUnitId,conversionFactor:baseUnitId?1:0});
+                        const purchaseUnitId=String(selected?.purchase_measure_unit_id||baseUnitId);
+                        updatePurchaseLine(index,{partId:e.target.value,description:String(selected?.name||selected?.description||""),purchaseUnitId,conversionFactor:purchaseUnitId?conversionFor(String(selected?.id||""),purchaseUnitId):0});
                       }} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                         <option value="">Selecione a peça cadastrada</option>
                         {parts.filter((entry:any)=>String(entry.status||"ativo").toLowerCase()!=="inativo").map((entry:any)=><option key={entry.id} value={entry.id}>{entry.sku?entry.sku+" · ":""}{entry.name||entry.description||entry.id}</option>)}
@@ -1167,7 +1279,7 @@ export function DbsInventoryPage({
                   const lines = (data?.purchaseItems ?? []).filter((item: any) => String(item.purchase_id) === String(purchase.id));
                   const outstanding = lines.filter((item: any) => Number(item.quantity) > Number(item.quantity_received ?? 0));
                   const selected = outstanding.filter((item: any) => Number(purchaseReceiptQuantities[item.id] ?? 0) > 0);
-                  const overReceived = selected.some((item: any) => Number(purchaseReceiptQuantities[item.id]) > Number(item.quantity) - Number(item.quantity_received ?? 0));
+                  const overReceived = selected.some((item: any) => Number(purchaseReceiptQuantities[item.id]) > (Number(item.quantity) - Number(item.quantity_received ?? 0)) / Math.max(Number(item.conversion_factor ?? 1),0.000001));
                   const approval = purchase.approval_status;
                   return <tr key={purchase.id} className="border-t border-slate-100 align-top">
                     <td className="p-3 font-bold">{suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name || purchase.supplier_name}</td>
@@ -1193,10 +1305,14 @@ export function DbsInventoryPage({
                             {outstanding.map((item: any) => {
                               const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
                               const remaining = Math.max(0, Number(item.quantity) - Number(item.quantity_received ?? 0));
+                              const factor=Math.max(Number(item.conversion_factor??1),0.000001);
+                              const remainingPurchase=remaining/factor;
+                              const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
+                              const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                               return <label key={item.id} className="block text-xs font-semibold text-slate-700">
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
-                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.quantity).toLocaleString("pt-BR")} · Recebido: {Number(item.quantity_received ?? 0).toLocaleString("pt-BR")} · Falta: {remaining.toLocaleString("pt-BR")}</span>
-                                <input aria-label={"Quantidade recebida de " + (part?.name || part?.sku || item.id)} type="number" min="0.001" max={remaining} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora (máx. " + remaining + ")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
+                                <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={async () => {
@@ -1205,7 +1321,7 @@ export function DbsInventoryPage({
                                 idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
                                 items: selected.map((item: any) => ({
                                   purchaseItemId: item.id,
-                                  quantityReceived: Number(purchaseReceiptQuantities[item.id]),
+                                  quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
                                 })),
                               } }), "Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
                               if (saved) setPurchaseReceiptQuantities(prev => {
@@ -1229,7 +1345,7 @@ export function DbsInventoryPage({
                 const lines=(data?.purchaseItems??[]).filter((item:any)=>String(item.purchase_id)===String(purchase.id));
                 const outstanding=lines.filter((item:any)=>Number(item.quantity)>Number(item.quantity_received??0));
                 const selected=outstanding.filter((item:any)=>Number(purchaseReceiptQuantities[item.id]??0)>0);
-                const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>Number(item.quantity)-Number(item.quantity_received??0));
+                const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>(Number(item.quantity)-Number(item.quantity_received??0))/Math.max(Number(item.conversion_factor??1),0.000001));
                 const approval=purchase.approval_status;
                 const purchaseSupplierDisplayName=suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name||purchase.supplier_name;
                 return <article key={purchase.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -1253,17 +1369,21 @@ export function DbsInventoryPage({
                             {outstanding.map((item:any)=>{
                               const part=parts.find((entry:any)=>String(entry.id)===String(item.part_id));
                               const remaining=Math.max(0,Number(item.quantity)-Number(item.quantity_received??0));
+                              const factor=Math.max(Number(item.conversion_factor??1),0.000001);
+                              const remainingPurchase=remaining/factor;
+                              const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
+                              const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                               return <label key={item.id} className="block text-xs font-semibold text-slate-700">
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
-                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.quantity).toLocaleString("pt-BR")} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} · Falta: {remaining.toLocaleString("pt-BR")}</span>
-                                <input aria-label={"Quantidade recebida de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remaining} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora (máx. "+remaining+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
+                                <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={async()=>{
                               const saved=await runAction(()=>receiveDbsPurchaseItems({data:{
                                 purchaseId:purchase.id,
                                 idempotencyKey:"purchase-receive:"+purchase.id+":"+crypto.randomUUID(),
-                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])})),
+                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])*Number(item.conversion_factor||1)})),
                               }}),"Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
                               if(saved)setPurchaseReceiptQuantities(prev=>{
                                 const next={...prev};
@@ -1358,41 +1478,64 @@ export function DbsInventoryPage({
   <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
     <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova reserva para OS</SheetTitle><SheetDescription>Selecione a ordem, centro de custo, peça e quantidade.</SheetDescription></SheetHeader>
     <form onSubmit={reserveParts} className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">Filtre as OS antes de pesquisar *</p>
+                <label className="block text-xs font-bold text-slate-600">Buscar cliente
+                  <input list="dbs-reservation-clients" value={reservationClientSearch} onChange={e=>{const value=e.target.value;setReservationClientSearch(value);const found=clients.find((cl:any)=>(cl.trade_name||cl.legal_name)===value);setReservationClientFilter(found?String(found.id):"");setReservationFiltersApplied(false);setWorkOrderId("");}} placeholder="Digite nome ou razão social" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"/>
+                  <datalist id="dbs-reservation-clients">{clients.filter((cl:any)=>cl.status!=="inativo").map((cl:any)=><option key={cl.id} value={cl.trade_name||cl.legal_name}/>)}</datalist>
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className="text-xs font-bold text-slate-600">Data inicial<input type="date" value={reservationDateFrom} onChange={e=>{setReservationDateFrom(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label>
+                  <label className="text-xs font-bold text-slate-600">Data final<input type="date" min={reservationDateFrom||undefined} value={reservationDateTo} onChange={e=>{setReservationDateTo(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label>
+                </div>
+                <button type="button" disabled={!reservationClientFilter&&!reservationDateFrom&&!reservationDateTo} onClick={()=>setReservationFiltersApplied(true)} className="mt-3 min-h-10 w-full rounded-lg bg-slate-800 text-xs font-bold text-white disabled:opacity-40">Aplicar filtros e carregar OS</button>
+              </div>
               <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
-              <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                <option value="">Selecione uma OS</option>
-                {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
+              <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={workOrderId} onChange={e=>{setWorkOrderId(e.target.value);const o=workOrders.find((x:any)=>String(x.id)===e.target.value);setCostCenterId(String(o?.cost_center_id||""));setReservationStockId("");setPartId("");setReservationPartSearch("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
+                <option value="">{!reservationFiltersApplied?"Aplique cliente e/ou período primeiro":"Selecione uma OS filtrada"}</option>
+                {filteredReservationOrders.map((order: any) => {const client=clients.find((cl:any)=>cl.id===order.client_id);return <option key={order.id} value={order.id}>{order.protocol||order.id} · {client?.trade_name||client?.legal_name||"Cliente"} · {String(order.created_at||"").slice(0,10)} · {order.status}</option>;})}
               </select>
+              {reservationFiltersApplied&&!filteredReservationOrders.length&&<p className="text-xs text-amber-700">Nenhuma OS encontrada com os filtros aplicados.</p>}
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
-              <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+              <select required value={costCenterId} onChange={e=>{setCostCenterId(e.target.value);setReservationStockId("");setPartId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione o centro de custo</option>
-                {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+                {activeCostCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
               </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Estoque operacional *</label>
+              <select required value={reservationStockId} onChange={e=>{setReservationStockId(e.target.value);setPartId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                <option value="">Selecione o estoque deste centro</option>
+                {operationalStocks.filter((s:any)=>String(s.cost_center_id)===String(costCenterId)&&s.status==="active").map((s:any)=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {costCenterId&&!operationalStocks.some((s:any)=>String(s.cost_center_id)===String(costCenterId)&&s.status==="active")&&<p className="text-xs font-semibold text-rose-700">Nenhum estoque operacional cadastrado neste centro. Crie em Estoques antes de reservar.</p>}
+              <label className="mt-3 block text-xs font-bold text-slate-600">Finalidade do material *</label>
+              <select required value={reservationPurpose} onChange={e=>setReservationPurpose(e.target.value as "TROCA_PECA"|"ATIVO_EQUIPAMENTO")} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="TROCA_PECA">Troca de Peça</option><option value="ATIVO_EQUIPAMENTO">Ativo / Equipamento</option></select>
+              <span className={reservationPurpose==="TROCA_PECA"?"inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800":"inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-800"}>{reservationPurpose==="TROCA_PECA"?"Troca de Peça":"Ativo / Equipamento"}</span>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
-              <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                <option value="">Selecione uma peça</option>
-                {availableParts.map((part: any) => <option key={part.id} value={part.id}>{part.name ?? part.description ?? part.id} · disponível {Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0)}</option>)}
-              </select>
+              <input list="dbs-reservation-parts" required value={reservationPartSearch} onChange={e=>{const value=e.target.value;setReservationPartSearch(value);const match=activeParts.find((part:any)=>{const base=(String(part.sku||"")+" · "+String(part.name||part.description||part.id)).trim();return value===base;});setPartId(match?String(match.id):"");}} placeholder="Digite código/SKU ou nome da peça" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm"/>
+              <datalist id="dbs-reservation-parts">
+                {activeParts.map((part:any)=>{const unit=measureUnits.find((u:any)=>String(u.id)===String(part.measure_unit_id));const bal=operationalBalances.find((b:any)=>String(b.stock_id)===String(selectedOperationalStock?.id)&&String(b.part_id)===String(part.id));const opFree=Math.max(0,Number(bal?.quantity??0)-Number(bal?.reserved_quantity??0));const centralFree=Math.max(0,Number(part.stock_quantity??0)-Number(part.reserved_quantity??0));const label=(String(part.sku||"")+" · "+String(part.name||part.description||part.id)).trim();return <option key={part.id} value={label}>{unit?.symbol||unit?.code||"un"} · operacional {opFree.toLocaleString("pt-BR")} · central {centralFree.toLocaleString("pt-BR")}</option>;})}
+              </datalist>
               <label className="mt-3 block text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" /></label>
-              <button disabled={busy || !availableParts.length || !workOrders.length} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
+              {partId && <div className="rounded-xl border border-slate-200 p-3 text-xs"><p>Saldo no estoque operacional: <strong>{Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0)).toLocaleString("pt-BR")}</strong></p><p className="mt-1">Saldo livre no Estoque Central: <strong>{selectedCentralAvailable.toLocaleString("pt-BR")}</strong></p>{!selectedOperationalStock&&<p className="mt-2 font-bold text-rose-700">Este centro de custo ainda não possui Estoque Operacional. Cadastre-o antes de reservar.</p>}{selectedOperationalStock&&selectedCentralAvailable>0&&Number(selectedOperationalBalance?.quantity??0)===0&&<p className="mt-2 text-sky-800">O estoque operacional está zerado. Há saldo central; use + Transferir para abastecer este centro de custo.</p>}{selectedOperationalStock&&Number(quantity)>Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0))&&<p className="mt-2 font-bold text-rose-700">Saldo operacional insuficiente. A reserva não será abatida do Estoque Central.</p>}</div>}
+              <button disabled={busy || !selectedOperationalStock || !reservationFiltersApplied || !workOrderId || !partId || Number(quantity)<=0 || Number(quantity)>Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0))} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
               <p className="mt-3 text-xs text-slate-500">A reserva bloqueia a disponibilidade, mas não baixa o estoque físico. A baixa ocorre ao concluir a OS.</p>
             </form>
   </SheetContent>
 </Sheet>
 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 className="text-base font-semibold text-slate-900">Reservas vinculadas às OS</h2><p className="mt-1 text-xs text-slate-500">{reservations.length} registros</p></div><button type="button" onClick={()=>setActiveDrawer("reservation")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova reserva</button></div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><p className="text-xs text-slate-500">{reservations.length} reservas registradas</p><button type="button" onClick={()=>{setWorkOrderId("");setCostCenterId("");setReservationStockId("");setPartId("");setReservationPartSearch("");setQuantity("1");setReservationPurpose("TROCA_PECA");setReservationClientFilter("");setReservationClientSearch("");setReservationDateFrom("");setReservationDateTo("");setReservationFiltersApplied(false);setActiveDrawer("reservation");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova reserva</button></div>
               <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[620px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS / finalidade</th><th className="p-3">Peça / estoque</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
                 <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">
-                  <td className="p-3 font-mono text-xs">{String(reservation.id).slice(0, 8)}</td><td className="p-3 font-mono text-xs">{String(reservation.work_order_id).slice(0, 8)}</td><td className="p-3">{reservation.quantity}</td><td className="p-3">{money(Number(reservation.quantity) * Number(reservation.unit_cost_cents))}</td><td className="p-3">{reservation.status}</td>
-                  <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => releaseDbsWorkOrderReservation({ data: { reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() } }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
+                  <td className="p-3 font-mono text-xs">{String(reservation.id).slice(0, 8)}</td><td className="p-3 font-mono text-xs">{String(workOrders.find((o:any)=>o.id===reservation.work_order_id)?.protocol||reservation.work_order_id).slice(0, 18)}<span className="ml-2 rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-800">{reservation.purpose==="ATIVO_EQUIPAMENTO"?"Ativo / Equipamento":reservation.purpose==="TROCA_PECA"?"Troca de Peça":"Legada"}</span><span className="mt-1 block text-[10px] text-slate-500">{clients.find((cl:any)=>cl.id===workOrders.find((o:any)=>o.id===reservation.work_order_id)?.client_id)?.trade_name||clients.find((cl:any)=>cl.id===workOrders.find((o:any)=>o.id===reservation.work_order_id)?.client_id)?.legal_name||"Cliente"}</span></td><td className="p-3">{parts.find((p:any)=>p.id===reservation.part_id)?.sku} · {parts.find((p:any)=>p.id===reservation.part_id)?.name}<span className="block text-[10px] text-slate-500">{reservation.is_operational?operationalStocks.find((s:any)=>s.id===reservation.stock_id)?.name:"Estoque legado"}</span></td><td className="p-3">{reservation.quantity}</td><td className="p-3">{money(Number(reservation.quantity) * Number(reservation.unit_cost_cents))}</td><td className="p-3">{reservation.status}</td>
+                  <td className="p-3">{reservation.status === "reserved" ? <button disabled={busy} onClick={() => void runAction(() => reservation.is_operational ? releaseDbsOperationalStockReservation({data:{reservationId:reservation.id,idempotencyKey:"op-release:"+crypto.randomUUID()}}) : releaseDbsWorkOrderReservation({ data: { reservationId: reservation.id, idempotencyKey: "release:" + crypto.randomUUID() } }), "Reserva liberada.")} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-bold text-rose-700">Liberar</button> : "—"}</td>
                 </tr>)}</tbody>
               </table></div>
               <div className="grid gap-2 p-3 md:hidden">
                 {reservations.map((reservation:any)=><article key={reservation.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{String(reservation.id).slice(0,8)}</p><p className="mt-1 text-xs text-slate-500">OS {String(reservation.work_order_id).slice(0,8)}</p></div><span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold">{reservation.status}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold">{String(reservation.id).slice(0,8)}</p><p className="mt-1 text-xs text-slate-500">OS {String(workOrders.find((o:any)=>o.id===reservation.work_order_id)?.protocol||reservation.work_order_id).slice(0,18)}</p><p className="text-xs text-slate-600">{parts.find((p:any)=>p.id===reservation.part_id)?.sku} · {parts.find((p:any)=>p.id===reservation.part_id)?.name}</p><span className="mt-1 inline-flex rounded-full bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-800">{reservation.purpose==="ATIVO_EQUIPAMENTO"?"Ativo / Equipamento":reservation.purpose==="TROCA_PECA"?"Troca de Peça":"Reserva legada"}</span></div><span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold">{reservation.status}</span></div>
                   <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2 text-xs"><div><p className="text-slate-500">Quantidade</p><p className="font-bold">{reservation.quantity}</p></div><div><p className="text-slate-500">Custo capturado</p><p className="font-bold">{money(Number(reservation.quantity)*Number(reservation.unit_cost_cents))}</p></div></div>
-                  {reservation.status==="reserved"&&<button type="button" disabled={busy} onClick={()=>void runAction(()=>releaseDbsWorkOrderReservation({data:{reservationId:reservation.id,idempotencyKey:"release:"+crypto.randomUUID()}}),"Reserva liberada.")} className="mt-3 min-h-10 w-full rounded-lg border border-rose-200 text-xs font-bold text-rose-700">Liberar reserva</button>}
+                  {reservation.status==="reserved"&&<button type="button" disabled={busy} onClick={()=>void runAction(()=>reservation.is_operational?releaseDbsOperationalStockReservation({data:{reservationId:reservation.id,idempotencyKey:"op-release:"+crypto.randomUUID()}}):releaseDbsWorkOrderReservation({data:{reservationId:reservation.id,idempotencyKey:"release:"+crypto.randomUUID()}}),"Reserva liberada.")} className="mt-3 min-h-10 w-full rounded-lg border border-rose-200 text-xs font-bold text-rose-700">Liberar reserva</button>}
                 </article>)}
                 {!reservations.length&&<p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma reserva registrada ainda.</p>}
               </div>
