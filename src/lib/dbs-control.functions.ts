@@ -3476,10 +3476,10 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select("work_order_id,parts_cost_cents,status,updated_at")
         .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(500),
-      (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,legal_name,trade_name,cnpj,phone,status").eq("scope_key",scopeKey).order("name").limit(500),
-      (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system").eq("scope_key",scopeKey).eq("status","active").order("code").limit(100),
-      (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status").eq("scope_key",scopeKey).eq("status","active").limit(500),
-      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).eq("status","active").order("code").limit(500),
+      (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,legal_name,trade_name,cnpj,phone,status,version").eq("scope_key",scopeKey).order("name").limit(500),
+      (supabaseAdmin as any).from("dbs_control_measure_units").select("id,code,name,symbol,decimal_places,status,is_system,version").eq("scope_key",scopeKey).order("code").limit(100),
+      (supabaseAdmin as any).from("dbs_control_unit_conversions").select("id,from_unit_id,to_unit_id,factor,status,version").eq("scope_key",scopeKey).limit(500),
+      (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,code,name,status").eq("scope_key",scopeKey).order("code").limit(500),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
         .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status,tare_weight_kg,initial_gross_weight_kg,current_gross_weight_kg,updated_at")
         .eq("scope_key",scopeKey).order("serial_number").limit(500),
@@ -3671,6 +3671,305 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     if (saved.error) throw new Error(saved.error.message);
     if (!saved.data) throw new Error("A peça mudou durante a gravação. Atualize a tela e tente novamente.");
     return saved.data;
+  });
+
+
+type DbsInventoryMasterUpdateInput =
+  | { entity: "supplier"; id: string; name: string; cnpj?: string; phone?: string }
+  | { entity: "cost_center"; id: string; code: string; name: string }
+  | { entity: "measure_unit"; id: string; code: string; name: string; symbol: string; decimalPlaces: number }
+  | { entity: "unit_conversion"; id: string; fromUnitId: string; toUnitId: string; factor: number };
+
+export const updateDbsInventoryMasterData = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: DbsInventoryMasterUpdateInput) => {
+    const id = requireInventoryId(input?.id, "Cadastro");
+    if (input.entity === "supplier") {
+      const name = String(input.name ?? "").trim();
+      const cnpj = normalizeBrazilianTaxId(input.cnpj);
+      if (name.length < 2 || name.length > 180) throw new Error("Informe o nome do fornecedor.");
+      if (cnpj && ![11, 14].includes(cnpj.length)) throw new Error("CNPJ/CPF do fornecedor inválido.");
+      return { entity: input.entity, id, name, cnpj: cnpj || null, phone: String(input.phone ?? "").trim().slice(0, 40) || null };
+    }
+    if (input.entity === "cost_center") {
+      const code = String(input.code ?? "").trim().toUpperCase();
+      const name = String(input.name ?? "").trim();
+      if (!/^[A-Z0-9._-]{1,40}$/.test(code) || name.length < 2 || name.length > 180) {
+        throw new Error("Informe código e nome válidos para o centro de custo.");
+      }
+      return { entity: input.entity, id, code, name };
+    }
+    if (input.entity === "measure_unit") {
+      const code = String(input.code ?? "").trim().toUpperCase();
+      const name = String(input.name ?? "").trim();
+      const symbol = String(input.symbol ?? "").trim();
+      const decimalPlaces = Number(input.decimalPlaces);
+      if (!/^[A-Z0-9_-]{1,12}$/.test(code) || name.length < 2 || name.length > 80 ||
+          symbol.length < 1 || symbol.length > 12 || !Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) {
+        throw new Error("Código, nome, símbolo ou precisão da unidade inválidos.");
+      }
+      return { entity: input.entity, id, code, name, symbol, decimalPlaces };
+    }
+    if (input.entity === "unit_conversion") {
+      const fromUnitId = requireInventoryId(input.fromUnitId, "Unidade de compra");
+      const toUnitId = requireInventoryId(input.toUnitId, "Unidade-base");
+      const factor = Number(input.factor);
+      if (fromUnitId === toUnitId || !Number.isFinite(factor) || factor <= 0) {
+        throw new Error("Informe unidades diferentes e fator de conversão positivo.");
+      }
+      return { entity: input.entity, id, fromUnitId, toUnitId, factor };
+    }
+    throw new Error("Tipo de cadastro não permitido.");
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const now = new Date().toISOString();
+
+    if (data.entity === "supplier") {
+      const existing = await admin.from("dbs_control_suppliers").select("id,version")
+        .eq("id", data.id).eq("scope_key", scopeKey).maybeSingle();
+      if (existing.error) throw new Error(existing.error.message);
+      if (!existing.data) throw new Error("Fornecedor não encontrado neste cadastro.");
+      const saved = await admin.from("dbs_control_suppliers").update({
+        name: data.name, legal_name: data.name, cnpj: data.cnpj, phone: data.phone,
+        updated_by: user.id, updated_at: now, version: Number(existing.data.version ?? 1) + 1,
+      }).eq("id", data.id).eq("scope_key", scopeKey)
+        .select("id,name,cnpj,phone,status,version").maybeSingle();
+      if (saved.error) {
+        if (saved.error.code === "23505") throw new Error("Já existe fornecedor com este nome ou CNPJ/CPF.");
+        throw new Error(saved.error.message);
+      }
+      if (!saved.data) throw new Error("O fornecedor foi alterado por outro usuário. Atualize a tela.");
+      return saved.data;
+    }
+
+    if (data.entity === "cost_center") {
+      const existing = await admin.from("dbs_control_cost_centers").select("id")
+        .eq("id", data.id).eq("scope_key", scopeKey).maybeSingle();
+      if (existing.error) throw new Error(existing.error.message);
+      if (!existing.data) throw new Error("Centro de custo não encontrado neste cadastro.");
+      const saved = await admin.from("dbs_control_cost_centers").update({
+        code: data.code, name: data.name, updated_by: user.id, updated_at: now,
+      }).eq("id", data.id).eq("scope_key", scopeKey)
+        .select("id,code,name,status").maybeSingle();
+      if (saved.error) {
+        if (saved.error.code === "23505") throw new Error("Já existe centro de custo com este código.");
+        throw new Error(saved.error.message);
+      }
+      if (!saved.data) throw new Error("Centro de custo não encontrado para atualização.");
+      return saved.data;
+    }
+
+    if (data.entity === "measure_unit") {
+      const existing = await admin.from("dbs_control_measure_units").select("id,is_system,version")
+        .eq("id", data.id).eq("scope_key", scopeKey).maybeSingle();
+      if (existing.error) throw new Error(existing.error.message);
+      if (!existing.data) throw new Error("Unidade de medida não encontrada neste cadastro.");
+      if (existing.data.is_system) throw new Error("Esta é uma unidade padrão do sistema e não pode ser alterada.");
+      const saved = await admin.from("dbs_control_measure_units").update({
+        code: data.code, name: data.name, symbol: data.symbol, decimal_places: data.decimalPlaces,
+        updated_by: user.id, updated_at: now, version: Number(existing.data.version ?? 1) + 1,
+      }).eq("id", data.id).eq("scope_key", scopeKey).eq("version", Number(existing.data.version ?? 1))
+        .select("id,code,name,symbol,decimal_places,status,is_system,version").maybeSingle();
+      if (saved.error) {
+        if (saved.error.code === "23505") throw new Error("Já existe unidade com este código.");
+        throw new Error(saved.error.message);
+      }
+      if (!saved.data) throw new Error("A unidade foi alterada por outro usuário. Atualize a tela.");
+      return saved.data;
+    }
+
+    const existing = await admin.from("dbs_control_unit_conversions").select("id,version")
+      .eq("id", data.id).eq("scope_key", scopeKey).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (!existing.data) throw new Error("Conversão não encontrada neste cadastro.");
+    const units = await admin.from("dbs_control_measure_units").select("id,status")
+      .eq("scope_key", scopeKey).in("id", [data.fromUnitId, data.toUnitId]);
+    if (units.error) throw new Error(units.error.message);
+    if ((units.data ?? []).length !== 2 || (units.data ?? []).some((unit: any) => unit.status !== "active")) {
+      throw new Error("As duas unidades da conversão precisam estar ativas.");
+    }
+    const saved = await admin.from("dbs_control_unit_conversions").update({
+      from_unit_id: data.fromUnitId, to_unit_id: data.toUnitId, factor: data.factor,
+      updated_by: user.id, updated_at: now, version: Number(existing.data.version ?? 1) + 1,
+    }).eq("id", data.id).eq("scope_key", scopeKey)
+      .select("id,from_unit_id,to_unit_id,factor,status,version").maybeSingle();
+    if (saved.error) {
+      if (saved.error.code === "23505") throw new Error("Já existe conversão cadastrada para esse par de unidades.");
+      throw new Error(saved.error.message);
+    }
+    if (!saved.data) throw new Error("A conversão não foi encontrada para atualização.");
+    return saved.data;
+  });
+
+type DbsInventoryRecordEntity = "part" | "supplier" | "cost_center" | "measure_unit" | "unit_conversion";
+type DbsInventoryRecordAction = "archive" | "restore";
+
+export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { entity: DbsInventoryRecordEntity; id: string; action: DbsInventoryRecordAction }) => {
+    const entities: DbsInventoryRecordEntity[] = ["part", "supplier", "cost_center", "measure_unit", "unit_conversion"];
+    if (!input || !entities.includes(input.entity) || !["archive", "restore"].includes(input.action)) {
+      throw new Error("Ação de cadastro inválida.");
+    }
+    return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro"), action: input.action };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const isPart = data.entity === "part";
+    const table = data.entity === "part" ? "dbs_control_parts"
+      : data.entity === "supplier" ? "dbs_control_suppliers"
+      : data.entity === "cost_center" ? "dbs_control_cost_centers"
+      : data.entity === "measure_unit" ? "dbs_control_measure_units"
+      : "dbs_control_unit_conversions";
+    let query = admin.from(table).select(
+      data.entity === "part" ? "id,status,stock_quantity,reserved_quantity,version"
+      : data.entity === "measure_unit" ? "id,status,is_system,version"
+      : "id,status,version"
+    ).eq("id", data.id);
+    if (!isPart) query = query.eq("scope_key", scopeKey);
+    const current = await query.maybeSingle();
+    if (current.error) throw new Error(current.error.message);
+    if (!current.data) throw new Error("Cadastro não encontrado neste escopo.");
+    if (data.entity === "measure_unit" && current.data.is_system) {
+      throw new Error("Esta unidade padrão do sistema não pode ser arquivada.");
+    }
+
+    if (data.action === "archive" && data.entity === "part") {
+      if (Number(current.data.stock_quantity ?? 0) > 0 || Number(current.data.reserved_quantity ?? 0) > 0) {
+        throw new Error("Esta peça ainda possui saldo ou quantidade reservada. Zere o saldo e libere as reservas antes de arquivar.");
+      }
+      const carStock = await admin.from("dbs_control_car_stock").select("id")
+        .eq("part_id", data.id).eq("status", "active").gt("quantity", 0).limit(1).maybeSingle();
+      if (carStock.error) throw new Error(carStock.error.message);
+      if (carStock.data) throw new Error("Esta peça ainda está sob custódia de um técnico. Faça a devolução antes de arquivar.");
+    }
+
+    if (data.action === "archive" && data.entity === "supplier") {
+      const linkedPart = await admin.from("dbs_control_parts").select("id")
+        .eq("supplier_id", data.id).eq("status", "ativo").limit(1).maybeSingle();
+      if (linkedPart.error) throw new Error(linkedPart.error.message);
+      if (linkedPart.data) throw new Error("Reatribua o fornecedor nas peças ativas antes de arquivar este cadastro.");
+    }
+
+    if (data.action === "archive" && data.entity === "measure_unit") {
+      const linkedPart = await admin.from("dbs_control_parts").select("id")
+        .eq("measure_unit_id", data.id).eq("status", "ativo").limit(1).maybeSingle();
+      if (linkedPart.error) throw new Error(linkedPart.error.message);
+      if (linkedPart.data) throw new Error("Reatribua a unidade-base nas peças ativas antes de arquivar esta unidade.");
+    }
+
+    const status = data.entity === "part"
+      ? (data.action === "archive" ? "inativo" : "ativo")
+      : (data.action === "archive" ? "inactive" : "active");
+    const update: Record<string, unknown> = { status };
+    if (data.entity !== "part") {
+      update.updated_at = new Date().toISOString();
+      update.updated_by = user.id;
+    } else {
+      update.updated_at = new Date().toISOString();
+      update.version = Number(current.data.version ?? 1) + 1;
+    }
+    if (["supplier", "measure_unit", "unit_conversion"].includes(data.entity)) {
+      update.version = Number(current.data.version ?? 1) + 1;
+    }
+    let saveQuery = admin.from(table).update(update).eq("id", data.id);
+    if (!isPart) saveQuery = saveQuery.eq("scope_key", scopeKey);
+    if (data.entity === "part" || ["supplier", "measure_unit", "unit_conversion"].includes(data.entity)) {
+      saveQuery = saveQuery.eq("version", Number(current.data.version ?? 1));
+    }
+    const saved = await saveQuery.select("id,status").maybeSingle();
+    if (saved.error) throw new Error(saved.error.message);
+    if (!saved.data) throw new Error("O cadastro mudou durante a operação. Atualize a tela e tente novamente.");
+    return saved.data;
+  });
+
+export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { entity: DbsInventoryRecordEntity; id: string }) => {
+    const entities: DbsInventoryRecordEntity[] = ["part", "supplier", "cost_center", "measure_unit", "unit_conversion"];
+    if (!input || !entities.includes(input.entity)) throw new Error("Tipo de cadastro inválido.");
+    return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro") };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const table = data.entity === "part" ? "dbs_control_parts"
+      : data.entity === "supplier" ? "dbs_control_suppliers"
+      : data.entity === "cost_center" ? "dbs_control_cost_centers"
+      : data.entity === "measure_unit" ? "dbs_control_measure_units"
+      : "dbs_control_unit_conversions";
+    let currentQuery = admin.from(table).select(data.entity === "measure_unit" ? "id,is_system" : "id").eq("id", data.id);
+    if (data.entity !== "part") currentQuery = currentQuery.eq("scope_key", scopeKey);
+    const current = await currentQuery.maybeSingle();
+    if (current.error) throw new Error(current.error.message);
+    if (!current.data) throw new Error("Cadastro não encontrado neste escopo.");
+    if (data.entity === "measure_unit" && current.data.is_system) {
+      throw new Error("Esta unidade padrão do sistema não pode ser excluída.");
+    }
+
+    const referenceChecks: Array<{ table: string; column: string; label: string }> = [];
+    if (data.entity === "part") {
+      const stock = await admin.from("dbs_control_parts").select("stock_quantity,reserved_quantity")
+        .eq("id", data.id).maybeSingle();
+      if (stock.error) throw new Error(stock.error.message);
+      if (Number(stock.data?.stock_quantity ?? 0) > 0 || Number(stock.data?.reserved_quantity ?? 0) > 0) {
+        throw new Error("Esta peça possui saldo ou reservas. Arquive após regularizar o estoque; o histórico não será apagado.");
+      }
+      referenceChecks.push(
+        { table: "dbs_control_purchase_items", column: "part_id", label: "compras" },
+        { table: "dbs_control_purchase_receipt_items", column: "part_id", label: "recebimentos" },
+        { table: "dbs_control_inventory_movements", column: "part_id", label: "movimentações de estoque" },
+        { table: "dbs_control_work_order_parts", column: "part_id", label: "itens de OS" },
+        { table: "dbs_control_work_order_reservations", column: "part_id", label: "reservas de OS" },
+        { table: "dbs_control_car_stock", column: "part_id", label: "estoque de técnicos" },
+      );
+    } else if (data.entity === "supplier") {
+      referenceChecks.push(
+        { table: "dbs_control_parts", column: "supplier_id", label: "peças cadastradas" },
+        { table: "dbs_control_purchases", column: "supplier_id", label: "compras registradas" },
+      );
+    } else if (data.entity === "measure_unit") {
+      referenceChecks.push(
+        { table: "dbs_control_parts", column: "measure_unit_id", label: "peças cadastradas" },
+        { table: "dbs_control_purchase_items", column: "purchase_unit_id", label: "itens de compras" },
+        { table: "dbs_control_unit_conversions", column: "from_unit_id", label: "conversões de origem" },
+        { table: "dbs_control_unit_conversions", column: "to_unit_id", label: "conversões de destino" },
+      );
+    } else if (data.entity === "cost_center") {
+      for (const tableName of [
+        "dbs_control_purchases", "dbs_control_purchase_items", "dbs_control_purchase_receipts",
+        "dbs_control_purchase_receipt_items", "dbs_control_inventory_movements", "dbs_control_quotes",
+        "dbs_control_work_orders", "dbs_control_work_order_parts", "dbs_control_work_order_reservations",
+        "dbs_control_reservation_consumptions", "dbs_control_car_stock", "dbs_control_car_stock_consumptions",
+        "dbs_control_gas_usage", "treasury_ledger_entries", "treasury_ledger_lines",
+      ]) referenceChecks.push({ table: tableName, column: "cost_center_id", label: "registros financeiros e operacionais" });
+    }
+
+    for (const check of referenceChecks) {
+      const result = await admin.from(check.table).select("id", { count: "exact", head: true }).eq(check.column, data.id);
+      if (result.error) {
+        throw new Error("Não foi possível verificar o histórico de " + check.label + ". Por segurança, a exclusão foi bloqueada; use Arquivar.");
+      }
+      if (Number(result.count ?? 0) > 0) {
+        throw new Error("Não é possível excluir: este cadastro está vinculado a " + check.label + ". Use Arquivar para preservar o histórico.");
+      }
+    }
+
+    let deleteQuery = admin.from(table).delete().eq("id", data.id);
+    if (data.entity !== "part") deleteQuery = deleteQuery.eq("scope_key", scopeKey);
+    const deleted = await deleteQuery.select("id").maybeSingle();
+    if (deleted.error) {
+      if (deleted.error.code === "23503") throw new Error("Este cadastro possui vínculos históricos. Use Arquivar para preservar compras, OS e estoque.");
+      throw new Error(deleted.error.message);
+    }
+    if (!deleted.data) throw new Error("O cadastro não foi excluído. Atualize a tela e tente novamente.");
+    return { ok: true, deletedId: deleted.data.id };
   });
 
 export const transferDbsStockToTechnician = createServerFn({ method: "POST" })
