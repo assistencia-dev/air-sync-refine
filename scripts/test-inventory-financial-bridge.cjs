@@ -571,6 +571,7 @@ assert.match(atomicOperationalConsumptionMigration, /assigned_employee_id=coales
 assert.match(atomicOperationalConsumptionMigration, /DBS_OPERATIONAL_CONSUMPTION_FORBIDDEN/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_apply_work_order_delta_with_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /v_has_operational_reservations/);
+assert.ok(atomicOperationalConsumptionMigration.includes("IF v_has_reservations OR v_has_operational_reservations THEN"));
 assert.match(atomicOperationalConsumptionMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /FOR UPDATE/);
 assert.match(atomicOperationalConsumptionMigration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_operational_reservation_consumptions/i);
