@@ -2106,17 +2106,22 @@ function DbsControlPage() {
           // already canonical. Match client, description and (when available)
           // assigned technician; preserve the original local payload in quarantine.
           const conflictItems = Array.isArray(msg.conflicts) ? msg.conflicts : [];
-          const duplicateProtocolConflicts = conflictItems.filter((item: any) =>
-            dbsControlConflictCode(item) === "DBS_OS_PROTOCOL_EXISTS"
-          );
+          const duplicateProtocolConflicts = conflictItems.filter((item: any) => {
+            const code = dbsControlConflictCode(item);
+            const message = String(item?.message ?? item?.error_message ?? "").trim().toLocaleLowerCase("pt-BR");
+            return code === "DBS_OS_PROTOCOL_EXISTS"
+              || /já existe uma os com este protocolo|protocolo.*já (está )?em uso|duplicate.*protocol/.test(message);
+          });
           const localOrders = Array.isArray(draftChanges?.ordens) ? draftChanges.ordens : [];
           const canonicalOrders = Array.isArray((latest.state as any).ordens) ? (latest.state as any).ordens : [];
           const normalizeMatchValue = (value: unknown) => String(value ?? "")
             .trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (duplicateProtocolConflicts.length && localOrders.length && duplicateProtocolConflicts.every((conflict: any) => {
-            const local = localOrders.find((order: any) =>
-              normalizeMatchValue(order?.id) === normalizeMatchValue(conflict?.protocol)
-            );
+            const local = localOrders.find((order: any) => {
+              const conflictIdentity = normalizeMatchValue(conflict?.protocol ?? conflict?.work_order_id ?? conflict?.id);
+              return [order?.id, order?.protocolo, order?.protocol, order?.numero]
+                .some((value) => normalizeMatchValue(value) === conflictIdentity);
+            });
             if (!local) return false;
             const clientId = normalizeMatchValue(local?.clienteId ?? local?.client_id ?? local?.clientId);
             const description = normalizeMatchValue(local?.descricao ?? local?.description ?? local?.servico);
