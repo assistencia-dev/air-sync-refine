@@ -559,6 +559,9 @@ assert.match(multipleOperationalStocksMigration, /Global lock order shared with 
 assert.match(multipleOperationalStocksMigration, /dbs-os-reservations:/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_consume_all_work_order_reservations/);
 assert.match(atomicOperationalConsumptionMigration, /dbs_control_operational_stock_consume_work_order/);
+assert.doesNotMatch([operationalStocksMigration,operationalConsumptionMigration,multipleOperationalStocksMigration,atomicOperationalConsumptionMigration].join("\\n"), /SECURITY DEFINER SET search_path=public/i);
+assert.match(operationalConsumptionMigration, /REVOKE ALL ON FUNCTION public\\.dbs_control_mirror_central_receipt_to_operational_history\\(\\) FROM PUBLIC,anon,authenticated/i);
+assert.match(atomicOperationalConsumptionMigration, /REVOKE ALL ON FUNCTION public\\.dbs_control_operational_stock_consume_work_order/i);
 assert.match(atomicOperationalConsumptionMigration, /rh_employee_access/);
 assert.match(atomicOperationalConsumptionMigration, /assigned_employee_id=coalesce\(ea\.employee_id,re\.id\)/);
 assert.match(atomicOperationalConsumptionMigration, /DBS_OPERATIONAL_CONSUMPTION_FORBIDDEN/);
