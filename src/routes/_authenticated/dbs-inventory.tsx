@@ -184,6 +184,20 @@ export function DbsInventoryPage({
   const activeCostCenters = costCenters.filter((center: any) => String(center.status ?? "active") === "active");
   const gasCylinders = data?.gasCylinders ?? [];
   const carStock = data?.carStock ?? [];
+  const operationalStocks = data?.operationalStocks ?? [];
+  const operationalBalances = data?.operationalBalances ?? [];
+  const operationalMovements = data?.operationalMovements ?? [];
+  const operationalReservations = data?.operationalReservations ?? [];
+  const clients = data?.clients ?? [];
+  const selectedOperationalStock = operationalStocks.find((stock:any)=>String(stock.cost_center_id)===String(costCenterId)&&stock.status==="active");
+  const selectedOperationalBalance = operationalBalances.find((row:any)=>String(row.stock_id)===String(selectedOperationalStock?.id)&&String(row.part_id)===String(partId));
+  const selectedPart = activeParts.find((part:any)=>String(part.id)===String(partId));
+  const selectedCentralAvailable = Math.max(0,Number(selectedPart?.stock_quantity??0)-Number(selectedPart?.reserved_quantity??0));
+  const filteredReservationOrders = reservationFiltersApplied && (reservationClientFilter||reservationDateFrom||reservationDateTo)
+    ? workOrders.filter((order:any)=>{
+      const date=String(order.created_at??"").slice(0,10);
+      return (!reservationClientFilter||String(order.client_id)===reservationClientFilter)&&(!reservationDateFrom||date>=reservationDateFrom)&&(!reservationDateTo||date<=reservationDateTo);
+    }) : [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
   const reservations = data?.reservations ?? [];
@@ -888,25 +902,44 @@ export function DbsInventoryPage({
 
           <Sheet open={activeDrawer==="transfer"} onOpenChange={(open)=>setActiveDrawer(open?"transfer":null)}>
             <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
-              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Transferir material</SheetTitle><SheetDescription>Selecione técnico, veículo, peça e quantidade.</SheetDescription></SheetHeader>
+              <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Transferir entre estoques</SheetTitle><SheetDescription>Movimentação atômica com validação de saldo, responsável e histórico.</SheetDescription></SheetHeader>
               <form onSubmit={transferStockToTechnician} className="space-y-4">
-                <label className="mt-3 block text-xs font-bold text-slate-600">Técnico responsável *
-                  <select required value={transferEmployeeId} onChange={e=>setTransferEmployeeId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione técnico</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                <label className="block text-xs font-bold text-slate-600">Origem *
+                  <select required value={transferSourceStockId} onChange={e=>{setTransferSourceStockId(e.target.value);if(e.target.value===transferDestinationStockId)setTransferDestinationStockId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="central">Estoque Central</option>{operationalStocks.filter((s:any)=>s.status==="active").map((s:any)=>{const cc=costCenters.find((c:any)=>c.id===s.cost_center_id);return <option key={s.id} value={s.id}>{cc?.code} · {s.name}</option>;})}
                   </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Peça / insumo *
-                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                    <option value="">Selecione material</option>{parts.filter((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0).map((part:any)=><option key={part.id} value={part.id}>{part.sku||part.name} · livre {Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)}</option>)}
+                <label className="block text-xs font-bold text-slate-600">Destino *
+                  <select required value={transferDestinationStockId} onChange={e=>setTransferDestinationStockId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione destino</option><option value="central" disabled={transferSourceStockId==="central"}>Estoque Central</option>{operationalStocks.filter((s:any)=>s.status==="active"&&s.id!==transferSourceStockId).map((s:any)=>{const cc=costCenters.find((c:any)=>c.id===s.cost_center_id);return <option key={s.id} value={s.id}>{cc?.code} · {s.name}</option>;})}
                   </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Veículo / identificação
-                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={120} placeholder="Placa ou nome do veículo" className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <label className="block text-xs font-bold text-slate-600">Peça / insumo *
+                  <select required value={transferPartId} onChange={e=>setTransferPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                    <option value="">Selecione material</option>{activeParts.map((part:any)=>{const b=operationalBalances.find((x:any)=>x.stock_id===transferSourceStockId&&x.part_id===part.id);const free=transferSourceStockId==="central"?Math.max(0,Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)):Math.max(0,Number(b?.quantity||0)-Number(b?.reserved_quantity||0));return <option key={part.id} value={part.id}>{part.sku||part.name} · disponível {free.toLocaleString("pt-BR")}</option>;})}
+                  </select>
                 </label>
-                <label className="mt-2 block text-xs font-bold text-slate-600">Quantidade *
-                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
+                <label className="block text-xs font-bold text-slate-600">Quantidade *
+                  <input required type="number" min="0.001" step="0.001" value={transferQuantity} onChange={e=>setTransferQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
                 </label>
-                <button disabled={busy||!employees.length||!parts.some((part:any)=>Number(part.stock_quantity||0)-Number(part.reserved_quantity||0)>0)} className="mt-4 min-h-10 w-full rounded-lg bg-sky-700 px-3 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+                <label className="block text-xs font-bold text-slate-600">Referência / documento
+                  <input value={transferVehicleLabel} onChange={e=>setTransferVehicleLabel(e.target.value)} maxLength={180} placeholder="OS, nota ou justificativa" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
+                </label>
+                <button disabled={busy||!transferPartId||!transferDestinationStockId||transferSourceStockId===transferDestinationStockId||!operationalStocks.length} className="min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">{busy?"Transferindo...":"Confirmar transferência"}</button>
+              </form>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={activeDrawer==="operational-stock"} onOpenChange={open=>setActiveDrawer(open?"operational-stock":null)}>
+            <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-6">
+              <SheetHeader className="mb-5 border-b border-slate-100 pb-4"><SheetTitle>Novo estoque operacional</SheetTitle><SheetDescription>Cada estoque pertence a um único centro de custo.</SheetDescription></SheetHeader>
+              <form onSubmit={createOperationalStock} className="space-y-4">
+                <label className="block text-xs font-bold text-slate-600">Centro de custo *
+                  <select required value={operationalStockCostCenterId} onChange={e=>setOperationalStockCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"><option value="">Selecione centro de custo</option>{activeCostCenters.map((cc:any)=><option key={cc.id} value={cc.id}>{cc.code} · {cc.name}</option>)}</select>
+                </label>
+                <label className="block text-xs font-bold text-slate-600">Nome do estoque *
+                  <input required minLength={2} maxLength={160} value={operationalStockName} onChange={e=>setOperationalStockName(e.target.value)} placeholder="Ex.: Almoxarifado DML, Viatura 01, Base RJ" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm"/>
+                </label>
+                <button disabled={busy||!activeCostCenters.length} className="min-h-11 w-full rounded-xl bg-sky-700 text-sm font-black text-white disabled:opacity-40">Criar estoque operacional</button>
               </form>
             </SheetContent>
           </Sheet>
