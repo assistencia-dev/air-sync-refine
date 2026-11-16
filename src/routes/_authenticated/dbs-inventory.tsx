@@ -1260,7 +1260,7 @@ export function DbsInventoryPage({
                   const lines = (data?.purchaseItems ?? []).filter((item: any) => String(item.purchase_id) === String(purchase.id));
                   const outstanding = lines.filter((item: any) => Number(item.quantity) > Number(item.quantity_received ?? 0));
                   const selected = outstanding.filter((item: any) => Number(purchaseReceiptQuantities[item.id] ?? 0) > 0);
-                  const overReceived = selected.some((item: any) => Number(purchaseReceiptQuantities[item.id]) > Number(item.quantity) - Number(item.quantity_received ?? 0));
+                  const overReceived = selected.some((item: any) => Number(purchaseReceiptQuantities[item.id]) > (Number(item.quantity) - Number(item.quantity_received ?? 0)) / Math.max(Number(item.conversion_factor ?? 1),0.000001));
                   const approval = purchase.approval_status;
                   return <tr key={purchase.id} className="border-t border-slate-100 align-top">
                     <td className="p-3 font-bold">{suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name || purchase.supplier_name}</td>
@@ -1286,10 +1286,14 @@ export function DbsInventoryPage({
                             {outstanding.map((item: any) => {
                               const part = parts.find((entry: any) => String(entry.id) === String(item.part_id));
                               const remaining = Math.max(0, Number(item.quantity) - Number(item.quantity_received ?? 0));
+                              const factor=Math.max(Number(item.conversion_factor??1),0.000001);
+                              const remainingPurchase=remaining/factor;
+                              const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
+                              const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                               return <label key={item.id} className="block text-xs font-semibold text-slate-700">
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
-                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.quantity).toLocaleString("pt-BR")} · Recebido: {Number(item.quantity_received ?? 0).toLocaleString("pt-BR")} · Falta: {remaining.toLocaleString("pt-BR")}</span>
-                                <input aria-label={"Quantidade recebida de " + (part?.name || part?.sku || item.id)} type="number" min="0.001" max={remaining} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora (máx. " + remaining + ")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
+                                <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={async () => {
@@ -1298,7 +1302,7 @@ export function DbsInventoryPage({
                                 idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
                                 items: selected.map((item: any) => ({
                                   purchaseItemId: item.id,
-                                  quantityReceived: Number(purchaseReceiptQuantities[item.id]),
+                                  quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
                                 })),
                               } }), "Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
                               if (saved) setPurchaseReceiptQuantities(prev => {
@@ -1322,7 +1326,7 @@ export function DbsInventoryPage({
                 const lines=(data?.purchaseItems??[]).filter((item:any)=>String(item.purchase_id)===String(purchase.id));
                 const outstanding=lines.filter((item:any)=>Number(item.quantity)>Number(item.quantity_received??0));
                 const selected=outstanding.filter((item:any)=>Number(purchaseReceiptQuantities[item.id]??0)>0);
-                const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>Number(item.quantity)-Number(item.quantity_received??0));
+                const overReceived=selected.some((item:any)=>Number(purchaseReceiptQuantities[item.id])>(Number(item.quantity)-Number(item.quantity_received??0))/Math.max(Number(item.conversion_factor??1),0.000001));
                 const approval=purchase.approval_status;
                 const purchaseSupplierDisplayName=suppliers.find((x:any)=>String(x.id)===String(purchase.supplier_id))?.name||purchase.supplier_name;
                 return <article key={purchase.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -1346,17 +1350,21 @@ export function DbsInventoryPage({
                             {outstanding.map((item:any)=>{
                               const part=parts.find((entry:any)=>String(entry.id)===String(item.part_id));
                               const remaining=Math.max(0,Number(item.quantity)-Number(item.quantity_received??0));
+                              const factor=Math.max(Number(item.conversion_factor??1),0.000001);
+                              const remainingPurchase=remaining/factor;
+                              const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
+                              const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
                               return <label key={item.id} className="block text-xs font-semibold text-slate-700">
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
-                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.quantity).toLocaleString("pt-BR")} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} · Falta: {remaining.toLocaleString("pt-BR")}</span>
-                                <input aria-label={"Quantidade recebida de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remaining} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora (máx. "+remaining+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
+                                <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={async()=>{
                               const saved=await runAction(()=>receiveDbsPurchaseItems({data:{
                                 purchaseId:purchase.id,
                                 idempotencyKey:"purchase-receive:"+purchase.id+":"+crypto.randomUUID(),
-                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])})),
+                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])*Number(item.conversion_factor||1)})),
                               }}),"Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
                               if(saved)setPurchaseReceiptQuantities(prev=>{
                                 const next={...prev};
