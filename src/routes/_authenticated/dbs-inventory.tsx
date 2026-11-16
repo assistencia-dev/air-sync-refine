@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
+  createDbsOperationalStock, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   reserveDbsWorkOrderParts, setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
@@ -56,7 +57,7 @@ export function DbsInventoryPage({
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders";
   type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
-  type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | null;
+  type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
   const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
   const [settingsView, setSettingsView] = useState<SettingsView>("suppliers");
@@ -122,6 +123,15 @@ export function DbsInventoryPage({
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
   const [transferEmployeeId, setTransferEmployeeId] = useState("");
+  const [transferSourceStockId, setTransferSourceStockId] = useState("central");
+  const [transferDestinationStockId, setTransferDestinationStockId] = useState("");
+  const [operationalStockName, setOperationalStockName] = useState("");
+  const [operationalStockCostCenterId, setOperationalStockCostCenterId] = useState("");
+  const [reservationPurpose, setReservationPurpose] = useState<"TROCA_PECA"|"ATIVO_EQUIPAMENTO">("TROCA_PECA");
+  const [reservationClientFilter, setReservationClientFilter] = useState("");
+  const [reservationDateFrom, setReservationDateFrom] = useState("");
+  const [reservationDateTo, setReservationDateTo] = useState("");
+  const [reservationFiltersApplied, setReservationFiltersApplied] = useState(false);
   const [transferPartId, setTransferPartId] = useState("");
   const [transferQuantity, setTransferQuantity] = useState("1");
   const [transferVehicleLabel, setTransferVehicleLabel] = useState("");
@@ -463,24 +473,25 @@ export function DbsInventoryPage({
     if (saved) { setNewCostCenterCode(""); setNewCostCenterName(""); setMasterRecordId(""); setActiveDrawer(null); }
   }
 
+  async function createOperationalStock(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!operationalStockCostCenterId||operationalStockName.trim().length<2){setMessage("Informe o centro de custo e o nome do estoque operacional.");return;}
+    const saved=await runAction(()=>createDbsOperationalStock({data:{costCenterId:operationalStockCostCenterId,name:operationalStockName.trim()}}),"Estoque operacional criado e vinculado ao centro de custo.");
+    if(saved){setOperationalStockName("");setOperationalStockCostCenterId("");setActiveDrawer(null);}
+  }
+
   async function transferStockToTechnician(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!transferEmployeeId || !transferPartId || !(Number(transferQuantity) > 0)) {
-      setMessage("Selecione técnico, peça e quantidade para transferir.");
-      return;
+    const source=transferSourceStockId==="central"?null:transferSourceStockId;
+    const destination=transferDestinationStockId==="central"?null:transferDestinationStockId;
+    if(!transferPartId||!(Number(transferQuantity)>0)||(!source&&!destination)||transferSourceStockId===transferDestinationStockId){
+      setMessage("Selecione peça, quantidade, origem e destino diferentes.");return;
     }
-    const saved = await runAction(() => transferDbsStockToTechnician({ data: {
-      employeeId: transferEmployeeId,
-      partId: transferPartId,
-      quantity: Number(transferQuantity),
-      vehicleLabel: transferVehicleLabel.trim() || "Veículo do colaborador",
-      idempotencyKey: "car-stock-transfer:" + crypto.randomUUID(),
-    } }), "Transferência confirmada: o estoque central foi reduzido e o material ficou sob custódia do técnico.");
-    if (saved) {
-      setTransferQuantity("1");
-      setTransferPartId("");
-      setActiveDrawer(null);
-    }
+    const saved=await runAction(()=>transferDbsOperationalStock({data:{
+      partId:transferPartId,quantity:Number(transferQuantity),sourceStockId:source,destinationStockId:destination,
+      idempotencyKey:"operational-transfer:"+crypto.randomUUID(),reference:transferVehicleLabel.trim()
+    }}),"Transferência transacional concluída e registrada no histórico.");
+    if(saved){setTransferQuantity("1");setTransferPartId("");setTransferSourceStockId("central");setTransferDestinationStockId("");setActiveDrawer(null);}
   }
 
   async function addSupplier(event: React.FormEvent<HTMLFormElement>) {
@@ -587,12 +598,11 @@ export function DbsInventoryPage({
     }
     const saved = await runAction(async () => {
       await setDbsWorkOrderCostCenter({ data: { workOrderId, costCenterId } });
-      return reserveDbsWorkOrderParts({ data: {
-        workOrderId,
-        idempotencyKey: "reserve:" + crypto.randomUUID(),
-        items: [{ partId, quantity: Number(quantity) }],
-      } });
-    }, "Centro de custo vinculado à OS e reserva registrada.");
+      return reserveDbsOperationalStockForWorkOrder({data:{
+        workOrderId,costCenterId,partId,quantity:Number(quantity),purpose:reservationPurpose,
+        idempotencyKey:"operational-reserve:"+crypto.randomUUID()
+      }});
+    }, "Reserva registrada no estoque operacional do centro de custo; o estoque central não foi alterado.");
     if (saved) setActiveDrawer(null);
   }
 
