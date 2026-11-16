@@ -88,3 +88,114 @@ export function validatePontoGps(
   }
   return { distance_m: distance, inside_radius: inside };
 }
+
+
+export type PontoLocationRecord = {
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+};
+
+export function hasPontoCoordinates(record: PontoLocationRecord | null | undefined): boolean {
+  const latitude = Number(record?.latitude);
+  const longitude = Number(record?.longitude);
+  return record?.latitude != null
+    && record?.longitude != null
+    && Number.isFinite(latitude)
+    && latitude >= -90
+    && latitude <= 90
+    && Number.isFinite(longitude)
+    && longitude >= -180
+    && longitude <= 180;
+}
+
+/** A map link is built only from coordinates persisted on the punch record. */
+export function pontoGoogleMapsUrl(record: PontoLocationRecord): string | null {
+  if (!hasPontoCoordinates(record)) return null;
+  return "https://www.google.com/maps/search/?api=1&query="
+    + Number(record.latitude) + "," + Number(record.longitude);
+}
+
+export function pontoGoogleMapsEmbedUrl(record: PontoLocationRecord): string | null {
+  if (!hasPontoCoordinates(record)) return null;
+  return "https://maps.google.com/maps?q="
+    + Number(record.latitude) + "," + Number(record.longitude) + "&z=17&output=embed";
+}
+
+/**
+ * Obtains a fresh GPS fix only after an explicit punch action.
+ * The watch is stopped immediately after an adequate fix or timeout; it is
+ * never retained as a background/continuous employee tracker.
+ */
+export function capturePontoPosition(
+  geolocation: Pick<Geolocation, "watchPosition" | "clearWatch">,
+  options: { targetAccuracyMeters?: number; maxAccuracyMeters?: number; timeoutMs?: number } = {},
+): Promise<GeolocationPosition> {
+  const targetAccuracy = options.targetAccuracyMeters ?? 80;
+  const maxAccuracy = options.maxAccuracyMeters ?? 150;
+  const timeoutMs = options.timeoutMs ?? 30_000;
+
+  return new Promise((resolve, reject) => {
+    let watchId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let bestPosition: GeolocationPosition | null = null;
+    let settled = false;
+
+    const stop = () => {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      timeoutId = null;
+      if (watchId !== null) {
+        geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    };
+
+    const finish = (position: GeolocationPosition) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      resolve(position);
+    };
+
+    const fail = (error: unknown) => {
+      if (settled) return;
+      if (bestPosition && Number(bestPosition.coords.accuracy) <= maxAccuracy) {
+        finish(bestPosition);
+        return;
+      }
+      settled = true;
+      stop();
+      reject(new Error(pontoGeolocationErrorMessage(error)));
+    };
+
+    try {
+      watchId = geolocation.watchPosition(
+        (position) => {
+          const coords = position?.coords;
+          if (!coords
+            || !Number.isFinite(coords.latitude)
+            || !Number.isFinite(coords.longitude)
+            || !Number.isFinite(coords.accuracy)
+            || coords.accuracy < 0
+            || coords.latitude < -90 || coords.latitude > 90
+            || coords.longitude < -180 || coords.longitude > 180) return;
+
+          if (!bestPosition || coords.accuracy < bestPosition.coords.accuracy) {
+            bestPosition = position;
+          }
+          if (coords.accuracy <= targetAccuracy) finish(position);
+        },
+        fail,
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+      );
+      timeoutId = setTimeout(() => {
+        if (bestPosition && bestPosition.coords.accuracy <= maxAccuracy) {
+          finish(bestPosition);
+          return;
+        }
+        fail({ code: 3 });
+      }, timeoutMs);
+    } catch (error) {
+      fail(error);
+    }
+  });
+}
