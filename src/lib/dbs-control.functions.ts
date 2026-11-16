@@ -3458,13 +3458,13 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock] = await Promise.all([
+    const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
-            .select("id,protocol,status,client_id,created_by_user_id,cost_center_id")
+            .select("id,protocol,status,client_id,created_by_user_id,cost_center_id,created_at,type")
             .in("created_by_user_id", scopedUserIds).is("deleted_at", null).order("created_at", { ascending: false }).limit(500)
         : Promise.resolve({ data: [], error: null }),
       (supabaseAdmin as any).from("dbs_control_work_order_reservations")
@@ -3486,8 +3486,13 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_car_stock")
         .select("id,employee_id,part_id,vehicle_label,quantity,unit_cost_cents,status,version,updated_at")
         .eq("scope_key",scopeKey).eq("status","active").order("updated_at",{ascending:false}).limit(1000),
+      (supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name,status").order("trade_name").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_operational_stocks").select("id,cost_center_id,name,status,created_at").eq("scope_key",scopeKey).order("created_at"),
+      (supabaseAdmin as any).from("dbs_control_operational_stock_balances").select("id,stock_id,part_id,quantity,reserved_quantity,version").eq("scope_key",scopeKey).limit(5000),
+      (supabaseAdmin as any).from("dbs_control_operational_stock_movements").select("id,part_id,movement_type,quantity,source_stock_id,destination_stock_id,work_order_id,purchase_id,reference,created_by,created_at").eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(500),
+      (supabaseAdmin as any).from("dbs_control_operational_reservations").select("id,stock_id,work_order_id,part_id,quantity,purpose,status,unit_cost_cents,created_at").eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(500),
     ]);
-    for (const result of [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock]) {
+    for (const result of [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     const [accessRows,pontoEmployees] = await Promise.all([
@@ -3533,6 +3538,11 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       costCenters: costCenters.data ?? [],
       gasCylinders: gasCylinders.data ?? [],
       carStock: carStock.data ?? [],
+      clients: clients.data ?? [],
+      operationalStocks: operationalStocks.data ?? [],
+      operationalBalances: operationalBalances.data ?? [],
+      operationalMovements: operationalMovements.data ?? [],
+      operationalReservations: operationalReservations.data ?? [],
       employees: employees.data ?? [],
     };
   });
