@@ -4123,3 +4123,80 @@ export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
     if(items.error) throw new Error(items.error.message);
     return {quote:quote.data,items:items.data??[]};
   });
+
+export const createDbsOperationalStock = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{costCenterId:string;name:string})=>{
+    const name=String(input?.name??"").trim();
+    if(name.length<2||name.length>160) throw new Error("Informe o nome do estoque operacional.");
+    return {costCenterId:requireInventoryId(input.costCenterId,"Centro de custo"),name};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    const center=await admin.from("dbs_control_cost_centers").select("id,code,name").eq("id",data.costCenterId).eq("scope_key",scopeKey).eq("status","active").maybeSingle();
+    if(center.error) throw new Error(center.error.message);
+    if(!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
+    const saved=await admin.from("dbs_control_operational_stocks").insert({
+      company_id:user.company_id,scope_key:scopeKey,cost_center_id:data.costCenterId,name:data.name,
+      status:"active",created_by:user.id,updated_by:user.id
+    }).select("id,cost_center_id,name,status").single();
+    if(saved.error){if(saved.error.code==="23505") throw new Error("Este centro de custo já possui um estoque operacional.");throw new Error(saved.error.message);}
+    return saved.data;
+  });
+
+export const transferDbsOperationalStock = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{partId:string;quantity:number;sourceStockId?:string|null;destinationStockId?:string|null;idempotencyKey:string;reference?:string})=>{
+    if(!Number.isFinite(input?.quantity)||input.quantity<=0||!input?.idempotencyKey||input.idempotencyKey.trim().length<8||
+      (!input.sourceStockId&&!input.destinationStockId)||input.sourceStockId===input.destinationStockId)
+      throw new Error("Informe peça, quantidade, origem/destino diferentes e chave de segurança.");
+    return {partId:requireInventoryId(input.partId,"Peça"),quantity:input.quantity,
+      sourceStockId:input.sourceStockId?requireInventoryId(input.sourceStockId,"Estoque de origem"):null,
+      destinationStockId:input.destinationStockId?requireInventoryId(input.destinationStockId,"Estoque de destino"):null,
+      idempotencyKey:input.idempotencyKey.trim(),reference:String(input.reference??"").trim().slice(0,180)||null};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_operational_stock_transfer",{
+      p_actor_user_id:user.id,p_part_id:data.partId,p_quantity:data.quantity,
+      p_source_stock_id:data.sourceStockId,p_destination_stock_id:data.destinationStockId,
+      p_idempotency_key:data.idempotencyKey,p_reference:data.reference
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const reserveDbsOperationalStockForWorkOrder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{workOrderId:string;costCenterId:string;partId:string;quantity:number;purpose:"TROCA_PECA"|"ATIVO_EQUIPAMENTO";idempotencyKey:string})=>{
+    if(!Number.isFinite(input?.quantity)||input.quantity<=0||!input?.idempotencyKey||input.idempotencyKey.trim().length<8||
+      !["TROCA_PECA","ATIVO_EQUIPAMENTO"].includes(input.purpose)) throw new Error("Dados da reserva operacional inválidos.");
+    return {workOrderId:requireInventoryId(input.workOrderId,"OS"),costCenterId:requireInventoryId(input.costCenterId,"Centro de custo"),
+      partId:requireInventoryId(input.partId,"Peça"),quantity:input.quantity,purpose:input.purpose,idempotencyKey:input.idempotencyKey.trim()};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_operational_stock_reserve",{
+      p_actor_user_id:user.id,p_work_order_id:data.workOrderId,p_cost_center_id:data.costCenterId,
+      p_part_id:data.partId,p_quantity:data.quantity,p_purpose:data.purpose,p_idempotency_key:data.idempotencyKey
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const releaseDbsOperationalStockReservation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{reservationId:string;idempotencyKey:string})=>{
+    if(!input?.idempotencyKey||input.idempotencyKey.trim().length<8) throw new Error("Chave de liberação inválida.");
+    return {reservationId:requireInventoryId(input.reservationId,"Reserva"),idempotencyKey:input.idempotencyKey.trim()};
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_operational_stock_release_reservation",{
+      p_actor_user_id:user.id,p_reservation_id:data.reservationId,p_idempotency_key:data.idempotencyKey
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
