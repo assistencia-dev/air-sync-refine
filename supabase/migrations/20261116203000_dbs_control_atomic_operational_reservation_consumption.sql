@@ -24,7 +24,7 @@ GRANT ALL ON public.dbs_control_operational_reservation_consumptions TO service_
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_consume_work_order(
   p_actor_user_id uuid,p_work_order_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_actor_company uuid;
   v_scope record;
@@ -175,7 +175,7 @@ BEGIN
   RETURN jsonb_build_object('ok',true,'replayed',false,'work_order_id',p_work_order_id,
     'consumed_reservations',v_count,'quantity',v_total_quantity,'cost_cents',v_total_cost,
     'ledger_entry_id',v_ledger_id);
-END $;
+END $$;
 
 REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_consume_work_order(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_consume_work_order(uuid,uuid,text) TO service_role;
@@ -300,7 +300,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_release_reservation(
   p_actor_user_id uuid,p_reservation_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_r public.dbs_control_operational_reservations%rowtype;
   v_balance public.dbs_control_operational_stock_balances%rowtype;
@@ -347,7 +347,7 @@ BEGIN
   UPDATE public.dbs_control_operational_reservations
     SET status='released',released_at=now() WHERE id=v_r.id;
   RETURN jsonb_build_object('ok',true,'replayed',false,'reservation_id',v_r.id,'status','released');
-END $;
+END $$;
 
 REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_release_reservation(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_release_reservation(uuid,uuid,text) TO service_role;
