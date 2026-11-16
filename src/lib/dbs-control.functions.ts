@@ -3527,7 +3527,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
     const purchaseItems = purchaseIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
-          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no,purchase_unit_id,conversion_factor,base_quantity,cost_center_id")
+          .select("id,purchase_id,part_id,quantity,purchase_quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no,purchase_unit_id,conversion_factor,base_quantity,cost_center_id")
           .in("purchase_id", purchaseIds).order("line_no")
       : { data: [], error: null };
     if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
