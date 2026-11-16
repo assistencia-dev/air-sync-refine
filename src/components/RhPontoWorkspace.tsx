@@ -304,6 +304,7 @@ function PontoColaborador() {
     if (e && typeof e === "object" && "code" in e) return pontoGeolocationErrorMessage(e);
     if (/permission|denied|not allowed|permiss/i.test(raw)) return "A localização do dispositivo foi bloqueada. Libere a permissão de localização no navegador e nas configurações do celular.";
     if (/timeout|timed out/i.test(raw)) return "O GPS demorou para responder. Ative a localização precisa, vá para um local aberto e tente novamente.";
+    if (/precis[aã]o.*150|accuracy.*150/i.test(raw)) return raw;
     if (/position|gps|geolocation|location/i.test(raw)) return "Não foi possível obter sua localização. Confira se o GPS/localização está ativado e se o site tem permissão.";
     if (/raio|radius|fora do raio/i.test(raw)) return "Você está fora do raio permitido para registrar a entrada. Aproxime-se da base cadastrada pelo RH.";
     if (/próxima marcação|marcação inválida|nenhuma/i.test(raw)) return raw;
