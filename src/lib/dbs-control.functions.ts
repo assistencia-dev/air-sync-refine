@@ -3469,7 +3469,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     // dbs_control_clients is a shared canonical catalog without company_id; OS results remain scoped below.
     const clientsQuery = (supabaseAdmin as any).from("dbs_control_clients")
       .select("id,legal_name,trade_name,status").order("trade_name").limit(1000);
-    const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations] = await Promise.all([
+    const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations, movementUsers] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version")
         .order("name").limit(500),
@@ -3502,8 +3502,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       (supabaseAdmin as any).from("dbs_control_operational_stock_balances").select("id,stock_id,part_id,quantity,reserved_quantity,version").eq("scope_key",scopeKey).limit(5000),
       (supabaseAdmin as any).from("dbs_control_operational_stock_movements").select("id,part_id,movement_type,quantity,source_stock_id,destination_stock_id,work_order_id,purchase_id,reference,created_by,created_at").eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(500),
       (supabaseAdmin as any).from("dbs_control_operational_reservations").select("id,stock_id,work_order_id,part_id,quantity,purpose,status,unit_cost_cents,created_at").eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(500),
+      scopedUserIds.length ? (supabaseAdmin as any).from("users").select("id,full_name,username").in("id",scopedUserIds) : Promise.resolve({data:[],error:null}),
     ]);
-    for (const result of [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations]) {
+    for (const result of [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations, movementUsers]) {
       if (result.error) throw new Error("Falha ao carregar painel de estoque/vendas: " + result.error.message);
     }
     const [accessRows,pontoEmployees] = await Promise.all([
@@ -3554,6 +3555,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       operationalBalances: operationalBalances.data ?? [],
       operationalMovements: operationalMovements.data ?? [],
       operationalReservations: operationalReservations.data ?? [],
+      movementUsers: movementUsers.data ?? [],
       employees: employees.data ?? [],
     };
   });
