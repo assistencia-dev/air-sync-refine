@@ -35,11 +35,13 @@ BEGIN
   IF NOT FOUND OR v_os_scope.scope_key IS DISTINCT FROM v_scope THEN
     RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
+  -- Global lock order shared with transfer: part -> operational stock -> balance.
+  -- This prevents a reserve/transfer cycle from taking the same rows in opposite order.
+  SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=p_part_id AND status='ativo' FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_PART_INVALID' USING ERRCODE='23503'; END IF;
   SELECT * INTO v_stock FROM public.dbs_control_operational_stocks
     WHERE id=p_stock_id AND scope_key=v_scope AND cost_center_id=p_cost_center_id AND status='active' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_STOCK_NOT_CONFIGURED' USING ERRCODE='23503'; END IF;
-  SELECT * INTO v_part FROM public.dbs_control_parts WHERE id=p_part_id AND status='ativo' FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_PART_INVALID' USING ERRCODE='23503'; END IF;
   SELECT * INTO v_balance FROM public.dbs_control_operational_stock_balances
     WHERE stock_id=v_stock.id AND part_id=p_part_id FOR UPDATE;
   IF NOT FOUND OR v_balance.quantity-v_balance.reserved_quantity<p_quantity THEN
