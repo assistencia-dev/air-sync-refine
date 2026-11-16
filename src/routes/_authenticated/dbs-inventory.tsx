@@ -200,7 +200,7 @@ export function DbsInventoryPage({
     }) : [];
   const employees = data?.employees ?? [];
   const workOrders = data?.workOrders ?? [];
-  const reservations = data?.reservations ?? [];
+  const reservations = [...(data?.reservations ?? []).map((r:any)=>({...r,is_operational:false})), ...(data?.operationalReservations ?? []).map((r:any)=>({...r,is_operational:true}))];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
@@ -1431,24 +1431,38 @@ export function DbsInventoryPage({
   <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[520px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
     <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>Nova reserva para OS</SheetTitle><SheetDescription>Selecione a ordem, centro de custo, peça e quantidade.</SheetDescription></SheetHeader>
     <form onSubmit={reserveParts} className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">Filtre as OS antes de pesquisar *</p>
+                <label className="block text-xs font-bold text-slate-600">Cliente
+                  <select value={reservationClientFilter} onChange={e=>{setReservationClientFilter(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Todos os clientes (use período para restringir)</option>{clients.filter((cl:any)=>cl.status!=="inativo").map((cl:any)=><option key={cl.id} value={cl.id}>{cl.trade_name||cl.legal_name}</option>)}</select>
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className="text-xs font-bold text-slate-600">Data inicial<input type="date" value={reservationDateFrom} onChange={e=>{setReservationDateFrom(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label>
+                  <label className="text-xs font-bold text-slate-600">Data final<input type="date" min={reservationDateFrom||undefined} value={reservationDateTo} onChange={e=>{setReservationDateTo(e.target.value);setReservationFiltersApplied(false);setWorkOrderId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs"/></label>
+                </div>
+                <button type="button" disabled={!reservationClientFilter&&!reservationDateFrom&&!reservationDateTo} onClick={()=>setReservationFiltersApplied(true)} className="mt-3 min-h-10 w-full rounded-lg bg-slate-800 text-xs font-bold text-white disabled:opacity-40">Aplicar filtros e carregar OS</button>
+              </div>
               <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
-              <select required value={workOrderId} onChange={e => setWorkOrderId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
-                <option value="">Selecione uma OS</option>
-                {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol ?? order.id} · {order.status}</option>)}
+              <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={workOrderId} onChange={e=>{setWorkOrderId(e.target.value);const o=workOrders.find((x:any)=>String(x.id)===e.target.value);if(o?.cost_center_id)setCostCenterId(String(o.cost_center_id));}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
+                <option value="">{!reservationFiltersApplied?"Aplique cliente e/ou período primeiro":"Selecione uma OS filtrada"}</option>
+                {filteredReservationOrders.map((order: any) => {const client=clients.find((cl:any)=>cl.id===order.client_id);return <option key={order.id} value={order.id}>{order.protocol||order.id} · {client?.trade_name||client?.legal_name||"Cliente"} · {String(order.created_at||"").slice(0,10)} · {order.status}</option>;})}
               </select>
+              {reservationFiltersApplied&&!filteredReservationOrders.length&&<p className="text-xs text-amber-700">Nenhuma OS encontrada com os filtros aplicados.</p>}
               <label className="mt-3 block text-xs font-bold text-slate-600">Centro de custo da OS *</label>
               <select required value={costCenterId} onChange={e=>setCostCenterId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione o centro de custo</option>
                 {costCenters.map((center:any)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
               </select>
+              <label className="mt-3 block text-xs font-bold text-slate-600">Finalidade do material *</label>
+              <select required value={reservationPurpose} onChange={e=>setReservationPurpose(e.target.value as "TROCA_PECA"|"ATIVO_EQUIPAMENTO")} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="TROCA_PECA">Troca de Peça</option><option value="ATIVO_EQUIPAMENTO">Ativo / Equipamento</option></select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Peça</label>
               <select required value={partId} onChange={e => setPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
                 <option value="">Selecione uma peça</option>
-                {activeParts.map((part: any) => { const unit=measureUnits.find((u:any)=>String(u.id)===String(part.measure_unit_id)); const free=Math.max(0,Number(part.stock_quantity??0)-Number(part.reserved_quantity??0)); return <option key={part.id} value={part.id}>{part.sku ? part.sku+" · " : ""}{part.name ?? part.description ?? part.id} · {unit?.symbol||unit?.code||"un"} · disponível {free.toLocaleString("pt-BR")}</option>; })}
+                {activeParts.map((part: any) => { const unit=measureUnits.find((u:any)=>String(u.id)===String(part.measure_unit_id)); const bal=operationalBalances.find((b:any)=>String(b.stock_id)===String(selectedOperationalStock?.id)&&String(b.part_id)===String(part.id)); const opFree=Math.max(0,Number(bal?.quantity??0)-Number(bal?.reserved_quantity??0)); const centralFree=Math.max(0,Number(part.stock_quantity??0)-Number(part.reserved_quantity??0)); return <option key={part.id} value={part.id}>{part.sku ? part.sku+" · " : ""}{part.name ?? part.description ?? part.id} · {unit?.symbol||unit?.code||"un"} · operacional {opFree.toLocaleString("pt-BR")} · central {centralFree.toLocaleString("pt-BR")}</option>; })}
               </select>
               <label className="mt-3 block text-xs font-bold text-slate-600">Quantidade<input type="number" min="0.001" step="0.001" required value={quantity} onChange={e => setQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" /></label>
-              {partId && (()=>{const selected=activeParts.find((p:any)=>String(p.id)===String(partId));const free=Math.max(0,Number(selected?.stock_quantity??0)-Number(selected?.reserved_quantity??0));return <p className={Number(quantity)>free?"rounded-lg bg-rose-50 p-3 text-xs font-semibold text-rose-700":"rounded-lg bg-slate-50 p-3 text-xs text-slate-600"}>Saldo central disponível: {free.toLocaleString("pt-BR")} · {Number(quantity)>free?"Quantidade superior ao saldo. Transfira material antes de reservar.":"Saldo conferido para a quantidade informada."}</p>;})()}
-              <button disabled={busy || !activeParts.length || !workOrders.length || !partId || Number(quantity)<=0 || (()=>{const selected=activeParts.find((p:any)=>String(p.id)===String(partId));return Number(quantity)>Math.max(0,Number(selected?.stock_quantity??0)-Number(selected?.reserved_quantity??0));})()} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
+              {partId && <div className="rounded-xl border border-slate-200 p-3 text-xs"><p>Saldo no estoque operacional: <strong>{Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0)).toLocaleString("pt-BR")}</strong></p><p className="mt-1">Saldo livre no Estoque Central: <strong>{selectedCentralAvailable.toLocaleString("pt-BR")}</strong></p>{!selectedOperationalStock&&<p className="mt-2 font-bold text-rose-700">Este centro de custo ainda não possui Estoque Operacional. Cadastre-o antes de reservar.</p>}{selectedOperationalStock&&selectedCentralAvailable>0&&Number(selectedOperationalBalance?.quantity??0)===0&&<p className="mt-2 text-sky-800">O estoque operacional está zerado. Há saldo central; use + Transferir para abastecer este centro de custo.</p>}{selectedOperationalStock&&Number(quantity)>Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0))&&<p className="mt-2 font-bold text-rose-700">Saldo operacional insuficiente. A reserva não será abatida do Estoque Central.</p>}</div>}
+              <button disabled={busy || !selectedOperationalStock || !reservationFiltersApplied || !workOrderId || !partId || Number(quantity)<=0 || Number(quantity)>Math.max(0,Number(selectedOperationalBalance?.quantity??0)-Number(selectedOperationalBalance?.reserved_quantity??0))} className="mt-5 min-h-11 w-full rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{busy ? "Processando..." : "Reservar estoque"}</button>
               <p className="mt-3 text-xs text-slate-500">A reserva bloqueia a disponibilidade, mas não baixa o estoque físico. A baixa ocorre ao concluir a OS.</p>
             </form>
   </SheetContent>
