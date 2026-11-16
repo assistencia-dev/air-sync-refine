@@ -180,6 +180,10 @@ const collaboratorPrivateScopeMigration = fs.readFileSync("supabase/migrations/2
 assert.match(cloudFunctions, /export const applyDbsControlDelta/, "A gravação do DBS CONTROL deve usar a API de deltas relacionais.");
 assert.match(cloudFunctions, /resolveDbsControlWorkOrderLegacyMap\(scope\.scopeKey, changes\.ordens \?\? \[\]\)/, "A sincronização deve resolver IDs locais de OS pelo mapa legado.");
 assert.match(cloudFunctions, /version: mappedCanonical\.version/, "Uma OS já vinculada deve usar sempre a versão canônica mais recente.");
+assert.match(cloudFunctions, /const resolvedOrderId = mappedCanonical\?\.id \?\? localOrderId/, "Um draft legado mapeado deve consultar a OS canônica antes de classificar uma emissão de colaborador.");
+assert.match(cloudFunctions, /work_order_id: !isNewCollaboratorOrder[\s\S]*?mappedCanonical\?\.id/, "Um draft legado mapeado deve enviar o UUID canônico para atualizar a OS existente.");
+assert.match(cloudFunctions, /protocol: \(mappedCanonical\?\.protocol \?\? protocol\) \|\| undefined/, "A atualização mapeada deve preservar o protocolo canônico.");
+assert.match(cloudFunctions, /Number\(mappedCanonical\?\.version \?\? expectedVersion\)/, "A atualização mapeada deve enviar a versão atual do banco.");
 assert.doesNotMatch(cloudFunctions, /if \(user\.role_key === "COLABORADOR"\)[\s\S]{0,260}workOrderLegacyMap\.delete\(localId\)/, "O fluxo do colaborador não pode descartar um vínculo legado explícito de uma OS já criada.");
 assert.doesNotMatch(cloudFunctions, /rpc\("dbs_control_save_snapshot_safe_v2"/, "Nenhum autosave novo pode chamar o RPC de snapshot completo.");
 assert.match(atomicSnapshotMigration, /for update/i, "A gravação atômica deve bloquear o snapshot do escopo durante a transação.");
