@@ -253,7 +253,7 @@ assert.match(phase2, /atendimento com pendência/i);
 assert.match(functions, /dbs_control_apply_work_order_delta_with_reservations/);
 assert.doesNotMatch(phase2Ui, /Vendas avulsas|Vendas recentes|Registrar venda|settleDbsPartSale|createDbsPartSale/);
 
-assert.match(phase2Ui, /reserveDbsWorkOrderParts/);
+assert.match(phase2Ui, /reserveDbsOperationalStockForWorkOrder/);
 assert.match(ledgerRpc, /insert into public\.treasury_accounts/i);
 assert.match(ledgerRpc, /on conflict \(scope_key, code\) do update/i);
 assert.match(phase2, /'4\.1\.02'/);
