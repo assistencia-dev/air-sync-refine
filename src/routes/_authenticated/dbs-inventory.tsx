@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Archive, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
@@ -10,6 +12,7 @@ import {
   reserveDbsWorkOrderParts, setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
   updateDbsPartCatalog, transferDbsStockToTechnician,
+  updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
 export const Route = createFileRoute("/_authenticated/dbs-inventory")({
@@ -31,6 +34,8 @@ function money(cents: unknown) {
 }
 
 type DbsInventorySection = "parts" | "purchases";
+type InventoryRecordEntity = "part" | "supplier" | "cost_center" | "measure_unit" | "unit_conversion";
+type PendingInventoryDelete = { entity: InventoryRecordEntity; id: string; label: string };
 type DbsInventoryPageProps = {
   embedded?: boolean;
   initialSection?: DbsInventorySection;
@@ -58,6 +63,9 @@ export function DbsInventoryPage({
   const [activeDrawer, setActiveDrawer] = useState<InventoryDrawer>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogFilter, setCatalogFilter] = useState<"all" | "stock" | "setup">("all");
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState<"active" | "archived" | "all">("active");
+  const [masterRecordId, setMasterRecordId] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<PendingInventoryDelete | null>(null);
   useEffect(() => {
     setModuleSection(initialSection);
   }, [initialSection]);
@@ -160,6 +168,10 @@ export function DbsInventoryPage({
   const measureUnits = data?.measureUnits ?? [];
   const unitConversions = data?.unitConversions ?? [];
   const costCenters = data?.costCenters ?? [];
+  const activeParts = parts.filter((part: any) => String(part.status ?? "ativo").toLowerCase() !== "inativo");
+  const activeSuppliers = suppliers.filter((supplier: any) => String(supplier.status ?? "active") === "active");
+  const activeMeasureUnits = measureUnits.filter((unit: any) => String(unit.status ?? "active") === "active");
+  const activeCostCenters = costCenters.filter((center: any) => String(center.status ?? "active") === "active");
   const gasCylinders = data?.gasCylinders ?? [];
   const carStock = data?.carStock ?? [];
   const employees = data?.employees ?? [];
@@ -184,10 +196,12 @@ export function DbsInventoryPage({
     const query = catalogSearch.trim().toLocaleLowerCase("pt-BR");
     const catalogSupplierLabel = suppliers.find((row: any) => String(row.id) === String(part.supplier_id))?.name ?? "";
     const matchesQuery = !query || [part.name, part.description, part.sku, catalogSupplierLabel].some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(query));
+    const active = String(part.status ?? "ativo").toLowerCase() !== "inativo";
+    const matchesStatus = catalogStatusFilter === "all" || (catalogStatusFilter === "active" && active) || (catalogStatusFilter === "archived" && !active);
     const matchesFilter = catalogFilter === "all"
       || (catalogFilter === "stock" && Number(part.stock_quantity ?? 0) > 0)
       || (catalogFilter === "setup" && (!part.supplier_id || !part.measure_unit_id));
-    return matchesQuery && matchesFilter;
+    return matchesQuery && matchesStatus && matchesFilter;
   });
 
   useEffect(() => {
@@ -215,7 +229,7 @@ export function DbsInventoryPage({
     if (!costCenterId && costCenters.length === 1) setCostCenterId(String(costCenters[0].id));
   }, [suppliers, costCenters, supplierId, costCenterId]);
 
-  const availableParts = parts.filter((part: any) =>
+  const availableParts = activeParts.filter((part: any) =>
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
   );
 
@@ -304,7 +318,7 @@ export function DbsInventoryPage({
     const conversion = unitConversions.find((row: any) =>
       String(row.from_unit_id) === purchaseUnitId && String(row.to_unit_id) === String(part.measure_unit_id)
     );
-    return conversion ? Number(conversion.factor) : 0;
+    return conversion && String(conversion.status ?? "active") === "active" ? Number(conversion.factor) : 0;
   }
 
   function selectCatalogPart(partIdValue: string) {
