@@ -22,6 +22,7 @@ assert.match(workspace, /Trabalhado corrigido/);
 assert.match(exportsSource, /win\.document\.open\(\)/);
 assert.match(exportsSource, /pointLabels/);
 assert.match(ponto, /validatePontoGps\(data, employee, data\.punch_type\)/, "o backend deve validar o GPS no servidor");
+assert.match(ponto, /select\("id, employee_id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, note"\)/, "o painel RH deve receber as coordenadas e a precisão salvas em cada batida");
 assert.match(ponto, /timeZone: "America\/Sao_Paulo"/, "a data operacional deve usar o fuso oficial calculado no servidor");
 assert.match(ponto, /work_date: serverWorkDate/, "a data enviada pelo dispositivo não deve ser persistida sem validação do servidor");
 assert.match(ponto, /DEFAULT now\(\) do PostgreSQL/, "o timestamp UTC deve continuar vindo do banco, não do relógio do dispositivo");
