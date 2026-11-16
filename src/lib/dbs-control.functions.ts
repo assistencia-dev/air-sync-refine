@@ -3460,7 +3460,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
-        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version")
         .order("name").limit(500),
       scopedUserIds.length
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
@@ -3600,7 +3600,7 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
 
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; costCents: number; saleCents: number }) => {
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
@@ -3609,7 +3609,8 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     return {
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
-      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade-base"),
+      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
+      purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
       costCents: input.costCents, saleCents: input.saleCents,
     };
   })
@@ -3628,16 +3629,16 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     if (duplicate.data) throw new Error("Já existe uma peça cadastrada com este SKU.");
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
-      measure_unit_id: data.measureUnitId, stock_quantity: 0, reserved_quantity: 0,
+      measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId, stock_quantity: 0, reserved_quantity: 0,
       cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
-    }).select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version").single();
+    }) .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").single();
     if (saved.error) throw new Error(saved.error.message);
     return saved.data;
   });
 
 export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; costCents: number; saleCents: number }) => {
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
@@ -3648,7 +3649,8 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
       partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
-      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade-base"),
+      measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
+      purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
       costCents: input.costCents, saleCents: input.saleCents,
     };
   })
@@ -3673,11 +3675,11 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     }
     const saved = await admin.from("dbs_control_parts").update({
       sku: data.sku, name: data.name, description: data.description,
-      supplier_id: data.supplierId, measure_unit_id: data.measureUnitId,
+      supplier_id: data.supplierId, measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId,
       cost_cents: data.costCents, sale_cents: data.saleCents,
       version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
     }).eq("id", data.partId).eq("version", data.expectedVersion)
-      .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,version").maybeSingle();
+       .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").maybeSingle();
     if (saved.error) throw new Error(saved.error.message);
     if (!saved.data) throw new Error("A peça mudou durante a gravação. Atualize a tela e tente novamente.");
     return saved.data;
