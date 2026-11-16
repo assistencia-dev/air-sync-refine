@@ -23,7 +23,7 @@ GRANT ALL ON public.dbs_control_operational_reservation_consumptions TO service_
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_consume_work_order(
   p_actor_user_id uuid,p_work_order_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
 DECLARE
   v_actor_company uuid;
   v_scope record;
@@ -180,7 +180,7 @@ GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_consume_work_orde
 
 CREATE OR REPLACE FUNCTION public.dbs_control_apply_work_order_delta_with_reservations(p_payload jsonb)
 RETURNS TABLE(ok boolean,status text,work_order_id uuid,protocol text,version bigint,command_id uuid,idempotency_key text,error_code text,error_message text,changed_at timestamptz)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_payload jsonb:=p_payload;
   v_order_id uuid;
@@ -261,7 +261,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_consume_all_work_order_reservations(
   p_work_order_id uuid,p_actor_user_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_has_legacy boolean;
   v_has_operational boolean;
@@ -298,7 +298,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_release_reservation(
   p_actor_user_id uuid,p_reservation_id uuid,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
 DECLARE
   v_r public.dbs_control_operational_reservations%rowtype;
   v_balance public.dbs_control_operational_stock_balances%rowtype;
