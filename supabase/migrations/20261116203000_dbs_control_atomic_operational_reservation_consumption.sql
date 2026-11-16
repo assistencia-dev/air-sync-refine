@@ -114,6 +114,60 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.dbs_control_operational_stock_release_reservation(
+  p_actor_user_id uuid,p_reservation_id uuid,p_idempotency_key text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $
+DECLARE
+  v_r public.dbs_control_operational_reservations%rowtype;
+  v_balance public.dbs_control_operational_stock_balances%rowtype;
+  v_actor_company uuid;
+  v_work_order_id uuid;
+  v_key text:=nullif(btrim(p_idempotency_key),'');
+BEGIN
+  IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  IF v_key IS NULL OR char_length(v_key) NOT BETWEEN 8 AND 240 THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_IDEMPOTENCY_REQUIRED' USING ERRCODE='22023';
+  END IF;
+
+  -- Read the OS id without locking the reservation; acquire the shared OS lock first.
+  SELECT work_order_id INTO v_work_order_id
+    FROM public.dbs_control_operational_reservations WHERE id=p_reservation_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_NOT_FOUND' USING ERRCODE='23503';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('dbs-os-reservations:'||v_work_order_id::text,0));
+
+  SELECT * INTO v_r FROM public.dbs_control_operational_reservations
+    WHERE id=p_reservation_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_NOT_FOUND' USING ERRCODE='23503';
+  END IF;
+  SELECT company_id INTO v_actor_company FROM public.users
+    WHERE id=p_actor_user_id AND status='ativo';
+  IF NOT FOUND OR v_actor_company IS DISTINCT FROM v_r.company_id THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_SCOPE_MISMATCH' USING ERRCODE='42501';
+  END IF;
+  IF v_r.status<>'reserved' THEN
+    RETURN jsonb_build_object('ok',true,'replayed',true,'reservation_id',v_r.id,'status',v_r.status);
+  END IF;
+  SELECT * INTO v_balance FROM public.dbs_control_operational_stock_balances
+    WHERE stock_id=v_r.stock_id AND part_id=v_r.part_id FOR UPDATE;
+  IF NOT FOUND OR v_balance.reserved_quantity<v_r.quantity THEN
+    RAISE EXCEPTION 'DBS_OPERATIONAL_RESERVATION_BALANCE_INCONSISTENT' USING ERRCODE='23514';
+  END IF;
+  UPDATE public.dbs_control_operational_stock_balances
+    SET reserved_quantity=reserved_quantity-v_r.quantity,version=version+1,updated_at=now()
+    WHERE id=v_balance.id;
+  UPDATE public.dbs_control_operational_reservations
+    SET status='released',released_at=now() WHERE id=v_r.id;
+  RETURN jsonb_build_object('ok',true,'replayed',false,'reservation_id',v_r.id,'status','released');
+END $;
+
+REVOKE ALL ON FUNCTION public.dbs_control_operational_stock_release_reservation(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.dbs_control_operational_stock_release_reservation(uuid,uuid,text) TO service_role;
+
 REVOKE ALL ON FUNCTION public.dbs_control_apply_work_order_delta_with_reservations(jsonb) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.dbs_control_apply_work_order_delta_with_reservations(jsonb) TO service_role;
 REVOKE ALL ON FUNCTION public.dbs_control_consume_all_work_order_reservations(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
