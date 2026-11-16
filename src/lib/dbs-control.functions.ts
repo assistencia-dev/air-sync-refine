@@ -3466,9 +3466,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    let clientsQuery = (supabaseAdmin as any).from("dbs_control_clients")
+    // dbs_control_clients is a shared canonical catalog without company_id; OS results remain scoped below.
+    const clientsQuery = (supabaseAdmin as any).from("dbs_control_clients")
       .select("id,legal_name,trade_name,status").order("trade_name").limit(1000);
-    clientsQuery = companyId ? clientsQuery.eq("company_id", companyId) : clientsQuery.is("company_id", null);
     const [parts, workOrders, reservations, purchases, workOrderFinancials, suppliers, measureUnits, unitConversions, costCenters, gasCylinders, carStock, clients, operationalStocks, operationalBalances, operationalMovements, operationalReservations] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version")
