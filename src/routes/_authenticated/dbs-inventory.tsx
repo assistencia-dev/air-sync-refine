@@ -614,7 +614,7 @@ export function DbsInventoryPage({
 
   async function reserveParts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!partId || !workOrderId || !costCenterId || Number(quantity) <= 0) {
+    if (!partId || !workOrderId || !costCenterId || !reservationStockId || Number(quantity) <= 0) {
       setMessage("Selecione OS, peça, quantidade e centro de custo.");
       return;
     }
@@ -1472,7 +1472,7 @@ export function DbsInventoryPage({
                 <button type="button" disabled={!reservationClientFilter&&!reservationDateFrom&&!reservationDateTo} onClick={()=>setReservationFiltersApplied(true)} className="mt-3 min-h-10 w-full rounded-lg bg-slate-800 text-xs font-bold text-white disabled:opacity-40">Aplicar filtros e carregar OS</button>
               </div>
               <label className="mt-4 block text-xs font-bold text-slate-600">Ordem de serviço</label>
-              <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={workOrderId} onChange={e=>{setWorkOrderId(e.target.value);const o=workOrders.find((x:any)=>String(x.id)===e.target.value);if(o?.cost_center_id)setCostCenterId(String(o.cost_center_id));}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
+              <select required disabled={!reservationFiltersApplied||!filteredReservationOrders.length} value={workOrderId} onChange={e=>{setWorkOrderId(e.target.value);const o=workOrders.find((x:any)=>String(x.id)===e.target.value);setCostCenterId(String(o?.cost_center_id||""));setReservationStockId("");setPartId("");setReservationPartSearch("");}} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100">
                 <option value="">{!reservationFiltersApplied?"Aplique cliente e/ou período primeiro":"Selecione uma OS filtrada"}</option>
                 {filteredReservationOrders.map((order: any) => {const client=clients.find((cl:any)=>cl.id===order.client_id);return <option key={order.id} value={order.id}>{order.protocol||order.id} · {client?.trade_name||client?.legal_name||"Cliente"} · {String(order.created_at||"").slice(0,10)} · {order.status}</option>;})}
               </select>
@@ -1504,7 +1504,7 @@ export function DbsInventoryPage({
   </SheetContent>
 </Sheet>
 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><p className="text-xs text-slate-500">{reservations.length} reservas registradas</p><button type="button" onClick={()=>setActiveDrawer("reservation")} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova reserva</button></div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><p className="text-xs text-slate-500">{reservations.length} reservas registradas</p><button type="button" onClick={()=>{setWorkOrderId("");setCostCenterId("");setReservationStockId("");setPartId("");setReservationPartSearch("");setQuantity("1");setReservationPurpose("TROCA_PECA");setReservationClientFilter("");setReservationClientSearch("");setReservationDateFrom("");setReservationDateTo("");setReservationFiltersApplied(false);setActiveDrawer("reservation");}} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Nova reserva</button></div>
               <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Reserva</th><th className="p-3">OS / finalidade</th><th className="p-3">Peça / estoque</th><th className="p-3">Quantidade</th><th className="p-3">Custo capturado</th><th className="p-3">Status</th><th className="p-3">Ação</th></tr></thead>
                 <tbody>{reservations.map((reservation: any) => <tr key={reservation.id} className="border-t border-slate-100">
