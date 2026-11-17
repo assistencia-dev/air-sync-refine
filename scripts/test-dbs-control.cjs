@@ -818,5 +818,5 @@ assert.equal(employeeSchedule.normalizeOrderDate("31/02/2026"), "", "Datas invá
 assert.match(html, /dbs-control-employee-days\.js\?v=20261116-1/, "O agrupador diário deve ser carregado na tela de operações.");
 assert.match(html, /employee-day-heading/, "Cada dia deve ter cabeçalho visual próprio.");
 assert.match(html, /employeeOrderGroups\.map\(group/, "As ordens do colaborador devem ser renderizadas dentro do respectivo dia.");
-assert.match(route, /20261116-employee-daily-agenda-1/, "A rota deve invalidar o cache antigo da agenda do colaborador.");
+assert.match(route, /20261117-os-audit-signature-1/, "A rota deve invalidar o cache antigo do iframe após as correções de assinatura e auditoria.");
 console.log("DBS CONTROL colaborador: agenda diária, ordenação e preservação de OS verificadas.");
