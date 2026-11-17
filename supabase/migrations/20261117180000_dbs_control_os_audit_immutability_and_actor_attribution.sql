@@ -15,16 +15,6 @@ DECLARE
   v_actor uuid;
   v_auth_id uuid;
 BEGIN
-  IF p_preferred_actor IS NOT NULL THEN
-    SELECT u.id INTO v_actor
-    FROM public.users u
-    WHERE u.id = p_preferred_actor
-    LIMIT 1;
-    IF v_actor IS NOT NULL THEN
-      RETURN v_actor;
-    END IF;
-  END IF;
-
   IF NULLIF(btrim(p_idempotency_key), '') IS NOT NULL THEN
     SELECT sc.actor_user_id INTO v_actor
     FROM public.dbs_control_sync_commands sc
@@ -43,6 +33,18 @@ BEGIN
     SELECT u.id INTO v_actor
     FROM public.users u
     WHERE u.auth_id = v_auth_id
+    LIMIT 1;
+    -- Never trust a caller-supplied actor when an authenticated identity
+    -- exists, even for administrators inserting through the public API.
+    RETURN v_actor;
+  END IF;
+
+  -- Service-role upload handlers have no auth.uid(); their server-side
+  -- caller supplies the already-resolved internal users.id.
+  IF p_preferred_actor IS NOT NULL THEN
+    SELECT u.id INTO v_actor
+    FROM public.users u
+    WHERE u.id = p_preferred_actor
     LIMIT 1;
   END IF;
 
