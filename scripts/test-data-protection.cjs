@@ -12,6 +12,7 @@ const restoreDrill = fs.readFileSync(path.join(root, "scripts/verify-backup-rest
 const restoreWorkflow = fs.readFileSync(path.join(root, ".github/workflows/backup-restore-drill.yml"), "utf8");
 const masterData = fs.readFileSync(path.join(root, "supabase/migrations/20261111133659_dbs_control_supplier_uom_master_data.sql"), "utf8");
 const purchaseApproval = fs.readFileSync(path.join(root, "supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql"), "utf8");
+const osAuditMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261117180000_dbs_control_os_audit_immutability_and_actor_attribution.sql"), "utf8");
 
 assert.match(backup, /dbs-control-os/);
 assert.match(backup, /listStorageObjects/);
@@ -51,6 +52,14 @@ assert.match(purchaseApproval, /DBS_PURCHASE_APPROVAL_REQUIRED/);
 assert.match(purchaseApproval, /legacy_received/);
 assert.match(retention, /Exclusão física de Ordem de Serviço bloqueada/);
 assert.match(retention, /dbs_control_work_order_revisions/);
+assert.match(osAuditMigration, /dbs_control_resolve_os_actor/, "O autor da revisão deve vir de identidade autenticada ou comando idempotente confiável.");
+assert.match(osAuditMigration, /DBS_OS_ACTOR_REQUIRED/, "Alterações sem responsável não podem ser gravadas na OS.");
+assert.match(osAuditMigration, /trg_dbs_control_os_events_append_only/, "A trilha de eventos deve ser append-only.");
+assert.match(osAuditMigration, /trg_dbs_control_os_revisions_append_only/, "As revisões devem ser append-only.");
+assert.match(osAuditMigration, /trg_dbs_control_os_attachments_append_only/, "Metadados de anexos não podem ser apagados ou substituídos.");
+assert.match(osAuditMigration, /trg_dbs_control_log_os_attachment/, "Todo novo anexo deve gerar um evento de auditoria.");
+assert.match(osAuditMigration, /uniquely_attributed/, "Backfill de autoria deve exigir correspondência inequívoca por OS e horário.");
+assert.match(osAuditMigration, /attachment_id/, "A auditoria de anexos deve identificar cada arquivo sem guardar seu conteúdo binário.");
 assert.match(integrity, /rh_ponto_records_employee_date_type_uq/);
 assert.match(integrity, /dbs_control_backup_manifests/);
 assert.match(bucketMigration, /document_buckets/);
