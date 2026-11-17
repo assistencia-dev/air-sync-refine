@@ -752,7 +752,9 @@ console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e 
 
 
 // Agenda do colaborador: agrupamento puro por data, sem alterar OS ou estado.
-const employeeSchedule = require("../public/dbs-control-employee-days.js");
+const employeeScheduleContext = {};
+vm.runInNewContext(fs.readFileSync("public/dbs-control-employee-days.js", "utf8"), employeeScheduleContext, { filename: "public/dbs-control-employee-days.js" });
+const employeeSchedule = employeeScheduleContext.DbsEmployeeSchedule;
 const scheduleReference = new Date(2026, 10, 16, 12, 0, 0);
 const scheduleOrders = [
   { id: "sem-data", data: "" },
