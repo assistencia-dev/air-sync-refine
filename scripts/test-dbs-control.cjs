@@ -764,7 +764,7 @@ const scheduleOrders = [
   { id: "hoje-1", data: "16/11/2026" },
   { id: "hoje-2", data: "2026-11-16" },
 ];
-const openDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "abertas", scheduleReference);
+const openDayGroups = Array.from(employeeSchedule.groupOrdersByDay(scheduleOrders, "abertas", scheduleReference));
 assert.deepEqual(openDayGroups.map((group) => group.key), [
   "2026-11-15", "2026-11-16", "2026-11-17", "2026-11-18", "sem-data",
 ], "OS abertas devem ficar no próprio dia, com datas anteriores recentes primeiro e sem data por último.");
@@ -774,7 +774,7 @@ assert.equal(openDayGroups[1].orders.length, 2, "OS da mesma data devem permanec
 assert.deepEqual(openDayGroups.flatMap((group) => group.orders.map((order) => order.id)).sort(),
   scheduleOrders.map((order) => order.id).sort(),
   "O agrupamento não pode ocultar nem duplicar ordens.");
-const completedDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "concluidas", scheduleReference);
+const completedDayGroups = Array.from(employeeSchedule.groupOrdersByDay(scheduleOrders, "concluidas", scheduleReference));
 assert.deepEqual(completedDayGroups.map((group) => group.key), [
   "2026-11-18", "2026-11-17", "2026-11-16", "2026-11-15", "sem-data",
 ], "O histórico concluído deve mostrar os dias mais recentes primeiro.");
