@@ -99,6 +99,10 @@ assert.ok(osViewer.includes('data-act="download"'), "O download de PDF deve cont
 assert.ok(osViewer.includes("fotoAntes") && osViewer.includes("fotoDepois"), "A visualização deve preservar as evidências antes/depois.");
 assert.ok(osViewer.includes("[...L(o.anexos), ...L(o.attachments)"), "A visualização deve contemplar anexos legados e atuais.");
 assert.ok(osViewer.includes("Assinaturas") && osViewer.includes("Histórico"), "A visualização deve manter assinaturas e histórico.");
+assert.ok(osViewer.includes('data-act="download-signature"'), "A visualização deve oferecer download do arquivo original da assinatura.");
+assert.ok(osViewer.includes("Baixar PNG original"), "O download da assinatura deve ser identificado como arquivo original.");
+assert.ok(osViewer.includes("URL.createObjectURL(blob)"), "O download da assinatura deve gerar um arquivo local sem expor o bucket privado.");
+assert.ok(osViewer.includes("first(o.assinaturaStoragePath, o.assinatura_path, o.signature_path)"), "A interface deve distinguir assinatura armazenada de link temporário indisponível.");
 assert.ok(osViewer.includes("setAttribute('role', 'dialog')"), "A visualização deve ser um diálogo acessível.");
 const osViewerMutationMethods = [".insert(", ".update(", ".upsert(", ".delete("];
 assert.equal(
@@ -748,7 +752,9 @@ console.log("Cadastros DBS CONTROL: edição, arquivamento, exclusão lógica e 
 
 
 // Agenda do colaborador: agrupamento puro por data, sem alterar OS ou estado.
-const employeeSchedule = require("../public/dbs-control-employee-days.js");
+const employeeScheduleContext = { Date };
+vm.runInNewContext(fs.readFileSync("public/dbs-control-employee-days.js", "utf8"), employeeScheduleContext, { filename: "public/dbs-control-employee-days.js" });
+const employeeSchedule = employeeScheduleContext.DbsEmployeeSchedule;
 const scheduleReference = new Date(2026, 10, 16, 12, 0, 0);
 const scheduleOrders = [
   { id: "sem-data", data: "" },
@@ -758,7 +764,7 @@ const scheduleOrders = [
   { id: "hoje-1", data: "16/11/2026" },
   { id: "hoje-2", data: "2026-11-16" },
 ];
-const openDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "abertas", scheduleReference);
+const openDayGroups = Array.from(employeeSchedule.groupOrdersByDay(scheduleOrders, "abertas", scheduleReference));
 assert.deepEqual(openDayGroups.map((group) => group.key), [
   "2026-11-15", "2026-11-16", "2026-11-17", "2026-11-18", "sem-data",
 ], "OS abertas devem ficar no próprio dia, com datas anteriores recentes primeiro e sem data por último.");
@@ -768,7 +774,7 @@ assert.equal(openDayGroups[1].orders.length, 2, "OS da mesma data devem permanec
 assert.deepEqual(openDayGroups.flatMap((group) => group.orders.map((order) => order.id)).sort(),
   scheduleOrders.map((order) => order.id).sort(),
   "O agrupamento não pode ocultar nem duplicar ordens.");
-const completedDayGroups = employeeSchedule.groupOrdersByDay(scheduleOrders, "concluidas", scheduleReference);
+const completedDayGroups = Array.from(employeeSchedule.groupOrdersByDay(scheduleOrders, "concluidas", scheduleReference));
 assert.deepEqual(completedDayGroups.map((group) => group.key), [
   "2026-11-18", "2026-11-17", "2026-11-16", "2026-11-15", "sem-data",
 ], "O histórico concluído deve mostrar os dias mais recentes primeiro.");
