@@ -14,6 +14,7 @@ AS $function$
 DECLARE
   v_actor uuid;
   v_auth_id uuid;
+  v_jwt_role text;
 BEGIN
   IF NULLIF(btrim(p_idempotency_key), '') IS NOT NULL THEN
     SELECT sc.actor_user_id INTO v_actor
@@ -29,18 +30,25 @@ BEGIN
   END IF;
 
   v_auth_id := auth.uid();
+  v_jwt_role := NULLIF(current_setting('request.jwt.claim.role', true), '');
   IF v_auth_id IS NOT NULL THEN
     SELECT u.id INTO v_actor
     FROM public.users u
     WHERE u.auth_id = v_auth_id
     LIMIT 1;
-    -- Never trust a caller-supplied actor when an authenticated identity
-    -- exists, even for administrators inserting through the public API.
-    RETURN v_actor;
+    IF v_actor IS NOT NULL THEN
+      RETURN v_actor;
+    END IF;
+    -- If an authenticated user is present but has no application profile,
+    -- do not accept an actor supplied in the row. Only a trusted server role
+    -- may use the preferred id fallback below.
+    IF v_jwt_role NOT IN ('service_role', 'supabase_admin') THEN
+      RETURN NULL;
+    END IF;
   END IF;
 
-  -- Service-role upload handlers have no auth.uid(); their server-side
-  -- caller supplies the already-resolved internal users.id.
+  -- Service-role upload handlers may not carry an auth.uid(); their
+  -- server-side caller supplies the already-resolved internal users.id.
   IF p_preferred_actor IS NOT NULL THEN
     SELECT u.id INTO v_actor
     FROM public.users u
