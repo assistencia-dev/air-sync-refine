@@ -5901,6 +5901,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 renderizarAbaAtiva(document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
                 return;
             }
+            if (msg.type === 'DBS_CONTROL_OS_AUDIT_RESULT') {
+                const requestId = String(msg.requestId || '');
+                const modal = Array.from(document.querySelectorAll('.os-history-modal'))
+                    .find(element => element.dataset.auditRequestId === requestId);
+                if (!modal) return;
+                modal.dataset.auditLoaded = 'true';
+                const list = modal.querySelector('.os-history-list');
+                if (!list) return;
+                if (msg.ok && Array.isArray(msg.result?.items)) {
+                    list.innerHTML = renderHistoricoRelacionalOS(msg.result.items);
+                } else {
+                    list.innerHTML = modal.__dbsOsLocalFallback || '<div class="os-history-empty">Histórico oficial indisponível no momento.</div>';
+                }
+                return;
+            }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
 
@@ -7200,23 +7215,78 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }).join('');
         }
 
+        function renderHistoricoRelacionalOS(items) {
+            if (!Array.isArray(items) || !items.length) {
+                return '<div class="os-history-empty">Nenhum evento relacional foi encontrado para esta OS.</div>';
+            }
+            return items.map(item => {
+                const changes = Array.isArray(item.changes) ? item.changes : [];
+                const changesHtml = changes.length ? `<div style="display:grid;gap:5px;margin-top:8px;">${changes.map(change =>
+                    `<div class="history-detail"><strong>${escDbsControl(change.label || 'Campo alterado')}:</strong> ${escDbsControl(change.before || '—')} <span aria-hidden="true">→</span> ${escDbsControl(change.after || '—')}</div>`
+                ).join('')}</div>` : '';
+                return `<div class="os-history-item">
+                    <div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(item.createdAt))}</div>
+                    <div>
+                        <div class="history-event">${escDbsControl(item.title || 'Evento da OS')}</div>
+                        <div class="history-detail" style="margin-top:4px;">${escDbsControl(item.detail || '')}</div>
+                        <div class="history-detail" style="margin-top:4px;"><strong>Responsável:</strong> ${escDbsControl(item.actorName || 'Usuário não identificado')}</div>
+                        ${changesHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderHistoricoLocalFallbackOS(os) {
+            const eventos = (ERP_STATE.osHistorico || [])
+                .filter(h => String(h.osId) === String(os.id))
+                .sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const notice = '<div class="os-history-empty" style="border-color:#f59e0b;background:#fffbeb;color:#92400e;">Não foi possível consultar a trilha oficial agora. Abaixo está somente a cópia local deste dispositivo, ainda não confirmada pela base compartilhada.</div>';
+            const local = eventos.length ? eventos.map(h => `<div class="os-history-item">
+                <div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</div>
+                <div><div class="history-event">${escDbsControl(h.evento)}</div>
+                <div class="history-detail" style="margin-top:4px;">${escDbsControl(h.detalhe)}</div>
+                <div class="history-detail" style="margin-top:4px;">Registro local · responsável não confirmado</div></div>
+            </div>`).join('') : '<div class="os-history-empty">Não há cópia local de eventos para esta OS.</div>';
+            return notice + local;
+        }
+
         function abrirHistoricoOS(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             if (!os) return;
             const cli = nomeClienteOS(os);
             const tec = nomeTecnicoOS(os);
-            const eventos = (ERP_STATE.osHistorico || []).filter(h => String(h.osId) === String(os.id)).sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : 'os-audit-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             const modal = document.createElement('div');
             modal.className = 'os-history-modal';
+            modal.dataset.auditRequestId = requestId;
             modal.innerHTML = `<div class="os-history-dialog" role="dialog" aria-modal="true">
                 <div class="os-history-head">
                     <div><h3>Histórico da ${escDbsControl(os.id)}</h3><p>${escDbsControl(cli)} · ${escDbsControl(tec)} · Status: ${escDbsControl(os.status || '—')}</p></div>
                     <button class="btn btn-secondary btn-sm" type="button">Fechar</button>
                 </div>
-                <div class="os-history-list">${eventos.length ? eventos.map(h => `<div class="os-history-item"><div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</div><div><div class="history-event">${escDbsControl(h.evento)}</div><div class="history-detail" style="margin-top:4px;">${escDbsControl(h.detalhe)}</div></div></div>`).join('') : '<div class="os-history-empty">Ainda não há eventos registrados para esta OS.</div>'}</div>
+                <div class="os-history-list"><div class="os-history-empty">Consultando histórico oficial da OS...</div></div>
             </div>`;
+            modal.__dbsOsLocalFallback = renderHistoricoLocalFallbackOS(os);
             modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('.os-history-head button')) modal.remove(); });
             document.body.appendChild(modal);
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'DBS_CONTROL_OS_AUDIT',
+                    requestId,
+                    workOrderId: String(os.id)
+                }, '*');
+            } else {
+                const list = modal.querySelector('.os-history-list');
+                if (list) list.innerHTML = modal.__dbsOsLocalFallback;
+            }
+            window.setTimeout(() => {
+                if (!modal.isConnected || modal.dataset.auditLoaded === 'true') return;
+                modal.dataset.auditLoaded = 'true';
+                const list = modal.querySelector('.os-history-list');
+                if (list) list.innerHTML = modal.__dbsOsLocalFallback;
+            }, 15000);
         }
 
         async function transicionarStatusOS(orderId, nextStatus) {
