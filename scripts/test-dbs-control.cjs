@@ -99,6 +99,10 @@ assert.ok(osViewer.includes('data-act="download"'), "O download de PDF deve cont
 assert.ok(osViewer.includes("fotoAntes") && osViewer.includes("fotoDepois"), "A visualização deve preservar as evidências antes/depois.");
 assert.ok(osViewer.includes("[...L(o.anexos), ...L(o.attachments)"), "A visualização deve contemplar anexos legados e atuais.");
 assert.ok(osViewer.includes("Assinaturas") && osViewer.includes("Histórico"), "A visualização deve manter assinaturas e histórico.");
+assert.ok(osViewer.includes('data-act="download-signature"'), "A visualização deve oferecer download do arquivo original da assinatura.");
+assert.ok(osViewer.includes("Baixar PNG original"), "O download da assinatura deve ser identificado como arquivo original.");
+assert.ok(osViewer.includes("URL.createObjectURL(blob)"), "O download da assinatura deve gerar um arquivo local sem expor o bucket privado.");
+assert.ok(osViewer.includes("first(o.assinaturaStoragePath, o.assinatura_path, o.signature_path)"), "A interface deve distinguir assinatura armazenada de link temporário indisponível.");
 assert.ok(osViewer.includes("setAttribute('role', 'dialog')"), "A visualização deve ser um diálogo acessível.");
 const osViewerMutationMethods = [".insert(", ".update(", ".upsert(", ".delete("];
 assert.equal(
