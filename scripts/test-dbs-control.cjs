@@ -358,6 +358,38 @@ assert.doesNotMatch(cloudFunctions, /assigned_employee_id: isDbsControlUuid\(raw
 assert.match(cloudFunctions, /sessão de colaborador é a autoridade/, "A emissão pelo colaborador deve usar o vínculo RH canônico da sessão.");
 assert.match(cloudFunctions, /dbs_control_apply_work_order_delta/, "A alteração da OS deve passar pelo RPC transacional com versão esperada.");
 assert.match(cloudFunctions, /event_type: "work_order_delta"/, "Cada lote de OS deve carregar um tipo de evento auditável.");
+
+const employeeCompletionStart = html.indexOf("async function concluirOSMobile");
+const employeeCompletionEnd = html.indexOf("function efetuarLoginPWA", employeeCompletionStart);
+assert.ok(employeeCompletionStart >= 0 && employeeCompletionEnd > employeeCompletionStart, "O fluxo de conclusão do técnico deve existir em um único handler verificável.");
+const employeeCompletionFlow = html.slice(employeeCompletionStart, employeeCompletionEnd);
+assert.match(employeeCompletionFlow, /if \(!relatoTecnico\)/, "O técnico deve registrar relato técnico antes de concluir uma OS.");
+assert.match(employeeCompletionFlow, /os\.status = atendimentoStatusLabel/, "A baixa do técnico deve atualizar o status da OS antes do envio.");
+assert.match(employeeCompletionFlow, /os\.concluidoEm = atendimentoStatus === 'concluida' \? statusTimestamp : null/, "A conclusão do técnico deve enviar um timestamp explícito para completed_at.");
+assert.match(employeeCompletionFlow, /await saveStateAndConfirmCloud\(\)/, "A conclusão do técnico deve aguardar a confirmação do backend antes de informar sucesso.");
+assert.match(employeeCompletionFlow, /OS \$\{osId\} concluída e confirmada na nuvem/, "A interface só pode apresentar a conclusão como confirmada após o ACK da nuvem.");
+assert.match(employeeCompletionFlow, /ERP_STATE\.ordens\[currentIndex\] = beforeCompletion/, "Falha na gravação deve restaurar o estado anterior sem mostrar falsa conclusão.");
+assert.match(cloudFunctions, /actor_user_id: user\.id/, "O evento de conclusão deve registrar a identidade autenticada que enviou a baixa.");
+assert.match(cloudFunctions, /\[\s*"status", "started_at", "completed_at", "technical_opinion"/, "O patch permitido ao técnico deve incluir status e timestamps de conclusão.");
+assert.match(deltaMigration, /insert into public\.dbs_control_work_order_events/i, "A transação de OS deve gravar o histórico de eventos relacional.");
+assert.match(deltaMigration, /actor_user_id/, "O histórico relacional deve guardar o autor do evento.");
+assert.match(deltaMigration, /completed_at = v_candidate\.completed_at/i, "A transação deve persistir o timestamp de conclusão junto com o status.");
+const realtimeRefreshStart = route.indexOf("const refreshLatestCloudState = async");
+const realtimeRefreshEnd = route.indexOf("const subscribeToCanonicalTables", realtimeRefreshStart);
+assert.ok(realtimeRefreshStart >= 0 && realtimeRefreshEnd > realtimeRefreshStart, "A shell autenticada deve ter um único caminho de reconciliação canônica.");
+const realtimeRefreshFlow = route.slice(realtimeRefreshStart, realtimeRefreshEnd);
+assert.match(realtimeRefreshFlow, /sendDashboardSummary\(\)/, "Toda reconciliação de OS deve atualizar também o resumo do painel da sessão.");
+assert.ok(route.includes('table: "dbs_control_work_orders"'), "O Realtime deve observar alterações na tabela canônica de OS.");
+assert.ok(route.includes('table: "dbs_control_work_order_events"'), "O Realtime deve observar o histórico de conclusão das OS.");
+assert.match(route, /getDbsControlSyncCursor[\s\S]*?refreshLatestCloudState\(true\)/, "A atualização dos painéis deve ter fallback por cursor além do Realtime.");
+const employeeDashboardCompletionSource = html.slice(
+  html.indexOf("function renderizarEmployeeDashboard"),
+  html.indexOf("function renderizarAbaAtiva", html.indexOf("function renderizarEmployeeDashboard")),
+);
+assert.match(employeeDashboardCompletionSource, /number\('orders_completed'\)/, "O painel do técnico deve exibir a contagem de OS confirmadas no banco.");
+assert.match(html, /metric\('orders_completed'\)/, "O painel administrativo deve exibir a contagem relacional de OS concluídas.");
+assert.match(html, /aggregate\.recent_orders/, "Os painéis devem renderizar as OS recentes a partir do resumo relacional.");
+assert.match(html, /employeeOsTab === 'concluidas'[\s\S]*?isOSConcluida\(o\)/, "A baixa confirmada deve colocar a OS na lista de concluídas do técnico.");
 assert.match(cloudFunctions, /const orderLabel = protocol \|\|/, "Uma OS nova deve usar um rótulo transitório sem exigir protocolo no formulário.");
 assert.doesNotMatch(cloudFunctions, /Não é possível sincronizar OS sem protocolo/, "O sincronizador não pode bloquear uma OS nova sem protocolo.");
 assert.match(protocolMigration, /dbs_control_work_order_protocol_seq/, "A migração deve criar o gerador canônico de protocolos de OS.");
