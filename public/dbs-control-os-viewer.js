@@ -128,7 +128,7 @@
       sec('Itens Previstos (Contrato/Orçamento)', '<div id="osv-planned-items" class="osv-empty">Carregando itens previstos…</div>'),
       sec(`Fotografias (${media.length})`, media.length ? `<div class="osv-gal">${media.map((m, i) => `<button type="button" class="osv-thumb" data-media="${i}"><img src="${esc(m.src)}" alt="${esc(m.name)}" loading="lazy"><span>${esc(m.name)}</span></button>`).join('')}</div>` : ''),
       sec(`Documentos e anexos (${docs.length})`, docs.length ? `<ul class="osv-list">${docs.map((d, i) => `<li><span>${esc(d.name)}</span>${d.kind === 'pdf' ? `<button type="button" data-doc="${i}">Visualizar</button>` : d.src ? `<a href="${esc(d.src)}" target="_blank" rel="noopener" download="${esc(d.name)}">Abrir</a>` : '<span class="osv-empty">Arquivo indisponível</span>'}</li>`).join('')}</ul>` : ''),
-      sec('Assinaturas', (sig ? `<div class="osv-f" style="margin-bottom:10px"><small>Cliente${o.assinaturaNome ? ' · ' + esc(o.assinaturaNome) : ''}${o.assinaturaEm ? ' · ' + esc(fmt(o.assinaturaEm)) : ''}</small><img class="osv-sig" src="${esc(sig)}" alt="Assinatura do cliente"></div>` : '') + (sigT ? `<div class="osv-f"><small>Técnico${o.assinaturaTecnicoNome ? ' · ' + esc(o.assinaturaTecnicoNome) : ''}</small><img class="osv-sig" src="${esc(sigT)}" alt="Assinatura do técnico"></div>` : '')),
+      sec('Assinaturas', (sig ? `<div class="osv-f" style="margin-bottom:12px"><small>Cliente${o.assinaturaNome ? ' · ' + esc(o.assinaturaNome) : ''}${o.assinaturaEm ? ' · ' + esc(fmt(o.assinaturaEm)) : ''}</small><img class="osv-sig" src="${esc(sig)}" alt="Assinatura do cliente"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a href="${esc(sig)}" target="_blank" rel="noopener noreferrer" style="min-height:36px;padding:0 12px;border:1px solid #cbd5e1;border-radius:8px;display:inline-flex;align-items:center;color:#0f2f57;text-decoration:none;font-weight:700">Abrir original</a><button type="button" data-act="download-signature" data-url="${esc(sig)}" data-filename="assinatura-cliente-${esc(String(o.protocolo || o.id).replace(/[^a-zA-Z0-9_-]/g, ''))}.png" style="min-height:36px;padding:0 12px;border:1px solid #0284c7;border-radius:8px;background:#eff6ff;color:#075985;font-weight:800;cursor:pointer">Baixar PNG original</button></div></div>` : (first(o.assinaturaStoragePath, o.assinatura_path, o.signature_path) ? '<p class="osv-empty">A assinatura está registrada no armazenamento seguro, mas o link temporário não foi carregado. Atualize a tela para renovar o acesso.</p>' : '')) + (sigT ? `<div class="osv-f"><small>Técnico${o.assinaturaTecnicoNome ? ' · ' + esc(o.assinaturaTecnicoNome) : ''}</small><img class="osv-sig" src="${esc(sigT)}" alt="Assinatura do técnico"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><a href="${esc(sigT)}" target="_blank" rel="noopener noreferrer" style="min-height:36px;padding:0 12px;border:1px solid #cbd5e1;border-radius:8px;display:inline-flex;align-items:center;color:#0f2f57;text-decoration:none;font-weight:700">Abrir original</a><button type="button" data-act="download-signature" data-url="${esc(sigT)}" data-filename="assinatura-tecnico-${esc(String(o.protocolo || o.id).replace(/[^a-zA-Z0-9_-]/g, ''))}.png" style="min-height:36px;padding:0 12px;border:1px solid #0284c7;border-radius:8px;background:#eff6ff;color:#075985;font-weight:800;cursor:pointer">Baixar PNG original</button></div></div>` : '')),
       sec(`Histórico (${hist.length})`, hist.length ? `<ul class="osv-list">${hist.map(h => `<li><span><strong>${esc(h.evento)}</strong>${h.detalhe ? `<br><small style="color:#64748b">${esc(h.detalhe)}</small>` : ''}</span><small style="white-space:nowrap;color:#64748b">${esc(fmt(h.createdAt))}</small></li>`).join('')}</ul>` : '')
     ].join('');
 
@@ -273,6 +273,25 @@
       if (b.dataset.status) { close(); return transicionarStatusOS(o.id, b.dataset.status); }
       const act = b.dataset.act;
       if (act === 'history') return abrirHistoricoOS(o.id);
+      if (act === 'download-signature') return busy(b, async () => {
+        const url = String(b.dataset.url || '').trim();
+        if (!url) throw new Error('O link seguro da assinatura não está disponível. Atualize a OS para renovar o acesso.');
+        const response = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        if (!response.ok) throw new Error('Não foi possível baixar a assinatura original (HTTP ' + response.status + '). Atualize a OS e tente novamente.');
+        const blob = await response.blob();
+        if (!blob.size) throw new Error('O arquivo de assinatura veio vazio. Preserve a OS e solicite nova leitura do anexo.');
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = b.dataset.filename || 'assinatura-cliente.png';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        } finally {
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+        }
+      });
       if (act === 'download') return baixarPDFIndividual(o.id);
       if (act === 'preview') return busy(b, async () => { const u = await pdfUrl(o.id); if (u) lightbox([{ src: u, name: `OS ${o.id}.pdf`, kind: 'pdf' }], 0); });
       if (act === 'print') return busy(b, async () => {
