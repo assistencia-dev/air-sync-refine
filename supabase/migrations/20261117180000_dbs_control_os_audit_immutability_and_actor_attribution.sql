@@ -132,9 +132,6 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.dbs_control_protect_work_order_document()
-  FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.dbs_control_reject_os_history_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -183,9 +180,6 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.dbs_control_enforce_os_event_actor()
-  FROM PUBLIC, anon, authenticated;
-
 DROP TRIGGER IF EXISTS trg_dbs_control_os_event_actor
   ON public.dbs_control_work_order_events;
 CREATE TRIGGER trg_dbs_control_os_event_actor
@@ -210,9 +204,6 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
-
-REVOKE ALL ON FUNCTION public.dbs_control_enforce_os_attachment_actor()
-  FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_dbs_control_os_attachment_actor
   ON public.dbs_control_work_order_attachments;
@@ -244,9 +235,6 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
-
-REVOKE ALL ON FUNCTION public.dbs_control_log_os_attachment()
-  FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_dbs_control_log_os_attachment
   ON public.dbs_control_work_order_attachments;
