@@ -12,7 +12,7 @@ const restoreDrill = fs.readFileSync(path.join(root, "scripts/verify-backup-rest
 const restoreWorkflow = fs.readFileSync(path.join(root, ".github/workflows/backup-restore-drill.yml"), "utf8");
 const masterData = fs.readFileSync(path.join(root, "supabase/migrations/20261111133659_dbs_control_supplier_uom_master_data.sql"), "utf8");
 const purchaseApproval = fs.readFileSync(path.join(root, "supabase/migrations/20261111134918_dbs_control_purchase_mandatory_approval.sql"), "utf8");
-const osAuditMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261117180000_dbs_control_os_audit_immutability_and_actor_attribution.sql"), "utf8");
+const osAuditMigration = fs.readFileSync(path.join(root, "supabase/migrations/20261117180729_dbs_control_os_audit_immutability_and_actor_attribution.sql"), "utf8");
 
 assert.match(backup, /dbs-control-os/);
 assert.match(backup, /listStorageObjects/);
