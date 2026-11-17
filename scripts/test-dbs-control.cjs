@@ -317,8 +317,12 @@ assert.doesNotMatch(html, /if \(!hasParts && !noPartsConfirmed\)/, "Peças ou co
 assert.doesNotMatch(html, /if \(!beforeFile && !os\.fotoAntes\)/, "Foto antes deve ser opcional.");
 assert.doesNotMatch(html, /if \(!afterFile && !os\.fotoDepois\)/, "Foto depois deve ser opcional.");
 assert.doesNotMatch(html, /Registre a assinatura do cliente antes de concluir/, "Assinatura não pode bloquear o registro do relatório técnico.");
-assert.match(html, /const hasSignature = Boolean\(canvas/, "A assinatura deve ser detectada sem exigir que o canvas seja preenchido.");
+assert.match(html, /const signatureDraft = DBS_SIGNATURE_DRAFTS\.get\(String\(osId\)\)/, "A assinatura recuperada do rascunho local deve ser considerada antes de qualquer envio.");
+assert.match(html, /const hasSignature = Boolean\(signatureDraft \|\| \(canvas && canvas\.dataset\.dbsDirty === 'true'\)\)/, "A assinatura deve ser detectada tanto pelo canvas quanto pelo rascunho persistido.");
 assert.match(html, /canvas\.dataset\.dbsDrawing = 'true'[\s\S]*?canvas\.dataset\.dbsDrawing = 'false'/, "O desenho da assinatura deve impedir que atualizações realtime desmontem o canvas durante o toque.");
+assert.match(html, /Persist the exact client signature locally before starting any network request[\s\S]*?saveExecutionDraft\(osId\)/, "A assinatura deve ser persistida localmente antes de iniciar uploads ou fechar a OS.");
+assert.match(html, /uploadOsAttachmentToCloud\(os\.id, 'assinatura', signature, 'assinatura-cliente\.png', 40000\)/, "O upload da assinatura deve usar uma janela de tempo adequada a arquivos maiores.");
+assert.match(html, /if \(signature && \(!signatureUpload \|\| signatureUpload\.error \|\| !signatureUpload\.result\?\.storagePath \|\| !signatureUpload\.result\?\.signedUrl\)\)/, "A OS não pode ser concluída se a assinatura capturada não estiver confirmada no Storage.");
 assert.match(html, /employee-execution-body canvas\.sig-canvas\[data-dbs-drawing="true"\]/, "O renderizador deve preservar o formulário enquanto o cliente estiver assinando.");
 assert.match(html, /catch\(error => \(\{ field: 'fotoAntes'/, "Falha de upload de foto deve ser tratada sem perder a conclusão da OS.");
 assert.match(html, /Fotos, assinatura, checklist, observações, peças e localização são opcionais/, "A interface deve informar ao técnico quais evidências são opcionais.");
@@ -814,5 +818,5 @@ assert.equal(employeeSchedule.normalizeOrderDate("31/02/2026"), "", "Datas invá
 assert.match(html, /dbs-control-employee-days\.js\?v=20261116-1/, "O agrupador diário deve ser carregado na tela de operações.");
 assert.match(html, /employee-day-heading/, "Cada dia deve ter cabeçalho visual próprio.");
 assert.match(html, /employeeOrderGroups\.map\(group/, "As ordens do colaborador devem ser renderizadas dentro do respectivo dia.");
-assert.match(route, /20261116-employee-daily-agenda-1/, "A rota deve invalidar o cache antigo da agenda do colaborador.");
+assert.match(route, /20261117-os-audit-signature-1/, "A rota deve invalidar o cache antigo do iframe após as correções de assinatura e auditoria.");
 console.log("DBS CONTROL colaborador: agenda diária, ordenação e preservação de OS verificadas.");

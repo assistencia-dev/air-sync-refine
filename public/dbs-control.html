@@ -5901,6 +5901,21 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 renderizarAbaAtiva(document.querySelector('.tab-view.active')?.id || 'tab-dashboard');
                 return;
             }
+            if (msg.type === 'DBS_CONTROL_OS_AUDIT_RESULT') {
+                const requestId = String(msg.requestId || '');
+                const modal = Array.from(document.querySelectorAll('.os-history-modal'))
+                    .find(element => element.dataset.auditRequestId === requestId);
+                if (!modal) return;
+                modal.dataset.auditLoaded = 'true';
+                const list = modal.querySelector('.os-history-list');
+                if (!list) return;
+                if (msg.ok && Array.isArray(msg.result?.items)) {
+                    list.innerHTML = renderHistoricoRelacionalOS(msg.result.items);
+                } else {
+                    list.innerHTML = modal.__dbsOsLocalFallback || '<div class="os-history-empty">Histórico oficial indisponível no momento.</div>';
+                }
+                return;
+            }
             if (msg.type !== 'DBS_CONTROL_CLOUD_STATE') return;
             if (!msg.state || typeof msg.state !== 'object' || Array.isArray(msg.state)) return;
 
@@ -7200,23 +7215,78 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }).join('');
         }
 
+        function renderHistoricoRelacionalOS(items) {
+            if (!Array.isArray(items) || !items.length) {
+                return '<div class="os-history-empty">Nenhum evento relacional foi encontrado para esta OS.</div>';
+            }
+            return items.map(item => {
+                const changes = Array.isArray(item.changes) ? item.changes : [];
+                const changesHtml = changes.length ? `<div style="display:grid;gap:5px;margin-top:8px;">${changes.map(change =>
+                    `<div class="history-detail"><strong>${escDbsControl(change.label || 'Campo alterado')}:</strong> ${escDbsControl(change.before || '—')} <span aria-hidden="true">→</span> ${escDbsControl(change.after || '—')}</div>`
+                ).join('')}</div>` : '';
+                return `<div class="os-history-item">
+                    <div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(item.createdAt))}</div>
+                    <div>
+                        <div class="history-event">${escDbsControl(item.title || 'Evento da OS')}</div>
+                        <div class="history-detail" style="margin-top:4px;">${escDbsControl(item.detail || '')}</div>
+                        <div class="history-detail" style="margin-top:4px;"><strong>Responsável:</strong> ${escDbsControl(item.actorName || 'Usuário não identificado')}</div>
+                        ${changesHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderHistoricoLocalFallbackOS(os) {
+            const eventos = (ERP_STATE.osHistorico || [])
+                .filter(h => String(h.osId) === String(os.id))
+                .sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const notice = '<div class="os-history-empty" style="border-color:#f59e0b;background:#fffbeb;color:#92400e;">Não foi possível consultar a trilha oficial agora. Abaixo está somente a cópia local deste dispositivo, ainda não confirmada pela base compartilhada.</div>';
+            const local = eventos.length ? eventos.map(h => `<div class="os-history-item">
+                <div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</div>
+                <div><div class="history-event">${escDbsControl(h.evento)}</div>
+                <div class="history-detail" style="margin-top:4px;">${escDbsControl(h.detalhe)}</div>
+                <div class="history-detail" style="margin-top:4px;">Registro local · responsável não confirmado</div></div>
+            </div>`).join('') : '<div class="os-history-empty">Não há cópia local de eventos para esta OS.</div>';
+            return notice + local;
+        }
+
         function abrirHistoricoOS(osId) {
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             if (!os) return;
             const cli = nomeClienteOS(os);
             const tec = nomeTecnicoOS(os);
-            const eventos = (ERP_STATE.osHistorico || []).filter(h => String(h.osId) === String(os.id)).sort((a,b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : 'os-audit-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             const modal = document.createElement('div');
             modal.className = 'os-history-modal';
+            modal.dataset.auditRequestId = requestId;
             modal.innerHTML = `<div class="os-history-dialog" role="dialog" aria-modal="true">
                 <div class="os-history-head">
                     <div><h3>Histórico da ${escDbsControl(os.id)}</h3><p>${escDbsControl(cli)} · ${escDbsControl(tec)} · Status: ${escDbsControl(os.status || '—')}</p></div>
                     <button class="btn btn-secondary btn-sm" type="button">Fechar</button>
                 </div>
-                <div class="os-history-list">${eventos.length ? eventos.map(h => `<div class="os-history-item"><div class="os-history-time">${escDbsControl(formatarDataHoraHistorico(h.createdAt))}</div><div><div class="history-event">${escDbsControl(h.evento)}</div><div class="history-detail" style="margin-top:4px;">${escDbsControl(h.detalhe)}</div></div></div>`).join('') : '<div class="os-history-empty">Ainda não há eventos registrados para esta OS.</div>'}</div>
+                <div class="os-history-list"><div class="os-history-empty">Consultando histórico oficial da OS...</div></div>
             </div>`;
+            modal.__dbsOsLocalFallback = renderHistoricoLocalFallbackOS(os);
             modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('.os-history-head button')) modal.remove(); });
             document.body.appendChild(modal);
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'DBS_CONTROL_OS_AUDIT',
+                    requestId,
+                    workOrderId: String(os.id)
+                }, '*');
+            } else {
+                const list = modal.querySelector('.os-history-list');
+                if (list) list.innerHTML = modal.__dbsOsLocalFallback;
+            }
+            window.setTimeout(() => {
+                if (!modal.isConnected || modal.dataset.auditLoaded === 'true') return;
+                modal.dataset.auditLoaded = 'true';
+                const list = modal.querySelector('.os-history-list');
+                if (list) list.innerHTML = modal.__dbsOsLocalFallback;
+            }, 15000);
         }
 
         async function transicionarStatusOS(orderId, nextStatus) {
@@ -8966,7 +9036,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
-        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName) {
+        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName, timeoutMs = 8000) {
             if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.reject(new Error('Arquivo de evidência inválido.'));
             const comma = dataUrl.indexOf(',');
             if (comma < 0) return Promise.reject(new Error('Conteúdo do arquivo inválido.'));
@@ -8987,7 +9057,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (!msg.ok || !msg.attachment) { finish(new Error(msg.error || 'Não foi possível enviar o anexo para a nuvem.')); return; }
                     finish(null, msg.attachment);
                 };
-                const timeout = setTimeout(() => finish(new Error('O upload do anexo excedeu o tempo limite; o atendimento continuará sem este anexo.')), 8000);
+                const effectiveTimeoutMs = Math.max(8000, Number(timeoutMs) || 8000);
+                const timeout = setTimeout(() => finish(new Error(`O upload de ${attachmentType} excedeu ${Math.round(effectiveTimeoutMs / 1000)} segundos; o arquivo local foi preservado para nova tentativa.`)), effectiveTimeoutMs);
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_UPLOAD_ATTACHMENT', requestId, orderId: String(osId),
                     attachmentType, fileName: String(fileName || attachmentType), contentType, dataBase64 }, window.location.origin);
@@ -9083,8 +9154,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // encerrar a OS. Evidências complementares não podem impedir o
             // técnico de registrar um atendimento já realizado.
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
-            const hasSignature = Boolean(canvas && (canvas.dataset.dbsDirty === 'true' || DBS_SIGNATURE_DRAFTS.has(String(osId))));
-            const signature = hasSignature ? canvas.toDataURL('image/png') : null;
+            const signatureDraft = DBS_SIGNATURE_DRAFTS.get(String(osId)) || null;
+            const hasSignature = Boolean(signatureDraft || (canvas && canvas.dataset.dbsDirty === 'true'));
+            const signature = hasSignature ? (signatureDraft || canvas?.toDataURL('image/png') || null) : null;
+            if (signature) {
+                DBS_SIGNATURE_DRAFTS.set(String(osId), signature);
+                // Persist the exact client signature locally before starting any network request.
+                saveExecutionDraft(osId);
+            }
 
             const executionBody = canvas?.closest('.employee-execution-body');
             const finishButton = executionBody?.querySelector('.employee-finish');
@@ -9145,13 +9222,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (afterFile && fotoDepois) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_depois', fotoDepois, afterFile.name)
                     .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result }))
                     .catch(error => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', error })));
-                if (signature) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
+                if (signature) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png', 40000)
                     .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result }))
                     .catch(error => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', error })));
                 setProgress('Enviando evidências...');
                 const uploadedAttachments = await Promise.all(uploadJobs);
                 const attachmentWarnings = photoReadWarnings.concat(uploadedAttachments.filter(item => item.error).map(item => item.field === 'assinatura' ? 'assinatura não enviada' : `${item.field === 'fotoAntes' ? 'foto antes' : 'foto depois'} não enviada`));
                 const attachmentFailed = field => uploadedAttachments.some(item => item.field === field && item.error);
+                const signatureUpload = uploadedAttachments.find(item => item.field === 'assinatura');
+                if (signature && (!signatureUpload || signatureUpload.error || !signatureUpload.result?.storagePath || !signatureUpload.result?.signedUrl)) {
+                    throw new Error('A assinatura foi capturada, mas o armazenamento seguro ainda não confirmou o arquivo. A OS NÃO será concluída. A assinatura e o relato permanecem salvos neste dispositivo; verifique a conexão e tente novamente.');
+                }
 
                 if (observationText) {
                     const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
@@ -9190,7 +9271,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     os[item.field] = item.result.signedUrl;
                 });
                 const statusTimestamp = new Date().toISOString();
-                os.assinaturaEm = statusTimestamp;
+                if (signature) os.assinaturaEm = statusTimestamp;
                 os.status = atendimentoStatusLabel;
                 os.concluidoEm = atendimentoStatus === 'concluida' ? statusTimestamp : null;
                 os.concluidoPorEmployeeId = atendimentoStatus === 'concluida'

@@ -156,4 +156,15 @@ while (status === "pending" && attempts < 8) {
 assert.equal(status, "published", "Retry temporário deve recuperar o evento sem perda.");
 assert.equal(attempts, 3);
 
+assert.match(functions, /export const getDbsControlWorkOrderAudit/, "O histórico aberto na OS precisa ser consultado na base relacional oficial.");
+assert.match(functions, /dbs_control_work_order_revisions/, "A linha do tempo precisa incluir as revisões persistidas.");
+assert.match(functions, /dbs_control_work_order_events/, "A linha do tempo precisa incluir eventos operacionais persistidos.");
+assert.match(functions, /uploaded_by_user_id,file_name,file_type,attachment_type,created_at/, "A auditoria precisa mostrar anexos sem expor caminhos ou conteúdo binário.");
+assert.match(route, /getDbsControlWorkOrderAudit/, "O shell autenticado precisa intermediar a consulta de histórico com escopo.");
+assert.match(route, /DBS_CONTROL_OS_AUDIT_RESULT/, "A resposta do histórico precisa retornar ao iframe da OS.");
+assert.match(iframe, /DBS_CONTROL_OS_AUDIT_RESULT/, "O modal de OS precisa renderizar a resposta do histórico oficial.");
+assert.match(iframe, /Responsável:<\/strong>/, "Cada evento oficial deve mostrar quem executou a ação.");
+assert.match(iframe, /cópia local deste dispositivo, ainda não confirmada/, "Falha de consulta não pode rotular histórico local como histórico oficial.");
+assert.match(iframe, /A assinatura foi capturada, mas o armazenamento seguro ainda não confirmou o arquivo/, "A conclusão deve ser bloqueada enquanto a assinatura capturada não estiver confirmada no Storage.");
+
 console.log("DBS CONTROL resilience: contratos de concorrência, retry, locks abandonados, worker e telemetria aprovados.");

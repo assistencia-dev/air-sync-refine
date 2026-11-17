@@ -1340,6 +1340,244 @@ export const uploadDbsControlOsAttachment = createServerFn({ method: "POST" })
       contentType: data.contentType, attachmentType: data.attachmentType };
   });
 
+
+type DbsControlOsAuditItem = {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  title: string;
+  detail: string;
+  kind: "event" | "revision" | "attachment";
+  changes?: Array<{ label: string; before: string; after: string }>;
+};
+
+const DBS_CONTROL_OS_AUDIT_FIELD_LABELS: Record<string, string> = {
+  protocol: "Protocolo",
+  protocolo: "Protocolo",
+  assigned_employee_id: "Responsável técnico",
+  status: "Status",
+  type: "Tipo de atendimento",
+  priority: "Prioridade",
+  scheduled_at: "Agendamento",
+  started_at: "Início do atendimento",
+  completed_at: "Conclusão",
+  description: "Descrição",
+  technical_opinion: "Parecer técnico",
+  diagnostico: "Diagnóstico",
+  observation: "Observação",
+  servico_executado: "Serviço executado",
+  signature_name: "Nome informado na assinatura",
+  signature_data: "Evidência de assinatura",
+  signature_path: "Arquivo de assinatura",
+  assinatura_path: "Arquivo de assinatura",
+  execution_checklist: "Checklist de execução",
+  completion_status_code: "Resultado do atendimento",
+  deleted_at: "Arquivamento lógico",
+};
+
+function formatDbsControlOsAuditValue(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "Não informado";
+  if (field === "assigned_employee_id") return value ? "Responsável definido" : "Sem responsável";
+  if (field === "signature_data") return value ? "Presente" : "Removida";
+  if (field === "signature_path" || field === "assinatura_path") return value ? "Arquivo registrado" : "Sem arquivo";
+  if (field === "execution_checklist") {
+    const items = Array.isArray(value) ? value : (value && typeof value === "object" ? Object.values(value as Record<string, unknown>) : []);
+    const done = items.filter((item: any) => Boolean(item?.completed ?? item?.concluido ?? item?.checked)).length;
+    return `${done} de ${items.length} itens conferidos`;
+  }
+  if (field.endsWith("_at") && typeof value === "string") {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleString("pt-BR");
+  }
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  if (typeof value === "object") return "Atualizado";
+  const text = String(value).trim();
+  return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+}
+
+function describeDbsControlOsAuditEvent(event: any): { title: string; detail: string } {
+  const type = String(event?.event_type ?? "");
+  const details = event?.details && typeof event.details === "object" ? event.details as Record<string, unknown> : {};
+  if (type === "work_order_created") return { title: "OS criada", detail: "Ordem de serviço registrada na base oficial." };
+  if (type === "work_order_parts_delta") {
+    const parts = Array.isArray(details.parts) ? details.parts.length : 0;
+    return { title: "Peças da OS atualizadas", detail: parts ? `${parts} item(ns) enviados na atualização.` : "Movimentação de peças registrada." };
+  }
+  if (type === "attachment_added") return { title: "Anexo registrado", detail: "Evidência vinculada à ordem de serviço." };
+  if (type === "work_order_updated" || type === "work_order_delta") {
+    const patch = details.patch && typeof details.patch === "object" ? details.patch as Record<string, unknown> : {};
+    const fields = Object.keys(patch).filter((key) => DBS_CONTROL_OS_AUDIT_FIELD_LABELS[key]);
+    return {
+      title: "Dados da OS atualizados",
+      detail: fields.length ? `Campos registrados: ${fields.map((key) => DBS_CONTROL_OS_AUDIT_FIELD_LABELS[key]).join(", ")}.` : "Alteração operacional registrada.",
+    };
+  }
+  const safeType = type.replace(/[_-]+/g, " ").trim();
+  return { title: safeType ? safeType.charAt(0).toUpperCase() + safeType.slice(1) : "Evento da OS", detail: "Evento registrado na base oficial." };
+}
+
+export const getDbsControlWorkOrderAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { orderId: string }) => {
+    const orderId = String(input?.orderId ?? "").trim();
+    if (!orderId || orderId.length > 160) throw new Error("Informe uma OS válida para consultar o histórico.");
+    return { orderId };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const employee = user.role_key === "COLABORADOR" ? await getCollaboratorEmployee(user.id) : null;
+    if (user.role_key === "COLABORADOR" && !employee) {
+      throw new Error("Funcionário sem acesso ativo ao DBS CONTROL.");
+    }
+    const collaboratorScope = employee ? await getCollaboratorBaseScope(employee) : null;
+
+    let orderQuery = supabaseAdmin
+      .from("dbs_control_work_orders")
+      .select("id,protocol,status,client_id,assigned_employee_id")
+      .limit(1);
+    if (DBS_CONTROL_UUID_RE.test(data.orderId)) orderQuery = orderQuery.eq("id", data.orderId);
+    else orderQuery = orderQuery.eq("protocol", data.orderId);
+
+    if (employee) {
+      orderQuery = orderQuery.eq("assigned_employee_id", employee.id);
+      if (collaboratorScope?.baseId) {
+        const clientIds = collaboratorScope.baseActive
+          ? (collaboratorScope.clientIds ?? []).map(String).filter(Boolean)
+          : [];
+        if (!clientIds.length) throw new Error("Esta OS está fora da base ativa vinculada ao seu acesso.");
+        orderQuery = orderQuery.in("client_id", clientIds);
+      }
+    }
+
+    const orderResult = await orderQuery.maybeSingle();
+    if (orderResult.error) throw new Error(orderResult.error.message);
+    const order = orderResult.data as any;
+    if (!order) throw new Error("OS não encontrada ou fora do seu escopo de acesso.");
+
+    const loadRows = async (table: string, select: string, timestampColumn: string) => {
+      const all: any[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data: rows, error } = await (supabaseAdmin as any)
+          .from(table)
+          .select(select)
+          .eq("work_order_id", order.id)
+          .order(timestampColumn, { ascending: true })
+          .range(offset, offset + 499);
+        if (error) throw new Error(error.message);
+        const page = rows ?? [];
+        all.push(...page);
+        if (page.length < 500) break;
+      }
+      return all;
+    };
+
+    const [events, revisions, attachments] = await Promise.all([
+      loadRows("dbs_control_work_order_events", "id,actor_user_id,event_type,old_status,new_status,details,created_at", "created_at"),
+      loadRows("dbs_control_work_order_revisions", "id,actor_user_id,action,before_data,after_data,recorded_at", "recorded_at"),
+      loadRows("dbs_control_work_order_attachments", "id,uploaded_by_user_id,file_name,file_type,attachment_type,created_at", "created_at"),
+    ]);
+
+    const revisionTimes = new Set(revisions.map((revision) => String(revision.recorded_at ?? "")));
+    const actorIds = [...new Set([
+      ...events.map((item) => item.actor_user_id),
+      ...revisions.map((item) => item.actor_user_id),
+      ...attachments.map((item) => item.uploaded_by_user_id),
+    ].map((value) => String(value ?? "").trim()).filter(Boolean))];
+    const actorsById = new Map<string, string>();
+    if (actorIds.length) {
+      const { data: actors, error: actorError } = await supabaseAdmin
+        .from("users")
+        .select("id,full_name,username")
+        .in("id", actorIds);
+      if (actorError) throw new Error(actorError.message);
+      for (const actor of actors ?? []) {
+        const name = String(actor.full_name ?? actor.username ?? "").trim();
+        actorsById.set(String(actor.id), name || "Usuário cadastrado");
+      }
+    }
+    const actorName = (id: unknown) => actorsById.get(String(id ?? "")) || "Usuário não identificado";
+
+    const items: DbsControlOsAuditItem[] = [];
+    for (const revision of revisions) {
+      const before = revision.before_data && typeof revision.before_data === "object"
+        ? revision.before_data as Record<string, unknown> : {};
+      const after = revision.after_data && typeof revision.after_data === "object"
+        ? revision.after_data as Record<string, unknown> : {};
+      const changes: Array<{ label: string; before: string; after: string }> = [];
+      for (const [field, label] of Object.entries(DBS_CONTROL_OS_AUDIT_FIELD_LABELS)) {
+        if (before[field] === undefined && after[field] === undefined) continue;
+        if (JSON.stringify(before[field] ?? null) === JSON.stringify(after[field] ?? null)) continue;
+        changes.push({
+          label,
+          before: formatDbsControlOsAuditValue(field, before[field]),
+          after: formatDbsControlOsAuditValue(field, after[field]),
+        });
+      }
+      const action = String(revision.action ?? "").toUpperCase();
+      items.push({
+        id: `revision:${revision.id}`,
+        createdAt: String(revision.recorded_at),
+        actorName: actorName(revision.actor_user_id),
+        title: action === "INSERT" ? "OS criada" : "Dados da OS alterados",
+        detail: changes.length ? `${changes.length} campo(s) alterado(s) nesta revisão.` : "Revisão documental registrada.",
+        kind: "revision",
+        changes,
+      });
+    }
+
+    for (const event of events) {
+      const eventType = String(event.event_type ?? "");
+      if (eventType === "attachment_added") continue;
+      if (["work_order_created", "work_order_updated", "work_order_delta"].includes(eventType)
+          && revisionTimes.has(String(event.created_at ?? ""))) continue;
+      const description = describeDbsControlOsAuditEvent(event);
+      const statusDetail = event.old_status || event.new_status
+        ? `Status: ${String(event.old_status ?? "—")} → ${String(event.new_status ?? "—")}.`
+        : "";
+      items.push({
+        id: `event:${event.id}`,
+        createdAt: String(event.created_at),
+        actorName: actorName(event.actor_user_id),
+        title: description.title,
+        detail: [description.detail, statusDetail].filter(Boolean).join(" "),
+        kind: "event",
+      });
+    }
+
+    const attachmentLabels: Record<string, string> = {
+      assinatura: "Assinatura do cliente",
+      foto_antes: "Foto antes",
+      foto_depois: "Foto depois",
+    };
+    for (const attachment of attachments) {
+      const attachmentType = String(attachment.attachment_type ?? "");
+      const title = attachmentLabels[attachmentType] ?? "Anexo da OS";
+      items.push({
+        id: `attachment:${attachment.id}`,
+        createdAt: String(attachment.created_at),
+        actorName: actorName(attachment.uploaded_by_user_id),
+        title: `${title} registrada`,
+        detail: String(attachment.file_name ?? "Arquivo anexado"),
+        kind: "attachment",
+      });
+    }
+
+    items.sort((a, b) => {
+      const time = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return time || a.id.localeCompare(b.id);
+    });
+
+    return {
+      order: {
+        id: String(order.id),
+        protocol: String(order.protocol ?? data.orderId),
+        status: String(order.status ?? ""),
+      },
+      items,
+      source: "relational_audit",
+    };
+  });
+
 export const getDbsControlDashboardSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

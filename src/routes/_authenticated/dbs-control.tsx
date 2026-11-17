@@ -8,7 +8,7 @@ import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { DbsInventoryPage } from "./dbs-inventory";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
 import {
   deleteDbsControlLocalSyncCommand,
   getDbsControlLocalSyncSummary,
@@ -1322,6 +1322,30 @@ function DbsControlPage() {
         return;
       }
 
+      if (msg.type === "DBS_CONTROL_OS_AUDIT") {
+        const requestId = String(msg.requestId || "");
+        const workOrderId = String(msg.workOrderId || "");
+        try {
+          const result = await getDbsControlWorkOrderAudit({ data: { orderId: workOrderId } });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_OS_AUDIT_RESULT",
+            requestId,
+            workOrderId,
+            ok: true,
+            result,
+          }, window.location.origin);
+        } catch (error) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_OS_AUDIT_RESULT",
+            requestId,
+            workOrderId,
+            ok: false,
+            error: error instanceof Error ? error.message : "Não foi possível carregar o histórico oficial desta OS.",
+          }, window.location.origin);
+        }
+        return;
+      }
+
       if (msg.type === "DBS_CONTROL_DB_AUDIT") {
         try {
           const result = await auditDbsControlDatabase();
@@ -2524,8 +2548,8 @@ function DbsControlPage() {
   // The shell is intentionally isolated in a full-width block so a stale
   // preview/debug node can never render beside the actual DBS CONTROL UI.
   const src = employeeMode
-    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261116-employee-daily-agenda-1`
-    : "/dbs-control.html?v=20261116-employee-daily-agenda-1"
+    ? `/dbs-control.html?mode=employee&employee_id=${encodeURIComponent(access.data.employee?.id ?? "")}&employee_name=${encodeURIComponent(employeeName)}&employee_email=${encodeURIComponent(access.data.employee?.email ?? "")}&can_issue_os=${access.data.employee?.can_issue_work_orders ? "1" : "0"}&base_active=${access.data.employee?.base_active ? "1" : "0"}&base_name=${encodeURIComponent(access.data.employee?.base_name ?? "")}&v=20261117-os-audit-signature-1`
+    : "/dbs-control.html?v=20261117-os-audit-signature-1"
 
   if (employeeMode) {
     return (
