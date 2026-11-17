@@ -8966,7 +8966,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             });
         }
 
-        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName) {
+        function uploadOsAttachmentToCloud(osId, attachmentType, dataUrl, fileName, timeoutMs = 8000) {
             if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.reject(new Error('Arquivo de evidência inválido.'));
             const comma = dataUrl.indexOf(',');
             if (comma < 0) return Promise.reject(new Error('Conteúdo do arquivo inválido.'));
@@ -8987,7 +8987,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     if (!msg.ok || !msg.attachment) { finish(new Error(msg.error || 'Não foi possível enviar o anexo para a nuvem.')); return; }
                     finish(null, msg.attachment);
                 };
-                const timeout = setTimeout(() => finish(new Error('O upload do anexo excedeu o tempo limite; o atendimento continuará sem este anexo.')), 8000);
+                const effectiveTimeoutMs = Math.max(8000, Number(timeoutMs) || 8000);
+                const timeout = setTimeout(() => finish(new Error(`O upload de ${attachmentType} excedeu ${Math.round(effectiveTimeoutMs / 1000)} segundos; o arquivo local foi preservado para nova tentativa.`)), effectiveTimeoutMs);
                 window.addEventListener('message', onMessage);
                 window.parent.postMessage({ type: 'DBS_CONTROL_UPLOAD_ATTACHMENT', requestId, orderId: String(osId),
                     attachmentType, fileName: String(fileName || attachmentType), contentType, dataBase64 }, window.location.origin);
@@ -9083,8 +9084,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             // encerrar a OS. Evidências complementares não podem impedir o
             // técnico de registrar um atendimento já realizado.
             if (!relatoTecnico) { alert('Informe o relato técnico do atendimento antes de concluir a OS.'); relatoInput?.focus(); return; }
-            const hasSignature = Boolean(canvas && (canvas.dataset.dbsDirty === 'true' || DBS_SIGNATURE_DRAFTS.has(String(osId))));
-            const signature = hasSignature ? canvas.toDataURL('image/png') : null;
+            const signatureDraft = DBS_SIGNATURE_DRAFTS.get(String(osId)) || null;
+            const hasSignature = Boolean(signatureDraft || (canvas && canvas.dataset.dbsDirty === 'true'));
+            const signature = hasSignature ? (signatureDraft || canvas?.toDataURL('image/png') || null) : null;
+            if (signature) {
+                DBS_SIGNATURE_DRAFTS.set(String(osId), signature);
+                // Persist the exact client signature locally before starting any network request.
+                saveExecutionDraft(osId);
+            }
 
             const executionBody = canvas?.closest('.employee-execution-body');
             const finishButton = executionBody?.querySelector('.employee-finish');
@@ -9145,13 +9152,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (afterFile && fotoDepois) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'foto_depois', fotoDepois, afterFile.name)
                     .then(result => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', result }))
                     .catch(error => ({ field: 'fotoDepois', pathField: 'fotoDepoisStoragePath', error })));
-                if (signature) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png')
+                if (signature) uploadJobs.push(uploadOsAttachmentToCloud(os.id, 'assinatura', signature, 'assinatura-cliente.png', 40000)
                     .then(result => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', result }))
                     .catch(error => ({ field: 'assinatura', pathField: 'assinaturaStoragePath', error })));
                 setProgress('Enviando evidências...');
                 const uploadedAttachments = await Promise.all(uploadJobs);
                 const attachmentWarnings = photoReadWarnings.concat(uploadedAttachments.filter(item => item.error).map(item => item.field === 'assinatura' ? 'assinatura não enviada' : `${item.field === 'fotoAntes' ? 'foto antes' : 'foto depois'} não enviada`));
                 const attachmentFailed = field => uploadedAttachments.some(item => item.field === field && item.error);
+                const signatureUpload = uploadedAttachments.find(item => item.field === 'assinatura');
+                if (signature && (!signatureUpload || signatureUpload.error || !signatureUpload.result?.storagePath || !signatureUpload.result?.signedUrl)) {
+                    throw new Error('A assinatura foi capturada, mas o armazenamento seguro ainda não confirmou o arquivo. A OS NÃO será concluída. A assinatura e o relato permanecem salvos neste dispositivo; verifique a conexão e tente novamente.');
+                }
 
                 if (observationText) {
                     const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
@@ -9190,7 +9201,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     os[item.field] = item.result.signedUrl;
                 });
                 const statusTimestamp = new Date().toISOString();
-                os.assinaturaEm = statusTimestamp;
+                if (signature) os.assinaturaEm = statusTimestamp;
                 os.status = atendimentoStatusLabel;
                 os.concluidoEm = atendimentoStatus === 'concluida' ? statusTimestamp : null;
                 os.concluidoPorEmployeeId = atendimentoStatus === 'concluida'
