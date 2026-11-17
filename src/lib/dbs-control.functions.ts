@@ -1354,6 +1354,7 @@ type DbsControlOsAuditItem = {
 const DBS_CONTROL_OS_AUDIT_FIELD_LABELS: Record<string, string> = {
   protocol: "Protocolo",
   protocolo: "Protocolo",
+  assigned_employee_id: "Responsável técnico",
   status: "Status",
   type: "Tipo de atendimento",
   priority: "Prioridade",
@@ -1376,6 +1377,7 @@ const DBS_CONTROL_OS_AUDIT_FIELD_LABELS: Record<string, string> = {
 
 function formatDbsControlOsAuditValue(field: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "Não informado";
+  if (field === "assigned_employee_id") return value ? "Responsável definido" : "Sem responsável";
   if (field === "signature_data") return value ? "Presente" : "Removida";
   if (field === "signature_path" || field === "assinatura_path") return value ? "Arquivo registrado" : "Sem arquivo";
   if (field === "execution_checklist") {
