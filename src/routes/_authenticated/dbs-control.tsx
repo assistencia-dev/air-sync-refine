@@ -8,7 +8,7 @@ import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { DbsInventoryPage } from "./dbs-inventory";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
 import {
   deleteDbsControlLocalSyncCommand,
   getDbsControlLocalSyncSummary,
@@ -1317,6 +1317,30 @@ function DbsControlPage() {
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_UPLOAD_ATTACHMENT_RESULT", requestId: msg.requestId, ok: false,
             error: error instanceof Error ? error.message : "Falha no upload do anexo.",
+          }, window.location.origin);
+        }
+        return;
+      }
+
+      if (msg.type === "DBS_CONTROL_OS_AUDIT") {
+        const requestId = String(msg.requestId || "");
+        const workOrderId = String(msg.workOrderId || "");
+        try {
+          const result = await getDbsControlWorkOrderAudit({ data: { orderId: workOrderId } });
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_OS_AUDIT_RESULT",
+            requestId,
+            workOrderId,
+            ok: true,
+            result,
+          }, window.location.origin);
+        } catch (error) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_OS_AUDIT_RESULT",
+            requestId,
+            workOrderId,
+            ok: false,
+            error: error instanceof Error ? error.message : "Não foi possível carregar o histórico oficial desta OS.",
           }, window.location.origin);
         }
         return;
