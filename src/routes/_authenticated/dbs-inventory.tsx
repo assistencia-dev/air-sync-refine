@@ -34,6 +34,27 @@ function money(cents: unknown) {
     .format(Number(cents ?? 0) / 100);
 }
 
+async function getPersistentPurchaseIdempotencyKey(namespace: string, fingerprint: string) {
+  const bytes = new TextEncoder().encode(fingerprint);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const fingerprintHash = Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, "0")).join("");
+  const storageKey = "dbs-control:" + namespace + ":" + fingerprintHash;
+  let key: string | null = null;
+  try { key = window.localStorage.getItem(storageKey); } catch { /* private browsing fallback */ }
+  if (!key) {
+    key = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+    try { window.localStorage.setItem(storageKey, key); } catch { /* request remains valid for this attempt */ }
+  }
+  return { key, storageKey };
+}
+
+function clearPersistentPurchaseIdempotencyKey(storageKey: string) {
+  try { window.localStorage.removeItem(storageKey); } catch { /* no persistent key was stored */ }
+}
+
 type DbsInventorySection = "parts" | "purchases";
 type InventoryRecordEntity = "part" | "supplier" | "cost_center" | "measure_unit" | "unit_conversion";
 type PendingInventoryDelete = { entity: InventoryRecordEntity; id: string; label: string };
@@ -323,14 +344,25 @@ export function DbsInventoryPage({
       setMessage("Cada item precisa de peça relacional, unidade de compra e conversão ativa para a unidade-base.");
       return;
     }
+    if (quoteImport.quoteId && (!quotePurchase.data || quotePurchase.error)) {
+      setMessage("Aguarde a importação completa do orçamento de origem ou corrija a consulta antes de registrar a compra.");
+      return;
+    }
+    const sourceQuoteId = quotePurchase.data?.quote?.id ? String(quotePurchase.data.quote.id) : undefined;
+    const purchaseFingerprint = JSON.stringify({
+      supplierId, costCenterId, documentNumber: purchaseDocument.trim(), purchaseDate, sourceQuoteId, items,
+    });
+    const operation = await getPersistentPurchaseIdempotencyKey("purchase-register", purchaseFingerprint);
     const saved = await runAction(() => createDbsPurchase({ data: {
       supplierId, costCenterId,
       documentNumber: purchaseDocument.trim() || undefined,
       purchaseDate,
-      idempotencyKey: "purchase-register:" + crypto.randomUUID(),
+      sourceQuoteId,
+      idempotencyKey: "purchase-register:" + operation.key,
       items,
     } }), "Pedido registrado para análise financeira. O estoque só será atualizado após aprovação e conferência do recebimento físico.");
     if (saved) {
+      clearPersistentPurchaseIdempotencyKey(operation.storageKey);
       setPurchaseDocument("");
       setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
       setActiveDrawer(null);
@@ -339,6 +371,32 @@ export function DbsInventoryPage({
 
   function updatePurchaseLine(index: number, patch: Partial<(typeof purchaseLines)[number]>) {
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
+  }
+
+  async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
+    const items = selected.map((item: any) => ({
+      purchaseItemId: String(item.id),
+      quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+    }));
+    if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0)) {
+      setMessage("Informe quantidades válidas para os itens conferidos.");
+      return;
+    }
+    const fingerprint = JSON.stringify({ purchaseId: String(purchase.id), items });
+    const operation = await getPersistentPurchaseIdempotencyKey("purchase-receipt", fingerprint);
+    const saved = await runAction(() => receiveDbsPurchaseItems({ data: {
+      purchaseId: purchase.id,
+      idempotencyKey: "purchase-receive:" + purchase.id + ":" + operation.key,
+      items,
+    } }), "Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
+    if (saved) {
+      clearPersistentPurchaseIdempotencyKey(operation.storageKey);
+      setPurchaseReceiptQuantities((previous) => {
+        const next = { ...previous };
+        for (const item of selected) delete next[item.id];
+        return next;
+      });
+    }
   }
 
   function conversionFor(partIdValue: string, purchaseUnitId: string): number {
@@ -1068,16 +1126,36 @@ export function DbsInventoryPage({
                     const id = String(purchase.id);
                     const reason = String(purchaseRejectionReasons[id] ?? "");
                     const center = costCenters.find((item: any) => String(item.id) === String(purchase.cost_center_id));
+                    const sourceQuote = (data?.sourceQuotes ?? []).find((quote: any) => String(quote.id) === String(purchase.source_quote_id));
+                    const lines = (data?.purchaseItems ?? []).filter((item: any) => String(item.purchase_id) === id);
                     const isSaving = busy && purchaseApprovalBusyId === id;
                     return <tr key={id} className="border-t border-slate-100 align-middle hover:bg-slate-50/70">
-                      <td className="px-4 py-3"><p className="font-medium text-slate-900">{String(purchase.supplier_name ?? "Fornecedor")}</p><p className="mt-0.5 text-xs text-slate-500">{String(purchase.document_number ?? "Pedido sem documento")}</p></td>
+                      <td className="px-4 py-3"><p className="font-medium text-slate-900">{String(purchase.supplier_name ?? "Fornecedor")}</p><p className="mt-0.5 text-xs text-slate-500">{String(purchase.document_number ?? "Pedido sem documento")}</p>
+                        <details className="mt-2 max-w-[420px]">
+                          <summary className="cursor-pointer text-xs font-semibold text-sky-700">Conferir composição ({lines.length} item(ns))</summary>
+                          {sourceQuote?.quote_number && <p className="mt-2 text-xs text-slate-500">Orçamento de origem: {sourceQuote.quote_number}</p>}
+                          <div className="mt-2 space-y-2">
+                            {lines.map((line: any) => {
+                              const part = parts.find((entry: any) => String(entry.id) === String(line.part_id));
+                              const unit = measureUnits.find((entry: any) => String(entry.id) === String(line.purchase_unit_id));
+                              return <div key={line.id} className="rounded-lg bg-slate-50 p-2 text-xs">
+                                <p className="font-semibold text-slate-800">{part?.sku ? String(part.sku) + " · " : ""}{part?.name || part?.description || "Peça sem nome"}</p>
+                                <p className="mt-1 text-slate-600">{Number(line.purchase_quantity ?? 0).toLocaleString("pt-BR")} {unit?.symbol || unit?.code || "un."} × {money(line.purchase_unit_cost_cents)} = <strong>{money(line.total_cents)}</strong></p>
+                              </div>;
+                            })}
+                            {!lines.length && <p className="text-xs text-rose-700">Itens não carregados. Não aprove até atualizar e conferir o pedido.</p>}
+                          </div>
+                        </details>
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{center?.code ? String(center.code) + " · " : ""}{center?.name ?? "Não informado"}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600">{purchase.purchase_date ? new Date(String(purchase.purchase_date) + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</td>
                       <td className="px-4 py-3 whitespace-nowrap font-semibold text-slate-900">{money(purchase.total_cents)}</td>
                       <td className="px-4 py-3"><input aria-label={"Motivo da rejeição da compra " + id} value={reason} onChange={(event) => setPurchaseRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} maxLength={1000} placeholder="Obrigatório para rejeitar" className="min-h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-normal"/></td>
                       <td className="px-4 py-3"><div className="flex justify-end gap-2">
-                        <button type="button" disabled={busy || purchaseApprovalBusyId !== null} onClick={() => void decidePurchaseApproval(purchase, "approved")} className="min-h-9 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-40">{isSaving ? "Salvando..." : "Aprovar"}</button>
-                        <button type="button" disabled={busy || purchaseApprovalBusyId !== null || reason.trim().length < 5} onClick={() => void decidePurchaseApproval(purchase, "rejected")} className="min-h-9 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40">Rejeitar</button>
+                        {data?.canApprovePurchases === true ? <>
+                          <button type="button" disabled={busy || purchaseApprovalBusyId !== null || !lines.length} onClick={() => void decidePurchaseApproval(purchase, "approved")} className="min-h-9 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-40">{isSaving ? "Salvando..." : "Aprovar"}</button>
+                          <button type="button" disabled={busy || purchaseApprovalBusyId !== null || reason.trim().length < 5} onClick={() => void decidePurchaseApproval(purchase, "rejected")} className="min-h-9 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-40">Rejeitar</button>
+                        </> : <span className="text-xs text-slate-500">Somente consulta · aprovação exclusiva do SUPER_ADMIN</span>}
                       </div></td>
                     </tr>;
                   })}
@@ -1090,11 +1168,30 @@ export function DbsInventoryPage({
                 const id = String(purchase.id);
                 const reason = String(purchaseRejectionReasons[id] ?? "");
                 const center = costCenters.find((item: any) => String(item.id) === String(purchase.cost_center_id));
+                const sourceQuote = (data?.sourceQuotes ?? []).find((quote: any) => String(quote.id) === String(purchase.source_quote_id));
+                const lines = (data?.purchaseItems ?? []).filter((item: any) => String(item.purchase_id) === id);
                 const isSaving = busy && purchaseApprovalBusyId === id;
                 return <article key={id} className="rounded-xl border border-slate-200 p-3">
                   <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{String(purchase.supplier_name ?? "Fornecedor")}</p><p className="text-xs text-slate-500">{String(purchase.document_number ?? "Pedido sem documento")}</p><p className="mt-1 text-xs text-slate-500">{center?.code ? String(center.code) + " · " : ""}{center?.name ?? "Não informado"}</p></div><strong className="text-sm text-slate-900">{money(purchase.total_cents)}</strong></div>
-                  <label className="mt-3 block text-xs font-medium text-slate-600">Motivo da rejeição<input aria-label={"Motivo da rejeição da compra " + id} value={reason} onChange={(event) => setPurchaseRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} maxLength={1000} placeholder="Obrigatório para rejeitar" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"/></label>
-                  <div className="mt-3 flex gap-2"><button type="button" disabled={busy || purchaseApprovalBusyId !== null} onClick={() => void decidePurchaseApproval(purchase, "approved")} className="min-h-10 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white disabled:opacity-40">{isSaving ? "Salvando..." : "Aprovar"}</button><button type="button" disabled={busy || purchaseApprovalBusyId !== null || reason.trim().length < 5} onClick={() => void decidePurchaseApproval(purchase, "rejected")} className="min-h-10 flex-1 rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-700 disabled:opacity-40">Rejeitar</button></div>
+                  <details className="mt-3 rounded-lg bg-slate-50 p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-sky-700">Conferir composição ({lines.length} item(ns))</summary>
+                    {sourceQuote?.quote_number && <p className="mt-2 text-xs text-slate-500">Orçamento de origem: {sourceQuote.quote_number}</p>}
+                    <div className="mt-2 space-y-2">
+                      {lines.map((line: any) => {
+                        const part = parts.find((entry: any) => String(entry.id) === String(line.part_id));
+                        const unit = measureUnits.find((entry: any) => String(entry.id) === String(line.purchase_unit_id));
+                        return <div key={line.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs">
+                          <p className="font-semibold text-slate-800">{part?.sku ? String(part.sku) + " · " : ""}{part?.name || part?.description || "Peça sem nome"}</p>
+                          <p className="mt-1 text-slate-600">{Number(line.purchase_quantity ?? 0).toLocaleString("pt-BR")} {unit?.symbol || unit?.code || "un."} × {money(line.purchase_unit_cost_cents)} = <strong>{money(line.total_cents)}</strong></p>
+                        </div>;
+                      })}
+                      {!lines.length && <p className="text-xs text-rose-700">Itens não carregados. Não aprove até atualizar e conferir o pedido.</p>}
+                    </div>
+                  </details>
+                  {data?.canApprovePurchases === true ? <>
+                    <label className="mt-3 block text-xs font-medium text-slate-600">Motivo da rejeição<input aria-label={"Motivo da rejeição da compra " + id} value={reason} onChange={(event) => setPurchaseRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} maxLength={1000} placeholder="Obrigatório para rejeitar" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs"/></label>
+                    <div className="mt-3 flex gap-2"><button type="button" disabled={busy || purchaseApprovalBusyId !== null || !lines.length} onClick={() => void decidePurchaseApproval(purchase, "approved")} className="min-h-10 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white disabled:opacity-40">{isSaving ? "Salvando..." : "Aprovar"}</button><button type="button" disabled={busy || purchaseApprovalBusyId !== null || reason.trim().length < 5} onClick={() => void decidePurchaseApproval(purchase, "rejected")} className="min-h-10 flex-1 rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-700 disabled:opacity-40">Rejeitar</button></div>
+                  </> : <p className="mt-3 text-xs text-slate-500">Acesso somente para consulta. Aprovação exclusiva do SUPER_ADMIN.</p>}
                 </article>;
               })}
               {!pendingPurchases.length && <p className="py-8 text-center text-sm text-slate-500">Nenhum pedido aguardando aprovação financeira.</p>}
@@ -1315,21 +1412,7 @@ export function DbsInventoryPage({
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
-                            <button type="button" disabled={busy || !selected.length || overReceived} onClick={async () => {
-                              const saved = await runAction(() => receiveDbsPurchaseItems({ data: {
-                                purchaseId: purchase.id,
-                                idempotencyKey: "purchase-receive:" + purchase.id + ":" + crypto.randomUUID(),
-                                items: selected.map((item: any) => ({
-                                  purchaseItemId: item.id,
-                                  quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
-                                })),
-                              } }), "Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
-                              if (saved) setPurchaseReceiptQuantities(prev => {
-                                const next = { ...prev };
-                                for (const item of selected) delete next[item.id];
-                                return next;
-                              });
-                            }} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
+                            <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived && <p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
                           </div>
                         </details>}
@@ -1379,18 +1462,7 @@ export function DbsInventoryPage({
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
                               </label>;
                             })}
-                            <button type="button" disabled={busy||!selected.length||overReceived} onClick={async()=>{
-                              const saved=await runAction(()=>receiveDbsPurchaseItems({data:{
-                                purchaseId:purchase.id,
-                                idempotencyKey:"purchase-receive:"+purchase.id+":"+crypto.randomUUID(),
-                                items:selected.map((item:any)=>({purchaseItemId:item.id,quantityReceived:Number(purchaseReceiptQuantities[item.id])*Number(item.conversion_factor||1)})),
-                              }}),"Recebimento físico registrado. O estoque e o custo médio foram atualizados; a parte financeira permanece no DBS Treasury.");
-                              if(saved)setPurchaseReceiptQuantities(prev=>{
-                                const next={...prev};
-                                for(const item of selected)delete next[item.id];
-                                return next;
-                              });
-                            }} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
+                            <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived&&<p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
                           </div>
                         </details>}
