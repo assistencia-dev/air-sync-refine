@@ -1,0 +1,381 @@
+/* DBS AIR — camada visual compartilhada
+   Escopo: apresentação, legibilidade e ergonomia. Não altera dados, regras ou permissões. */
+:root {
+  --dbs-ui-brand: #1769d1;
+  --dbs-ui-brand-strong: #1557a0;
+  --dbs-ui-navy: #0b2745;
+  --dbs-ui-ink: #172b43;
+  --dbs-ui-muted: #64758a;
+  --dbs-ui-border: #e1e8f0;
+  --dbs-ui-surface: #ffffff;
+  --dbs-ui-canvas: #f5f8fc;
+  --dbs-ui-radius-card: 16px;
+  --dbs-ui-shadow-card: 0 8px 26px rgba(15, 41, 68, .055);
+}
+
+/* Navegação e áreas administrativas React */
+.admin-mobile-shell {
+  color: var(--dbs-ui-ink);
+  background-color: var(--dbs-ui-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.admin-mobile-shell > header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  min-height: 64px;
+  border-color: var(--dbs-ui-border);
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 3px 14px rgba(15, 41, 68, .045);
+  backdrop-filter: blur(14px);
+}
+.admin-mobile-shell > aside {
+  border-right: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(180deg, #0b2745 0%, #0a223c 100%);
+}
+.admin-mobile-shell > aside > nav > button {
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.admin-mobile-shell > aside > nav > button:hover {
+  border-color: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.075);
+}
+.admin-mobile-shell > aside > nav > button:focus-visible {
+  outline: 3px solid rgba(147,197,253,.65);
+  outline-offset: 2px;
+}
+.admin-mobile-shell > main {
+  color: var(--dbs-ui-ink);
+}
+.admin-mobile-shell main .bg-white.rounded-xl.border,
+.admin-mobile-shell main .bg-white.rounded-2xl.border {
+  border-color: var(--dbs-ui-border);
+  border-radius: var(--dbs-ui-radius-card);
+  box-shadow: var(--dbs-ui-shadow-card);
+}
+.admin-mobile-shell main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: #d7e1eb;
+  border-radius: 10px;
+  color: var(--dbs-ui-ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.admin-mobile-shell main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+  border-color: #6ba3dd;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(23,105,209,.11);
+}
+.admin-mobile-shell main table thead th {
+  color: #60738a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .035em;
+}
+.admin-mobile-shell main table tbody tr {
+  transition: background-color .14s ease;
+}
+.admin-mobile-shell main table tbody tr:hover {
+  background-color: #f7faff;
+}
+.admin-mobile-shell main :is(button, a):focus-visible {
+  outline: 3px solid rgba(23,105,209,.28);
+  outline-offset: 2px;
+}
+.admin-mobile-nav {
+  border-color: rgba(218,228,240,.95);
+  box-shadow: 0 -8px 26px rgba(15,41,68,.09);
+}
+.admin-mobile-nav-item.is-active {
+  box-shadow: inset 0 0 0 1px rgba(23,105,209,.08);
+}
+
+/* Peças & Estoque / Compras — mantém os controles e suas funções atuais */
+.dbs-operations-page {
+  background: var(--dbs-ui-canvas);
+  color: var(--dbs-ui-ink);
+}
+.dbs-operations-page .dbs-op-tabs,
+.dbs-operations-page > div > nav[aria-label="Módulos"] {
+  border-color: var(--dbs-ui-border);
+}
+.dbs-operations-page .dbs-op-tab {
+  border-radius: 8px 8px 0 0;
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease;
+}
+.dbs-operations-page .dbs-op-tab:not(.is-active):hover {
+  background: #f1f6fc;
+}
+.dbs-operations-page .dbs-op-tab.is-active,
+.dbs-operations-page .dbs-op-tab[aria-selected="true"] {
+  background: linear-gradient(180deg, #f0f6ff 0%, rgba(240,246,255,0) 100%);
+}
+.dbs-operations-page :is(section, article).rounded-xl,
+.dbs-operations-page :is(section, article).rounded-2xl {
+  border-color: var(--dbs-ui-border);
+}
+.dbs-operations-page tbody tr:hover {
+  background: #f6faff;
+}
+.dbs-operations-page :is(button, a, summary):focus-visible,
+.dbs-operations-drawer :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(23,105,209,.28);
+  outline-offset: 2px;
+}
+.dbs-operations-drawer {
+  border-color: var(--dbs-ui-border);
+  box-shadow: -14px 0 44px rgba(15,41,68,.12);
+}
+
+/* DBS CONTROL legado — refinamento sem reestruturar menus nem formulários */
+body:has(> aside .nav-menu) {
+  color: var(--dbs-ui-ink);
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+body > aside .brand-header {
+  background: linear-gradient(135deg, #071d36 0%, #0b2745 100%);
+}
+body > aside .nav-menu .nav-item {
+  min-height: 44px;
+  margin: 2px 9px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left-width: 3px;
+  font-size: 12px;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+body > aside .nav-menu .nav-item:hover {
+  background: rgba(255,255,255,.075);
+  color: #fff;
+}
+body > aside .nav-menu .nav-item.active {
+  border-left-color: #67b5ff;
+  background: rgba(35,112,190,.24);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(147,197,253,.08);
+}
+body > aside .nav-menu .nav-item:focus-visible {
+  outline: 3px solid rgba(147,197,253,.7);
+  outline-offset: 1px;
+}
+body > main > header {
+  min-height: 64px;
+  border-bottom-color: var(--dbs-ui-border);
+  box-shadow: 0 3px 14px rgba(15,41,68,.045);
+}
+body .metric-card,
+body .data-card {
+  border-color: var(--dbs-ui-border);
+  border-radius: 13px;
+  box-shadow: 0 3px 12px rgba(15,41,68,.045);
+}
+body .metric-card {
+  padding: 16px;
+}
+body .metric-title {
+  letter-spacing: .055em;
+}
+body .metric-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+}
+body .data-header {
+  border-bottom-color: var(--dbs-ui-border);
+  background: #f7faff;
+}
+body .filter-bar :is(input, select) {
+  min-height: 40px;
+  border-color: #d7e1eb;
+  border-radius: 9px;
+}
+body .data-card :is(input, select, textarea):focus,
+body .filter-bar :is(input, select):focus {
+  border-color: #6ba3dd;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(23,105,209,.11);
+}
+body .data-card tbody tr {
+  transition: background-color .14s ease;
+}
+body .data-card tbody tr:hover {
+  background: #f7faff;
+}
+
+/* Visualizador de OS — mantém leitura somente leitura e ações existentes */
+body .osv {
+  border-radius: 18px 0 0 18px;
+  box-shadow: -18px 0 54px rgba(15,47,87,.2);
+}
+body .osv-head {
+  background: linear-gradient(125deg, #0b2745 0%, #124574 100%);
+}
+body .osv-head h2 {
+  letter-spacing: -.025em;
+}
+body .osv-bar {
+  background: #f5f8fc;
+  border-bottom-color: var(--dbs-ui-border);
+}
+body .osv-bar button,
+body .osv-list button,
+body .osv-list a {
+  border-radius: 9px;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+body .osv-bar button:hover,
+body .osv-list button:hover,
+body .osv-list a:hover {
+  border-color: #9bbde2;
+  background: #f4f8ff;
+}
+body .osv-sec {
+  padding-bottom: 3px;
+}
+body .osv-sec h3 {
+  letter-spacing: .075em;
+}
+body .osv-text {
+  border-radius: 9px;
+  border-left-width: 3px;
+  line-height: 1.6;
+}
+body .osv-thumb {
+  border-color: var(--dbs-ui-border);
+  border-radius: 12px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+body .osv-thumb:hover {
+  border-color: #9bbde2;
+  box-shadow: 0 4px 14px rgba(15,41,68,.09);
+}
+body .osv-sig {
+  border-radius: 10px;
+  padding: 5px;
+}
+body .osv-empty {
+  display: block;
+  padding: 10px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+/* Treasury — mesma linguagem de cartões, navegação e ações */
+body .sidebar {
+  background: linear-gradient(180deg, #0b2745 0%, #091f37 100%);
+}
+body .sidebar-brand {
+  background: rgba(255,255,255,.025);
+}
+body .sidebar .nav-item {
+  min-height: 44px;
+  margin: 2px 9px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-right: 0;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+body .sidebar .nav-item:hover {
+  background: rgba(255,255,255,.075);
+}
+body .sidebar .nav-item.active {
+  border-right: 0;
+  background: rgba(35,112,190,.24);
+  color: #bfdbfe;
+  box-shadow: inset 3px 0 0 #67b5ff;
+}
+body .sidebar .nav-item:focus-visible {
+  outline: 3px solid rgba(147,197,253,.7);
+  outline-offset: 1px;
+}
+body .kpi-card {
+  border-color: var(--dbs-ui-border);
+  border-radius: 13px;
+  box-shadow: 0 3px 12px rgba(15,41,68,.045);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+body .kpi-card:hover {
+  transform: translateY(-1px);
+  border-color: #c7d9ed;
+  box-shadow: 0 8px 22px rgba(15,41,68,.075);
+}
+body .approval-row {
+  border-color: var(--dbs-ui-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15,41,68,.025);
+}
+body .approval-row:focus-within {
+  border-color: #9bbde2;
+}
+body .approval-action {
+  min-height: 40px;
+  border-radius: 9px;
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+body .approval-action:not(:disabled):active,
+body .btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+body .btn {
+  border-radius: 9px;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+body :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgba(23,105,209,.3);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .admin-mobile-shell > header {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .admin-mobile-shell main .bg-white.rounded-xl.border,
+  .admin-mobile-shell main .bg-white.rounded-2xl.border {
+    border-radius: 14px;
+  }
+  body .osv {
+    border-radius: 0;
+  }
+  body .osv-head {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  body .osv-head h2 {
+    font-size: 18px;
+  }
+  body .osv-body {
+    padding: 14px max(14px, env(safe-area-inset-left)) max(28px, env(safe-area-inset-bottom));
+  }
+  body .osv-bar {
+    gap: 7px;
+    padding: 8px 12px;
+  }
+  body .osv-bar button {
+    min-height: 44px;
+  }
+  body .osv-gal {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+  body > aside .nav-menu .nav-item,
+  body .sidebar .nav-item {
+    min-height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-mobile-shell *,
+  .dbs-operations-page *,
+  .dbs-operations-drawer *,
+  body .nav-item,
+  body .kpi-card,
+  body .approval-action,
+  body .btn,
+  body .osv-thumb {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
