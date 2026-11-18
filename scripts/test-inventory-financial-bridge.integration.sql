@@ -26,7 +26,10 @@ declare
   v_result jsonb;
   v_replay jsonb;
   v_purchase uuid;
+  v_purchase_item1 uuid;
+  v_purchase_item2 uuid;
   v_ledger uuid;
+  v_partial_receipt_ledger uuid;
   v_receipt_ledger uuid;
   v_revenue_entry uuid;
   v_revenue_cents bigint;
@@ -158,16 +161,79 @@ begin
     raise exception 'TEST_APPROVAL: aprovação não gerou a obrigação no Ledger.';
   end if;
 
-  v_result := public.dbs_control_receive_registered_purchase(v_purchase, v_actor, v_key || ':receipt');
-  v_receipt_ledger := nullif(v_result->>'receipt_ledger_entry_id', '')::uuid;
-  if v_result->>'status' <> 'received' or v_receipt_ledger is null then
-    raise exception 'TEST_RECEIPT: recebimento não confirmou estoque e reclassificação: %', v_result;
+  select id into v_purchase_item1
+    from public.dbs_control_purchase_items
+   where purchase_id = v_purchase and part_id = v_part;
+  select id into v_purchase_item2
+    from public.dbs_control_purchase_items
+   where purchase_id = v_purchase and part_id = v_part2;
+  if v_purchase_item1 is null or v_purchase_item2 is null then
+    raise exception 'TEST_RECEIPT_SETUP: itens relacionais da compra não foram encontrados.';
   end if;
 
-  -- Repeating receipt is safe even with a different retry token.
-  v_replay := public.dbs_control_receive_registered_purchase(v_purchase, v_actor, v_key || ':receipt-retry');
-  if nullif(v_replay->>'receipt_ledger_entry_id', '')::uuid is distinct from v_receipt_ledger then
-    raise exception 'TEST_RECEIPT_IDEMPOTENCY: replay criou outra entrada contábil.';
+  -- First delivery: half of the first line. The partial receipt must use
+  -- the contracted line total, not the rounded base-unit display cost.
+  v_result := public.dbs_control_receive_purchase_items(
+    v_purchase, v_actor, v_key || ':receipt-part-1',
+    jsonb_build_array(jsonb_build_object(
+      'purchase_item_id', v_purchase_item1, 'quantity_received', 1
+    ))
+  );
+  v_partial_receipt_ledger := nullif(v_result->>'receipt_ledger_entry_id', '')::uuid;
+  if v_result->>'status' <> 'partially_received'
+     or (v_result->>'received_total_cents')::bigint <> 12345
+     or v_partial_receipt_ledger is null then
+    raise exception 'TEST_PARTIAL_RECEIPT: primeira entrega parcial inválida: %', v_result;
+  end if;
+  v_replay := public.dbs_control_receive_purchase_items(
+    v_purchase, v_actor, v_key || ':receipt-part-1',
+    jsonb_build_array(jsonb_build_object(
+      'purchase_item_id', v_purchase_item1, 'quantity_received', 1
+    ))
+  );
+  if coalesce((v_replay->>'replayed')::boolean, false) is not true then
+    raise exception 'TEST_PARTIAL_RECEIPT_IDEMPOTENCY: repetição da primeira entrega não foi reconhecida.';
+  end if;
+  select status into v_status from public.dbs_control_purchases where id = v_purchase;
+  if v_status <> 'partially_received' then
+    raise exception 'TEST_PARTIAL_STATUS: esperado partially_received, recebido %.', v_status;
+  end if;
+
+  -- Final delivery: remaining first-line quantity plus the complete second
+  -- line. Cumulative allocation must close exactly to the purchase total.
+  v_result := public.dbs_control_receive_purchase_items(
+    v_purchase, v_actor, v_key || ':receipt-final',
+    jsonb_build_array(
+      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 1),
+      jsonb_build_object('purchase_item_id', v_purchase_item2, 'quantity_received', 1)
+    )
+  );
+  v_receipt_ledger := nullif(v_result->>'receipt_ledger_entry_id', '')::uuid;
+  if v_result->>'status' <> 'received'
+     or (v_result->>'received_total_cents')::bigint <> 23456
+     or v_receipt_ledger is null then
+    raise exception 'TEST_RECEIPT: última entrega não concluiu a compra e a reclassificação: %', v_result;
+  end if;
+
+  v_replay := public.dbs_control_receive_purchase_items(
+    v_purchase, v_actor, v_key || ':receipt-final',
+    jsonb_build_array(
+      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 1),
+      jsonb_build_object('purchase_item_id', v_purchase_item2, 'quantity_received', 1)
+    )
+  );
+  if coalesce((v_replay->>'replayed')::boolean, false) is not true then
+    raise exception 'TEST_RECEIPT_IDEMPOTENCY: repetição da entrega final não foi reconhecida.';
+  end if;
+
+  select coalesce(sum(received_total_cents),0), coalesce(sum(total_cents),0),
+         bool_and(quantity_received = quantity)
+    into v_paid, v_remaining, v_received_all
+    from public.dbs_control_purchase_items
+   where purchase_id = v_purchase;
+  if v_paid <> v_total or v_remaining <> v_total or v_received_all is not true then
+    raise exception 'TEST_RECEIPT_COST_ALLOCATION: recebido/contratado divergiu (%/%; completo=%).',
+      v_paid, v_remaining, v_received_all;
   end if;
 
   select stock_quantity, cost_cents
@@ -193,8 +259,8 @@ begin
   select count(*) into v_movement_count
     from public.dbs_control_inventory_movements
    where purchase_id = v_purchase and movement_type = 'receipt';
-  if v_movement_count <> 2 then
-    raise exception 'TEST_MOVEMENT_IDEMPOTENCY: esperadas exatamente 2 entradas (uma por item); encontradas %.', v_movement_count;
+  if v_movement_count <> 3 then
+    raise exception 'TEST_MOVEMENT_IDEMPOTENCY: esperadas 3 entradas (duas entregas do primeiro item e uma do segundo); encontradas %.', v_movement_count;
   end if;
 
   select total_cents into v_total
@@ -211,9 +277,10 @@ begin
   end if;
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
     into v_debits, v_credits
-    from public.treasury_ledger_lines where entry_id = v_receipt_ledger;
+    from public.treasury_ledger_lines
+   where entry_id in (v_partial_receipt_ledger, v_receipt_ledger);
   if v_debits <> v_credits or v_debits <> v_total then
-    raise exception 'TEST_RECEIPT_LEDGER: reclassificação não balanceada (débito %, crédito %, total %).', v_debits, v_credits, v_total;
+    raise exception 'TEST_RECEIPT_LEDGER: reclassificações parciais não fecharam com o contrato (débito %, crédito %, total %).', v_debits, v_credits, v_total;
   end if;
 
   v_payment := public.dbs_control_settle_purchase(
