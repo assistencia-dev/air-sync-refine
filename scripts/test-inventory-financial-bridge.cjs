@@ -658,26 +658,3 @@ assert.match(integrationSql, /ROLLBACK;/i);
 assert.match(integrationSql, /v_movement_count <> 3/);
 
 console.log("inventory financial bridge, purchase approval, quote traceability, partial receipt valuation and retry-safe idempotency checks passed");
-SUPER_ADMIN','ADMIN_OPERACIONAL','GESTOR_CONTA','GESTOR_REGIONAL','FINANCEIRO_LEITURA'\$old\$/);
-assert.match(purchaseWorkflowIntegrityMigration, /\$new\
-assert.match(purchaseWorkflowIntegrityMigration, /v_receipt_unit_cost/);
-assert.match(purchaseWorkflowIntegrityMigration, /v_order_item\.total_cents/);
-assert.match(purchaseWorkflowIntegrityMigration, /received_total_cents/);
-assert.match(integrationSql, /dbs_control_receive_purchase_items/i);
-assert.match(integrationSql, /TEST_PARTIAL_RECEIPT/i);
-assert.match(integrationSql, /TEST_RECEIPT_COST_ALLOCATION/i);
-assert.match(integrationSql, /ROLLBACK;/i);
-assert.match(integrationSql, /v_movement_count <> 3/);
-
-console.log("inventory financial bridge, purchase approval, quote traceability, partial receipt valuation and retry-safe idempotency checks passed");
-SUPER_ADMIN'\$new\$/);
-assert.match(purchaseWorkflowIntegrityMigration, /v_receipt_unit_cost/);
-assert.match(purchaseWorkflowIntegrityMigration, /v_order_item\.total_cents/);
-assert.match(purchaseWorkflowIntegrityMigration, /received_total_cents/);
-assert.match(integrationSql, /dbs_control_receive_purchase_items/i);
-assert.match(integrationSql, /TEST_PARTIAL_RECEIPT/i);
-assert.match(integrationSql, /TEST_RECEIPT_COST_ALLOCATION/i);
-assert.match(integrationSql, /ROLLBACK;/i);
-assert.match(integrationSql, /v_movement_count <> 3/);
-
-console.log("inventory financial bridge, purchase approval, quote traceability, partial receipt valuation and retry-safe idempotency checks passed");
