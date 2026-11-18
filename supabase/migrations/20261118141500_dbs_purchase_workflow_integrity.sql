@@ -178,8 +178,8 @@ BEGIN
   END IF;
   v_def := replace(v_def, v_old, v_new);
 
-  v_old := $old$v_line_total,v_order_item.unit_cost_cents,$old$;
-  v_new := $new$v_line_total,v_receipt_unit_cost,$new$;
+  v_old := $old$v_receipt_id,v_order_item.id,v_part.id,v_qty,v_order_item.unit_cost_cents,$old$;
+  v_new := $new$v_receipt_id,v_order_item.id,v_part.id,v_qty,v_receipt_unit_cost,$new$;
   IF position(v_old IN v_def) = 0 THEN
     RAISE EXCEPTION 'Migration: custo unitário do item de recebimento mudou; função não foi substituída.';
   END IF;
