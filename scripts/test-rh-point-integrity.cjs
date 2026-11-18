@@ -72,7 +72,7 @@ const rawPunches = [
 ];
 const days = new Map();
 for (const row of rawPunches) {
-  const key = \`${row.employee_id}|${row.work_date}\`;
+  const key = String(row.employee_id) + "|" + row.work_date;
   days.set(key, (days.get(key) || 0) + 1);
 }
 assert.equal(days.size, 1, "quatro batidas devem formar um único dia no relatório");
