@@ -64,15 +64,15 @@
 
   function orderDate(order) {
     if (!order || typeof order !== "object") return "";
-    return normalizeOrderDate(
-      order.data
-      ?? order.scheduledAt
-      ?? order.scheduled_at
-      ?? order.dataHora
-      ?? order.scheduledDate
-      ?? order.scheduled_date
-      ?? order.date
-    );
+    const candidates = [
+      order.data, order.scheduledAt, order.scheduled_at, order.dataHora,
+      order.scheduledDate, order.scheduled_date, order.date,
+    ];
+    for (const value of candidates) {
+      const normalized = normalizeOrderDate(value);
+      if (normalized) return normalized;
+    }
+    return "";
   }
 
   // Retorna somente OS cuja data de agendamento corresponde ao dia escolhido.
