@@ -220,13 +220,13 @@ body:has(> aside .nav-menu) .osv-bar {
 }
 body:has(> aside .nav-menu) .osv-bar button,
 body:has(> aside .nav-menu) .osv-list button,
-body .osv-list a {
+body:has(> aside .nav-menu) .osv-list a {
   border-radius: 9px;
   transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
 }
 body:has(> aside .nav-menu) .osv-bar button:hover,
 body:has(> aside .nav-menu) .osv-list button:hover,
-body .osv-list a:hover {
+body:has(> aside .nav-menu) .osv-list a:hover {
   border-color: #9bbde2;
   background: #f4f8ff;
 }
