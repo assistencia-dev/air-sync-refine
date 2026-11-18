@@ -59,6 +59,10 @@ function TreasuryPage() {
 
   useEffect(() => {
     canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN";
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "DBS_TREASURY_APPROVAL_CAPABILITY", canApprovePurchases: canApprovePurchasesRef.current },
+      window.location.origin,
+    );
   }, [profile?.role_key]);
 
   useEffect(() => {
@@ -163,7 +167,7 @@ function TreasuryPage() {
           const cloud = await getTreasuryCloudState();
           const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
           if (state) iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
+            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [], canApprovePurchases: canApprovePurchasesRef.current },
             window.location.origin,
           );
         } catch (err) {
