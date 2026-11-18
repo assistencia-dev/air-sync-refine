@@ -29,6 +29,7 @@ const operationalConsumptionMigration = fs.readFileSync('supabase/migrations/202
 const multipleOperationalStocksMigration = fs.readFileSync('supabase/migrations/20261116200000_dbs_control_multiple_operational_stocks_per_center.sql', 'utf8');
 const atomicOperationalConsumptionMigration = fs.readFileSync('supabase/migrations/20261116203000_dbs_control_atomic_operational_reservation_consumption.sql', 'utf8');
 const ambiguousReservationWrapperFixMigration = fs.readFileSync('supabase/migrations/20261117001500_fix_dbs_control_reservation_wrapper_ambiguous_columns.sql', 'utf8');
+const purchaseWorkflowIntegrityMigration = fs.readFileSync('supabase/migrations/20261118141500_dbs_purchase_workflow_integrity.sql', 'utf8');
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
@@ -606,7 +607,9 @@ assert.match(phase2Ui, /Ativo \/ Equipamento/);
 assert.match(phase2Ui, /Saldo no estoque operacional/);
 assert.match(phase2Ui, /purchaseMeasureUnitId/);
 assert.match(functions, /purchase_measure_unit_id/);
-assert.match(functions, /purchase_quantity,quantity_received/);
+assert.match(functions, /metadata\?\.purchase_quantity/);
+assert.match(functions, /purchase_unit_cost_cents/);
+assert.doesNotMatch(functions, /select\("id,purchase_id,part_id,quantity,purchase_quantity,quantity_received/i, "purchase_quantity não é coluna física; deve vir dos metadados da linha.");
 assert.match(phase2Ui, /quantityReceived: Number\(purchaseReceiptQuantities\[item.id\]\) \* Number\(item.conversion_factor \|\| 1\)/);
 assert.match(phase2Ui, /remainingPurchase/);
 assert.match(phase2Ui, /purchase_measure_unit_id \|\| part\?\.measure_unit_id/);
@@ -623,4 +626,30 @@ assert.match(functions, /purchase_measure_unit_id.*unidades de compra de peças/
 assert.match(functions, /dbs_control_operational_stock_movements.*histórico operacional/);
 assert.match(functions, /dbs_control_operational_stocks/);
 
-console.log("inventory financial bridge, operational stock isolation, OS reservation purpose and unit conversion checks passed");
+assert.match(functions, /dbs_control_register_purchase_with_quote/);
+assert.match(functions, /source_quote_id/);
+assert.match(functions, /purchase_quantity: Number\(item\.metadata\?\.purchase_quantity/);
+assert.match(phase2Ui, /getPersistentPurchaseIdempotencyKey/);
+assert.match(phase2Ui, /purchase-receipt/);
+assert.match(phase2Ui, /sourceQuoteId/);
+assert.match(phase2Ui, /Conferir composição/);
+assert.match(phase2Ui, /data\?\.canApprovePurchases === true/);
+assert.match(treasuryFunctions, /user\.role_key !== "SUPER_ADMIN"/);
+assert.doesNotMatch(treasuryFunctions, /\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]/);
+assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
+assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
+assert.match(treasuryHtml, /approval-purchase-items/);
+assert.match(purchaseWorkflowIntegrityMigration, /ADD COLUMN IF NOT EXISTS source_quote_id/i);
+assert.match(purchaseWorkflowIntegrityMigration, /dbs_control_register_purchase_with_quote/i);
+assert.match(purchaseWorkflowIntegrityMigration, /v_actor_role NOT IN/i);
+assert.match(purchaseWorkflowIntegrityMigration, /'SUPER_ADMIN'/);
+assert.match(purchaseWorkflowIntegrityMigration, /v_receipt_unit_cost/);
+assert.match(purchaseWorkflowIntegrityMigration, /v_order_item\.total_cents/);
+assert.match(purchaseWorkflowIntegrityMigration, /received_total_cents/);
+assert.match(integrationSql, /dbs_control_receive_purchase_items/i);
+assert.match(integrationSql, /TEST_PARTIAL_RECEIPT/i);
+assert.match(integrationSql, /TEST_RECEIPT_COST_ALLOCATION/i);
+assert.match(integrationSql, /ROLLBACK;/i);
+assert.match(integrationSql, /v_movement_count <> 3/);
+
+console.log("inventory financial bridge, purchase approval, quote traceability, partial receipt valuation and retry-safe idempotency checks passed");
