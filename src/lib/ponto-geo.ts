@@ -103,6 +103,7 @@ export function hasPontoCoordinates(record: PontoLocationRecord | null | undefin
     && Number.isFinite(latitude)
     && latitude >= -90
     && latitude <= 90
+    && record?.longitude != null
     && Number.isFinite(longitude)
     && longitude >= -180
     && longitude <= 180;
@@ -124,31 +125,44 @@ export function pontoGoogleMapsEmbedUrl(record: PontoLocationRecord): string | n
 /**
  * Obtains a fresh GPS fix only after an explicit punch action.
  *
- * POSITION_UNAVAILABLE (code 2) can be transient while the device is still
- * acquiring its first fix. Keep the one-shot watch alive until a valid fix
- * arrives or the app-owned deadline expires. Only permission denial (code 1)
- * ends the attempt immediately.
+ * POSITION_UNAVAILABLE (code 2) and browser timeout notifications (code 3)
+ * can be transient while the device is acquiring a fresh fix. Keep the
+ * one-shot watch alive until a usable reading or the app-owned deadline.
+ *
+ * After the first reading at or better than the target accuracy, keep a short
+ * settling window open and retain the best reported accuracy. This avoids
+ * accepting the first merely-acceptable fix when a better one arrives moments
+ * later. At the deadline, a reading up to maxAccuracyMeters is a fallback.
  *
  * This is never a background/continuous employee tracker: the watch is
- * cleared as soon as the punch has a usable fix or the bounded attempt ends.
+ * cleared as soon as the bounded capture finishes.
  */
 export function capturePontoPosition(
   geolocation: Pick<Geolocation, "watchPosition" | "clearWatch">,
-  options: { targetAccuracyMeters?: number; maxAccuracyMeters?: number; timeoutMs?: number } = {},
+  options: {
+    targetAccuracyMeters?: number;
+    maxAccuracyMeters?: number;
+    timeoutMs?: number;
+    settleMs?: number;
+  } = {},
 ): Promise<GeolocationPosition> {
   const targetAccuracy = options.targetAccuracyMeters ?? 80;
   const maxAccuracy = options.maxAccuracyMeters ?? 150;
   const timeoutMs = options.timeoutMs ?? 45_000;
+  const settleMs = options.settleMs ?? 2_500;
 
   return new Promise((resolve, reject) => {
     let watchId: number | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let settleTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let bestPosition: GeolocationPosition | null = null;
     let settled = false;
 
     const stop = () => {
       if (timeoutId !== null) clearTimeout(timeoutId);
       timeoutId = null;
+      if (settleTimeoutId !== null) clearTimeout(settleTimeoutId);
+      settleTimeoutId = null;
       if (watchId !== null) {
         geolocation.clearWatch(watchId);
         watchId = null;
@@ -171,23 +185,24 @@ export function capturePontoPosition(
 
     const handlePositionError = (error: unknown) => {
       if (settled) return;
-      if (bestPosition && Number(bestPosition.coords.accuracy) <= maxAccuracy) {
-        finish(bestPosition);
-        return;
-      }
-
       const code = error && typeof error === "object" && "code" in error
         ? Number((error as { code?: unknown }).code)
         : 0;
 
-      // Permission denial is definitive. A code 2/3 from the device can be
-      // temporary, so do not clear the watch before the app's own deadline.
+      // A permission denial is definitive, even if a prior reading existed.
       if (code === 1) {
         failImmediately(error);
         return;
       }
+
+      // These device/browser errors can be transient while a fresh fix is
+      // being acquired; keep the watch alive until another fix or deadline.
       if (code === 2 || code === 3) return;
 
+      if (bestPosition && bestPosition.coords.accuracy <= maxAccuracy) {
+        finish(bestPosition);
+        return;
+      }
       failImmediately(error);
     };
 
@@ -204,7 +219,19 @@ export function capturePontoPosition(
       if (!bestPosition || coords.accuracy < bestPosition.coords.accuracy) {
         bestPosition = position;
       }
-      if (coords.accuracy <= targetAccuracy) finish(position);
+
+      if (coords.accuracy <= targetAccuracy && settleTimeoutId === null) {
+        if (settleMs <= 0) {
+          finish(bestPosition);
+          return;
+        }
+        settleTimeoutId = setTimeout(() => {
+          settleTimeoutId = null;
+          if (bestPosition && bestPosition.coords.accuracy <= maxAccuracy) {
+            finish(bestPosition);
+          }
+        }, settleMs);
+      }
     };
 
     const onDeadline = () => {
