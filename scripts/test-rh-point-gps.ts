@@ -91,8 +91,9 @@ function mockGeolocation(cleared: number[], watchId = 27, onStart?: (callbacks: 
   let callbacks: GpsCallbacks | null = null;
   const geolocation = {
     watchPosition(success: PositionCallback, error: PositionErrorCallback, options?: PositionOptions) {
-      callbacks = { onPosition: success, onError: error, options };
-      onStart?.(callbacks);
+      const registeredCallbacks: GpsCallbacks = { onPosition: success, onError: error, options };
+      callbacks = registeredCallbacks;
+      onStart?.(registeredCallbacks);
       return watchId;
     },
     clearWatch(id: number) { cleared.push(id); },
