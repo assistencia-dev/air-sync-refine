@@ -1417,6 +1417,11 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
+        if (msg.type === "DBS_TREASURY_APPROVAL_CAPABILITY") {
+            CAN_APPROVE_PURCHASES = msg.canApprovePurchases === true;
+            renderPurchaseApprovals();
+            return;
+        }
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
         PENDING_PURCHASE_APPROVALS = Array.isArray(msg.pendingPurchaseApprovals) ? msg.pendingPurchaseApprovals : [];
