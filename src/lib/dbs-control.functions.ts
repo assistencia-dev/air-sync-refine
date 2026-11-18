@@ -3552,6 +3552,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     documentNumber?: string;
     purchaseDate: string;
     idempotencyKey: string;
+    sourceQuoteId?: string;
     items: Array<{ partId: string; purchaseUnitId: string; quantity: number; unitCostCents: number; conversionFactor: number }>;
   }) => {
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
@@ -3568,6 +3569,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
       documentNumber: String(input.documentNumber ?? "").trim().slice(0, 100) || null,
       purchaseDate,
       idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
+      sourceQuoteId: input.sourceQuoteId ? requireInventoryId(input.sourceQuoteId, "Orçamento de origem") : null,
       items: items.map((item) => {
         if (!item?.partId || !item?.purchaseUnitId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
             !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0 ||
@@ -3596,6 +3598,17 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     if (center.error) throw new Error(center.error.message);
     if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo.");
     if (!center.data) throw new Error("Centro de custo não encontrado ou inativo.");
+    if (data.sourceQuoteId) {
+      const { data: sourceQuote, error: sourceQuoteError } = await (supabaseAdmin as any)
+        .from("dbs_control_quotes")
+        .select("id,scope_key,quote_number")
+        .eq("id", data.sourceQuoteId)
+        .eq("scope_key", scopeKey)
+        .maybeSingle();
+      if (sourceQuoteError) throw new Error(sourceQuoteError.message);
+      if (!sourceQuote) throw new Error("O orçamento de origem não foi encontrado neste cadastro.");
+    }
+
     const resolvedItems = [];
     for (const item of data.items) {
       const [part, unit] = await Promise.all([
@@ -3631,7 +3644,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         unit_cost_cents: item.unitCostCents,
       });
     }
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase_with_quote", {
       p_payload: {
         actor_user_id: user.id,
         company_id: companyId,
@@ -3643,6 +3656,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         purchase_date: data.purchaseDate,
         payment_status: "unpaid",
         idempotency_key: data.idempotencyKey,
+        source_quote_id: data.sourceQuoteId,
         items: resolvedItems,
       },
     });
@@ -3714,7 +3728,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
         .select("id,work_order_id,part_id,quantity,unit_cost_cents,status,created_at,scope_key")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("id,supplier_id,supplier_name,cost_center_id,document_number,purchase_date,status,approval_status,rejection_reason,version,total_cents,received_total_cents,created_at")
+        .select("id,supplier_id,supplier_name,cost_center_id,source_quote_id,document_number,purchase_date,status,approval_status,rejection_reason,version,total_cents,received_total_cents,created_at")
         .eq("scope_key", scopeKey).order("purchase_date", { ascending: false }).limit(200),
       (supabaseAdmin as any).from("dbs_control_work_order_financials")
         .select("work_order_id,parts_cost_cents,status,updated_at")
@@ -3760,10 +3774,26 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
     const purchaseIds = (purchases.data ?? []).map((purchase: any) => purchase.id).filter(Boolean);
     const purchaseItems = purchaseIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_items")
-          .select("id,purchase_id,part_id,quantity,purchase_quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no,purchase_unit_id,conversion_factor,base_quantity,cost_center_id")
+          .select("id,purchase_id,part_id,quantity,quantity_received,unit_cost_cents,total_cents,received_total_cents,line_no,purchase_unit_id,conversion_factor,base_quantity,cost_center_id,metadata")
           .in("purchase_id", purchaseIds).order("line_no")
       : { data: [], error: null };
     if (purchaseItems.error) throw new Error("Falha ao carregar itens das compras: " + purchaseItems.error.message);
+    const purchaseItemRows = (purchaseItems.data ?? []).map((item: any) => ({
+      ...item,
+      purchase_quantity: Number(item.metadata?.purchase_quantity
+        ?? (Number(item.quantity ?? 0) / Math.max(Number(item.conversion_factor ?? 1), 0.000001))),
+      purchase_unit_cost_cents: Number(item.metadata?.purchase_unit_cost_cents
+        ?? Math.round(Number(item.unit_cost_cents ?? 0) * Number(item.conversion_factor ?? 1))),
+    }));
+    const sourceQuoteIds = [...new Set((purchases.data ?? [])
+      .map((purchase: any) => String(purchase.source_quote_id ?? ""))
+      .filter(Boolean))];
+    const sourceQuotes = sourceQuoteIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_quotes")
+          .select("id,quote_number,status")
+          .eq("scope_key", scopeKey).in("id", sourceQuoteIds)
+      : { data: [], error: null };
+    if (sourceQuotes.error) throw new Error("Falha ao carregar orçamentos de origem das compras: " + sourceQuotes.error.message);
     const inventoryMovements = await (supabaseAdmin as any).from("dbs_control_inventory_movements")
       .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,cost_center_id,created_at,metadata")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100);
@@ -3773,7 +3803,9 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       workOrders: workOrders.data ?? [],
       reservations: reservations.data ?? [],
       purchases: purchases.data ?? [],
-      purchaseItems: purchaseItems.data ?? [],
+      purchaseItems: purchaseItemRows,
+      sourceQuotes: sourceQuotes.data ?? [],
+      canApprovePurchases: user.role_key === "SUPER_ADMIN",
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
