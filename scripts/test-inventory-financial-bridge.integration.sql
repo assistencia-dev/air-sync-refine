@@ -12,6 +12,7 @@ declare
   v_part2 uuid;
   v_supplier uuid;
   v_measure_unit uuid;
+  v_purchase_unit uuid;
   v_cost_center uuid;
   v_before_stock numeric;
   v_before_cost integer;
@@ -81,6 +82,13 @@ begin
     'Unidade de teste', 'un', 0, 'active', v_actor, v_actor
   ) returning id into v_measure_unit;
 
+  insert into public.dbs_control_measure_units (
+    company_id, scope_key, code, name, symbol, decimal_places, status, created_by, updated_by
+  ) values (
+    v_company, v_scope, 'PKG' || upper(substr(md5(v_key),1,8)),
+    'Pacote de teste', 'pct', 0, 'active', v_actor, v_actor
+  ) returning id into v_purchase_unit;
+
   insert into public.dbs_control_cost_centers (
     company_id, scope_key, code, name, status, created_by, updated_by
   ) values (
@@ -108,8 +116,16 @@ begin
 
   -- Reactivation is transaction-local; the full test rolls back.
   update public.dbs_control_parts
-     set status = 'ativo', measure_unit_id = v_measure_unit
+     set status = 'ativo', measure_unit_id = v_measure_unit,
+         purchase_measure_unit_id = CASE WHEN id = v_part THEN v_purchase_unit ELSE v_measure_unit END
    where id in (v_part, v_part2);
+
+  insert into public.dbs_control_unit_conversions(
+    company_id,scope_key,from_unit_id,to_unit_id,factor,status,notes,created_by,updated_by
+  ) values (
+    v_company,v_scope,v_purchase_unit,v_measure_unit,3,'active',
+    'Conversão 3 unidades-base por pacote - teste com rollback',v_actor,v_actor
+  );
 
   v_payload := jsonb_build_object(
     'actor_user_id', v_actor,
@@ -124,7 +140,7 @@ begin
     'idempotency_key', v_key,
     'legacy_key', v_key,
     'items', jsonb_build_array(
-      jsonb_build_object('part_id', v_part, 'quantity', 2, 'purchase_unit_id', v_measure_unit, 'conversion_factor', 1, 'unit_cost_cents', 12345),
+      jsonb_build_object('part_id', v_part, 'quantity', 2, 'purchase_unit_id', v_purchase_unit, 'conversion_factor', 3, 'base_quantity', 6, 'unit_cost_cents', 10000),
       jsonb_build_object('part_id', v_part2, 'quantity', 1, 'purchase_unit_id', v_measure_unit, 'conversion_factor', 1, 'unit_cost_cents', 11111)
     )
   );
@@ -179,12 +195,12 @@ begin
   v_result := public.dbs_control_receive_purchase_items(
     v_purchase, v_actor, v_key || ':receipt-part-1',
     jsonb_build_array(jsonb_build_object(
-      'purchase_item_id', v_purchase_item1, 'quantity_received', 1
+      'purchase_item_id', v_purchase_item1, 'quantity_received', 3
     ))
   );
   v_partial_receipt_ledger := nullif(v_result->>'receipt_ledger_entry_id', '')::uuid;
   if v_result->>'status' <> 'partially_received'
-     or (v_result->>'received_total_cents')::bigint <> 12345
+     or (v_result->>'received_total_cents')::bigint <> 10000
      or v_partial_receipt_ledger is null then
     raise exception 'TEST_PARTIAL_RECEIPT: primeira entrega parcial inválida: %', v_result;
   end if;
@@ -207,13 +223,13 @@ begin
   v_result := public.dbs_control_receive_purchase_items(
     v_purchase, v_actor, v_key || ':receipt-final',
     jsonb_build_array(
-      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 1),
+      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 3),
       jsonb_build_object('purchase_item_id', v_purchase_item2, 'quantity_received', 1)
     )
   );
   v_receipt_ledger := nullif(v_result->>'receipt_ledger_entry_id', '')::uuid;
   if v_result->>'status' <> 'received'
-     or (v_result->>'received_total_cents')::bigint <> 23456
+     or (v_result->>'received_total_cents')::bigint <> 21111
      or v_receipt_ledger is null then
     raise exception 'TEST_RECEIPT: última entrega não concluiu a compra e a reclassificação: %', v_result;
   end if;
@@ -242,13 +258,13 @@ begin
   select stock_quantity, cost_cents
     into v_after_stock, v_after_cost
     from public.dbs_control_parts where id = v_part;
-  if v_after_stock <> coalesce(v_before_stock, 0) + 2 then
+  if v_after_stock <> coalesce(v_before_stock, 0) + 6 then
     raise exception 'TEST_STOCK: saldo esperado %, recebido %.',
-      coalesce(v_before_stock, 0) + 2, v_after_stock;
+      coalesce(v_before_stock, 0) + 6, v_after_stock;
   end if;
-  if v_after_cost <> round(((coalesce(v_before_stock, 0) * coalesce(v_before_cost, 0)) + (2 * 12345)) / (coalesce(v_before_stock, 0) + 2))::integer then
-    raise exception 'TEST_AVERAGE_COST: custo médio não foi recalculado. Esperado %, recebido %.',
-      round(((coalesce(v_before_stock, 0) * coalesce(v_before_cost, 0)) + (2 * 12345)) / (coalesce(v_before_stock, 0) + 2))::integer,
+  if v_after_cost <> round(((coalesce(v_before_stock, 0) * coalesce(v_before_cost, 0)) + 20000) / (coalesce(v_before_stock, 0) + 6))::integer then
+    raise exception 'TEST_AVERAGE_COST: custo médio não foi recalculado com o valor contratado da conversão 3:1. Esperado %, recebido %.',
+      round(((coalesce(v_before_stock, 0) * coalesce(v_before_cost, 0)) + 20000) / (coalesce(v_before_stock, 0) + 6))::integer,
       v_after_cost;
   end if;
 
@@ -268,7 +284,7 @@ begin
 
   select total_cents into v_total
     from public.dbs_control_purchases where id = v_purchase;
-  if v_total <> 35801 then
+  if v_total <> 31111 then
     raise exception 'TEST_PURCHASE_TOTAL: esperado 35801 centavos, recebido %.', v_total;
   end if;
 
@@ -302,8 +318,8 @@ begin
   end if;
   select total_cents-paid_cents into v_remaining
     from public.dbs_control_purchases where id=v_purchase;
-  if v_remaining <> 25801 then
-    raise exception 'TEST_ACCOUNTS_PAYABLE: saldo esperado 25801, recebido %.',v_remaining;
+  if v_remaining <> 21111 then
+    raise exception 'TEST_ACCOUNTS_PAYABLE: saldo esperado 21111, recebido %.',v_remaining;
   end if;
 
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
@@ -442,7 +458,7 @@ begin
     raise exception 'TEST_OVERVIEW_TOTALS: agregados não refletem todos os fluxos com valores positivos: %',v_overview;
   end if;
 
-  raise notice 'PASS: pending purchase -> finance approval creates AP -> exactly two receipt movements -> weighted average -> partial supplier payment -> one OS part consumption -> parts COGS -> OS closure/revenue Ledger -> all seven overview metrics.';
+  raise notice 'PASS: pending purchase -> approval/AP -> two partial receipts for a 3:1 purchase-unit conversion -> exact contract-cent reconciliation -> weighted average -> partial payment -> OS consumption/COGS/revenue and seven overview metrics.';
 end;
 $test$;
 
