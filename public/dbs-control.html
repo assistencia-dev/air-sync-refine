@@ -3796,6 +3796,56 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     border-style:dashed; background:#f8fafc;
   }
   body.dbs-control-employee-mode .employee-day-orders { display:grid; gap:11px; min-width:0; }
+  body.dbs-control-employee-mode .employee-agenda-toolbar {
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    flex-wrap:wrap; margin:0 0 14px; padding:14px;
+    border:1px solid #dbe7f2; border-radius:15px; background:#fff;
+  }
+  body.dbs-control-employee-mode .employee-agenda-summary { display:grid; gap:3px; min-width:180px; }
+  body.dbs-control-employee-mode .employee-agenda-summary span {
+    color:#647b91; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+  }
+  body.dbs-control-employee-mode .employee-agenda-summary strong {
+    color:#173e62; font-size:15px; font-weight:900; line-height:1.35;
+  }
+  body.dbs-control-employee-mode .employee-agenda-summary small { color:#64748b; font-size:11px; }
+  body.dbs-control-employee-mode .employee-agenda-controls {
+    display:flex; align-items:end; justify-content:flex-end; gap:7px; flex-wrap:wrap;
+  }
+  body.dbs-control-employee-mode .employee-agenda-controls button {
+    min-height:42px; padding:8px 12px; border:1px solid #d7e2ed; border-radius:10px;
+    background:#f8fafc; color:#244762; font-size:11px; font-weight:800; cursor:pointer;
+  }
+  body.dbs-control-employee-mode .employee-agenda-controls button:hover {
+    border-color:#9fc5e8; background:#eff7ff;
+  }
+  body.dbs-control-employee-mode .employee-agenda-controls .employee-agenda-today {
+    border-color:#155e9a; background:#155e9a; color:#fff;
+  }
+  body.dbs-control-employee-mode .employee-agenda-date-field {
+    display:grid; gap:4px; color:#647b91; font-size:9px; font-weight:900;
+    letter-spacing:.06em; text-transform:uppercase;
+  }
+  body.dbs-control-employee-mode .employee-agenda-date-field input {
+    min-height:42px; min-width:154px; padding:8px 10px; border:1px solid #cbd8e5;
+    border-radius:10px; background:#fff; color:#173e62; font:700 12px inherit;
+    text-transform:none; letter-spacing:normal;
+  }
+  body.dbs-control-employee-mode .employee-agenda-empty { margin-top:2px; }
+  body.dbs-control-employee-mode .employee-agenda-empty button {
+    min-height:42px; margin-top:12px; padding:9px 14px; border:0;
+    border-radius:10px; background:#155e9a; color:#fff; font-weight:800; cursor:pointer;
+  }
+  @media(max-width:620px) {
+    body.dbs-control-employee-mode .employee-agenda-toolbar { align-items:stretch; padding:12px; }
+    body.dbs-control-employee-mode .employee-agenda-controls { display:grid; grid-template-columns:42px minmax(0,1fr) 42px; width:100%; }
+    body.dbs-control-employee-mode .employee-agenda-controls button { padding:8px 5px; }
+    body.dbs-control-employee-mode .employee-agenda-controls .employee-agenda-date-field { grid-column:2; grid-row:1; }
+    body.dbs-control-employee-mode .employee-agenda-controls .employee-agenda-date-field input { min-width:0; width:100%; }
+    body.dbs-control-employee-mode .employee-agenda-controls [data-agenda-step="-1"] { grid-column:1; grid-row:1; }
+    body.dbs-control-employee-mode .employee-agenda-controls [data-agenda-step="1"] { grid-column:3; grid-row:1; }
+    body.dbs-control-employee-mode .employee-agenda-controls .employee-agenda-today { grid-column:1 / -1; grid-row:2; }
+  }
 </style>
 </head>
 <body>
@@ -4599,7 +4649,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         </nav>
     </main>
 
-    <script src="/dbs-control-employee-days.js?v=20261116-1"></script>
+    <script src="/dbs-control-employee-days.js?v=20261118-1"></script>
     <script>
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
@@ -8700,6 +8750,19 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const minhasOSVisiveis = minhasOS.filter(o => employeeOsTab === 'concluidas'
                 ? isOSConcluida(o)
                 : !isOSConcluida(o));
+            const employeeSchedule = window.DbsEmployeeSchedule;
+            const employeeNow = new Date();
+            const employeeToday = employeeSchedule?.localIsoDate?.(employeeNow)
+                || employeeNow.getFullYear() + '-' + String(employeeNow.getMonth() + 1).padStart(2, '0') + '-' + String(employeeNow.getDate()).padStart(2, '0');
+            const employeeSelectedDay = employeeSchedule?.normalizeOrderDate?.(window.__DBS_EMPLOYEE_SELECTED_DAY__) || employeeToday;
+            window.__DBS_EMPLOYEE_SELECTED_DAY__ = employeeSelectedDay;
+            const employeeDayOrders = employeeSchedule?.filterOrdersForDay?.(minhasOSVisiveis, employeeSelectedDay) || [];
+            const employeeDayOpenCount = employeeSchedule?.filterOrdersForDay?.(minhasOS.filter(o => !isOSConcluida(o)), employeeSelectedDay).length || 0;
+            const employeeDayCompletedCount = employeeSchedule?.filterOrdersForDay?.(minhasOS.filter(isOSConcluida), employeeSelectedDay).length || 0;
+            const employeeTomorrow = employeeSchedule?.addDays?.(employeeToday, 1) || employeeToday;
+            const employeeYesterday = employeeSchedule?.addDays?.(employeeToday, -1) || employeeToday;
+            const employeeSelectedDayTitle = employeeSchedule?.displayDate?.(employeeSelectedDay, employeeToday, employeeTomorrow, employeeYesterday) || employeeSelectedDay;
+            const employeeDayKind = employeeSelectedDay < employeeToday ? 'past' : employeeSelectedDay === employeeToday ? 'today' : 'future';
 
             const statusMeta = (status) => {
                 const s = String(status || 'Em Atendimento');
@@ -8713,29 +8776,43 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return [s,'employee-status-active'];
             };
             const escHtml = (value) => String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-            const employeeOrderGroups = window.DbsEmployeeSchedule?.groupOrdersByDay?.(minhasOSVisiveis, employeeOsTab, new Date())
-                || [{ key: 'all', kind: 'today', title: 'Atendimentos', caption: 'OS atribuídas', orders: minhasOSVisiveis }];
+            const employeeAgendaDateControls = `
+              <div class="employee-agenda-toolbar" aria-label="Agenda diária de ordens de serviço">
+                <div class="employee-agenda-summary">
+                  <span>Agenda do colaborador</span>
+                  <strong>${escHtml(employeeSelectedDayTitle)}</strong>
+                  <small>${employeeDayOrders.length} OS ${employeeOsTab === 'concluidas' ? 'concluídas' : 'agendadas'} nesta data</small>
+                </div>
+                <div class="employee-agenda-controls">
+                  <button type="button" data-agenda-step="-1" aria-label="Ver dia anterior" title="Dia anterior" onclick="window.__DBS_EMPLOYEE_SELECTED_DAY__=window.DbsEmployeeSchedule.addDays(window.__DBS_EMPLOYEE_SELECTED_DAY__ || '${employeeSelectedDay}',-1);renderizarPWAScreen()">‹</button>
+                  <label class="employee-agenda-date-field">Escolher dia
+                    <input id="employee-agenda-date" type="date" value="${employeeSelectedDay}" aria-label="Escolher dia da agenda" onchange="window.__DBS_EMPLOYEE_SELECTED_DAY__=window.DbsEmployeeSchedule.normalizeOrderDate(this.value)||'${employeeToday}';renderizarPWAScreen()">
+                  </label>
+                  <button type="button" data-agenda-step="1" aria-label="Ver próximo dia" title="Próximo dia" onclick="window.__DBS_EMPLOYEE_SELECTED_DAY__=window.DbsEmployeeSchedule.addDays(window.__DBS_EMPLOYEE_SELECTED_DAY__ || '${employeeSelectedDay}',1);renderizarPWAScreen()">›</button>
+                  <button type="button" class="employee-agenda-today" onclick="window.__DBS_EMPLOYEE_SELECTED_DAY__='${employeeToday}';renderizarPWAScreen()">Hoje</button>
+                </div>
+              </div>`;
 
             area.innerHTML = `
               <div class="employee-list-summary" aria-label="Resumo das ordens do colaborador">
-                <div class="employee-list-summary-count"><strong>${minhasOSVisiveis.length}</strong><span>${employeeOsTab === 'concluidas' ? 'finalizadas' : 'em aberto'}</span></div>
-                <div class="employee-list-summary-copy"><strong>Fila de atendimento</strong><span>${employeeOsTab === 'concluidas' ? 'Histórico dos atendimentos finalizados' : 'Toque em uma OS para executar o atendimento'}</span></div>
+                <div class="employee-list-summary-count"><strong>${employeeDayOrders.length}</strong><span>${employeeOsTab === 'concluidas' ? 'concluídas no dia' : 'OS do dia'}</span></div>
+                <div class="employee-list-summary-copy"><strong>${employeeOsTab === 'concluidas' ? 'Histórico do dia' : 'Atendimentos do dia'}</strong><span>Exibindo somente as OS da data selecionada</span></div>
                 <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarPWAScreen()" aria-label="Atualizar minhas ordens">↻ Atualizar</button>
               </div>
               <div class="employee-os-tabs" role="tablist" aria-label="Ordens de serviço do colaborador" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;">
-                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${minhasOS.filter(o => !isOSConcluida(o)).length})</span></button>
-                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${minhasOS.filter(isOSConcluida).length})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'abertas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'abertas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='abertas';renderizarPWAScreen()">OS em andamento <span>(${employeeDayOpenCount})</span></button>
+                <button type="button" class="btn ${employeeOsTab === 'concluidas' ? 'btn-primary' : 'btn-secondary'}" role="tab" aria-selected="${employeeOsTab === 'concluidas'}" onclick="window.__DBS_EMPLOYEE_OS_TAB__='concluidas';renderizarPWAScreen()">OS concluídas <span>(${employeeDayCompletedCount})</span></button>
               </div>
-
+              ${employeeAgendaDateControls}
               <div class="employee-orders">
-                ${minhasOSVisiveis.length ? employeeOrderGroups.map(group => `
-                  <section class="employee-day-group employee-day-${group.kind}" data-employee-day="${escHtml(group.key)}">
+                ${employeeDayOrders.length ? `
+                  <section class="employee-day-group employee-day-${employeeDayKind}" data-employee-day="${escHtml(employeeSelectedDay)}">
                     <header class="employee-day-heading">
-                      <div><span class="employee-day-caption">${escHtml(group.caption)}</span><h3>${escHtml(group.title)}</h3></div>
-                      <span class="employee-day-count">${group.orders.length} OS</span>
+                      <div><span class="employee-day-caption">${employeeOsTab === 'concluidas' ? 'Histórico do dia' : 'OS programadas para o dia'}</span><h3>${escHtml(employeeSelectedDayTitle)}</h3></div>
+                      <span class="employee-day-count">${employeeDayOrders.length} OS</span>
                     </header>
                     <div class="employee-day-orders">
-                    ${group.orders.map(o => {
+                    ${employeeDayOrders.map(o => {
                     const cli = ERP_STATE.clientes.find(c => String(c.id) === String(o.clienteId)) || {};
                     const eq = ERP_STATE.equipamentos.find(e => String(e.id) === String(o.equipamentoId)) || {};
                     const meta = statusMeta(o.status);
@@ -8853,11 +8930,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     }).join('')}
                     </div>
                   </section>
-                `).join('') : '<div class="employee-empty"><div class="employee-icon">✓</div><h3>' + (employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída' : 'Nenhuma OS em andamento') + '</h3><p>' + (employeeOsTab === 'concluidas' ? 'As ordens finalizadas aparecerão aqui para consulta.' : 'Quando uma OS for despachada para você, ela aparecerá automaticamente nesta área.') + '</p></div>'}
+                ` : `
+                  <div class="employee-empty employee-agenda-empty" role="status">
+                    <div class="employee-icon">${employeeOsTab === 'concluidas' ? '✓' : '▤'}</div>
+                    <h3>${employeeOsTab === 'concluidas' ? 'Nenhuma OS concluída nesta data' : 'Nenhuma OS agendada para esta data'}</h3>
+                    <p>${employeeOsTab === 'concluidas' ? 'Não há atendimentos finalizados no dia selecionado.' : 'Não há ordens programadas para este dia. Escolha outra data ou volte para hoje.'}</p>
+                    ${employeeSelectedDay !== employeeToday ? `<button type="button" onclick="window.__DBS_EMPLOYEE_SELECTED_DAY__='${employeeToday}';renderizarPWAScreen()">Voltar para hoje</button>` : ''}
+                  </div>
+                `}
               </div>
             `;
 
-            minhasOSVisiveis.forEach(o => {
+            employeeDayOrders.forEach(o => {
               if (!isOSConcluida(o)) setTimeout(() => {
                 initCanvas('sig-canvas-' + o.id);
                 const initialStatus = normalizarStatusAtendimentoMobile(o.completionStatusCode || String(o.status || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, '_'));
