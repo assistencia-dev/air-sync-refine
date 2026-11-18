@@ -635,8 +635,13 @@ assert.match(phase2Ui, /purchase-receipt/);
 assert.match(phase2Ui, /sourceQuoteId/);
 assert.match(phase2Ui, /Conferir composição/);
 assert.match(phase2Ui, /data\?\.canApprovePurchases === true/);
-assert.match(treasuryFunctions, /user\.role_key !== "SUPER_ADMIN"/);
-assert.doesNotMatch(treasuryFunctions, /\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]/);
+assert.match(treasuryFunctions, /async function requirePurchaseApprovalActor[\s\S]*?if \(user\.role_key !== "SUPER_ADMIN"\)/);
+const purchaseApprovalGuard = treasuryFunctions.slice(
+  treasuryFunctions.indexOf("async function requirePurchaseApprovalActor"),
+  treasuryFunctions.indexOf("function asObject", treasuryFunctions.indexOf("async function requirePurchaseApprovalActor")),
+);
+assert.doesNotMatch(purchaseApprovalGuard, /FINANCEIRO_LEITURA/);
+assert.match(treasuryFunctions, /data\.role_key\)\)/);
 assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
 assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
 assert.match(treasuryHtml, /approval-purchase-items/);
