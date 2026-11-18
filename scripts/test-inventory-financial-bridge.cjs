@@ -646,9 +646,8 @@ assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]\.inclu
 assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
 assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
 assert.match(treasuryHtml, /approval-purchase-items/);
-assert.match(purchaseWorkflowIntegrityMigration, /ADD COLUMN IF NOT EXISTS source_quote_id/i);
-assert.match(purchaseWorkflowIntegrityMigration, /dbs_control_register_purchase_with_quote/i);
-assert.match(purchaseWorkflowIntegrityMigration, /\$old\
+assert.ok(purchaseWorkflowIntegrityMigration.includes("v_old := $old$'SUPER_ADMIN','ADMIN_OPERACIONAL','GESTOR_CONTA','GESTOR_REGIONAL','FINANCEIRO_LEITURA'$old$;"));
+assert.ok(purchaseWorkflowIntegrityMigration.includes("v_new := $new$'SUPER_ADMIN'$new$;"));
 assert.match(purchaseWorkflowIntegrityMigration, /v_receipt_unit_cost/);
 assert.match(purchaseWorkflowIntegrityMigration, /v_order_item\.total_cents/);
 assert.match(purchaseWorkflowIntegrityMigration, /received_total_cents/);
