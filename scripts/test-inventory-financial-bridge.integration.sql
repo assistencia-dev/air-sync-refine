@@ -47,6 +47,7 @@ declare
   v_paid bigint;
   v_remaining bigint;
   v_status text;
+  v_received_all boolean;
   v_movement_count integer;
   v_debits bigint;
   v_credits bigint;
@@ -170,6 +171,8 @@ begin
   if v_purchase_item1 is null or v_purchase_item2 is null then
     raise exception 'TEST_RECEIPT_SETUP: itens relacionais da compra não foram encontrados.';
   end if;
+  select total_cents into v_total
+    from public.dbs_control_purchases where id = v_purchase;
 
   -- First delivery: half of the first line. The partial receipt must use
   -- the contracted line total, not the rounded base-unit display cost.
