@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/treasury")({
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html?v=20261115-approval-menu-1";
+const TREASURY_URL = "/treasury.html?v=20261118-purchase-flow-1";
 
 
 function TreasuryPage() {
@@ -29,6 +29,7 @@ function TreasuryPage() {
   const [profile, setProfile] = useState<{ role_key?: string } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const cloudReadyRef = useRef(false);
+  const canApprovePurchasesRef = useRef(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -55,6 +56,14 @@ function TreasuryPage() {
     void loadProfile();
     return () => { cancelled = true; };
   }, [navigate]);
+
+  useEffect(() => {
+    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN";
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "DBS_TREASURY_APPROVAL_CAPABILITY", canApprovePurchases: canApprovePurchasesRef.current },
+      window.location.origin,
+    );
+  }, [profile?.role_key]);
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -128,7 +137,7 @@ function TreasuryPage() {
           }
           cloudReadyRef.current = true;
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
+            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [], canApprovePurchases: canApprovePurchasesRef.current },
             window.location.origin,
           );
           setCloudError(null);
@@ -158,7 +167,7 @@ function TreasuryPage() {
           const cloud = await getTreasuryCloudState();
           const state = cloud?.state && typeof cloud.state === "object" ? cloud.state : null;
           if (state) iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
+            { type: "DBS_TREASURY_CLOUD_STATE", state, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [], canApprovePurchases: canApprovePurchasesRef.current },
             window.location.origin,
           );
         } catch (err) {

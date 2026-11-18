@@ -1417,9 +1417,15 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     window.addEventListener("message", (event) => {
         if (event.origin !== window.location.origin || event.source !== window.parent) return;
         const msg = event.data || {};
+        if (msg.type === "DBS_TREASURY_APPROVAL_CAPABILITY") {
+            CAN_APPROVE_PURCHASES = msg.canApprovePurchases === true;
+            renderPurchaseApprovals();
+            return;
+        }
         if (msg.type !== "DBS_TREASURY_CLOUD_STATE") return;
         CLOUD_STATE_RECEIVED = true;
         PENDING_PURCHASE_APPROVALS = Array.isArray(msg.pendingPurchaseApprovals) ? msg.pendingPurchaseApprovals : [];
+        CAN_APPROVE_PURCHASES = msg.canApprovePurchases === true;
         renderPurchaseApprovals();
         LEDGER_REPORT = msg.ledgerReport && typeof msg.ledgerReport === "object" ? msg.ledgerReport : null;
         if (msg.state && typeof msg.state === "object" && !Array.isArray(msg.state)) {
@@ -1444,6 +1450,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
     let STATE = { passivos: [], recorrencias: [], recebimentos: [], contasPagar: [], bancos: [], movimentacoes: [], auditoria: [], _meta: { version: TREASURY_VERSION, planoContas: [], centrosCusto: [], orcamentos: [], conciliacoes: [], fechamentos: [], snapshots: [] } };
     let LEDGER_REPORT = null;
     let PENDING_PURCHASE_APPROVALS = [];
+    let CAN_APPROVE_PURCHASES = false;
     let purchaseApprovalBusyId = "";
     let purchaseApprovalRejectingId = "";
 
@@ -1638,6 +1645,42 @@ function showToast(msg) {
             documentNumber.textContent = String(item?.document_number || 'Pedido sem número');
             main.append(supplier, documentNumber);
 
+            const itemDetails = document.createElement('details');
+            itemDetails.className = 'approval-purchase-items';
+            const itemSummary = document.createElement('summary');
+            const purchaseItems = Array.isArray(item?.items) ? item.items : [];
+            itemSummary.textContent = 'Conferir composição (' + purchaseItems.length + ' item(ns))';
+            itemDetails.appendChild(itemSummary);
+            if (item?.source_quote_number) {
+                const quoteOrigin = document.createElement('p');
+                quoteOrigin.className = 'approval-row-muted';
+                quoteOrigin.textContent = 'Orçamento de origem: ' + String(item.source_quote_number);
+                itemDetails.appendChild(quoteOrigin);
+            }
+            if (!purchaseItems.length) {
+                const emptyItems = document.createElement('p');
+                emptyItems.className = 'approval-row-muted';
+                emptyItems.textContent = 'Os itens desta compra não foram carregados. Não aprove sem conferir o pedido no módulo Compras.';
+                itemDetails.appendChild(emptyItems);
+            } else {
+                purchaseItems.forEach(line => {
+                    const lineRow = document.createElement('div');
+                    lineRow.className = 'approval-purchase-item';
+                    const lineName = document.createElement('strong');
+                    lineName.textContent = [line.part_sku, line.part_name].filter(Boolean).join(' · ');
+                    const lineMeta = document.createElement('span');
+                    const qty = Number(line.purchase_quantity) || 0;
+                    const unitCost = (Number(line.purchase_unit_cost_cents) || 0) / 100;
+                    const lineTotal = (Number(line.total_cents) || 0) / 100;
+                    lineMeta.textContent = qty.toLocaleString('pt-BR') + ' ' + String(line.purchase_unit_label || 'un.')
+                        + ' × ' + unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        + ' = ' + lineTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    lineRow.append(lineName, lineMeta);
+                    itemDetails.appendChild(lineRow);
+                });
+            }
+            main.appendChild(itemDetails);
+
             const date = document.createElement('div');
             const dateLabel = document.createElement('span');
             dateLabel.className = 'approval-row-label';
@@ -1662,22 +1705,33 @@ function showToast(msg) {
 
             const actions = document.createElement('div');
             actions.className = 'approval-actions';
-            const approve = document.createElement('button');
-            approve.type = 'button';
-            approve.className = 'approval-action approval-action-approve';
-            approve.textContent = isBusy ? 'Processando…' : 'Aprovar pedido';
-            approve.disabled = !!purchaseApprovalBusyId;
-            approve.addEventListener('click', () => {
-                if (!window.confirm('Confirmar a aprovação desta compra? O compromisso será lançado no Financeiro e o recebimento ficará liberado.')) return;
-                void decidePurchaseApproval(item, 'approved', '');
-            });
-            const reject = document.createElement('button');
-            reject.type = 'button';
-            reject.className = 'approval-action approval-action-reject';
-            reject.textContent = 'Rejeitar';
-            reject.disabled = !!purchaseApprovalBusyId;
-            reject.addEventListener('click', () => openPurchaseApprovalRejection(id));
-            actions.append(approve, reject);
+            if (CAN_APPROVE_PURCHASES) {
+                const approve = document.createElement('button');
+                approve.type = 'button';
+                approve.className = 'approval-action approval-action-approve';
+                approve.textContent = isBusy ? 'Processando…' : 'Aprovar pedido';
+                approve.disabled = !!purchaseApprovalBusyId || !purchaseItems.length;
+                approve.addEventListener('click', () => {
+                    if (!purchaseItems.length) {
+                        alert('A compra não possui itens carregados para conferência. Atualize a tela antes de aprovar.');
+                        return;
+                    }
+                    if (!window.confirm('Confirmar a aprovação desta compra? O compromisso será lançado no Financeiro e o recebimento ficará liberado.')) return;
+                    void decidePurchaseApproval(item, 'approved', '');
+                });
+                const reject = document.createElement('button');
+                reject.type = 'button';
+                reject.className = 'approval-action approval-action-reject';
+                reject.textContent = 'Rejeitar';
+                reject.disabled = !!purchaseApprovalBusyId;
+                reject.addEventListener('click', () => openPurchaseApprovalRejection(id));
+                actions.append(approve, reject);
+            } else {
+                const readOnly = document.createElement('span');
+                readOnly.className = 'approval-row-muted';
+                readOnly.textContent = 'Acesso somente para consulta. Aprovação exclusiva do SUPER_ADMIN.';
+                actions.appendChild(readOnly);
+            }
             row.append(main, date, amount, actions);
             list.appendChild(row);
         });
