@@ -29,6 +29,7 @@ function TreasuryPage() {
   const [profile, setProfile] = useState<{ role_key?: string } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const cloudReadyRef = useRef(false);
+  const canApprovePurchasesRef = useRef(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -55,6 +56,10 @@ function TreasuryPage() {
     void loadProfile();
     return () => { cancelled = true; };
   }, [navigate]);
+
+  useEffect(() => {
+    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN";
+  }, [profile?.role_key]);
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -128,7 +133,7 @@ function TreasuryPage() {
           }
           cloudReadyRef.current = true;
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [] },
+            { type: "DBS_TREASURY_CLOUD_STATE", state: stateToHydrate, ledgerEntryCount: cloud?.ledger_entry_count ?? 0, ledgerReport: cloud?.ledger_report ?? null, pendingPurchaseApprovals: cloud?.pending_purchase_approvals ?? [], canApprovePurchases: canApprovePurchasesRef.current },
             window.location.origin,
           );
           setCloudError(null);
