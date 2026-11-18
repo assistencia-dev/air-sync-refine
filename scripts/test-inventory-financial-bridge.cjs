@@ -29,7 +29,7 @@ const operationalConsumptionMigration = fs.readFileSync('supabase/migrations/202
 const multipleOperationalStocksMigration = fs.readFileSync('supabase/migrations/20261116200000_dbs_control_multiple_operational_stocks_per_center.sql', 'utf8');
 const atomicOperationalConsumptionMigration = fs.readFileSync('supabase/migrations/20261116203000_dbs_control_atomic_operational_reservation_consumption.sql', 'utf8');
 const ambiguousReservationWrapperFixMigration = fs.readFileSync('supabase/migrations/20261117001500_fix_dbs_control_reservation_wrapper_ambiguous_columns.sql', 'utf8');
-const purchaseWorkflowIntegrityMigration = fs.readFileSync('supabase/migrations/20261118141500_dbs_purchase_workflow_integrity.sql', 'utf8');
+const purchaseWorkflowIntegrityMigration = fs.readFileSync('supabase/migrations/20261118143128_dbs_purchase_workflow_integrity.sql', 'utf8');
 
 const treasuryFunctions = fs.readFileSync('src/lib/treasury.functions.ts', 'utf8');
 const treasuryPage = fs.readFileSync('src/routes/_authenticated/treasury.tsx', 'utf8');
