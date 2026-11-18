@@ -384,7 +384,7 @@ assert.match(scopeSkuMigration, /dbs_control_normalize_part_sku/i);
 assert.match(scopeSkuMigration, /admin_count = 1/i);
 assert.match(scopeSkuMigration, /dbs_control_reconcile_work_order_financials/i);
 assert.match(scopeSkuMigration, /completed_without_source_value/i);
-assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 35801/i);
+assert.match(integrationSql, /TEST_PURCHASE_TOTAL: esperado 31111/i);
 assert.match(integrationSql, /v_part2/i);
 assert.match(integrationSql, /TEST_OS_REVENUE/i);
 assert.match(integrationSql, /gross_margin_pct/);
