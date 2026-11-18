@@ -640,8 +640,9 @@ const purchaseApprovalGuard = treasuryFunctions.slice(
   treasuryFunctions.indexOf("async function requirePurchaseApprovalActor"),
   treasuryFunctions.indexOf("function asObject", treasuryFunctions.indexOf("async function requirePurchaseApprovalActor")),
 );
-assert.doesNotMatch(purchaseApprovalGuard, /FINANCEIRO_LEITURA/);
-assert.match(treasuryFunctions, /data\.role_key\)\)/);
+assert.match(purchaseApprovalGuard, /if \(user\.role_key !== "SUPER_ADMIN"\)/);
+assert.doesNotMatch(purchaseApprovalGuard, /\|\|\s*user\.role_key/);
+assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]\.includes\(data\.role_key\)/);
 assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
 assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
 assert.match(treasuryHtml, /approval-purchase-items/);
