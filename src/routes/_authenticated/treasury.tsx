@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/treasury")({
 
 // HTML completo do DBS TREASURY V10 fornecido pelo usuário
 // Os links de CDN foram removidos das crases acidentais no original
-const TREASURY_URL = "/treasury.html?v=20261115-approval-menu-1";
+const TREASURY_URL = "/treasury.html?v=20261118-purchase-flow-1";
 
 
 function TreasuryPage() {
