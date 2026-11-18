@@ -165,96 +165,96 @@ body > main > header {
   border-bottom-color: var(--dbs-ui-border);
   box-shadow: 0 3px 14px rgba(15,41,68,.045);
 }
-body .metric-card,
-body .data-card {
+body:has(> aside .nav-menu) .metric-card,
+body:has(> aside .nav-menu) .data-card {
   border-color: var(--dbs-ui-border);
   border-radius: 13px;
   box-shadow: 0 3px 12px rgba(15,41,68,.045);
 }
-body .metric-card {
+body:has(> aside .nav-menu) .metric-card {
   padding: 16px;
 }
-body .metric-title {
+body:has(> aside .nav-menu) .metric-title {
   letter-spacing: .055em;
 }
-body .metric-value {
+body:has(> aside .nav-menu) .metric-value {
   font-variant-numeric: tabular-nums;
   letter-spacing: -.025em;
 }
-body .data-header {
+body:has(> aside .nav-menu) .data-header {
   border-bottom-color: var(--dbs-ui-border);
   background: #f7faff;
 }
-body .filter-bar :is(input, select) {
+body:has(> aside .nav-menu) .filter-bar :is(input, select) {
   min-height: 40px;
   border-color: #d7e1eb;
   border-radius: 9px;
 }
-body .data-card :is(input, select, textarea):focus,
-body .filter-bar :is(input, select):focus {
+body:has(> aside .nav-menu) .data-card :is(input, select, textarea):focus,
+body:has(> aside .nav-menu) .filter-bar :is(input, select):focus {
   border-color: #6ba3dd;
   outline: 0;
   box-shadow: 0 0 0 3px rgba(23,105,209,.11);
 }
-body .data-card tbody tr {
+body:has(> aside .nav-menu) .data-card tbody tr {
   transition: background-color .14s ease;
 }
-body .data-card tbody tr:hover {
+body:has(> aside .nav-menu) .data-card tbody tr:hover {
   background: #f7faff;
 }
 
 /* Visualizador de OS — mantém leitura somente leitura e ações existentes */
-body .osv {
+body:has(> aside .nav-menu) .osv {
   border-radius: 18px 0 0 18px;
   box-shadow: -18px 0 54px rgba(15,47,87,.2);
 }
-body .osv-head {
+body:has(> aside .nav-menu) .osv-head {
   background: linear-gradient(125deg, #0b2745 0%, #124574 100%);
 }
-body .osv-head h2 {
+body:has(> aside .nav-menu) .osv-head h2 {
   letter-spacing: -.025em;
 }
-body .osv-bar {
+body:has(> aside .nav-menu) .osv-bar {
   background: #f5f8fc;
   border-bottom-color: var(--dbs-ui-border);
 }
-body .osv-bar button,
-body .osv-list button,
+body:has(> aside .nav-menu) .osv-bar button,
+body:has(> aside .nav-menu) .osv-list button,
 body .osv-list a {
   border-radius: 9px;
   transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
 }
-body .osv-bar button:hover,
-body .osv-list button:hover,
+body:has(> aside .nav-menu) .osv-bar button:hover,
+body:has(> aside .nav-menu) .osv-list button:hover,
 body .osv-list a:hover {
   border-color: #9bbde2;
   background: #f4f8ff;
 }
-body .osv-sec {
+body:has(> aside .nav-menu) .osv-sec {
   padding-bottom: 3px;
 }
-body .osv-sec h3 {
+body:has(> aside .nav-menu) .osv-sec h3 {
   letter-spacing: .075em;
 }
-body .osv-text {
+body:has(> aside .nav-menu) .osv-text {
   border-radius: 9px;
   border-left-width: 3px;
   line-height: 1.6;
 }
-body .osv-thumb {
+body:has(> aside .nav-menu) .osv-thumb {
   border-color: var(--dbs-ui-border);
   border-radius: 12px;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-body .osv-thumb:hover {
+body:has(> aside .nav-menu) .osv-thumb:hover {
   border-color: #9bbde2;
   box-shadow: 0 4px 14px rgba(15,41,68,.09);
 }
-body .osv-sig {
+body:has(> aside .nav-menu) .osv-sig {
   border-radius: 10px;
   padding: 5px;
 }
-body .osv-empty {
+body:has(> aside .nav-menu) .osv-empty {
   display: block;
   padding: 10px 12px;
   border: 1px dashed #cbd5e1;
@@ -263,13 +263,13 @@ body .osv-empty {
 }
 
 /* Treasury — mesma linguagem de cartões, navegação e ações */
-body .sidebar {
+body:has(.sidebar-brand) .sidebar {
   background: linear-gradient(180deg, #0b2745 0%, #091f37 100%);
 }
-body .sidebar-brand {
+body:has(.sidebar-brand) .sidebar-brand {
   background: rgba(255,255,255,.025);
 }
-body .sidebar .nav-item {
+body:has(.sidebar-brand) .sidebar .nav-item {
   min-height: 44px;
   margin: 2px 9px;
   padding: 10px 12px;
@@ -277,52 +277,52 @@ body .sidebar .nav-item {
   border-right: 0;
   transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-body .sidebar .nav-item:hover {
+body:has(.sidebar-brand) .sidebar .nav-item:hover {
   background: rgba(255,255,255,.075);
 }
-body .sidebar .nav-item.active {
+body:has(.sidebar-brand) .sidebar .nav-item.active {
   border-right: 0;
   background: rgba(35,112,190,.24);
   color: #bfdbfe;
   box-shadow: inset 3px 0 0 #67b5ff;
 }
-body .sidebar .nav-item:focus-visible {
+body:has(.sidebar-brand) .sidebar .nav-item:focus-visible {
   outline: 3px solid rgba(147,197,253,.7);
   outline-offset: 1px;
 }
-body .kpi-card {
+body:has(.sidebar-brand) .kpi-card {
   border-color: var(--dbs-ui-border);
   border-radius: 13px;
   box-shadow: 0 3px 12px rgba(15,41,68,.045);
   transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
-body .kpi-card:hover {
+body:has(.sidebar-brand) .kpi-card:hover {
   transform: translateY(-1px);
   border-color: #c7d9ed;
   box-shadow: 0 8px 22px rgba(15,41,68,.075);
 }
-body .approval-row {
+body:has(.sidebar-brand) .approval-row {
   border-color: var(--dbs-ui-border);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(15,41,68,.025);
 }
-body .approval-row:focus-within {
+body:has(.sidebar-brand) .approval-row:focus-within {
   border-color: #9bbde2;
 }
-body .approval-action {
+body:has(.sidebar-brand) .approval-action {
   min-height: 40px;
   border-radius: 9px;
   transition: transform .14s ease, box-shadow .14s ease;
 }
-body .approval-action:not(:disabled):active,
-body .btn:not(:disabled):active {
+body:has(.sidebar-brand) .approval-action:not(:disabled):active,
+body:has(.sidebar-brand) .btn:not(:disabled):active {
   transform: translateY(1px);
 }
-body .btn {
+body:has(.sidebar-brand) .btn {
   border-radius: 9px;
   transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-body :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+body:has(.sidebar-brand) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid rgba(23,105,209,.3);
   outline-offset: 2px;
 }
@@ -336,31 +336,31 @@ body :is(button, a, input, select, textarea, [tabindex]):focus-visible {
   .admin-mobile-shell main .bg-white.rounded-2xl.border {
     border-radius: 14px;
   }
-  body .osv {
+  body:has(> aside .nav-menu) .osv {
     border-radius: 0;
   }
-  body .osv-head {
+  body:has(> aside .nav-menu) .osv-head {
     gap: 8px;
     padding: 12px 14px;
   }
-  body .osv-head h2 {
+  body:has(> aside .nav-menu) .osv-head h2 {
     font-size: 18px;
   }
-  body .osv-body {
+  body:has(> aside .nav-menu) .osv-body {
     padding: 14px max(14px, env(safe-area-inset-left)) max(28px, env(safe-area-inset-bottom));
   }
-  body .osv-bar {
+  body:has(> aside .nav-menu) .osv-bar {
     gap: 7px;
     padding: 8px 12px;
   }
-  body .osv-bar button {
+  body:has(> aside .nav-menu) .osv-bar button {
     min-height: 44px;
   }
-  body .osv-gal {
+  body:has(> aside .nav-menu) .osv-gal {
     grid-template-columns: repeat(2, minmax(0,1fr));
   }
   body > aside .nav-menu .nav-item,
-  body .sidebar .nav-item {
+  body:has(.sidebar-brand) .sidebar .nav-item {
     min-height: 46px;
   }
 }
@@ -369,11 +369,12 @@ body :is(button, a, input, select, textarea, [tabindex]):focus-visible {
   .admin-mobile-shell *,
   .dbs-operations-page *,
   .dbs-operations-drawer *,
-  body .nav-item,
-  body .kpi-card,
-  body .approval-action,
-  body .btn,
-  body .osv-thumb {
+  body:has(> aside .nav-menu) .nav-item,
+  body:has(.sidebar-brand) .nav-item,
+  body:has(.sidebar-brand) .kpi-card,
+  body:has(.sidebar-brand) .approval-action,
+  body:has(.sidebar-brand) .btn,
+  body:has(> aside .nav-menu) .osv-thumb {
     scroll-behavior: auto !important;
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
