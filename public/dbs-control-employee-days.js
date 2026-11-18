@@ -62,6 +62,27 @@
     return capitalized;
   }
 
+  function orderDate(order) {
+    if (!order || typeof order !== "object") return "";
+    return normalizeOrderDate(
+      order.data
+      ?? order.scheduledAt
+      ?? order.scheduled_at
+      ?? order.dataHora
+      ?? order.scheduledDate
+      ?? order.scheduled_date
+      ?? order.date
+    );
+  }
+
+  // Retorna somente OS cuja data de agendamento corresponde ao dia escolhido.
+  // OS sem data não entram silenciosamente em nenhum dia.
+  function filterOrdersForDay(orders, selectedDate) {
+    const day = normalizeOrderDate(selectedDate);
+    if (!day) return [];
+    return (Array.isArray(orders) ? orders : []).filter((order) => orderDate(order) === day);
+  }
+
   function groupOrdersByDay(orders, tab, now) {
     const referenceDate = now instanceof Date ? now : new Date();
     const today = localIsoDate(referenceDate);
@@ -72,7 +93,7 @@
     const groups = new Map();
 
     (Array.isArray(orders) ? orders : []).forEach((order) => {
-      const date = normalizeOrderDate(order && order.data);
+      const date = orderDate(order);
       const key = date || "sem-data";
       if (!groups.has(key)) {
         const kind = !date ? "undated"
@@ -108,5 +129,5 @@
     });
   }
 
-  return { normalizeOrderDate, groupOrdersByDay };
+  return { normalizeOrderDate, localIsoDate, addDays, displayDate, filterOrdersForDay, groupOrdersByDay };
 });
