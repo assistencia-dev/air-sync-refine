@@ -42,8 +42,10 @@ assert.match(workspace, /pontoGoogleMapsEmbedUrl/, "o mapa deve usar as coordena
 assert.match(workspace, /Ver mapa/, "o painel diário deve oferecer acesso direto ao mapa");
 assert.match(workspace, /Ver localização/, "o histórico do colaborador deve permitir conferir sua própria batida");
 assert.match(geo, /timeoutMs\s*=\s*options\.timeoutMs\s*\?\?\s*45_000/, "a captura GPS deve tolerar a aquisição inicial do sinal");
-assert.match(geo, /if \(code === 2 \|\| code === 3\) return/, "POSITION_UNAVAILABLE deve ser transitório enquanto o GPS ainda está adquirindo a posição");
-assert.match(geo, /if \(code === 1\)/, "somente a permissão explicitamente negada deve encerrar a captura imediatamente");
+assert.match(geo, /settleMs\s*=\s*options\.settleMs\s*\?\?\s*2_500/, "a captura deve comparar leituras por uma pequena janela de estabilização");
+assert.match(geo, /coords\.accuracy < bestPosition\.coords\.accuracy/, "a leitura mais precisa deve ser preservada");
+assert.match(geo, /if \(code === 2 \|\| code === 3\) return/, "POSITION_UNAVAILABLE e timeout do navegador devem ser transitórios");
+assert.match(geo, /if \(code === 1\)/, "a permissão explicitamente negada deve encerrar a captura imediatamente");
 assert.doesNotMatch(geo, /timeout: timeoutMs/, "o timeout interno do navegador não deve cancelar a aquisição antes do prazo controlado pelo app");
 assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
 assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
@@ -70,7 +72,7 @@ const rawPunches = [
 ];
 const days = new Map();
 for (const row of rawPunches) {
-  const key = `${row.employee_id}|${row.work_date}`;
+  const key = String(row.employee_id) + "|" + row.work_date;
   days.set(key, (days.get(key) || 0) + 1);
 }
 assert.equal(days.size, 1, "quatro batidas devem formar um único dia no relatório");
@@ -97,10 +99,49 @@ vm.runInNewContext(geoRuntime, {
   Error,
 });
 const capturePontoPosition = geoModule.exports.capturePontoPosition;
-const mockedPosition = (accuracy) => ({
-  coords: { latitude: -22.9, longitude: -43.2, accuracy },
+const mockedPosition = (accuracy, latitude = -22.9, longitude = -43.2) => ({
+  coords: { latitude, longitude, accuracy },
   timestamp: Date.now(),
 });
+
+async function verifyPontoGpsBestAccuracy() {
+  let onPosition;
+  let options;
+  const cleared = [];
+  const gps = {
+    watchPosition(success, _error, watchOptions) {
+      onPosition = success;
+      options = watchOptions;
+      return 501;
+    },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 300, settleMs: 40 });
+  assert.equal(options.enableHighAccuracy, true);
+  assert.equal(options.maximumAge, 0);
+  assert.equal("timeout" in options, false);
+  onPosition(mockedPosition(73));
+  setTimeout(() => onPosition(mockedPosition(17)), 10);
+  setTimeout(() => onPosition(mockedPosition(38)), 20);
+  const position = await pending;
+  assert.equal(position.coords.accuracy, 17, "a melhor precisão recebida na janela deve vencer");
+  assert.deepEqual(cleared, [501]);
+}
+
+async function verifyPontoGpsWorseReadingDoesNotReplaceBest() {
+  let onPosition;
+  const cleared = [];
+  const gps = {
+    watchPosition(success) { onPosition = success; return 502; },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 300, settleMs: 35 });
+  onPosition(mockedPosition(19));
+  setTimeout(() => onPosition(mockedPosition(90)), 8);
+  const position = await pending;
+  assert.equal(position.coords.accuracy, 19);
+  assert.deepEqual(cleared, [502]);
+}
 
 async function verifyPontoGpsTransientRecovery() {
   let onPosition;
@@ -110,54 +151,108 @@ async function verifyPontoGpsTransientRecovery() {
     watchPosition(success, error) {
       onPosition = success;
       onError = error;
-      return 401;
+      return 503;
     },
     clearWatch(id) { cleared.push(id); },
   };
-  const pending = capturePontoPosition(gps, { timeoutMs: 300 });
-  assert.equal(typeof onError, "function");
-  assert.equal(typeof onPosition, "function");
+  const pending = capturePontoPosition(gps, { timeoutMs: 300, settleMs: 10 });
   onError({ code: 2, message: "Position unavailable" });
-  assert.deepEqual(cleared, [], "POSITION_UNAVAILABLE não deve encerrar a captura imediatamente");
-  setTimeout(() => onPosition(mockedPosition(42)), 10);
+  onError({ code: 3, message: "Timeout" });
+  assert.deepEqual(cleared, [], "códigos 2 e 3 não devem encerrar a captura");
+  setTimeout(() => onPosition(mockedPosition(42)), 8);
   const position = await pending;
-  assert.equal(position.coords.accuracy, 42, "a captura deve aceitar uma posição válida que chegue depois do code 2");
-  assert.deepEqual(cleared, [401], "a captura temporária deve ser encerrada depois da posição válida");
+  assert.equal(position.coords.accuracy, 42);
+  assert.deepEqual(cleared, [503]);
+}
+
+async function verifyPontoGpsDeadlineFallback() {
+  let onPosition;
+  const cleared = [];
+  const gps = {
+    watchPosition(success) { onPosition = success; return 504; },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 35, settleMs: 300 });
+  onPosition(mockedPosition(125));
+  const position = await pending;
+  assert.equal(position.coords.accuracy, 125, "até 150 m pode ser fallback no prazo máximo");
+  assert.deepEqual(cleared, [504]);
+}
+
+async function verifyPontoGpsInvalidAndImpreciseReadings() {
+  let onPosition;
+  const cleared = [];
+  const gps = {
+    watchPosition(success) { onPosition = success; return 505; },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 35, settleMs: 10 });
+  onPosition(mockedPosition(5, 91, -43.2));
+  onPosition(mockedPosition(5, -22.9, Number.NaN));
+  onPosition(mockedPosition(Number.NaN));
+  onPosition(mockedPosition(220));
+  await assert.rejects(pending, /tempo limite/i);
+  assert.deepEqual(cleared, [505]);
 }
 
 async function verifyPontoGpsPermissionDenial() {
+  let onPosition;
   let onError;
   const cleared = [];
   const gps = {
-    watchPosition(_success, error) { onError = error; return 402; },
+    watchPosition(success, error) {
+      onPosition = success;
+      onError = error;
+      return 506;
+    },
     clearWatch(id) { cleared.push(id); },
   };
-  const pending = capturePontoPosition(gps, { timeoutMs: 300 });
+  const pending = capturePontoPosition(gps, { timeoutMs: 300, settleMs: 250 });
+  onPosition(mockedPosition(60));
   onError({ code: 1, message: "Permission denied" });
   await assert.rejects(pending, /Permissão de localização negada/i);
-  assert.deepEqual(cleared, [402], "permissão negada deve encerrar o watch imediatamente");
+  assert.deepEqual(cleared, [506]);
+}
+
+async function verifyPontoGpsSynchronousFixClearsWatch() {
+  const cleared = [];
+  const gps = {
+    watchPosition(success) {
+      success(mockedPosition(12));
+      return 507;
+    },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const position = await capturePontoPosition(gps, { timeoutMs: 300, settleMs: 0 });
+  assert.equal(position.coords.accuracy, 12);
+  assert.deepEqual(cleared, [507], "o watch deve ser limpo mesmo quando a posição chega antes do ID");
 }
 
 async function verifyPontoGpsDeadline() {
   let onError;
   const cleared = [];
   const gps = {
-    watchPosition(_success, error) { onError = error; return 403; },
+    watchPosition(_success, error) { onError = error; return 508; },
     clearWatch(id) { cleared.push(id); },
   };
   const started = Date.now();
-  const pending = capturePontoPosition(gps, { timeoutMs: 35 });
+  const pending = capturePontoPosition(gps, { timeoutMs: 35, settleMs: 10 });
   onError({ code: 2, message: "Position unavailable" });
   await assert.rejects(pending, /tempo limite/i);
-  assert.ok(Date.now() - started >= 25, "code 2 deve aguardar o prazo de aquisição definido pelo app");
-  assert.deepEqual(cleared, [403], "o watch deve ser encerrado ao atingir o prazo");
+  assert.ok(Date.now() - started >= 25);
+  assert.deepEqual(cleared, [508]);
 }
 
 async function verifyPontoGpsCaptureRegression() {
+  await verifyPontoGpsBestAccuracy();
+  await verifyPontoGpsWorseReadingDoesNotReplaceBest();
   await verifyPontoGpsTransientRecovery();
+  await verifyPontoGpsDeadlineFallback();
+  await verifyPontoGpsInvalidAndImpreciseReadings();
   await verifyPontoGpsPermissionDenial();
+  await verifyPontoGpsSynchronousFixClearsWatch();
   await verifyPontoGpsDeadline();
-  console.log("RH GPS capture: temporary unavailable recovery, explicit permission denial, and bounded timeout passed.");
+  console.log("RH GPS capture: best accuracy, settling, transient recovery, fallback, invalid readings, permission, timeout and watch cleanup passed.");
 }
 
 void verifyPontoGpsCaptureRegression().catch((error) => {
