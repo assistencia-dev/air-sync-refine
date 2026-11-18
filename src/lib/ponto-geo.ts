@@ -3,8 +3,8 @@ export function pontoGeolocationErrorMessage(error: unknown): string {
     ? Number((error as { code?: unknown }).code)
     : 0;
   if (code === 1) return "Permissão de localização negada. Autorize a localização para este site no navegador e nas configurações do celular.";
-  if (code === 2) return "O dispositivo não conseguiu determinar sua posição. Ative a localização/GPS, desative o modo avião e tente novamente em local aberto.";
-  if (code === 3) return "O GPS excedeu o tempo de resposta. Mantenha a localização precisa ativada e tente novamente em local aberto.";
+  if (code === 2) return "O serviço de localização ainda não conseguiu determinar sua posição. Isso não significa necessariamente que o GPS esteja desligado; pode ser uma indisponibilidade temporária do sinal. Tente novamente em local aberto e confira a permissão do navegador.";
+  if (code === 3) return "Não foi possível obter uma posição dentro do tempo limite. Mantenha esta tela aberta, tente em local aberto e confira se o navegador tem permissão de localização.";
   return "Falha ao acessar o GPS. Confira a permissão de localização do navegador e tente novamente.";
 }
 
@@ -123,8 +123,14 @@ export function pontoGoogleMapsEmbedUrl(record: PontoLocationRecord): string | n
 
 /**
  * Obtains a fresh GPS fix only after an explicit punch action.
- * The watch is stopped immediately after an adequate fix or timeout; it is
- * never retained as a background/continuous employee tracker.
+ *
+ * POSITION_UNAVAILABLE (code 2) can be transient while the device is still
+ * acquiring its first fix. Keep the one-shot watch alive until a valid fix
+ * arrives or the app-owned deadline expires. Only permission denial (code 1)
+ * ends the attempt immediately.
+ *
+ * This is never a background/continuous employee tracker: the watch is
+ * cleared as soon as the punch has a usable fix or the bounded attempt ends.
  */
 export function capturePontoPosition(
   geolocation: Pick<Geolocation, "watchPosition" | "clearWatch">,
@@ -132,7 +138,7 @@ export function capturePontoPosition(
 ): Promise<GeolocationPosition> {
   const targetAccuracy = options.targetAccuracyMeters ?? 80;
   const maxAccuracy = options.maxAccuracyMeters ?? 150;
-  const timeoutMs = options.timeoutMs ?? 30_000;
+  const timeoutMs = options.timeoutMs ?? 45_000;
 
   return new Promise((resolve, reject) => {
     let watchId: number | null = null;
@@ -156,46 +162,78 @@ export function capturePontoPosition(
       resolve(position);
     };
 
-    const fail = (error: unknown) => {
+    const failImmediately = (error: unknown) => {
       if (settled) return;
-      if (bestPosition && Number(bestPosition.coords.accuracy) <= maxAccuracy) {
-        finish(bestPosition);
-        return;
-      }
       settled = true;
       stop();
       reject(new Error(pontoGeolocationErrorMessage(error)));
     };
 
-    try {
-      watchId = geolocation.watchPosition(
-        (position) => {
-          const coords = position?.coords;
-          if (!coords
-            || !Number.isFinite(coords.latitude)
-            || !Number.isFinite(coords.longitude)
-            || !Number.isFinite(coords.accuracy)
-            || coords.accuracy < 0
-            || coords.latitude < -90 || coords.latitude > 90
-            || coords.longitude < -180 || coords.longitude > 180) return;
+    const handlePositionError = (error: unknown) => {
+      if (settled) return;
+      if (bestPosition && Number(bestPosition.coords.accuracy) <= maxAccuracy) {
+        finish(bestPosition);
+        return;
+      }
 
-          if (!bestPosition || coords.accuracy < bestPosition.coords.accuracy) {
-            bestPosition = position;
-          }
-          if (coords.accuracy <= targetAccuracy) finish(position);
-        },
-        fail,
-        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
+      const code = error && typeof error === "object" && "code" in error
+        ? Number((error as { code?: unknown }).code)
+        : 0;
+
+      // Permission denial is definitive. A code 2/3 from the device can be
+      // temporary, so do not clear the watch before the app's own deadline.
+      if (code === 1) {
+        failImmediately(error);
+        return;
+      }
+      if (code === 2 || code === 3) return;
+
+      failImmediately(error);
+    };
+
+    const onPosition = (position: GeolocationPosition) => {
+      const coords = position?.coords;
+      if (!coords
+        || !Number.isFinite(coords.latitude)
+        || !Number.isFinite(coords.longitude)
+        || !Number.isFinite(coords.accuracy)
+        || coords.accuracy < 0
+        || coords.latitude < -90 || coords.latitude > 90
+        || coords.longitude < -180 || coords.longitude > 180) return;
+
+      if (!bestPosition || coords.accuracy < bestPosition.coords.accuracy) {
+        bestPosition = position;
+      }
+      if (coords.accuracy <= targetAccuracy) finish(position);
+    };
+
+    const onDeadline = () => {
+      if (bestPosition && bestPosition.coords.accuracy <= maxAccuracy) {
+        finish(bestPosition);
+        return;
+      }
+      failImmediately({ code: 3 });
+    };
+
+    try {
+      const nextWatchId = geolocation.watchPosition(
+        onPosition,
+        handlePositionError,
+        // Use the app-owned deadline below. A browser-level timeout here can
+        // emit code 3 early and prematurely stop a still-recovering GPS watch.
+        { enableHighAccuracy: true, maximumAge: 0 },
       );
-      timeoutId = setTimeout(() => {
-        if (bestPosition && bestPosition.coords.accuracy <= maxAccuracy) {
-          finish(bestPosition);
-          return;
-        }
-        fail({ code: 3 });
-      }, timeoutMs);
+
+      // Some test doubles may invoke a callback synchronously before
+      // watchPosition returns its ID. Do not leak the watch in that case.
+      if (settled) {
+        geolocation.clearWatch(nextWatchId);
+      } else {
+        watchId = nextWatchId;
+        timeoutId = setTimeout(onDeadline, timeoutMs);
+      }
     } catch (error) {
-      fail(error);
+      failImmediately(error);
     }
   });
 }

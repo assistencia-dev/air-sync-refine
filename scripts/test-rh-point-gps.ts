@@ -68,6 +68,21 @@ assert.equal(pontoGoogleMapsUrl(savedLocation), "https://www.google.com/maps/sea
 assert.equal(pontoGoogleMapsEmbedUrl(savedLocation), "https://maps.google.com/maps?q=-22.9,-43.2&z=17&output=embed");
 assert.equal(pontoGoogleMapsUrl({ latitude: 91, longitude: -43.2 }), null);
 
+function mockPosition(accuracy: number): GeolocationPosition {
+  return {
+    coords: {
+      latitude: -22.9,
+      longitude: -43.2,
+      accuracy,
+      altitude: null,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+    },
+    timestamp: Date.now(),
+  } as GeolocationPosition;
+}
+
 // A captura termina ao obter precisão adequada e encerra o watch do navegador.
 async function verifyOneShotGpsCapture() {
   let onPosition: PositionCallback | null = null;
@@ -88,25 +103,89 @@ async function verifyOneShotGpsCapture() {
     timeoutMs: 1000,
   });
 
-  const mockPosition = {
-    coords: {
-      latitude: -22.9,
-      longitude: -43.2,
-      accuracy: 32,
-      altitude: null,
-      altitudeAccuracy: null,
-      heading: null,
-      speed: null,
-    },
-    timestamp: Date.now(),
-  } as GeolocationPosition;
   if (!onPosition) throw new Error("watchPosition não foi iniciado.");
-  onPosition(mockPosition);
+  onPosition(mockPosition(32));
   const captured = await pending;
   assert.equal(captured.coords.accuracy, 32);
   assert.equal(clearedWatch, 27, "o rastreamento temporário deve ser encerrado após capturar a posição");
 }
-void verifyOneShotGpsCapture().catch((error) => {
+
+// POSITION_UNAVAILABLE pode aparecer antes da primeira leitura válida.
+// O sistema deve continuar aguardando sem desligar a captura.
+async function verifyTemporaryUnavailableThenGpsFix() {
+  let onPosition: PositionCallback | null = null;
+  let onError: PositionErrorCallback | null = null;
+  const cleared: number[] = [];
+  const mockGeolocation = {
+    watchPosition(success: PositionCallback, error: PositionErrorCallback) {
+      onPosition = success;
+      onError = error;
+      return 28;
+    },
+    clearWatch(id: number) { cleared.push(id); },
+  } as unknown as Geolocation;
+
+  const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 500 });
+  if (!onError || !onPosition) throw new Error("Callbacks do GPS não foram registrados.");
+  onError({ code: 2, message: "Position unavailable" } as GeolocationPositionError);
+  assert.deepEqual(cleared, [], "code 2 não pode encerrar a captura antes do prazo");
+
+  setTimeout(() => onPosition?.(mockPosition(42)), 20);
+  const captured = await pending;
+  assert.equal(captured.coords.accuracy, 42, "uma posição válida posterior deve ser aceita");
+  assert.deepEqual(cleared, [28], "o watch deve ser encerrado depois da posição válida");
+}
+
+// Negativa explícita de permissão é definitiva e deve parar imediatamente.
+async function verifyPermissionDeniedStopsImmediately() {
+  let onError: PositionErrorCallback | null = null;
+  const cleared: number[] = [];
+  const mockGeolocation = {
+    watchPosition(_success: PositionCallback, error: PositionErrorCallback) {
+      onError = error;
+      return 29;
+    },
+    clearWatch(id: number) { cleared.push(id); },
+  } as unknown as Geolocation;
+
+  const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 500 });
+  if (!onError) throw new Error("Callback de erro do GPS não foi registrado.");
+  onError({ code: 1, message: "Permission denied" } as GeolocationPositionError);
+  await assert.rejects(pending, /Permissão de localização negada/i);
+  assert.deepEqual(cleared, [29], "a captura deve ser encerrada quando o usuário negar a permissão");
+}
+
+// Sem uma posição válida, a tentativa deve terminar pelo prazo controlado
+// pelo aplicativo, em vez de tratar o primeiro code 2 como GPS desligado.
+async function verifyUnavailableGpsTimesOutSafely() {
+  let onError: PositionErrorCallback | null = null;
+  const cleared: number[] = [];
+  const mockGeolocation = {
+    watchPosition(_success: PositionCallback, error: PositionErrorCallback) {
+      onError = error;
+      return 30;
+    },
+    clearWatch(id: number) { cleared.push(id); },
+  } as unknown as Geolocation;
+
+  const startedAt = Date.now();
+  const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 35 });
+  if (!onError) throw new Error("Callback de erro do GPS não foi registrado.");
+  onError({ code: 2, message: "Position unavailable" } as GeolocationPositionError);
+  await assert.rejects(pending, /tempo limite/i);
+  assert.ok(Date.now() - startedAt >= 25, "code 2 deve aguardar o prazo de aquisição");
+  assert.deepEqual(cleared, [30], "o watch temporário deve ser limpo no timeout");
+}
+
+async function runGpsCaptureTests() {
+  await verifyOneShotGpsCapture();
+  await verifyTemporaryUnavailableThenGpsFix();
+  await verifyPermissionDeniedStopsImmediately();
+  await verifyUnavailableGpsTimesOutSafely();
+  console.log("RH GPS: captura de uma tentativa, recuperação de POSITION_UNAVAILABLE, permissão negada, timeout, precisão e geocerca validados.");
+}
+
+void runGpsCaptureTests().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
