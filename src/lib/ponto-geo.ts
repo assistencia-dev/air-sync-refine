@@ -103,7 +103,6 @@ export function hasPontoCoordinates(record: PontoLocationRecord | null | undefin
     && Number.isFinite(latitude)
     && latitude >= -90
     && latitude <= 90
-    && record?.longitude != null
     && Number.isFinite(longitude)
     && longitude >= -180
     && longitude <= 180;
