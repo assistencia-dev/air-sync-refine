@@ -69,8 +69,8 @@ async function requireTreasuryAdmin(context: { userId: string }) {
 
 async function requirePurchaseApprovalActor(context: { userId: string }) {
   const user = await requireTreasuryReader(context);
-  if (!["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(user.role_key)) {
-    throw new Error("Aprovação de compras restrita ao Financeiro.");
+  if (user.role_key !== "SUPER_ADMIN") {
+    throw new Error("Aprovação de compras restrita ao SUPER_ADMIN. O perfil FINANCEIRO_LEITURA é somente para consulta.");
   }
   const owner = await resolveTreasuryScopeOwner(user);
   const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
@@ -206,7 +206,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
       .limit(500),
     admin
       .from("dbs_control_purchases")
-      .select("id,supplier_name,document_number,purchase_date,total_cents,approval_status,version,cost_center_id")
+      .select("id,supplier_name,document_number,purchase_date,total_cents,approval_status,version,cost_center_id,source_quote_id")
       .eq("scope_key", scopeKey)
       .eq("approval_status", "pending")
       .neq("status", "cancelled")
@@ -219,6 +219,66 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (commitmentsError) throw new Error("Falha ao carregar compromissos de compras: " + commitmentsError.message);
   if (costCentersError) throw new Error("Falha ao carregar centros de custo: " + costCentersError.message);
   if (pendingPurchaseApprovalsError) throw new Error("Falha ao carregar aprovações pendentes: " + pendingPurchaseApprovalsError.message);
+
+  const pendingPurchaseIds = (pendingPurchaseApprovals ?? []).map((purchase: any) => String(purchase.id)).filter(Boolean);
+  const pendingPurchaseItemsResult = pendingPurchaseIds.length
+    ? await admin.from("dbs_control_purchase_items")
+        .select("id,purchase_id,part_id,quantity,unit_cost_cents,total_cents,purchase_unit_id,conversion_factor,metadata")
+        .in("purchase_id", pendingPurchaseIds).order("line_no", { ascending: true })
+    : { data: [], error: null };
+  if (pendingPurchaseItemsResult.error) {
+    throw new Error("Falha ao carregar os itens para conferência financeira: " + pendingPurchaseItemsResult.error.message);
+  }
+  const pendingPartIds = [...new Set((pendingPurchaseItemsResult.data ?? [])
+    .map((item: any) => String(item.part_id ?? "")).filter(Boolean))];
+  const pendingUnitIds = [...new Set((pendingPurchaseItemsResult.data ?? [])
+    .map((item: any) => String(item.purchase_unit_id ?? "")).filter(Boolean))];
+  const pendingQuoteIds = [...new Set((pendingPurchaseApprovals ?? [])
+    .map((purchase: any) => String(purchase.source_quote_id ?? "")).filter(Boolean))];
+  const [pendingPartsResult, pendingUnitsResult, pendingQuotesResult] = await Promise.all([
+    pendingPartIds.length
+      ? admin.from("dbs_control_parts").select("id,sku,name,measure_unit_id").in("id", pendingPartIds)
+      : Promise.resolve({ data: [], error: null }),
+    pendingUnitIds.length
+      ? admin.from("dbs_control_measure_units").select("id,code,symbol,name").in("id", pendingUnitIds)
+      : Promise.resolve({ data: [], error: null }),
+    pendingQuoteIds.length
+      ? admin.from("dbs_control_quotes").select("id,quote_number,status").eq("scope_key", scopeKey).in("id", pendingQuoteIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (pendingPartsResult.error) throw new Error("Falha ao carregar o catálogo das compras pendentes: " + pendingPartsResult.error.message);
+  if (pendingUnitsResult.error) throw new Error("Falha ao carregar as unidades das compras pendentes: " + pendingUnitsResult.error.message);
+  if (pendingQuotesResult.error) throw new Error("Falha ao carregar os orçamentos de origem: " + pendingQuotesResult.error.message);
+  const pendingPartById = new Map((pendingPartsResult.data ?? []).map((part: any) => [String(part.id), part]));
+  const pendingUnitById = new Map((pendingUnitsResult.data ?? []).map((unit: any) => [String(unit.id), unit]));
+  const pendingQuoteById = new Map((pendingQuotesResult.data ?? []).map((quote: any) => [String(quote.id), quote]));
+  const pendingItemsByPurchase = new Map<string, any[]>();
+  for (const item of pendingPurchaseItemsResult.data ?? []) {
+    const purchaseId = String(item.purchase_id);
+    const factor = Math.max(Number(item.conversion_factor ?? 1), 0.000001);
+    const metadata = item.metadata && typeof item.metadata === "object" ? item.metadata : {};
+    const unit = pendingUnitById.get(String(item.purchase_unit_id));
+    const part = pendingPartById.get(String(item.part_id));
+    const rows = pendingItemsByPurchase.get(purchaseId) ?? [];
+    rows.push({
+      id: String(item.id),
+      part_id: String(item.part_id),
+      part_sku: String(part?.sku ?? ""),
+      part_name: String(part?.name ?? "Peça sem nome"),
+      quantity: Number(item.quantity ?? 0),
+      purchase_quantity: Number(metadata.purchase_quantity ?? (Number(item.quantity ?? 0) / factor)),
+      purchase_unit_label: String(unit?.symbol || unit?.code || unit?.name || "un."),
+      purchase_unit_cost_cents: Number(metadata.purchase_unit_cost_cents
+        ?? Math.round(Number(item.unit_cost_cents ?? 0) * factor)),
+      total_cents: Number(item.total_cents ?? 0),
+    });
+    pendingItemsByPurchase.set(purchaseId, rows);
+  }
+  const enrichedPendingPurchaseApprovals = (pendingPurchaseApprovals ?? []).map((purchase: any) => ({
+    ...purchase,
+    source_quote_number: pendingQuoteById.get(String(purchase.source_quote_id ?? ""))?.quote_number ?? null,
+    items: pendingItemsByPurchase.get(String(purchase.id)) ?? [],
+  }));
 
   const ledgerEntryIds = (entries ?? []).filter((entry: any) => entry.status === "posted").map((entry: any) => String(entry.id)).filter(Boolean);
   const ledgerLineChunks: string[][] = [];
@@ -320,7 +380,7 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
     ledger_entry_count: entries?.length ?? 0,
     ledger_report: ledgerReport,
     purchase_commitments: purchaseCommitments ?? [],
-    pending_purchase_approvals: pendingPurchaseApprovals ?? [],
+    pending_purchase_approvals: enrichedPendingPurchaseApprovals,
     cost_centers: costCenters ?? [],
     source: state ? "legacy_read_plus_relational_ledger" : "relational_master_data",
   };
