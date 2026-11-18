@@ -127,6 +127,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: "/dbs-design-system.css?v=20261118-visual-refinement-1" },
       { rel: "icon", href: "/__l5e/assets-v1/4588320a-68f8-4932-9a72-8f318ecd3268/logo-dbs-air.jpg?v=20261029-logo-1", type: "image/jpeg" },
       { rel: "icon", href: "/favicon.ico?v=20261029-logo-1", type: "image/x-icon" },
       { rel: "manifest", href: "/manifest.webmanifest?v=20261029-logo-1" },

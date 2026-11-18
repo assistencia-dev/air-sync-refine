@@ -249,9 +249,17 @@ export async function readTreasuryScope(user: { id: string; company_id: string |
   if (pendingPartsResult.error) throw new Error("Falha ao carregar o catálogo das compras pendentes: " + pendingPartsResult.error.message);
   if (pendingUnitsResult.error) throw new Error("Falha ao carregar as unidades das compras pendentes: " + pendingUnitsResult.error.message);
   if (pendingQuotesResult.error) throw new Error("Falha ao carregar os orçamentos de origem: " + pendingQuotesResult.error.message);
-  const pendingPartById = new Map((pendingPartsResult.data ?? []).map((part: any) => [String(part.id), part]));
-  const pendingUnitById = new Map((pendingUnitsResult.data ?? []).map((unit: any) => [String(unit.id), unit]));
-  const pendingQuoteById = new Map((pendingQuotesResult.data ?? []).map((quote: any) => [String(quote.id), quote]));
+  // Tipos explícitos mantêm os campos disponíveis mesmo quando a consulta
+  // retorna lista vazia (caso em que o TypeScript inferia os valores como {}).
+  const pendingPartById = new Map<string, { sku?: string | null; name?: string | null }>(
+    (pendingPartsResult.data ?? []).map((part: any) => [String(part.id), part] as const),
+  );
+  const pendingUnitById = new Map<string, { symbol?: string | null; code?: string | null; name?: string | null }>(
+    (pendingUnitsResult.data ?? []).map((unit: any) => [String(unit.id), unit] as const),
+  );
+  const pendingQuoteById = new Map<string, { quote_number?: string | null }>(
+    (pendingQuotesResult.data ?? []).map((quote: any) => [String(quote.id), quote] as const),
+  );
   const pendingItemsByPurchase = new Map<string, any[]>();
   for (const item of pendingPurchaseItemsResult.data ?? []) {
     const purchaseId = String(item.purchase_id);
