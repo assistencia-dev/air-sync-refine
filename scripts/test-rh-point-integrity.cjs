@@ -1,6 +1,8 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
+const ts = require("typescript");
 
 const root = path.resolve(__dirname, "..");
 const ponto = fs.readFileSync(path.join(root, "src/lib/ponto.functions.ts"), "utf8");
@@ -78,3 +80,87 @@ const adjusted = 8 * 60 + 30;
 const approvedAdjustment = 30;
 assert.equal(adjusted + approvedAdjustment, 9 * 60, "ajuste aprovado deve aparecer no total corrigido");
 console.log("RH point integrity: data validation, timezone parsing, daily grouping, approved adjustments and PDF contracts passed.");
+
+const geoModule = { exports: {} };
+const geoRuntime = ts.transpileModule(geo, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+vm.runInNewContext(geoRuntime, {
+  module: geoModule,
+  exports: geoModule.exports,
+  setTimeout,
+  clearTimeout,
+  Date,
+  Promise,
+  Number,
+  Math,
+  Error,
+});
+const capturePontoPosition = geoModule.exports.capturePontoPosition;
+const mockedPosition = (accuracy) => ({
+  coords: { latitude: -22.9, longitude: -43.2, accuracy },
+  timestamp: Date.now(),
+});
+
+async function verifyPontoGpsTransientRecovery() {
+  let onPosition;
+  let onError;
+  const cleared = [];
+  const gps = {
+    watchPosition(success, error) {
+      onPosition = success;
+      onError = error;
+      return 401;
+    },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 300 });
+  assert.equal(typeof onError, "function");
+  assert.equal(typeof onPosition, "function");
+  onError({ code: 2, message: "Position unavailable" });
+  assert.deepEqual(cleared, [], "POSITION_UNAVAILABLE não deve encerrar a captura imediatamente");
+  setTimeout(() => onPosition(mockedPosition(42)), 10);
+  const position = await pending;
+  assert.equal(position.coords.accuracy, 42, "a captura deve aceitar uma posição válida que chegue depois do code 2");
+  assert.deepEqual(cleared, [401], "a captura temporária deve ser encerrada depois da posição válida");
+}
+
+async function verifyPontoGpsPermissionDenial() {
+  let onError;
+  const cleared = [];
+  const gps = {
+    watchPosition(_success, error) { onError = error; return 402; },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const pending = capturePontoPosition(gps, { timeoutMs: 300 });
+  onError({ code: 1, message: "Permission denied" });
+  await assert.rejects(pending, /Permissão de localização negada/i);
+  assert.deepEqual(cleared, [402], "permissão negada deve encerrar o watch imediatamente");
+}
+
+async function verifyPontoGpsDeadline() {
+  let onError;
+  const cleared = [];
+  const gps = {
+    watchPosition(_success, error) { onError = error; return 403; },
+    clearWatch(id) { cleared.push(id); },
+  };
+  const started = Date.now();
+  const pending = capturePontoPosition(gps, { timeoutMs: 35 });
+  onError({ code: 2, message: "Position unavailable" });
+  await assert.rejects(pending, /tempo limite/i);
+  assert.ok(Date.now() - started >= 25, "code 2 deve aguardar o prazo de aquisição definido pelo app");
+  assert.deepEqual(cleared, [403], "o watch deve ser encerrado ao atingir o prazo");
+}
+
+async function verifyPontoGpsCaptureRegression() {
+  await verifyPontoGpsTransientRecovery();
+  await verifyPontoGpsPermissionDenial();
+  await verifyPontoGpsDeadline();
+  console.log("RH GPS capture: temporary unavailable recovery, explicit permission denial, and bounded timeout passed.");
+}
+
+void verifyPontoGpsCaptureRegression().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
