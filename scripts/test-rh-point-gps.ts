@@ -127,7 +127,7 @@ async function verifyTemporaryUnavailableThenGpsFix() {
 
   const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 500 });
   if (!onError || !onPosition) throw new Error("Callbacks do GPS não foram registrados.");
-  onError({ code: 2, message: "Position unavailable" } as PositionError);
+  onError({ code: 2, message: "Position unavailable" } as GeolocationPositionError);
   assert.deepEqual(cleared, [], "code 2 não pode encerrar a captura antes do prazo");
 
   setTimeout(() => onPosition?.(mockPosition(42)), 20);
@@ -150,7 +150,7 @@ async function verifyPermissionDeniedStopsImmediately() {
 
   const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 500 });
   if (!onError) throw new Error("Callback de erro do GPS não foi registrado.");
-  onError({ code: 1, message: "Permission denied" } as PositionError);
+  onError({ code: 1, message: "Permission denied" } as GeolocationPositionError);
   await assert.rejects(pending, /Permissão de localização negada/i);
   assert.deepEqual(cleared, [29], "a captura deve ser encerrada quando o usuário negar a permissão");
 }
@@ -171,7 +171,7 @@ async function verifyUnavailableGpsTimesOutSafely() {
   const startedAt = Date.now();
   const pending = capturePontoPosition(mockGeolocation, { timeoutMs: 35 });
   if (!onError) throw new Error("Callback de erro do GPS não foi registrado.");
-  onError({ code: 2, message: "Position unavailable" } as PositionError);
+  onError({ code: 2, message: "Position unavailable" } as GeolocationPositionError);
   await assert.rejects(pending, /tempo limite/i);
   assert.ok(Date.now() - startedAt >= 25, "code 2 deve aguardar o prazo de aquisição");
   assert.deepEqual(cleared, [30], "o watch temporário deve ser limpo no timeout");
