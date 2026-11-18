@@ -827,11 +827,11 @@ assert.deepEqual(completedDayGroups.map((group) => group.key), [
   "2026-11-18", "2026-11-17", "2026-11-16", "2026-11-15", "sem-data",
 ], "O histórico concluído deve mostrar os dias mais recentes primeiro.");
 assert.equal(employeeSchedule.normalizeOrderDate("31/02/2026"), "", "Datas inválidas devem ficar sem data, não em um dia incorreto.");
-assert.match(html, /dbs-control-employee-days\\.js\\?v=20261118-1/, "O filtro diário atualizado deve ser carregado na tela de operações.");
+assert.match(html, /dbs-control-employee-days\.js\?v=20261118-1/, "O filtro diário atualizado deve ser carregado na tela de operações.");
 assert.match(html, /id=["']employee-agenda-date["']/, "A agenda deve permitir escolher uma data específica.");
-assert.match(html, /employeeDayOrders\\.map\\(o/, "A lista deve renderizar somente as OS do dia selecionado.");
+assert.match(html, /employeeDayOrders\.map\(o/, "A lista deve renderizar somente as OS do dia selecionado.");
 assert.match(html, /data-agenda-step=["']-1["']/, "A agenda deve permitir voltar um dia.");
 assert.match(html, /employee-agenda-today/, "A agenda deve permitir retornar diretamente para hoje.");
-assert.doesNotMatch(html, /employeeOrderGroups\\.map\\(group/, "A tela do colaborador não deve misturar grupos de vários dias.");
+assert.doesNotMatch(html, /employeeOrderGroups\.map\(group/, "A tela do colaborador não deve misturar grupos de vários dias.");
 assert.match(route, /20261118-employee-single-day-agenda-1/, "A rota deve invalidar o cache antigo após a correção da agenda diária.");
 console.log("DBS CONTROL colaborador: agenda diária, ordenação e preservação de OS verificadas.");
