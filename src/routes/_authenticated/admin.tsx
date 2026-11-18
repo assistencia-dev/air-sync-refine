@@ -194,7 +194,7 @@ function AdminPage() {
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 sm:inline-flex">
-              <CircleDot className="h-3 w-3 fill-emerald-500 text-emerald-500" /> Operação online
+              <CircleDot className="h-3 w-3 fill-emerald-500 text-emerald-500" /> Acesso administrativo
             </span>
             <span className="text-sm font-semibold text-slate-700 hidden sm:inline">
               {profile.data?.full_name ?? profile.data?.username}
