@@ -207,7 +207,7 @@ begin
   v_replay := public.dbs_control_receive_purchase_items(
     v_purchase, v_actor, v_key || ':receipt-part-1',
     jsonb_build_array(jsonb_build_object(
-      'purchase_item_id', v_purchase_item1, 'quantity_received', 1
+      'purchase_item_id', v_purchase_item1, 'quantity_received', 3
     ))
   );
   if coalesce((v_replay->>'replayed')::boolean, false) is not true then
@@ -237,7 +237,7 @@ begin
   v_replay := public.dbs_control_receive_purchase_items(
     v_purchase, v_actor, v_key || ':receipt-final',
     jsonb_build_array(
-      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 1),
+      jsonb_build_object('purchase_item_id', v_purchase_item1, 'quantity_received', 3),
       jsonb_build_object('purchase_item_id', v_purchase_item2, 'quantity_received', 1)
     )
   );
@@ -285,7 +285,7 @@ begin
   select total_cents into v_total
     from public.dbs_control_purchases where id = v_purchase;
   if v_total <> 31111 then
-    raise exception 'TEST_PURCHASE_TOTAL: esperado 35801 centavos, recebido %.', v_total;
+    raise exception 'TEST_PURCHASE_TOTAL: esperado 31111 centavos, recebido %.', v_total;
   end if;
 
   select coalesce(sum(debit_cents),0), coalesce(sum(credit_cents),0)
@@ -382,8 +382,8 @@ begin
   end if;
 
   select stock_quantity into v_after_stock from public.dbs_control_parts where id=v_part;
-  if v_after_stock <> coalesce(v_before_stock,0)+1 then
-    raise exception 'TEST_OS_STOCK: esperado saldo após consumo %, recebido %.',coalesce(v_before_stock,0)+1,v_after_stock;
+  if v_after_stock <> coalesce(v_before_stock,0)+5 then
+    raise exception 'TEST_OS_STOCK: esperado saldo após consumo %, recebido %.',coalesce(v_before_stock,0)+5,v_after_stock;
   end if;
   select count(*) into v_os_movement_count
     from public.dbs_control_inventory_movements
