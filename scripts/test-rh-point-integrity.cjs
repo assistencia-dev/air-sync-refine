@@ -28,7 +28,7 @@ assert.match(ponto, /select\("id, employee_id, work_date, punch_type, punched_at
 assert.match(ponto, /timeZone: "America\/Sao_Paulo"/, "a data operacional deve usar o fuso oficial calculado no servidor");
 assert.match(ponto, /work_date: serverWorkDate/, "a data enviada pelo dispositivo não deve ser persistida sem validação do servidor");
 assert.match(ponto, /DEFAULT now\(\) do PostgreSQL/, "o timestamp UTC deve continuar vindo do banco, não do relógio do dispositivo");
-assert.match(ponto, /distance_m: gps\.distance_m, inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
+assert.match(ponto, /distance_m: gps\.distance_m,[\s\S]*?inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
 assert.match(geo, /distance - accuracy > radius/, "a entrada só deve ser bloqueada quando a margem GPS confirma que está fora do raio");
 assert.match(geo, /inside === false/, "a incerteza da geocerca deve resultar em conferência RH, não bloqueio falso");
 assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
