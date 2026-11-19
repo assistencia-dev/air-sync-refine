@@ -242,7 +242,7 @@ function PontoRh() {
       setLat(position.coords.latitude.toFixed(7));
       setLng(position.coords.longitude.toFixed(7));
     } catch (error) {
-      setBaseGpsError(friendlyError(error));
+      setBaseGpsError(error instanceof Error ? error.message : pontoGeolocationErrorMessage(error));
     } finally {
       setBaseGpsBusy(false);
     }
@@ -305,6 +305,9 @@ function PontoRh() {
           <div><div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-sky-700"/><h4 className="text-sm font-black text-slate-900">Localização das marcações</h4></div><p className="mt-1 text-xs text-slate-500">Mapa baseado nas coordenadas realmente gravadas em cada batida. Não é a localização atual do colaborador.</p></div>
           <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-black text-sky-800">{dayEmployee.records.filter((record:any)=>hasPontoCoordinates(record)).length} marcação(ões) com GPS</span>
         </div>
+        {dayEmployee.gpsPending && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <strong>Conferência necessária:</strong> existe pelo menos uma batida sem localização confirmada ou cuja margem de precisão não permite validar a geocerca. A jornada foi preservada; confira a ocorrência com o colaborador antes de classificar o dia.
+        </div>}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["entrada","almoco_saida","almoco_retorno","saida"] as const).map((type) => {
             const record = dayEmployee.records.find((item:any)=>item.punch_type===type);
