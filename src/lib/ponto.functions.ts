@@ -96,8 +96,14 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
 
 export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
   if (!TYPES.includes(input.punch_type) || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Marcação inválida.");
-  if (input.latitude != null && (input.latitude < -90 || input.latitude > 90)) throw new Error("Latitude inválida.");
-  if (input.longitude != null && (input.longitude < -180 || input.longitude > 180)) throw new Error("Longitude inválida.");
+  const hasAnyGps = input.latitude != null || input.longitude != null || input.gps_accuracy_m != null;
+  const hasAllGps = input.latitude != null && input.longitude != null && input.gps_accuracy_m != null;
+  if (hasAnyGps && !hasAllGps) throw new Error("Leitura GPS incompleta. Tente novamente ou registre a batida para conferência do RH.");
+  if (hasAllGps && (
+    !Number.isFinite(input.latitude) || input.latitude! < -90 || input.latitude! > 90 ||
+    !Number.isFinite(input.longitude) || input.longitude! < -180 || input.longitude! > 180 ||
+    !Number.isFinite(input.gps_accuracy_m) || input.gps_accuracy_m! < 0 || input.gps_accuracy_m! > 100_000
+  )) throw new Error("Leitura GPS inválida.");
   return input;
 }).handler(async ({ context, data }) => {
   const employee = await getEmployee(context.userId);
@@ -121,13 +127,51 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   const next = TYPES[Math.min(last ? TYPES.indexOf(last) + 1 : 0, TYPES.length)];
   if (!next || data.punch_type !== next) throw new Error(`A próxima marcação deve ser ${next ?? "nenhuma"}.`);
 
-  const gps = validatePontoGps(data, employee, data.punch_type);
+  const hasGps = data.latitude != null && data.longitude != null && data.gps_accuracy_m != null;
+  const gps = hasGps
+    ? validatePontoGps(data, employee, data.punch_type)
+    : { distance_m: null, inside_radius: null };
+  const gpsPending = !hasGps || gps.inside_radius == null;
+  const gpsNote = !hasGps
+    ? "GPS pendente de conferência pelo RH: localização não capturada nesta batida."
+    : gps.inside_radius == null
+      ? "GPS pendente de conferência pelo RH: não foi possível validar a geocerca com segurança."
+      : null;
+  const note = [data.note?.trim(), gpsNote].filter(Boolean).join(" | ") || null;
+
   // punched_at permanece omitido intencionalmente: o DEFAULT now() do PostgreSQL
   // grava o timestamp UTC autoritativo no servidor de banco.
-  const payload = { punch_type: data.punch_type, latitude: data.latitude ?? null, longitude: data.longitude ?? null, gps_accuracy_m: data.gps_accuracy_m ?? null, photo_data: data.photo_data ?? null, note: data.note ?? null, work_date: serverWorkDate, employee_id: employee.id, distance_m: gps.distance_m, inside_radius: gps.inside_radius };
-  const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload).select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
+  const payload = {
+    punch_type: data.punch_type,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    gps_accuracy_m: data.gps_accuracy_m ?? null,
+    photo_data: data.photo_data ?? null,
+    note,
+    work_date: serverWorkDate,
+    employee_id: employee.id,
+    distance_m: gps.distance_m,
+    inside_radius: gps.inside_radius,
+  };
+  const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload)
+    .select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
-  await supabaseAdmin.from("rh_ponto_audit").insert({ employee_id: employee.id, actor_user_id: null, action: "MARCACAO_PONTO", details: { record_id: record.id, punch_type: record.punch_type, work_date: record.work_date, distance_m: record.distance_m, inside_radius: record.inside_radius } });
+  const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
+    employee_id: employee.id,
+    actor_user_id: null,
+    action: "MARCACAO_PONTO",
+    details: {
+      record_id: record.id,
+      punch_type: record.punch_type,
+      work_date: record.work_date,
+      distance_m: record.distance_m,
+      inside_radius: record.inside_radius,
+      gps_status: gpsPending ? "PENDENTE" : "VALIDADO",
+      gps_accuracy_m: record.gps_accuracy_m,
+    },
+  });
+  if (auditError) throw new Error("Batida salva, mas não foi possível registrar sua auditoria. Avise o RH.");
+
   return record;
 });
 
