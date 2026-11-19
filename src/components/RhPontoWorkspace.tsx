@@ -37,6 +37,7 @@ function PontoRh() {
   const [selectedDay, setSelectedDay] = useState(localDateISO());
   const [employeeFilter, setEmployeeFilter] = useState("todos");
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [gpsFilter, setGpsFilter] = useState<"todos" | "pendente" | "validado">("todos");
   const [search, setSearch] = useState("");
   const [dayEmployee, setDayEmployee] = useState<any>(null);
   const [selectedMapPunch, setSelectedMapPunch] = useState<any>(null);
@@ -52,12 +53,16 @@ function PontoRh() {
   const [saida, setSaida] = useState("");
   const [almocoIni, setAlmocoIni] = useState("");
   const [almocoFim, setAlmocoFim] = useState("");
+  const [baseGpsBusy, setBaseGpsBusy] = useState(false);
+  const [baseGpsError, setBaseGpsError] = useState("");
 
   const reportStart = reportDate + "-01";
   const reportEnd = reportDate + "-" + String(new Date(Number(reportDate.slice(0,4)), Number(reportDate.slice(5,7)), 0).getDate()).padStart(2, "0");
-  const employees = useQuery({ queryKey: ["rh-ponto-employees"], queryFn: () => listRhPontoEmployees() });
-  const report = useQuery({ queryKey: ["rh-ponto-report", reportStart, reportEnd], queryFn: () => listRhPontoRecords({ data: { start_date: reportStart, end_date: reportEnd } }) });
-  const management = useQuery({ queryKey: ["rh-ponto-day-management", reportStart, reportEnd], queryFn: () => listRhPontoDayManagement({ data: { start_date: reportStart, end_date: reportEnd } }) });
+  const employees = useQuery({ queryKey: ["rh-ponto-employees"], queryFn: () => listRhPontoEmployees(), refetchInterval: 30_000 });
+  const report = useQuery({ queryKey: ["rh-ponto-report", reportStart, reportEnd], queryFn: () => listRhPontoRecords({ data: { start_date: reportStart, end_date: reportEnd } }), refetchInterval: 30_000 });
+  const management = useQuery({ queryKey: ["rh-ponto-day-management", reportStart, reportEnd], queryFn: () => listRhPontoDayManagement({ data: { start_date: reportStart, end_date: reportEnd } }), refetchInterval: 30_000 });
+  const failedQueries = [employees, report, management].filter(query => query.isError);
+  const refreshPontoData = () => Promise.all([employees.refetch(), report.refetch(), management.refetch()]);
 
   const dayRecords = useMemo(() => (report.data ?? []).filter((r:any) => r.work_date === selectedDay), [report.data, selectedDay]);
   const latest = useMemo(() => {
@@ -77,10 +82,15 @@ function PontoRh() {
         const s = records[0]?.day_summary ?? { worked_minutes:0, late_minutes:0, early_leave_minutes:0, overtime_minutes:0, missing_punches:["entrada","almoco_saida","almoco_retorno","saida"] };
         const saved = latest.get(e.id + "|" + selectedDay);
         const status = saved?.details?.status ?? (records.length === 0 ? "SEM_MARCACAO" : s.late_minutes ? "ATRASO" : s.early_leave_minutes ? "SAIDA_ANTECIPADA" : s.missing_punches?.length ? "PONTO_INCOMPLETO" : "PRESENCA");
-        return { employee:e, records, summary:s, status, note:saved?.details?.note ?? null };
+        const gpsCount = records.filter((record:any) => hasPontoCoordinates(record)).length;
+        const gpsPending = records.length > 0 && records.some((record:any) =>
+          !hasPontoCoordinates(record) || record.inside_radius == null || record.gps_accuracy_m == null
+        );
+        return { employee:e, records, summary:s, status, note:saved?.details?.note ?? null, gpsCount, gpsPending };
       })
-      .filter((r:any) => statusFilter === "todos" || r.status === statusFilter);
-  }, [employees.data, dayRecords, employeeFilter, search, latest, selectedDay, statusFilter]);
+      .filter((r:any) => statusFilter === "todos" || r.status === statusFilter)
+      .filter((r:any) => gpsFilter === "todos" || (r.records.length > 0 && (gpsFilter === "pendente" ? r.gpsPending : !r.gpsPending)));
+  }, [employees.data, dayRecords, employeeFilter, search, latest, selectedDay, statusFilter, gpsFilter]);
 
   const stats = {
     total: rows.length,
@@ -89,6 +99,7 @@ function PontoRh() {
     absence: rows.filter((r:any)=>r.status==="FALTA").length,
     pending: rows.filter((r:any)=>r.status==="SEM_MARCACAO").length,
     justified: rows.filter((r:any)=>["FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].includes(r.status)).length,
+    gpsPending: rows.filter((r:any)=>r.records.length > 0 && r.gpsPending).length,
   };
 
   const statusLabel:Record<string,string> = { PRESENCA:"Presença", ATRASO:"Atraso", SAIDA_ANTECIPADA:"Saída antecipada", FALTA:"Falta", FALTA_JUSTIFICADA:"Falta justificada", SEM_MARCACAO:"Sem marcação", PONTO_INCOMPLETO:"Ponto incompleto", ATESTADO:"Atestado", FOLGA:"Folga", FERIAS:"Férias", COMPENSACAO:"Compensação", HOME_OFFICE:"Home office", ABONO:"Abono" };
@@ -215,8 +226,34 @@ function PontoRh() {
   const active=(employees.data??[]).filter((e:any)=>e.ponto_access_enabled).length;
   const openAccess=(e:any)=>{setSelected(e);setIdentifier(e.portal_user?.username??e.portal_user?.email??"");setRadius(String(e.ponto_raio_m??150));setLat(e.ponto_base_lat?String(e.ponto_base_lat):"");setLng(e.ponto_base_lng?String(e.ponto_base_lng):"");setEntrada(e.ponto_entrada_prevista??"");setSaida(e.ponto_saida_prevista??"");setAlmocoIni(e.ponto_almoco_inicio_previsto??"");setAlmocoFim(e.ponto_almoco_fim_previsto??"");};
   const openDay=(r:any)=>{setDayEmployee(r);setOccurrenceStatus(r.status as RhPontoDayStatus);setOccurrenceNote(r.note??"");setSelectedMapPunch(r.records.find((record:any)=>hasPontoCoordinates(record))??null);};
+  const captureBaseGps = async () => {
+    setBaseGpsBusy(true);
+    setBaseGpsError("");
+    try {
+      if (!window.isSecureContext || !navigator.geolocation) {
+        throw new Error("Abra o RH em HTTPS e permita a localização do navegador para capturar a coordenada da unidade.");
+      }
+      const position = await capturePontoPosition(navigator.geolocation, {
+        targetAccuracyMeters: 50,
+        maxAccuracyMeters: 100,
+        timeoutMs: 12_000,
+        settleMs: 1_000,
+      });
+      setLat(position.coords.latitude.toFixed(7));
+      setLng(position.coords.longitude.toFixed(7));
+    } catch (error) {
+      setBaseGpsError(friendlyError(error));
+    } finally {
+      setBaseGpsBusy(false);
+    }
+  };
 
   return <div className="space-y-5">
+    {failedQueries.length > 0 && <section role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+      <p className="font-black">A conferência do ponto não foi totalmente carregada.</p>
+      <p className="mt-1">{failedQueries[0].error instanceof Error ? failedQueries[0].error.message : "Falha ao consultar dados do RH."}</p>
+      <button type="button" onClick={() => void refreshPontoData()} className="mt-3 min-h-10 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-black">Tentar novamente</button>
+    </section>}
     <header className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div><p className="text-[10px] font-black uppercase tracking-[.22em] text-sky-300">RH · gestão de jornada</p><h2 className="mt-2 text-3xl font-black">Folha de Ponto</h2><p className="mt-1 max-w-2xl text-sm text-slate-400">Acompanhe cada dia, identifique desvios e registre a ocorrência sem apagar a marcação original.</p></div>
@@ -233,16 +270,26 @@ function PontoRh() {
           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Funcionário<select value={employeeFilter} onChange={e=>setEmployeeFilter(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold"><option value="todos">Todos</option>{(employees.data??[]).map((e:any)=><option key={e.id} value={e.id}>{e.full_name}</option>)}</select></label>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3"><Filter className="h-4 w-4 text-slate-400"/>{["todos","PRESENCA","SEM_MARCACAO","PONTO_INCOMPLETO","ATRASO","SAIDA_ANTECIPADA","FALTA","FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].map(s=><button key={s} onClick={()=>setStatusFilter(s)} className={"rounded-full border px-3 py-1.5 text-[11px] font-black "+(statusFilter===s?"border-slate-900 bg-slate-900 text-white":"border-slate-200 bg-white text-slate-500")}>{s==="todos"?"Todas":statusLabel[s]}</button>)}</div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <MapPin className="h-4 w-4 text-amber-600"/>
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Conferência GPS</span>
+          {([{id:"todos",label:"Todas"},{id:"pendente",label:"GPS pendente"},{id:"validado",label:"GPS validado"}] as const).map(option =>
+            <button key={option.id} type="button" onClick={() => setGpsFilter(option.id)}
+              className={"rounded-full border px-3 py-1.5 text-[11px] font-black "+(gpsFilter===option.id?"border-amber-600 bg-amber-600 text-white":"border-slate-200 bg-white text-slate-600")}>
+              {option.label}
+            </button>
+          )}
+        </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[["Colaboradores",stats.total,"text-slate-900",ClipboardCheck],["Pendências",stats.pending,"text-slate-600",History],["Presença",stats.presence,"text-emerald-700",CheckCircle2],["Atenção",stats.attention,"text-amber-700",AlertTriangle],["Faltas",stats.absence,"text-red-700",XCircle],["Justificados",stats.justified,"text-violet-700",BriefcaseBusiness]].map(([label,value,color,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</span><Icon className={"h-4 w-4 "+color}/></div><p className={"mt-2 text-2xl font-black "+color}>{value}</p></div>)}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {[["Colaboradores",stats.total,"text-slate-900",ClipboardCheck],["Pendências",stats.pending,"text-slate-600",History],["GPS pendente",stats.gpsPending,"text-amber-700",MapPin],["Presença",stats.presence,"text-emerald-700",CheckCircle2],["Atenção",stats.attention,"text-amber-700",AlertTriangle],["Faltas",stats.absence,"text-red-700",XCircle],["Justificados",stats.justified,"text-violet-700",BriefcaseBusiness]].map(([label,value,color,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</span><Icon className={"h-4 w-4 "+color}/></div><p className={"mt-2 text-2xl font-black "+color}>{value}</p></div>)}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Controle do dia</p><h3 className="mt-1 text-xl font-black text-slate-900">{new Date(selectedDay+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}</h3></div><div className="flex items-center gap-2 text-xs font-bold text-slate-400"><History className="h-4 w-4"/>Marcações originais preservadas</div></div>
+        <div className="flex flex-col gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Controle do dia</p><h3 className="mt-1 text-xl font-black text-slate-900">{new Date(selectedDay+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}</h3></div><div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-400"><span className="inline-flex items-center gap-2"><History className="h-4 w-4"/>Marcações originais preservadas</span><button type="button" onClick={() => void refreshPontoData()} className="min-h-9 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-sky-700 hover:bg-sky-50">Atualizar conferência</button></div></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">GPS</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
-        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full px-2.5 py-1 text-[10px] font-black "+(row.records.some((record:any)=>hasPontoCoordinates(record))?"bg-sky-50 text-sky-700":"bg-slate-100 text-slate-500")}>{row.records.filter((record:any)=>hasPontoCoordinates(record)).length}/4 com GPS</span>{row.records.some((record:any)=>hasPontoCoordinates(record))&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa</button>}</td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
+        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full px-2.5 py-1 text-[10px] font-black "+(row.gpsPending?"bg-amber-50 text-amber-800":"bg-emerald-50 text-emerald-700")}>{row.gpsCount}/4 com GPS</span>{row.gpsPending&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-amber-700 underline underline-offset-2">Pendente · conferir</button>}{row.gpsCount>0&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa / detalhes</button>}</td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
       </section>
     </> : <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Configuração</p><h3 className="mt-1 text-xl font-black text-slate-900">Acessos e jornada</h3><p className="mt-1 text-xs text-slate-500">{active} acessos liberados · login, GPS e horários previstos continuam aqui.</p></div>
@@ -291,7 +338,14 @@ function PontoRh() {
       <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><History className="h-4 w-4 text-slate-500"/><h4 className="text-sm font-black text-slate-900">Histórico administrativo</h4></div><div className="mt-3 space-y-2">{(management.data??[]).filter((r:any)=>r.employee_id===dayEmployee.employee.id&&r.details?.work_date===selectedDay).slice().reverse().map((r:any,i:number)=><div key={r.created_at+"-"+i} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between gap-3"><span className={"rounded-full border px-2 py-1 text-[10px] font-black "+(statusClass[r.details?.status]??"")}>{statusLabel[r.details?.status]??r.details?.status}</span><span className="text-[10px] text-slate-400">{new Date(r.created_at).toLocaleString("pt-BR")}</span></div><p className="mt-1 text-xs text-slate-600">{r.details?.note||"Sem observação."}</p></div>)}{!(management.data??[]).some((r:any)=>r.employee_id===dayEmployee.employee.id&&r.details?.work_date===selectedDay)&&<p className="text-xs text-slate-400">Nenhuma ocorrência administrativa registrada.</p>}</div></div>
     </div></div>}
 
-    {selected&&<div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4"><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><h3 className="text-xl font-black text-slate-900">Folha de Ponto · {selected.full_name}</h3><p className="mt-1 text-xs text-slate-500">O colaborador usa o login central já cadastrado.</p></div><button onClick={()=>setSelected(null)} className="text-xs font-bold text-slate-500">Fechar</button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-slate-600 sm:col-span-2">Usuário / e-mail / CPF<input value={identifier} onChange={e=>setIdentifier(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="ex.: joao.silva"/></label><label className="text-xs font-bold text-slate-600">Raio GPS (m)<input value={radius} onChange={e=>setRadius(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5"/></label><label className="text-xs font-bold text-slate-600">Latitude base<input value={lat} onChange={e=>setLat(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="-22.xxxxxxx"/></label><label className="text-xs font-bold text-slate-600">Longitude base<input value={lng} onChange={e=>setLng(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="-43.xxxxxxx"/></label><div className="sm:col-span-2 rounded-xl bg-slate-50 p-4"><p className="mb-3 flex items-center gap-2 text-xs font-black text-slate-700"><Clock3 className="h-4 w-4"/>Jornada prevista</p><div className="grid gap-3 sm:grid-cols-4"><input type="time" value={entrada} onChange={e=>setEntrada(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={almocoIni} onChange={e=>setAlmocoIni(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={almocoFim} onChange={e=>setAlmocoFim(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={saida} onChange={e=>setSaida(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/></div></div></div><div className="mt-6 flex justify-end gap-2"><button onClick={()=>accessMutation.mutate(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"><UserX className="mr-1 inline h-4 w-4"/>Revogar acesso</button><button onClick={()=>accessMutation.mutate(true)} disabled={accessMutation.isPending} className="rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white">{accessMutation.isPending?"Salvando...":"Salvar e liberar"}</button></div>{accessMutation.error&&<p className="mt-3 text-xs font-bold text-red-600">{accessMutation.error instanceof Error?accessMutation.error.message:"Falha ao salvar."}</p>}</div></div>}
+    {selected&&<div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4"><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><h3 className="text-xl font-black text-slate-900">Folha de Ponto · {selected.full_name}</h3><p className="mt-1 text-xs text-slate-500">O colaborador usa o login central já cadastrado.</p></div><button onClick={()=>setSelected(null)} className="text-xs font-bold text-slate-500">Fechar</button></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-slate-600 sm:col-span-2">Usuário / e-mail / CPF<input value={identifier} onChange={e=>setIdentifier(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="ex.: joao.silva"/></label><label className="text-xs font-bold text-slate-600">Raio GPS (m)<input value={radius} onChange={e=>setRadius(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5"/></label><label className="text-xs font-bold text-slate-600">Latitude base<input value={lat} onChange={e=>setLat(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="-22.xxxxxxx"/></label><label className="text-xs font-bold text-slate-600">Longitude base<input value={lng} onChange={e=>setLng(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" placeholder="-43.xxxxxxx"/></label><div className="sm:col-span-2 rounded-xl border border-sky-100 bg-sky-50/60 p-4">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <div><p className="text-xs font-black text-slate-800">Coordenada da unidade</p><p className="mt-1 text-[11px] text-slate-500">Capture estando fisicamente no endereço da base. Os campos continuam editáveis.</p></div>
+    <button type="button" onClick={() => void captureBaseGps()} disabled={baseGpsBusy} className="min-h-10 rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white disabled:opacity-50">{baseGpsBusy?"Capturando...":"Usar GPS deste local"}</button>
+  </div>
+  {baseGpsError && <p role="alert" className="mt-2 text-xs font-bold text-rose-700">{baseGpsError}</p>}
+</div>
+<div className="sm:col-span-2 rounded-xl bg-slate-50 p-4"><p className="mb-3 flex items-center gap-2 text-xs font-black text-slate-700"><Clock3 className="h-4 w-4"/>Jornada prevista</p><div className="grid gap-3 sm:grid-cols-4"><input type="time" value={entrada} onChange={e=>setEntrada(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={almocoIni} onChange={e=>setAlmocoIni(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={almocoFim} onChange={e=>setAlmocoFim(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/><input type="time" value={saida} onChange={e=>setSaida(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-2"/></div></div></div><div className="mt-6 flex justify-end gap-2"><button onClick={()=>accessMutation.mutate(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"><UserX className="mr-1 inline h-4 w-4"/>Revogar acesso</button><button onClick={()=>accessMutation.mutate(true)} disabled={accessMutation.isPending} className="rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-black text-white">{accessMutation.isPending?"Salvando...":"Salvar e liberar"}</button></div>{accessMutation.error&&<p className="mt-3 text-xs font-bold text-red-600">{accessMutation.error instanceof Error?accessMutation.error.message:"Falha ao salvar."}</p>}</div></div>}
   </div>;
 }
 function PontoColaborador() {
@@ -314,36 +368,58 @@ function PontoColaborador() {
   const punch = useMutation({
     mutationFn: async (type: any) => {
       const workDate = localDateISO();
-      if (!window.isSecureContext) throw new Error("A localização exige uma conexão segura (HTTPS). Abra a folha de ponto pelo endereço oficial https://air-sync-refine.lovable.app/.");
-      if (!navigator.geolocation) throw new Error("Este navegador não disponibiliza geolocalização. Abra a folha de ponto no navegador atualizado do celular.");
-      const pos = await capturePontoPosition(navigator.geolocation);
-      const baseLat = query.data?.employee.ponto_base_lat;
-      const baseLng = query.data?.employee.ponto_base_lng;
-      const R = 6371000;
-      const rad = (n: number) => n * Math.PI / 180;
-      const distance = baseLat != null && baseLng != null
-        ? 2 * R * Math.asin(Math.sqrt(
-            Math.sin((rad(pos.coords.latitude - Number(baseLat)) / 2)) ** 2 +
-            Math.cos(rad(Number(baseLat))) * Math.cos(rad(pos.coords.latitude)) *
-            Math.sin((rad(pos.coords.longitude - Number(baseLng)) / 2)) ** 2
-          ))
-        : null;
-      const inside = distance == null ? true : distance <= Number(query.data?.employee.ponto_raio_m ?? 150);
+      let gps: { latitude: number | null; longitude: number | null; accuracy: number | null } = {
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+      };
+      let gpsPendingReason = "";
+
+      // A falha ou a permissão negada de GPS nunca apaga uma batida de jornada.
+      // Tentamos capturar a localização por tempo limitado; se não houver fix,
+      // registramos a hora oficial e deixamos a geocerca pendente para o RH.
+      if (!window.isSecureContext) {
+        gpsPendingReason = "A página não está em uma conexão segura (HTTPS).";
+      } else if (!navigator.geolocation) {
+        gpsPendingReason = "Este navegador não disponibilizou a localização.";
+      } else {
+        try {
+          const position = await capturePontoPosition(navigator.geolocation, {
+            targetAccuracyMeters: 80,
+            maxAccuracyMeters: 150,
+            timeoutMs: 12_000,
+            settleMs: 1_000,
+          });
+          gps = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+        } catch (error) {
+          gpsPendingReason = friendlyError(error);
+        }
+      }
+
       return registerMyPonto({
         data: {
           punch_type: type,
           work_date: workDate,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          gps_accuracy_m: pos.coords.accuracy,
-          distance_m: distance,
-          inside_radius: inside
+          latitude: gps.latitude,
+          longitude: gps.longitude,
+          gps_accuracy_m: gps.accuracy,
+          note: gpsPendingReason ? "GPS pendente de conferência pelo RH: " + gpsPendingReason : null,
         }
       });
     },
     onSuccess: (record:any) => {
+      const gpsPending = !hasPontoCoordinates(record) || record.inside_radius == null;
       const accuracy = record?.gps_accuracy_m != null ? " Precisão registrada: ±"+Math.round(Number(record.gps_accuracy_m))+" m." : "";
-      setStatus({type:"success", text:"Marcação registrada com sucesso. A localização foi gravada nesta batida."+accuracy});
+      setStatus({
+        type:"success",
+        text: gpsPending
+          ? "Marcação registrada. O GPS ficou pendente de conferência pelo RH; sua jornada foi preservada."
+          : "Marcação registrada com sucesso. A localização foi gravada nesta batida."+accuracy,
+      });
       qc.invalidateQueries({ queryKey: ["my-ponto"] });
     },
     onError: e => setStatus({type:"error", text:friendlyError(e)})
