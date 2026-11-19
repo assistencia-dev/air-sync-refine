@@ -251,7 +251,7 @@ function stripOperationalCostFields(record: any) {
 function stripCollaboratorPartCatalogBalances(record: any) {
   const safe = stripOperationalCostFields(record);
   if (!safe || typeof safe !== "object" || Array.isArray(safe)) return safe;
-  const catalog = { ...safe };
+  const catalog: Record<string, any> = { ...(safe as any) };
   // "qtd" is stock quantity on the catalogue row, but is the consumed
   // quantity on an OS part link; strip it only from the catalogue projection.
   delete catalog.qtd;
