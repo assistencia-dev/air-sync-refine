@@ -38,13 +38,13 @@ function scripts(file) {
 }
 const treasury = scripts('public/treasury.html').find(source => source.includes('function normalizeTreasuryState'));
 const tree = ts.createSourceFile('treasury.js', treasury, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-const functions = tree.statements.filter(node => ts.isFunctionDeclaration(node) && ['init', 'save', 'normalizeTreasuryState'].includes(node.name?.text)).map(node => node.getText(tree)).join('\n');
+const functions = tree.statements.filter(node => ts.isFunctionDeclaration(node) && ['init', 'save', 'normalizeTreasuryState', 'isoToday'].includes(node.name?.text)).map(node => node.getText(tree)).join('\n');
 function treasurySession(storage) {
   const messages = [];
   const context = vm.createContext({
     localStorage: storage,
     TREASURY_STATE_KEY: 'state', TREASURY_SNAPSHOT_KEY: 'snapshot', TREASURY_PREVIOUS_KEY: 'previous', TREASURY_VERSION: 5,
-    STATE: {}, PRESERVE_UNREADABLE_TREASURY_CACHE: false, window: {},
+    STATE: {}, PRESERVE_UNREADABLE_TREASURY_CACHE: false, window: {}, TREASURY_DATES: { today: () => '2026-11-19' },
     document: { getElementById: () => ({ value: '' }) },
     console: { warn() {}, error() {} },
     treasuryPost: (type, data) => messages.push({ type, ...data }),

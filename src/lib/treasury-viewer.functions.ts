@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { readTreasuryScope } from "@/lib/treasury.functions";
+import { addBrazilCalendarDays, brazilBusinessDateKey } from "@/lib/brazil-date";
 
 async function getCaller(context: { userId: string }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -82,12 +83,10 @@ export const getTreasuryViewerData = createServerFn({ method: "GET" })
     if (!hasFinancialData) {
       throw new Error("O retrato financeiro sincronizado está vazio. Para evitar indicadores incorretos, o painel executivo ficará indisponível até o DBS TREASURY sincronizar os dados.");
     }
-    // Use a data local do servidor, sem converter meia-noite local para UTC
-    // (o que pode deslocar o dia em fusos como o de Brasília).
-    const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    const today = new Date(); today.setHours(0,0,0,0);
-    const isoToday = dateKey(today);
-    const addDays = (n: number) => { const d = new Date(today); d.setDate(d.getDate()+n); return dateKey(d); };
+    // Calendário operacional oficial: America/Sao_Paulo, independente do fuso
+    // configurado no runtime/serverless da hospedagem.
+    const isoToday = brazilBusinessDateKey();
+    const addDays = (n: number) => addBrazilCalendarDays(isoToday, n);
     const isPaid = (status: unknown) => ["pago","paga","quitado","quitada","baixado","baixada"].includes(String(status || "").trim().toLowerCase());
     const pending = (state.contasPagar || []).filter((x: any) => !isPaid(x.status))
       .map((x: any) => ({ id: String(x.id || ""), fornecedor: String(x.fornecedor || "Fornecedor não informado"),
