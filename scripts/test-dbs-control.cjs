@@ -744,7 +744,7 @@ assert.match(treasuryHtml, /DBS_TREASURY_VERIFY_ADMIN_PASSWORD/, "As alteraçõe
 assert.match(treasuryHtml, /async function validarDatasRetroativas/, "As validações de datas devem aguardar a reautenticação sem aplicar alterações antes da resposta.");
 assert.match(treasuryHtml, /await verifyTreasuryAdminPasswordInParent\(senha\)/, "A senha real do administrador precisa ser validada no portal antes da edição retroativa.");
 assert.match(treasuryHtml, /async function alternarFechamentoPeriodo/, "Reabrir um mês financeiro deve aguardar a reautenticação do administrador.");
-assert.match(treasuryRoute, /const TREASURY_URL = "\/treasury\.html\?v=20261118-purchase-flow-1"/, "A nova função de aprovação deve invalidar o cache do HTML.");
+assert.match(treasuryRoute, /const TREASURY_URL = "\\/treasury\\.html\\?v=20261119-brazil-date-1"/, "A tela do Treasury deve invalidar o cache quando o calendário oficial mudar.");
 assert.match(treasuryRoute, /supabase\.auth\.signInWithPassword/, "A reautenticação deve ser conferida pelo Supabase Auth.");
 assert.match(treasuryRoute, /verified\.user\?\.id !== auth\.user\.id/, "A reautenticação só é aceita para a mesma identidade Superadministradora.");
 assert.doesNotMatch(treasuryRoute, /treasury_snapshots.*(?:update|insert|upsert)/s, "A rota não pode escrever snapshots financeiros.");
