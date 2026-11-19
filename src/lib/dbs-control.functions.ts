@@ -241,7 +241,7 @@ function stripOperationalCostFields(record: any) {
     stockQuantity,
     reserved_quantity,
     reservedQuantity,
-    qtd,
+    // `qtd` is the quantity actually used on this OS part link; retain it.
     ...safe
   } = record;
 
