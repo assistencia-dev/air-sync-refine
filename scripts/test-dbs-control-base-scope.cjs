@@ -56,8 +56,12 @@ if (!/scopedPartsResult = scopedPartIds\.length[\s\S]*?select\("id,sku,name,desc
 if (!/const canonicalParts = \(scopedPartsResult\.data \?\? \[\]\)\.map[\s\S]*?isScopedCollaborator \? \{\} : \{[\s\S]*?custo:/.test(control)) {
   throw new Error('Collaborators may only receive part labels; inventory and cost fields stay admin-only.');
 }
-if (!/reserved_quantity,[\s\S]*?qtd,[\s\S]*?\.\.\.safe/.test(control)) {
-  throw new Error('Collaborator serialization must omit inventory balances and quantity fields.');
+if (!/reserved_quantity,[\\s\\S]*?\\.\\.\\.safe/.test(control)) {
+  throw new Error('Collaborator serialization must omit global inventory balances.');
+}
+if (!/qtd: Number\\(\\(link as any\\)\\.quantity \\|\\| 0\\)/.test(control)) {
+  throw new Error('Collaborator work-order part quantities must remain visible for execution.');
+}
 }
 
 console.log('DBS CONTROL base scope: base, client scoping, permission, RPC and mobile UI contracts passed.');
