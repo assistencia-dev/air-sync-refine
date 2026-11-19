@@ -6,6 +6,7 @@ import {
   pontoGeolocationErrorMessage,
   pontoGoogleMapsEmbedUrl,
   pontoGoogleMapsUrl,
+  summarizePontoGpsReview,
   validatePontoGps,
 } from "../src/lib/ponto-geo";
 
@@ -28,12 +29,15 @@ const outsideCoords = { latitude: -22.89, longitude: -43.2, gps_accuracy_m: 6 };
 assert.ok(distanceMeters(employee.ponto_base_lat, employee.ponto_base_lng, outsideCoords.latitude, outsideCoords.longitude) > 150);
 assert.throws(() => validatePontoGps(outsideCoords, employee, "entrada"), /fora do raio/i);
 
-// Localização é obrigatória para as quatro marcações, não só para a Entrada.
-assert.throws(() => validatePontoGps({ gps_accuracy_m: 5 }, employee, "almoco_saida"), /GPS obrigatório/i);
-assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /Precisão do GPS inválida/i);
-assert.throws(
-  () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, {}, "entrada"),
-  /Base GPS não configurada/i,
+// Ausência total de GPS preserva a batida e deixa a geocerca pendente para o RH.
+assert.deepEqual(
+  validatePontoGps({}, employee, "almoco_saida"),
+  { distance_m: null, inside_radius: null },
+);
+assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /Dados GPS incompletos ou inválidos/i);
+assert.deepEqual(
+  validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, {}, "entrada"),
+  { distance_m: null, inside_radius: null },
 );
 
 // As demais batidas preservam a regra atual: registrar a localização mesmo fora do raio.
@@ -41,17 +45,26 @@ const lunchOutside = validatePontoGps(outsideCoords, employee, "almoco_saida");
 assert.equal(lunchOutside.inside_radius, false);
 assert.ok((lunchOutside.distance_m ?? 0) > 150);
 
-assert.throws(
-  () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, { ponto_base_lat: -22.9 }, "saida"),
-  /incompleta/i,
+// Na borda, a margem de erro impede afirmar falsamente que está dentro/fora.
+const uncertainFence = validatePontoGps(
+  { latitude: -22.8985, longitude: -43.2, gps_accuracy_m: 25 },
+  employee,
+  "entrada",
+);
+assert.equal(uncertainFence.inside_radius, null);
+assert.ok((uncertainFence.distance_m ?? 0) > 125 && (uncertainFence.distance_m ?? 0) < 175);
+
+assert.deepEqual(
+  validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, { ponto_base_lat: -22.9 }, "saida"),
+  { distance_m: null, inside_radius: null },
 );
 assert.throws(
   () => validatePontoGps({ latitude: 91, longitude: -43.2, gps_accuracy_m: 5 }, employee, "saida"),
-  /GPS obrigatório/i,
+  /Dados GPS incompletos ou inválidos/i,
 );
 assert.throws(
   () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: -1 }, employee, "saida"),
-  /Precisão do GPS inválida/i,
+  /Dados GPS incompletos ou inválidos/i,
 );
 assert.throws(
   () => validatePontoGps({ ...outsideCoords, distance_m: 0, inside_radius: true } as any, employee, "entrada"),
@@ -65,6 +78,26 @@ assert.equal(hasPontoCoordinates({ latitude: null, longitude: -43.2 }), false);
 assert.equal(pontoGoogleMapsUrl(savedLocation), "https://www.google.com/maps/search/?api=1&query=-22.9,-43.2");
 assert.equal(pontoGoogleMapsEmbedUrl(savedLocation), "https://maps.google.com/maps?q=-22.9,-43.2&z=17&output=embed");
 assert.equal(pontoGoogleMapsUrl({ latitude: 91, longitude: -43.2 }), null);
+
+const validPunch = { ...savedLocation, gps_accuracy_m: 8, inside_radius: true };
+const outsidePunch = { latitude: -22.89, longitude: -43.2, gps_accuracy_m: 6, inside_radius: false };
+const pendingPunch = { latitude: null, longitude: null, gps_accuracy_m: null, inside_radius: null };
+
+assert.deepEqual(summarizePontoGpsReview([]), {
+  gpsCount: 0, totalCount: 0, pending: false, outsideRadius: false, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([validPunch]), {
+  gpsCount: 1, totalCount: 1, pending: false, outsideRadius: false, validated: true,
+});
+assert.deepEqual(summarizePontoGpsReview([outsidePunch]), {
+  gpsCount: 1, totalCount: 1, pending: false, outsideRadius: true, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([pendingPunch]), {
+  gpsCount: 0, totalCount: 1, pending: true, outsideRadius: false, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([outsidePunch, pendingPunch]), {
+  gpsCount: 1, totalCount: 2, pending: true, outsideRadius: true, validated: false,
+}, "uma batida fora do raio nunca deve ser escondida nem classificada como validada");
 
 function mockPosition(accuracy: number, latitude = -22.9, longitude = -43.2): GeolocationPosition {
   return {

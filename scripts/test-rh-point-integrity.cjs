@@ -28,16 +28,28 @@ assert.match(ponto, /select\("id, employee_id, work_date, punch_type, punched_at
 assert.match(ponto, /timeZone: "America\/Sao_Paulo"/, "a data operacional deve usar o fuso oficial calculado no servidor");
 assert.match(ponto, /work_date: serverWorkDate/, "a data enviada pelo dispositivo não deve ser persistida sem validação do servidor");
 assert.match(ponto, /DEFAULT now\(\) do PostgreSQL/, "o timestamp UTC deve continuar vindo do banco, não do relógio do dispositivo");
-assert.match(ponto, /distance_m: gps\.distance_m, inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
-assert.match(geo, /punchType === "entrada" && !hasBaseLat/, "a Entrada deve exigir base GPS cadastrada");
+assert.match(ponto, /distance_m: gps\.distance_m,[\s\S]*?inside_radius: gps\.inside_radius/, "o backend deve gravar distância recalculada no servidor");
+assert.match(geo, /distance - accuracy > radius/, "a entrada só deve ser bloqueada quando a margem GPS confirma que está fora do raio");
+assert.match(geo, /inside === false/, "a incerteza da geocerca deve resultar em conferência RH, não bloqueio falso");
 assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
-assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS capturado"/, "a interface deve distinguir captura GPS de geocerca validada");
-assert.match(workspace, /capturePontoPosition\(navigator\.geolocation\)/, "o cliente deve buscar uma posição GPS nova durante a batida");
+assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS pendente · conferir RH"/, "a interface deve distinguir captura GPS de geocerca validada e pendente");
+assert.match(workspace, /capturePontoPosition\(navigator\.geolocation,/, "o cliente deve buscar uma posição GPS nova durante a batida com prazo limitado");
+assert.match(workspace, /timeoutMs: 12_000/, "a tentativa de GPS não deve impedir indefinidamente o registro da jornada");
+assert.match(workspace, /GPS pendente de conferência pelo RH/, "a interface deve informar quando a batida foi salva sem GPS validado");
+assert.match(ponto, /GPS pendente de conferência pelo RH/, "o servidor deve registrar nota de conferência quando não há GPS");
+assert.match(ponto, /gps_status: gpsPending \? "PENDENTE" : "VALIDADO"/, "a auditoria deve distinguir geolocalização pendente de validada");
+assert.match(ponto, /timeZone: "America\/Sao_Paulo"/, "a data operacional deve continuar vindo do fuso oficial do servidor");
+assert.doesNotMatch(ponto, /data\.work_date !== serverWorkDate/, "a batida não pode ser descartada porque o relógio do dispositivo diverge do servidor");
 assert.match(geo, /watchPosition/, "a captura deve aguardar uma leitura GPS atualizada");
 assert.match(geo, /clearWatch\(watchId\)/, "a leitura GPS deve ser encerrada após cada batida");
 assert.match(geo, /maximumAge: 0/, "a captura não deve reaproveitar uma localização antiga");
 assert.match(geo, /targetAccuracyMeters \?\? 80/, "a captura deve buscar precisão adequada antes de concluir");
 assert.match(workspace, /Localização das marcações/, "o painel do RH deve apresentar o mapa das batidas");
+assert.match(workspace, /hidden md:block overflow-x-auto/, "a tabela completa do RH deve continuar disponível no desktop");
+assert.match(workspace, /grid gap-3 md:hidden/, "a conferência diária deve usar cartões no celular sem rolagem horizontal");
+assert.match(workspace, /Conferir dia/, "os cartões mobile devem preservar a ação de gerir a jornada");
+assert.match(workspace, /Espelho de ponto/, "os cartões mobile devem preservar a exportação do espelho");
+assert.match(workspace, /min-h-11 rounded-xl/, "ações principais do RH mobile devem manter alvo de toque mínimo de 44px");
 assert.match(workspace, /pontoGoogleMapsEmbedUrl/, "o mapa deve usar as coordenadas persistidas");
 assert.match(workspace, /Ver mapa/, "o painel diário deve oferecer acesso direto ao mapa");
 assert.match(workspace, /Ver localização/, "o histórico do colaborador deve permitir conferir sua própria batida");
@@ -49,6 +61,12 @@ assert.match(geo, /if \(code === 1\)/, "a permissão explicitamente negada deve 
 assert.doesNotMatch(geo, /timeout: timeoutMs/, "o timeout interno do navegador não deve cancelar a aquisição antes do prazo controlado pelo app");
 assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
 assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
+assert.match(geo, /summarizePontoGpsReview/, "a revisão do RH deve classificar GPS pendente, fora do raio e validado separadamente");
+assert.match(workspace, /fora_raio/, "o RH deve ter filtro específico para batidas confirmadas fora do raio");
+assert.match(workspace, /gpsOutsideRadius/, "o painel deve contabilizar e apresentar batidas fora da geocerca");
+assert.match(workspace, /gpsValidated/, "somente leituras dentro da geocerca podem aparecer como GPS validado");
+assert.match(workspace, /Fora do raio confirmado/, "o detalhe diário deve explicar uma exceção GPS confirmada");
+assert.match(workspace, /GPS pendente/, "o detalhe diário deve manter uma fila separada para localização incerta");
 
 function parseTime(value) {
   const raw = String(value || "").trim();
