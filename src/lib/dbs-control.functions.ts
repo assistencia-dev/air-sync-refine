@@ -228,10 +228,34 @@ function stripOperationalCostFields(record: any) {
     financial_status,
     revenue_entry_id,
     revenue_reversal_entry_id,
+    venda,
+    sale_cents,
+    saleCents,
+    unit_cents,
+    unitCents,
+    unit_sale_cents,
+    total_cents,
+    totalCents,
+    valor,
+    stock_quantity,
+    stockQuantity,
+    reserved_quantity,
+    reservedQuantity,
+    // `qtd` is the quantity actually used on this OS part link; retain it.
     ...safe
   } = record;
 
   return safe;
+}
+
+function stripCollaboratorPartCatalogBalances(record: any) {
+  const safe = stripOperationalCostFields(record);
+  if (!safe || typeof safe !== "object" || Array.isArray(safe)) return safe;
+  const catalog: Record<string, any> = { ...(safe as any) };
+  // "qtd" is stock quantity on the catalogue row, but is the consumed
+  // quantity on an OS part link; strip it only from the catalogue projection.
+  delete catalog.qtd;
+  return catalog;
 }
 
 function filterCollaboratorState(
@@ -319,7 +343,7 @@ function filterCollaboratorState(
     }),
     pecas: (normalized.pecas as any[])
       .filter((item) => partsUsed.has(String(item?.id)))
-      .map((item) => stripOperationalCostFields(item)),
+      .map((item) => stripCollaboratorPartCatalogBalances(item)),
     compras: [],
   };
 }
@@ -576,12 +600,27 @@ async function hydrateDbsControlStateFromCanonicalDb(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
+  // Colaboradores não recebem o catálogo inteiro. Buscamos somente as peças
+  // já referenciadas nas OS filtradas por funcionário/base; assim o celular
+  // exibe nome e SKU sem revelar custos, preços, saldo ou fornecedores globais.
+  let scopedPartsResult: any = partsResult;
+  if (isScopedCollaborator) {
+    const scopedPartIds = [...new Set((orderPartsResult.data ?? [])
+      .map((row: any) => String(row?.part_id ?? "").trim())
+      .filter(Boolean))];
+    scopedPartsResult = scopedPartIds.length
+      ? await supabaseAdmin.from("dbs_control_parts")
+        .select("id,sku,name,description,status,updated_at")
+        .in("id", scopedPartIds)
+      : noRows;
+  }
+
   const results = [
     clientsResult,
     sitesResult,
     equipmentResult,
     servicesResult,
-    partsResult,
+    scopedPartsResult,
     employeesResult,
     ordersResult,
     orderEquipmentResult,
@@ -756,23 +795,25 @@ async function hydrateDbsControlStateFromCanonicalDb(
     status: row.status || "ativo",
   }));
 
-  const canonicalParts = (partsResult.data ?? []).map((row: any) => ({
+  const canonicalParts = (scopedPartsResult.data ?? []).map((row: any) => ({
     id: String(row.id),
     sku: row.sku || "",
     nome: row.name || "Peça",
     name: row.name || "Peça",
     descricao: row.description || "",
-    qtd: Number(row.stock_quantity || 0),
-    stock_quantity: Number(row.stock_quantity || 0),
-    custo: Number(row.cost_cents || 0) / 100,
-    venda: Number(row.sale_cents || 0) / 100,
-    supplier_id: row.supplier_id ? String(row.supplier_id) : null,
-    measure_unit_id: row.measure_unit_id ? String(row.measure_unit_id) : null,
+    ...(isScopedCollaborator ? {} : {
+      qtd: Number(row.stock_quantity || 0),
+      stock_quantity: Number(row.stock_quantity || 0),
+      custo: Number(row.cost_cents || 0) / 100,
+      venda: Number(row.sale_cents || 0) / 100,
+      supplier_id: row.supplier_id ? String(row.supplier_id) : null,
+      measure_unit_id: row.measure_unit_id ? String(row.measure_unit_id) : null,
+    }),
     stock_source: "relational",
     status: row.status || "ativo",
   }));
 
-  const canonicalPartById = new Map(canonicalParts.map((part: any) => [String(part.id), part]));
+  const canonicalPartById = new Map<string, any>(canonicalParts.map((part: any) => [String(part.id), part] as const));
   const purchaseItemsByPurchaseId = new Map<string, any[]>();
   for (const item of (purchaseItemsResult as any).data ?? []) {
     const purchaseId = String(item?.purchase_id ?? "").trim();
