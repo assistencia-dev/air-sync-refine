@@ -156,7 +156,7 @@ function RHDashboard() {
           </TabsContent>
         </Tabs>
       </div>
-      <MobileAdminNavigation active="people" />
+      <MobileAdminNavigation active="people" currentPage="people" />
     </div>
   );
 }

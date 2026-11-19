@@ -24,6 +24,8 @@ function TreasuryViewerPage() {
   const [filter,setFilter] = useState("todos");
   const [search,setSearch] = useState("");
   const [lastRefresh,setLastRefresh] = useState("");
+  const [roleKey,setRoleKey] = useState<string | null>(null);
+  const showAdminNavigation = roleKey === "SUPER_ADMIN";
   async function load() {
     setLoading(true); setError("");
     try { const result = await getTreasuryViewerData(); setData(result); setLastRefresh(new Date().toLocaleString("pt-BR")); }
@@ -38,6 +40,7 @@ function TreasuryViewerPage() {
       const {data:profile} = await supabase.from("users").select("role_key,status").eq("auth_id",auth.user.id).maybeSingle();
       if(cancelled) return;
       if(profile?.status !== "ativo" || !["FINANCEIRO_LEITURA","SUPER_ADMIN"].includes(profile?.role_key || "")) { navigate({to:"/portal",replace:true}); return; }
+      setRoleKey(profile.role_key ?? null);
       void load();
     });
     return () => { cancelled=true; };
@@ -61,7 +64,7 @@ function TreasuryViewerPage() {
     {label:"Passivos futuros",value:data?.summary.passives,icon:TrendingDown,detail:"Parcelas não pagas"},
     {label:"Recebimentos previstos",value:data?.summary.expectedReceipts,icon:CheckCircle2,detail:"Entradas pendentes"},
   ];
-  return <div className="admin-mobile-shell min-h-screen bg-[#f3f7fc] pb-20 text-slate-900 lg:pb-0" style={{fontFamily:"Inter,system-ui,sans-serif"}}>
+  return <div className={`admin-mobile-shell min-h-screen bg-[#f3f7fc] text-slate-900 ${showAdminNavigation ? "pb-20 lg:pb-0" : "finance-viewer-shell"}`} style={{fontFamily:"Inter,system-ui,sans-serif"}}>
     <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-4 px-5 py-4 lg:px-8">
         <div className="flex items-center gap-4"><BrandLogo frameClassName="rounded-xl px-3 py-2 shadow-sm" imageClassName="h-10 w-auto max-w-[210px] object-contain"/><span className="hidden h-8 w-px bg-slate-200 md:block"/><div><p className="text-[10px] font-bold uppercase tracking-[.22em] text-blue-700">DBS AIR · Gestão executiva</p><h1 className="text-lg font-bold tracking-tight">Acompanhamento Financeiro</h1></div></div>
@@ -79,6 +82,6 @@ function TreasuryViewerPage() {
       </section>
       <footer className="flex flex-wrap items-center justify-between gap-2 pb-5 text-xs text-slate-500"><span>DBS AIR REFRIGERAÇÃO · DBS TREASURY</span><span>Perfil somente leitura · Alterações financeiras não estão disponíveis neste acesso.</span></footer>
     </main>
-    <MobileAdminNavigation active="finance" financePath="/financeiro-acompanhamento" />
+    {showAdminNavigation && <MobileAdminNavigation active="finance" financePath="/financeiro-acompanhamento" currentPage="finance" />}
   </div>;
 }

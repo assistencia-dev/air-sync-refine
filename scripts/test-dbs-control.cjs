@@ -46,7 +46,7 @@ assert.match(adminSurface, /navigate\(\{ to: ["']\/treinamento["'] \}\)/, "O pai
 assert.match(adminSurface, /GraduationCap[\s\S]*?Dúvidas \/ Treinamento/, "A central de treinamento deve aparecer com identidade própria no menu.");
 assert.match(mobileAdminNavigation, /aria-label="Navegação administrativa"/, "O Super Admin mobile deve ter uma navegação única e acessível.");
 assert.match(mobileAdminNavigation, /Dúvidas e treinamento[\s\S]*?Encerrar sessão/, "O menu mobile deve concentrar treinamento e saída sem duplicar a navegação desktop.");
-assert.match(adminSurface, /MobileAdminNavigation active=\{requestedTab === "passage"/, "O painel administrativo deve usar o shell mobile unificado.");
+assert.match(adminSurface, /MobileAdminNavigation\s+active=\{requestedTab === "passage"/, "O painel administrativo deve usar o shell mobile unificado.");
 assert.match(route, /MobileAdminNavigation active="operation"/, "O DBS CONTROL deve usar a mesma navegação mobile administrativa.");
 assert.ok(route.includes('className="flex h-[100dvh] min-h-0 flex-col overflow-hidden admin-mobile-shell'), "O shell administrativo do DBS CONTROL deve ter altura definida para preencher o viewport.");
 assert.ok(route.includes('className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#f4f8fc]'), "O shell do colaborador também deve preencher a altura útil da tela.");

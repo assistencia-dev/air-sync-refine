@@ -11,6 +11,9 @@ const inventory = read("src/routes/_authenticated/dbs-inventory.tsx");
 const dbsControl = read("public/dbs-control.html");
 const treasury = read("public/treasury.html");
 const mobileNavigation = read("src/components/MobileAdminNavigation.tsx");
+const appStyles = read("src/styles.css");
+const publicHome = read("src/routes/index.tsx");
+const financeViewer = read("src/routes/_authenticated/financeiro-acompanhamento.tsx");
 
 assert.match(sharedUi, /--dbs-ui-brand:\s*#1769d1/i);
 assert.match(sharedUi, /\.admin-mobile-shell/);
@@ -46,6 +49,19 @@ assert.match(treasury, /mod-aprovacoes/);
 assert.match(treasury, /DBS_TREASURY_DECIDE_PURCHASE_APPROVAL/);
 assert.match(mobileNavigation, /Navegação administrativa/);
 assert.match(mobileNavigation, /Encerrar sessão/);
+assert.match(mobileNavigation, /currentPage\?: NavigationPage/);
+assert.match(mobileNavigation, /aria-current=\{currentPage === "tickets"/);
+assert.match(mobileNavigation, /aria-haspopup="dialog"/);
+assert.match(appStyles, /\.admin-mobile-menu-item\[aria-current="page"\]/);
+assert.match(admin, /flex flex-col gap-3 p-4 sm:flex-row/);
+assert.match(admin, /Assumido por:/);
+assert.match(admin, /Motivo do cancelamento:/);
+assert.match(financeViewer, /showAdminNavigation = roleKey === "SUPER_ADMIN"/);
+assert.match(financeViewer, /setRoleKey\(profile\.role_key \?\? null\)/);
+assert.match(financeViewer, /\{showAdminNavigation && <MobileAdminNavigation/);
+assert.match(publicHome, /aria-expanded=\{menuOpen\}/);
+assert.match(publicHome, /aria-controls="public-mobile-navigation"/);
+assert.match(publicHome, /aria-expanded=\{expandedFaq === idx\}/);
 
 // O status do cabeçalho não deve afirmar conectividade sem uma checagem real.
 assert.doesNotMatch(admin, /Operação online/);

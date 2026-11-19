@@ -603,7 +603,7 @@ function TrainingPage() {
           </article>
         </div>
       </main>
-      <MobileAdminNavigation active="more" />
+      <MobileAdminNavigation active="more" currentPage="training" />
     </div>
   );
 }
