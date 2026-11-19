@@ -1225,6 +1225,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
 
 <div id="toast-container"></div>
 
+<script src="/dbs-treasury-date.js?v=20261119-brazil-date-1"></script>
 <script>
     if (window.__DBS_TREASURY_ALLOWED_FRAME__ !== true) {
         document.body.innerHTML = '<main style="min-height:100vh;display:grid;place-items:center;padding:32px;background:#f4f7fb;font:16px system-ui;color:#0f172a"><section style="max-width:520px;background:#fff;border:1px solid #dbe3ef;border-radius:20px;padding:28px;box-shadow:0 16px 48px #0f172a12"><h1 style="font-size:22px;margin-bottom:12px">DBS TREASURY protegido</h1><p style="line-height:1.6;color:#475569">Este módulo só pode ser aberto pela rota autenticada do DBS Air. Entre no portal e acesse Financeiro pelo menu administrativo.</p><p style="margin-top:20px"><a href="/login" style="color:#1769D1;font-weight:700">Ir para o login</a></p></section></main>';
@@ -1232,6 +1233,8 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
         throw new Error("DBS TREASURY requires the authenticated /treasury route.");
     }
     document.documentElement.style.visibility = "visible";
+    if (!window.DbsTreasuryDates) throw new Error("A rotina de calendário do DBS TREASURY não foi carregada.");
+    const TREASURY_DATES = window.DbsTreasuryDates;
 
     const TREASURY_STATE_KEY = 'DBS_TREASURY_STATE_V3';
     const TREASURY_PREVIOUS_KEY = 'DBS_TREASURY_PREVIOUS_SAFE';
@@ -1328,7 +1331,7 @@ table.mobile-card-table td:last-child{border-bottom:0!important}table.mobile-car
         return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
     }
 
-    function isoToday() { return new Date().toISOString().slice(0, 10); }
+    function isoToday() { return TREASURY_DATES.today(); }
 
     function ledgerBankLine(bank, amount, direction, metadata = {}) {
         return {
@@ -1487,8 +1490,7 @@ function showToast(msg) {
     }
 
     function init() {
-        const now = new Date();
-        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const monthStr = isoToday().slice(0, 7);
         document.getElementById('global-period-filter').value = monthStr;
 
         let local;
@@ -1573,10 +1575,9 @@ function showToast(msg) {
     }
 
     function getDaysDiff(dateString) {
-        const target = new Date(dateString + 'T00:00:00');
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+        const target = TREASURY_DATES.normalize(dateString);
+        if (!target) return NaN;
+        return TREASURY_DATES.differenceInDays(isoToday(), target);
     }
 
     function switchModule(modId, btn) {
@@ -1861,15 +1862,11 @@ function showToast(msg) {
             }
         }
 
-        const hoje = new Date();
-        const limite = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        const mesAtual = isoToday().slice(0, 7);
         const periodosRetroativos = [];
         for (const dataLancamento of datas) {
-            const alvo = dataLancamento.includes('T')
-                ? new Date(dataLancamento)
-                : new Date(dataLancamento + 'T00:00:00');
-            if (Number.isNaN(alvo.getTime()) || alvo >= limite) continue;
             const periodo = dataLancamento.slice(0, 7);
+            if (!/^\\d{4}-\\d{2}$/.test(periodo) || periodo >= mesAtual) continue;
             if (!periodosRetroativos.includes(periodo)) periodosRetroativos.push(periodo);
         }
         if (!periodosRetroativos.length) return true;
@@ -2228,7 +2225,7 @@ function showToast(msg) {
 
         if(orig.saldo < valor) { alert('Saldo insuficiente na conta de origem!'); return; }
 
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = isoToday();
         const transferId = `transfer_${Date.now()}`;
         const outgoing = { id: `${transferId}_out`, data: hoje, descricao: `Transferência para ${dest.nome}`, conta: orig.nome, bancoId: orig.id, tipo: 'Transferência', valor, sinal: -1, origemTipo: 'transferencia' };
         const incoming = { id: `${transferId}_in`, data: hoje, descricao: `Transferência de ${orig.nome}`, conta: dest.nome, bancoId: dest.id, tipo: 'Transferência', valor, sinal: 1, origemTipo: 'transferencia' };
@@ -2566,7 +2563,7 @@ function showToast(msg) {
         const fileInput = document.getElementById(`file-rec-${recId}`);
         const file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
         if (file && file.size > 5 * 1024 * 1024) { alert('Recibo muito grande. Limite para armazenamento direto: 5 MB.'); return; }
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = isoToday();
         rec.bancoId = banco.id;
         rec.historico = rec.historico || [];
         const historico = { id: `rh_${Date.now()}`, dataPagamento: hoje, valor: rec.valor, comprovante: file ? file.name : 'Recibo.pdf', bancoId: banco.id };
@@ -2690,33 +2687,31 @@ function showToast(msg) {
     }
 
     function calcularProjecao(dias) {
-        const hoje = new Date();
-        hoje.setHours(0,0,0,0);
-        const limite = new Date();
-        limite.setDate(hoje.getDate() + dias);
+        const hoje = isoToday();
+        const limite = TREASURY_DATES.addDays(hoje, dias);
+        const dentroDaProjecao = value => {
+            const dateKey = TREASURY_DATES.normalize(value);
+            return Boolean(dateKey && dateKey >= hoje && dateKey <= limite);
+        };
 
         let entradas = 0;
         STATE.recebimentos.forEach(r => {
-            let d = new Date(r.data + 'T00:00:00');
-            if (d >= hoje && d <= limite) entradas += r.valor;
+            if (dentroDaProjecao(r.data)) entradas += Number(r.valor) || 0;
         });
 
         let saidas = 0;
         STATE.contasPagar.forEach(p => {
-            let d = new Date(p.vencimento + 'T00:00:00');
-            if (p.status === 'Pendente' && d >= hoje && d <= limite) saidas += p.valor;
+            if (p.status === 'Pendente' && dentroDaProjecao(p.vencimento)) saidas += Number(p.valor) || 0;
         });
 
         STATE.passivos.filter(p => !p.arquivado).forEach(p => {
             p.parcelas.forEach(parc => {
-                let d = new Date(parc.vencimento + 'T00:00:00');
-                if (parc.status === 'Pendente' && d >= hoje && d <= limite) saidas += parc.valor;
+                if (parc.status === 'Pendente' && dentroDaProjecao(parc.vencimento)) saidas += Number(parc.valor) || 0;
             });
         });
 
         STATE.recorrencias.filter(rec => !rec.arquivado).forEach(rec => {
-            let d = new Date(rec.proximoVencimento + 'T00:00:00');
-            if (d >= hoje && d <= limite) saidas += rec.valor;
+            if (dentroDaProjecao(rec.proximoVencimento)) saidas += Number(rec.valor) || 0;
         });
 
         return entradas - saidas;
@@ -2726,7 +2721,7 @@ function showToast(msg) {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(STATE, null, 2));
         const dlAnchor = document.createElement('a');
         dlAnchor.setAttribute("href", dataStr);
-        dlAnchor.setAttribute("download", `DBS_TREASURY_BACKUP_${new Date().toISOString().split('T')[0]}.json`);
+        dlAnchor.setAttribute("download", `DBS_TREASURY_BACKUP_${isoToday()}.json`);
         document.body.appendChild(dlAnchor);
         dlAnchor.click();
         dlAnchor.remove();
@@ -2806,12 +2801,15 @@ function showToast(msg) {
         return new Date(Number(ano),Number(mes)-1,Number(dia));
     }
     function setAtalhoData(tipo){
-        const hoje=new Date(); let inicio,fim;
-        if(tipo==='mesAtual'){ inicio=new Date(hoje.getFullYear(),hoje.getMonth(),1); fim=new Date(hoje.getFullYear(),hoje.getMonth()+1,0); }
-        else if(tipo==='mesAnterior'){ inicio=new Date(hoje.getFullYear(),hoje.getMonth()-1,1); fim=new Date(hoje.getFullYear(),hoje.getMonth(),0); }
-        else { inicio=new Date(hoje.getFullYear(),0,1); fim=new Date(hoje.getFullYear(),11,31); }
-        document.getElementById('filtroDataInicio').value=`${inicio.getFullYear()}-${String(inicio.getMonth()+1).padStart(2,'0')}-${String(inicio.getDate()).padStart(2,'0')}`;
-        document.getElementById('filtroDataFim').value=`${fim.getFullYear()}-${String(fim.getMonth()+1).padStart(2,'0')}-${String(fim.getDate()).padStart(2,'0')}`;
+        const hoje = isoToday();
+        const ano = hoje.slice(0, 4);
+        const intervalo = tipo === 'mesAnterior'
+            ? TREASURY_DATES.monthRange(hoje, -1)
+            : tipo === 'mesAtual'
+                ? TREASURY_DATES.monthRange(hoje, 0)
+                : { start: ano + '-01-01', end: ano + '-12-31' };
+        document.getElementById('filtroDataInicio').value = intervalo.start;
+        document.getElementById('filtroDataFim').value = intervalo.end;
         filtrarAcordosPorData();
     }
     function limparFiltroData(){ document.getElementById('filtroDataInicio').value=''; document.getElementById('filtroDataFim').value=''; filtrarAcordosPorData(); }
@@ -2819,9 +2817,9 @@ function showToast(msg) {
         const ini=document.getElementById('filtroDataInicio')?.value;
         const fim=document.getElementById('filtroDataFim')?.value;
         if(!ini&&!fim) return STATE.passivos||[];
-        const dIni=ini?new Date(ini+'T00:00:00'):new Date(2000,0,1);
-        const dFim=fim?new Date(fim+'T23:59:59'):new Date(2099,11,31,23,59,59);
-        return (STATE.passivos||[]).filter(pass=>(pass.parcelas||[]).some(p=>{ const d=parseDataBR(p.vencimento); return d&&d>=dIni&&d<=dFim; }));
+        return (STATE.passivos||[]).filter(pass=>(pass.parcelas||[]).some(p =>
+            TREASURY_DATES.matchesRange(p.vencimento, ini, fim)
+        ));
     }
     function filtrarAcordosPorData(){ render(); showToast('Filtro por período aplicado.'); }
 
@@ -2833,7 +2831,9 @@ function showToast(msg) {
         let totalContratos=0,totalPago=0,totalSaldo=0,linhas='';
         lista.forEach(ac=>{
             const valorTotal=Number(ac.valorTotal)||0,totalParcelas=Number(ac.parcelas?.length)||1;
-            const parcelasFiltradas=(ac.parcelas||[]).filter(p=>{const d=parseDataBR(p.vencimento); if(!ini&&!fim)return true; const a=ini?new Date(ini+'T00:00:00'):new Date(2000,0,1); const b=fim?new Date(fim+'T23:59:59'):new Date(2099,11,31,23,59,59); return d&&d>=a&&d<=b;});
+            const parcelasFiltradas=(ac.parcelas||[]).filter(p =>
+                (!ini && !fim) || TREASURY_DATES.matchesRange(p.vencimento, ini, fim)
+            );
             const valorParcela=Number(ac.parcelas?.[0]?.valor)||0;
             const pagasTotal=(ac.parcelas||[]).filter(p=>p.status==='Pago').reduce((s,p)=>s+(Number(p.valor)||0),0);
             const pagoPeriodo=parcelasFiltradas.filter(p=>p.status==='Pago').reduce((s,p)=>s+(Number(p.valor)||0),0);
@@ -3350,19 +3350,16 @@ function showToast(msg) {
 
         // Radar de Saídas: consolida somente dados já existentes no Treasury.
         // Não cria lançamentos, não altera status e não modifica nenhuma fonte operacional.
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const inicioProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
-        const fimProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0);
-        const limite7Dias = new Date(hoje);
-        limite7Dias.setDate(limite7Dias.getDate() + 7);
+        const hoje = isoToday();
+        const intervaloProximoMes = TREASURY_DATES.monthRange(hoje, 1);
+        const limite7Dias = TREASURY_DATES.addDays(hoje, 7);
 
         const saidas = [];
         const adicionarSaida = ({ origem, descricao, valor, vencimento, id }) => {
-            if (!vencimento || !Number.isFinite(Number(valor)) || Number(valor) <= 0) return;
-            const data = new Date(String(vencimento).slice(0, 10) + 'T00:00:00');
-            if (Number.isNaN(data.getTime())) return;
-            saidas.push({ origem, descricao, valor: Number(valor), vencimento: String(vencimento).slice(0, 10), data, id });
+            const dateKey = TREASURY_DATES.normalize(vencimento);
+            const amount = Number(valor);
+            if (!dateKey || !Number.isFinite(amount) || amount <= 0) return;
+            saidas.push({ origem, descricao, valor: amount, vencimento: dateKey, id });
         };
 
         // Contas a pagar pendentes.
@@ -3400,11 +3397,13 @@ function showToast(msg) {
             });
         });
 
-        saidas.sort((a, b) => a.data - b.data || a.descricao.localeCompare(b.descricao, 'pt-BR'));
+        saidas.sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.descricao.localeCompare(b.descricao, 'pt-BR'));
 
-        const atrasadas = saidas.filter(s => s.data < hoje);
-        const proximos7 = saidas.filter(s => s.data >= hoje && s.data <= limite7Dias);
-        const proximoMes = saidas.filter(s => s.data >= inicioProximoMes && s.data <= fimProximoMes);
+        const atrasadas = saidas.filter(s => s.vencimento < hoje);
+        const proximos7 = saidas.filter(s => s.vencimento >= hoje && s.vencimento <= limite7Dias);
+        const saidasProximoMes = saidas.filter(s =>
+            s.vencimento >= intervaloProximoMes.start && s.vencimento <= intervaloProximoMes.end
+        );
         const total = lista => lista.reduce((acc, item) => acc + item.valor, 0);
 
         const renderSaida = item => {
@@ -3440,7 +3439,7 @@ function showToast(msg) {
                 <div style="padding:9px; border:1px solid var(--border-light); border-radius:8px;">
                     <div style="font-size:10px; color:var(--text-muted);">PRÓXIMO MÊS</div>
                     <strong style="font-size:15px;">R$ ${formatMoney(total(proximoMes))}</strong>
-                    <div style="font-size:10px; color:var(--text-muted);">${proximoMes.length} conta(s)</div>
+                    <div style="font-size:10px; color:var(--text-muted);">${saidasProximoMes.length} conta(s)</div>
                 </div>
             </div>
             ${atrasadas.length ? `
@@ -3451,11 +3450,11 @@ function showToast(msg) {
                 <div style="font-size:11px; font-weight:800; margin:12px 0 2px;">🟡 PRÓXIMOS 7 DIAS</div>
                 ${proximos7.map(renderSaida).join('')}
             ` : ''}
-            ${proximoMes.length ? `
+            ${saidasProximoMes.length ? `
                 <div style="font-size:11px; font-weight:800; margin:12px 0 2px;">🔵 PRÓXIMO MÊS</div>
-                ${proximoMes.map(renderSaida).join('')}
+                ${saidasProximoMes.map(renderSaida).join('')}
             ` : ''}
-            ${!atrasadas.length && !proximos7.length && !proximoMes.length ? '<div style="padding:18px 0; text-align:center; color:var(--text-muted);">Nenhuma saída pendente encontrada para os períodos monitorados.</div>' : ''}
+            ${!atrasadas.length && !proximos7.length && !saidasProximoMes.length ? '<div style="padding:18px 0; text-align:center; color:var(--text-muted);">Nenhuma saída pendente encontrada para os períodos monitorados.</div>' : ''}
         `;
 
         // Passivos
