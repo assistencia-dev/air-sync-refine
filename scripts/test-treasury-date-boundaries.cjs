@@ -6,6 +6,7 @@ const ts = require("typescript");
 const tsSource = fs.readFileSync("src/lib/brazil-date.ts", "utf8");
 const jsSource = fs.readFileSync("public/dbs-treasury-date.js", "utf8");
 const viewer = fs.readFileSync("src/lib/treasury-viewer.functions.ts", "utf8");
+const viewerPage = fs.readFileSync("src/routes/_authenticated/financeiro-acompanhamento.tsx", "utf8");
 const html = fs.readFileSync("public/treasury.html", "utf8");
 
 const compiled = ts.transpileModule(tsSource, {
@@ -43,6 +44,8 @@ assert.equal(dates.matchesRange("2027-01-01", "2026-12-01", "2026-12-31"), false
 
 assert.match(viewer, /brazilBusinessDateKey/);
 assert.match(viewer, /addBrazilCalendarDays/);
+assert.match(viewerPage, /addBrazilCalendarDays\(today,7\)/);
+assert.match(viewerPage, /addBrazilCalendarDays\(today,30\)/);
 assert.match(html, /dbs-treasury-date\.js/);
 assert.match(html, /TREASURY_DATES\.today/);
 assert.match(html, /TREASURY_DATES\.differenceInDays/);
