@@ -32,7 +32,7 @@ assert.match(ponto, /distance_m: gps\.distance_m,[\s\S]*?inside_radius: gps\.ins
 assert.match(geo, /distance - accuracy > radius/, "a entrada só deve ser bloqueada quando a margem GPS confirma que está fora do raio");
 assert.match(geo, /inside === false/, "a incerteza da geocerca deve resultar em conferência RH, não bloqueio falso");
 assert.match(ponto, /Cadastre latitude e longitude da base/, "o RH não pode liberar o ponto sem configurar a base GPS");
-assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS capturado"/, "a interface deve distinguir captura GPS de geocerca validada");
+assert.match(workspace, /r\.inside_radius === true \? "Dentro do raio" : "GPS pendente · conferir RH"/, "a interface deve distinguir captura GPS de geocerca validada e pendente");
 assert.match(workspace, /capturePontoPosition\(navigator\.geolocation,/, "o cliente deve buscar uma posição GPS nova durante a batida com prazo limitado");
 assert.match(workspace, /timeoutMs: 12_000/, "a tentativa de GPS não deve impedir indefinidamente o registro da jornada");
 assert.match(workspace, /GPS pendente de conferência pelo RH/, "a interface deve informar quando a batida foi salva sem GPS validado");
