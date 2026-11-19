@@ -248,6 +248,16 @@ function stripOperationalCostFields(record: any) {
   return safe;
 }
 
+function stripCollaboratorPartCatalogBalances(record: any) {
+  const safe = stripOperationalCostFields(record);
+  if (!safe || typeof safe !== "object" || Array.isArray(safe)) return safe;
+  const catalog = { ...safe };
+  // "qtd" is stock quantity on the catalogue row, but is the consumed
+  // quantity on an OS part link; strip it only from the catalogue projection.
+  delete catalog.qtd;
+  return catalog;
+}
+
 function filterCollaboratorState(
   state: Record<string, unknown>,
   employeeId: string,
@@ -333,7 +343,7 @@ function filterCollaboratorState(
     }),
     pecas: (normalized.pecas as any[])
       .filter((item) => partsUsed.has(String(item?.id)))
-      .map((item) => stripOperationalCostFields(item)),
+      .map((item) => stripCollaboratorPartCatalogBalances(item)),
     compras: [],
   };
 }
