@@ -228,6 +228,20 @@ function stripOperationalCostFields(record: any) {
     financial_status,
     revenue_entry_id,
     revenue_reversal_entry_id,
+    venda,
+    sale_cents,
+    saleCents,
+    unit_cents,
+    unitCents,
+    unit_sale_cents,
+    total_cents,
+    totalCents,
+    valor,
+    stock_quantity,
+    stockQuantity,
+    reserved_quantity,
+    reservedQuantity,
+    qtd,
     ...safe
   } = record;
 
@@ -576,12 +590,27 @@ async function hydrateDbsControlStateFromCanonicalDb(
       : Promise.resolve({ data: [], error: null }),
   ]);
 
+  // Colaboradores não recebem o catálogo inteiro. Buscamos somente as peças
+  // já referenciadas nas OS filtradas por funcionário/base; assim o celular
+  // exibe nome e SKU sem revelar custos, preços, saldo ou fornecedores globais.
+  let scopedPartsResult = partsResult;
+  if (isScopedCollaborator) {
+    const scopedPartIds = [...new Set((orderPartsResult.data ?? [])
+      .map((row: any) => String(row?.part_id ?? "").trim())
+      .filter(Boolean))];
+    scopedPartsResult = scopedPartIds.length
+      ? await supabaseAdmin.from("dbs_control_parts")
+        .select("id,sku,name,description,status,updated_at")
+        .in("id", scopedPartIds)
+      : noRows;
+  }
+
   const results = [
     clientsResult,
     sitesResult,
     equipmentResult,
     servicesResult,
-    partsResult,
+    scopedPartsResult,
     employeesResult,
     ordersResult,
     orderEquipmentResult,
@@ -756,18 +785,20 @@ async function hydrateDbsControlStateFromCanonicalDb(
     status: row.status || "ativo",
   }));
 
-  const canonicalParts = (partsResult.data ?? []).map((row: any) => ({
+  const canonicalParts = (scopedPartsResult.data ?? []).map((row: any) => ({
     id: String(row.id),
     sku: row.sku || "",
     nome: row.name || "Peça",
     name: row.name || "Peça",
     descricao: row.description || "",
-    qtd: Number(row.stock_quantity || 0),
-    stock_quantity: Number(row.stock_quantity || 0),
-    custo: Number(row.cost_cents || 0) / 100,
-    venda: Number(row.sale_cents || 0) / 100,
-    supplier_id: row.supplier_id ? String(row.supplier_id) : null,
-    measure_unit_id: row.measure_unit_id ? String(row.measure_unit_id) : null,
+    ...(isScopedCollaborator ? {} : {
+      qtd: Number(row.stock_quantity || 0),
+      stock_quantity: Number(row.stock_quantity || 0),
+      custo: Number(row.cost_cents || 0) / 100,
+      venda: Number(row.sale_cents || 0) / 100,
+      supplier_id: row.supplier_id ? String(row.supplier_id) : null,
+      measure_unit_id: row.measure_unit_id ? String(row.measure_unit_id) : null,
+    }),
     stock_source: "relational",
     status: row.status || "ativo",
   }));
