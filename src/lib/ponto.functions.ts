@@ -91,7 +91,14 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
   const employee = await getEmployee(context.userId);
   const { data, error } = await supabaseAdmin.from("rh_ponto_records").select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").eq("employee_id", employee.id).order("punched_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return { employee, records: data ?? [] };
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const work_date = `${parts.find(part => part.type === "year")?.value}-${parts.find(part => part.type === "month")?.value}-${parts.find(part => part.type === "day")?.value}`;
+  return { employee, records: data ?? [], work_date };
 });
 
 export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { punch_type: PointType; work_date?: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
