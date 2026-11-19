@@ -63,13 +63,13 @@ if (!/qtd: Number\(\(link as any\)\.quantity \|\| 0\)/.test(control)) {
   throw new Error('Collaborator work-order part quantities must remain visible for execution.');
 }
 
-if (!/function stripCollaboratorPartCatalogBalances[\\s\\S]*?delete catalog\\.qtd/.test(control)) {
+if (!/function stripCollaboratorPartCatalogBalances[\s\S]*?delete catalog\.qtd/.test(control)) {
   throw new Error('Legacy catalogue stock quantity must not leak through the collaborator part catalogue.');
 }
-if (!/pecasUsadas:[\\s\\S]*?map\\(\\(part: any\\) => stripOperationalCostFields\\(part\\)\\)/.test(control)) {
+if (!/pecasUsadas:[\s\S]*?map\(\(part: any\) => stripOperationalCostFields\(part\)\)/.test(control)) {
   throw new Error('Consumed quantity on the collaborator work-order part link must be preserved.');
 }
-if (!/pecas: \\(normalized\\.pecas as any\\[\\]\\)[\\s\\S]*?map\\(\\(item\\) => stripCollaboratorPartCatalogBalances\\(item\\)\\)/.test(control)) {
+if (!/pecas: \(normalized\.pecas as any\[\]\)[\s\S]*?map\(\(item\) => stripCollaboratorPartCatalogBalances\(item\)\)/.test(control)) {
   throw new Error('Collaborator catalogue rows must use the balance-stripping projection.');
 }
 
