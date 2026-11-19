@@ -294,7 +294,7 @@ function PontoRh() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Controle do dia</p><h3 className="mt-1 text-xl font-black text-slate-900">{new Date(selectedDay+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}</h3></div><div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-400"><span className="inline-flex items-center gap-2"><History className="h-4 w-4"/>Marcações originais preservadas</span><button type="button" onClick={() => void refreshPontoData()} className="min-h-9 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-sky-700 hover:bg-sky-50">Atualizar conferência</button></div></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">GPS</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+        <div className="hidden md:block overflow-x-auto"><table className="w-full min-w-[1080px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">GPS</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
         <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4">
           <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-700">{row.gpsCount}/4 com GPS</span>
           {row.gpsPending&&<span className="mt-1 block text-[10px] font-black text-amber-700">GPS pendente</span>}
@@ -303,6 +303,51 @@ function PontoRh() {
           {(row.gpsPending||row.gpsOutsideRadius)&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-slate-700 underline underline-offset-2">Conferir GPS</button>}
           {row.gpsCount>0&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa / detalhes</button>}
         </td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
+        <div className="grid gap-3 md:hidden">
+          {rows.map((row:any)=>{
+            const a=row.records.find((r:any)=>r.punch_type==="entrada");
+            const b=row.records.find((r:any)=>r.punch_type==="almoco_saida");
+            const c=row.records.find((r:any)=>r.punch_type==="almoco_retorno");
+            const d=row.records.find((r:any)=>r.punch_type==="saida");
+            return <article key={row.employee.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h4 className="truncate text-sm font-black text-slate-900">{row.employee.full_name}</h4>
+                  <p className="mt-1 text-xs text-slate-500">{row.employee.unit||"Sem unidade"}</p>
+                </div>
+                <span className={"shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[[labels.entrada,punchTime(a)],[labels.almoco_saida,punchTime(b)],[labels.almoco_retorno,punchTime(c)],[labels.saida,punchTime(d)]].map(([label,time]:any)=>
+                  <div key={label} className="rounded-xl bg-slate-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p>
+                    <p className="mt-1 text-sm font-black tabular-nums text-slate-900">{time}</p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Trabalhado</p>
+                  <p className="mt-1 text-lg font-black text-slate-900">{fmt(row.summary.worked_minutes)}</p>
+                  <p className="text-[10px] font-bold text-slate-500">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Conferência GPS</p>
+                  <p className="mt-1 text-sm font-black text-slate-900">{row.gpsCount}/4 com GPS</p>
+                  {row.gpsPending&&<p className="text-[10px] font-black text-amber-700">GPS pendente</p>}
+                  {row.gpsOutsideRadius&&<p className="text-[10px] font-black text-red-700">Fora do raio</p>}
+                  {row.gpsValidated&&<p className="text-[10px] font-black text-emerald-700">GPS validado</p>}
+                </div>
+              </div>
+              {row.note&&<p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">{row.note}</p>}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={()=>openDay(row)} className="min-h-11 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white">Conferir dia</button>
+                <button type="button" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="min-h-11 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-black text-sky-800">Espelho de ponto</button>
+              </div>
+            </article>;
+          })}
+          {!rows.length&&<div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}
+        </div>
       </section>
     </> : <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Configuração</p><h3 className="mt-1 text-xl font-black text-slate-900">Acessos e jornada</h3><p className="mt-1 text-xs text-slate-500">{active} acessos liberados · login, GPS e horários previstos continuam aqui.</p></div>
