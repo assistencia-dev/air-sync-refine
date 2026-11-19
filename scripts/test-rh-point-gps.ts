@@ -63,7 +63,7 @@ assert.throws(
 );
 assert.throws(
   () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: -1 }, employee, "saida"),
-  /Precisão do GPS inválida/i,
+  /Dados GPS incompletos ou inválidos/i,
 );
 assert.throws(
   () => validatePontoGps({ ...outsideCoords, distance_m: 0, inside_radius: true } as any, employee, "entrada"),
