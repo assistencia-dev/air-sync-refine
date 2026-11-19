@@ -122,6 +122,45 @@ export function hasPontoCoordinates(record: PontoLocationRecord | null | undefin
     && longitude <= 180;
 }
 
+export type PontoGpsReviewRecord = PontoLocationRecord & {
+  gps_accuracy_m?: number | string | null;
+  inside_radius?: boolean | null;
+};
+
+export type PontoGpsReviewSummary = {
+  gpsCount: number;
+  totalCount: number;
+  pending: boolean;
+  outsideRadius: boolean;
+  validated: boolean;
+};
+
+/**
+ * Summarizes persisted GPS evidence for one employee/day.
+ * A confirmed outside-geofence reading is an exception, never a validation.
+ * Missing or uncertain evidence remains pending for HR review.
+ */
+export function summarizePontoGpsReview(
+  records: PontoGpsReviewRecord[],
+): PontoGpsReviewSummary {
+  const gpsCount = records.filter(hasPontoCoordinates).length;
+  const pending = records.length > 0 && records.some((record) => {
+    const accuracy = record.gps_accuracy_m == null ? null : Number(record.gps_accuracy_m);
+    return !hasPontoCoordinates(record)
+      || accuracy == null
+      || !Number.isFinite(accuracy)
+      || accuracy < 0
+      || record.inside_radius == null;
+  });
+  const outsideRadius = records.some((record) => record.inside_radius === false);
+  const validated = records.length > 0
+    && !pending
+    && !outsideRadius
+    && records.every((record) => record.inside_radius === true);
+
+  return { gpsCount, totalCount: records.length, pending, outsideRadius, validated };
+}
+
 /** A map link is built only from coordinates persisted on the punch record. */
 export function pontoGoogleMapsUrl(record: PontoLocationRecord): string | null {
   if (!hasPontoCoordinates(record)) return null;
