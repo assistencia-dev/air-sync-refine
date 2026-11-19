@@ -813,7 +813,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     status: row.status || "ativo",
   }));
 
-  const canonicalPartById = new Map(canonicalParts.map((part: any) => [String(part.id), part]));
+  const canonicalPartById = new Map<string, any>(canonicalParts.map((part: any) => [String(part.id), part] as const));
   const purchaseItemsByPurchaseId = new Map<string, any[]>();
   for (const item of (purchaseItemsResult as any).data ?? []) {
     const purchaseId = String(item?.purchase_id ?? "").trim();
