@@ -6,6 +6,7 @@ import {
   pontoGeolocationErrorMessage,
   pontoGoogleMapsEmbedUrl,
   pontoGoogleMapsUrl,
+  summarizePontoGpsReview,
   validatePontoGps,
 } from "../src/lib/ponto-geo";
 
@@ -77,6 +78,26 @@ assert.equal(hasPontoCoordinates({ latitude: null, longitude: -43.2 }), false);
 assert.equal(pontoGoogleMapsUrl(savedLocation), "https://www.google.com/maps/search/?api=1&query=-22.9,-43.2");
 assert.equal(pontoGoogleMapsEmbedUrl(savedLocation), "https://maps.google.com/maps?q=-22.9,-43.2&z=17&output=embed");
 assert.equal(pontoGoogleMapsUrl({ latitude: 91, longitude: -43.2 }), null);
+
+const validPunch = { ...savedLocation, gps_accuracy_m: 8, inside_radius: true };
+const outsidePunch = { latitude: -22.89, longitude: -43.2, gps_accuracy_m: 6, inside_radius: false };
+const pendingPunch = { latitude: null, longitude: null, gps_accuracy_m: null, inside_radius: null };
+
+assert.deepEqual(summarizePontoGpsReview([]), {
+  gpsCount: 0, totalCount: 0, pending: false, outsideRadius: false, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([validPunch]), {
+  gpsCount: 1, totalCount: 1, pending: false, outsideRadius: false, validated: true,
+});
+assert.deepEqual(summarizePontoGpsReview([outsidePunch]), {
+  gpsCount: 1, totalCount: 1, pending: false, outsideRadius: true, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([pendingPunch]), {
+  gpsCount: 0, totalCount: 1, pending: true, outsideRadius: false, validated: false,
+});
+assert.deepEqual(summarizePontoGpsReview([outsidePunch, pendingPunch]), {
+  gpsCount: 1, totalCount: 2, pending: true, outsideRadius: true, validated: false,
+}, "uma batida fora do raio nunca deve ser escondida nem classificada como validada");
 
 function mockPosition(accuracy: number, latitude = -22.9, longitude = -43.2): GeolocationPosition {
   return {
