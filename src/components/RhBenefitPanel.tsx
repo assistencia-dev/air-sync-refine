@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { RhVtPanel } from "@/components/RhVtPanel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -120,10 +121,12 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
   const employees = useQuery({
     queryKey: ["rh-employees", benefitType],
     queryFn: () => listRhEmployees({ data: { benefit_type: benefitType } }),
+    enabled: benefitType !== "passagem",
   });
   const topups = useQuery({
     queryKey: ["rh-topups", benefitType],
     queryFn: () => listRhTopups({ data: { benefit_type: benefitType } }),
+    enabled: benefitType !== "passagem",
   });
   const activeEmployees = (employees.data ?? []).filter((item: Employee) => item.is_active);
   const rows = (topups.data ?? []) as Topup[];
@@ -212,6 +215,8 @@ export function RhBenefitPanel({ benefitType }: { benefitType: RhBenefitType }) 
     qc.invalidateQueries({ queryKey: ["rh-workspace-vt"] });
     qc.invalidateQueries({ queryKey: ["rh-workspace-va"] });
   };
+
+  if (benefitType === "passagem") return <RhVtPanel />;
 
   return (
     <section className={benefitType === "passagem" ? "overflow-hidden rounded-2xl border border-[#dfdbd0] bg-[#f6f4ed] shadow-sm" : "overflow-hidden rounded-2xl border border-slate-800 bg-[#1E293B] shadow-sm"}>
