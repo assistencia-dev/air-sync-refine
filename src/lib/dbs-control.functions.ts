@@ -593,7 +593,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
   // Colaboradores não recebem o catálogo inteiro. Buscamos somente as peças
   // já referenciadas nas OS filtradas por funcionário/base; assim o celular
   // exibe nome e SKU sem revelar custos, preços, saldo ou fornecedores globais.
-  let scopedPartsResult = partsResult;
+  let scopedPartsResult: any = partsResult;
   if (isScopedCollaborator) {
     const scopedPartIds = [...new Set((orderPartsResult.data ?? [])
       .map((row: any) => String(row?.part_id ?? "").trim())
