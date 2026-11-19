@@ -45,6 +45,11 @@ assert.match(geo, /clearWatch\(watchId\)/, "a leitura GPS deve ser encerrada ap�
 assert.match(geo, /maximumAge: 0/, "a captura não deve reaproveitar uma localização antiga");
 assert.match(geo, /targetAccuracyMeters \?\? 80/, "a captura deve buscar precisão adequada antes de concluir");
 assert.match(workspace, /Localização das marcações/, "o painel do RH deve apresentar o mapa das batidas");
+assert.match(workspace, /hidden md:block overflow-x-auto/, "a tabela completa do RH deve continuar disponível no desktop");
+assert.match(workspace, /grid gap-3 md:hidden/, "a conferência diária deve usar cartões no celular sem rolagem horizontal");
+assert.match(workspace, /Conferir dia/, "os cartões mobile devem preservar a ação de gerir a jornada");
+assert.match(workspace, /Espelho de ponto/, "os cartões mobile devem preservar a exportação do espelho");
+assert.match(workspace, /min-h-11 rounded-xl/, "ações principais do RH mobile devem manter alvo de toque mínimo de 44px");
 assert.match(workspace, /pontoGoogleMapsEmbedUrl/, "o mapa deve usar as coordenadas persistidas");
 assert.match(workspace, /Ver mapa/, "o painel diário deve oferecer acesso direto ao mapa");
 assert.match(workspace, /Ver localização/, "o histórico do colaborador deve permitir conferir sua própria batida");
