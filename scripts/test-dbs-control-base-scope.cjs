@@ -47,4 +47,17 @@ if (!/filterCollaboratorState[\s\S]{0,1600}clientIds/.test(control)) {
   throw new Error('Collaborator state must be filtered by base client IDs.');
 }
 
+if (!/const scopedPartIds = \[\.\.\.new Set\(\(orderPartsResult\.data \?\? \[\]\)[\s\S]*?part_id/.test(control)) {
+  throw new Error('Collaborator part IDs must originate only from already scoped work-order part links.');
+}
+if (!/scopedPartsResult = scopedPartIds\.length[\s\S]*?select\("id,sku,name,description,status,updated_at"\)[\s\S]*?in\("id", scopedPartIds\)/.test(control)) {
+  throw new Error('Collaborator part hydration must fetch only linked IDs and must not select cost, supplier, sale price or stock.');
+}
+if (!/const canonicalParts = \(scopedPartsResult\.data \?\? \[\]\)\.map[\s\S]*?isScopedCollaborator \? \{\} : \{[\s\S]*?custo:/.test(control)) {
+  throw new Error('Collaborators may only receive part labels; inventory and cost fields stay admin-only.');
+}
+if (!/reserved_quantity,[\s\S]*?qtd,[\s\S]*?\.\.\.safe/.test(control)) {
+  throw new Error('Collaborator serialization must omit inventory balances and quantity fields.');
+}
+
 console.log('DBS CONTROL base scope: base, client scoping, permission, RPC and mobile UI contracts passed.');
