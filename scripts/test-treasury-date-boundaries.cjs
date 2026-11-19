@@ -44,9 +44,9 @@ assert.equal(dates.matchesRange("2027-01-01", "2026-12-01", "2026-12-31"), false
 assert.match(viewer, /brazilBusinessDateKey/);
 assert.match(viewer, /addBrazilCalendarDays/);
 assert.match(html, /dbs-treasury-date\.js/);
-assert.match(html, /DbsTreasuryDates\.today/);
-assert.match(html, /DbsTreasuryDates\.differenceInDays/);
-assert.match(html, /DbsTreasuryDates\.matchesRange/);
+assert.match(html, /TREASURY_DATES\.today/);
+assert.match(html, /TREASURY_DATES\.differenceInDays/);
+assert.match(html, /TREASURY_DATES\.matchesRange/);
 assert.doesNotMatch(html, /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/);
 
 console.log("Treasury Brazil date boundaries: timezone, month rollover, leap day, date-only filtering verified.");
