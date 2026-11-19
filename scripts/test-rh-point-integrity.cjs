@@ -56,6 +56,12 @@ assert.match(geo, /if \(code === 1\)/, "a permissão explicitamente negada deve 
 assert.doesNotMatch(geo, /timeout: timeoutMs/, "o timeout interno do navegador não deve cancelar a aquisição antes do prazo controlado pelo app");
 assert.match(workspace, /window\.isSecureContext/, "a interface deve orientar quando a origem não for HTTPS");
 assert.match(geo, /pontoGeolocationErrorMessage/, "os erros nativos de geolocalização devem ser traduzidos para instruções claras");
+assert.match(geo, /summarizePontoGpsReview/, "a revisão do RH deve classificar GPS pendente, fora do raio e validado separadamente");
+assert.match(workspace, /fora_raio/, "o RH deve ter filtro específico para batidas confirmadas fora do raio");
+assert.match(workspace, /gpsOutsideRadius/, "o painel deve contabilizar e apresentar batidas fora da geocerca");
+assert.match(workspace, /gpsValidated/, "somente leituras dentro da geocerca podem aparecer como GPS validado");
+assert.match(workspace, /Fora do raio confirmado/, "o detalhe diário deve explicar uma exceção GPS confirmada");
+assert.match(workspace, /GPS pendente/, "o detalhe diário deve manter uma fila separada para localização incerta");
 
 function parseTime(value) {
   const raw = String(value || "").trim();
