@@ -44,6 +44,12 @@ export function validatePontoGps(
   const longitude = input.longitude;
   const accuracy = input.gps_accuracy_m;
 
+  // Ausência de GPS não deve apagar a batida. O servidor registra a jornada
+  // com geocerca pendente para revisão do RH.
+  if (latitude == null && longitude == null && accuracy == null) {
+    return { distance_m: null, inside_radius: null };
+  }
+
   if (
     typeof latitude !== "number" ||
     !Number.isFinite(latitude) ||
@@ -52,23 +58,23 @@ export function validatePontoGps(
     typeof longitude !== "number" ||
     !Number.isFinite(longitude) ||
     longitude < -180 ||
-    longitude > 180
+    longitude > 180 ||
+    typeof accuracy !== "number" ||
+    !Number.isFinite(accuracy) ||
+    accuracy < 0 ||
+    accuracy > 100_000
   ) {
-    throw new Error("GPS obrigatório: não foi possível validar as coordenadas desta marcação.");
-  }
-  if (typeof accuracy !== "number" || !Number.isFinite(accuracy) || accuracy < 0 || accuracy > 100_000) {
-    throw new Error("Precisão do GPS inválida. Ative a localização e tente novamente.");
+    throw new Error("Dados GPS incompletos ou inválidos. A batida deve ser reenviada com uma leitura válida.");
   }
 
   const hasBaseLat = employee.ponto_base_lat != null;
   const hasBaseLng = employee.ponto_base_lng != null;
-  if (hasBaseLat !== hasBaseLng) {
-    throw new Error("Configuração GPS da base incompleta. O RH deve cadastrar latitude e longitude.");
+
+  // Cadastro incompleto/legado da base não pode impedir o colaborador de
+  // registrar a jornada. Sem geocerca verificável, o RH recebe pendência.
+  if (!hasBaseLat || !hasBaseLng) {
+    return { distance_m: null, inside_radius: null };
   }
-  if (punchType === "entrada" && !hasBaseLat) {
-    throw new Error("Base GPS não configurada pelo RH. Cadastre latitude e longitude antes de liberar a Entrada.");
-  }
-  if (!hasBaseLat || !hasBaseLng) return { distance_m: null, inside_radius: null };
 
   const baseLat = Number(employee.ponto_base_lat);
   const baseLng = Number(employee.ponto_base_lng);
@@ -78,13 +84,21 @@ export function validatePontoGps(
     !Number.isFinite(baseLng) || baseLng < -180 || baseLng > 180 ||
     !Number.isInteger(radius) || radius < 20 || radius > 5_000
   ) {
-    throw new Error("Configuração de geolocalização da base inválida. Revise a base e o raio no RH.");
+    return { distance_m: null, inside_radius: null };
   }
 
   const distance = distanceMeters(baseLat, baseLng, latitude, longitude);
-  const inside = distance <= radius;
-  if (punchType === "entrada" && !inside) {
-    throw new Error("Marcação bloqueada: você está fora do raio GPS permitido pelo RH.");
+  // Considera a margem de erro reportada pelo próprio dispositivo. Quando
+  // a incerteza cruza o limite da geocerca, a marcação fica pendente em vez
+  // de bloquear falsamente uma entrada legítima.
+  const inside = distance + accuracy <= radius
+    ? true
+    : distance - accuracy > radius
+      ? false
+      : null;
+
+  if (punchType === "entrada" && inside === false) {
+    throw new Error("Marcação bloqueada: o GPS confirmou que você está fora do raio permitido. Aproxime-se da base cadastrada pelo RH.");
   }
   return { distance_m: distance, inside_radius: inside };
 }
