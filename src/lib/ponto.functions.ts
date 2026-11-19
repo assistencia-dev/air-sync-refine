@@ -94,8 +94,8 @@ export const getMyPonto = createServerFn({ method: "GET" }).middleware([requireS
   return { employee, records: data ?? [] };
 });
 
-export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { punch_type: PointType; work_date: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
-  if (!TYPES.includes(input.punch_type) || !/^\d{4}-\d{2}-\d{2}$/.test(input.work_date)) throw new Error("Marcação inválida.");
+export const registerMyPonto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { punch_type: PointType; work_date?: string; latitude?: number | null; longitude?: number | null; gps_accuracy_m?: number | null; distance_m?: number | null; inside_radius?: boolean | null; photo_data?: string | null; note?: string | null }) => {
+  if (!TYPES.includes(input.punch_type)) throw new Error("Tipo de marcação inválido.");
   const hasAnyGps = input.latitude != null || input.longitude != null || input.gps_accuracy_m != null;
   const hasAllGps = input.latitude != null && input.longitude != null && input.gps_accuracy_m != null;
   if (hasAnyGps && !hasAllGps) throw new Error("Leitura GPS incompleta. Tente novamente ou registre a batida para conferência do RH.");
@@ -116,9 +116,8 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
     day: "2-digit",
   }).formatToParts(new Date());
   const serverWorkDate = `${dateParts.find(part => part.type === "year")?.value}-${dateParts.find(part => part.type === "month")?.value}-${dateParts.find(part => part.type === "day")?.value}`;
-  if (data.work_date !== serverWorkDate) {
-    throw new Error("A data da marcação diverge do horário oficial da empresa. Atualize a tela e tente novamente.");
-  }
+  // A data do dispositivo nunca decide a competência da batida. O servidor
+  // usa exclusivamente America/Sao_Paulo para impedir perda por relógio/fuso incorreto.
   const { data: rows, error } = await supabaseAdmin.from("rh_ponto_records").select("punch_type, punched_at").eq("employee_id", employee.id).eq("work_date", serverWorkDate).order("punched_at", { ascending: true });
   if (error) throw new Error(error.message);
   const existingTypes = (rows ?? []).map((row) => row.punch_type as PointType);
@@ -170,7 +169,11 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
       gps_accuracy_m: record.gps_accuracy_m,
     },
   });
-  if (auditError) throw new Error("Batida salva, mas não foi possível registrar sua auditoria. Avise o RH.");
+  if (auditError) {
+    // A batida já está persistida. Nunca informe falha de registro nem provoque
+    // uma repetição que seria recusada como duplicada; deixe o erro no log do servidor.
+    console.error("Falha ao auditar marcação de ponto já salva:", auditError.message);
+  }
 
   return record;
 });
