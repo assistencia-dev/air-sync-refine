@@ -28,12 +28,15 @@ const outsideCoords = { latitude: -22.89, longitude: -43.2, gps_accuracy_m: 6 };
 assert.ok(distanceMeters(employee.ponto_base_lat, employee.ponto_base_lng, outsideCoords.latitude, outsideCoords.longitude) > 150);
 assert.throws(() => validatePontoGps(outsideCoords, employee, "entrada"), /fora do raio/i);
 
-// Localização é obrigatória para as quatro marcações, não só para a Entrada.
-assert.throws(() => validatePontoGps({ gps_accuracy_m: 5 }, employee, "almoco_saida"), /GPS obrigatório/i);
-assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /Precisão do GPS inválida/i);
-assert.throws(
-  () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, {}, "entrada"),
-  /Base GPS não configurada/i,
+// Ausência total de GPS preserva a batida e deixa a geocerca pendente para o RH.
+assert.deepEqual(
+  validatePontoGps({}, employee, "almoco_saida"),
+  { distance_m: null, inside_radius: null },
+);
+assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /incompletos/i);
+assert.deepEqual(
+  validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, {}, "entrada"),
+  { distance_m: null, inside_radius: null },
 );
 
 // As demais batidas preservam a regra atual: registrar a localização mesmo fora do raio.
@@ -41,9 +44,18 @@ const lunchOutside = validatePontoGps(outsideCoords, employee, "almoco_saida");
 assert.equal(lunchOutside.inside_radius, false);
 assert.ok((lunchOutside.distance_m ?? 0) > 150);
 
-assert.throws(
-  () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, { ponto_base_lat: -22.9 }, "saida"),
-  /incompleta/i,
+// Na borda, a margem de erro impede afirmar falsamente que está dentro/fora.
+const uncertainFence = validatePontoGps(
+  { latitude: -22.8985, longitude: -43.2, gps_accuracy_m: 25 },
+  employee,
+  "entrada",
+);
+assert.equal(uncertainFence.inside_radius, null);
+assert.ok((uncertainFence.distance_m ?? 0) > 125 && (uncertainFence.distance_m ?? 0) < 175);
+
+assert.deepEqual(
+  validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, { ponto_base_lat: -22.9 }, "saida"),
+  { distance_m: null, inside_radius: null },
 );
 assert.throws(
   () => validatePontoGps({ latitude: 91, longitude: -43.2, gps_accuracy_m: 5 }, employee, "saida"),
