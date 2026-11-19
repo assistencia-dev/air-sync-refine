@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, LogOut, RefreshCw, ShieldCheck, Wallet, TrendingDown, ReceiptText, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getTreasuryViewerData } from "@/lib/treasury-viewer.functions";
+import { addBrazilCalendarDays } from "@/lib/brazil-date";
 import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 
@@ -49,8 +50,8 @@ function TreasuryViewerPage() {
     const matchesSearch = `${x.fornecedor} ${x.descricao} ${x.status}`.toLowerCase().includes(search.toLowerCase());
     const today=data?.today || "";
     const matchesFilter = filter==="todos" || (filter==="vencidos" && x.vencimento<today) ||
-      (filter==="hoje" && x.vencimento===today) || (filter==="7dias" && x.vencimento>=today && x.vencimento<=new Date(new Date(today+"T12:00:00").getTime()+7*86400000).toISOString().slice(0,10)) ||
-      (filter==="30dias" && x.vencimento>=today && x.vencimento<=new Date(new Date(today+"T12:00:00").getTime()+30*86400000).toISOString().slice(0,10));
+      (filter==="hoje" && x.vencimento===today) || (filter==="7dias" && x.vencimento>=today && x.vencimento<=addBrazilCalendarDays(today,7)) ||
+      (filter==="30dias" && x.vencimento>=today && x.vencimento<=addBrazilCalendarDays(today,30));
     return matchesSearch && matchesFilter;
   }),[data,filter,search]);
   async function signOut() { await supabase.auth.signOut(); navigate({to:"/login",replace:true}); }
