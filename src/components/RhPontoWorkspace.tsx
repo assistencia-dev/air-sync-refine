@@ -3,7 +3,7 @@ import { openRhPrint } from "@/lib/rh.exports";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, UserX, AlertTriangle, BriefcaseBusiness, ChevronRight, ClipboardCheck, Filter, History, Save, Search, XCircle, FileDown, FileSpreadsheet } from "lucide-react";
 import { getMyProfile } from "@/lib/admin-profile.functions";
-import { capturePontoPosition, hasPontoCoordinates, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl } from "@/lib/ponto-geo";
+import { capturePontoPosition, hasPontoCoordinates, summarizePontoGpsReview, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl } from "@/lib/ponto-geo";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
@@ -36,7 +36,7 @@ function PontoRh() {
   const [selectedDay, setSelectedDay] = useState(localDateISO());
   const [employeeFilter, setEmployeeFilter] = useState("todos");
   const [statusFilter, setStatusFilter] = useState("todos");
-  const [gpsFilter, setGpsFilter] = useState<"todos" | "pendente" | "validado">("todos");
+  const [gpsFilter, setGpsFilter] = useState<"todos" | "pendente" | "fora_raio" | "validado">("todos");
   const [search, setSearch] = useState("");
   const [dayEmployee, setDayEmployee] = useState<any>(null);
   const [selectedMapPunch, setSelectedMapPunch] = useState<any>(null);
@@ -81,14 +81,20 @@ function PontoRh() {
         const s = records[0]?.day_summary ?? { worked_minutes:0, late_minutes:0, early_leave_minutes:0, overtime_minutes:0, missing_punches:["entrada","almoco_saida","almoco_retorno","saida"] };
         const saved = latest.get(e.id + "|" + selectedDay);
         const status = saved?.details?.status ?? (records.length === 0 ? "SEM_MARCACAO" : s.late_minutes ? "ATRASO" : s.early_leave_minutes ? "SAIDA_ANTECIPADA" : s.missing_punches?.length ? "PONTO_INCOMPLETO" : "PRESENCA");
-        const gpsCount = records.filter((record:any) => hasPontoCoordinates(record)).length;
-        const gpsPending = records.length > 0 && records.some((record:any) =>
-          !hasPontoCoordinates(record) || record.inside_radius == null || record.gps_accuracy_m == null
-        );
-        return { employee:e, records, summary:s, status, note:saved?.details?.note ?? null, gpsCount, gpsPending };
+        const gpsReview = summarizePontoGpsReview(records);
+        return {
+          employee:e, records, summary:s, status, note:saved?.details?.note ?? null,
+          gpsCount: gpsReview.gpsCount,
+          gpsPending: gpsReview.pending,
+          gpsOutsideRadius: gpsReview.outsideRadius,
+          gpsValidated: gpsReview.validated,
+        };
       })
       .filter((r:any) => statusFilter === "todos" || r.status === statusFilter)
-      .filter((r:any) => gpsFilter === "todos" || (r.records.length > 0 && (gpsFilter === "pendente" ? r.gpsPending : !r.gpsPending)));
+      .filter((r:any) => gpsFilter === "todos"
+        || (gpsFilter === "pendente" && r.gpsPending)
+        || (gpsFilter === "fora_raio" && r.gpsOutsideRadius)
+        || (gpsFilter === "validado" && r.gpsValidated));
   }, [employees.data, dayRecords, employeeFilter, search, latest, selectedDay, statusFilter, gpsFilter]);
 
   const stats = {
@@ -98,7 +104,8 @@ function PontoRh() {
     absence: rows.filter((r:any)=>r.status==="FALTA").length,
     pending: rows.filter((r:any)=>r.status==="SEM_MARCACAO").length,
     justified: rows.filter((r:any)=>["FALTA_JUSTIFICADA","ATESTADO","FOLGA","FERIAS","COMPENSACAO","HOME_OFFICE","ABONO"].includes(r.status)).length,
-    gpsPending: rows.filter((r:any)=>r.records.length > 0 && r.gpsPending).length,
+    gpsPending: rows.filter((r:any)=>r.gpsPending).length,
+    gpsOutsideRadius: rows.filter((r:any)=>r.gpsOutsideRadius).length,
   };
 
   const statusLabel:Record<string,string> = { PRESENCA:"Presença", ATRASO:"Atraso", SAIDA_ANTECIPADA:"Saída antecipada", FALTA:"Falta", FALTA_JUSTIFICADA:"Falta justificada", SEM_MARCACAO:"Sem marcação", PONTO_INCOMPLETO:"Ponto incompleto", ATESTADO:"Atestado", FOLGA:"Folga", FERIAS:"Férias", COMPENSACAO:"Compensação", HOME_OFFICE:"Home office", ABONO:"Abono" };
@@ -272,7 +279,7 @@ function PontoRh() {
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
           <MapPin className="h-4 w-4 text-amber-600"/>
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Conferência GPS</span>
-          {([{id:"todos",label:"Todas"},{id:"pendente",label:"GPS pendente"},{id:"validado",label:"GPS validado"}] as const).map(option =>
+          {([{id:"todos",label:"Todas"},{id:"pendente",label:"GPS pendente"},{id:"fora_raio",label:"Fora do raio"},{id:"validado",label:"GPS validado"}] as const).map(option =>
             <button key={option.id} type="button" onClick={() => setGpsFilter(option.id)}
               className={"rounded-full border px-3 py-1.5 text-[11px] font-black "+(gpsFilter===option.id?"border-amber-600 bg-amber-600 text-white":"border-slate-200 bg-white text-slate-600")}>
               {option.label}
@@ -281,14 +288,21 @@ function PontoRh() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {[["Colaboradores",stats.total,"text-slate-900",ClipboardCheck],["Pendências",stats.pending,"text-slate-600",History],["GPS pendente",stats.gpsPending,"text-amber-700",MapPin],["Presença",stats.presence,"text-emerald-700",CheckCircle2],["Atenção",stats.attention,"text-amber-700",AlertTriangle],["Faltas",stats.absence,"text-red-700",XCircle],["Justificados",stats.justified,"text-violet-700",BriefcaseBusiness]].map(([label,value,color,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</span><Icon className={"h-4 w-4 "+color}/></div><p className={"mt-2 text-2xl font-black "+color}>{value}</p></div>)}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[["Colaboradores",stats.total,"text-slate-900",ClipboardCheck],["Pendências",stats.pending,"text-slate-600",History],["GPS pendente",stats.gpsPending,"text-amber-700",MapPin],["Fora do raio",stats.gpsOutsideRadius,"text-red-700",AlertTriangle],["Presença",stats.presence,"text-emerald-700",CheckCircle2],["Atenção",stats.attention,"text-amber-700",AlertTriangle],["Faltas",stats.absence,"text-red-700",XCircle],["Justificados",stats.justified,"text-violet-700",BriefcaseBusiness]].map(([label,value,color,Icon]:any)=><div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</span><Icon className={"h-4 w-4 "+color}/></div><p className={"mt-2 text-2xl font-black "+color}>{value}</p></div>)}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-600">Controle do dia</p><h3 className="mt-1 text-xl font-black text-slate-900">{new Date(selectedDay+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}</h3></div><div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-400"><span className="inline-flex items-center gap-2"><History className="h-4 w-4"/>Marcações originais preservadas</span><button type="button" onClick={() => void refreshPontoData()} className="min-h-9 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-sky-700 hover:bg-sky-50">Atualizar conferência</button></div></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-4 py-3">Situação</th><th className="px-4 py-3">Entrada</th><th className="px-4 py-3">Almoço</th><th className="px-4 py-3">Saída</th><th className="px-4 py-3">Trabalhado</th><th className="px-4 py-3">GPS</th><th className="px-4 py-3">Ocorrência</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
-        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full px-2.5 py-1 text-[10px] font-black "+(row.gpsPending?"bg-amber-50 text-amber-800":"bg-emerald-50 text-emerald-700")}>{row.gpsCount}/4 com GPS</span>{row.gpsPending&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-amber-700 underline underline-offset-2">Pendente · conferir</button>}{row.gpsCount>0&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa / detalhes</button>}</td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
+        <tbody>{rows.map((row:any)=>{const a=row.records.find((r:any)=>r.punch_type==="entrada"),b=row.records.find((r:any)=>r.punch_type==="almoco_saida"),c=row.records.find((r:any)=>r.punch_type==="almoco_retorno"),d=row.records.find((r:any)=>r.punch_type==="saida");return <tr key={row.employee.id} className="border-t border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="font-black text-slate-800">{row.employee.full_name}</div><div className="text-[11px] text-slate-400">{row.employee.unit||"Sem unidade"}</div></td><td className="px-4 py-4"><span className={"inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black "+(statusClass[row.status]??"")}>{statusLabel[row.status]??row.status}</span></td><td className="px-4 py-4 font-bold">{punchTime(a)}</td><td className="px-4 py-4 text-slate-500">{punchTime(b)} · {punchTime(c)}</td><td className="px-4 py-4 font-bold">{punchTime(d)}</td><td className="px-4 py-4 font-black">{fmt(row.summary.worked_minutes)}<div className="text-[10px] font-bold text-slate-400">{row.summary.late_minutes?"Atraso "+fmt(row.summary.late_minutes):row.summary.overtime_minutes?"Extra "+fmt(row.summary.overtime_minutes):row.summary.early_leave_minutes?"Saída antecipada":"Jornada ok"}</div></td><td className="px-4 py-4">
+          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-700">{row.gpsCount}/4 com GPS</span>
+          {row.gpsPending&&<span className="mt-1 block text-[10px] font-black text-amber-700">GPS pendente</span>}
+          {row.gpsOutsideRadius&&<span className="mt-1 block text-[10px] font-black text-red-700">Fora do raio</span>}
+          {row.gpsValidated&&<span className="mt-1 block text-[10px] font-black text-emerald-700">GPS validado</span>}
+          {(row.gpsPending||row.gpsOutsideRadius)&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-slate-700 underline underline-offset-2">Conferir GPS</button>}
+          {row.gpsCount>0&&<button type="button" onClick={()=>openDay(row)} className="mt-1 block text-[10px] font-black text-sky-700 underline underline-offset-2">Ver mapa / detalhes</button>}
+        </td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{row.note||"—"}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-1.5"><button onClick={()=>openDay(row)} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">Gerir <ChevronRight className="h-3.5 w-3.5"/></button><button title="Exportar espelho deste colaborador" onClick={()=>openEmployeeReport(row.employee.id,"folha")} className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-sky-700"><FileDown className="h-4 w-4"/></button></div></td></tr>})}</tbody></table>{!rows.length&&<div className="p-10 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}</div>
       </section>
     </> : <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Configuração</p><h3 className="mt-1 text-xl font-black text-slate-900">Acessos e jornada</h3><p className="mt-1 text-xs text-slate-500">{active} acessos liberados · login, GPS e horários previstos continuam aqui.</p></div>
@@ -305,7 +319,10 @@ function PontoRh() {
           <span className="w-fit rounded-full bg-white px-3 py-1 text-[10px] font-black text-sky-800">{dayEmployee.records.filter((record:any)=>hasPontoCoordinates(record)).length} marcação(ões) com GPS</span>
         </div>
         {dayEmployee.gpsPending && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <strong>Conferência necessária:</strong> existe pelo menos uma batida sem localização confirmada ou cuja margem de precisão não permite validar a geocerca. A jornada foi preservada; confira a ocorrência com o colaborador antes de classificar o dia.
+          <strong>GPS pendente:</strong> existe pelo menos uma batida sem localização confirmada ou cuja margem de precisão não permite validar a geocerca. A jornada foi preservada; confira a ocorrência com o colaborador antes de classificar o dia.
+        </div>}
+        {dayEmployee.gpsOutsideRadius && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+          <strong>Fora do raio confirmado:</strong> pelo menos uma batida foi registrada além da geocerca da unidade. Essa situação não é considerada GPS validado e deve ser conferida pelo RH.
         </div>}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["entrada","almoco_saida","almoco_retorno","saida"] as const).map((type) => {
