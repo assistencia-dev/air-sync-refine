@@ -14,9 +14,8 @@ const localDateISO = () => {
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
-const nextType = (records: any[]) => {
-  const today = localDateISO();
-  const done = records.filter(r => r.work_date === today).map(r => r.punch_type);
+const nextType = (records: any[], workDate = localDateISO()) => {
+  const done = records.filter(r => r.work_date === workDate).map(r => r.punch_type);
   return (["entrada", "almoco_saida", "almoco_retorno", "saida"] as const).find(t => !done.includes(t)) ?? null;
 };
 
@@ -370,7 +369,7 @@ function PontoColaborador() {
 
   const punch = useMutation({
     mutationFn: async (type: any) => {
-      const workDate = localDateISO();
+      const workDate = query.data?.work_date ?? localDateISO();
       let gps: { latitude: number | null; longitude: number | null; accuracy: number | null } = {
         latitude: null,
         longitude: null,
@@ -429,9 +428,9 @@ function PontoColaborador() {
   });
 
   const records = query.data?.records ?? [];
-  const todayDate = localDateISO();
+  const todayDate = query.data?.work_date ?? localDateISO();
   const today = records.filter((r: any) => r.work_date === todayDate);
-  const next = useMemo(() => nextType(records), [records]);
+  const next = useMemo(() => nextType(records, todayDate), [records, todayDate]);
   const completed = today.length >= 4;
   const nextLabel = next ? labels[next] : "Jornada completa";
 
