@@ -495,6 +495,7 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
 .admin-mobile-menu-item strong { font-size: 13px; font-weight: 850; line-height: 1.2; }
 .admin-mobile-menu-item small { margin-top: 3px; color: #64748b; font-size: 11px; line-height: 1.25; }
 .admin-mobile-menu-icon { display: grid; min-width: 42px; min-height: 42px; place-items: center; border-radius: 14px; }
+.admin-mobile-menu-item[aria-current="page"] { border-color: #bfdbfe; background: #eff6ff; }
 
 @media (max-width: 767px) {
   .admin-mobile-nav { display: block; }
@@ -518,6 +519,7 @@ p, label, h1, h2, h3, h4, th, td, a, button, span {
 @media (max-width: 767px) {
   html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
   .admin-mobile-shell { position: relative; isolation: isolate; padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important; overflow-x: clip; }
+  .admin-mobile-shell.finance-viewer-shell { padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; }
   .admin-mobile-shell > header { min-height: 64px; padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: 10px; gap: 10px; }
   .admin-mobile-shell > header > div { min-width: 0; }
   .admin-mobile-shell > header h1 { max-width: 68vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

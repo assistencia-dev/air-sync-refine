@@ -136,7 +136,9 @@ export function Index() {
           <button
             className="md:hidden p-2 rounded-lg"
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Menu"
+            aria-label={menuOpen ? "Fechar menu principal" : "Abrir menu principal"}
+            aria-expanded={menuOpen}
+            aria-controls="public-mobile-navigation"
             style={{ color: "#0F172A" }}
           >
             {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -145,7 +147,7 @@ export function Index() {
 
         {/* Mobile Menu */}
         {menuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
+          <div id="public-mobile-navigation" aria-label="Navegação principal" className="md:hidden border-t border-gray-200 bg-white">
             <div className="container max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
               <a href="#solucoes" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">Soluções</a>
               <a href="#pmoc" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 py-2">PMOC</a>
@@ -498,6 +500,9 @@ export function Index() {
               <div key={idx} style={{ borderBottom: idx < arr.length - 1 ? "1px solid #E2E8F0" : "none" }} className="py-5">
                 <button
                   onClick={() => toggleFaq(idx)}
+                  id={`faq-question-${idx}`}
+                  aria-expanded={expandedFaq === idx}
+                  aria-controls={`faq-answer-${idx}`}
                   className="w-full flex items-center justify-between text-left transition gap-4"
                   style={{ color: expandedFaq === idx ? "#0284C7" : "#0F172A" }}
                 >
@@ -505,7 +510,7 @@ export function Index() {
                   <ChevronDown className={`w-5 h-5 transition-transform flex-shrink-0 ${expandedFaq === idx ? "rotate-180" : ""}`} style={{ color: "#999" }} />
                 </button>
                 {expandedFaq === idx && (
-                  <p className="mt-4 leading-relaxed" style={{ color: "#666" }}>{item.a}</p>
+                  <p id={`faq-answer-${idx}`} role="region" aria-labelledby={`faq-question-${idx}`} className="mt-4 leading-relaxed" style={{ color: "#666" }}>{item.a}</p>
                 )}
               </div>
             ))}

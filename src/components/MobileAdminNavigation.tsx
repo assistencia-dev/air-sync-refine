@@ -17,10 +17,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 
 type AdminArea = "home" | "operation" | "people" | "finance" | "more";
+type NavigationPage = "tickets" | "users" | "people" | "finance" | "training";
 
 type Props = {
   active?: AdminArea;
   financePath?: "/treasury" | "/financeiro-acompanhamento";
+  currentPage?: NavigationPage;
 };
 
 const primaryItems: Array<{ id: AdminArea; label: string; icon: typeof LayoutDashboard }> = [
@@ -34,7 +36,7 @@ const primaryItems: Array<{ id: AdminArea; label: string; icon: typeof LayoutDas
  * Navegação administrativa exclusiva para telas pequenas.
  * O colaborador usa outro shell; este componente não altera dados nem permissões.
  */
-export function MobileAdminNavigation({ active = "home", financePath = "/treasury" }: Props) {
+export function MobileAdminNavigation({ active = "home", financePath = "/treasury", currentPage }: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -132,27 +134,27 @@ export function MobileAdminNavigation({ active = "home", financePath = "/treasur
             </div>
 
             <div className="mt-3 grid gap-2">
-              <button type="button" onClick={goTickets} className="admin-mobile-menu-item">
+              <button type="button" onClick={goTickets} className="admin-mobile-menu-item" aria-current={currentPage === "tickets" ? "page" : undefined}>
                 <span className="admin-mobile-menu-icon bg-amber-50 text-amber-700"><CircleHelp className="h-5 w-5" /></span>
                 <span><strong>Central de chamados</strong><small>Fila, responsáveis e status</small></span>
                 <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
               </button>
-              <button type="button" onClick={goUsers} className="admin-mobile-menu-item">
+              <button type="button" onClick={goUsers} className="admin-mobile-menu-item" aria-current={currentPage === "users" ? "page" : undefined}>
                 <span className="admin-mobile-menu-icon bg-sky-50 text-sky-700"><Users className="h-5 w-5" /></span>
                 <span><strong>Usuários vinculados</strong><small>Perfis, empresas e acessos</small></span>
                 <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
               </button>
-              <button type="button" onClick={goPeople} className="admin-mobile-menu-item">
+              <button type="button" onClick={goPeople} className="admin-mobile-menu-item" aria-current={currentPage === "people" ? "page" : undefined}>
                 <span className="admin-mobile-menu-icon bg-emerald-50 text-emerald-700"><BriefcaseBusiness className="h-5 w-5" /></span>
                 <span><strong>RH e ponto</strong><small>Colaboradores, jornadas e benefícios</small></span>
                 <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
               </button>
-              <button type="button" onClick={goFinance} className="admin-mobile-menu-item">
+              <button type="button" onClick={goFinance} className="admin-mobile-menu-item" aria-current={currentPage === "finance" ? "page" : undefined}>
                 <span className="admin-mobile-menu-icon bg-violet-50 text-violet-700"><BarChart3 className="h-5 w-5" /></span>
                 <span><strong>Financeiro</strong><small>Ledger, caixa e acompanhamento</small></span>
                 <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
               </button>
-              <button type="button" onClick={goTraining} className="admin-mobile-menu-item">
+              <button type="button" onClick={goTraining} className="admin-mobile-menu-item" aria-current={currentPage === "training" ? "page" : undefined}>
                 <span className="admin-mobile-menu-icon bg-cyan-50 text-cyan-700"><BookOpen className="h-5 w-5" /></span>
                 <span><strong>Dúvidas e treinamento</strong><small>POP e orientações operacionais</small></span>
                 <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
@@ -192,6 +194,8 @@ export function MobileAdminNavigation({ active = "home", financePath = "/treasur
             onClick={() => setOpen((value) => !value)}
             className={`admin-mobile-nav-item ${active === "more" || open ? "is-active" : ""}`}
             aria-expanded={open}
+            aria-haspopup="dialog"
+            aria-label={open ? "Fechar mais áreas administrativas" : "Abrir mais áreas administrativas"}
           >
             {open ? <X className="h-[19px] w-[19px]" /> : <Menu className="h-[19px] w-[19px]" />}
             <span>Mais</span>

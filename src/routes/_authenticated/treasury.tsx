@@ -274,7 +274,7 @@ function TreasuryPage() {
         </div>}
         <iframe className="admin-mobile-iframe treasury-content-frame" key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
       </main>
-      {profile?.role_key === "SUPER_ADMIN" && <MobileAdminNavigation active="finance" />}
+      {profile?.role_key === "SUPER_ADMIN" && <MobileAdminNavigation active="finance" currentPage="finance" />}
     </div>
   );
 }
