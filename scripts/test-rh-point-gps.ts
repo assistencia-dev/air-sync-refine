@@ -33,7 +33,7 @@ assert.deepEqual(
   validatePontoGps({}, employee, "almoco_saida"),
   { distance_m: null, inside_radius: null },
 );
-assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /Precisão do GPS inválida/i);
+assert.throws(() => validatePontoGps({ latitude: -22.9, longitude: -43.2 }, employee, "saida"), /Dados GPS incompletos ou inválidos/i);
 assert.deepEqual(
   validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: 5 }, {}, "entrada"),
   { distance_m: null, inside_radius: null },
@@ -59,7 +59,7 @@ assert.deepEqual(
 );
 assert.throws(
   () => validatePontoGps({ latitude: 91, longitude: -43.2, gps_accuracy_m: 5 }, employee, "saida"),
-  /GPS obrigatório/i,
+  /Dados GPS incompletos ou inválidos/i,
 );
 assert.throws(
   () => validatePontoGps({ latitude: -22.9, longitude: -43.2, gps_accuracy_m: -1 }, employee, "saida"),
