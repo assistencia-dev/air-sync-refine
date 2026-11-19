@@ -531,7 +531,7 @@ function PontoColaborador() {
               <p className="text-sm font-black text-slate-800">{labels[r.punch_type] ?? r.punch_type}</p>
               <p className="text-xs text-slate-400">{new Date(r.work_date+"T12:00:00").toLocaleDateString("pt-BR")} · {formatTime(r.punched_at)}</p>
             </div>
-            <span className={"inline-flex w-fit rounded-full border px-2.5 py-1 text-[10px] font-black "+(r.inside_radius === false ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>{r.inside_radius === false ? "Fora do raio" : r.inside_radius === true ? "Dentro do raio" : "GPS capturado"}</span>
+            <span className={"inline-flex w-fit rounded-full border px-2.5 py-1 text-[10px] font-black "+(r.inside_radius === false ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>{r.inside_radius === false ? "Fora do raio" : r.inside_radius === true ? "Dentro do raio" : "GPS pendente · conferir RH"}</span>
             <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold text-slate-400">{r.gps_accuracy_m != null ? "Precisão ±"+Math.round(Number(r.gps_accuracy_m))+"m" : "Precisão indisponível"}</span>{hasPontoCoordinates(r)&&<a href={pontoGoogleMapsUrl(r)??undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-black text-sky-700 underline underline-offset-2"><MapPin className="h-3 w-3"/>Ver localização</a>}</div>
           </div>
         ))}
