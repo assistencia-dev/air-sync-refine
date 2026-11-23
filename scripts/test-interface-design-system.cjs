@@ -27,7 +27,7 @@ assert.match(sharedUi, /prefers-reduced-motion/);
 assert.match(sharedUi, /body:has\(> aside \.nav-menu\)/, "Os estilos legados do DBS CONTROL devem ficar isolados.");
 assert.match(sharedUi, /body:has\(\.sidebar-brand\)/, "Os estilos do Treasury devem ficar isolados do shell React.");
 
-const stylesheetPath = /\/dbs-design-system\.css\?v=20261118-visual-refinement-1/;
+const stylesheetPath = /\\/dbs-design-system\\.css\\?v=20261123-brand-header-cleanup-1/;
 assert.match(appRoot, stylesheetPath, "A camada compartilhada deve carregar no shell React.");
 assert.match(dbsControl, stylesheetPath, "DBS CONTROL legado deve receber a mesma camada visual.");
 assert.match(treasury, stylesheetPath, "DBS TREASURY deve receber a mesma camada visual.");
