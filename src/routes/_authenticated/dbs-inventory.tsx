@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Archive, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -698,7 +699,10 @@ export function DbsInventoryPage({
     <main className="dbs-operations-page min-h-full bg-[#f8fafc] px-4 py-4 text-slate-900 sm:px-6 lg:px-7">
       <div className="mx-auto max-w-[1440px]">
         {!embedded && <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLogo frameClassName="rounded-lg px-2 py-1" imageClassName="h-8 w-auto max-w-[132px] object-contain" />
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{moduleSection === "parts" ? "Peças & Estoque" : "Compras"}</h1>
+          </div>
           <div className="flex items-center gap-2">
             <Link to="/dbs-control" className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">Menu principal</Link>
             <button type="button" onClick={()=>moduleSection==="parts"?(setCatalogPartId(""),setActiveDrawer("new-part")):setActiveDrawer("new-purchase")} className="inline-flex min-h-10 items-center rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">{moduleSection==="parts"?"+ Nova peça":"+ Nova compra"}</button>

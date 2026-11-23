@@ -11,6 +11,7 @@ const inventory = read("src/routes/_authenticated/dbs-inventory.tsx");
 const dbsControl = read("public/dbs-control.html");
 const treasury = read("public/treasury.html");
 const mobileNavigation = read("src/components/MobileAdminNavigation.tsx");
+const brandLogo = read("src/components/BrandLogo.tsx");
 const appStyles = read("src/styles.css");
 const publicHome = read("src/routes/index.tsx");
 const financeViewer = read("src/routes/_authenticated/financeiro-acompanhamento.tsx");
@@ -26,10 +27,10 @@ assert.match(sharedUi, /prefers-reduced-motion/);
 assert.match(sharedUi, /body:has\(> aside \.nav-menu\)/, "Os estilos legados do DBS CONTROL devem ficar isolados.");
 assert.match(sharedUi, /body:has\(\.sidebar-brand\)/, "Os estilos do Treasury devem ficar isolados do shell React.");
 
-const stylesheetPath = /\/dbs-design-system\.css\?v=20261118-visual-refinement-1/;
-assert.match(appRoot, stylesheetPath, "A camada compartilhada deve carregar no shell React.");
-assert.match(dbsControl, stylesheetPath, "DBS CONTROL legado deve receber a mesma camada visual.");
-assert.match(treasury, stylesheetPath, "DBS TREASURY deve receber a mesma camada visual.");
+const stylesheetPath = "/dbs-design-system.css?v=20261123-brand-header-cleanup-1";
+assert.ok(appRoot.includes(stylesheetPath), "A camada compartilhada deve carregar no shell React.");
+assert.ok(dbsControl.includes(stylesheetPath), "DBS CONTROL legado deve receber a mesma camada visual.");
+assert.ok(treasury.includes(stylesheetPath), "DBS TREASURY deve receber a mesma camada visual.");
 assert.equal((appRoot.match(/dbs-design-system\.css/g) || []).length, 1);
 assert.equal((dbsControl.match(/dbs-design-system\.css/g) || []).length, 1);
 assert.equal((treasury.match(/dbs-design-system\.css/g) || []).length, 1);
@@ -52,6 +53,11 @@ assert.match(mobileNavigation, /Encerrar sessão/);
 assert.match(mobileNavigation, /currentPage\?: NavigationPage/);
 assert.match(mobileNavigation, /aria-current=\{currentPage === "tickets"/);
 assert.match(mobileNavigation, /aria-haspopup="dialog"/);
+assert.match(brandLogo, /onError=\{\(\) => setImageUnavailable\(true\)\}/, "A marca React deve ter alternativa quando a imagem oficial não carregar.");
+assert.match(brandLogo, /dbs-brand-logo-fallback/, "O fallback textual da marca deve existir.");
+assert.match(inventory, /import \{ BrandLogo \}/, "Peças & Estoque deve compartilhar o cabeçalho de marca.");
+assert.match(dbsControl, /dbs-control-logo-fallback/, "DBS CONTROL deve manter a marca quando o asset falhar.");
+assert.match(treasury, /dbs-treasury-brand-logo/, "DBS TREASURY deve exibir a marca no menu lateral.");
 assert.match(appStyles, /\.admin-mobile-menu-item\[aria-current="page"\]/);
 assert.match(admin, /flex flex-col gap-3 p-4 sm:flex-row/);
 assert.match(admin, /Assumido por:/);
@@ -65,6 +71,6 @@ assert.match(publicHome, /aria-expanded=\{expandedFaq === idx\}/);
 
 // O status do cabeçalho não deve afirmar conectividade sem uma checagem real.
 assert.doesNotMatch(admin, /Operação online/);
-assert.match(admin, /Acesso administrativo/);
+assert.doesNotMatch(admin, /Acesso administrativo/, "O cabeçalho não deve repetir a identificação já dada pelo título administrativo.");
 
-console.log("DBS AIR shared interface layer, responsive navigation, OS viewer, inventory and Treasury preservation checks passed.");
+console.log("DBS AIR shared interface, resilient branding, compact headers, responsive navigation, OS viewer, inventory and Treasury preservation checks passed.");

@@ -380,3 +380,105 @@ body:has(.sidebar-brand) :is(button, a, input, select, textarea, [tabindex]):foc
     transition-duration: .01ms !important;
   }
 }
+
+/* Marca DBS AIR resiliente: usa a arte oficial quando disponível e mantém
+   uma assinatura textual limpa quando a hospedagem não entrega o arquivo. */
+.dbs-brand-logo-fallback {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 78px;
+  padding: 0 5px;
+  color: #123b82;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  line-height: 1;
+  white-space: nowrap;
+}
+.dbs-brand-logo-fallback strong {
+  font-size: 1.18em;
+  font-weight: 800;
+  letter-spacing: -.075em;
+}
+.dbs-brand-logo-fallback span {
+  color: #0f9f8f;
+  font-size: .68em;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+/* DBS CONTROL legado: limita a marca a uma área estável no menu lateral. */
+body:has(> aside .nav-menu) .brand-header .dbs-control-logo {
+  display: block;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
+}
+.dbs-control-logo-fallback {
+  display: inline-flex;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 10px;
+  background: #fff;
+  color: #123b82;
+  font: 800 12px/1 "Space Grotesk", Inter, sans-serif;
+}
+.dbs-control-logo-fallback small {
+  margin-top: 3px;
+  color: #0f9f8f;
+  font-size: 8px;
+  letter-spacing: .16em;
+}
+.dbs-control-logo[hidden],
+.dbs-treasury-brand-logo[hidden],
+.dbs-control-logo-fallback[hidden],
+.dbs-treasury-brand-fallback[hidden] {
+  display: none !important;
+}
+
+/* DBS TREASURY: recupera a marca no cabeçalho sem aumentar a altura da navegação. */
+.dbs-treasury-brand-logo {
+  display: block;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
+}
+.dbs-treasury-brand-fallback {
+  display: inline-flex;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #123b82;
+  font: 800 10px/1 "Space Grotesk", Inter, sans-serif;
+}
+.dbs-treasury-brand-fallback small {
+  color: #0f9f8f;
+  font-size: 7px;
+  margin-left: 2px;
+}
+@media (max-width: 640px) {
+  body:has(> aside .nav-menu) .brand-header .dbs-control-logo,
+  .dbs-control-logo-fallback {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+  }
+}
