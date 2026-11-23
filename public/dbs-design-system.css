@@ -439,6 +439,8 @@ body:has(> aside .nav-menu) .brand-header .dbs-control-logo {
   font-size: 8px;
   letter-spacing: .16em;
 }
+.dbs-control-logo[hidden],
+.dbs-treasury-brand-logo[hidden],
 .dbs-control-logo-fallback[hidden],
 .dbs-treasury-brand-fallback[hidden] {
   display: none !important;
