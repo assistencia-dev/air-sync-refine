@@ -198,7 +198,12 @@ export function DbsFleetEmployeePanel() {
   const sessionId = status.data?.activeSession?.id ?? null;
 
   const start = useMutation({
-    mutationFn: () => startMyFleetTracking({ data: { consent: true } }),
+    mutationFn: () => {
+      if (!window.isSecureContext || !navigator.geolocation) {
+        throw new Error("O GPS exige conexão HTTPS e permissão de localização neste navegador.");
+      }
+      return startMyFleetTracking({ data: { consent: true } });
+    },
     onSuccess: async () => {
       setConsent(false);
       setFeedback({ kind: "ok", text: "Acompanhamento iniciado. Seu status e a última atualização aparecem nesta tela." });
@@ -290,8 +295,14 @@ export function DbsFleetEmployeePanel() {
         },
         (error) => {
           if (disposed) return;
-          if (error.code === 1) setGpsState("Permissão de localização negada. Autorize o GPS no navegador para compartilhar sua posição.");
-          else if (error.code === 2) setGpsState("Sinal GPS indisponível temporariamente. O acompanhamento tentará novamente.");
+          if (error.code === 1) {
+            setGpsState("Permissão de localização negada. O acompanhamento será encerrado até você autorizar o GPS no navegador.");
+            void stopMyFleetTracking({ data: { session_id: sessionId } }).then(() => {
+              if (!disposed) return queryClient.invalidateQueries({ queryKey: ["my-dbs-fleet-status"] });
+            }).catch(() => {
+              if (!disposed) setGpsState("Permissão de localização negada. Encerre manualmente o acompanhamento.");
+            });
+          } else if (error.code === 2) setGpsState("Sinal GPS indisponível temporariamente. O acompanhamento tentará novamente.");
           else setGpsState("O GPS ainda está procurando uma posição. Mantenha o portal aberto.");
         },
         { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
