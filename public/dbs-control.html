@@ -4003,7 +4003,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <h3 style="margin-bottom:4px;">Atividades do Dia</h3>
                         <p style="font-size:11px;color:var(--text-muted);">Painel de conferência operacional: o que está programado, quem está executando e o que já foi concluído.</p>
                     </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-primary btn-sm" type="button" onclick="abrirRotaAtividadesDia()" title="Monta etapas no Google Maps para um técnico e a lista visível deste dia">Abrir rota do técnico</button>
                     <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarAtividadesDia()">Atualizar conferência</button>
+                    </div>
                 </div>
                 <div class="day-toolbar">
                     <div class="form-group">
@@ -4651,6 +4654,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
     </main>
 
     <script src="/dbs-control-employee-days.js?v=20261118-1"></script>
+    <script src="/dbs-control-route-planner.js?v=20261124-1"></script>
     <script>
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
@@ -7216,7 +7220,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const conclusion = isOSConcluida(o)
                     ? `<span class="day-status ${complete ? 'ok' : 'missing'}">${complete ? 'Conferida' : 'Concluída com pendência'}</span>`
                     : '<span class="day-status pending">Em aberto</span>';
-                return `<tr>
+                return `<tr data-dbs-route-order-id="${escDbsControl(o.id)}">
                     <td><strong>${escDbsControl(o.id)}</strong></td>
                     <td>${escDbsControl(cli)}</td>
                     <td>${escDbsControl(tec)}</td>
@@ -7227,6 +7231,123 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     <td style="text-align:right;white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="abrirVisualizacaoOS('${String(o.id).replace(/'/g,"\\'")}')">Ver</button> <button class="btn btn-secondary btn-sm" onclick="abrirHistoricoOS('${String(o.id).replace(/'/g,"\\'")}')">Histórico</button> <button class="btn btn-primary btn-sm" onclick="baixarPDFIndividual('${String(o.id).replace(/'/g,"\\'")}')">PDF</button></td>
                 </tr>`;
             }).join('');
+        }
+
+
+
+        // Rota auxiliar: lê apenas as OS atualmente visíveis na conferência do dia.
+        // Não altera agenda, ordem, status, GPS, histórico ou dados da OS.
+        function fecharModalRotaAtividades() {
+            const modal = document.getElementById('dbs-route-planner-modal');
+            if (!modal) return;
+            const previousFocus = modal.__previousFocus;
+            modal.remove();
+            if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+        }
+
+        function abrirRotaAtividadesDia() {
+            const technicianSelect = document.getElementById('day-filter-tecnico');
+            const technicianId = String(technicianSelect?.value || '').trim();
+            if (!technicianId) {
+                alert('Selecione um único colaborador no filtro da agenda para montar a rota.');
+                technicianSelect?.focus();
+                return;
+            }
+
+            const technicianName = technicianSelect?.selectedOptions?.[0]?.textContent?.trim() || 'Colaborador';
+            const selectedDate = document.getElementById('day-filter-date')?.value || obterDataFiltroDia();
+            const visibleIds = Array.from(document.querySelectorAll('#day-table-body tr[data-dbs-route-order-id]'))
+                .map(row => String(row.getAttribute('data-dbs-route-order-id') || '').trim())
+                .filter(Boolean);
+            const visibleOrders = visibleIds
+                .map(id => (ERP_STATE.ordens || []).find(order => String(order.id) === id))
+                .filter(order => order && String(order.tecnicoId ?? order.employeeId ?? '') === technicianId);
+
+            if (!visibleOrders.length) {
+                alert('Não há OS visíveis deste colaborador para a data e os filtros selecionados.');
+                return;
+            }
+
+            const state = ERP_STATE || {};
+            const plan = window.DbsControlRoutePlanner?.buildStops(
+                visibleOrders,
+                state.clientes,
+                state.locais || state.sites || state.unidades
+            );
+            if (!plan) {
+                alert('O planejador de rota ainda não foi carregado. Atualize a tela e tente novamente.');
+                return;
+            }
+            if (!plan.stops.length) {
+                alert('Não há OS em aberto com endereço cadastrado para montar a rota. OS concluídas/canceladas são ignoradas.');
+                return;
+            }
+
+            const legs = window.DbsControlRoutePlanner.buildRouteLegs(plan.stops);
+            const modal = document.createElement('div');
+            modal.id = 'dbs-route-planner-modal';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.setAttribute('aria-labelledby', 'dbs-route-planner-title');
+            modal.__previousFocus = document.activeElement;
+
+            if (!document.getElementById('dbs-route-planner-modal-style')) {
+                const style = document.createElement('style');
+                style.id = 'dbs-route-planner-modal-style';
+                style.textContent = [
+                    '#dbs-route-planner-modal{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.58)}',
+                    '#dbs-route-planner-modal .dbs-route-dialog{width:min(720px,100%);max-height:min(88vh,900px);overflow:auto;border:1px solid #dbe5ef;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.28);color:#17324d}',
+                    '#dbs-route-planner-modal .dbs-route-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:20px 22px;background:#f4f8fc;border-bottom:1px solid #e3ebf3}',
+                    '#dbs-route-planner-modal h2{margin:0;font-size:19px;font-weight:850;color:#173b60}',
+                    '#dbs-route-planner-modal p{margin:5px 0 0;font-size:12px;line-height:1.5;color:#63768a}',
+                    '#dbs-route-planner-modal .dbs-route-close{width:40px;height:40px;border:1px solid #d2dfeb;border-radius:10px;background:#fff;color:#24435f;font-size:24px;cursor:pointer}',
+                    '#dbs-route-planner-modal .dbs-route-body{padding:18px 22px 22px}',
+                    '#dbs-route-planner-modal .dbs-route-note{margin-bottom:14px;padding:12px 14px;border:1px solid #d8e7f5;border-radius:11px;background:#f7fbff;color:#4b647d;font-size:12px;line-height:1.55}',
+                    '#dbs-route-planner-modal ol{display:grid;gap:9px;margin:0;padding:0;list-style:none}',
+                    '#dbs-route-planner-modal li{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border:1px solid #e3ebf3;border-radius:11px;background:#fff}',
+                    '#dbs-route-planner-modal .dbs-route-number{display:grid;place-items:center;flex:0 0 28px;height:28px;border-radius:9px;background:#e9f3ff;color:#155a9c;font-size:12px;font-weight:900}',
+                    '#dbs-route-planner-modal .dbs-route-address{font-size:12px;font-weight:800;color:#234564;overflow-wrap:anywhere}',
+                    '#dbs-route-planner-modal .dbs-route-meta{display:block;margin-top:4px;font-size:11px;color:#718399}',
+                    '#dbs-route-planner-modal .dbs-route-legs{display:grid;gap:9px;margin-top:17px}',
+                    '#dbs-route-planner-modal .dbs-route-leg{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #dbe5ef;border-radius:12px}',
+                    '#dbs-route-planner-modal .dbs-route-leg b{display:block;font-size:12px;color:#24435f}',
+                    '#dbs-route-planner-modal .dbs-route-leg small{display:block;margin-top:3px;color:#718399;font-size:10px}',
+                    '#dbs-route-planner-modal .dbs-route-open{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border-radius:9px;background:#1769d1;color:#fff;text-decoration:none;font-size:12px;font-weight:850;white-space:nowrap}',
+                    '#dbs-route-planner-modal .dbs-route-open:focus-visible,#dbs-route-planner-modal .dbs-route-close:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}',
+                    '@media(max-width:560px){#dbs-route-planner-modal{padding:8px;align-items:flex-end}#dbs-route-planner-modal .dbs-route-dialog{max-height:92vh;border-radius:16px}#dbs-route-planner-modal .dbs-route-head,#dbs-route-planner-modal .dbs-route-body{padding:15px}#dbs-route-planner-modal .dbs-route-leg{align-items:stretch;flex-direction:column}#dbs-route-planner-modal .dbs-route-open{width:100%}}'
+                ].join('');
+                document.head.appendChild(style);
+            }
+
+            const safe = value => typeof escDbsControl === 'function'
+                ? escDbsControl(String(value ?? ''))
+                : String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+            const stopList = plan.stops.map(stop => {
+                const protocols = (stop.orders || []).map(order => order.protocol || order.id).filter(Boolean).join(', ');
+                return '<li><span class="dbs-route-number">' + stop.sequence + '</span><div><div class="dbs-route-address">' + safe(stop.label) + ' · ' + safe(stop.address) + '</div><small class="dbs-route-meta">' + safe(protocols || 'OS vinculada') + '</small></div></li>';
+            }).join('');
+            const legList = legs.map(leg => {
+                const title = 'Etapa ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop;
+                const startLabel = leg.origin ? 'Saída: parada ' + (leg.firstStop - 1) : 'Saída: localização atual do aparelho';
+                const link = leg.url
+                    ? '<a class="dbs-route-open" href="' + safe(leg.url) + '" target="_blank" rel="noopener noreferrer">Abrir etapa no Maps ↗</a>'
+                    : '<span style="font-size:11px;color:#a33b42">Endereços muito longos para um único link. Abra as paradas individualmente.</span>';
+                return '<div class="dbs-route-leg"><div><b>' + safe(title) + '</b><small>' + safe(startLabel) + ' · destino: ' + safe(plan.stops[leg.lastStop - 1]?.label || '') + '</small></div>' + link + '</div>';
+            }).join('');
+
+            modal.innerHTML = '<div class="dbs-route-dialog"><div class="dbs-route-head"><div><h2 id="dbs-route-planner-title">Rota do dia · ' + safe(technicianName) + '</h2><p>' + safe(selectedDate) + ' · ' + plan.stops.length + ' paradas · ' + plan.includedOrderCount + ' OS abertas</p></div><button type="button" class="dbs-route-close" aria-label="Fechar">×</button></div>' +
+                '<div class="dbs-route-body"><div class="dbs-route-note">A sequência preserva a ordem da agenda; só usa horário quando todas as paradas têm agendamento válido. O Google Maps calcula o trajeto, mas o DBS não otimiza trânsito nem altera a agenda. ' +
+                (plan.ignoredTerminalCount ? plan.ignoredTerminalCount + ' OS concluídas/canceladas foram ignoradas. ' : '') +
+                (plan.missingAddressCount ? plan.missingAddressCount + ' OS sem endereço utilizável ficaram fora da rota. ' : '') +
+                'As paradas são agrupadas por endereço e as etapas seguintes começam no último endereço da etapa anterior.</div><ol>' + stopList + '</ol><div class="dbs-route-legs">' + legList + '</div></div></div>';
+            modal.addEventListener('click', event => {
+                if (event.target === modal || event.target.closest('.dbs-route-close')) fecharModalRotaAtividades();
+            });
+            modal.addEventListener('keydown', event => {
+                if (event.key === 'Escape') fecharModalRotaAtividades();
+            });
+            document.body.appendChild(modal);
+            modal.querySelector('.dbs-route-close')?.focus();
         }
 
         function renderizarHistoricoOperacional() {
