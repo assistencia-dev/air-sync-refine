@@ -171,11 +171,12 @@ export const registerMyPonto = createServerFn({ method: "POST" }).middleware([re
   const { data: record, error: insertError } = await supabaseAdmin.from("rh_ponto_records").insert(payload)
     .select("id, work_date, punch_type, punched_at, latitude, longitude, gps_accuracy_m, distance_m, inside_radius, photo_data, note").single();
   if (insertError) throw new Error(insertError.message);
-  if (data.punch_type === "saida") {
+  if (data.punch_type === "saida" || data.punch_type === "almoco_saida") {
+    const endReason = data.punch_type === "saida" ? "punch_exit" : "lunch_break";
     const { error: fleetStopError } = await fleetDb.from("rh_employee_location_sessions")
-      .update({ ended_at: new Date().toISOString(), end_reason: "punch_exit" })
+      .update({ ended_at: new Date().toISOString(), end_reason: endReason })
       .eq("employee_id", employee.id).eq("work_date", serverWorkDate).is("ended_at", null);
-    if (fleetStopError) console.error("DBS FLEET: a batida de saída foi salva, mas a sessão GPS não foi encerrada automaticamente:", fleetStopError.message);
+    if (fleetStopError) console.error("DBS FLEET: a batida foi salva, mas a sessão GPS não foi encerrada automaticamente:", fleetStopError.message);
   }
   const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
     employee_id: employee.id,
@@ -424,15 +425,15 @@ async function fleetAttendance(employeeId: string, workDate = fleetWorkDate()) {
     .order("punched_at", { ascending: true });
   if (error) throw new Error(error.message);
   const types = (data ?? []).map(row => row.punch_type);
-  return { hasEntry: types.includes("entrada"), hasExit: types.includes("saida"), types };
+  return { hasEntry: types.includes("entrada"), hasExit: types.includes("saida"), onBreak: types.includes("almoco_saida") && !types.includes("almoco_retorno"), types };
 }
 
-async function fleetCloseSession(sessionId: string, reason: "punch_exit" | "employee_stop" | "expired" | "admin_stop") {
+async function fleetCloseSession(sessionId: string, reason: "punch_exit" | "lunch_break" | "employee_stop" | "expired" | "admin_stop") {
   const { error } = await fleetDb.from("rh_employee_location_sessions")
     .update({ ended_at: new Date().toISOString(), end_reason: reason })
     .eq("id", sessionId)
     .is("ended_at", null);
-  if (error) console.error("DBS FLEET: não foi possível encerrar a sessão:", error.message);
+  if (error) throw new Error("DBS FLEET: não foi possível encerrar a sessão: " + error.message);
 }
 
 async function fleetCleanupRetention() {
@@ -466,8 +467,8 @@ export const getMyFleetStatus = createServerFn({ method: "GET" })
     if (activeSession) {
       const ageMs = Date.now() - Date.parse(activeSession.started_at);
       const wrongWorkDate = activeSession.work_date !== workDate;
-      if (attendance.hasExit || wrongWorkDate) {
-        await fleetCloseSession(activeSession.id, attendance.hasExit ? "punch_exit" : "expired");
+      if (attendance.hasExit || wrongWorkDate || attendance.onBreak) {
+        await fleetCloseSession(activeSession.id, attendance.hasExit ? "punch_exit" : attendance.onBreak ? "lunch_break" : "expired");
         activeSession = null;
       } else if (!attendance.hasEntry || ageMs > 14 * 60 * 60 * 1000) {
         await fleetCloseSession(activeSession.id, "expired");
@@ -484,7 +485,8 @@ export const getMyFleetStatus = createServerFn({ method: "GET" })
     return {
       employee: { id: employee.id, full_name: employee.full_name, unit: employee.unit },
       workDate,
-      eligible: attendance.hasEntry && !attendance.hasExit,
+      eligible: attendance.hasEntry && !attendance.hasExit && !attendance.onBreak,
+      onBreak: attendance.onBreak,
       hasEntry: attendance.hasEntry,
       hasExit: attendance.hasExit,
       activeSession,
@@ -503,8 +505,8 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
     const employee = await getEmployee(context.userId);
     const workDate = fleetWorkDate();
     const attendance = await fleetAttendance(employee.id, workDate);
-    if (!attendance.hasEntry || attendance.hasExit) {
-      throw new Error("O acompanhamento só pode ser iniciado depois da batida de entrada e antes da batida de saída.");
+    if (!attendance.hasEntry || attendance.hasExit || attendance.onBreak) {
+      throw new Error(attendance.onBreak ? "O acompanhamento é pausado durante o intervalo. Inicie novamente após registrar o retorno do almoço." : "O acompanhamento só pode ser iniciado depois da batida de entrada e antes da batida de saída.");
     }
     const { data: activeRows, error: activeError } = await fleetDb.from("rh_employee_location_sessions")
       .select("id, employee_id, work_date, started_at, consent_at, last_latitude, last_longitude, last_accuracy_m, last_position_at")
@@ -512,10 +514,10 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
       .order("started_at", { ascending: false }).limit(1);
     if (activeError) throw new Error(activeError.message);
     const active = activeRows?.[0] ?? null;
-    if (active && active.work_date === workDate && Date.now() - Date.parse(active.started_at) <= 14 * 60 * 60 * 1000) {
+    if (active && active.work_date === workDate && Date.now() - Date.parse(active.started_at) <= 14 * 60 * 60 * 1000 && !attendance.onBreak) {
       return { session: active, alreadyActive: true };
     }
-    if (active) await fleetCloseSession(active.id, active.work_date === workDate ? "expired" : "expired");
+    if (active) await fleetCloseSession(active.id, "expired");
     await fleetCleanupRetention();
     const { data: user, error: userError } = await supabaseAdmin.from("users").select("id")
       .eq("auth_id", context.userId).eq("status", "ativo").maybeSingle();
@@ -563,9 +565,9 @@ export const recordMyFleetPosition = createServerFn({ method: "POST" })
       throw new Error("O limite de acompanhamento desta jornada foi atingido.");
     }
     const attendance = await fleetAttendance(employee.id, workDate);
-    if (!attendance.hasEntry || attendance.hasExit) {
-      await fleetCloseSession(session.id, attendance.hasExit ? "punch_exit" : "expired");
-      throw new Error("A jornada foi encerrada. O acompanhamento GPS foi interrompido.");
+    if (!attendance.hasEntry || attendance.hasExit || attendance.onBreak) {
+      await fleetCloseSession(session.id, attendance.hasExit ? "punch_exit" : attendance.onBreak ? "lunch_break" : "expired");
+      throw new Error(attendance.onBreak ? "O intervalo foi iniciado. O acompanhamento GPS foi pausado até o registro do retorno." : "A jornada foi encerrada. O acompanhamento GPS foi interrompido.");
     }
     const { data: lastRows, error: lastError } = await fleetDb.from("rh_employee_location_points")
       .select("recorded_at, latitude, longitude")
@@ -648,6 +650,11 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
     const latitude = data.latitude ?? session?.last_latitude ?? null;
     const longitude = data.longitude ?? session?.last_longitude ?? null;
     const accuracy = data.accuracy_m ?? session?.last_accuracy_m ?? null;
+    const { data: existingAlerts, error: existingError } = await fleetDb.from("rh_employee_sos_alerts")
+      .select("id, created_at, status, message").eq("employee_id", employee.id)
+      .in("status", ["OPEN", "ACKNOWLEDGED"]).order("created_at", { ascending: false }).limit(1);
+    if (existingError) throw new Error(existingError.message);
+    if (existingAlerts?.[0]) return { ...existingAlerts[0], alreadyOpen: true };
     await fleetCleanupRetention();
     const { data: alert, error } = await fleetDb.from("rh_employee_sos_alerts").insert({
       employee_id: employee.id,
@@ -665,7 +672,7 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
 export const listRhFleetOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: { work_date: string }) => {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input?.work_date ?? "")) throw new Error("Data de consulta inválida.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input?.work_date ?? "")) throw new Error("Data de consulta inválida.");
     const date = Date.parse(input.work_date + "T12:00:00");
     if (!Number.isFinite(date) || date > Date.now() + 86_400_000 || date < Date.now() - 30 * 86_400_000) {
       throw new Error("O histórico de deslocamento fica disponível por até 30 dias.");
@@ -678,12 +685,18 @@ export const listRhFleetOverview = createServerFn({ method: "GET" })
       .select("id, employee_id, work_date, started_at, ended_at, end_reason, consent_at, last_latitude, last_longitude, last_accuracy_m, last_position_at")
       .eq("work_date", data.work_date).order("started_at", { ascending: false }).limit(300);
     if (error) throw new Error(error.message);
-    const employeeIds = [...new Set((sessions ?? []).map((session: any) => session.employee_id))];
+    const staleCutoff = Date.now() - 14 * 60 * 60 * 1000;
+    const staleSessions = (sessions ?? []).filter((session: any) => !session.ended_at && Date.parse(session.started_at) < staleCutoff);
+    for (const session of staleSessions) await fleetCloseSession(session.id, "expired");
+    const visibleSessions = (sessions ?? []).map((session: any) => staleSessions.some((stale: any) => stale.id === session.id)
+      ? { ...session, ended_at: new Date().toISOString(), end_reason: "expired" }
+      : session);
+    const employeeIds = [...new Set(visibleSessions.map((session: any) => session.employee_id))];
     const employees = employeeIds.length
       ? ((await supabaseAdmin.from("rh_employees").select("id, full_name, unit").in("id", employeeIds)).data ?? [])
       : [];
     const employeeById = new Map(employees.map(employee => [employee.id, employee]));
-    const enrichedSessions = (sessions ?? []).map((session: any) => ({
+    const enrichedSessions = visibleSessions.map((session: any) => ({
       ...session,
       employee: employeeById.get(session.employee_id) ?? null,
     }));
@@ -738,7 +751,7 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const actor = await requireRh(context);
     const { data: current, error: currentError } = await fleetDb.from("rh_employee_sos_alerts")
-      .select("id, status").eq("id", data.alert_id).maybeSingle();
+      .select("id, status, acknowledged_at").eq("id", data.alert_id).maybeSingle();
     if (currentError || !current) throw new Error("Alerta SOS não encontrado.");
     if (current.status === "RESOLVED") return current;
     const now = new Date().toISOString();
