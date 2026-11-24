@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, CheckCircle2, Clock3, ExternalLink, LocateFixed, MapPin,
-  Navigation, Radio, RefreshCw, ShieldCheck, Siren, Square, Timer, UserRound,
+  CheckCircle2, ExternalLink, LocateFixed, MapPin,
+  Navigation, Radio, RefreshCw, ShieldCheck, Siren, Square, UserRound,
 } from "lucide-react";
 import {
   getMyFleetStatus,
