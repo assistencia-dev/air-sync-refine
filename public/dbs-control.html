@@ -8224,11 +8224,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         async function geocodificarLojaPMOC(address) {
-            const url = 'https://photon.komoot.io/api/?limit=1&lang=pt&q=' + encodeURIComponent(address);
+            const query = /\\b(brasil|brazil)\\b/i.test(address) ? address : address + ', Brasil';
+            const url = 'https://photon.komoot.io/api/?limit=1&lang=pt&q=' + encodeURIComponent(query);
             const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
             if (!response.ok) throw new Error('Geocodificação indisponível (' + response.status + ').');
             const data = await response.json();
             const feature = Array.isArray(data.features) ? data.features[0] : null;
+            const properties = feature?.properties || {};
+            if (properties.country && !/brasil|brazil/i.test(String(properties.country))) throw new Error('O resultado encontrado não pertence ao Brasil.');
+            if (!properties.country || !(properties.city || properties.county || properties.state)) throw new Error('O resultado não confirmou cidade/região; revise o endereço cadastrado.');
             const coordinates = feature?.geometry?.coordinates;
             if (!Array.isArray(coordinates) || !Number.isFinite(Number(coordinates[0])) || !Number.isFinite(Number(coordinates[1]))) {
                 throw new Error('Endereço não localizado com confiança.');
@@ -8257,6 +8261,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (!audit) throw new Error('O planejador PMOC não foi carregado. Atualize a tela.');
                 DBS_PMOC_ROUTE.candidates = audit.candidates;
                 DBS_PMOC_ROUTE.selected = [];
+                DBS_PMOC_ROUTE.geocoded = 0;
+                DBS_PMOC_ROUTE.analyzed = false;
                 DBS_PMOC_ROUTE.review = audit.review.slice();
                 DBS_PMOC_ROUTE.origin = await obterOrigemRotaPMOC();
                 if (!audit.candidates.length) {
@@ -8272,7 +8278,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     } catch (error) {
                         DBS_PMOC_ROUTE.review.push({ id: candidate.id, name: candidate.name, address: candidate.address, reason: 'Não foi possível localizar no mapa: ' + (error?.message || 'endereço não reconhecido') });
                     }
-                    if (index < DBS_PMOC_ROUTE.candidates.length - 1) await DBS_PMOC_ROUTE_WAIT(350);
+                    if (index < DBS_PMOC_ROUTE.candidates.length - 1) await DBS_PMOC_ROUTE_WAIT(700);
                     if (button) button.textContent = 'Localizando ' + (index + 1) + '/' + DBS_PMOC_ROUTE.candidates.length + '…';
                 }
                 const located = DBS_PMOC_ROUTE.candidates.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng));
