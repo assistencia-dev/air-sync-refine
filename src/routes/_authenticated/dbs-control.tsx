@@ -1311,24 +1311,28 @@ function DbsControlPage() {
         }
         return;
       }
-      if (msg.type === "DBS_CONTROL_CREATE_PMOC_ROUTE") {
+      if (msg.type === "DBS_CONTROL_CREATE_ROUTE_ORDERS") {
         const reply = (payload: Record<string, unknown>) => {
           iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_PMOC_ROUTE_RESULT",
+            type: "DBS_CONTROL_ROUTE_ORDERS_RESULT",
             requestId: String(msg.requestId ?? ""),
             ...payload,
           }, window.location.origin);
         };
         try {
           if (employeeModeRef.current) {
-            reply({ ok: false, error: "A aprovação e emissão de rotas PMOC são restritas à administração." });
+            reply({ ok: false, error: "A aprovação e emissão de rotas são restritas à administração." });
             return;
           }
           const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
           const competence = String(msg.competence ?? "").trim();
+          const serviceType = String(msg.serviceType ?? "").trim();
+          const cause = String(msg.cause ?? "").trim();
+          const allowedTypes = new Set(["PMOC Preventiva · Mensal","PMOC Preventiva · Trimestral","Manutenção Corretiva","Visita Técnica","Manutenção Preventiva","Instalação / Start-Up","Atendimento Emergencial","Inspeção Técnica","Outro"]);
+          const isPmocRoute = /pmoc/i.test(serviceType);
           const orders = Array.isArray(msg.orders) ? msg.orders : [];
-          if (!requestId || !/^[0-9]{4}-[0-9]{2}$/.test(competence) || !orders.length || orders.length > 50) {
-            reply({ ok: false, error: "Solicitação de rota PMOC inválida. Refaça a análise." });
+          if (!requestId || !/^[0-9]{4}-[0-9]{2}$/.test(competence) || !allowedTypes.has(serviceType) || cause.length < 5 || cause.length > 500 || !orders.length || orders.length > 50) {
+            reply({ ok: false, error: "Solicitação de rota inválida. Confira o tipo, o motivo e a quantidade de lojas." });
             return;
           }
           const seenSites = new Set<string>();
@@ -1337,9 +1341,12 @@ function DbsControlPage() {
             const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
             const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
             if (!uuidPattern.test(siteId) || !uuidPattern.test(clientId)
-              || String(order?.tipo ?? order?.type ?? "").toLowerCase() !== "preventiva"
-              || String(order?.pmocCompetencia ?? "") !== competence || seenSites.has(siteId)) {
-              reply({ ok: false, error: "A rota contém loja duplicada ou dados PMOC inválidos. Nenhuma OS foi enviada." });
+              || String(order?.tipo ?? order?.type ?? "") !== serviceType
+              || String(order?.causaSolicitacao ?? "") !== cause
+              || (isPmocRoute && String(order?.pmocCompetencia ?? "") !== competence)
+              || (!isPmocRoute && order?.pmocCompetencia != null)
+              || seenSites.has(siteId)) {
+              reply({ ok: false, error: "A rota contém loja duplicada ou dados de atendimento inválidos. Nenhuma OS foi enviada." });
               return;
             }
             seenSites.add(siteId);
@@ -1366,8 +1373,8 @@ function DbsControlPage() {
             conflicts: Array.isArray(result.conflicts) ? result.conflicts : [],
           });
         } catch (err) {
-          console.error("DBS Control PMOC route approval:", err);
-          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota PMOC." });
+          console.error("DBS Control route approval:", err);
+          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota." });
         }
         return;
       }
