@@ -1330,23 +1330,21 @@ function DbsControlPage() {
           const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
           const competence = String(msg.competence ?? "").trim();
           const routeDate = String(msg.routeDate ?? "").trim();
-          const serviceType = legacyPmocRequest
-            ? "preventiva"
-            : String(msg.serviceType ?? "").trim();
-          const serviceKey = serviceType.toLocaleLowerCase("pt-BR")
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+          const serviceType = legacyPmocRequest ? "preventiva" : String(msg.serviceType ?? "").trim();
+          const serviceKey = normalizeDbsStatus(serviceType).replace(/\s+/g, " ").trim();
+          const isPmocService = serviceKey === "preventiva" || serviceKey.startsWith("pmoc ");
           const allowedServiceTypes = new Set([
             "pmoc preventiva · mensal",
             "pmoc preventiva · trimestral",
             "manutencao preventiva",
             "manutencao corretiva",
-            "visita técnica",
+            "visita tecnica",
             "instalacao / start-up",
             "inspecao tecnica",
             "retorno tecnico",
             "atendimento emergencial",
             "outro atendimento",
-            // Compatibilidade com o antigo botão de aprovação PMOC.
+            // Compatibilidade com clientes antigos do planejador PMOC.
             "preventiva",
           ]);
           const orders = Array.isArray(msg.orders) ? msg.orders : [];
@@ -1357,19 +1355,27 @@ function DbsControlPage() {
             const date = new Date(Date.UTC(year, month - 1, day));
             return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
           };
+          const validCompetence = (value: string) => /^[0-9]{4}-(0[1-9]|1[0-2])$/.test(value);
+          const monthOf = (value: unknown) => String(value ?? "").trim().slice(0, 7);
 
           if (!requestId || !orders.length || orders.length > 50) {
             reply({ ok: false, error: "Solicitação de rota inválida. Selecione de 1 a 50 locais e tente novamente." });
             return;
           }
           if (legacyPmocRequest) {
-            if (!/^[0-9]{4}-[0-9]{2}$/.test(competence) || serviceKey !== "preventiva") {
+            if (!validCompetence(competence) || serviceKey !== "preventiva") {
               reply({ ok: false, error: "Solicitação PMOC antiga inválida. Refaça a análise." });
               return;
             }
-          } else if (!allowedServiceTypes.has(serviceKey) || !validCalendarDate(routeDate)) {
-            reply({ ok: false, error: "Tipo de atendimento ou data da programação inválidos." });
-            return;
+          } else {
+            if (!allowedServiceTypes.has(serviceKey) || !validCalendarDate(routeDate)) {
+              reply({ ok: false, error: "Tipo de atendimento ou data da programação inválidos." });
+              return;
+            }
+            if (isPmocService && !validCompetence(competence)) {
+              reply({ ok: false, error: "Informe uma competência PMOC válida antes de gerar as OS." });
+              return;
+            }
           }
 
           const seenSites = new Set<string>();
@@ -1377,12 +1383,13 @@ function DbsControlPage() {
           const requestedSiteIds = new Set<string>();
           const requestedEmployeeIds = new Set<string>();
           const requestedEquipmentIds = new Set<string>();
+          const equipmentOwnerById = new Map<string, string>();
           const normalizedOrders: any[] = [];
 
           for (const order of orders) {
             const siteId = String(order?.siteId ?? order?.site_id ?? "").trim();
             const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
-            const orderType = normalizeDbsStatus(order?.tipo ?? order?.type ?? "");
+            const orderType = normalizeDbsStatus(order?.tipo ?? order?.type ?? "").replace(/\s+/g, " ").trim();
             if (!validUuid.test(siteId) || !validUuid.test(clientId) || seenSites.has(siteId)) {
               reply({ ok: false, error: "A rota contém loja/cliente inválido ou loja repetida. Nenhuma OS foi enviada." });
               return;
@@ -1399,14 +1406,22 @@ function DbsControlPage() {
 
             if (!legacyPmocRequest) {
               const scheduledAt = String(order?.scheduledAt ?? order?.scheduled_at ?? "").trim();
-              const scheduledTimestamp = Date.parse(scheduledAt);
-              if (!scheduledAt || !Number.isFinite(scheduledTimestamp)) {
-                reply({ ok: false, error: "Uma das paradas não possui horário de atendimento válido." });
+              if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt)) || String(order?.routeDate ?? "") !== routeDate) {
+                reply({ ok: false, error: "Uma das paradas não possui data/horário de atendimento válido." });
                 return;
               }
               const priority = normalizeDbsStatus(order?.prioridade ?? order?.priority ?? msg.priority ?? "normal");
               if (!["baixa", "normal", "alta", "urgente"].includes(priority)) {
                 reply({ ok: false, error: "A prioridade de uma das OS é inválida." });
+                return;
+              }
+              const description = String(order?.desc ?? order?.description ?? "").trim();
+              if (description.length < 14 || description.length > 4000) {
+                reply({ ok: false, error: "Cada OS precisa registrar o assunto e o relato da solicitação (até 4.000 caracteres)." });
+                return;
+              }
+              if (isPmocService && String(order?.pmocCompetencia ?? "") !== competence) {
+                reply({ ok: false, error: "Uma das OS PMOC não corresponde à competência selecionada." });
                 return;
               }
             }
@@ -1427,14 +1442,26 @@ function DbsControlPage() {
               reply({ ok: false, error: "Uma OS contém equipamento inválido ou mais de 10 equipamentos vinculados." });
               return;
             }
-            equipmentIds.forEach((id: string) => requestedEquipmentIds.add(id));
+            for (const equipmentId of equipmentIds) {
+              if (equipmentOwnerById.has(equipmentId)) {
+                reply({ ok: false, error: "O mesmo equipamento foi selecionado em mais de uma parada." });
+                return;
+              }
+              equipmentOwnerById.set(equipmentId, siteId);
+              requestedEquipmentIds.add(equipmentId);
+            }
+
             requestedClientIds.add(clientId);
             requestedSiteIds.add(siteId);
             seenSites.add(siteId);
 
+            const pmocReturn = Boolean(order?.pmocRetorno);
+            const serviceSlug = serviceKey.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
             const canonicalId = legacyPmocRequest
               ? `PMOC-ROUTE:${competence}:${siteId}`
-              : `SERVICE-ROUTE:${requestId}:${siteId}`;
+              : isPmocService
+                ? `${pmocReturn ? "PMOC-RETURN" : "PMOC-ROUTE"}:${competence}:${serviceSlug}:${siteId}`
+                : `SERVICE-ROUTE:${requestId}:${siteId}`;
             normalizedOrders.push({
               ...order,
               id: canonicalId,
@@ -1516,6 +1543,31 @@ function DbsControlPage() {
             if (!employee || employee.is_active !== true) {
               reply({ ok: false, error: "O técnico selecionado está inativo ou não possui vínculo RH válido." });
               return;
+            }
+          }
+
+          if (isPmocService) {
+            const existingPmoc = await (supabase as any).from("dbs_control_work_orders")
+              .select("id,site_id,type,status,completion_status_code,scheduled_at,created_at,deleted_at")
+              .in("site_id", [...requestedSiteIds])
+              .is("deleted_at", null);
+            if (existingPmoc.error) throw new Error("Falha ao conferir OS PMOC já existentes: " + existingPmoc.error.message);
+            const existingRows = existingPmoc.data ?? [];
+            for (const order of normalizedOrders) {
+              const sameCompetence = existingRows.filter((row: any) =>
+                String(row.site_id) === String(order.siteId)
+                && /pmoc|preventiv/i.test(normalizeDbsStatus(row.type))
+                && monthOf(row.scheduled_at || row.created_at) === competence
+                && !/cancelad/i.test(normalizeDbsStatus(row.status))
+              );
+              if (sameCompetence.length && !order.pmocRetorno) {
+                reply({ ok: false, error: "Já existe uma OS PMOC/preventiva nesta loja e competência. Atualize a auditoria ou selecione a opção de retorno quando houver um retorno realmente pendente." });
+                return;
+              }
+              if (order.pmocRetorno && !sameCompetence.length) {
+                reply({ ok: false, error: "A loja foi marcada como retorno, mas não há OS PMOC/preventiva correspondente nesta competência. Atualize a auditoria." });
+                return;
+              }
             }
           }
 
