@@ -1335,7 +1335,9 @@ function DbsControlPage() {
           for (const order of orders) {
             const siteId = String(order?.siteId ?? order?.site_id ?? "").trim();
             const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
-            if (!siteId || !clientId || String(order?.tipo ?? order?.type ?? "").toLowerCase() !== "preventiva"
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (!uuidPattern.test(siteId) || !uuidPattern.test(clientId)
+              || String(order?.tipo ?? order?.type ?? "").toLowerCase() !== "preventiva"
               || String(order?.pmocCompetencia ?? "") !== competence || seenSites.has(siteId)) {
               reply({ ok: false, error: "A rota contém loja duplicada ou dados PMOC inválidos. Nenhuma OS foi enviada." });
               return;
