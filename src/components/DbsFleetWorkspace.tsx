@@ -514,3 +514,67 @@ export function DbsFleetAdminPanel() {
     </div>
   );
 }
+
+
+/**
+ * O dock permanece montado no layout autenticado durante a navegação entre
+ * módulos. O painel fica apenas oculto por CSS quando recolhido, para que a
+ * sessão de GPS não seja desmontada ao abrir uma OS ou trocar de rota.
+ */
+export function DbsFleetEmployeeDock() {
+  const [open, setOpen] = useState(false);
+  const status = useQuery({
+    queryKey: ["my-dbs-fleet-status"],
+    queryFn: () => getMyFleetStatus(),
+    refetchInterval: 20_000,
+    retry: false,
+    staleTime: 10_000,
+  });
+
+  if (status.isLoading || status.error || !status.data?.employee
+    || (!status.data.eligible && !status.data.sosAvailable && !status.data.activeSession)) {
+    return null;
+  }
+
+  const active = Boolean(status.data.activeSession);
+  const label = active
+    ? "GPS compartilhado"
+    : status.data.onBreak
+      ? "GPS pausado · almoço"
+      : status.data.eligible
+        ? "Autorizar GPS"
+        : "Segurança da jornada";
+
+  return (
+    <>
+      <div
+        className={`fixed bottom-24 right-3 z-[90] w-[min(94vw,520px)] transition-opacity md:bottom-16 ${open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+        aria-hidden={!open}
+      >
+        <div className="max-h-[78vh] overflow-y-auto rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-950 px-4 py-3 text-white">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[.18em] text-sky-300">Controles em qualquer módulo</p>
+              <p className="mt-0.5 truncate text-sm font-black">DBS FLEET · {label}</p>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} className="min-h-10 min-w-10 rounded-xl border border-white/20 bg-white/10 text-lg font-black text-white" aria-label="Recolher controles do DBS FLEET">×</button>
+          </div>
+          <div className="p-2 sm:p-3">
+            <DbsFleetEmployeePanel />
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={open ? "Recolher controles do DBS FLEET" : "Abrir controles de localização e SOS do DBS FLEET"}
+        className="fixed bottom-4 right-3 z-[91] inline-flex min-h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-left text-xs font-black text-white shadow-xl ring-1 ring-white/10 md:bottom-4"
+      >
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${active ? "animate-pulse bg-emerald-400" : status.data.onBreak ? "bg-amber-400" : "bg-sky-400"}`} />
+        <span className="truncate">DBS FLEET · {label}</span>
+        <span className="rounded-lg bg-white/10 px-2 py-1 text-[10px] text-sky-200">{status.data.sosAvailable ? "SOS" : "Abrir"}</span>
+      </button>
+    </>
+  );
+}
