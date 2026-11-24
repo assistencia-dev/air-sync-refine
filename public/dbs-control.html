@@ -4630,6 +4630,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     </div>
                     <div id="pmoc-route-audit" class="pmoc-route-audit" aria-live="polite">A auditoria ainda não foi executada. Nenhuma OS será criada nesta etapa.</div>
                     <div id="pmoc-route-map" class="pmoc-route-map" role="region" aria-label="Mapa das lojas PMOC"></div>
+                    <div id="pmoc-route-maps-links" class="pmoc-route-legs" aria-label="Etapas do Google Maps"></div>
                     <div class="pmoc-route-columns">
                         <div><div class="pmoc-route-subhead"><strong>Rota sugerida e editável</strong><span id="pmoc-route-selected-count">0 lojas</span></div><ol id="pmoc-route-selected" class="pmoc-route-list"><li class="pmoc-route-empty">Clique em “Analisar lojas e montar rota”.</li></ol></div>
                         <div><div class="pmoc-route-subhead"><strong>Lojas disponíveis</strong><span id="pmoc-route-available-count">0</span></div><div id="pmoc-route-available" class="pmoc-route-available"><p class="pmoc-route-empty">As lojas aptas aparecerão após a auditoria.</p></div></div>
@@ -8224,7 +8225,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
         }
 
         async function geocodificarLojaPMOC(address) {
-            const query = /\\b(brasil|brazil)\\b/i.test(address) ? address : address + ', Brasil';
+            const query = /(brasil|brazil)/i.test(address) ? address : address + ', Brasil';
             const url = 'https://photon.komoot.io/api/?limit=1&lang=pt&q=' + encodeURIComponent(query);
             const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
             if (!response.ok) throw new Error('Geocodificação indisponível (' + response.status + ').');
@@ -8386,9 +8387,16 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (points.length > 1) DBS_PMOC_ROUTE.polyline = L.polyline(points.map(item => [item.lat,item.lng]), { color:'#1769d1', weight:4, opacity:.8 }).addTo(DBS_PMOC_ROUTE.map);
                 if (points.length) DBS_PMOC_ROUTE.map.fitBounds(L.latLngBounds(points.map(item => [item.lat,item.lng])).pad(.18));
                 setTimeout(() => DBS_PMOC_ROUTE.map?.invalidateSize(), 80);
-                const optimized = window.DbsPmocRoutePlanner.optimize(points, DBS_PMOC_ROUTE.origin);
                 const distance = document.getElementById('pmoc-route-distance');
-                if (distance) distance.textContent = 'Estimativa em linha reta: ' + optimized.distanceEstimateKm.toLocaleString('pt-BR') + ' km · ' + points.length + ' lojas. A distância real por vias será calculada pelo Google Maps.';
+                let estimate = 0;
+                let previous = DBS_PMOC_ROUTE.origin;
+                points.forEach(point => { if (previous) estimate += window.DbsPmocRoutePlanner.distanceKm(previous, point); previous = point; });
+                if (distance) distance.textContent = 'Estimativa em linha reta: ' + estimate.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' km · ' + points.length + ' lojas. A distância real por vias será calculada pelo Google Maps.';
+                const maps = document.getElementById('pmoc-route-maps-links');
+                const legs = window.DbsControlRoutePlanner?.buildRouteLegs(points);
+                if (maps) maps.innerHTML = (legs || []).map(leg => leg.url
+                    ? '<div class="dbs-route-leg"><div><b>Google Maps · etapa ' + leg.index + '</b><small>Paradas ' + leg.firstStop + '–' + leg.lastStop + '</small></div><button type="button" class="dbs-route-open" data-dbs-maps-url="' + escDbsControl(leg.url) + '">Abrir etapa no Google Maps →</button></div>'
+                    : '<p class="pmoc-route-empty">Etapa muito longa para um único link do Google Maps.</p>').join('');
             } catch (error) {
                 const distance = document.getElementById('pmoc-route-distance');
                 if (distance) distance.textContent = 'Mapa indisponível neste navegador. A lista de lojas continua editável; confira as etapas no Google Maps após a aprovação.';
