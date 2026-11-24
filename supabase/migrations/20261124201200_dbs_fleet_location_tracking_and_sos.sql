@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS public.rh_employee_sos_alerts (
   latitude numeric(10,7),
   longitude numeric(10,7),
   accuracy_m numeric(10,2),
+  location_recorded_at timestamptz,
+  location_source text CHECK (location_source IN ('current_sos', 'last_known_session')),
   acknowledged_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
   acknowledged_at timestamptz,
   resolved_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
