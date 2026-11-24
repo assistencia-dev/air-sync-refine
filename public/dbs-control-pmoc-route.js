@@ -21,7 +21,13 @@
     if (full) return full;
     return [raw.logradouro ?? raw.rua ?? raw.street, raw.numero ?? raw.number, raw.complemento ?? raw.complement, raw.bairro ?? raw.neighborhood, raw.cidade ?? raw.city, raw.uf ?? raw.state, raw.cep ?? raw.postal_code].map(text).filter(Boolean).join(', ');
   }
-  function monthOf(value) {\n    const raw = text(value);\n    const br = raw.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n    if (br) return br[3] + '-' + br[2];\n    return raw.slice(0,7);\n  }\n  function buildCandidates(sites, clients, orders, competence) {
+  function monthOf(value) {
+    const raw = text(value);
+    const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (br) return br[3] + '-' + br[2];
+    return raw.slice(0,7);
+  }
+  function buildCandidates(sites, clients, orders, competence) {
     const clientMap = new Map(list(clients).map(row => [idOf(row), row]));
     const siteRows = list(sites);
     const candidates = [];
@@ -45,9 +51,14 @@
       }
       const siteOrders = monthOrders.filter(order => siteIdOf(order) === siteId);
       const legacyAmbiguous = monthOrders.filter(order => clientIdOf(order) === clientId && !siteIdOf(order));
+      const cancelled = siteOrders.filter(order => /cancelad/.test(norm(order.status)));
       const open = siteOrders.filter(order => !terminal(order) && !/cancelad/.test(norm(order.status)));
       const returns = siteOrders.filter(order => order.pmocResultado === 'retorno' || order.pmocPrecisaRetorno || norm(order.status).includes('retorno'));
       const done = siteOrders.some(order => terminal(order) && !/cancelad/.test(norm(order.status)));
+      if (cancelled.length && !open.length && !done && !returns.length) {
+        review.push({ id: siteId, name, address, clientName: text(client.nome ?? client.name ?? client.trade_name), reason: 'Há OS PMOC cancelada nesta competência; revisar o motivo antes de gerar uma nova OS.' });
+        continue;
+      }
       if (open.length && !returns.length) continue;
       if (done && !returns.length) continue;
       if (!siteOrders.length && legacyAmbiguous.length) {
