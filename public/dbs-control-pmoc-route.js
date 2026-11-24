@@ -91,6 +91,16 @@
     const ordered = [];
     let cursor = origin && Number.isFinite(Number(origin.lat)) && Number.isFinite(Number(origin.lng))
       ? {lat:Number(origin.lat),lng:Number(origin.lng)} : null;
+    if (!cursor && remaining.length > 1) {
+      const center = remaining.reduce((sum, stop) => ({ lat: sum.lat + stop.lat / remaining.length, lng: sum.lng + stop.lng / remaining.length }), { lat: 0, lng: 0 });
+      let centralIndex = 0, centralDistance = Infinity;
+      remaining.forEach((stop, index) => { const distance = distanceKm(center, stop); if (distance < centralDistance) { centralDistance = distance; centralIndex = index; } });
+      const first = remaining.splice(centralIndex, 1)[0];
+      first.distanceFromPreviousKm = null;
+      first.sequence = 1;
+      ordered.push(first);
+      cursor = first;
+    }
     while (remaining.length) {
       let bestIndex = 0, bestDistance = Infinity;
       if (cursor) remaining.forEach((stop,index) => { const distance = distanceKm(cursor,stop); if (distance < bestDistance) { bestDistance=distance; bestIndex=index; } });
