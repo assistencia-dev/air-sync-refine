@@ -486,6 +486,7 @@ function PontoColaborador() {
           : "Marcação registrada com sucesso. A localização foi gravada nesta batida."+accuracy,
       });
       qc.invalidateQueries({ queryKey: ["my-ponto"] });
+      qc.invalidateQueries({ queryKey: ["my-dbs-fleet-status"] });
     },
     onError: e => setStatus({type:"error", text:friendlyError(e)})
   });
