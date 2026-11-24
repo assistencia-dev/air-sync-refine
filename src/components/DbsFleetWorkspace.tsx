@@ -222,11 +222,11 @@ export function DbsFleetEmployeePanel() {
       const location = await new Promise<{ latitude: number; longitude: number; accuracy_m: number } | null>((resolve) => {
         if (!window.isSecureContext || !navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
-          (position) => resolve({
+          (position) => resolve(position.coords.accuracy <= 500 ? {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy_m: position.coords.accuracy,
-          }),
+          } : null),
           () => resolve(null),
           { enableHighAccuracy: true, maximumAge: 10_000, timeout: 8_000 },
         );
@@ -369,7 +369,7 @@ export function DbsFleetEmployeePanel() {
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-black text-slate-800">Acompanhamento indisponível neste momento</p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">A opção aparece depois da batida de entrada e fica disponível até a batida de saída. Fora desse período, o sistema não coleta novas posições.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-600">{status.data?.onBreak ? "O GPS foi pausado no intervalo. Depois de registrar o retorno do almoço, você poderá autorizar novamente." : "A opção aparece depois da batida de entrada e fica disponível até a batida de saída. Fora desse período, o sistema não coleta novas posições."}</p>
             </div>
           )}
           {feedback && <div role="status" className={`rounded-xl border p-3 text-xs font-bold ${feedback.kind === "error" ? "border-rose-200 bg-rose-50 text-rose-800" : feedback.kind === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>{feedback.text}</div>}
@@ -386,10 +386,10 @@ export function DbsFleetEmployeePanel() {
           <div className="flex items-center gap-2 text-rose-800"><Siren className="h-5 w-5" /><p className="text-sm font-black">Precisa de ajuda?</p></div>
           <p className="mt-2 text-xs leading-5 text-rose-800">Envie um alerta à administração. O sistema tenta obter uma localização atual; se o GPS não responder, usa a última posição conhecida, quando disponível. O SOS não depende de manter o acompanhamento contínuo ativo.</p>
           <textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={500} rows={2} className="mt-3 w-full rounded-xl border border-rose-200 bg-white p-3 text-xs text-slate-700" aria-label="Mensagem opcional do SOS" />
-          <button type="button" onClick={() => { if (window.confirm("Enviar um alerta SOS à administração da DBS Air agora?")) sendSos.mutate(); }} disabled={!status.data?.eligible || sendSos.isPending} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-3 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="button" onClick={() => { if (window.confirm("Enviar um alerta SOS à administração da DBS Air agora?")) sendSos.mutate(); }} disabled={!status.data?.sosAvailable || sendSos.isPending} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-3 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-45">
             <Siren className="h-4 w-4" /> {sendSos.isPending ? "Enviando SOS…" : "ENVIAR SOS"}
           </button>
-          {!status.data?.eligible && <p className="mt-2 text-[10px] font-bold text-rose-800">O SOS pelo portal fica disponível durante a jornada registrada.</p>}
+          {!status.data?.sosAvailable && <p className="mt-2 text-[10px] font-bold text-rose-800">O SOS pelo portal fica disponível durante a jornada registrada.</p>}
         </div>
       </div>
       <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-[10px] leading-5 text-slate-500 sm:px-7">
