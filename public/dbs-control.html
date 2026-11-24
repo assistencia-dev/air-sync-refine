@@ -8281,6 +8281,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         Object.assign(candidate, point);
                         DBS_PMOC_ROUTE.geocoded += 1;
                     } catch (error) {
+                        candidate.geocodeFailed = true;
                         DBS_PMOC_ROUTE.review.push({ id: candidate.id, name: candidate.name, address: candidate.address, reason: 'Não foi possível localizar no mapa: ' + (error?.message || 'endereço não reconhecido') });
                     }
                     if (index < DBS_PMOC_ROUTE.candidates.length - 1) await DBS_PMOC_ROUTE_WAIT(700);
@@ -8305,7 +8306,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function filtrarLojasRotaPMOC() {
             const query = String(document.getElementById('pmoc-route-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
-            const available = DBS_PMOC_ROUTE.candidates.filter(item => !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
+            const available = DBS_PMOC_ROUTE.candidates.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
                 && (!query || [item.name,item.clientName,item.address].join(' ').toLocaleLowerCase('pt-BR').includes(query)));
             const target = document.getElementById('pmoc-route-available');
             if (!target) return;
@@ -8318,14 +8319,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         function adicionarLojaRotaPMOC(siteId) {
             const item = DBS_PMOC_ROUTE.candidates.find(candidate => String(candidate.id) === String(siteId));
-            if (!item || DBS_PMOC_ROUTE.selected.some(candidate => candidate.id === item.id)) return;
+            if (!item || !Number.isFinite(item.lat) || !Number.isFinite(item.lng) || DBS_PMOC_ROUTE.selected.some(candidate => candidate.id === item.id)) return;
             DBS_PMOC_ROUTE.selected.push(item);
             ordenarRotaPMOC();
         }
 
         function adicionarLojasVisiveisPMOC() {
             const query = String(document.getElementById('pmoc-route-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
-            DBS_PMOC_ROUTE.candidates.filter(item => !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
+            DBS_PMOC_ROUTE.candidates.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
                 && (!query || [item.name,item.clientName,item.address].join(' ').toLocaleLowerCase('pt-BR').includes(query)))
                 .forEach(item => DBS_PMOC_ROUTE.selected.push(item));
             ordenarRotaPMOC();
