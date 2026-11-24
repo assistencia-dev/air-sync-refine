@@ -113,7 +113,7 @@ const pmocAudit = pmoc.buildCandidates(
     { id: 'client-e', nome: 'Cliente E' }, { id: 'client-f', nome: 'Cliente sem loja' }
   ],
   [
-    { id: 'done', clienteId: 'client-a', siteId: 'site-done', tipo: 'preventiva', status: 'concluída', data: '2026-11-04' },
+    { id: 'done', clienteId: 'client-a', siteId: 'site-done', tipo: 'PMOC pmoca · Mensal', status: 'concluída', data: '2026-11-04' },
     { id: 'legacy', clienteId: 'client-c', tipo: 'PMOC', status: 'aberta', data: '2026-11-03' }
   ],
   '2026-11'
@@ -122,7 +122,16 @@ assert.deepEqual(Array.from(pmocAudit.candidates, row => row.id), ['site-pending
 assert.ok(pmocAudit.review.some(row => row.id === 'site-ambiguous'), 'OS PMOC sem loja vinculada deve exigir conciliação manual.');
 assert.ok(pmocAudit.review.some(row => row.id === 'site-no-address'), 'Loja sem endereço não deve entrar na rota.');
 assert.ok(pmocAudit.review.some(row => row.id === 'client-f'), 'Cliente sem loja vinculada deve aparecer na auditoria.');
+
 assert.equal(pmocAudit.candidates[0].status, 'pendente');
+const ordinarypmoceAudit = pmoc.buildCandidates(
+  [{ id: 'pmoc-site', clienteId: 'pmoc-client', nome: 'Loja PMOC', endereco: 'Rua PMOC, 1, Rio de Janeiro, RJ', status: 'ativo' }],
+  [{ id: 'pmoc-client', nome: 'Cliente PMOC' }],
+  [{ id: 'ordinary-pmoce', clienteId: 'pmoc-client', siteId: 'pmoc-site', tipo: 'Manutenção pmoca', status: 'concluída', data: '2026-11-04' }],
+  '2026-11'
+);
+assert.equal(ordinarypmoceAudit.candidates.length, 1, 'Uma pmoca comum não pode ser considerada PMOC concluído da competência.');
+
 
 const optimized = pmoc.optimize([
   { id: 'far', lat: 0, lng: 2 }, { id: 'near', lat: 0, lng: 1 }, { id: 'middle', lat: 0, lng: 1.5 }
@@ -137,7 +146,7 @@ assert.equal(centralStart.stops[0].id, 'center', 'Sem GPS, deve iniciar pela loj
 const cancelledAudit = pmoc.buildCandidates(
   [{ id: 'cancelled-site', clienteId: 'cancelled-client', nome: 'Loja com OS cancelada', endereco: 'Rua C, 30, Niterói, RJ', status: 'ativo' }],
   [{ id: 'cancelled-client', nome: 'Cliente' }],
-  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'preventiva', status: 'cancelada', data: '24/11/2026' }],
+  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'PMOC pmoca · Mensal', status: 'cancelada', data: '24/11/2026' }],
   '2026-11'
 );
 assert.equal(cancelledAudit.candidates.length, 0, 'OS cancelada não deve ser reaberta automaticamente com a mesma chave de emissão.');
@@ -150,8 +159,8 @@ new vm.Script(html.slice(plannerScriptStart + '<script>'.length, plannerScriptEn
 
 assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-1/, 'O planejador PMOC deve entrar com cache busting.');
 assert.match(html, /id="pmoc-route-map"/, 'A interface deve exibir o mapa dentro do DBS.');
-assert.match(html, /onclick="analisarRotaPMOC\(\)"/, 'A análise da rota deve ser acionada pelo usuário.');
-assert.match(html, /onclick="aprovarRotaPMOC\(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
+assert.match(html, /onclick="analisarRotapmoc(\)"/, 'A análise da rota deve ser acionada pelo usuário.');
+assert.match(html, /onclick="aprovarRotapmoc(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
 assert.match(html, /removerLojaRotaPMOC/, 'A rota deve permitir remover lojas individualmente.');
 assert.match(html, /adicionarLojaRotaPMOC/, 'A rota deve permitir adicionar lojas individualmente.');
 assert.match(html, /DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'A programação genérica deve passar pelo shell autenticado.');
@@ -178,8 +187,8 @@ const servicePlanner = pmocWindow.DbsServiceRoutePlanner;
 assert.equal(servicePlanner, pmoc, 'O nome genérico do planejador deve manter compatibilidade com o contrato PMOC legado.');
 assert.equal(servicePlanner.typeFamily('Manutenção Corretiva'), 'corretiva');
 assert.equal(servicePlanner.typeFamily('Visita Técnica'), 'visita');
-assert.equal(servicePlanner.typeFamily('Manutenção Preventiva'), 'preventiva');
-assert.equal(servicePlanner.typeFamily('PMOC Preventiva · Mensal'), 'pmoc');
+assert.equal(servicePlanner.typeFamily('Manutenção pmoca'), 'pmoca');
+assert.equal(servicePlanner.typeFamily('PMOC pmoca · Mensal'), 'pmoc');
 assert.equal(servicePlanner.typeFamily('Instalação / Start-Up'), 'instalacao');
 assert.equal(servicePlanner.typeFamily('Inspeção Técnica'), 'inspecao');
 assert.equal(servicePlanner.typeFamily('Retorno Técnico'), 'retorno');
@@ -220,8 +229,8 @@ assert.equal(servicePlanner.buildCandidates([], [], [], '', { serviceType: 'Visi
 
 assert.match(html, /id="pmoc-route-type"/, 'A interface deve permitir escolher o tipo do atendimento.');
 for (const type of [
-  'Visita Técnica','PMOC Preventiva · Mensal','PMOC Preventiva · Trimestral',
-  'Manutenção Preventiva','Manutenção Corretiva','Instalação / Start-Up',
+  'Visita Técnica','PMOC pmoca · Mensal','PMOC pmoca · Trimestral',
+  'Manutenção pmoca','Manutenção Corretiva','Instalação / Start-Up',
   'Inspeção Técnica','Retorno Técnico','Atendimento Emergencial','Outro Atendimento'
 ]) assert.ok(html.includes(type), 'A interface deve oferecer o tipo: ' + type);
 assert.match(html, /id="pmoc-route-subject"/, 'A rota deve registrar o assunto informado pelo cliente.');
@@ -241,7 +250,7 @@ assert.match(html, /Causa ou relato informado/, 'A causa deve acompanhar o conte
 
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_SERVICE_ROUTE"/, 'O shell deve aceitar a nova programação de serviços.');
 for (const serverType of [
-  'pmoc preventiva · mensal','pmoc preventiva · trimestral','manutencao preventiva',
+  'pmoc pmoca · mensal','pmoc pmoca · trimestral','manutencao pmoca',
   'manutencao corretiva','visita tecnica','instalacao / start-up',
   'inspecao tecnica','retorno tecnico','atendimento emergencial','outro atendimento'
 ]) assert.ok(parentRoute.includes(serverType), 'O shell deve autorizar o tipo: ' + serverType);
