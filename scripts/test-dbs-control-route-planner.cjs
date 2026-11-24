@@ -88,3 +88,9 @@ assert.match(html, /dbs-control-route-planner\.js\?v=20261124-1/, 'O planejador 
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as OS que aparecem na lista filtrada do dia.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
+
+assert.match(html, /class="dbs-route-open"[^>]*target="_top"/, 'A rota administrativa deve navegar na aba principal para não herdar a restrição COOP do iframe.');
+assert.match(html, /class='employee-map-link'[^>]*target='_top'/, 'O link de rota do colaborador também deve navegar na aba principal.');
+assert.doesNotMatch(html, /class="dbs-route-open"[^>]*target="_blank"/, 'O planejador não pode abrir o Google Maps em uma nova aba.');
+assert.doesNotMatch(html, /class='employee-map-link'[^>]*target='_blank'/, 'A agenda do colaborador não pode abrir o Google Maps em uma nova aba.');
+console.log('DBS CONTROL Firefox Maps COOP: navegação externa usa a aba principal nos dois fluxos.');
