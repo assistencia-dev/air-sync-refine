@@ -8198,6 +8198,249 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             ].map(([label,value]) => '<div class="pmoc-month-metric"><strong>'+Number(value).toLocaleString('pt-BR')+'</strong><span>'+label+'</span></div>').join('');
         }
 
+
+        const DBS_PMOC_ROUTE = { candidates: [], selected: [], review: [], map: null, markers: [], polyline: null, origin: null, analyzed: false, geocoded: 0 };
+        const DBS_PMOC_ROUTE_COMPETENCE = () => obterCompetenciaPMOC();
+        const DBS_PMOC_ROUTE_WAIT = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        function carregarLeafletPMOC() {
+            return new Promise((resolve, reject) => {
+                if (window.L) return resolve(window.L);
+                if (!document.getElementById('dbs-leaflet-css')) {
+                    const css = document.createElement('link'); css.id = 'dbs-leaflet-css'; css.rel = 'stylesheet';
+                    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css);
+                }
+                let script = document.getElementById('dbs-leaflet-js');
+                if (script) {
+                    script.addEventListener('load', () => resolve(window.L), { once: true });
+                    script.addEventListener('error', reject, { once: true });
+                    if (window.L) resolve(window.L);
+                    return;
+                }
+                script = document.createElement('script'); script.id = 'dbs-leaflet-js';
+                script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                script.onload = () => resolve(window.L); script.onerror = reject; document.head.appendChild(script);
+            });
+        }
+
+        async function geocodificarLojaPMOC(address) {
+            const url = 'https://photon.komoot.io/api/?limit=1&lang=pt&q=' + encodeURIComponent(address);
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) throw new Error('Geocodificação indisponível (' + response.status + ').');
+            const data = await response.json();
+            const feature = Array.isArray(data.features) ? data.features[0] : null;
+            const coordinates = feature?.geometry?.coordinates;
+            if (!Array.isArray(coordinates) || !Number.isFinite(Number(coordinates[0])) || !Number.isFinite(Number(coordinates[1]))) {
+                throw new Error('Endereço não localizado com confiança.');
+            }
+            return { lng: Number(coordinates[0]), lat: Number(coordinates[1]), label: feature.properties?.name || address };
+        }
+
+        function obterOrigemRotaPMOC() {
+            const enabled = document.getElementById('pmoc-route-use-location')?.checked;
+            if (!enabled || !navigator.geolocation) return Promise.resolve(null);
+            return new Promise(resolve => navigator.geolocation.getCurrentPosition(
+                position => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+                () => resolve(null),
+                { enableHighAccuracy: false, timeout: 7000, maximumAge: 60000 }
+            ));
+        }
+
+        async function analisarRotaPMOC() {
+            const button = document.getElementById('pmoc-route-analyze');
+            if (button) { button.disabled = true; button.textContent = 'Analisando endereços…'; }
+            const competence = DBS_PMOC_ROUTE_COMPETENCE();
+            try {
+                const state = ERP_STATE || {};
+                const sourceSites = state.locais || state.sites || state.unidades || [];
+                const audit = window.DbsPmocRoutePlanner?.buildCandidates(sourceSites, state.clientes || [], state.ordens || [], competence);
+                if (!audit) throw new Error('O planejador PMOC não foi carregado. Atualize a tela.');
+                DBS_PMOC_ROUTE.candidates = audit.candidates;
+                DBS_PMOC_ROUTE.selected = [];
+                DBS_PMOC_ROUTE.review = audit.review.slice();
+                DBS_PMOC_ROUTE.origin = await obterOrigemRotaPMOC();
+                if (!audit.candidates.length) {
+                    renderizarRotaPMOC();
+                    throw new Error('Nenhuma loja elegível foi encontrada. Confira os cadastros e a competência selecionada.');
+                }
+                for (let index = 0; index < DBS_PMOC_ROUTE.candidates.length; index += 1) {
+                    const candidate = DBS_PMOC_ROUTE.candidates[index];
+                    try {
+                        const point = await geocodificarLojaPMOC(candidate.address);
+                        Object.assign(candidate, point);
+                        DBS_PMOC_ROUTE.geocoded += 1;
+                    } catch (error) {
+                        DBS_PMOC_ROUTE.review.push({ id: candidate.id, name: candidate.name, address: candidate.address, reason: 'Não foi possível localizar no mapa: ' + (error?.message || 'endereço não reconhecido') });
+                    }
+                    if (index < DBS_PMOC_ROUTE.candidates.length - 1) await DBS_PMOC_ROUTE_WAIT(350);
+                    if (button) button.textContent = 'Localizando ' + (index + 1) + '/' + DBS_PMOC_ROUTE.candidates.length + '…';
+                }
+                const located = DBS_PMOC_ROUTE.candidates.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng));
+                const optimized = window.DbsPmocRoutePlanner.optimize(located, DBS_PMOC_ROUTE.origin);
+                DBS_PMOC_ROUTE.selected = optimized.stops;
+                DBS_PMOC_ROUTE.analyzed = true;
+                await renderizarRotaPMOC();
+                if (DBS_PMOC_ROUTE.review.length) {
+                    const auditBox = document.getElementById('pmoc-route-audit');
+                    if (auditBox) auditBox.textContent += ' ' + DBS_PMOC_ROUTE.review.length + ' registros precisam de revisão e não foram incluídos automaticamente.';
+                }
+            } catch (error) {
+                const auditBox = document.getElementById('pmoc-route-audit');
+                if (auditBox) auditBox.textContent = error?.message || 'Falha ao analisar a rota.';
+            } finally {
+                if (button) { button.disabled = false; button.textContent = 'Reanalisar rota'; }
+            }
+        }
+
+        function filtrarLojasRotaPMOC() {
+            const query = String(document.getElementById('pmoc-route-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
+            const available = DBS_PMOC_ROUTE.candidates.filter(item => !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
+                && (!query || [item.name,item.clientName,item.address].join(' ').toLocaleLowerCase('pt-BR').includes(query)));
+            const target = document.getElementById('pmoc-route-available');
+            if (!target) return;
+            target.innerHTML = available.length ? available.map(item =>
+                '<div class="pmoc-route-option"><div class="pmoc-route-item-main"><strong>' + escDbsControl(item.name) + '</strong><small>' + escDbsControl(item.clientName + ' · ' + item.address) + '</small></div><button type="button" class="pmoc-route-add" aria-label="Adicionar ' + escDbsControl(item.name) + '" onclick="adicionarLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\')">+</button></div>'
+            ).join('') : '<p class="pmoc-route-empty">Nenhuma outra loja disponível com esse filtro.</p>';
+            const count = document.getElementById('pmoc-route-available-count');
+            if (count) count.textContent = String(available.length);
+        }
+
+        function adicionarLojaRotaPMOC(siteId) {
+            const item = DBS_PMOC_ROUTE.candidates.find(candidate => String(candidate.id) === String(siteId));
+            if (!item || DBS_PMOC_ROUTE.selected.some(candidate => candidate.id === item.id)) return;
+            DBS_PMOC_ROUTE.selected.push(item);
+            ordenarRotaPMOC();
+        }
+
+        function adicionarLojasVisiveisPMOC() {
+            const query = String(document.getElementById('pmoc-route-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
+            DBS_PMOC_ROUTE.candidates.filter(item => !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
+                && (!query || [item.name,item.clientName,item.address].join(' ').toLocaleLowerCase('pt-BR').includes(query)))
+                .forEach(item => DBS_PMOC_ROUTE.selected.push(item));
+            ordenarRotaPMOC();
+        }
+
+        function removerLojaRotaPMOC(siteId) {
+            DBS_PMOC_ROUTE.selected = DBS_PMOC_ROUTE.selected.filter(item => String(item.id) !== String(siteId));
+            ordenarRotaPMOC();
+        }
+
+        function moverLojaRotaPMOC(siteId, offset) {
+            const index = DBS_PMOC_ROUTE.selected.findIndex(item => String(item.id) === String(siteId));
+            const target = index + offset;
+            if (index < 0 || target < 0 || target >= DBS_PMOC_ROUTE.selected.length) return;
+            const [item] = DBS_PMOC_ROUTE.selected.splice(index, 1);
+            DBS_PMOC_ROUTE.selected.splice(target, 0, item);
+            renderizarRotaPMOC();
+        }
+
+        function ordenarRotaPMOC() {
+            DBS_PMOC_ROUTE.selected = DBS_PMOC_ROUTE.selected.map((item,index) => ({...item,sequence:index+1}));
+            renderizarRotaPMOC();
+        }
+
+        async function renderizarRotaPMOC() {
+            const selected = document.getElementById('pmoc-route-selected');
+            if (selected) selected.innerHTML = DBS_PMOC_ROUTE.selected.length ? DBS_PMOC_ROUTE.selected.map((item,index) =>
+                '<li class="pmoc-route-item"><span class="dbs-route-number">' + (index+1) + '</span><div class="pmoc-route-item-main"><strong>' + escDbsControl(item.name) + '</strong><small>' + escDbsControl(item.clientName + ' · ' + item.address) + '</small></div><button type="button" class="pmoc-route-remove" aria-label="Remover loja" onclick="removerLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\')">×</button><button type="button" class="pmoc-route-add" aria-label="Mover loja para cima" onclick="moverLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\',-1)">↑</button><button type="button" class="pmoc-route-add" aria-label="Mover loja para baixo" onclick="moverLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\',1)">↓</button></li>'
+            ).join('') : '<li class="pmoc-route-empty">Nenhuma loja selecionada. Adicione lojas pela lista ao lado.</li>';
+            const selectedCount = document.getElementById('pmoc-route-selected-count');
+            if (selectedCount) selectedCount.textContent = DBS_PMOC_ROUTE.selected.length + ' lojas';
+            const audit = document.getElementById('pmoc-route-audit');
+            if (audit && DBS_PMOC_ROUTE.analyzed) audit.textContent = DBS_PMOC_ROUTE.candidates.length + ' lojas sem OS PMOC ativa na competência; ' + DBS_PMOC_ROUTE.geocoded + ' endereços localizados; ' + DBS_PMOC_ROUTE.review.length + ' registros para revisão. OS já abertas ou concluídas na loja foram conciliadas e não serão duplicadas.';
+            const review = document.getElementById('pmoc-route-review');
+            if (review) {
+                review.hidden = !DBS_PMOC_ROUTE.review.length;
+                review.innerHTML = DBS_PMOC_ROUTE.review.length ? '<strong>Revisar antes de uma próxima rota (' + DBS_PMOC_ROUTE.review.length + ')</strong><ul>' + DBS_PMOC_ROUTE.review.map(item => '<li><strong>' + escDbsControl(item.name) + ':</strong> ' + escDbsControl(item.reason) + '</li>').join('') + '</ul>' : '';
+            }
+            filtrarLojasRotaPMOC();
+            const approve = document.getElementById('pmoc-route-approve');
+            if (approve) approve.disabled = !DBS_PMOC_ROUTE.selected.length || !DBS_PMOC_ROUTE.analyzed;
+            await desenharMapaRotaPMOC();
+        }
+
+        async function desenharMapaRotaPMOC() {
+            const element = document.getElementById('pmoc-route-map');
+            if (!element || !DBS_PMOC_ROUTE.analyzed) return;
+            try {
+                const L = await carregarLeafletPMOC();
+                if (!DBS_PMOC_ROUTE.map) {
+                    DBS_PMOC_ROUTE.map = L.map(element, { scrollWheelZoom: false }).setView([-22.9,-43.2], 10);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(DBS_PMOC_ROUTE.map);
+                }
+                DBS_PMOC_ROUTE.markers.forEach(marker => marker.remove());
+                DBS_PMOC_ROUTE.markers = [];
+                if (DBS_PMOC_ROUTE.polyline) DBS_PMOC_ROUTE.polyline.remove();
+                const points = DBS_PMOC_ROUTE.selected.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng));
+                points.forEach((item,index) => {
+                    const marker = L.marker([item.lat,item.lng]).addTo(DBS_PMOC_ROUTE.map);
+                    marker.bindPopup('<strong>' + escDbsControl(index+1 + '. ' + item.name) + '</strong><br>' + escDbsControl(item.address));
+                    DBS_PMOC_ROUTE.markers.push(marker);
+                });
+                if (points.length > 1) DBS_PMOC_ROUTE.polyline = L.polyline(points.map(item => [item.lat,item.lng]), { color:'#1769d1', weight:4, opacity:.8 }).addTo(DBS_PMOC_ROUTE.map);
+                if (points.length) DBS_PMOC_ROUTE.map.fitBounds(L.latLngBounds(points.map(item => [item.lat,item.lng])).pad(.18));
+                setTimeout(() => DBS_PMOC_ROUTE.map?.invalidateSize(), 80);
+                const optimized = window.DbsPmocRoutePlanner.optimize(points, DBS_PMOC_ROUTE.origin);
+                const distance = document.getElementById('pmoc-route-distance');
+                if (distance) distance.textContent = 'Estimativa em linha reta: ' + optimized.distanceEstimateKm.toLocaleString('pt-BR') + ' km · ' + points.length + ' lojas. A distância real por vias será calculada pelo Google Maps.';
+            } catch (error) {
+                const distance = document.getElementById('pmoc-route-distance');
+                if (distance) distance.textContent = 'Mapa indisponível neste navegador. A lista de lojas continua editável; confira as etapas no Google Maps após a aprovação.';
+            }
+        }
+
+        async function aprovarRotaPMOC() {
+            const button = document.getElementById('pmoc-route-approve');
+            if (!DBS_PMOC_ROUTE.selected.length) return;
+            const competence = DBS_PMOC_ROUTE_COMPETENCE();
+            const sites = DBS_PMOC_ROUTE.selected.slice();
+            const existing = (ERP_STATE.ordens || []).filter(order => !order.excluidaEm && !order.arquivadaEm && /pmoc|preventiv/i.test(String(order.tipo || order.type || ''))
+                && dataOSParaISO(order.data || order.createdAt || order.created_at).slice(0,7) === competence);
+            const blocked = sites.filter(site => existing.some(order => String(order.siteId || order.site_id || order.localId || '') === String(site.id)
+                && !/conclu[ií]d|cancelad/i.test(String(order.status || '').toLocaleLowerCase('pt-BR'))));
+            if (blocked.length) {
+                alert('A auditoria encontrou OS PMOC já em andamento para: ' + blocked.map(item => item.name).join(', ') + '. Refaça a análise antes de aprovar.');
+                return;
+            }
+            if (!confirm('Aprovar a rota com ' + sites.length + ' lojas? Será criada uma OS PMOC individual para cada loja selecionada. A aprovação não agenda técnico nem altera OS existentes.')) return;
+            const requestId = 'pmoc-route:' + competence + ':' + sites.map(item => item.id).sort().join('|');
+            const orders = sites.map(site => ({
+                id: 'PMOC-ROUTE:' + competence + ':' + site.id,
+                clienteId: site.clientId,
+                siteId: site.siteId || site.id,
+                tipo: 'preventiva',
+                status: 'aberta',
+                prioridade: 'normal',
+                data: new Date().toISOString(),
+                descricao: 'PMOC preventivo · competência ' + competence + ' · ' + site.name,
+                observacao: 'OS criada pela aprovação da rota PMOC. Endereço auditado: ' + site.address,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                pmocCompetencia: competence,
+                pmocOrigemRota: requestId
+            }));
+            if (button) { button.disabled = true; button.textContent = 'Criando OS com segurança…'; }
+            window.parent.postMessage({ type: 'DBS_CONTROL_CREATE_PMOC_ROUTE', requestId, competence, orders }, '*');
+        }
+
+        window.addEventListener('message', function(event) {
+            if (event.source !== window.parent || event.data?.type !== 'DBS_CONTROL_PMOC_ROUTE_RESULT') return;
+            const result = event.data;
+            const button = document.getElementById('pmoc-route-approve');
+            if (button) { button.disabled = false; button.textContent = 'Aprovar rota e criar OS PMOC'; }
+            const applied = Array.isArray(result.appliedOrders) ? result.appliedOrders.length : 0;
+            const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+            const audit = document.getElementById('pmoc-route-audit');
+            if (result.ok && applied === DBS_PMOC_ROUTE.selected.length) {
+                if (audit) audit.textContent = 'Rota aprovada. ' + applied + ' OS PMOC criadas e confirmadas na base relacional. Atualize a tela para carregar os protocolos oficiais.';
+                if (button) button.disabled = true;
+            } else {
+                if (audit) audit.textContent = 'Resultado parcial: ' + applied + ' OS confirmadas; ' + conflicts.length + ' conflitos. Nenhuma OS foi apagada. ' + (result.error || conflicts.map(item => item.message).join(' · '));
+            }
+            if (result.error) alert(result.error);
+            else if (conflicts.length) alert('Aprovação parcial. Confira o relatório do planejador: ' + conflicts.map(item => item.protocol + ' — ' + item.message).join('\n'));
+        });
+
         function exportarControlePMOC() {
             const competencia = obterCompetenciaPMOC();
             const headers = ['Competência','Cliente','CNPJ','Incluído','Resultado','OS preventiva/PMOC','OS de retorno'];
