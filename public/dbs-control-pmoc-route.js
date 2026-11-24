@@ -32,7 +32,7 @@
     const siteRows = list(sites);
     const candidates = [];
     const review = [];
-    const monthOrders = list(orders).filter(order => !order.excluidaEm && !order.arquivadaEm && !order.deleted_at && isPmoc(order) && monthOf(order.data ?? order.createdAt ?? order.created_at) === competence);
+    const monthOrders = list(orders).filter(order => !order.excluidaEm && !order.arquivadaEm && !order.deleted_at && isPmoc(order) && monthOf(order.data || order.createdAt || order.created_at) === competence);
     const activeSiteIds = new Set(siteRows.filter(site => !/inativ|arquiv/.test(norm(site.status))).map(idOf));
     for (const site of siteRows) {
       const siteId = idOf(site);
