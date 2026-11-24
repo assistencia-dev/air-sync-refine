@@ -142,9 +142,11 @@ const cancelledAudit = pmoc.buildCandidates(
 );
 assert.equal(cancelledAudit.candidates.length, 0, 'OS cancelada não deve ser reaberta automaticamente com a mesma chave de emissão.');
 assert.ok(cancelledAudit.review.length > 0, 'OS cancelada exige revisão manual.');
-const inlinePlannerScript = html.match(/<script>([\\s\\S]*?function analisarRotaPMOC\\([\\s\\S]*?)<\\/script>/);
-assert.ok(inlinePlannerScript, 'O script do planejador PMOC deve estar presente no HTML.');
-new vm.Script(inlinePlannerScript[1], { filename: 'dbs-control-pmoc-inline.js' });
+const plannerFunctionIndex = html.indexOf('function analisarRotaPMOC');
+const plannerScriptStart = html.lastIndexOf('<script>', plannerFunctionIndex);
+const plannerScriptEnd = html.indexOf('</script>', plannerScriptStart);
+assert.ok(plannerFunctionIndex >= 0 && plannerScriptStart >= 0 && plannerScriptEnd > plannerScriptStart, 'O script do planejador PMOC deve estar presente no HTML.');
+new vm.Script(html.slice(plannerScriptStart + '<script>'.length, plannerScriptEnd), { filename: 'dbs-control-pmoc-inline.js' });
 
 assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-1/, 'O planejador PMOC deve entrar com cache busting.');
 assert.match(html, /id="pmoc-route-map"/, 'A interface deve exibir o mapa dentro do DBS.');
