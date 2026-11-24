@@ -7,6 +7,7 @@ const migration = fs.readFileSync(path.join(root, "supabase/migrations/202611242
 const functions = fs.readFileSync(path.join(root, "src/lib/ponto.functions.ts"), "utf8");
 const fleet = fs.readFileSync(path.join(root, "src/components/DbsFleetWorkspace.tsx"), "utf8");
 const pontoWorkspace = fs.readFileSync(path.join(root, "src/components/RhPontoWorkspace.tsx"), "utf8");
+const authenticatedRoute = fs.readFileSync(path.join(root, "src/routes/_authenticated/route.tsx"), "utf8");
 
 for (const table of [
   "rh_employee_location_sessions",
@@ -79,7 +80,10 @@ assert.match(fleet, /Confirmar recebimento/, "O RH deve conseguir confirmar o re
 assert.match(fleet, /Ver deslocamento/, "O RH deve conseguir visualizar trajetos.");
 assert.match(fleet, /não rastreia em segundo plano/, "A limitação do navegador deve estar explicitada na interface.");
 assert.match(pontoWorkspace, /DbsFleetAdminPanel/, "O DBS FLEET deve estar acessível no RH.");
-assert.match(pontoWorkspace, /DbsFleetEmployeePanel/, "O DBS FLEET deve estar acessível no portal do colaborador.");
+assert.doesNotMatch(pontoWorkspace, /DbsFleetEmployeePanel/, "O Ponto não deve montar um rastreador duplicado.");
+assert.match(fleet, /export function DbsFleetEmployeeDock\(/, "O dock do colaborador deve existir.");
+assert.match(fleet, /className=\{open \? "fixed[\\s\\S]*DbsFleetEmployeePanel/, "O painel fica oculto por CSS, mas permanece montado durante a navegação.");
+assert.match(authenticatedRoute, /<DbsFleetEmployeeDock \/>/, "O rastreador deve persistir no layout autenticado em todos os módulos.");
 assert.match(pontoWorkspace, /view==="acessos" \? <section[\s\S]*?<DbsFleetAdminPanel \/>/, "A nova aba do FLEET não pode substituir Acessos e jornada.");
 assert.match(fleet, /status\.data\?\.sosAvailable/, "O SOS deve permanecer acessível durante o intervalo da jornada.");
 
