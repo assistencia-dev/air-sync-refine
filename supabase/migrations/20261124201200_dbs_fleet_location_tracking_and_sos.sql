@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.rh_employee_location_sessions (
   started_at timestamptz NOT NULL DEFAULT now(),
   ended_at timestamptz,
   consent_at timestamptz NOT NULL,
+  consent_policy_version text NOT NULL DEFAULT 'fleet-2026-11-v1',
   end_reason text CHECK (end_reason IN ('punch_exit', 'lunch_break', 'employee_stop', 'expired', 'admin_stop')),
   last_latitude numeric(10,7),
   last_longitude numeric(10,7),
