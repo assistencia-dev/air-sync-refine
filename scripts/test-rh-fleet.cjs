@@ -20,6 +20,7 @@ for (const table of [
 }
 
 assert.match(migration, /lunch_break/, "A sessão deve registrar pausa de almoço.");
+assert.match(migration, /consent_policy_version text NOT NULL/, "A sessão deve guardar a versão da política aceita.");
 assert.match(migration, /location_recorded_at timestamptz/, "O SOS deve preservar a hora da localização exibida.");
 assert.match(migration, /location_source text CHECK/, "O SOS deve identificar se a posição veio do GPS atual ou do último ponto conhecido.");
 assert.match(migration, /CREATE EXTENSION IF NOT EXISTS pg_cron/, "A retenção deve ter agendamento automático no Postgres.");
@@ -71,6 +72,7 @@ assert.match(fleet, /navigator\.geolocation\.clearWatch/, "A leitura do GPS deve
 assert.match(fleet, /document\.visibilityState !== "visible"/, "A coleta deve pausar quando o portal sair de primeiro plano.");
 assert.match(fleet, /document\.addEventListener\("visibilitychange"/, "A coleta deve retomar somente quando o portal voltar a ficar visível.");
 assert.match(fleet, /Autorizo compartilhar minha localização com a administração durante esta jornada/, "A tela deve explicar e coletar consentimento.");
+assert.match(fleet, /Pausa de almoço/, "A interface deve diferenciar intervalo de folga.");
 assert.match(fleet, /Encerrar acompanhamento/, "O colaborador deve poder interromper o acompanhamento.");
 assert.match(fleet, /ENVIAR SOS/, "O colaborador deve ter botão de emergência.");
 assert.match(fleet, /Confirmar recebimento/, "O RH deve conseguir confirmar o recebimento do SOS.");
