@@ -4670,7 +4670,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <label class="pmoc-route-wide">Causa ou relato informado pelo solicitante
                             <textarea id="pmoc-route-cause" rows="3" maxlength="2000" placeholder="Descreva o que aconteceu, os sintomas, quando começou, em quais equipamentos e o impacto para o cliente."></textarea>
                         </label>
-                        <label class="pmoc-route-wide">Orientações adicionais para o técnico (opcional)
+                        <label class="pmoc-route-wide">Complemento do relato / observações para a OS (opcional)
                             <textarea id="pmoc-route-instructions" rows="2" maxlength="1500" placeholder="Acesso, contato no local, restrições de horário, cuidados, peças suspeitas ou instruções importantes."></textarea>
                         </label>
                     </div>
@@ -8487,7 +8487,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const [item] = DBS_PMOC_ROUTE.selected.splice(index, 1);
             DBS_PMOC_ROUTE.selected.splice(target, 0, item);
             DBS_PMOC_ROUTE.selected = DBS_PMOC_ROUTE.selected.map((stop, stopIndex) => ({ ...stop, sequence: stopIndex + 1 }));
-            marcarRotaComoNaoOtimizada();
+            renderizarRotaPMOC();
         }
 
         function equipamentosDisponiveisRotaPMOC(site) {
@@ -8515,7 +8515,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const item = DBS_PMOC_ROUTE.selected.find(candidate => String(candidate.id) === String(siteId));
             if (!item) return;
             item.equipmentId = String(equipmentId || '').trim() || null;
-            marcarRotaComoNaoOtimizada();
+            renderizarRotaPMOC();
         }
 
         function horarioPrevistoRotaPMOC(index) {
@@ -8584,7 +8584,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             if (button) { button.disabled = true; button.textContent = 'Localizando os locais selecionados…'; }
             DBS_PMOC_ROUTE.analyzed = false;
-            DBS_PMOC_ROUTE.review = DBS_PMOC_ROUTE.review.filter(item => !String(item.reason || '').includes('Não foi possível localizar no mapa'));
+            DBS_PMOC_ROUTE.geocoded = 0;
+            DBS_PMOC_ROUTE.review = DBS_PMOC_ROUTE.review.filter(item => !String(item.reason || '').includes('Não foi possível localizar este endereço no mapa'));
             try {
                 DBS_PMOC_ROUTE.origin = await obterOrigemRotaPMOC();
                 const selected = DBS_PMOC_ROUTE.selected.slice();
