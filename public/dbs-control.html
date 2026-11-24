@@ -8771,6 +8771,11 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
             const pmocMode = (window.DbsServiceRoutePlanner || window.DbsPmocRoutePlanner).typeFamily(serviceType) === 'pmoc';
             const competence = pmocMode ? DBS_PMOC_ROUTE_COMPETENCE() : '';
+            if (pmocMode && routeDate.slice(0,7) !== competence) {
+                alert('A data da visita PMOC precisa estar dentro da competência selecionada (' + competence + '). Ajuste a data ou a competência.');
+                document.getElementById('pmoc-route-date')?.focus();
+                return;
+            }
             if (pmocMode) {
                 const existing = (ERP_STATE.ordens || []).filter(order => !order.excluidaEm && !order.arquivadaEm
                     && /pmoc/i.test(String(order.tipo || order.type || ''))
@@ -8794,9 +8799,23 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const endTime = String(end.getHours()).padStart(2,'0') + ':' + String(end.getMinutes()).padStart(2,'0');
             const technicianName = technician ? String(technician.nome || technician.name || 'Técnico') : 'Sem atribuição por enquanto';
             const warningCount = sites.filter(site => site.warning).length;
+            const technicianDayOrders = technician ? (ERP_STATE.ordens || []).filter(order => {
+                if (order.excluidaEm || order.arquivadaEm || /cancelad/i.test(String(order.status || ''))) return false;
+                if (typeof isOSConcluida === 'function' && isOSConcluida(order)) return false;
+                const assignedIds = [order.employeeId, order.employee_id, order.tecnicoId, order.assignedEmployeeId, order.assigned_employee_id]
+                    .map(value => String(value || '').trim()).filter(Boolean);
+                const orderDate = dataOSParaISO(order.scheduledAt || order.scheduled_at || order.data);
+                return assignedIds.some(id => id === selectedTechnicianId || id === employeeId) && orderDate === routeDate;
+            }) : [];
+            const technicianScheduleWarning = technicianDayOrders.length
+                ? 'Atenção: já existem ' + technicianDayOrders.length + ' OS atribuídas a este técnico nesta data (' +
+                    technicianDayOrders.map(order => String(order.protocolo || order.protocol || order.id || 'OS')).join(', ') +
+                    '). Confira a agenda para evitar sobreposição.\\n'
+                : '';
             const confirmation = 'Confirmar ' + sites.length + ' OS de ' + serviceType + '?\\n'
                 + 'Data: ' + dataBRRotaPMOC(routeDate) + ' · janela prevista ' + startTime + '–' + endTime + '\\n'
                 + 'Técnico: ' + technicianName + ' · prioridade: ' + priority + '\\n'
+                + technicianScheduleWarning
                 + 'Assunto: ' + subject + '\\n'
                 + (warningCount ? 'Atenção: ' + warningCount + ' locais têm OS do mesmo tipo ainda em aberto ou histórico sem loja vinculada.\\n' : '')
                 + 'Cada parada terá ' + duration + ' minutos e intervalo estimado de ' + travelBuffer + ' minutos entre locais. Nenhuma OS existente será alterada.';
