@@ -538,6 +538,13 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
       if (current?.[0]) return { session: current[0], alreadyActive: true };
       throw new Error(error.message);
     }
+    const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: employee.id,
+      actor_user_id: user.id,
+      action: "DBS_FLEET_TRACKING_STARTED",
+      details: { session_id: session.id, work_date: workDate, consent_at: session.consent_at, foreground_only: true },
+    });
+    if (auditError) console.error("DBS FLEET: sessão iniciada, mas a auditoria de consentimento falhou:", auditError.message);
     return { session, alreadyActive: false };
   });
 
@@ -618,9 +625,17 @@ export const stopMyFleetTracking = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const employee = await getEmployee(context.userId);
     const { data: session, error: sessionError } = await fleetDb.from("rh_employee_location_sessions")
-      .select("id, ended_at").eq("id", data.session_id).eq("employee_id", employee.id).maybeSingle();
+      .select("id, work_date, started_at, ended_at").eq("id", data.session_id).eq("employee_id", employee.id).maybeSingle();
     if (sessionError || !session) throw new Error("Sessão de localização não encontrada.");
     if (!session.ended_at) await fleetCloseSession(session.id, "employee_stop");
+    const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", context.userId).maybeSingle();
+    const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: employee.id,
+      actor_user_id: user?.id ?? null,
+      action: "DBS_FLEET_TRACKING_STOPPED",
+      details: { session_id: session.id, work_date: session.work_date, started_at: session.started_at, ended_at: new Date().toISOString(), reason: "employee_stop" },
+    });
+    if (auditError) console.error("DBS FLEET: sessão encerrada, mas a auditoria falhou:", auditError.message);
     return { ok: true };
   });
 
@@ -672,6 +687,20 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
       status: "OPEN",
     }).select("id, created_at, status, message").single();
     if (error) throw new Error(error.message);
+    const { data: user } = await supabaseAdmin.from("users").select("id").eq("auth_id", context.userId).maybeSingle();
+    const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: employee.id,
+      actor_user_id: user?.id ?? null,
+      action: "DBS_FLEET_SOS_SENT",
+      details: {
+        sos_alert_id: alert.id,
+        session_id: session?.id ?? null,
+        message: data.message,
+        location_source: locationSource,
+        location_recorded_at: locationRecordedAt,
+      },
+    });
+    if (auditError) console.error("DBS FLEET: SOS enviado, mas a auditoria falhou:", auditError.message);
     return alert;
   });
 
@@ -757,7 +786,7 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const actor = await requireRh(context);
     const { data: current, error: currentError } = await fleetDb.from("rh_employee_sos_alerts")
-      .select("id, status, acknowledged_at").eq("id", data.alert_id).maybeSingle();
+      .select("id, employee_id, status, acknowledged_at").eq("id", data.alert_id).maybeSingle();
     if (currentError || !current) throw new Error("Alerta SOS não encontrado.");
     if (current.status === "RESOLVED") return current;
     const now = new Date().toISOString();
@@ -777,5 +806,12 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
       .update(patch).eq("id", data.alert_id)
       .select("id, status, acknowledged_at, resolved_at").single();
     if (error) throw new Error(error.message);
+    const { error: auditError } = await supabaseAdmin.from("rh_ponto_audit").insert({
+      employee_id: current.employee_id,
+      actor_user_id: actor.id,
+      action: data.status === "ACKNOWLEDGED" ? "DBS_FLEET_SOS_ACKNOWLEDGED" : "DBS_FLEET_SOS_RESOLVED",
+      details: { sos_alert_id: data.alert_id, previous_status: current.status, status: data.status },
+    });
+    if (auditError) console.error("DBS FLEET: status do SOS atualizado, mas a auditoria falhou:", auditError.message);
     return updated;
   });
