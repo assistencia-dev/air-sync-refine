@@ -1327,7 +1327,7 @@ function DbsControlPage() {
           const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
           const competence = String(msg.competence ?? "").trim();
           const orders = Array.isArray(msg.orders) ? msg.orders : [];
-          if (!requestId || !/^\\d{4}-\\d{2}$/.test(competence) || !orders.length || orders.length > 50) {
+          if (!requestId || !/^[0-9]{4}-[0-9]{2}$/.test(competence) || !orders.length || orders.length > 50) {
             reply({ ok: false, error: "Solicitação de rota PMOC inválida. Refaça a análise." });
             return;
           }
