@@ -8264,7 +8264,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 if (!audit) throw new Error('O planejador PMOC não foi carregado. Atualize a tela.');
                 const monthlyExcluded = audit.candidates.filter(item => !clienteIncluidoPMOC(item.clientId, competence));
                 audit.review.push(...monthlyExcluded.map(item => ({ id: item.id, name: item.name, address: item.address, reason: 'Cliente retirado manualmente do controle mensal desta competência.' })));
-                DBS_PMOC_ROUTE.candidates = audit.candidates.filter(item => clienteIncluidoPMOC(item.clientId, competence));
+                const canonicalUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                const nonCanonical = audit.candidates.filter(item => !canonicalUuid.test(String(item.id)) || !canonicalUuid.test(String(item.clientId)));
+                audit.review.push(...nonCanonical.map(item => ({ id: item.id, name: item.name, address: item.address, reason: 'Loja/cliente ainda não possui ID relacional canônico; sincronize o cadastro antes de emitir OS.' })));
+                DBS_PMOC_ROUTE.candidates = audit.candidates.filter(item => clienteIncluidoPMOC(item.clientId, competence) && canonicalUuid.test(String(item.id)) && canonicalUuid.test(String(item.clientId)));
                 DBS_PMOC_ROUTE.selected = [];
                 DBS_PMOC_ROUTE.geocoded = 0;
                 DBS_PMOC_ROUTE.analyzed = false;
