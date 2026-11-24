@@ -9,7 +9,6 @@
   const clientIdOf = value => text(value && (value.clienteId ?? value.client_id ?? value.clientId));
   const siteIdOf = value => text(value && (value.siteId ?? value.localId ?? value.site_id));
   const terminal = order => /^(concluida|concluido|concluida com pendencia|cancelada|cancelado|finalizada|finalizado)$/.test(norm(order && (order.status ?? order.situacao ?? order.statusOS)));
-  const isPmoc = order => /pmoc|preventiv/.test(norm(order && (order.tipo ?? order.type ?? order.tipoServico ?? order.service_name)));
   function matchesServiceType(order, selectedType) {
     const type = norm(selectedType);
     const value = norm(order && (order.tipo ?? order.type ?? order.tipoServico ?? order.service_name));
