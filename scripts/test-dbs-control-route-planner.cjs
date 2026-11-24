@@ -20,7 +20,8 @@ assert.equal(
 
 const clients = [
   { id: 'c1', nome: 'Cliente A', endereco: 'Avenida Brasil, 100, Rio de Janeiro, RJ' },
-  { id: 'c2', nome: 'Cliente B', endereco: 'Rua do Mercado, 10, Rio de Janeiro, RJ' }
+  { id: 'c2', nome: 'Cliente B', endereco: 'Rua do Mercado, 10, Rio de Janeiro, RJ' },
+  { id: 'c3', nome: 'Cliente sem endereço', endereco: '' }
 ];
 const sites = [
   { id: 's1', clienteId: 'c1', nome: 'Filial Centro', endereco: 'Rua das Flores, 25, Niterói, RJ' },
@@ -31,9 +32,10 @@ const orders = [
   { id: 'os-2', protocolo: 'OS-002', clienteId: 'c1', siteId: 's1', status: 'Aguardando peça' },
   { id: 'os-3', protocolo: 'OS-003', clienteId: 'c2', siteId: 's2', status: 'Aberta' },
   { id: 'os-4', protocolo: 'OS-004', clienteId: 'c2', status: 'Aberta' },
-  { id: 'os-5', protocolo: 'OS-005', clienteId: 'c1', localAtendimento: 'Sala técnica', status: 'Aberta' },
+  { id: 'os-5', protocolo: 'OS-005', clienteId: 'c3', localAtendimento: 'Sala técnica', status: 'Aberta' },
   { id: 'os-6', protocolo: 'OS-006', clienteId: 'c1', siteId: 's1', status: 'Concluída' },
-  { id: 'os-7', protocolo: 'OS-007', clienteId: 'c1', siteId: 's1', status: 'Cancelada' }
+  { id: 'os-7', protocolo: 'OS-007', clienteId: 'c1', siteId: 's1', status: 'Cancelada' },
+  { id: 'os-8', protocolo: 'OS-008', clienteId: 'c1', siteId: 's1', status: 'Concluída com pendência' }
 ];
 
 const plan = planner.buildStops(orders, clients, sites);
@@ -41,7 +43,7 @@ assert.equal(plan.stops.length, 3, 'OS no mesmo endereço devem compartilhar uma
 assert.equal(plan.stops[0].orders.length, 2, 'As OS do mesmo local devem aparecer juntas na parada.');
 assert.equal(plan.includedOrderCount, 4, 'A contagem deve considerar apenas OS abertas com endereço.');
 assert.equal(plan.missingAddressCount, 1, 'Local de atendimento como setor não pode ser confundido com endereço postal.');
-assert.equal(plan.ignoredTerminalCount, 2, 'OS concluídas e canceladas não devem entrar na rota.');
+assert.equal(plan.ignoredTerminalCount, 3, 'OS concluídas e canceladas não devem entrar na rota.');
 assert.equal(plan.stops[0].address, 'Rua das Flores, 25, Niterói, RJ', 'O local específico deve prevalecer sobre o endereço geral do cliente.');
 
 const fallback = planner.buildStops([
