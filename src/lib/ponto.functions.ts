@@ -671,7 +671,9 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
     const locationSource = hasCurrentSosLocation ? "current_sos" : latitude != null && longitude != null ? "last_known_session" : null;
     const { data: existingAlerts, error: existingError } = await fleetDb.from("rh_employee_sos_alerts")
       .select("id, created_at, status, message").eq("employee_id", employee.id)
-      .in("status", ["OPEN", "ACKNOWLEDGED"]).order("created_at", { ascending: false }).limit(1);
+      .in("status", ["OPEN", "ACKNOWLEDGED"])
+      .gte("created_at", new Date(Date.now() - 90_000).toISOString())
+      .order("created_at", { ascending: false }).limit(1);
     if (existingError) throw new Error(existingError.message);
     if (existingAlerts?.[0]) return { ...existingAlerts[0], alreadyOpen: true };
     await fleetCleanupRetention();
