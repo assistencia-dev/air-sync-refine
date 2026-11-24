@@ -1321,7 +1321,7 @@ function DbsControlPage() {
         };
         try {
           if (employeeModeRef.current) {
-            reply({ ok: false, error: "A aprovação e emissão de rotas PMOC são restritas à administração." });
+            reply({ ok: false, error: "A aprovação e emissão de rotas são restritas à administração." });
             return;
           }
           const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
@@ -1374,7 +1374,7 @@ function DbsControlPage() {
           });
         } catch (err) {
           console.error("DBS Control route approval:", err);
-          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota PMOC." });
+          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota." });
         }
         return;
       }
