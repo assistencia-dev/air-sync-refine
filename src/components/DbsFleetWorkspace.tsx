@@ -468,6 +468,8 @@ export function DbsFleetAdminPanel() {
                 <p className="text-sm font-black text-rose-950">{alert.employee?.full_name ?? "Colaborador"} · {alert.employee?.unit ?? "Sem unidade"}</p>
                 <p className="mt-1 text-xs font-bold text-rose-800">{dateTime(alert.created_at)} · {alert.status === "OPEN" ? "Aguardando atendimento" : "Recebido pela administração"}</p>
                 <p className="mt-2 text-sm text-rose-900">{alert.message}</p>
+                {alert.location_source === "last_known_session" && <p className="mt-2 text-[10px] font-black text-rose-800">Última posição conhecida · {dateTime(alert.location_recorded_at)}</p>}
+                {alert.location_source === "current_sos" && <p className="mt-2 text-[10px] font-black text-rose-800">Localização capturada no acionamento do SOS</p>}
                 {alert.latitude != null && alert.longitude != null && <a href={mapsUrl(alert.latitude, alert.longitude)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-black text-rose-900 underline"><MapPin className="h-3.5 w-3.5" /> Abrir posição do SOS no Maps <ExternalLink className="h-3 w-3" /></a>}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
