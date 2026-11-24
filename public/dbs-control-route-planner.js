@@ -59,8 +59,9 @@
   }
 
   function terminalStatus(order) {
-    const status = normalizeKey(order && (order.status ?? order.situacao ?? order.statusOS));
-    return /^(concluid[ao]|finalizad[ao]|encerrad[ao]|fechad[ao])$/.test(status)
+    const status = normalizeKey(order && (order.status ?? order.situacao ?? order.statusOS))
+      .replace(/[_-]+/g, ' ');
+    return /^(concluid[ao](?: com pendencia)?|finalizad[ao]|encerrad[ao]|fechad[ao])$/.test(status)
       || status.includes('cancelad');
   }
 
