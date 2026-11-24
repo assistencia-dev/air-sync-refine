@@ -27,7 +27,7 @@
   };
   const isPmocType = value => typeFamily(value) === 'pmoc';
   const orderType = order => order && (order.tipo ?? order.type ?? order.tipoServico ?? order.service_name);
-  const isPmocOrder = order => ['pmoc','preventiva'].includes(typeFamily(orderType(order)));
+  const isPmocOrder = order => typeFamily(orderType(order)) === 'pmoc';
 
   function addressFrom(record) {
     if (!record || typeof record !== 'object') return text(record);
