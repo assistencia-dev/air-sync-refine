@@ -4618,6 +4618,50 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 </div>
                 <div id="pmoc-metricas" class="pmoc-month-metrics" aria-live="polite"></div>
                 <p class="pmoc-month-note">A conclusão é reconhecida por uma OS preventiva/PMOC concluída na competência. Se o técnico marcar “Precisa retornar”, o cliente permanece pendente. A seleção de clientes é específica de cada mês.</p>
+                <section id="pmoc-route-planner" class="pmoc-route-panel" aria-labelledby="pmoc-route-title">
+                    <div class="pmoc-route-head">
+                        <div><h4 id="pmoc-route-title">Planejador inteligente de rotas PMOC</h4><p>Concilia cada loja com as OS da competência, aproxima endereços por região e permite revisar a rota antes de emitir qualquer OS.</p></div>
+                        <button type="button" class="btn btn-primary btn-sm" id="pmoc-route-analyze" onclick="analisarRotaPMOC()">Analisar lojas e montar rota</button>
+                    </div>
+                    <div class="pmoc-route-toolbar">
+                        <label class="pmoc-route-origin"><input type="checkbox" id="pmoc-route-use-location"> Usar minha localização como ponto de partida (uma única leitura, mediante permissão)</label>
+                        <input type="search" id="pmoc-route-search" placeholder="Filtrar lojas por nome, bairro ou endereço" aria-label="Filtrar lojas da rota" oninput="filtrarLojasRotaPMOC()">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarLojasVisiveisPMOC()">+ Adicionar lojas visíveis</button>
+                    </div>
+                    <div id="pmoc-route-audit" class="pmoc-route-audit" aria-live="polite">A auditoria ainda não foi executada. Nenhuma OS será criada nesta etapa.</div>
+                    <div id="pmoc-route-map" class="pmoc-route-map" role="region" aria-label="Mapa das lojas PMOC"></div>
+                    <div class="pmoc-route-columns">
+                        <div><div class="pmoc-route-subhead"><strong>Rota sugerida e editável</strong><span id="pmoc-route-selected-count">0 lojas</span></div><ol id="pmoc-route-selected" class="pmoc-route-list"><li class="pmoc-route-empty">Clique em “Analisar lojas e montar rota”.</li></ol></div>
+                        <div><div class="pmoc-route-subhead"><strong>Lojas disponíveis</strong><span id="pmoc-route-available-count">0</span></div><div id="pmoc-route-available" class="pmoc-route-available"><p class="pmoc-route-empty">As lojas aptas aparecerão após a auditoria.</p></div></div>
+                    </div>
+                    <div id="pmoc-route-review" class="pmoc-route-review" hidden></div>
+                    <div class="pmoc-route-footer">
+                        <span id="pmoc-route-distance">A distância estimada será exibida após geocodificar os endereços.</span>
+                        <button type="button" class="btn btn-primary" id="pmoc-route-approve" onclick="aprovarRotaPMOC()" disabled>Aprovar rota e criar OS PMOC</button>
+                    </div>
+                    <p class="pmoc-route-disclaimer">A geocodificação consulta o OpenStreetMap/Nominatim somente após você solicitar a análise. Os endereços são enviados ao serviço para localizar os pontos. A rota é uma estimativa por proximidade em linha reta, não considera trânsito; confira o trajeto no mapa antes de aprovar.</p>
+                </section>
+                <style>
+                    .pmoc-route-panel{margin:18px 0;padding:16px;border:1px solid #d9e5f1;border-radius:16px;background:#fbfdff}
+                    .pmoc-route-head,.pmoc-route-toolbar,.pmoc-route-subhead,.pmoc-route-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+                    .pmoc-route-head h4{margin:0;color:#173b60;font-size:16px}.pmoc-route-head p{margin:4px 0 0;color:#64748b;font-size:12px}
+                    .pmoc-route-toolbar{margin:14px 0}.pmoc-route-origin{display:flex;align-items:center;gap:7px;font-size:12px;color:#475569}.pmoc-route-toolbar input[type=search]{min-height:38px;min-width:220px;padding:8px 11px;border:1px solid #cbd5e1;border-radius:9px}
+                    .pmoc-route-audit{margin:10px 0;padding:10px 12px;border-radius:10px;background:#eff6ff;color:#1e3a5f;font-size:12px;line-height:1.5}
+                    .pmoc-route-map{height:320px;min-height:260px;border:1px solid #d7e2ee;border-radius:13px;background:#edf2f7;overflow:hidden}
+                    .pmoc-route-columns{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);gap:14px;margin-top:14px}
+                    .pmoc-route-subhead{margin-bottom:8px;color:#24435f;font-size:12px}.pmoc-route-subhead span{color:#64748b;font-weight:600}
+                    .pmoc-route-list,.pmoc-route-available{display:grid;gap:7px;margin:0;padding:0;list-style:none;max-height:320px;overflow:auto}
+                    .pmoc-route-item,.pmoc-route-option{display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid #e0e8f0;border-radius:10px;background:#fff}
+                    .pmoc-route-item{align-items:center}.pmoc-route-item .pmoc-route-item-main,.pmoc-route-option .pmoc-route-item-main{flex:1;min-width:0}
+                    .pmoc-route-item strong,.pmoc-route-option strong{display:block;font-size:12px;color:#24435f}.pmoc-route-item small,.pmoc-route-option small{display:block;margin-top:3px;font-size:11px;color:#64748b;overflow-wrap:anywhere}
+                    .pmoc-route-remove,.pmoc-route-add{width:34px;height:34px;border:1px solid #dbe5ef;border-radius:9px;background:#fff;color:#1d4f7a;font-size:20px;font-weight:800;cursor:pointer;flex:0 0 34px}
+                    .pmoc-route-remove{color:#b42318}.pmoc-route-add{color:#1769d1}
+                    .pmoc-route-empty{padding:14px;color:#64748b;font-size:12px;border:1px dashed #cbd5e1;border-radius:10px;background:#fff}
+                    .pmoc-route-review{margin-top:12px;padding:12px;border:1px solid #f3d7a2;border-radius:10px;background:#fffbeb;color:#854d0e;font-size:12px}
+                    .pmoc-route-review ul{margin:7px 0 0;padding-left:18px}.pmoc-route-footer{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
+                    .pmoc-route-footer span{font-size:12px;color:#475569}.pmoc-route-disclaimer{margin:10px 0 0;color:#64748b;font-size:10px;line-height:1.5}
+                    @media(max-width:760px){.pmoc-route-columns{grid-template-columns:1fr}.pmoc-route-map{height:280px}.pmoc-route-head{align-items:flex-start}.pmoc-route-head button,.pmoc-route-footer button{width:100%}.pmoc-route-footer{align-items:stretch}}
+                </style>
                 <div class="table-responsive">
                     <table class="pmoc-month-table">
                         <thead><tr><th>Incluir no mês</th><th>Cliente</th><th>Resultado</th><th>OS preventiva/PMOC</th><th>Retorno</th></tr></thead>
@@ -4655,6 +4699,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
     <script src="/dbs-control-employee-days.js?v=20261118-1"></script>
     <script src="/dbs-control-route-planner.js?v=20261124-1"></script>
+    <script src="/dbs-control-pmoc-route.js?v=20261124-1"></script>
     <script>
         // O DBS CONTROL entra em produção sem dados fictícios do HTML de referência.
         // Clientes, equipamentos, OS, técnicos, peças, serviços e compras serão cadastrados
