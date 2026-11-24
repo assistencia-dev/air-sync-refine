@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { resolveCollaboratorLanding } from "@/lib/collaborator-navigation";
+import { DbsFleetEmployeeDock } from "@/components/DbsFleetWorkspace";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -30,5 +31,5 @@ export const Route = createFileRoute("/_authenticated")({
 
     return { user: data.user };
   },
-  component: () => <Outlet />,
+  component: () => <><Outlet /><DbsFleetEmployeeDock /></>,
 });
