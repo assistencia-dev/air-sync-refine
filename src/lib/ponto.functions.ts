@@ -486,6 +486,7 @@ export const getMyFleetStatus = createServerFn({ method: "GET" })
       employee: { id: employee.id, full_name: employee.full_name, unit: employee.unit },
       workDate,
       eligible: attendance.hasEntry && !attendance.hasExit && !attendance.onBreak,
+      sosAvailable: attendance.hasEntry && !attendance.hasExit,
       onBreak: attendance.onBreak,
       hasEntry: attendance.hasEntry,
       hasExit: attendance.hasExit,
@@ -517,7 +518,7 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
     if (active && active.work_date === workDate && Date.now() - Date.parse(active.started_at) <= 14 * 60 * 60 * 1000 && !attendance.onBreak) {
       return { session: active, alreadyActive: true };
     }
-    if (active) await fleetCloseSession(active.id, "expired");
+    if (active) await fleetCloseSession(active.id, attendance.onBreak ? "lunch_break" : "expired");
     await fleetCleanupRetention();
     const { data: user, error: userError } = await supabaseAdmin.from("users").select("id")
       .eq("auth_id", context.userId).eq("status", "ativo").maybeSingle();
