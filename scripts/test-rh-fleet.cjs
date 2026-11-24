@@ -78,5 +78,7 @@ assert.match(fleet, /Ver deslocamento/, "O RH deve conseguir visualizar trajetos
 assert.match(fleet, /não rastreia em segundo plano/, "A limitação do navegador deve estar explicitada na interface.");
 assert.match(pontoWorkspace, /DbsFleetAdminPanel/, "O DBS FLEET deve estar acessível no RH.");
 assert.match(pontoWorkspace, /DbsFleetEmployeePanel/, "O DBS FLEET deve estar acessível no portal do colaborador.");
+assert.match(pontoWorkspace, /view==="acessos" \? <section[\s\S]*?<DbsFleetAdminPanel \/>/, "A nova aba do FLEET não pode substituir Acessos e jornada.");
+assert.match(fleet, /status\.data\?\.sosAvailable/, "O SOS deve permanecer acessível durante o intervalo da jornada.");
 
 console.log("DBS FLEET: consentimento, GPS em primeiro plano, pausa no almoço, retenção, RLS, mapa RH e SOS verificados.");
