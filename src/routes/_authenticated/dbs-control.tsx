@@ -1311,6 +1311,66 @@ function DbsControlPage() {
         }
         return;
       }
+      if (msg.type === "DBS_CONTROL_CREATE_PMOC_ROUTE") {
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_PMOC_ROUTE_RESULT",
+            requestId: String(msg.requestId ?? ""),
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, error: "A aprovação e emissão de rotas PMOC são restritas à administração." });
+            return;
+          }
+          const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+          const competence = String(msg.competence ?? "").trim();
+          const orders = Array.isArray(msg.orders) ? msg.orders : [];
+          if (!requestId || !/^[0-9]{4}-[0-9]{2}$/.test(competence) || !orders.length || orders.length > 50) {
+            reply({ ok: false, error: "Solicitação de rota PMOC inválida. Refaça a análise." });
+            return;
+          }
+          const seenSites = new Set<string>();
+          for (const order of orders) {
+            const siteId = String(order?.siteId ?? order?.site_id ?? "").trim();
+            const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (!uuidPattern.test(siteId) || !uuidPattern.test(clientId)
+              || String(order?.tipo ?? order?.type ?? "").toLowerCase() !== "preventiva"
+              || String(order?.pmocCompetencia ?? "") !== competence || seenSites.has(siteId)) {
+              reply({ ok: false, error: "A rota contém loja duplicada ou dados PMOC inválidos. Nenhuma OS foi enviada." });
+              return;
+            }
+            seenSites.add(siteId);
+          }
+          const result = await applyDbsControlDelta({
+            data: {
+              requestId,
+              changes: { ordens: orders },
+            },
+          });
+          const cloud = await getCloudStateSingleFlight();
+          if (cloud?.state) {
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_CLOUD_STATE",
+              state: cloud.state,
+              baseState: cloud.state,
+            }, window.location.origin);
+          }
+          sendDashboardSummary();
+          reply({
+            ok: Boolean(result.ok),
+            applied: Number(result.applied ?? 0),
+            appliedOrders: Array.isArray(result.appliedOrders) ? result.appliedOrders : [],
+            conflicts: Array.isArray(result.conflicts) ? result.conflicts : [],
+          });
+        } catch (err) {
+          console.error("DBS Control PMOC route approval:", err);
+          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota PMOC." });
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA") {
         try {
           const result = await getDbsControlCatalogMasterData();

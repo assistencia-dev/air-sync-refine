@@ -90,6 +90,77 @@ assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as 
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
 
 const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
+const pmocHelper = fs.readFileSync('public/dbs-control-pmoc-route.js', 'utf8');
+const pmocWindow = {};
+vm.runInNewContext(pmocHelper, { window: pmocWindow, Math, String, Array, Object, Map, Set }, {
+  filename: 'public/dbs-control-pmoc-route.js'
+});
+const pmoc = pmocWindow.DbsPmocRoutePlanner;
+assert.ok(pmoc, 'O planejador PMOC deve ser exposto no DBS Control.');
+assert.equal(pmoc.addressFrom({ address_json: { logradouro: 'Rua A', numero: '10', bairro: 'Centro', cidade: 'Niterói', uf: 'RJ' } }), 'Rua A, 10, Centro, Niterói, RJ');
+
+const pmocAudit = pmoc.buildCandidates(
+  [
+    { id: 'site-done', clienteId: 'client-a', nome: 'Loja já atendida', endereco: 'Rua A, 10, Rio de Janeiro, RJ', status: 'ativo' },
+    { id: 'site-pending', clienteId: 'client-b', nome: 'Loja pendente', endereco: 'Rua B, 20, Niterói, RJ', status: 'ativo' },
+    { id: 'site-ambiguous', clienteId: 'client-c', nome: 'Loja com histórico sem vínculo', endereco: 'Rua C, 30, São Gonçalo, RJ', status: 'ativo' },
+    { id: 'site-no-address', clienteId: 'client-d', nome: 'Loja sem endereço', endereco: '', status: 'ativo' },
+    { id: 'site-inactive', clienteId: 'client-e', nome: 'Loja inativa', endereco: 'Rua E, 50, Rio de Janeiro, RJ', status: 'inativo' }
+  ],
+  [
+    { id: 'client-a', nome: 'Cliente A' }, { id: 'client-b', nome: 'Cliente B' },
+    { id: 'client-c', nome: 'Cliente C' }, { id: 'client-d', nome: 'Cliente D' },
+    { id: 'client-e', nome: 'Cliente E' }, { id: 'client-f', nome: 'Cliente sem loja' }
+  ],
+  [
+    { id: 'done', clienteId: 'client-a', siteId: 'site-done', tipo: 'preventiva', status: 'concluída', data: '2026-11-04' },
+    { id: 'legacy', clienteId: 'client-c', tipo: 'PMOC', status: 'aberta', data: '2026-11-03' }
+  ],
+  '2026-11'
+);
+assert.deepEqual(Array.from(pmocAudit.candidates, row => row.id), ['site-pending'], 'Só loja ativa sem OS PMOC na competência deve entrar como pendente.');
+assert.ok(pmocAudit.review.some(row => row.id === 'site-ambiguous'), 'OS PMOC sem loja vinculada deve exigir conciliação manual.');
+assert.ok(pmocAudit.review.some(row => row.id === 'site-no-address'), 'Loja sem endereço não deve entrar na rota.');
+assert.ok(pmocAudit.review.some(row => row.id === 'client-f'), 'Cliente sem loja vinculada deve aparecer na auditoria.');
+assert.equal(pmocAudit.candidates[0].status, 'pendente');
+
+const optimized = pmoc.optimize([
+  { id: 'far', lat: 0, lng: 2 }, { id: 'near', lat: 0, lng: 1 }, { id: 'middle', lat: 0, lng: 1.5 }
+], { lat: 0, lng: 0 });
+assert.deepEqual(Array.from(optimized.stops, row => row.id), ['near', 'middle', 'far'], 'A rota deve aproximar a próxima loja a partir da origem/última parada.');
+assert.equal(optimized.stops[0].sequence, 1);
+assert.ok(optimized.distanceEstimateKm > 0);
+const centralStart = pmoc.optimize([
+  { id: 'edge-a', lat: 0, lng: 0 }, { id: 'center', lat: 0, lng: 1 }, { id: 'edge-b', lat: 0, lng: 2 }
+], null);
+assert.equal(centralStart.stops[0].id, 'center', 'Sem GPS, deve iniciar pela loja mais central e depois aproximar as demais.');
+const cancelledAudit = pmoc.buildCandidates(
+  [{ id: 'cancelled-site', clienteId: 'cancelled-client', nome: 'Loja com OS cancelada', endereco: 'Rua C, 30, Niterói, RJ', status: 'ativo' }],
+  [{ id: 'cancelled-client', nome: 'Cliente' }],
+  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'preventiva', status: 'cancelada', data: '24/11/2026' }],
+  '2026-11'
+);
+assert.equal(cancelledAudit.candidates.length, 0, 'OS cancelada não deve ser reaberta automaticamente com a mesma chave de emissão.');
+assert.ok(cancelledAudit.review.length > 0, 'OS cancelada exige revisão manual.');
+const plannerFunctionIndex = html.indexOf('function analisarRotaPMOC');
+const plannerScriptStart = html.lastIndexOf('<script>', plannerFunctionIndex);
+const plannerScriptEnd = html.indexOf('</script>', plannerScriptStart);
+assert.ok(plannerFunctionIndex >= 0 && plannerScriptStart >= 0 && plannerScriptEnd > plannerScriptStart, 'O script do planejador PMOC deve estar presente no HTML.');
+new vm.Script(html.slice(plannerScriptStart + '<script>'.length, plannerScriptEnd), { filename: 'dbs-control-pmoc-inline.js' });
+
+assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-1/, 'O planejador PMOC deve entrar com cache busting.');
+assert.match(html, /id="pmoc-route-map"/, 'A interface deve exibir o mapa dentro do DBS.');
+assert.match(html, /onclick="analisarRotaPMOC\(\)"/, 'A análise da rota deve ser acionada pelo usuário.');
+assert.match(html, /onclick="aprovarRotaPMOC\(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
+assert.match(html, /removerLojaRotaPMOC/, 'A rota deve permitir remover lojas individualmente.');
+assert.match(html, /adicionarLojaRotaPMOC/, 'A rota deve permitir adicionar lojas individualmente.');
+assert.match(html, /DBS_CONTROL_CREATE_PMOC_ROUTE/, 'A aprovação deve passar pelo shell autenticado.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_PMOC_ROUTE"/, 'O shell autenticado deve receber o pedido de emissão.');
+assert.match(parentRoute, /applyDbsControlDelta\(/, 'A emissão deve usar o fluxo relacional oficial de OS.');
+assert.match(parentRoute, /uuidPattern\.test\(siteId\)/, 'A emissão deve exigir IDs relacionais canônicos de loja/cliente.');
+console.log('DBS CONTROL PMOC route planner: conciliação por loja/competência, auditoria de ambiguidades, otimização, mapa e aprovação relacional verificados.');
+
+
 assert.match(html, /class="dbs-route-open"[^>]*data-dbs-maps-url=/, 'O botão de etapa deve enviar o endereço ao shell autenticado.');
 assert.match(html, /class='employee-map-link'[^>]*data-dbs-maps-url=/, 'O cartão do colaborador deve usar o mesmo acionador seguro.');
 assert.match(html, /function solicitarAberturaMaps\(/, 'A navegação externa deve usar o acionador compartilhado.');
