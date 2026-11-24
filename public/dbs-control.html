@@ -7330,7 +7330,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const title = 'Etapa ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop;
                 const startLabel = leg.origin ? 'Saída: parada ' + (leg.firstStop - 1) : 'Saída: localização atual do aparelho';
                 const link = leg.url
-                    ? '<a class="dbs-route-open" href="' + safe(leg.url) + '" target="_blank" rel="noopener noreferrer">Abrir etapa no Maps ↗</a>'
+                    ? '<a class="dbs-route-open" href="' + safe(leg.url) + '" target="_top">Abrir etapa no Maps →</a>'
                     : '<span style="font-size:11px;color:#a33b42">Endereços muito longos para um único link. Abra as paradas individualmente.</span>';
                 return '<div class="dbs-route-leg"><div><b>' + safe(title) + '</b><small>' + safe(startLabel) + ' · destino: ' + safe(plan.stops[leg.lastStop - 1]?.label || '') + '</small></div>' + link + '</div>';
             }).join('');
@@ -8947,7 +8947,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
                       : '';
                     const localHtml = address
-                      ? `<a class='employee-map-link' href='${escHtml(mapsUrl)}' target='_blank' rel='noopener noreferrer' aria-label='Abrir o endereço de ${escHtml(cli.nome || 'cliente')} no Google Maps'><span class='employee-map-pin' aria-hidden='true'>⌖</span><b>${escHtml(address)}</b><span class='employee-map-action'>Abrir rota no Maps&nbsp;↗</span></a>`
+                      ? `<a class='employee-map-link' href='${escHtml(mapsUrl)}' target='_top' aria-label='Abrir o endereço de ${escHtml(cli.nome || 'cliente')} no Google Maps'><span class='employee-map-pin' aria-hidden='true'>⌖</span><b>${escHtml(address)}</b><span class='employee-map-action'>Abrir rota no Maps&nbsp;→</span></a>`
                       : '<b>Não informado</b>';
                     return `
                       <article class="employee-order">
