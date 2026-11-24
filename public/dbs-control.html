@@ -8362,7 +8362,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const selectedCount = document.getElementById('pmoc-route-selected-count');
             if (selectedCount) selectedCount.textContent = DBS_PMOC_ROUTE.selected.length + ' lojas';
             const audit = document.getElementById('pmoc-route-audit');
-            if (audit && DBS_PMOC_ROUTE.analyzed) audit.textContent = DBS_PMOC_ROUTE.candidates.length + ' lojas sem OS PMOC ativa na competência; ' + DBS_PMOC_ROUTE.geocoded + ' endereços localizados; ' + DBS_PMOC_ROUTE.review.length + ' registros para revisão. OS já abertas ou concluídas na loja foram conciliadas e não serão duplicadas.';
+            if (audit && DBS_PMOC_ROUTE.analyzed) audit.textContent = DBS_PMOC_ROUTE.candidates.length + ' lojas pendentes/retorno sem OS em andamento; ' + DBS_PMOC_ROUTE.geocoded + ' endereços localizados; ' + DBS_PMOC_ROUTE.review.length + ' registros para revisão. OS já abertas ou concluídas na loja foram conciliadas e não serão duplicadas.';
             const review = document.getElementById('pmoc-route-review');
             if (review) {
                 review.hidden = !DBS_PMOC_ROUTE.review.length;
@@ -8454,7 +8454,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
             const audit = document.getElementById('pmoc-route-audit');
             if (result.ok && applied === DBS_PMOC_ROUTE.selected.length) {
-                if (audit) audit.textContent = 'Rota aprovada. ' + applied + ' OS PMOC criadas e confirmadas na base relacional. Atualize a tela para carregar os protocolos oficiais.';
+                if (audit) audit.textContent = 'Rota aprovada. ' + applied + ' OS PMOC criadas/confirmadas na base relacional. Protocolos: ' + (result.appliedOrders || []).map(item => item.protocol).filter(Boolean).join(', ') + '. A base foi atualizada.';
                 if (button) button.disabled = true;
             } else {
                 if (audit) audit.textContent = 'Resultado parcial: ' + applied + ' OS confirmadas; ' + conflicts.length + ' conflitos. Nenhuma OS foi apagada. ' + (result.error || conflicts.map(item => item.message).join(' · '));
