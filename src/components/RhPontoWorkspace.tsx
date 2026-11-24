@@ -5,7 +5,7 @@ import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, Use
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { capturePontoPosition, hasPontoCoordinates, summarizePontoGpsReview, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl } from "@/lib/ponto-geo";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
-import { DbsFleetAdminPanel, DbsFleetEmployeePanel } from "@/components/DbsFleetWorkspace";
+import { DbsFleetAdminPanel } from "@/components/DbsFleetWorkspace";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
 const localDateISO = () => {
@@ -578,8 +578,6 @@ function PontoColaborador() {
         {status && <div className={"mt-4 rounded-2xl border p-4 text-sm font-bold "+(status.type==="success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : status.type==="error" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-sky-200 bg-sky-50 text-sky-800")}>{status.text}</div>}
       </div>
     </section>
-
-    <DbsFleetEmployeePanel />
 
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
       <div className="flex items-center justify-between gap-3">
