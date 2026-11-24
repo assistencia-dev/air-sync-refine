@@ -12,7 +12,7 @@
   function matchesServiceType(order, selectedType) {
     const type = norm(selectedType);
     const value = norm(order && (order.tipo ?? order.type ?? order.tipoServico ?? order.service_name));
-    if (type.includes('pmoc')) return /pmoc/.test(value);
+    if (type.includes('pmoc')) return /pmoc|preventiv/.test(value);
     if (type.includes('corretiva')) return /corretiv/.test(value);
     if (type.includes('visita')) return /visita.?tecnica/.test(value);
     if (type.includes('preventiva')) return /preventiv/.test(value) && !/pmoc/.test(value);
