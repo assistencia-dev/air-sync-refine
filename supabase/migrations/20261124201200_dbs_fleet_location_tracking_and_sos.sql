@@ -98,4 +98,38 @@ REVOKE ALL ON public.rh_employee_sos_alerts FROM anon, authenticated;
 
 GRANT ALL ON public.rh_employee_location_sessions TO service_role;
 GRANT ALL ON public.rh_employee_location_points TO service_role;
+
 GRANT ALL ON public.rh_employee_sos_alerts TO service_role;
+
+-- Retenção automatizada: a política não depende de alguém abrir o portal.
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+GRANT USAGE ON SCHEMA cron TO postgres;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA cron TO postgres;
+
+CREATE OR REPLACE FUNCTION public.dbs_fleet_cleanup_retention()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $
+BEGIN
+  DELETE FROM public.rh_employee_location_points
+  WHERE recorded_at < now() - interval '30 days';
+
+  DELETE FROM public.rh_employee_location_sessions
+  WHERE ended_at IS NOT NULL
+    AND ended_at < now() - interval '30 days';
+
+  DELETE FROM public.rh_employee_sos_alerts
+  WHERE created_at < now() - interval '90 days'
+    AND status = 'RESOLVED';
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.dbs_fleet_cleanup_retention() FROM PUBLIC, anon, authenticated, service_role;
+
+SELECT cron.schedule(
+  'dbs-fleet-retention-cleanup',
+  '15 3 * * *',
+  'SELECT public.dbs_fleet_cleanup_retention();'
+);
