@@ -4625,7 +4625,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     </div>
                     <div class="pmoc-route-toolbar">
                         <label class="pmoc-route-origin"><input type="checkbox" id="pmoc-route-use-location"> Usar minha localização como ponto de partida (uma única leitura, mediante permissão)</label>
-                        <label class="pmoc-route-origin" for="pmoc-route-service-type">Tipo de atendimento<select id="pmoc-route-service-type" aria-label="Tipo de atendimento"><option value="PMOC Preventiva · Mensal">PMOC — preventiva mensal</option><option value="PMOC Preventiva · Trimestral">PMOC — preventiva trimestral</option><option value="Manutenção Corretiva">Manutenção corretiva</option><option value="Visita Técnica">Visita técnica</option><option value="Manutenção Preventiva">Manutenção preventiva</option><option value="Instalação / Start-Up">Instalação / start-up</option><option value="Atendimento Emergencial">Atendimento emergencial</option><option value="Inspeção Técnica">Inspeção técnica</option><option value="Outro">Outro atendimento</option></select></label>
+                        <label class="pmoc-route-origin" for="pmoc-route-service-type">Tipo de atendimento<select id="pmoc-route-service-type" aria-label="Tipo de atendimento" onchange="redefinirAnaliseRotaPMOC()"><option value="PMOC Preventiva · Mensal">PMOC — preventiva mensal</option><option value="PMOC Preventiva · Trimestral">PMOC — preventiva trimestral</option><option value="Manutenção Corretiva">Manutenção corretiva</option><option value="Visita Técnica">Visita técnica</option><option value="Manutenção Preventiva">Manutenção preventiva</option><option value="Instalação / Start-Up">Instalação / start-up</option><option value="Atendimento Emergencial">Atendimento emergencial</option><option value="Inspeção Técnica">Inspeção técnica</option><option value="Outro">Outro atendimento</option></select></label>
                         <label class="pmoc-route-origin" for="pmoc-route-cause">Causa / motivo da solicitação<input id="pmoc-route-cause" type="text" maxlength="500" placeholder="Descreva o problema, pedido do cliente ou motivo da visita" required></label>
                         <input type="search" id="pmoc-route-search" placeholder="Filtrar lojas por nome, bairro ou endereço" aria-label="Filtrar lojas da rota" oninput="filtrarLojasRotaPMOC()">
                         <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarLojasVisiveisPMOC()">+ Adicionar lojas visíveis</button>
@@ -8313,6 +8313,26 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             }
         }
 
+        function redefinirAnaliseRotaPMOC() {
+            DBS_PMOC_ROUTE.candidates = [];
+            DBS_PMOC_ROUTE.selected = [];
+            DBS_PMOC_ROUTE.review = [];
+            DBS_PMOC_ROUTE.analyzed = false;
+            const approve = document.getElementById('pmoc-route-approve');
+            if (approve) approve.disabled = true;
+            const audit = document.getElementById('pmoc-route-audit');
+            if (audit) audit.textContent = 'Tipo de atendimento alterado. Execute novamente a análise para atualizar a rota e evitar duplicidade.';
+            const list = document.getElementById('pmoc-route-selected');
+            if (list) list.innerHTML = '<li class="pmoc-route-empty">Reanalise as lojas para este tipo de atendimento.</li>';
+            const available = document.getElementById('pmoc-route-available');
+            if (available) available.innerHTML = '<p class="pmoc-route-empty">A lista será atualizada após a análise.</p>';
+            const mapLinks = document.getElementById('pmoc-route-maps-links');
+            if (mapLinks) mapLinks.innerHTML = '';
+            if (DBS_PMOC_ROUTE.markers) DBS_PMOC_ROUTE.markers.forEach(marker => marker.remove());
+            DBS_PMOC_ROUTE.markers = [];
+            if (DBS_PMOC_ROUTE.polyline) { DBS_PMOC_ROUTE.polyline.remove(); DBS_PMOC_ROUTE.polyline = null; }
+        }
+
         function filtrarLojasRotaPMOC() {
             const query = String(document.getElementById('pmoc-route-search')?.value || '').trim().toLocaleLowerCase('pt-BR');
             const available = DBS_PMOC_ROUTE.candidates.filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && !DBS_PMOC_ROUTE.selected.some(selected => selected.id === item.id)
@@ -8427,20 +8447,20 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (!allowedTypes.has(serviceType)) { alert("Selecione um tipo de atendimento válido."); return; }
             if (cause.length < 5) { alert("Descreva a causa ou o motivo da solicitação (mínimo de 5 caracteres)."); document.getElementById("pmoc-route-cause")?.focus(); return; }
             const sites = DBS_PMOC_ROUTE.selected.slice();
-            const normalizedType = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('pt-BR');
+            const normalizedType = value => String(value || '').toLocaleLowerCase('pt-BR');
             const typePattern = serviceType.includes('PMOC') ? /pmoc/i : serviceType.includes('Corretiva') ? /corretiv/i : serviceType.includes('Visita') ? /visita.?tecnica/i : serviceType.includes('Preventiva') ? /preventiv/i : serviceType.includes('Instalação') ? /instal|start.?up/i : serviceType.includes('Emergencial') ? /emergenc/i : serviceType.includes('Inspeção') ? /inspec/i : /outro/i;
             const existing = (ERP_STATE.ordens || []).filter(order => !order.excluidaEm && !order.arquivadaEm && typePattern.test(normalizedType(order.tipo || order.type))
                 && dataOSParaISO(order.data || order.createdAt || order.created_at).slice(0,7) === competence);
             const blocked = sites.filter(site => existing.some(order => String(order.siteId || order.site_id || order.localId || '') === String(site.id)
                 && !/conclu[ií]d|cancelad/i.test(String(order.status || '').toLocaleLowerCase('pt-BR'))));
             if (blocked.length) {
-                alert('A auditoria encontrou OS PMOC já em andamento para: ' + blocked.map(item => item.name).join(', ') + '. Refaça a análise antes de aprovar.');
+                alert('A auditoria encontrou OS deste tipo já em andamento para: ' + blocked.map(item => item.name).join(', ') + '. Refaça a análise antes de aprovar.');
                 return;
             }
             if (!confirm('Aprovar a rota com ' + sites.length + ' lojas? Será criada uma OS de ' + serviceType + ' para cada loja selecionada, com o motivo informado. A aprovação não agenda técnico nem altera OS existentes.')) return;
             const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : 'pmoc-route-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             const orders = sites.map(site => ({
-                id: 'ROUTE:' + competence + ':' + serviceType.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + ':' + site.id,
+                id: 'ROUTE:' + competence + ':' + serviceType.replace(/[^a-z0-9]+/gi,'-').toLowerCase() + ':' + site.id,
                 clienteId: site.clientId,
                 siteId: site.siteId || site.id,
                 tipo: serviceType,
