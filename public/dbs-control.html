@@ -3873,7 +3873,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
             <div class="nav-section">Gestão de Ativos & Clientes</div>
             <li class="nav-item" title="Cadastre e consulte clientes" onclick="switchTab('tab-clientes', this)"><span>Clientes</span></li>
-            <li class="nav-item" title="Controle mensal de PMOC, clientes atendidos e retornos" onclick="switchTab('tab-pmoc', this)"><span>Controle Mensal PMOC</span></li>
+            <li class="nav-item" title="Controle mensal de PMOC, clientes atendidos e retornos" onclick="switchTab('tab-pmoc', this)"><span>PMOC & Rotas</span></li>
             <li class="nav-item" onclick="switchTab('tab-importacao', this)"><span>Importação em Massa</span></li>
             <li class="nav-item" onclick="switchTab('tab-equipamentos', this)"><span>Parque de Equipamentos</span></li>
             <li class="nav-item" title="Cadastre técnicos e gerencie seus acessos" onclick="switchTab('tab-tecnicos', this)"><span>Equipe Técnica</span></li>
@@ -4005,6 +4005,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-primary btn-sm" type="button" onclick="abrirRotaAtividadesDia()" title="Monta etapas no Google Maps para um técnico e a lista visível deste dia">Abrir rota do técnico</button>
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="abrirProgramadorRotas()" title="Programar visitas, corretivas, preventivas, PMOC e outros atendimentos">Programar visitas / OS</button>
                     <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarAtividadesDia()">Atualizar conferência</button>
                     </div>
                 </div>
@@ -4683,7 +4684,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     <div id="pmoc-route-map" class="pmoc-route-map" role="region" aria-label="Mapa das lojas PMOC"></div>
                     <div id="pmoc-route-maps-links" class="pmoc-route-legs" aria-label="Etapas do Google Maps"></div>
                     <div class="pmoc-route-columns">
-                        <div><div class="pmoc-route-subhead"><strong>Rota sugerida e editável</strong><span id="pmoc-route-selected-count">0 lojas</span></div><ol id="pmoc-route-selected" class="pmoc-route-list"><li class="pmoc-route-empty">Clique em “Analisar lojas e montar rota”.</li></ol></div>
+                        <div><div class="pmoc-route-subhead"><strong>Rota sugerida e editável</strong><span id="pmoc-route-selected-count">0 lojas</span></div><ol id="pmoc-route-selected" class="pmoc-route-list"><li class="pmoc-route-empty">Carregue os locais, escolha as paradas e otimize a rota.</li></ol></div>
                         <div><div class="pmoc-route-subhead"><strong>Lojas disponíveis</strong><span id="pmoc-route-available-count">0</span></div><div id="pmoc-route-available" class="pmoc-route-available"><p class="pmoc-route-empty">As lojas aptas aparecerão após a auditoria.</p></div></div>
                     </div>
                     <div id="pmoc-route-review" class="pmoc-route-review" hidden></div>
@@ -6788,7 +6789,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     'tab-nova-os':['Nova Ordem de Serviço','Crie e encaminhe uma nova OS'],
                     'tab-cadastros':['Central de Cadastros','Visão central da base operacional'],
                     'tab-clientes':['Clientes','Cadastro e relacionamento com clientes'],
-                    'tab-pmoc':['Controle Mensal PMOC','Competência, clientes atendidos, pendências e retornos'],
+                    'tab-pmoc':['PMOC e Programação de Rotas','Controle mensal, tipos de atendimento, causa da solicitação e agenda de visitas'],
                     'tab-importacao':['Importação em Massa','Importe e atualize sua base com segurança'],
                     'tab-equipamentos':['Parque de Equipamentos','Ativos e equipamentos por cliente e local'],
                     'tab-tecnicos':['Equipe Técnica','Técnicos, vínculos RH e acessos'],
@@ -7399,6 +7400,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const previousFocus = modal.__previousFocus;
             modal.remove();
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+        }
+
+        function abrirProgramadorRotas() {
+            switchTab('tab-pmoc');
+            setTimeout(() => {
+                const planner = document.getElementById('pmoc-route-planner');
+                planner?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                document.getElementById('pmoc-route-type')?.focus({ preventScroll: true });
+            }, 120);
         }
 
         function abrirRotaAtividadesDia() {
