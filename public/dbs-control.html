@@ -8403,7 +8403,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
             if (!confirm('Aprovar a rota com ' + sites.length + ' lojas? Será criada uma OS PMOC individual para cada loja selecionada. A aprovação não agenda técnico nem altera OS existentes.')) return;
-            const requestId = 'pmoc-route:' + competence + ':' + sites.map(item => item.id).sort().join('|');
+            const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : 'pmoc-route-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             const orders = sites.map(site => ({
                 id: 'PMOC-ROUTE:' + competence + ':' + site.id,
                 clienteId: site.clientId,
@@ -8412,7 +8412,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 status: 'aberta',
                 prioridade: 'normal',
                 data: new Date().toISOString(),
-                descricao: 'PMOC preventivo · competência ' + competence + ' · ' + site.name,
+                desc: 'PMOC preventivo · competência ' + competence + ' · ' + site.name,
                 observacao: 'OS criada pela aprovação da rota PMOC. Endereço auditado: ' + site.address,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
