@@ -527,6 +527,7 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
       employee_id: employee.id,
       work_date: workDate,
       consent_at: new Date().toISOString(),
+      consent_policy_version: "fleet-2026-11-v1",
       created_by_user_id: user.id,
     }).select("id, employee_id, work_date, started_at, consent_at, last_latitude, last_longitude, last_accuracy_m, last_position_at").single();
     if (error) {
@@ -542,7 +543,7 @@ export const startMyFleetTracking = createServerFn({ method: "POST" })
       employee_id: employee.id,
       actor_user_id: user.id,
       action: "DBS_FLEET_TRACKING_STARTED",
-      details: { session_id: session.id, work_date: workDate, consent_at: session.consent_at, foreground_only: true },
+      details: { session_id: session.id, work_date: workDate, consent_at: session.consent_at, consent_policy_version: "fleet-2026-11-v1", foreground_only: true },
     });
     if (auditError) console.error("DBS FLEET: sessão iniciada, mas a auditoria de consentimento falhou:", auditError.message);
     return { session, alreadyActive: false };
