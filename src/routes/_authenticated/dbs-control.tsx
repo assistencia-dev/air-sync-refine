@@ -1311,43 +1311,218 @@ function DbsControlPage() {
         }
         return;
       }
-      if (msg.type === "DBS_CONTROL_CREATE_PMOC_ROUTE") {
+      if (msg.type === "DBS_CONTROL_CREATE_PMOC_ROUTE" || msg.type === "DBS_CONTROL_CREATE_SERVICE_ROUTE") {
+        const legacyPmocRequest = msg.type === "DBS_CONTROL_CREATE_PMOC_ROUTE";
+        const responseType = legacyPmocRequest ? "DBS_CONTROL_PMOC_ROUTE_RESULT" : "DBS_CONTROL_SERVICE_ROUTE_RESULT";
         const reply = (payload: Record<string, unknown>) => {
           iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_PMOC_ROUTE_RESULT",
+            type: responseType,
             requestId: String(msg.requestId ?? ""),
             ...payload,
           }, window.location.origin);
         };
         try {
           if (employeeModeRef.current) {
-            reply({ ok: false, error: "A aprovação e emissão de rotas PMOC são restritas à administração." });
+            reply({ ok: false, error: "A programação e emissão em lote de rotas é restrita à administração." });
             return;
           }
+
           const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
           const competence = String(msg.competence ?? "").trim();
+          const routeDate = String(msg.routeDate ?? "").trim();
+          const serviceType = legacyPmocRequest
+            ? "preventiva"
+            : String(msg.serviceType ?? "").trim();
+          const serviceKey = serviceType.toLocaleLowerCase("pt-BR")
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+          const allowedServiceTypes = new Set([
+            "pmoc preventiva · mensal",
+            "pmoc preventiva · trimestral",
+            "manutenção preventiva",
+            "manutenção corretiva",
+            "visita técnica",
+            "instalação / start-up",
+            "inspeção técnica",
+            "retorno técnico",
+            "atendimento emergencial",
+            "outro atendimento",
+            // Compatibilidade com o antigo botão de aprovação PMOC.
+            "preventiva",
+          ]);
           const orders = Array.isArray(msg.orders) ? msg.orders : [];
-          if (!requestId || !/^[0-9]{4}-[0-9]{2}$/.test(competence) || !orders.length || orders.length > 50) {
-            reply({ ok: false, error: "Solicitação de rota PMOC inválida. Refaça a análise." });
+          const validUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const validCalendarDate = (value: string) => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+            const [year, month, day] = value.split("-").map(Number);
+            const date = new Date(Date.UTC(year, month - 1, day));
+            return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+          };
+
+          if (!requestId || !orders.length || orders.length > 50) {
+            reply({ ok: false, error: "Solicitação de rota inválida. Selecione de 1 a 50 locais e tente novamente." });
             return;
           }
+          if (legacyPmocRequest) {
+            if (!/^[0-9]{4}-[0-9]{2}$/.test(competence) || serviceKey !== "preventiva") {
+              reply({ ok: false, error: "Solicitação PMOC antiga inválida. Refaça a análise." });
+              return;
+            }
+          } else if (!allowedServiceTypes.has(serviceKey) || !validCalendarDate(routeDate)) {
+            reply({ ok: false, error: "Tipo de atendimento ou data da programação inválidos." });
+            return;
+          }
+
           const seenSites = new Set<string>();
+          const requestedClientIds = new Set<string>();
+          const requestedSiteIds = new Set<string>();
+          const requestedEmployeeIds = new Set<string>();
+          const requestedEquipmentIds = new Set<string>();
+          const normalizedOrders: any[] = [];
+
           for (const order of orders) {
             const siteId = String(order?.siteId ?? order?.site_id ?? "").trim();
             const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            if (!uuidPattern.test(siteId) || !uuidPattern.test(clientId)
-              || String(order?.tipo ?? order?.type ?? "").toLowerCase() !== "preventiva"
-              || String(order?.pmocCompetencia ?? "") !== competence || seenSites.has(siteId)) {
-              reply({ ok: false, error: "A rota contém loja duplicada ou dados PMOC inválidos. Nenhuma OS foi enviada." });
+            const orderType = normalizeDbsStatus(order?.tipo ?? order?.type ?? "");
+            if (!validUuid.test(siteId) || !validUuid.test(clientId) || seenSites.has(siteId)) {
+              reply({ ok: false, error: "A rota contém loja/cliente inválido ou loja repetida. Nenhuma OS foi enviada." });
               return;
             }
+            if (legacyPmocRequest) {
+              if (orderType !== "preventiva" || String(order?.pmocCompetencia ?? "") !== competence) {
+                reply({ ok: false, error: "A rota PMOC contém uma OS fora da competência ou com tipo inválido." });
+                return;
+              }
+            } else if (orderType !== serviceKey) {
+              reply({ ok: false, error: "O tipo de uma OS não corresponde ao tipo de atendimento escolhido para esta rota." });
+              return;
+            }
+
+            if (!legacyPmocRequest) {
+              const scheduledAt = String(order?.scheduledAt ?? order?.scheduled_at ?? "").trim();
+              const scheduledTimestamp = Date.parse(scheduledAt);
+              if (!scheduledAt || !Number.isFinite(scheduledTimestamp)) {
+                reply({ ok: false, error: "Uma das paradas não possui horário de atendimento válido." });
+                return;
+              }
+              const priority = normalizeDbsStatus(order?.prioridade ?? order?.priority ?? msg.priority ?? "normal");
+              if (!["baixa", "normal", "alta", "urgente"].includes(priority)) {
+                reply({ ok: false, error: "A prioridade de uma das OS é inválida." });
+                return;
+              }
+            }
+
+            const employeeId = String(order?.employeeId ?? order?.employee_id ?? order?.assignedEmployeeId ?? order?.assigned_employee_id ?? "").trim();
+            if (employeeId) {
+              if (!validUuid.test(employeeId)) {
+                reply({ ok: false, error: "O técnico selecionado não possui um vínculo RH válido." });
+                return;
+              }
+              requestedEmployeeIds.add(employeeId);
+            }
+
+            const equipmentIds = Array.isArray(order?.equipamentosIds)
+              ? order.equipamentosIds.map((value: unknown) => String(value ?? "").trim()).filter(Boolean)
+              : (order?.equipamentoId ? [String(order.equipamentoId).trim()] : []);
+            if (equipmentIds.length > 10 || equipmentIds.some((id: string) => !validUuid.test(id))) {
+              reply({ ok: false, error: "Uma OS contém equipamento inválido ou mais de 10 equipamentos vinculados." });
+              return;
+            }
+            equipmentIds.forEach((id: string) => requestedEquipmentIds.add(id));
+            requestedClientIds.add(clientId);
+            requestedSiteIds.add(siteId);
             seenSites.add(siteId);
+
+            const canonicalId = legacyPmocRequest
+              ? `PMOC-ROUTE:${competence}:${siteId}`
+              : `SERVICE-ROUTE:${requestId}:${siteId}`;
+            normalizedOrders.push({
+              ...order,
+              id: canonicalId,
+              clienteId: clientId,
+              siteId,
+              tipo: legacyPmocRequest ? "preventiva" : serviceType,
+              equipamentosIds: equipmentIds,
+              equipamentoId: equipmentIds[0] ?? null,
+            });
           }
+
+          const [sitesResult, clientsResult, employeesResult, equipmentResult] = await Promise.all([
+            (supabase as any).from("dbs_control_sites")
+              .select("id,client_id,status,address_json")
+              .in("id", [...requestedSiteIds]),
+            (supabase as any).from("dbs_control_clients")
+              .select("id,status")
+              .in("id", [...requestedClientIds]),
+            requestedEmployeeIds.size
+              ? (supabase as any).from("rh_employees")
+                  .select("id,is_active")
+                  .in("id", [...requestedEmployeeIds])
+              : Promise.resolve({ data: [], error: null }),
+            requestedEquipmentIds.size
+              ? (supabase as any).from("dbs_control_equipment")
+                  .select("id,client_id,site_id,status")
+                  .in("id", [...requestedEquipmentIds])
+              : Promise.resolve({ data: [], error: null }),
+          ]);
+
+          for (const result of [sitesResult, clientsResult, employeesResult, equipmentResult]) {
+            if (result.error) throw new Error("Falha ao validar os vínculos da programação: " + result.error.message);
+          }
+          const siteRows = new Map((sitesResult.data ?? []).map((row: any) => [String(row.id), row]));
+          const clientRows = new Map((clientsResult.data ?? []).map((row: any) => [String(row.id), row]));
+          const employeeRows = new Map((employeesResult.data ?? []).map((row: any) => [String(row.id), row]));
+          const equipmentRows = new Map((equipmentResult.data ?? []).map((row: any) => [String(row.id), row]));
+
+          const hasAddress = (value: any) => {
+            if (!value) return false;
+            const address = typeof value === "string" ? value : [
+              value.texto, value.endereco, value.address, value.formatted_address,
+              value.logradouro, value.rua, value.street, value.cidade, value.city,
+            ].filter(Boolean).join(" ");
+            return Boolean(String(address ?? "").trim());
+          };
+
+          for (const order of normalizedOrders) {
+            const siteId = String(order.siteId);
+            const clientId = String(order.clienteId);
+            const site: any = siteRows.get(siteId);
+            const client: any = clientRows.get(clientId);
+            if (!site || String(site.client_id) !== clientId || /inativ|arquiv/i.test(normalizeDbsStatus(site.status))) {
+              reply({ ok: false, error: "Uma das lojas não está ativa ou não pertence ao cliente selecionado. Atualize os cadastros e tente novamente." });
+              return;
+            }
+            if (!client || /inativ|arquiv/i.test(normalizeDbsStatus(client.status))) {
+              reply({ ok: false, error: "Um dos clientes está inativo ou não existe mais no cadastro." });
+              return;
+            }
+            if (!hasAddress(site.address_json)) {
+              reply({ ok: false, error: "Uma das lojas selecionadas está sem endereço cadastrado. Corrija o endereço antes de programar a OS." });
+              return;
+            }
+            const equipmentIds = Array.isArray(order.equipamentosIds) ? order.equipamentosIds : [];
+            for (const equipmentId of equipmentIds) {
+              const equipment: any = equipmentRows.get(String(equipmentId));
+              if (!equipment || String(equipment.client_id) !== clientId
+                || (equipment.site_id && String(equipment.site_id) !== siteId)
+                || /inativ|arquiv/i.test(normalizeDbsStatus(equipment.status))) {
+                reply({ ok: false, error: "Um equipamento selecionado não pertence ao cliente/local desta OS ou está inativo." });
+                return;
+              }
+            }
+          }
+
+          for (const employeeId of requestedEmployeeIds) {
+            const employee: any = employeeRows.get(employeeId);
+            if (!employee || employee.is_active !== true) {
+              reply({ ok: false, error: "O técnico selecionado está inativo ou não possui vínculo RH válido." });
+              return;
+            }
+          }
+
           const result = await applyDbsControlDelta({
             data: {
               requestId,
-              changes: { ordens: orders },
+              changes: { ordens: normalizedOrders },
             },
           });
           const cloud = await getCloudStateSingleFlight();
@@ -1366,8 +1541,8 @@ function DbsControlPage() {
             conflicts: Array.isArray(result.conflicts) ? result.conflicts : [],
           });
         } catch (err) {
-          console.error("DBS Control PMOC route approval:", err);
-          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível aprovar a rota PMOC." });
+          console.error("DBS Control service route approval:", err);
+          reply({ ok: false, error: err instanceof Error ? err.message : "Não foi possível confirmar a programação de serviços." });
         }
         return;
       }
