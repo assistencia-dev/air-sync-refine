@@ -154,8 +154,8 @@ assert.match(html, /onclick="analisarRotaPMOC\(\)"/, 'A análise da rota deve se
 assert.match(html, /onclick="aprovarRotaPMOC\(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
 assert.match(html, /removerLojaRotaPMOC/, 'A rota deve permitir remover lojas individualmente.');
 assert.match(html, /adicionarLojaRotaPMOC/, 'A rota deve permitir adicionar lojas individualmente.');
-assert.match(html, /DBS_CONTROL_CREATE_PMOC_ROUTE/, 'A aprovação deve passar pelo shell autenticado.');
-assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_PMOC_ROUTE"/, 'O shell autenticado deve receber o pedido de emissão.');
+assert.match(html, /DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'A programação genérica deve passar pelo shell autenticado.');
+assert.match(parentRoute, /DBS_CONTROL_CREATE_PMOC_ROUTE.*DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'O shell deve manter compatibilidade PMOC e aceitar programação genérica.');
 assert.match(parentRoute, /applyDbsControlDelta\(/, 'A emissão deve usar o fluxo relacional oficial de OS.');
 assert.match(parentRoute, /uuidPattern\.test\(siteId\)/, 'A emissão deve exigir IDs relacionais canônicos de loja/cliente.');
 console.log('DBS CONTROL PMOC route planner: conciliação por loja/competência, auditoria de ambiguidades, otimização, mapa e aprovação relacional verificados.');
