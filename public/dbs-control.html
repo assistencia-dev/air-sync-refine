@@ -7237,6 +7237,45 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
 
         // Rota auxiliar: lê apenas as OS atualmente visíveis na conferência do dia.
         // Não altera agenda, ordem, status, GPS, histórico ou dados da OS.
+
+        // O shell autenticado abre o Maps fora do iframe do legado. Isso evita
+        // COOP no Firefox quando a prévia do Lovable restringe novas abas.
+        function solicitarAberturaMaps(event, rawUrl) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            let url;
+            try {
+                url = new URL(String(rawUrl || ''), window.location.origin);
+            } catch {
+                alert('O endereço desta rota é inválido.');
+                return false;
+            }
+
+            const allowedHosts = ['www.google.com', 'maps.google.com'];
+            if (url.protocol !== 'https:' || !allowedHosts.includes(url.hostname) || !url.pathname.startsWith('/maps/dir/')) {
+                alert('O destino da rota não é um endereço válido do Google Maps.');
+                return false;
+            }
+
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_MAPS', url: url.toString() }, window.location.origin);
+                return false;
+            }
+
+            window.location.assign(url.toString());
+            return false;
+        }
+
+        document.addEventListener('click', function (event) {
+            const trigger = event.target instanceof Element
+                ? event.target.closest('[data-dbs-maps-url]')
+                : null;
+            if (!trigger) return;
+            solicitarAberturaMaps(event, trigger.getAttribute('data-dbs-maps-url'));
+        }, true);
+
         function fecharModalRotaAtividades() {
             const modal = document.getElementById('dbs-route-planner-modal');
             if (!modal) return;
@@ -7330,7 +7369,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const title = 'Etapa ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop;
                 const startLabel = leg.origin ? 'Saída: parada ' + (leg.firstStop - 1) : 'Saída: localização atual do aparelho';
                 const link = leg.url
-                    ? '<a class="dbs-route-open" href="' + safe(leg.url) + '" target="_top">Abrir etapa no Maps →</a>'
+                    ? '<button type="button" class="dbs-route-open" data-dbs-maps-url="' + safe(leg.url) + '">Abrir etapa no Maps →</button>'
                     : '<span style="font-size:11px;color:#a33b42">Endereços muito longos para um único link. Abra as paradas individualmente.</span>';
                 return '<div class="dbs-route-leg"><div><b>' + safe(title) + '</b><small>' + safe(startLabel) + ' · destino: ' + safe(plan.stops[leg.lastStop - 1]?.label || '') + '</small></div>' + link + '</div>';
             }).join('');
@@ -8947,7 +8986,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
                       : '';
                     const localHtml = address
-                      ? `<a class='employee-map-link' href='${escHtml(mapsUrl)}' target='_top' aria-label='Abrir o endereço de ${escHtml(cli.nome || 'cliente')} no Google Maps'><span class='employee-map-pin' aria-hidden='true'>⌖</span><b>${escHtml(address)}</b><span class='employee-map-action'>Abrir rota no Maps&nbsp;→</span></a>`
+                      ? `<a class='employee-map-link' href='${escHtml(mapsUrl)}' data-dbs-maps-url='${escHtml(mapsUrl)}' aria-label='Abrir o endereço de ${escHtml(cli.nome || 'cliente')} no Google Maps'><span class='employee-map-pin' aria-hidden='true'>⌖</span><b>${escHtml(address)}</b><span class='employee-map-action'>Abrir rota no Maps&nbsp;→</span></a>`
                       : '<b>Não informado</b>';
                     return `
                       <article class="employee-order">
