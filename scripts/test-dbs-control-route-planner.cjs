@@ -1,0 +1,88 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+const helper = fs.readFileSync('public/dbs-control-route-planner.js', 'utf8');
+const html = fs.readFileSync('public/dbs-control.html', 'utf8');
+const window = {};
+vm.runInNewContext(helper, { window, URLSearchParams, Date, Math, String, Array, Object, Map, Set }, {
+  filename: 'public/dbs-control-route-planner.js'
+});
+
+const planner = window.DbsControlRoutePlanner;
+assert.ok(planner, 'O planejador deve ser exposto para o DBS Control.');
+assert.equal(
+  planner.addressFrom({ address_json: { logradouro: 'Rua das Flores', numero: '25', bairro: 'Centro', cidade: 'Niterói', uf: 'RJ' } }),
+  'Rua das Flores, 25, Centro, Niterói, RJ',
+  'Endereços estruturados devem ser montados sem converter objetos em [object Object].'
+);
+
+const clients = [
+  { id: 'c1', nome: 'Cliente A', endereco: 'Avenida Brasil, 100, Rio de Janeiro, RJ' },
+  { id: 'c2', nome: 'Cliente B', endereco: 'Rua do Mercado, 10, Rio de Janeiro, RJ' }
+];
+const sites = [
+  { id: 's1', clienteId: 'c1', nome: 'Filial Centro', endereco: 'Rua das Flores, 25, Niterói, RJ' },
+  { id: 's2', clienteId: 'c2', nome: 'Unidade Norte', endereco: 'Rua do Porto, 80, São Gonçalo, RJ' }
+];
+const orders = [
+  { id: 'os-1', protocolo: 'OS-001', clienteId: 'c1', siteId: 's1', status: 'Em Atendimento' },
+  { id: 'os-2', protocolo: 'OS-002', clienteId: 'c1', siteId: 's1', status: 'Aguardando peça' },
+  { id: 'os-3', protocolo: 'OS-003', clienteId: 'c2', siteId: 's2', status: 'Aberta' },
+  { id: 'os-4', protocolo: 'OS-004', clienteId: 'c2', status: 'Aberta' },
+  { id: 'os-5', protocolo: 'OS-005', clienteId: 'c1', localAtendimento: 'Sala técnica', status: 'Aberta' },
+  { id: 'os-6', protocolo: 'OS-006', clienteId: 'c1', siteId: 's1', status: 'Concluída' },
+  { id: 'os-7', protocolo: 'OS-007', clienteId: 'c1', siteId: 's1', status: 'Cancelada' }
+];
+
+const plan = planner.buildStops(orders, clients, sites);
+assert.equal(plan.stops.length, 3, 'OS no mesmo endereço devem compartilhar uma parada; ordens sem endereço válido ficam fora.');
+assert.equal(plan.stops[0].orders.length, 2, 'As OS do mesmo local devem aparecer juntas na parada.');
+assert.equal(plan.includedOrderCount, 4, 'A contagem deve considerar apenas OS abertas com endereço.');
+assert.equal(plan.missingAddressCount, 1, 'Local de atendimento como setor não pode ser confundido com endereço postal.');
+assert.equal(plan.ignoredTerminalCount, 2, 'OS concluídas e canceladas não devem entrar na rota.');
+assert.equal(plan.stops[0].address, 'Rua das Flores, 25, Niterói, RJ', 'O local específico deve prevalecer sobre o endereço geral do cliente.');
+
+const fallback = planner.buildStops([
+  { id: 'os-client', clienteId: 'c2', status: 'Aberta' }
+], clients, []);
+assert.equal(fallback.stops[0].address, clients[1].endereco, 'Sem endereço específico, deve usar o endereço cadastrado no cliente.');
+
+const routeStops = [
+  { address: 'Rua 1, 10, Rio de Janeiro, RJ' },
+  { address: 'Rua 2, 20, Rio de Janeiro, RJ' },
+  { address: 'Rua 3, 30, Rio de Janeiro, RJ' },
+  { address: 'Rua 4, 40, Rio de Janeiro, RJ' },
+  { address: 'Rua 5, 50, Niterói, RJ' }
+];
+const legs = planner.buildRouteLegs(routeStops);
+assert.equal(legs.length, 2, 'Mais de quatro paradas devem ser divididas em etapas móveis compatíveis.');
+const firstUrl = new URL(legs[0].url);
+assert.equal(firstUrl.searchParams.get('api'), '1');
+assert.equal(firstUrl.searchParams.get('destination'), routeStops[3].address);
+assert.equal(firstUrl.searchParams.get('waypoints').split('|').length, 3);
+assert.equal(firstUrl.searchParams.get('origin'), null, 'A primeira etapa deve permitir que o Maps use a localização atual do aparelho.');
+const secondUrl = new URL(legs[1].url);
+assert.equal(secondUrl.searchParams.get('origin'), routeStops[3].address, 'A etapa seguinte deve começar no último endereço da etapa anterior.');
+assert.equal(secondUrl.searchParams.get('destination'), routeStops[4].address);
+assert.equal(secondUrl.searchParams.get('travelmode'), 'driving');
+
+const scheduled = planner.buildStops([
+  { id: 'late', clienteId: 'c1', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T15:00:00-03:00' },
+  { id: 'early', clienteId: 'c1', status: 'Aberta', endereco: 'Rua B, 2', scheduledAt: '2026-11-24T09:00:00-03:00' }
+], clients, []);
+assert.equal(scheduled.sortedBySchedule, true, 'Só deve ordenar quando todas as paradas têm horário válido.');
+assert.equal(scheduled.stops[0].orders[0].id, 'early', 'Horários agendados válidos devem ordenar as paradas.');
+
+const partialSchedule = planner.buildStops([
+  { id: 'timed', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T09:00:00-03:00' },
+  { id: 'untimed', status: 'Aberta', endereco: 'Rua B, 2' }
+], [], []);
+assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
+assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
+
+assert.match(html, /dbs-control-route-planner\.js\?v=20261124-1/, 'O planejador deve entrar com cache busting próprio.');
+assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
+assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as OS que aparecem na lista filtrada do dia.');
+console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
