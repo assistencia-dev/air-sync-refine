@@ -89,8 +89,16 @@ assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve o
 assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as OS que aparecem na lista filtrada do dia.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
 
-assert.match(html, /class="dbs-route-open"[^>]*target="_top"/, 'A rota administrativa deve navegar na aba principal para não herdar a restrição COOP do iframe.');
-assert.match(html, /class='employee-map-link'[^>]*target='_top'/, 'O link de rota do colaborador também deve navegar na aba principal.');
-assert.doesNotMatch(html, /class="dbs-route-open"[^>]*target="_blank"/, 'O planejador não pode abrir o Google Maps em uma nova aba.');
-assert.doesNotMatch(html, /class='employee-map-link'[^>]*target='_blank'/, 'A agenda do colaborador não pode abrir o Google Maps em uma nova aba.');
-console.log('DBS CONTROL Firefox Maps COOP: navegação externa usa a aba principal nos dois fluxos.');
+const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
+assert.match(html, /class="dbs-route-open"[^>]*data-dbs-maps-url=/, 'O botão de etapa deve enviar o endereço ao shell autenticado.');
+assert.match(html, /class='employee-map-link'[^>]*data-dbs-maps-url=/, 'O cartão do colaborador deve usar o mesmo acionador seguro.');
+assert.match(html, /function solicitarAberturaMaps\(/, 'A navegação externa deve usar o acionador compartilhado.');
+assert.match(html, /type: 'DBS_CONTROL_OPEN_MAPS'/, 'O iframe deve solicitar abertura ao shell autenticado.');
+assert.doesNotMatch(html, /class="dbs-route-open"[^>]*target="_top"/, 'Não usar top navigation direta dentro do iframe.');
+assert.doesNotMatch(html, /class="dbs-route-open"[^>]*target="_blank"/, 'Não abrir o Maps diretamente a partir do iframe legado.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_OPEN_MAPS"/, 'O shell autenticado deve receber pedidos de abertura do Maps.');
+assert.match(parentRoute, /allowedHosts = new Set\(\["www\.google\.com", "maps\.google\.com"\]\)/, 'O shell só deve abrir Google Maps HTTPS autorizado.');
+assert.match(parentRoute, /function DbsControlMapsLaunchDialog/, 'O shell deve apresentar uma confirmação visível de abertura.');
+assert.match(parentRoute, /window\.top !== window\.self/, 'O shell deve detectar prévias incorporadas e oferecer cópia do link.');
+assert.match(parentRoute, /window\.location\.assign\(url\)/, 'Quando aberto diretamente, o Maps deve navegar na aba principal.');
+console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domínio, abertura top-level e fallback copiável verificados.');

@@ -495,6 +495,71 @@ function mountDbsMaterialsPortal(frame: HTMLIFrameElement | null, section: DbsMa
   return root;
 }
 
+function DbsControlMapsLaunchDialog({ url, onClose }: { url: string; onClose: () => void }) {
+  const embedded = window.top !== window.self;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyStatus("Link copiado. Cole-o em uma nova aba para abrir o Google Maps.");
+    } catch {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+      setCopyStatus("Não foi possível copiar automaticamente. O link está selecionado; pressione Ctrl+C.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] grid place-items-center bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="dbs-maps-launch-title" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">DBS Control · Navegação</p>
+            <h2 id="dbs-maps-launch-title" className="mt-1 text-lg font-black text-slate-900">Abrir rota no Google Maps</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-xl font-bold text-slate-500 hover:bg-slate-50">×</button>
+        </div>
+
+        {embedded ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">
+            O DBS Air está aberto dentro de uma prévia incorporada, que bloqueia a navegação externa por segurança. Copie o endereço abaixo e cole-o em uma nova aba do navegador. No sistema aberto diretamente em sua própria aba, o botão de abertura funciona normalmente.
+          </p>
+        ) : (
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            O Google Maps será aberto nesta mesma aba. Para voltar ao DBS Control, use o botão Voltar do navegador.
+          </p>
+        )}
+
+        <label htmlFor="dbs-maps-launch-url" className="mt-4 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Endereço da rota</label>
+        <input
+          ref={inputRef}
+          id="dbs-maps-launch-url"
+          readOnly
+          value={url}
+          onFocus={(event) => event.currentTarget.select()}
+          className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+        />
+
+        {copyStatus && <p role="status" aria-live="polite" className="mt-2 text-xs font-semibold text-emerald-700">{copyStatus}</p>}
+
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50">Fechar</button>
+          <button type="button" onClick={() => void copyUrl()} className="min-h-11 rounded-xl border border-sky-200 bg-sky-50 px-4 text-sm font-bold text-sky-800 hover:bg-sky-100">Copiar link</button>
+          {!embedded && (
+            <button type="button" onClick={() => window.location.assign(url)} className="min-h-11 rounded-xl bg-sky-700 px-4 text-sm font-bold text-white hover:bg-sky-800">
+              Abrir Google Maps
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function DbsControlPage() {
   const navigate = useNavigate();
   const profile = useQuery({ queryKey: ["me"], queryFn: () => getMyProfile() });
@@ -528,6 +593,7 @@ function DbsControlPage() {
   const employeeFrameDocumentRef = useRef<Document | null>(null);
   const readyHydrationInFlightRef = useRef(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [mapsLaunchUrl, setMapsLaunchUrl] = useState<string | null>(null);
   // Cada menu mantém sua própria raiz React e seu próprio estado dentro
   // da aba correspondente do iframe. Alternar de tela não troca a rota.
   const [inventoryPortals, setInventoryPortals] = useState<Partial<Record<DbsMaterialsSection, {
@@ -1232,6 +1298,19 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_OPEN_MAPS") {
+        try {
+          const requested = new URL(String(msg.url ?? ""));
+          const allowedHosts = new Set(["www.google.com", "maps.google.com"]);
+          if (requested.protocol !== "https:"
+            || !allowedHosts.has(requested.hostname)
+            || !requested.pathname.startsWith("/maps/dir/")) return;
+          setMapsLaunchUrl(requested.toString());
+        } catch {
+          // Ignorar mensagens de navegação malformadas ou fora do domínio permitido.
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_REQUEST_CATALOG_MASTER_DATA") {
         try {
           const result = await getDbsControlCatalogMasterData();
@@ -2561,6 +2640,7 @@ function DbsControlPage() {
           </section>
         )}
         <iframe ref={iframeRef} title="DBS CONTROL" src={src} onLoad={handleEmployeeFrameLoad} className="min-h-0 w-full flex-1 border-0" allow="camera; geolocation" />
+        {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}
       </main>
     );
   }
@@ -2589,6 +2669,7 @@ function DbsControlPage() {
         />,
         inventoryPortals.purchases.target,
       )}
+      {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}
       <MobileAdminNavigation active="operation" />
     </main>
   );
