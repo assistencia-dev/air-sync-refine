@@ -89,6 +89,7 @@ assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve o
 assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as OS que aparecem na lista filtrada do dia.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
 
+const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const pmocHelper = fs.readFileSync('public/dbs-control-pmoc-route.js', 'utf8');
 const pmocWindow = {};
 vm.runInNewContext(pmocHelper, { window: pmocWindow, Math, String, Array, Object, Map, Set }, {
@@ -143,7 +144,6 @@ assert.match(parentRoute, /uuidPattern\.test\(siteId\)/, 'A emissão deve exigir
 console.log('DBS CONTROL PMOC route planner: conciliação por loja/competência, auditoria de ambiguidades, otimização, mapa e aprovação relacional verificados.');
 
 
-const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 assert.match(html, /class="dbs-route-open"[^>]*data-dbs-maps-url=/, 'O botão de etapa deve enviar o endereço ao shell autenticado.');
 assert.match(html, /class='employee-map-link'[^>]*data-dbs-maps-url=/, 'O cartão do colaborador deve usar o mesmo acionador seguro.');
 assert.match(html, /function solicitarAberturaMaps\(/, 'A navegação externa deve usar o acionador compartilhado.');
