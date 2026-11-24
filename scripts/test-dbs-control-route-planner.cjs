@@ -235,6 +235,13 @@ assert.match(html, /id="pmoc-route-instructions"/, 'A programação deve aceitar
 assert.match(html, /id="pmoc-route-date"/, 'A programação deve pedir a data.');
 assert.match(html, /id="pmoc-route-start-time"/, 'A programação deve pedir o horário inicial.');
 assert.match(html, /id="pmoc-route-duration"/, 'A programação deve definir duração por parada.');
+assert.match(html, /id="pmoc-route-travel-buffer"/, 'A rota deve prever intervalo entre deslocamentos.');
+assert.match(html, /select multiple size="3"/, 'Uma OS pode selecionar vários equipamentos do mesmo local.');
+assert.match(html, /selecionarEquipamentosRotaPMOC/, 'A seleção múltipla de equipamentos deve atualizar a parada.');
+assert.match(html, /routeTravelBufferMinutes: travelBuffer/, 'O intervalo estimado deve constar nos detalhes da programação.');
+assert.match(html, /technicianScheduleWarning/, 'A programação deve avisar sobre OS já previstas para o técnico no mesmo dia.');
+assert.match(html, /A data da visita PMOC precisa estar dentro da competência selecionada/, 'A data da OS PMOC deve corresponder à competência.');
+assert.match(parentRoute, /serviceKey === "preventiva" \\|\\| serviceKey\\.startsWith\\("pmoc "\\)/, 'Somente PMOC ou o fluxo PMOC legado deve ativar conciliação por competência.');
 assert.match(html, /id="pmoc-route-technician"/, 'A programação deve permitir técnico com vínculo RH.');
 assert.match(html, /id="pmoc-route-priority"/, 'A programação deve permitir prioridade.');
 assert.match(html, /equipamentosDisponiveisRotaPMOC/, 'A programação deve permitir associar equipamento do cliente/local.');
