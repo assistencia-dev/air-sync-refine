@@ -113,7 +113,7 @@ const pmocAudit = pmoc.buildCandidates(
     { id: 'client-e', nome: 'Cliente E' }, { id: 'client-f', nome: 'Cliente sem loja' }
   ],
   [
-    { id: 'done', clienteId: 'client-a', siteId: 'site-done', tipo: 'PMOC pmoca · Mensal', status: 'concluída', data: '2026-11-04' },
+    { id: 'done', clienteId: 'client-a', siteId: 'site-done', tipo: 'PMOC Preventiva · Mensal', status: 'concluída', data: '2026-11-04' },
     { id: 'legacy', clienteId: 'client-c', tipo: 'PMOC', status: 'aberta', data: '2026-11-03' }
   ],
   '2026-11'
@@ -122,16 +122,7 @@ assert.deepEqual(Array.from(pmocAudit.candidates, row => row.id), ['site-pending
 assert.ok(pmocAudit.review.some(row => row.id === 'site-ambiguous'), 'OS PMOC sem loja vinculada deve exigir conciliação manual.');
 assert.ok(pmocAudit.review.some(row => row.id === 'site-no-address'), 'Loja sem endereço não deve entrar na rota.');
 assert.ok(pmocAudit.review.some(row => row.id === 'client-f'), 'Cliente sem loja vinculada deve aparecer na auditoria.');
-
 assert.equal(pmocAudit.candidates[0].status, 'pendente');
-const ordinarypmoceAudit = pmoc.buildCandidates(
-  [{ id: 'pmoc-site', clienteId: 'pmoc-client', nome: 'Loja PMOC', endereco: 'Rua PMOC, 1, Rio de Janeiro, RJ', status: 'ativo' }],
-  [{ id: 'pmoc-client', nome: 'Cliente PMOC' }],
-  [{ id: 'ordinary-pmoce', clienteId: 'pmoc-client', siteId: 'pmoc-site', tipo: 'Manutenção pmoca', status: 'concluída', data: '2026-11-04' }],
-  '2026-11'
-);
-assert.equal(ordinarypmoceAudit.candidates.length, 1, 'Uma pmoca comum não pode ser considerada PMOC concluído da competência.');
-
 
 const optimized = pmoc.optimize([
   { id: 'far', lat: 0, lng: 2 }, { id: 'near', lat: 0, lng: 1 }, { id: 'middle', lat: 0, lng: 1.5 }
@@ -146,7 +137,7 @@ assert.equal(centralStart.stops[0].id, 'center', 'Sem GPS, deve iniciar pela loj
 const cancelledAudit = pmoc.buildCandidates(
   [{ id: 'cancelled-site', clienteId: 'cancelled-client', nome: 'Loja com OS cancelada', endereco: 'Rua C, 30, Niterói, RJ', status: 'ativo' }],
   [{ id: 'cancelled-client', nome: 'Cliente' }],
-  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'PMOC pmoca · Mensal', status: 'cancelada', data: '24/11/2026' }],
+  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'PMOC Preventiva · Mensal', status: 'cancelada', data: '24/11/2026' }],
   '2026-11'
 );
 assert.equal(cancelledAudit.candidates.length, 0, 'OS cancelada não deve ser reaberta automaticamente com a mesma chave de emissão.');
@@ -157,14 +148,14 @@ const plannerScriptEnd = html.indexOf('</script>', plannerScriptStart);
 assert.ok(plannerFunctionIndex >= 0 && plannerScriptStart >= 0 && plannerScriptEnd > plannerScriptStart, 'O script do planejador PMOC deve estar presente no HTML.');
 new vm.Script(html.slice(plannerScriptStart + '<script>'.length, plannerScriptEnd), { filename: 'dbs-control-pmoc-inline.js' });
 
-assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-1/, 'O planejador PMOC deve entrar com cache busting.');
+assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-2/, 'O planejador PMOC deve entrar com cache busting.');
 assert.match(html, /id="pmoc-route-map"/, 'A interface deve exibir o mapa dentro do DBS.');
-assert.match(html, /onclick="analisarRotapmoc(\)"/, 'A análise da rota deve ser acionada pelo usuário.');
-assert.match(html, /onclick="aprovarRotapmoc(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
+assert.match(html, /onclick="analisarRotaPMOC\(\)"/, 'A análise da rota deve ser acionada pelo usuário.');
+assert.match(html, /onclick="aprovarRotaPMOC\(\)"/, 'A emissão só pode ocorrer no botão de aprovação.');
 assert.match(html, /removerLojaRotaPMOC/, 'A rota deve permitir remover lojas individualmente.');
 assert.match(html, /adicionarLojaRotaPMOC/, 'A rota deve permitir adicionar lojas individualmente.');
 assert.match(html, /DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'A programação genérica deve passar pelo shell autenticado.');
-assert.match(parentRoute, /DBS_CONTROL_CREATE_PMOC_ROUTE.*DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'O shell deve manter compatibilidade PMOC e aceitar programação genérica.');
+assert.match(parentRoute, /DBS_CONTROL_CREATE_PMOC_ROUTE.*DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'O shell mantém compatibilidade PMOC e aceita programação genérica.');
 assert.match(parentRoute, /applyDbsControlDelta\(/, 'A emissão deve usar o fluxo relacional oficial de OS.');
 assert.match(parentRoute, /validUuid\.test\(siteId\)/, 'A emissão deve exigir IDs relacionais canônicos de loja/cliente.');
 console.log('DBS CONTROL PMOC route planner: conciliação por loja/competência, auditoria de ambiguidades, otimização, mapa e aprovação relacional verificados.');
@@ -184,11 +175,11 @@ assert.match(parentRoute, /window\.location\.assign\(url\)/, 'Quando aberto dire
 console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domínio, abertura top-level e fallback copiável verificados.');
 
 const servicePlanner = pmocWindow.DbsServiceRoutePlanner;
-assert.equal(servicePlanner, pmoc, 'O nome genérico do planejador deve manter compatibilidade com o contrato PMOC legado.');
+assert.equal(servicePlanner, pmoc, 'O planejador genérico deve manter compatibilidade com o contrato PMOC legado.');
 assert.equal(servicePlanner.typeFamily('Manutenção Corretiva'), 'corretiva');
 assert.equal(servicePlanner.typeFamily('Visita Técnica'), 'visita');
-assert.equal(servicePlanner.typeFamily('Manutenção pmoca'), 'pmoca');
-assert.equal(servicePlanner.typeFamily('PMOC pmoca · Mensal'), 'pmoc');
+assert.equal(servicePlanner.typeFamily('Manutenção Preventiva'), 'preventiva');
+assert.equal(servicePlanner.typeFamily('PMOC Preventiva · Mensal'), 'pmoc');
 assert.equal(servicePlanner.typeFamily('Instalação / Start-Up'), 'instalacao');
 assert.equal(servicePlanner.typeFamily('Inspeção Técnica'), 'inspecao');
 assert.equal(servicePlanner.typeFamily('Retorno Técnico'), 'retorno');
@@ -218,50 +209,54 @@ const serviceAudit = servicePlanner.buildCandidates(
 assert.equal(serviceAudit.pmocMode, false, 'Uma rota corretiva não pode depender da competência PMOC.');
 assert.equal(serviceAudit.serviceType, 'Manutenção Corretiva');
 assert.equal(serviceAudit.routeDate, '2026-11-25');
-assert.equal(serviceAudit.candidates.length, 2, 'Outros serviços devem listar todos os locais ativos com endereço sem selecionar automaticamente.');
-assert.equal(serviceAudit.candidates[0].existingOpenCount, 1, 'OS corretivas em aberto devem ser exibidas como aviso, não ocultadas da seleção.');
+assert.equal(serviceAudit.candidates.length, 2, 'Outros serviços devem listar locais ativos com endereço sem seleção automática.');
+assert.equal(serviceAudit.candidates[0].existingOpenCount, 1, 'OS do mesmo tipo em aberto devem aparecer como aviso, não ocultar o local.');
 assert.match(serviceAudit.candidates[0].warning, /OS deste tipo ainda em aberto/);
 assert.equal(serviceAudit.candidates[0].status, 'disponivel');
 assert.equal(serviceAudit.candidates[1].existingOpenCount, 0);
-assert.ok(serviceAudit.candidates[1].warning.includes('sem loja vinculada'), 'Histórico antigo do cliente sem site deve ser informado sem atribuição presumida.');
+assert.match(serviceAudit.candidates[1].warning, /sem loja vinculada/, 'Histórico antigo sem local deve ser avisado sem atribuição presumida.');
 assert.ok(serviceAudit.review.some(row => row.id === 'site-without-address'), 'Local sem endereço precisa de revisão.');
-assert.equal(servicePlanner.buildCandidates([], [], [], '', { serviceType: 'Visita Técnica' }).pmocMode, false);
+
+const ordinaryPreventiveAudit = servicePlanner.buildCandidates(
+  [{ id: 'pmoc-site', clienteId: 'pmoc-client', nome: 'Loja PMOC', endereco: 'Rua PMOC, 1, Rio de Janeiro, RJ', status: 'ativo' }],
+  [{ id: 'pmoc-client', nome: 'Cliente PMOC' }],
+  [{ id: 'ordinary-preventive', clienteId: 'pmoc-client', siteId: 'pmoc-site', tipo: 'Manutenção Preventiva', status: 'concluída', data: '2026-11-04' }],
+  '2026-11'
+);
+assert.equal(ordinaryPreventiveAudit.candidates.length, 1, 'Uma preventiva comum não pode ser considerada PMOC concluído da competência.');
 
 assert.match(html, /id="pmoc-route-type"/, 'A interface deve permitir escolher o tipo do atendimento.');
-for (const type of [
-  'Visita Técnica','PMOC pmoca · Mensal','PMOC pmoca · Trimestral',
-  'Manutenção pmoca','Manutenção Corretiva','Instalação / Start-Up',
-  'Inspeção Técnica','Retorno Técnico','Atendimento Emergencial','Outro Atendimento'
-]) assert.ok(html.includes(type), 'A interface deve oferecer o tipo: ' + type);
-assert.match(html, /id="pmoc-route-subject"/, 'A rota deve registrar o assunto informado pelo cliente.');
-assert.match(html, /id="pmoc-route-cause"/, 'A rota deve registrar a causa/relato do solicitante.');
-assert.match(html, /id="pmoc-route-instructions"/, 'A rota deve aceitar informações complementares.');
-assert.match(html, /id="pmoc-route-date"/, 'A rota deve pedir a data prevista.');
-assert.match(html, /id="pmoc-route-start-time"/, 'A rota deve pedir o horário inicial.');
-assert.match(html, /id="pmoc-route-duration"/, 'A rota deve definir a duração por parada.');
-assert.match(html, /id="pmoc-route-technician"/, 'A rota deve permitir atribuir um técnico com vínculo RH.');
-assert.match(html, /id="pmoc-route-priority"/, 'A rota deve permitir definir prioridade.');
-assert.match(html, /equipamentosDisponiveisRotaPMOC/, 'A rota deve permitir vincular um equipamento do cliente/local.');
-assert.match(html, /DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'A nova programação deve usar uma mensagem de shell própria.');
-assert.match(html, /scheduledAt,/, 'Cada OS deve receber horário sequencial.');
-assert.match(html, /pmocCompetencia: pmocMode \? competence : null/, 'Somente o tipo PMOC deve carregar competência PMOC.');
-assert.match(html, /function abrirProgramadorRotas\(/, 'A programação deve estar acessível a partir da agenda do dia.');
+for (const type of ['Visita Técnica','PMOC Preventiva · Mensal','PMOC Preventiva · Trimestral','Manutenção Preventiva','Manutenção Corretiva','Instalação / Start-Up','Inspeção Técnica','Retorno Técnico','Atendimento Emergencial','Outro Atendimento']) {
+  assert.ok(html.includes(type), 'A interface deve oferecer o tipo: ' + type);
+}
+assert.match(html, /id="pmoc-route-subject"/, 'A programação deve registrar o assunto do cliente.');
+assert.match(html, /id="pmoc-route-cause"/, 'A programação deve registrar a causa/relato do solicitante.');
+assert.match(html, /id="pmoc-route-instructions"/, 'A programação deve aceitar complemento/observação.');
+assert.match(html, /id="pmoc-route-date"/, 'A programação deve pedir a data.');
+assert.match(html, /id="pmoc-route-start-time"/, 'A programação deve pedir o horário inicial.');
+assert.match(html, /id="pmoc-route-duration"/, 'A programação deve definir duração por parada.');
+assert.match(html, /id="pmoc-route-technician"/, 'A programação deve permitir técnico com vínculo RH.');
+assert.match(html, /id="pmoc-route-priority"/, 'A programação deve permitir prioridade.');
+assert.match(html, /equipamentosDisponiveisRotaPMOC/, 'A programação deve permitir associar equipamento do cliente/local.');
+assert.match(html, /DBS_CONTROL_CREATE_SERVICE_ROUTE/, 'A programação usa mensagem de shell própria.');
+assert.match(html, /scheduledAt,/, 'Cada OS recebe horário previsto.');
+assert.match(html, /pmocCompetencia: pmocMode \? competence : null/, 'Somente tipo PMOC carrega competência PMOC.');
+assert.match(html, /function abrirProgramadorRotas\(/, 'A programação deve estar acessível na agenda diária.');
 assert.match(html, /Causa ou relato informado/, 'A causa deve acompanhar o conteúdo da OS.');
+assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-2/, 'O helper atualizado deve ter cache busting.');
 
-assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_SERVICE_ROUTE"/, 'O shell deve aceitar a nova programação de serviços.');
-for (const serverType of [
-  'pmoc pmoca · mensal','pmoc pmoca · trimestral','manutencao pmoca',
-  'manutencao corretiva','visita tecnica','instalacao / start-up',
-  'inspecao tecnica','retorno tecnico','atendimento emergencial','outro atendimento'
-]) assert.ok(parentRoute.includes(serverType), 'O shell deve autorizar o tipo: ' + serverType);
-assert.match(parentRoute, /dbs_control_sites/, 'O shell deve validar as lojas relacionais.');
-assert.match(parentRoute, /dbs_control_clients/, 'O shell deve validar os clientes relacionais.');
-assert.match(parentRoute, /dbs_control_equipment/, 'O shell deve validar os equipamentos selecionados.');
-assert.match(parentRoute, /rh_employees/, 'O shell deve validar o vínculo RH do técnico.');
-assert.match(parentRoute, /is_active !== true/, 'O shell deve impedir atribuição a técnico inativo.');
-assert.match(parentRoute, /applyDbsControlDelta\(/, 'A emissão deve usar o fluxo relacional oficial.');
-assert.match(parentRoute, /existingPmoc|Já existe uma OS PMOC/i, 'O fluxo deve verificar OS PMOC concorrentes antes de criar outra.');
-assert.match(parentRoute, /SERVICE-ROUTE:/, 'As OS de outras categorias devem receber chave de idempotência própria da rota.');
-assert.match(parentRoute, /PMOC-RETURN/, 'Os retornos PMOC devem preservar uma chave distinta da primeira visita.');
-console.log('DBS CONTROL service route planner: tipos de serviço, causa da solicitação, agenda, equipamento/técnico, avisos de duplicidade e validação relacional aprovados.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_SERVICE_ROUTE"/, 'O shell deve aceitar programação genérica.');
+for (const serverType of ['pmoc preventiva · mensal','pmoc preventiva · trimestral','manutencao preventiva','manutencao corretiva','visita tecnica','instalacao / start-up','inspecao tecnica','retorno tecnico','atendimento emergencial','outro atendimento']) {
+  assert.ok(parentRoute.includes(serverType), 'O shell deve autorizar o tipo: ' + serverType);
+}
+assert.match(parentRoute, /dbs_control_sites/, 'O shell valida lojas relacionais.');
+assert.match(parentRoute, /dbs_control_clients/, 'O shell valida clientes relacionais.');
+assert.match(parentRoute, /dbs_control_equipment/, 'O shell valida equipamentos selecionados.');
+assert.match(parentRoute, /rh_employees/, 'O shell valida o vínculo RH do técnico.');
+assert.match(parentRoute, /is_active !== true/, 'O shell impede técnico inativo.');
+assert.match(parentRoute, /applyDbsControlDelta\(/, 'A emissão usa o fluxo relacional oficial.');
+assert.match(parentRoute, /existingPmoc|Já existe uma OS PMOC/i, 'O fluxo verifica duplicidade PMOC.');
+assert.match(parentRoute, /SERVICE-ROUTE:/, 'OS não PMOC recebem chave própria de idempotência.');
+assert.match(parentRoute, /PMOC-RETURN/, 'Retorno PMOC tem chave distinta de primeira visita.');
+assert.match(parentRoute, /existingType.includes\("pmoc"\)/, 'PMOC não deve contar preventiva comum como visita PMOC.');
 
