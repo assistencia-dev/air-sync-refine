@@ -8786,8 +8786,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     equipment ? 'Equipamento: ' + rotuloEquipamentoRotaPMOC(equipment) : 'Equipamento específico: não informado',
                     instructions ? 'Orientações ao técnico: ' + instructions : ''
                 ].filter(Boolean).join('\\n');
+                const pmocReturn = pmocMode && site.status === 'retorno';
                 const id = pmocMode
-                    ? 'PMOC-ROUTE:' + competence + ':' + serviceKey + ':' + site.id
+                    ? (pmocReturn ? 'PMOC-RETURN:' : 'PMOC-ROUTE:') + competence + ':' + serviceKey + ':' + site.id
                     : 'SERVICE-ROUTE:' + requestId + ':' + site.id;
                 return {
                     id,
@@ -8810,13 +8811,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     routeDate,
                     routeServiceType: serviceType,
                     routeDurationMinutes: duration,
-                    pmocCompetencia: pmocMode ? competence : null
+                    pmocCompetencia: pmocMode ? competence : null,\n                    pmocRetorno: pmocReturn
                 };
             });
             if (button) { button.disabled = true; button.textContent = 'Validando e gerando OS…'; }
             window.parent.postMessage({
                 type: 'DBS_CONTROL_CREATE_SERVICE_ROUTE',
-                requestId, serviceType, routeDate, priority, orders
+                requestId, serviceType, routeDate, competence: pmocMode ? competence : null, priority, orders
             }, '*');
         }
 
