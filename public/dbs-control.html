@@ -4620,13 +4620,64 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 <p class="pmoc-month-note">A conclusão é reconhecida por uma OS preventiva/PMOC concluída na competência. Se o técnico marcar “Precisa retornar”, o cliente permanece pendente. A seleção de clientes é específica de cada mês.</p>
                 <section id="pmoc-route-planner" class="pmoc-route-panel" aria-labelledby="pmoc-route-title">
                     <div class="pmoc-route-head">
-                        <div><h4 id="pmoc-route-title">Planejador inteligente de rotas PMOC</h4><p>Concilia cada loja com as OS da competência, aproxima endereços por região e permite revisar a rota antes de emitir qualquer OS.</p></div>
-                        <button type="button" class="btn btn-primary btn-sm" id="pmoc-route-analyze" onclick="analisarRotaPMOC()">Analisar lojas e montar rota</button>
+                        <div><h4 id="pmoc-route-title">Programação de rotas e atendimentos</h4><p>Escolha o tipo de serviço, registre o que o cliente solicitou, selecione os locais e programe a sequência antes de gerar as OS.</p></div>
+                        <button type="button" class="btn btn-primary btn-sm" id="pmoc-route-analyze" onclick="analisarRotaPMOC()">Carregar locais elegíveis</button>
+                    </div>
+                    <div class="pmoc-route-form-grid">
+                        <label>Tipo de atendimento
+                            <select id="pmoc-route-type" onchange="aoAlterarTipoRota()">
+                                <option value="Visita Técnica" selected>Visita técnica</option>
+                                <option value="PMOC Preventiva · Mensal">PMOC preventiva · Mensal</option>
+                                <option value="PMOC Preventiva · Trimestral">PMOC preventiva · Trimestral</option>
+                                <option value="Manutenção Preventiva">Manutenção preventiva</option>
+                                <option value="Manutenção Corretiva">Manutenção corretiva</option>
+                                <option value="Instalação / Start-Up">Instalação / Start-up</option>
+                                <option value="Inspeção Técnica">Inspeção técnica / diagnóstico</option>
+                                <option value="Retorno Técnico">Retorno técnico</option>
+                                <option value="Atendimento Emergencial">Atendimento emergencial</option>
+                                <option value="Outro Atendimento">Outro atendimento</option>
+                            </select>
+                        </label>
+                        <label>Data prevista
+                            <input type="date" id="pmoc-route-date" required>
+                        </label>
+                        <label>Primeiro horário
+                            <input type="time" id="pmoc-route-start-time" value="08:00" required>
+                        </label>
+                        <label>Duração estimada por parada
+                            <select id="pmoc-route-duration">
+                                <option value="30">30 minutos</option>
+                                <option value="60" selected>1 hora</option>
+                                <option value="90">1h30</option>
+                                <option value="120">2 horas</option>
+                                <option value="180">3 horas</option>
+                            </select>
+                        </label>
+                        <label>Técnico responsável
+                            <select id="pmoc-route-technician"><option value="">Sem atribuição por enquanto</option></select>
+                        </label>
+                        <label>Prioridade
+                            <select id="pmoc-route-priority">
+                                <option value="normal" selected>Normal</option>
+                                <option value="baixa">Baixa</option>
+                                <option value="alta">Alta</option>
+                                <option value="urgente">Urgente</option>
+                            </select>
+                        </label>
+                        <label class="pmoc-route-wide">Assunto / solicitação do cliente
+                            <input type="text" id="pmoc-route-subject" maxlength="160" placeholder="Ex.: equipamento não está resfriando a área de vendas">
+                        </label>
+                        <label class="pmoc-route-wide">Causa ou relato informado pelo solicitante
+                            <textarea id="pmoc-route-cause" rows="3" maxlength="2000" placeholder="Descreva o que aconteceu, os sintomas, quando começou, em quais equipamentos e o impacto para o cliente."></textarea>
+                        </label>
+                        <label class="pmoc-route-wide">Orientações adicionais para o técnico (opcional)
+                            <textarea id="pmoc-route-instructions" rows="2" maxlength="1500" placeholder="Acesso, contato no local, restrições de horário, cuidados, peças suspeitas ou instruções importantes."></textarea>
+                        </label>
                     </div>
                     <div class="pmoc-route-toolbar">
                         <label class="pmoc-route-origin"><input type="checkbox" id="pmoc-route-use-location"> Usar minha localização como ponto de partida (uma única leitura, mediante permissão)</label>
                         <input type="search" id="pmoc-route-search" placeholder="Filtrar lojas por nome, bairro ou endereço" aria-label="Filtrar lojas da rota" oninput="filtrarLojasRotaPMOC()">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarLojasVisiveisPMOC()">+ Adicionar lojas visíveis</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarLojasVisiveisPMOC()">+ Adicionar locais visíveis</button>
                     </div>
                     <div id="pmoc-route-audit" class="pmoc-route-audit" aria-live="polite">A auditoria ainda não foi executada. Nenhuma OS será criada nesta etapa.</div>
                     <div id="pmoc-route-map" class="pmoc-route-map" role="region" aria-label="Mapa das lojas PMOC"></div>
@@ -4637,13 +4688,31 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     </div>
                     <div id="pmoc-route-review" class="pmoc-route-review" hidden></div>
                     <div class="pmoc-route-footer">
-                        <span id="pmoc-route-distance">A distância estimada será exibida após geocodificar os endereços.</span>
-                        <button type="button" class="btn btn-primary" id="pmoc-route-approve" onclick="aprovarRotaPMOC()" disabled>Aprovar rota e criar OS PMOC</button>
+                        <span id="pmoc-route-distance">Escolha os locais e otimize a sequência para visualizar o mapa.</span>
+                        <div class="pmoc-route-footer-actions">
+                            <button type="button" class="btn btn-secondary" id="pmoc-route-optimize" onclick="otimizarRotaPMOC()" disabled>Geocodificar e otimizar rota</button>
+                            <button type="button" class="btn btn-primary" id="pmoc-route-approve" onclick="aprovarRotaPMOC()" disabled>Confirmar programação e gerar OS</button>
+                        </div>
                     </div>
                     <p class="pmoc-route-disclaimer">A geocodificação consulta o serviço Photon/OpenStreetMap somente após você solicitar a análise. Os endereços são enviados ao serviço para localizar os pontos. A rota é uma estimativa por proximidade em linha reta, não considera trânsito; confira o trajeto no mapa antes de aprovar.</p>
                 </section>
                 <style>
                     .pmoc-route-panel{margin:18px 0;padding:16px;border:1px solid #d9e5f1;border-radius:16px;background:#fbfdff}
+                    .pmoc-route-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:15px 0;padding:13px;border:1px solid #e2eaf2;border-radius:12px;background:#fff}
+                    .pmoc-route-form-grid label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11px;font-weight:800;color:#38536e}
+                    .pmoc-route-form-grid input,.pmoc-route-form-grid select,.pmoc-route-form-grid textarea{width:100%;min-width:0;min-height:39px;padding:9px 10px;border:1px solid #cbd8e8;border-radius:9px;background:#fff;color:#17324d;font:inherit;font-size:12px;font-weight:500}
+                    .pmoc-route-form-grid textarea{resize:vertical;line-height:1.45}
+                    .pmoc-route-wide{grid-column:1/-1}
+                    .pmoc-route-footer-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+                    .pmoc-route-item{flex-wrap:wrap}
+                    .pmoc-route-item .pmoc-route-equipment{flex:1 1 100%;min-width:0;margin:2px 0 0 39px}
+                    .pmoc-route-equipment label{display:flex;align-items:center;gap:7px;font-size:10px;color:#64748b}
+                    .pmoc-route-equipment select{flex:1;min-width:0;max-width:100%;min-height:34px;padding:6px 8px;border:1px solid #d3dfeb;border-radius:8px;background:#fff;color:#24435f;font-size:11px}
+                    .pmoc-route-item .pmoc-route-warning,.pmoc-route-option .pmoc-route-warning{display:block;margin-top:4px;color:#9a5a08;font-size:10px;line-height:1.4}
+                    .pmoc-route-option{flex-wrap:wrap}
+                    .pmoc-route-option .pmoc-route-item-main{min-width:0}
+                    .pmoc-route-option .pmoc-route-option-warning{flex:1 1 100%;color:#9a5a08;font-size:10px;line-height:1.4}
+
                     .pmoc-route-head,.pmoc-route-toolbar,.pmoc-route-subhead,.pmoc-route-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
                     .pmoc-route-head h4{margin:0;color:#173b60;font-size:16px}.pmoc-route-head p{margin:4px 0 0;color:#64748b;font-size:12px}
                     .pmoc-route-toolbar{margin:14px 0}.pmoc-route-origin{display:flex;align-items:center;gap:7px;font-size:12px;color:#475569}.pmoc-route-toolbar input[type=search]{min-height:38px;min-width:220px;padding:8px 11px;border:1px solid #cbd5e1;border-radius:9px}
@@ -4663,7 +4732,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     .pmoc-route-panel .dbs-route-leg{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px;padding:10px;border:1px solid #dbe5ef;border-radius:10px;background:#fff}.pmoc-route-panel .dbs-route-leg b{display:block;font-size:12px;color:#24435f}.pmoc-route-panel .dbs-route-leg small{display:block;margin-top:3px;color:#718399;font-size:10px}.pmoc-route-panel .dbs-route-open{min-height:38px;padding:0 12px;border:0;border-radius:9px;background:#1769d1;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
                     @media(max-width:560px){.pmoc-route-panel .dbs-route-leg{align-items:stretch;flex-direction:column}.pmoc-route-panel .dbs-route-open{width:100%}}
                     .pmoc-route-footer span{font-size:12px;color:#475569}.pmoc-route-disclaimer{margin:10px 0 0;color:#64748b;font-size:10px;line-height:1.5}
-                    @media(max-width:760px){.pmoc-route-columns{grid-template-columns:1fr}.pmoc-route-map{height:280px}.pmoc-route-head{align-items:flex-start}.pmoc-route-head button,.pmoc-route-footer button{width:100%}.pmoc-route-footer{align-items:stretch}}
+                    @media(max-width:900px){.pmoc-route-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}\n                    @media(max-width:760px){.pmoc-route-columns{grid-template-columns:1fr}.pmoc-route-map{height:280px}.pmoc-route-head{align-items:flex-start}.pmoc-route-head button,.pmoc-route-footer-actions button{width:100%}.pmoc-route-footer{align-items:stretch}.pmoc-route-footer-actions{width:100%}}\n                    @media(max-width:520px){.pmoc-route-form-grid{grid-template-columns:1fr}.pmoc-route-wide{grid-column:auto}.pmoc-route-item .pmoc-route-equipment{margin-left:0}}
                 </style>
                 <div class="table-responsive">
                     <table class="pmoc-month-table">
