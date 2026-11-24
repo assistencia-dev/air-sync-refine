@@ -4654,6 +4654,15 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                                 <option value="180">3 horas</option>
                             </select>
                         </label>
+                        <label>Intervalo entre paradas (deslocamento/organização)
+                            <select id="pmoc-route-travel-buffer">
+                                <option value="0">Sem intervalo</option>
+                                <option value="15">15 minutos</option>
+                                <option value="30" selected>30 minutos</option>
+                                <option value="45">45 minutos</option>
+                                <option value="60">1 hora</option>
+                            </select>
+                        </label>
                         <label>Técnico responsável
                             <select id="pmoc-route-technician"><option value="">Sem atribuição por enquanto</option></select>
                         </label>
@@ -8521,10 +8530,17 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             ].map(value => String(value ?? '').trim()).filter(Boolean).join(' · ');
         }
 
-        function selecionarEquipamentoRotaPMOC(siteId, equipmentId) {
+        function selecionarEquipamentosRotaPMOC(siteId, select) {
             const item = DBS_PMOC_ROUTE.selected.find(candidate => String(candidate.id) === String(siteId));
-            if (!item) return;
-            item.equipmentId = String(equipmentId || '').trim() || null;
+            if (!item || !select) return;
+            const selectedIds = Array.from(select.selectedOptions || [])
+                .map(option => String(option.value || '').trim()).filter(Boolean);
+            if (selectedIds.length > 10) {
+                alert('É possível vincular até 10 equipamentos por OS.');
+                return;
+            }
+            item.equipmentIds = selectedIds;
+            item.equipmentId = selectedIds[0] || null;
             renderizarRotaPMOC();
         }
 
@@ -8532,9 +8548,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const date = String(document.getElementById('pmoc-route-date')?.value || dataLocalRotaPMOC());
             const time = String(document.getElementById('pmoc-route-start-time')?.value || '08:00');
             const duration = Math.max(15, Number(document.getElementById('pmoc-route-duration')?.value || 60));
+            const travelBuffer = Math.max(0, Number(document.getElementById('pmoc-route-travel-buffer')?.value || 30));
             const start = new Date(date + 'T' + time + ':00');
             if (!Number.isFinite(start.getTime())) return 'Horário a definir';
-            start.setMinutes(start.getMinutes() + duration * index);
+            start.setMinutes(start.getMinutes() + (duration + travelBuffer) * index);
             return String(start.getHours()).padStart(2,'0') + ':' + String(start.getMinutes()).padStart(2,'0');
         }
 
@@ -8552,11 +8569,14 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const selected = document.getElementById('pmoc-route-selected');
             if (selected) selected.innerHTML = DBS_PMOC_ROUTE.selected.length ? DBS_PMOC_ROUTE.selected.map((item,index) => {
                 const equipmentOptions = equipamentosDisponiveisRotaPMOC(item);
-                const options = '<option value="">Sem equipamento específico</option>' + equipmentOptions.map(equipment =>
-                    '<option value="' + escDbsControl(equipment.id) + '" ' + (String(item.equipmentId || '') === String(equipment.id) ? 'selected' : '') + '>' + escDbsControl(rotuloEquipamentoRotaPMOC(equipment)) + '</option>'
+                const selectedEquipmentIds = Array.isArray(item.equipmentIds)
+                    ? item.equipmentIds.map(String)
+                    : (item.equipmentId ? [String(item.equipmentId)] : []);
+                const options = equipmentOptions.map(equipment =>
+                    '<option value="' + escDbsControl(equipment.id) + '" ' + (selectedEquipmentIds.includes(String(equipment.id)) ? 'selected' : '') + '>' + escDbsControl(rotuloEquipamentoRotaPMOC(equipment)) + '</option>'
                 ).join('');
                 const warning = item.warning ? '<small class="pmoc-route-warning">' + escDbsControl(item.warning) + '</small>' : '';
-                const equipmentField = '<div class="pmoc-route-equipment"><label>Equipamento (opcional)<select aria-label="Equipamento de ' + escDbsControl(item.name) + '" onchange="selecionarEquipamentoRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\',this.value)" ' + (equipmentOptions.length ? '' : 'disabled') + '>' + (equipmentOptions.length ? options : '<option value="">Nenhum equipamento relacional disponível para esta loja</option>') + '</select></label></div>';
+                const equipmentField = '<div class="pmoc-route-equipment"><label>Equipamentos (opcional · até 10)<select multiple size="3" aria-label="Equipamentos de ' + escDbsControl(item.name) + '" onchange="selecionarEquipamentosRotaPMOC(\\'' + String(item.id).replace(/'/g,"\\\\'") + '\\',this)" ' + (equipmentOptions.length ? '' : 'disabled') + '>' + (equipmentOptions.length ? options : '<option value="">Nenhum equipamento relacional disponível para esta loja</option>') + '</select><small>' + selectedEquipmentIds.length + ' selecionado(s)</small></label></div>';
                 return '<li class="pmoc-route-item"><span class="dbs-route-number">' + (index+1) + '</span><div class="pmoc-route-item-main"><strong>' + escDbsControl(item.name) + '</strong><small>' + escDbsControl(item.clientName + ' · ' + item.address) + '</small><small>Visita prevista: ' + escDbsControl(formatarDataHoraRotaPMOC(index)) + '</small>' + warning + '</div>'
                     + '<button type="button" class="pmoc-route-remove" aria-label="Remover local" onclick="removerLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\')">×</button>'
                     + '<button type="button" class="pmoc-route-add" aria-label="Mover local para cima" onclick="moverLojaRotaPMOC(\'' + String(item.id).replace(/'/g,"\\'") + '\',-1)">↑</button>'
@@ -8734,9 +8754,18 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 return;
             }
             const sites = DBS_PMOC_ROUTE.selected.slice();
-            const equipmentIds = sites.map(site => String(site.equipmentId || '').trim()).filter(Boolean);
-            if (new Set(equipmentIds).size !== equipmentIds.length) {
+            const equipmentIds = sites.flatMap(site => Array.isArray(site.equipmentIds)
+                ? site.equipmentIds.map(value => String(value || '').trim()).filter(Boolean)
+                : (site.equipmentId ? [String(site.equipmentId).trim()] : []));
+            if (equipmentIds.some((id, index) => equipmentIds.indexOf(id) !== index)) {
                 alert('O mesmo equipamento foi selecionado em mais de uma parada. Revise a rota.');
+                return;
+            }
+            if (sites.some(site => {
+                const ids = Array.isArray(site.equipmentIds) ? site.equipmentIds : (site.equipmentId ? [site.equipmentId] : []);
+                return ids.length > 10;
+            })) {
+                alert('Cada OS pode receber no máximo 10 equipamentos.');
                 return;
             }
             const pmocMode = (window.DbsServiceRoutePlanner || window.DbsPmocRoutePlanner).typeFamily(serviceType) === 'pmoc';
@@ -8754,7 +8783,12 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     return;
                 }
             }
-            const totalMinutes = sites.length * duration;
+            const travelBuffer = Math.max(0, Number(document.getElementById('pmoc-route-travel-buffer')?.value || 30));
+            const totalMinutes = sites.length * duration + Math.max(0, sites.length - 1) * travelBuffer;
+            if (end.getDate() !== start.getDate() || end.getMonth() !== start.getMonth() || end.getFullYear() !== start.getFullYear()) {
+                alert('A programação ultrapassa o dia selecionado. Reduza o número de paradas, a duração ou o intervalo, ou escolha outra data.');
+                return;
+            }
             const end = new Date(start.getTime() + totalMinutes * 60000);
             const endTime = String(end.getHours()).padStart(2,'0') + ':' + String(end.getMinutes()).padStart(2,'0');
             const technicianName = technician ? String(technician.nome || technician.name || 'Técnico') : 'Sem atribuição por enquanto';
@@ -8764,7 +8798,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 + 'Técnico: ' + technicianName + ' · prioridade: ' + priority + '\\n'
                 + 'Assunto: ' + subject + '\\n'
                 + (warningCount ? 'Atenção: ' + warningCount + ' locais têm OS do mesmo tipo ainda em aberto ou histórico sem loja vinculada.\\n' : '')
-                + 'Cada parada receberá um horário sequencial de ' + duration + ' minutos. Nenhuma OS existente será alterada.';
+                + 'Cada parada terá ' + duration + ' minutos e intervalo estimado de ' + travelBuffer + ' minutos entre locais. Nenhuma OS existente será alterada.';
             if (!confirm(confirmation)) return;
 
             const requestId = (window.crypto && typeof window.crypto.randomUUID === 'function')
@@ -8773,8 +8807,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const now = new Date().toISOString();
             const serviceKey = serviceType.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
             const orders = sites.map((site,index) => {
-                const scheduled = new Date(start.getTime() + duration * index * 60000);
+                const scheduled = new Date(start.getTime() + (duration + travelBuffer) * index * 60000);
                 const scheduledAt = scheduled.toISOString();
+                const siteEquipmentIds = Array.isArray(site.equipmentIds) ? site.equipmentIds : (site.equipmentId ? [site.equipmentId] : []);
+                const equipments = siteEquipmentIds.map(id => (ERP_STATE.equipamentos || []).find(item => String(item.id) === String(id))).filter(Boolean);
                 const equipment = site.equipmentId ? (ERP_STATE.equipamentos || []).find(item => String(item.id) === String(site.equipmentId)) : null;
                 const detailParts = [
                     'Solicitação: ' + subject,
@@ -8782,8 +8818,10 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     'Tipo de atendimento: ' + serviceType,
                     'Data e horário programados: ' + dataBRRotaPMOC(routeDate) + ' às ' + horarioPrevistoRotaPMOC(index),
                     'Prioridade: ' + priority,
+                    'Duração estimada por parada: ' + duration + ' minutos',
+                    'Intervalo estimado entre locais: ' + travelBuffer + ' minutos',
                     'Local: ' + site.name + ' · ' + site.address,
-                    equipment ? 'Equipamento: ' + rotuloEquipamentoRotaPMOC(equipment) : 'Equipamento específico: não informado',
+                    'Equipamentos: ' + (equipments.length ? equipments.map(rotuloEquipamentoRotaPMOC).join(' | ') : 'não informados'),
                     instructions ? 'Orientações ao técnico: ' + instructions : ''
                 ].filter(Boolean).join('\\n');
                 const pmocReturn = pmocMode && site.status === 'retorno';
@@ -8794,8 +8832,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     id,
                     clienteId: site.clientId,
                     siteId: site.siteId || site.id,
-                    equipamentoId: site.equipmentId || null,
-                    equipamentosIds: site.equipmentId ? [site.equipmentId] : [],
+                    equipamentoId: siteEquipmentIds[0] || null,
+                    equipamentosIds: siteEquipmentIds,
                     tecnicoId: selectedTechnicianId || null,
                     employeeId: employeeId || null,
                     tipo: serviceType,
@@ -8811,6 +8849,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     routeDate,
                     routeServiceType: serviceType,
                     routeDurationMinutes: duration,
+                    routeTravelBufferMinutes: travelBuffer,
                     pmocCompetencia: pmocMode ? competence : null,
                     pmocRetorno: pmocReturn
                 };
