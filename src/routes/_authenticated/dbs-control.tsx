@@ -1338,12 +1338,12 @@ function DbsControlPage() {
           const allowedServiceTypes = new Set([
             "pmoc preventiva · mensal",
             "pmoc preventiva · trimestral",
-            "manutenção preventiva",
-            "manutenção corretiva",
+            "manutencao preventiva",
+            "manutencao corretiva",
             "visita técnica",
-            "instalação / start-up",
-            "inspeção técnica",
-            "retorno técnico",
+            "instalacao / start-up",
+            "inspecao tecnica",
+            "retorno tecnico",
             "atendimento emergencial",
             "outro atendimento",
             // Compatibilidade com o antigo botão de aprovação PMOC.
