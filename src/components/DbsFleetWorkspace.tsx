@@ -341,7 +341,7 @@ export function DbsFleetEmployeePanel() {
           <p className="mt-1 text-xs text-slate-300">O GPS só é compartilhado depois da sua autorização e durante a jornada registrada.</p>
         </div>
         <span className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black ${sessionId ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200" : "border-white/15 bg-white/5 text-slate-300"}`}>
-          <Radio className="h-3.5 w-3.5" /> {sessionId ? "Acompanhamento ativo" : status.data?.eligible ? "Aguardando autorização" : "Fora da janela de jornada"}
+          <Radio className="h-3.5 w-3.5" /> {sessionId ? "Acompanhamento ativo" : status.data?.onBreak ? "Pausa de almoço" : status.data?.eligible ? "Aguardando autorização" : "Fora da janela de jornada"}
         </span>
       </div>
       <div className="grid gap-4 p-5 sm:p-7 lg:grid-cols-[1.2fr_.8fr]">
