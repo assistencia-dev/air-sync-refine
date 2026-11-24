@@ -130,6 +130,21 @@ const optimized = pmoc.optimize([
 assert.deepEqual(Array.from(optimized.stops, row => row.id), ['near', 'middle', 'far'], 'A rota deve aproximar a próxima loja a partir da origem/última parada.');
 assert.equal(optimized.stops[0].sequence, 1);
 assert.ok(optimized.distanceEstimateKm > 0);
+const centralStart = pmoc.optimize([
+  { id: 'edge-a', lat: 0, lng: 0 }, { id: 'center', lat: 0, lng: 1 }, { id: 'edge-b', lat: 0, lng: 2 }
+], null);
+assert.equal(centralStart.stops[0].id, 'center', 'Sem GPS, deve iniciar pela loja mais central e depois aproximar as demais.');
+const cancelledAudit = pmoc.buildCandidates(
+  [{ id: 'cancelled-site', clienteId: 'cancelled-client', nome: 'Loja com OS cancelada', endereco: 'Rua C, 30, Niterói, RJ', status: 'ativo' }],
+  [{ id: 'cancelled-client', nome: 'Cliente' }],
+  [{ id: 'cancelled-order', clienteId: 'cancelled-client', siteId: 'cancelled-site', tipo: 'preventiva', status: 'cancelada', data: '24/11/2026' }],
+  '2026-11'
+);
+assert.equal(cancelledAudit.candidates.length, 0, 'OS cancelada não deve ser reaberta automaticamente com a mesma chave de emissão.');
+assert.ok(cancelledAudit.review.length > 0, 'OS cancelada exige revisão manual.');
+const inlinePlannerScript = html.match(/<script>([\\s\\S]*?function analisarRotaPMOC\\([\\s\\S]*?)<\\/script>/);
+assert.ok(inlinePlannerScript, 'O script do planejador PMOC deve estar presente no HTML.');
+new vm.Script(inlinePlannerScript[1], { filename: 'dbs-control-pmoc-inline.js' });
 
 assert.match(html, /dbs-control-pmoc-route\.js\?v=20261124-1/, 'O planejador PMOC deve entrar com cache busting.');
 assert.match(html, /id="pmoc-route-map"/, 'A interface deve exibir o mapa dentro do DBS.');
