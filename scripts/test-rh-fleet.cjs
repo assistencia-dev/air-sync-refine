@@ -20,6 +20,8 @@ for (const table of [
 }
 
 assert.match(migration, /lunch_break/, "A sessão deve registrar pausa de almoço.");
+assert.match(migration, /location_recorded_at timestamptz/, "O SOS deve preservar a hora da localização exibida.");
+assert.match(migration, /location_source text CHECK/, "O SOS deve identificar se a posição veio do GPS atual ou do último ponto conhecido.");
 assert.match(migration, /rh_employee_location_sessions_one_active_employee/, "Deve impedir duas sessões simultâneas por funcionário.");
 assert.match(migration, /accuracy_m numeric\\(10,2\\) NOT NULL CHECK \\(accuracy_m BETWEEN 0 AND 250\\)/, "Pontos devem ter limite de precisão.");
 
@@ -51,6 +53,12 @@ assert.match(functions, /30 \* 24 \* 60 \* 60 \* 1000/, "Pontos de localização
 assert.match(functions, /90 \* 24 \* 60 \* 60 \* 1000/, "Alertas SOS resolvidos devem ter retenção de 90 dias.");
 assert.match(functions, /sosAvailable: attendance\.hasEntry && !attendance\.hasExit/, "SOS deve continuar acessível durante intervalo autorizado da jornada.");
 assert.match(functions, /existingAlerts\?\.\[0\]/, "SOS aberto existente deve evitar duplicação de alertas.");
+assert.match(functions, /location_recorded_at: locationRecordedAt/, "O alerta deve guardar a hora da localização apresentada.");
+assert.match(functions, /locationSource = hasCurrentSosLocation \? "current_sos"/, "O servidor deve distinguir GPS atual de última posição conhecida.");
+assert.match(functions, /DBS_FLEET_TRACKING_STARTED/, "O consentimento e início da sessão devem ser auditados.");
+assert.match(functions, /DBS_FLEET_TRACKING_STOPPED/, "O encerramento manual deve ser auditado.");
+assert.match(functions, /DBS_FLEET_SOS_ACKNOWLEDGED/, "A confirmação de SOS deve ser auditada.");
+assert.match(functions, /DBS_FLEET_SOS_RESOLVED/, "A resolução de SOS deve ser auditada.");
 assert.match(functions, /requireRh\(context\);[\s\S]*?rh_employee_location_sessions/, "O mapa operacional deve ser restrito ao RH.");
 assert.match(functions, /requireRh\(context\);[\s\S]*?rh_employee_location_points/, "O histórico de trajetos deve ser restrito ao RH.");
 assert.match(functions, /!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//, "A validação de data deve usar dígitos reais, não barra invertida literal.");
