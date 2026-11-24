@@ -26,7 +26,7 @@ assert.match(migration, /CREATE EXTENSION IF NOT EXISTS pg_cron/, "A retenção 
 assert.match(migration, /cron\.schedule\(/, "A limpeza de retenção deve estar agendada diariamente.");
 assert.match(migration, /dbs_fleet_cleanup_retention/, "A função de retenção automática deve existir.");
 assert.match(migration, /rh_employee_location_sessions_one_active_employee/, "Deve impedir duas sessões simultâneas por funcionário.");
-assert.match(migration, /accuracy_m numeric\\(10,2\\) NOT NULL CHECK \\(accuracy_m BETWEEN 0 AND 250\\)/, "Pontos devem ter limite de precisão.");
+assert.match(migration, /accuracy_m numeric\(10,2\) NOT NULL CHECK \(accuracy_m BETWEEN 0 AND 250\)/, "Pontos devem ter limite de precisão.");
 
 for (const fn of [
   "getMyFleetStatus",
