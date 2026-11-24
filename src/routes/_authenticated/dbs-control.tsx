@@ -1554,12 +1554,14 @@ function DbsControlPage() {
             if (existingPmoc.error) throw new Error("Falha ao conferir OS PMOC já existentes: " + existingPmoc.error.message);
             const existingRows = existingPmoc.data ?? [];
             for (const order of normalizedOrders) {
-              const sameCompetence = existingRows.filter((row: any) =>
-                String(row.site_id) === String(order.siteId)
-                && /pmoc|preventiv/i.test(normalizeDbsStatus(row.type))
-                && monthOf(row.scheduled_at || row.created_at) === competence
-                && !/cancelad/i.test(normalizeDbsStatus(row.status))
-              );
+              const sameCompetence = existingRows.filter((row: any) => {
+                const existingType = normalizeDbsStatus(row.type);
+                const isLegacyPmocType = legacyPmocRequest && existingType === "preventiva";
+                return String(row.site_id) === String(order.siteId)
+                  && (existingType.includes("pmoc") || isLegacyPmocType)
+                  && monthOf(row.scheduled_at || row.created_at) === competence
+                  && !/cancelad/i.test(normalizeDbsStatus(row.status));
+              });
               if (sameCompetence.length && !order.pmocRetorno) {
                 reply({ ok: false, error: "Já existe uma OS PMOC/preventiva nesta loja e competência. Atualize a auditoria ou selecione a opção de retorno quando houver um retorno realmente pendente." });
                 return;
