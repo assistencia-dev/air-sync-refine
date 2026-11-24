@@ -643,7 +643,7 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
     const attendance = await fleetAttendance(employee.id, workDate);
     if (!attendance.hasEntry || attendance.hasExit) throw new Error("O SOS pelo portal está disponível durante a jornada registrada, após a entrada e antes da saída.");
     const { data: sessionRows, error: sessionError } = await fleetDb.from("rh_employee_location_sessions")
-      .select("id, last_latitude, last_longitude, last_accuracy_m")
+      .select("id, last_latitude, last_longitude, last_accuracy_m, last_position_at")
       .eq("employee_id", employee.id).eq("work_date", workDate)
       .order("started_at", { ascending: false }).limit(1);
     if (sessionError) throw new Error(sessionError.message);
@@ -651,6 +651,9 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
     const latitude = data.latitude ?? session?.last_latitude ?? null;
     const longitude = data.longitude ?? session?.last_longitude ?? null;
     const accuracy = data.accuracy_m ?? session?.last_accuracy_m ?? null;
+    const hasCurrentSosLocation = data.latitude != null && data.longitude != null;
+    const locationRecordedAt = hasCurrentSosLocation ? new Date().toISOString() : session?.last_position_at ?? null;
+    const locationSource = hasCurrentSosLocation ? "current_sos" : latitude != null && longitude != null ? "last_known_session" : null;
     const { data: existingAlerts, error: existingError } = await fleetDb.from("rh_employee_sos_alerts")
       .select("id, created_at, status, message").eq("employee_id", employee.id)
       .in("status", ["OPEN", "ACKNOWLEDGED"]).order("created_at", { ascending: false }).limit(1);
@@ -664,6 +667,8 @@ export const sendMyFleetSos = createServerFn({ method: "POST" })
       latitude,
       longitude,
       accuracy_m: accuracy,
+      location_recorded_at: locationRecordedAt,
+      location_source: locationSource,
       status: "OPEN",
     }).select("id, created_at, status, message").single();
     if (error) throw new Error(error.message);
@@ -702,7 +707,7 @@ export const listRhFleetOverview = createServerFn({ method: "GET" })
       employee: employeeById.get(session.employee_id) ?? null,
     }));
     const { data: sosAlerts, error: sosError } = await fleetDb.from("rh_employee_sos_alerts")
-      .select("id, employee_id, session_id, created_at, status, message, latitude, longitude, accuracy_m, acknowledged_by, acknowledged_at")
+      .select("id, employee_id, session_id, created_at, status, message, latitude, longitude, accuracy_m, location_recorded_at, location_source, acknowledged_by, acknowledged_at")
       .in("status", ["OPEN", "ACKNOWLEDGED"])
       .order("created_at", { ascending: false }).limit(100);
     if (sosError) throw new Error(sosError.message);
