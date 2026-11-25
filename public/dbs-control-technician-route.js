@@ -205,7 +205,7 @@
       '#dbs-dispatch-route-modal .dbs-dispatch-location small{display:block;margin-top:3px;font-size:10px;color:#65798f;line-height:1.45}',
       '#dbs-dispatch-route-modal .dbs-dispatch-origin-toggle{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px;color:#27445e}',
       '#dbs-dispatch-route-modal .dbs-dispatch-origin-toggle input{width:16px;min-height:16px;margin:0}',
-      '#dbs-dispatch-route-modal .dbs-dispatch-metrics{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;margin-top:11px}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:7px;margin-top:11px}',
       '#dbs-dispatch-route-modal .dbs-dispatch-metric{display:flex;flex-direction:column;gap:2px;min-width:0;padding:9px 10px;border:1px solid #dfe8f0;border-radius:10px;background:#f8fbfe}',
       '#dbs-dispatch-route-modal .dbs-dispatch-metric strong{font-size:18px;line-height:1.1;color:#173b60}',
       '#dbs-dispatch-route-modal .dbs-dispatch-metric span{font-size:9px;font-weight:800;color:#65798f}',
@@ -687,13 +687,16 @@
           ['Em atendimento', metrics.inProgressOrders],
           ['Vencidas', metrics.overdueOrders],
           ['Emergenciais', metrics.emergencyOrders],
-          ['Equipamentos', metrics.equipment]
+          ['Equipamentos', metrics.equipment],
+          ['OS sem local definido', metrics.ordersWithoutSpecificSite],
+          ['Equip. sem local definido', metrics.equipmentWithoutSpecificSite]
         ].map(([label, value]) => '<div class="dbs-dispatch-metric"><strong>' + Number(value).toLocaleString('pt-BR') + '</strong><span>' + safe(label) + '</span></div>').join('');
       }
       const unmapped = Math.max(0, metrics.locations - metrics.mappedLocations);
       if (status) status.textContent = metrics.mappedLocations + '/' + metrics.locations + ' locais posicionados pelo endereço. '
         + metrics.openOrders + ' OS abertas · ' + metrics.inProgressOrders + ' em atendimento · '
         + metrics.overdueOrders + ' vencidas · ' + metrics.equipment + ' equipamentos. '
+        + metrics.ordersWithoutSpecificSite + ' OS e ' + metrics.equipmentWithoutSpecificSite + ' equipamentos sem vínculo de local específico. '
         + (unmapped ? unmapped + ' endereço(s) aguardam revisão. ' : '')
         + (originForRoute() ? 'A rota considera o GPS recente do técnico.' : 'Sem GPS recente: a rota não usa a posição do administrador como origem.')
         + ' Pinos verdes: sem OS pendente; âmbar: OS em aberto/atendimento; vermelhos: OS vencida/emergencial.';
