@@ -516,12 +516,25 @@ async function hydrateDbsControlStateFromCanonicalDb(
         ? (inScope(scopedClientIds) ? query.in("id", scopedClientIds) : noRows)
         : query;
     })(),
-    (() => {
-      const query = supabaseAdmin.from("dbs_control_sites")
-        .select("id,client_id,name,address_json,map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status,contact_name,contact_phone,contact_email,notes,status,updated_at");
-      return isScopedCollaborator
-        ? (inScope(scopedClientIds) ? query.in("client_id", scopedClientIds) : noRows)
-        : query;
+    (async () => {
+      const baseSelect = "id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at";
+      const mapSelect = "id,client_id,name,address_json,map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status,contact_name,contact_phone,contact_email,notes,status,updated_at";
+      const querySites = (columns: string) => {
+        const query = supabaseAdmin.from("dbs_control_sites").select(columns);
+        return isScopedCollaborator
+          ? (inScope(scopedClientIds) ? query.in("client_id", scopedClientIds) : noRows)
+          : query;
+      };
+      const withMapCoordinates = await querySites(mapSelect);
+      if (!withMapCoordinates.error) return withMapCoordinates;
+
+      // Keep the current DBS CONTROL available during an additive rollout:
+      // older databases do not have the optional map cache columns yet.
+      const message = String(withMapCoordinates.error.message ?? "");
+      const missingCoordinatesSchema =
+        /map_(?:latitude|longitude|geocoded_at|geocode_provider|geocode_status)/i.test(message)
+        && /(column|schema cache|does not exist|could not find|not found)/i.test(message);
+      return missingCoordinatesSchema ? querySites(baseSelect) : withMapCoordinates;
     })(),
     (() => {
       const query = supabaseAdmin.from("dbs_control_equipment")
@@ -4646,7 +4659,16 @@ export const saveDbsControlSiteMapCoordinates = createServerFn({ method: "POST" 
         }).eq("id", item.siteId);
         if (row.updated_at) update = update.eq("updated_at", row.updated_at);
         const result = await update.select("id").maybeSingle();
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) {
+          const message = String(result.error.message ?? "");
+          const missingCoordinatesSchema =
+            /map_(?:latitude|longitude|geocoded_at|geocode_provider|geocode_status)/i.test(message)
+            && /(column|schema cache|does not exist|could not find|not found)/i.test(message);
+          if (missingCoordinatesSchema) {
+            throw new Error("O mapa pode ser consultado com coordenadas aproximadas, mas o cache ainda não foi habilitado no banco oficial. Nenhuma coordenada foi gravada.");
+          }
+          throw new Error(result.error.message);
+        }
         if (result.data) saved += 1;
         else skipped += 1;
       }
