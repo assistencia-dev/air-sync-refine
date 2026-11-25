@@ -161,7 +161,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-4/, 'O planejador atualizado deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-5/, 'O planejador atualizado deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
@@ -277,8 +277,8 @@ console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domí
 const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-4/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-11/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-5/, 'O algoritmo atualizado deve ter cache busting.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-12/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.doesNotMatch(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O planejador de novas OS não pode sobrescrever o atalho da rota das OS existentes.');
 assert.match(dispatchScript, /window\.abrirPlanejamentoNovosAtendimentos = openPlanner/, 'O planejamento de novos atendimentos deve ter uma ação global separada.');
 assert.match(html, /onclick="abrirPlanejamentoNovosAtendimentos\(\)"/, 'A tela deve oferecer um botão separado para planejar novas OS.');
@@ -295,18 +295,21 @@ assert.match(existingRoute, /Sem GPS recente: início na primeira parada/, 'Sem 
 assert.doesNotMatch(existingRoute, /DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'Abrir rota não pode criar nem alterar OS existentes.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
-assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
+assert.match(dispatchScript, /location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
+assert.match(dispatchScript, /state\.originEnabled = Boolean\(location\.is_live\)/, 'A posição antiga não pode ser ativada automaticamente como origem.');
 assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
 assert.match(dispatchScript, /enrichSiteCandidates/, 'Os locais devem receber indicadores calculados pelas OS e equipamentos reais.');
 assert.match(dispatchScript, /summarizeSiteMetrics/, 'O painel do mapa deve exibir indicadores agregados da operação.');
 assert.match(dispatchScript, /enrichSiteCandidates\(\s*candidates,/, 'Os indicadores devem considerar todos os locais com endereço, inclusive os que aguardam geocodificação.');
 assert.match(dispatchScript, /state\.siteMetrics = planner\(\)\.summarizeSiteMetrics\(measured\)/, 'O resumo operacional não pode descartar locais ainda sem coordenadas.');
-assert.match(dispatchScript, /Cadastros a revisar/, 'O mapa deve expor registros de endereço que exigem conferência.');
+assert.match(dispatchScript, /Endereços sem pino no mapa/, 'Endereços sem coordenadas devem continuar disponíveis.');
 
 assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'Coordenadas geocodificadas devem ser cacheadas no cadastro relacional do local.');
-assert.match(dispatchScript, /state\.selected = state\.technician\s*\?\s*state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável após escolher um técnico, sem abrir OS automaticamente.');
-assert.match(dispatchScript, /Pinos verdes: sem OS pendente/, 'A legenda do mapa deve diferenciar locais por situação operacional real.');
-assert.match(dispatchScript, /Sem GPS recente: a rota não usa a posição do administrador como origem/, 'Sem GPS do técnico, o planejador não pode presumir a localização do administrador.');
+assert.match(dispatchScript, /function seedNearestStops\(/, 'A sugestão depende de coordenada do técnico.');
+assert.match(dispatchScript, /planner\(\)\.rankSitesByDistance\(source, origin\)/, 'A lista deve ser ordenada por distância direta do técnico.');
+assert.match(dispatchScript, /employeePositions\.forEach\(/, 'O mapa deve mostrar colaboradores com posição disponível.');
+assert.match(dispatchScript, /id="dbs-dispatch-team"/, 'A lista deve mostrar todos os colaboradores cadastrados.');
+assert.match(dispatchScript, /Usar última posição como referência/, 'A posição anterior somente deve ser usada com escolha explícita.');
 assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'O shell deve persistir coordenadas de endereço com validação administrativa.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES"/, 'A ponte autenticada deve persistir coordenadas geocodificadas.');
 assert.match(dbsControlFunctions, /export const saveDbsControlSiteMapCoordinates = createServerFn/, 'O salvamento das coordenadas deve ocorrer exclusivamente no servidor.');
@@ -316,18 +319,18 @@ assert.match(dbsControlFunctions, /const baseSelect = "id,client_id,name,address
 assert.match(dbsControlFunctions, /return missingCoordinatesSchema \? querySites\(baseSelect\) : withMapCoordinates/, 'A ausência das colunas novas não pode interromper a leitura operacional do DBS CONTROL.');
 assert.match(dbsControlFunctions, /Nenhuma coordenada foi gravada/, 'O sistema deve informar claramente quando o cache de mapa ainda não existe no banco.');
 
-assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
+assert.match(dispatchScript, /rankSitesByDistance/, 'A sequência deve ser sugerida da loja mais próxima à mais distante do técnico.');
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
 assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
 assert.match(dispatchScript, /causaSolicitacao: cause/, 'A descrição do problema deve ser preservada na OS.');
 
 assert.ok((dispatchScript.match(/serviceType: ''/g) || []).length >= 2, 'Toda parada deve começar sem tipo pré-selecionado, exigindo classificação explícita.');
-assert.match(dispatchScript, /Selecione o tipo de atendimento/, 'A interface deve orientar a classificação individual da parada.');
-assert.match(dispatchScript, /Rota planejada para '\s*\+\s*routeDate/, 'A data e a ordem da parada devem acompanhar a OS criada.');
-assert.match(dispatchScript, /Photon[/]OpenStreetMap/, 'A interface deve informar a consulta externa de geocodificação.');
-assert.match(dispatchScript, /A sequência considera proximidade quando há coordenadas/, 'A interface deve explicar que a sugestão inicial usa proximidade e não trânsito.');
+assert.match(dispatchScript, /Tipo de OS/, 'Cada parada deve permitir escolher o tipo de OS.');
+assert.match(dispatchScript, /rotaSequencia: index \+ 1/, 'A sequência da parada deve acompanhar a OS criada.');
+assert.match(dispatchScript, /DBS_CONTROL_GEOCODE_SITE_ADDRESS/, 'A geocodificação continua pela ponte autenticada.');
+assert.match(dispatchScript, /Lojas ordenadas da mais próxima à mais distante do técnico/, 'A lista informa a ordenação por distância do técnico.');
 assert.match(dispatchScript, /state\.selected\.length >= 50/, 'A interface deve impedir seleção acima de 50 locais por lote.');
-assert.match(dispatchScript, /Motivo . problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
+assert.match(dispatchScript, /Descreva o problema/, 'A corretiva exige descrição do problema.');
 assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
 assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
 
@@ -366,17 +369,26 @@ assert.deepEqual(
 );
 const gpsLegs = planner.buildRouteLegs(proximityRoute.stops, { lat: 0, lng: 0 });
 assert.equal(new URL(gpsLegs[0].url).searchParams.get('origin'), '0,0', 'O primeiro trajeto do Maps deve sair da última posição do técnico.');
+const ranked = planner.rankSitesByDistance([{ id: 'farther', name: 'Loja distante', lat: 0, lng: 2 }, { id: 'nearest', name: 'Loja próxima', lat: 0, lng: 0.2 }, { id: 'middle', name: 'Loja intermediária', lat: 0, lng: 1 }, { id: 'no-pin', name: 'Sem pino' }], { lat: 0, lng: 0 });
+assert.deepEqual(Array.from(ranked, item => item.id), ['nearest', 'middle', 'farther', 'no-pin']);
 
 assert.match(pontoFunctions, /export const listRhFleetTechnicianLocations = createServerFn/, 'A leitura da localização deve ocorrer numa função de servidor.');
 assert.match(pontoFunctions, /export const verifyRhDbsControlTechnician = createServerFn/, 'A atribuição deve validar o vínculo RH sem depender das tabelas GPS.');
 assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da migração Fleet deve virar aviso, não bloquear a rota por endereço.');
 assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
 assert.match(parentRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'O bridge precisa responder ao carregamento dos técnicos ativos.');
-assert.match(technicianRoute, /Mapa-base carregado/, 'O mapa-base deve aparecer antes da geocodificação dos endereços.');
-assert.match(technicianRoute, /GPS atualizado nos últimos 3 minutos/, 'O mapa da rota deve identificar a posição recebida dentro da janela de 3 minutos.');
+assert.match(technicianRoute, /Mapa de lojas, clientes e colaboradores/, 'O mapa inclui lojas, clientes e colaboradores.');
+assert.match(technicianRoute, /state\.staff = result\.employees/, 'A lista lateral recebe todos os funcionários ativos, não só cargos técnicos.');
+assert.match(technicianRoute, /if \(!state\.staff\.length\) state\.staff = state\.technicians/, 'A resposta limitada do seletor não pode sobrescrever o cadastro completo do RH já carregado.');
+assert.match(technicianRoute, /employee\.full_name \|\| employee\.nome/, 'O cadastro do RH deve exibir o nome completo do colaborador.');
+assert.match(technicianRoute, /GPS recente/, 'O mapa identifica GPS recente.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
+assert.match(pontoFunctions, /\.select\("id, full_name, unit"\)\s*\.eq\("is_active", true\)\s*\.order\("full_name", \{ ascending: true \}\)/, 'O mapa deve recuperar todos os colaboradores ativos do RH, inclusive sem sessão de GPS.');
+assert.match(pontoFunctions, /employees,\s*locations/, 'A função de localização deve devolver o cadastro completo e os pinos disponíveis.');
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
-assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_LIST_TECHNICIAN_LOCATIONS"/, 'O shell deve enviar as posições dos colaboradores.');
+assert.match(parentRoute, /employees: Array\.isArray\(result\.employees\) \? result\.employees : \[\]/, 'O shell deve devolver a lista administrativa de todos os colaboradores.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell recebe consulta individual de localização.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS"/, 'O shell deve receber a aprovação de criação em lote.');
 assert.match(parentRoute, /changes: \{ ordens: orders \}/, 'A aprovação precisa enviar a lista efetivamente recebida para a camada relacional.');
 assert.doesNotMatch(parentRoute, /changes: \{ ordens \}/, 'A aprovação não pode referenciar uma variável inexistente.');
@@ -393,7 +405,7 @@ console.log('DBS CONTROL technician-first route: GPS do técnico, locais sem OS 
 assert.ok(!dispatchScript.includes("photon.komoot.io"), "O navegador não deve acessar o Photon diretamente; a chamada precisa passar pelo servidor autenticado.");
 assert.ok(dispatchScript.includes("DBS_CONTROL_GEOCODE_SITE_ADDRESS"), "O mapa deve consultar o geocodificador por meio da ponte autenticada do shell.");
 assert.ok(dispatchScript.includes("Endereço cadastrado; serviço de geocodificação indisponível"), "Falhas de rede do provedor não podem ser rotuladas como endereço ausente.");
-assert.ok(dispatchScript.includes("Endereço cadastrado: "), "O endereço original deve permanecer visível na lista de revisão.");
+assert.ok(dispatchScript.includes("Endereços sem pino no mapa") && dispatchScript.includes("safe(item.address)"), "O endereço original deve permanecer visível na lista de revisão e selecionável.");
 assert.ok(dispatchScript.includes('data-action="review-map"'), "A revisão deve permitir abrir o endereço cadastrado no Google Maps.");
 assert.ok(parentRoute.includes('msg.type === "DBS_CONTROL_GEOCODE_SITE_ADDRESS"'), "O shell deve receber a geocodificação e chamar a ação do servidor.");
 assert.ok(parentRoute.includes("geocodeDbsControlSiteAddress({ data: { address } })"), "A consulta externa deve ocorrer exclusivamente pela função autenticada do servidor.");
@@ -403,27 +415,27 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-11"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-12"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
 assert.ok(dispatchScript.includes("audit.candidates.slice(0, 250)"), "O mapa não pode descartar filiais após a centésima; deve suportar pelo menos 135 endereços.");
-assert.ok(dispatchScript.includes("A lista excede 250 locais."), "Somente listas acima do limite ampliado podem ser direcionadas à divisão por região.");
+assert.ok(dispatchScript.includes("Mais de 250 locais; filtre por região."), "Listas grandes informam o limite do mapa.");
 assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação do mapa não pode alterar o limite de emissão de até 50 OS por lote.");
 
 
  // Technician route must remain usable before address geocoding finishes.
  assert.ok(dispatchScript.includes("function optimizeRoutePreservingUnlocated"), "A ordem da rota deve preservar locais sem coordenadas.");
- assert.ok(dispatchScript.includes("const unlocated = source.filter(item => !hasValidCoordinates(item))"), "Endereços sem pino devem continuar como paradas selecionáveis.");
+ assert.ok(dispatchScript.includes("rankSitesByDistance(source, origin)"), "Endereços sem pino continuam no fim da lista.");
  assert.ok(dispatchScript.includes("state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute())"), "A lista completa de locais deve ser mantida após a leitura dos indicadores.");
  assert.ok(dispatchScript.includes("queueMapGeocoding(state.candidates)"), "O mapa deve localizar todos os clientes em segundo plano, sem bloquear a rota por endereço.");
  assert.ok(dispatchScript.includes("persistGeocodedSiteCoordinates([coordinates])"), "Cada pino localizado deve ser salvo incrementalmente para preservar o progresso.");
  assert.ok(dispatchScript.includes("queueSelectedGeocoding(state.selected)"), "A ação manual deve permitir tentar novamente os pinos das paradas selecionadas.");
  assert.ok(dispatchScript.includes("setTimeout(resolve, 1100)"), "As consultas públicas de geocodificação devem ser sequenciais e espaçadas.");
  assert.ok(!/const workers = Array.from\(\{ length: 1 \}, async \(\) => \{/.test(dispatchScript), "O mapa não deve geocodificar todos os clientes em sequência antes de liberar a rota.");
- assert.ok(dispatchScript.includes("A rota e os links do Google Maps continuam disponíveis pelos endereços"), "Links da rota devem ficar disponíveis mesmo durante geocodificação.");
- assert.ok(dispatchScript.includes("Endereços sem pino"), "A interface deve contar endereços que ainda não possuem marcador.");
- assert.ok(dispatchScript.includes("Endereço pronto para navegação; pino em processamento"), "Paradas sem coordenadas devem continuar disponíveis para navegação.");
+ assert.ok(dispatchScript.includes("buildRouteLegs(state.selected, originForRoute())"), "Links do Google Maps continuam disponíveis para a rota.");
+ assert.ok(dispatchScript.includes("Endereços sem pino no mapa"), "A interface identifica endereços ainda sem marcador.");
+ assert.ok(dispatchScript.includes("Endereços sem pino no mapa") && dispatchScript.includes("continuam selecionáveis pelo endereço"), "Paradas sem coordenadas continuam disponíveis pelo endereço.");
  assert.ok(dispatchScript.includes("if (!/(tecnic|hvac|refriger|instalad|mecanic|manutenc)/.test(role)) return false;"), "O seletor deve listar apenas colaboradores com cargo técnico real.");
  assert.ok(parentRoute.includes('posicao: String(registration.position || registration.cargo || "").trim()'), "O shell deve enviar o cargo RH real e não inventar o cargo Técnico quando está vazio.");
  assert.ok(dispatchScript.includes("function queueSelectedGeocoding(items)"), "A fila progressiva de pinos deve existir.");

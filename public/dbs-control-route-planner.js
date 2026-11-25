@@ -439,6 +439,21 @@
     return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
   }
 
+  // Distância em linha reta desde a posição do técnico, sem estimar trânsito.
+  function rankSitesByDistance(sites, origin) {
+    const source = list(sites);
+    if (!hasCoordinates(origin)) return source.map(site => ({ ...site, distanceFromTechnicianKm: null }));
+    const originPoint = { lat: Number(origin.lat ?? origin.latitude), lng: Number(origin.lng ?? origin.longitude) };
+    const located = [], unlocated = [];
+    source.forEach(site => {
+      if (!hasCoordinates(site)) { unlocated.push({ ...site, distanceFromTechnicianKm: null }); return; }
+      const km = distanceKm(originPoint, { lat: Number(site.lat ?? site.latitude), lng: Number(site.lng ?? site.longitude) });
+      located.push({ ...site, distanceFromTechnicianKm: Math.round(km * 10) / 10 });
+    });
+    located.sort((a, b) => a.distanceFromTechnicianKm - b.distanceFromTechnicianKm || asText(a.name).localeCompare(asText(b.name), "pt-BR"));
+    return located.concat(unlocated);
+  }
+
   function optimizeStops(stops, origin) {
     const remaining = list(stops)
       .filter(stop => coordinate(stop && stop.lat, -90, 90) !== null && coordinate(stop && stop.lng, -180, 180) !== null)
@@ -503,6 +518,7 @@
     distanceKm,
     hasCoordinates,
     optimizeStops,
+    rankSitesByDistance,
     buildRouteLegs
   };
 })(typeof window !== 'undefined' ? window : globalThis);
