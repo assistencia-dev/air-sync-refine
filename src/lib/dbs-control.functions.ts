@@ -518,7 +518,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     })(),
     (() => {
       const query = supabaseAdmin.from("dbs_control_sites")
-        .select("id,client_id,name,address_json,contact_name,contact_phone,contact_email,notes,status,updated_at");
+        .select("id,client_id,name,address_json,map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status,contact_name,contact_phone,contact_email,notes,status,updated_at");
       return isScopedCollaborator
         ? (inScope(scopedClientIds) ? query.in("client_id", scopedClientIds) : noRows)
         : query;
@@ -754,6 +754,11 @@ async function hydrateDbsControlStateFromCanonicalDb(
           row.address_json.cep,
         ].filter(Boolean).join(", ")).trim()
       : String(row.address_json || ""),
+    latitude: row.map_latitude == null ? null : Number(row.map_latitude),
+    longitude: row.map_longitude == null ? null : Number(row.map_longitude),
+    mapGeocodedAt: row.map_geocoded_at || null,
+    mapGeocodeProvider: row.map_geocode_provider || null,
+    mapGeocodeStatus: row.map_geocode_status || "pending",
     contato: row.contact_name || "",
     telefone: row.contact_phone || "",
     email: row.contact_email || "",
@@ -4567,3 +4572,87 @@ export const setDbsOperationalStockStatus = createServerFn({ method: "POST" })
     if(!saved) throw new Error("Estoque operacional não encontrado neste escopo.");
     return saved;
   });
+
+export const saveDbsControlSiteMapCoordinates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    coordinates: Array<{ siteId: string; address: string; latitude: number; longitude: number }>;
+  }) => {
+    if (!Array.isArray(input?.coordinates) || input.coordinates.length < 1 || input.coordinates.length > 100) {
+      throw new Error("Envie entre 1 e 100 localizações válidas para salvar no mapa.");
+    }
+    const seen = new Set<string>();
+    const coordinates = input.coordinates.map((item) => {
+      const siteId = String(item?.siteId ?? "").trim();
+      const address = String(item?.address ?? "").trim().slice(0, 700);
+      const latitude = Number(item?.latitude);
+      const longitude = Number(item?.longitude);
+      if (!DBS_CONTROL_UUID_RE.test(siteId) || !address
+        || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
+        || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        throw new Error("Uma das coordenadas ou referências de local é inválida.");
+      }
+      if (seen.has(siteId)) throw new Error("O lote contém um local duplicado.");
+      seen.add(siteId);
+      return { siteId, address, latitude, longitude };
+    });
+    return { coordinates };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const administrativeRoles = ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
+    if (!administrativeRoles.includes(user.role_key)) {
+      throw new Error("Somente a administração pode atualizar coordenadas dos locais.");
+    }
+
+    const ids = data.coordinates.map((item) => item.siteId);
+    const current = await supabaseAdmin.from("dbs_control_sites")
+      .select("id,address_json,updated_at")
+      .in("id", ids);
+    if (current.error) throw new Error(current.error.message);
+
+    const normalizeAddress = (value: unknown) => String(value ?? "")
+      .trim()
+      .normalize("NFD")
+      .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/\\s+/g, " ")
+      .toLocaleLowerCase("pt-BR");
+    const addressFromJson = (value: any) => {
+      if (typeof value === "string") return value.trim();
+      if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+      return String(value.texto || value.endereco || value.address || [
+        value.logradouro, value.numero, value.complemento, value.bairro, value.cidade, value.uf, value.cep,
+      ].filter(Boolean).join(", ")).trim();
+    };
+    const byId = new Map((current.data ?? []).map((row: any) => [String(row.id), row]));
+    const queue = data.coordinates.slice();
+    let saved = 0;
+    let skipped = 0;
+    const workers = Array.from({ length: 8 }, async () => {
+      while (queue.length) {
+        const item = queue.shift();
+        if (!item) return;
+        const row: any = byId.get(item.siteId);
+        if (!row || normalizeAddress(addressFromJson(row.address_json)) !== normalizeAddress(item.address)) {
+          skipped += 1;
+          continue;
+        }
+        let update = supabaseAdmin.from("dbs_control_sites").update({
+          map_latitude: item.latitude,
+          map_longitude: item.longitude,
+          map_geocoded_at: new Date().toISOString(),
+          map_geocode_provider: "Photon/OpenStreetMap",
+          map_geocode_status: "resolved",
+        }).eq("id", item.siteId);
+        if (row.updated_at) update = update.eq("updated_at", row.updated_at);
+        const result = await update.select("id").maybeSingle();
+        if (result.error) throw new Error(result.error.message);
+        if (result.data) saved += 1;
+        else skipped += 1;
+      }
+    });
+    await Promise.all(workers);
+    if (saved) invalidateDbsControlHydrationCache();
+    return { saved, skipped };
+  });
+
