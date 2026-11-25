@@ -84,9 +84,9 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261124-1/, 'O planejador deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O planejador deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
-assert.match(html, /data-dbs-route-order-id/, 'O planejador deve usar apenas as OS que aparecem na lista filtrada do dia.');
+assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
 
 const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
@@ -173,3 +173,69 @@ assert.match(parentRoute, /function DbsControlMapsLaunchDialog/, 'O shell deve a
 assert.match(parentRoute, /window\.top !== window\.self/, 'O shell deve detectar prévias incorporadas e oferecer cópia do link.');
 assert.match(parentRoute, /window\.location\.assign\(url\)/, 'Quando aberto diretamente, o Maps deve navegar na aba principal.');
 console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domínio, abertura top-level e fallback copiável verificados.');
+
+// O novo despacho começa pelo técnico e pelos locais, não depende de OS existentes.
+const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
+new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
+const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O algoritmo atualizado deve ter cache busting.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-1/, 'O novo despacho deve ser carregado depois do shell legado.');
+assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
+assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
+assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
+assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
+assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
+assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
+assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
+assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
+assert.match(dispatchScript, /causaSolicitacao: cause/, 'A descrição do problema deve ser preservada na OS.');
+
+assert.ok((dispatchScript.match(/serviceType: ''/g) || []).length >= 2, 'Toda parada deve começar sem tipo pré-selecionado, exigindo classificação explícita.');
+assert.match(dispatchScript, /Selecione o tipo de atendimento/, 'A interface deve orientar a classificação individual da parada.');
+assert.match(dispatchScript, /Rota planejada para '\s*\+\s*routeDate/, 'A data e a ordem da parada devem acompanhar a OS criada.');
+assert.match(dispatchScript, /Photon[/]OpenStreetMap/, 'A interface deve informar a consulta externa de geocodificação.');
+assert.match(dispatchScript, /não considera trânsito/, 'A interface deve explicar que a sugestão inicial usa proximidade e não trânsito.');
+assert.match(dispatchScript, /state\.selected\.length >= 50/, 'A interface deve impedir seleção acima de 50 locais por lote.');
+assert.match(dispatchScript, /Motivo . problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
+assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
+assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
+
+const siteAudit = planner.buildSiteCandidates(
+  [
+    { id: 'site-1', clienteId: 'c1', nome: 'Loja Centro', endereco: 'Rua A, 10, Rio de Janeiro, RJ', lat: 0, lng: 1, status: 'ativo' },
+    { id: 'site-2', clienteId: 'c2', nome: 'Loja Norte', endereco: 'Rua B, 20, Niterói, RJ', lat: 0, lng: 2, status: 'ativo' },
+    { id: 'site-inactive', clienteId: 'c2', nome: 'Loja Inativa', endereco: 'Rua C, 30, Niterói, RJ', status: 'inativo' }
+  ],
+  [
+    { id: 'c1', nome: 'Cliente 1' },
+    { id: 'c2', nome: 'Cliente 2' },
+    { id: 'c3', nome: 'Cliente sem loja', endereco: 'Rua D, 40, Niterói, RJ', lat: 0, lng: 0.5 }
+  ]
+);
+assert.deepEqual(
+  Array.from(siteAudit.candidates, item => item.id),
+  ['site-1', 'site-2', 'client:c3'],
+  'O planejador deve usar locais ativos e permitir cliente sem unidade própria com endereço.'
+);
+const proximityRoute = planner.optimizeStops(siteAudit.candidates, { lat: 0, lng: 0 });
+assert.deepEqual(
+  Array.from(proximityRoute.stops, item => item.id),
+  ['client:c3', 'site-1', 'site-2'],
+  'O técnico deve ser o ponto de partida da sequência por proximidade.'
+);
+const gpsLegs = planner.buildRouteLegs(proximityRoute.stops, { lat: 0, lng: 0 });
+assert.equal(new URL(gpsLegs[0].url).searchParams.get('origin'), '0,0', 'O primeiro trajeto do Maps deve sair da última posição do técnico.');
+
+assert.match(pontoFunctions, /export const listRhFleetTechnicianLocations = createServerFn/, 'A leitura da localização deve ocorrer numa função de servidor.');
+assert.match(pontoFunctions, /export const verifyRhDbsControlTechnician = createServerFn/, 'A atribuição deve validar o vínculo RH sem depender das tabelas GPS.');
+assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da migração Fleet deve virar aviso, não bloquear a rota por endereço.');
+assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
+assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
+assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS"/, 'O shell deve receber a aprovação de criação em lote.');
+assert.match(parentRoute, /assignedId !== technicianEmployeeId/, 'Toda OS do lote deve ser atribuída ao técnico selecionado.');
+assert.match(parentRoute, /technicianCheck\.employee_found/, 'O servidor deve rejeitar técnico sem vínculo ativo no RH.');
+assert.match(parentRoute, /Nenhuma OS foi criada/, 'A detecção de duplicidade deve bloquear o lote antes de gravar.');
+
+console.log('DBS CONTROL technician-first route: GPS do técnico, locais sem OS prévia, proximidade, edição e OS em lote atribuídas verificados.');

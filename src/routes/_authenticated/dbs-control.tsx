@@ -18,6 +18,7 @@ import {
   withDbsControlLocalSyncLock,
   type DbsControlLocalSyncCommand,
 } from "@/lib/dbs-control.local-sync";
+import { listRhFleetTechnicianLocations, verifyRhDbsControlTechnician } from "@/lib/ponto.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -1298,6 +1299,160 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_TECHNICIAN_LOCATION_RESULT",
+            requestId,
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, error: "A consulta de localização dos técnicos é restrita à administração." });
+            return;
+          }
+          const employeeId = String(msg.employeeId ?? "").trim();
+          if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)) {
+            reply({ ok: false, error: "Selecione um técnico com vínculo ativo no RH para consultar o GPS." });
+            return;
+          }
+          const result = await listRhFleetTechnicianLocations({ data: { employee_id: employeeId } });
+          if (!result.employee_found) {
+            reply({ ok: false, error: "O vínculo deste técnico não foi encontrado como colaborador ativo no RH." });
+            return;
+          }
+          reply({ ok: true, location: result.locations?.[0] ?? null, warning: result.location_unavailable_reason ?? null });
+        } catch (error) {
+          reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível consultar a última localização autorizada." });
+        }
+        return;
+      }
+      if (msg.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_DISPATCH_ROUTE_RESULT",
+            requestId,
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, error: "A criação de OS em lote é restrita à administração." });
+            return;
+          }
+          const technicianEmployeeId = String(msg.technicianEmployeeId ?? "").trim();
+          const routeDate = String(msg.routeDate ?? "").trim();
+          const orders = Array.isArray(msg.orders) ? msg.orders : [];
+          const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const allowedTypes = new Set([
+            "PMOC Preventiva · Mensal",
+            "PMOC Preventiva · Trimestral",
+            "Manutenção Corretiva",
+            "Visita Técnica",
+            "Manutenção Preventiva",
+            "Instalação / Start-Up",
+            "Atendimento Emergencial",
+            "Inspeção Técnica",
+            "Outro",
+          ]);
+          if (!requestId || !uuidPattern.test(technicianEmployeeId)
+            || !/^\d{4}-\d{2}-\d{2}$/.test(routeDate)
+            || !orders.length || orders.length > 50) {
+            reply({ ok: false, error: "Rota inválida. Confira o técnico, a data e a quantidade de locais (máximo 50)." });
+            return;
+          }
+
+          const seenStops = new Set<string>();
+          for (const order of orders) {
+            const siteId = String(order?.siteId ?? order?.site_id ?? "").trim();
+            const clientId = String(order?.clienteId ?? order?.client_id ?? "").trim();
+            const assignedId = String(order?.employeeId ?? order?.tecnicoId ?? "").trim();
+            const serviceType = String(order?.tipo ?? order?.type ?? "").trim();
+            const cause = String(order?.causaSolicitacao ?? "").trim();
+            const isPmoc = /pmoc/i.test(serviceType);
+            const stopKey = siteId ? "site:" + siteId : "client:" + clientId;
+            if (!clientId || !uuidPattern.test(clientId)
+              || (siteId && !uuidPattern.test(siteId))
+              || assignedId !== technicianEmployeeId
+              || !allowedTypes.has(serviceType)
+              || (/corretiv|emergencial/i.test(serviceType) && (cause.length < 5 || cause.length > 500))
+              || (!/corretiv|emergencial/i.test(serviceType) && cause.length > 500)
+              || (isPmoc && String(order?.pmocCompetencia ?? "") !== routeDate.slice(0, 7))
+              || (!isPmoc && order?.pmocCompetencia != null)
+              || seenStops.has(stopKey)) {
+              reply({ ok: false, error: "A rota contém local duplicado ou dados de OS inválidos. Nenhuma OS foi enviada." });
+              return;
+            }
+            seenStops.add(stopKey);
+          }
+
+          const technicianCheck = await verifyRhDbsControlTechnician({ data: { employee_id: technicianEmployeeId } });
+          if (!technicianCheck.employee_found) {
+            reply({ ok: false, error: "O técnico selecionado não está vinculado a um colaborador ativo do RH. Nenhuma OS foi criada." });
+            return;
+          }
+          const before = await getCloudStateSingleFlight();
+          const currentOrders = Array.isArray(before?.state?.ordens) ? before.state.ordens : [];
+          const terminal = (status: unknown) => /conclu[ií]d|finalizad|encerrad|cancelad|arquivad/i.test(String(status ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+          const typeKey = (value: unknown) => {
+            const type = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            if (/corretiv/.test(type)) return "corretiva";
+            if (/emergencial/.test(type)) return "emergencial";
+            if (/visita/.test(type)) return "visita";
+            if (/inspec/.test(type)) return "inspecao";
+            if (/instal|start.?up/.test(type)) return "instalacao";
+            if (/pmoc/.test(type)) return "pmoc";
+            if (/preventiv/.test(type)) return "preventiva";
+            return type.trim();
+          };
+          const duplicates = orders.filter((requested: any) => currentOrders.some((existing: any) => {
+            const existingSiteId = String(existing?.siteId ?? existing?.site_id ?? existing?.localId ?? "").trim();
+            const existingClientId = String(existing?.clienteId ?? existing?.client_id ?? "").trim();
+            const requestedSiteId = String(requested?.siteId ?? requested?.site_id ?? "").trim();
+            const sameLocation = requestedSiteId
+              ? existingSiteId === requestedSiteId
+              : !existingSiteId && existingClientId === String(requested?.clienteId ?? requested?.client_id ?? "");
+            const sameType = typeKey(existing?.tipo ?? existing?.type) === typeKey(requested?.tipo ?? requested?.type);
+            return sameLocation && sameType && !terminal(existing?.status)
+              && !existing?.excluidaEm && !existing?.deleted_at && !existing?.arquivadaEm;
+          }));
+          if (duplicates.length) {
+            reply({
+              ok: false,
+              error: "Nenhuma OS foi criada. Já existe atendimento deste mesmo tipo em aberto para: "
+                + duplicates.map((order: any) => String(order?.nomeLocal ?? order?.desc ?? order?.siteId ?? order?.clienteId)).join(", ")
+                + ". Revise a fila antes de repetir.",
+            });
+            return;
+          }
+
+          const result = await applyDbsControlDelta({
+            data: { requestId, changes: { ordens } },
+          });
+          const cloud = await getCloudStateSingleFlight();
+          if (cloud?.state) {
+            iframeRef.current?.contentWindow?.postMessage({
+              type: "DBS_CONTROL_CLOUD_STATE",
+              state: cloud.state,
+              baseState: cloud.state,
+            }, window.location.origin);
+          }
+          sendDashboardSummary();
+          reply({
+            ok: Boolean(result.ok),
+            applied: Number(result.applied ?? 0),
+            appliedOrders: Array.isArray(result.appliedOrders) ? result.appliedOrders : [],
+            conflicts: Array.isArray(result.conflicts) ? result.conflicts : [],
+          });
+        } catch (error) {
+          console.error("DBS Control dispatch route approval:", error);
+          reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível criar as OS da rota." });
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_OPEN_MAPS") {
         try {
           const requested = new URL(String(msg.url ?? ""));
