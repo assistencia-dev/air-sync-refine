@@ -84,7 +84,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261124-1/, 'O planejador deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O planejador deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
