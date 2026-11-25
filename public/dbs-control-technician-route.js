@@ -441,7 +441,11 @@
       state.siteMetrics = planner().summarizeSiteMetrics(measured);
       const route = planner().optimizeStops(measured, originForRoute());
       state.candidates = route.stops;
-      if (!state.candidates.length) throw new Error('Nenhum endereço foi geocodificado com confiança. Os cadastros que falharam foram separados para revisão.');
+      if (!state.candidates.length) {
+        if (status) status.textContent = 'Nenhum endereço foi posicionado automaticamente. Os indicadores permanecem disponíveis e os cadastros precisam de revisão manual.';
+        renderLists();
+        return;
+      }
 
       const persist = state.candidates
         .filter(item => item.mapCoordinatesSource === 'address_geocoded' && UUID.test(String(item.siteId || '')))
