@@ -389,6 +389,7 @@
       const audit = getLocationSources();
       state.review = audit.review.slice();
       const candidates = audit.candidates.slice(0, 100);
+      candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
       if (audit.candidates.length > candidates.length) {
         state.review.push({ reason: 'A lista excede 100 locais. Refine o cadastro/região antes de gerar uma rota maior.' });
       }
@@ -424,6 +425,9 @@
       });
       await Promise.all(workers);
 
+      // Carry the full relational site counts through geocoding so an
+      // address failure cannot make a multi-site client look like a single-site client.
+      located.activeSiteCountByClient = audit.activeSiteCountByClient || {};
       const erp = getErpState();
       const measured = planner().enrichSiteCandidates(
         located,
