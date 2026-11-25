@@ -327,6 +327,11 @@
   }
 
   function addStop(id) {
+    if (state.selected.length >= 50) {
+      const status = byId('dbs-dispatch-status');
+      if (status) status.textContent = 'O limite é de 50 OS por lote. Conclua este lote e depois planeje o próximo.';
+      return;
+    }
     const candidate = state.candidates.find(item => String(item.id) === String(id));
     if (!candidate || state.selected.some(item => String(item.id) === String(id))) return;
     state.selected.push(Object.assign({}, candidate, {
@@ -338,10 +343,16 @@
   }
 
   function addNearestFive() {
+    const remainingCapacity = 50 - state.selected.length;
+    if (remainingCapacity <= 0) {
+      const status = byId('dbs-dispatch-status');
+      if (status) status.textContent = 'O limite é de 50 OS por lote. Conclua este lote e depois planeje o próximo.';
+      return;
+    }
     const selectedIds = new Set(state.selected.map(item => String(item.id)));
     const available = state.candidates.filter(item => !selectedIds.has(String(item.id)));
     const optimized = planner().optimizeStops(available, originForRoute()).stops;
-    optimized.slice(0, 5).forEach(item => {
+    optimized.slice(0, Math.min(5, remainingCapacity)).forEach(item => {
       state.selected.push(Object.assign({}, item, { serviceType: '', cause: '' }));
     });
     reorderSelected();
@@ -510,7 +521,7 @@
       + '<label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar a última posição do técnico como ponto de partida da rota</label>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Sugerir rota pelas proximidades</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five">Adicionar 5 locais mais próximos</button></div>'
       + '</section>'
-      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa da equipe e das lojas</h3><p>O marcador verde representa a última localização do técnico; os azuis são os locais sugeridos.</p><p>Ao solicitar a sugestão, os endereços cadastrados são consultados no serviço Photon/OpenStreetMap para obter coordenadas; revise os pontos antes de aprovar.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Aguardando dados.</span></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
+      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa da equipe e das lojas</h3><p>O marcador verde representa a última localização do técnico; os azuis são os locais sugeridos.</p><p>A sequência é estimada por proximidade geográfica e não considera trânsito. O Maps calcula o trajeto por vias. Ao solicitar a análise, os endereços são consultados no Photon/OpenStreetMap para obter coordenadas; confira os pontos antes de aprovar.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Aguardando dados.</span></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
       + '<section class="dbs-dispatch-columns">'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Rota selecionada e editável</h3><p>Defina o tipo e o motivo de cada atendimento.</p></div><strong id="dbs-dispatch-count">0 paradas</strong></div><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregue a sugestão e adicione os locais que deseja atender.</div></div></div>'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Locais cadastrados próximos</h3><p id="dbs-dispatch-available-count">Aguardando análise</p></div></div><input id="dbs-dispatch-search" type="search" placeholder="Filtrar por loja, cliente, bairro ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Clique em “Sugerir rota pelas proximidades”.</div></div></div>'
