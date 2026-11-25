@@ -5,6 +5,7 @@ import { CalendarDays, CheckCircle2, Clock3, MapPin, ShieldCheck, UserCheck, Use
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { capturePontoPosition, hasPontoCoordinates, summarizePontoGpsReview, pontoGeolocationErrorMessage, pontoGoogleMapsEmbedUrl, pontoGoogleMapsUrl } from "@/lib/ponto-geo";
 import { getMyPonto, listRhPontoEmployees, listRhPontoRecords, listRhPontoDayManagement, registerMyPonto, setRhPontoAccess, setRhPontoDayManagement, type RhPontoDayStatus } from "@/lib/ponto.functions";
+import { DbsFleetAdminPanel } from "@/components/DbsFleetWorkspace";
 
 const labels: Record<string, string> = { entrada: "Entrada", almoco_saida: "Saída almoço", almoco_retorno: "Retorno almoço", saida: "Saída" };
 const localDateISO = () => {
@@ -42,7 +43,7 @@ function PontoRh() {
   const [selectedMapPunch, setSelectedMapPunch] = useState<any>(null);
   const [occurrenceStatus, setOccurrenceStatus] = useState<RhPontoDayStatus>("PRESENCA");
   const [occurrenceNote, setOccurrenceNote] = useState("");
-  const [view, setView] = useState<"gestao" | "acessos">("gestao");
+  const [view, setView] = useState<"gestao" | "acessos" | "fleet">("gestao");
   const [selected, setSelected] = useState<any>(null);
   const [identifier, setIdentifier] = useState("");
   const [radius, setRadius] = useState("150");
@@ -263,7 +264,7 @@ function PontoRh() {
     <header className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div><p className="text-[10px] font-black uppercase tracking-[.22em] text-sky-300">RH · gestão de jornada</p><h2 className="mt-2 text-3xl font-black">Folha de Ponto</h2><p className="mt-1 max-w-2xl text-sm text-slate-400">Acompanhe cada dia, identifique desvios e registre a ocorrência sem apagar a marcação original.</p></div>
-        <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2"><button onClick={openMonthlyReport} className="inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2 text-xs font-black text-slate-950"><ClipboardCheck className="h-4 w-4"/>Relatório mensal</button><button onClick={exportMonthlyCsv} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileSpreadsheet className="h-4 w-4"/>CSV do período</button></div>{employeeFilter !== "todos" && <><button onClick={()=>openEmployeeReport(employeeFilter,"folha")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileDown className="h-4 w-4"/>Espelho PDF</button><button onClick={()=>openEmployeeReport(employeeFilter,"resumo")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileSpreadsheet className="h-4 w-4"/>Resumo</button></>}</div><div className="flex rounded-xl bg-white/10 p-1"><button onClick={()=>setView("gestao")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="gestao"?"bg-white text-slate-900":"text-white/70")}>Gestão diária</button><button onClick={()=>setView("acessos")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="acessos"?"bg-white text-slate-900":"text-white/70")}>Acessos e jornada</button></div>
+        <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2"><button onClick={openMonthlyReport} className="inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2 text-xs font-black text-slate-950"><ClipboardCheck className="h-4 w-4"/>Relatório mensal</button><button onClick={exportMonthlyCsv} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileSpreadsheet className="h-4 w-4"/>CSV do período</button></div>{employeeFilter !== "todos" && <><button onClick={()=>openEmployeeReport(employeeFilter,"folha")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileDown className="h-4 w-4"/>Espelho PDF</button><button onClick={()=>openEmployeeReport(employeeFilter,"resumo")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-black text-white"><FileSpreadsheet className="h-4 w-4"/>Resumo</button></>}</div><div className="flex rounded-xl bg-white/10 p-1"><button onClick={()=>setView("gestao")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="gestao"?"bg-white text-slate-900":"text-white/70")}>Gestão diária</button><button onClick={()=>setView("acessos")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="acessos"?"bg-white text-slate-900":"text-white/70")}>Acessos e jornada</button><button onClick={()=>setView("fleet")} className={"rounded-lg px-4 py-2 text-xs font-black "+(view==="fleet"?"bg-white text-slate-900":"text-white/70")}>DBS FLEET</button></div>
       </div>
     </header>
 
@@ -349,10 +350,10 @@ function PontoRh() {
           {!rows.length&&<div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">Nenhum funcionário encontrado com os filtros.</div>}
         </div>
       </section>
-    </> : <section className="space-y-5">
+    </> : view==="acessos" ? <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Configuração</p><h3 className="mt-1 text-xl font-black text-slate-900">Acessos e jornada</h3><p className="mt-1 text-xs text-slate-500">{active} acessos liberados · login, GPS e horários previstos continuam aqui.</p></div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Colaborador</th><th className="px-5 py-3">Unidade</th><th className="px-5 py-3">Login</th><th className="px-5 py-3">Acesso</th><th className="px-5 py-3 text-right">Configurar</th></tr></thead><tbody>{(employees.data??[]).map((e:any)=><tr key={e.id} className="border-t border-slate-100"><td className="px-5 py-4 font-bold text-slate-800">{e.full_name}</td><td className="px-5 py-4 text-slate-500">{e.unit}</td><td className="px-5 py-4 text-slate-500">{e.portal_user?.username??e.portal_user?.email??"—"}</td><td className="px-5 py-4">{e.ponto_access_enabled?<span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"><CheckCircle2 className="mr-1 h-3.5 w-3.5"/>Liberado</span>:<span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"><UserX className="mr-1 h-3.5 w-3.5"/>Bloqueado</span>}</td><td className="px-5 py-4 text-right"><button onClick={()=>openAccess(e)} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">{e.ponto_access_enabled?"Editar":"Liberar acesso"}</button></td></tr>)}</tbody></table></div></section>
-    </section>}
+    </section> : <DbsFleetAdminPanel />}
 
     {dayEmployee&&<div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4"><div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
       <div className="flex items-start justify-between"><div><p className="text-[10px] font-black uppercase tracking-wider text-sky-600">Gestão do dia</p><h3 className="mt-1 text-2xl font-black text-slate-900">{dayEmployee.employee.full_name}</h3><p className="text-xs text-slate-500">{selectedDay} · {dayEmployee.employee.unit}</p></div><button onClick={()=>setDayEmployee(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">×</button></div>
@@ -485,6 +486,7 @@ function PontoColaborador() {
           : "Marcação registrada com sucesso. A localização foi gravada nesta batida."+accuracy,
       });
       qc.invalidateQueries({ queryKey: ["my-ponto"] });
+      qc.invalidateQueries({ queryKey: ["my-dbs-fleet-status"] });
     },
     onError: e => setStatus({type:"error", text:friendlyError(e)})
   });
