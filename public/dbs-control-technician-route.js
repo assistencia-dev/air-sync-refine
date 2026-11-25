@@ -405,10 +405,10 @@
     try {
       const audit = getLocationSources();
       state.review = audit.review.slice();
-      const candidates = audit.candidates.slice(0, 100);
+      const candidates = audit.candidates.slice(0, 250);
       candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
       if (audit.candidates.length > candidates.length) {
-        state.review.push({ reason: 'A lista excede 100 locais. Refine o cadastro/região antes de gerar uma rota maior.' });
+        state.review.push({ reason: 'A lista excede 250 locais. Divida a análise por região para manter o mapa responsivo.' });
       }
       if (!candidates.length) throw new Error('Não encontrei locais ativos com endereço e vínculo de cliente. Confira os cadastros.');
       let completed = 0;
