@@ -1326,7 +1326,7 @@ function DbsControlPage() {
                 email: String(registration.email ?? "").trim().toLowerCase(),
                 fone: registration.phone || registration.telefone || "",
                 telefone: registration.phone || registration.telefone || "",
-                posicao: registration.position || registration.cargo || "Técnico",
+                posicao: String(registration.position || registration.cargo || "").trim(),
                 unit: employee.unit ?? null,
                 is_active: true,
               };

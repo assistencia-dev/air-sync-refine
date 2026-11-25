@@ -20,6 +20,11 @@
     result: null,
     manualOrder: false,
     geocoding: false,
+    geocodeQueue: [],
+    geocodingIds: new Set(),
+    geocodeMapOnlyIds: new Set(),
+    geocodeGeneration: 0,
+    locationGeneration: 0,
     technicians: [],
     techniciansLoaded: false
   };
@@ -88,6 +93,9 @@
       const status = String(item.status || item.situacao || '').normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
       if (/^(inativ[oa]|arquivad[oa]|excluid[oa]|cancelad[oa])$/.test(status)) return false;
+      const role = String(item.posicao || item.position || item.cargo || "").normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      if (!/(tecnic|hvac|refriger|instalad|mecanic|manutenc)/.test(role)) return false;
       const employeeId = getEmployeeId(item);
       if (!employeeId || seen.has(employeeId)) return false;
       seen.add(employeeId);
@@ -149,10 +157,9 @@
       state.technician = null;
       if (status) {
         status.textContent = loadError
-          ? 'GPS do técnico indisponível (' + loadError + '). O mapa de clientes será carregado pelo endereço cadastrado.'
-          : 'Selecione um técnico para usar o GPS como origem. O mapa de clientes será carregado independentemente.';
+          ? 'Consulta de técnicos indisponível (' + loadError + '). Os endereços continuam disponíveis para navegação.'
+          : 'Selecione um técnico para usar o GPS como origem. Os endereços já estão carregados para planejamento.';
       }
-      void buildSuggestions();
     }
   }
 
@@ -163,9 +170,10 @@
   function originForRoute() {
     const location = state.location;
     if (!state.originEnabled || !location) return null;
+    if (!planner().hasCoordinates({ lat: location.latitude, lng: location.longitude })) return null;
     const lat = Number(location.latitude);
     const lng = Number(location.longitude);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat: lat, lng: lng } : null;
+    return { lat: lat, lng: lng };
   }
 
   function resetPlan() {
@@ -176,6 +184,11 @@
     state.manualOrder = false;
     state.result = null;
     state.geocoding = false;
+    state.geocodeQueue = [];
+    state.geocodingIds = new Set();
+    state.geocodeMapOnlyIds = new Set();
+    state.geocodeGeneration += 1;
+    state.locationGeneration += 1;
   }
 
   function ensureStyle() {
@@ -279,32 +292,46 @@
   }
 
   async function refreshLocation() {
+    const generation = ++state.locationGeneration;
     const employeeId = getEmployeeId(state.technician);
     state.location = null;
     state.originEnabled = false;
     const box = byId('dbs-dispatch-location-summary');
-    if (box) box.innerHTML = '<strong>Consultando última posição compartilhada…</strong><small>Consulta segura ao DBS FLEET do RH.</small>';
+    if (box) box.innerHTML = '<strong>Consultando última posição compartilhada…</strong><small>O planejamento dos endereços continua carregado enquanto o GPS é consultado.</small>';
     const toggle = byId('dbs-dispatch-use-origin');
-    if (toggle) toggle.checked = false;
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
     if (!employeeId) {
-      if (box) box.innerHTML = '<strong>Este técnico ainda não está vinculado a um colaborador do RH.</strong><small>Sem o vínculo, o DBS não consegue associar a posição autorizada do GPS. O planejamento continua disponível pela região central.</small>';
+      if (generation !== state.locationGeneration) return;
+      if (box) box.innerHTML = '<strong>Este técnico ainda não está vinculado a um colaborador do RH.</strong><small>A rota continua disponível pelos endereços cadastrados; o GPS não será usado como origem.</small>';
       renderMapAndLinks();
       return;
     }
-    const result = await requestTechnicianLocation(employeeId);
+    let result;
+    try {
+      result = await requestTechnicianLocation(employeeId);
+    } catch (error) {
+      if (generation !== state.locationGeneration) return;
+      if (box) box.innerHTML = '<strong>Consulta de GPS indisponível.</strong><small>' + safe(error && error.message || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
+      renderMapAndLinks();
+      return;
+    }
+    if (generation !== state.locationGeneration) return;
     if (!result || !result.ok) {
-      if (box) box.innerHTML = '<strong>Não foi possível obter a posição.</strong><small>' + safe(result && result.error || 'Verifique o vínculo e as permissões do RH.') + '</small>';
+      if (box) box.innerHTML = '<strong>Não foi possível obter a posição.</strong><small>' + safe(result && result.error || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
       renderMapAndLinks();
       return;
     }
     state.location = result.location || null;
     const location = state.location;
-    const hasCoordinates = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    const hasCoordinates = Boolean(location && planner().hasCoordinates({ lat: location.latitude, lng: location.longitude }));
     if (!location || !hasCoordinates) {
       const gpsMessage = String(result.warning || '').trim();
       if (box) box.innerHTML = '<strong>' + safe(gpsMessage ? 'GPS ainda indisponível neste banco' : 'Nenhuma posição compartilhada encontrada.') + '</strong><small>'
         + safe(gpsMessage || 'O mapa dos clientes continua disponível pelos endereços cadastrados, mesmo sem GPS do técnico.')
-        + ' A rota poderá ser organizada pela proximidade entre os endereços, sem afirmar onde o técnico está.</small>';
+        + ' A rota poderá ser organizada pelos endereços, sem afirmar onde o técnico está.</small>';
       renderMapAndLinks();
       return;
     }
@@ -320,7 +347,13 @@
     if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
       + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
       + ' (' + safe(ageLabel(location.position_age_ms)) + ')' + safe(accuracy) + '</small>';
-    renderMapAndLinks();
+    if (location.is_live && !state.manualOrder) {
+      state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
+      state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
+      renderLists();
+    } else {
+      renderMapAndLinks();
+    }
   }
 
   function getLocationSources() {
@@ -395,13 +428,145 @@
     });
   }
 
+  function hasValidCoordinates(item) {
+    return Boolean(planner() && planner().hasCoordinates(item));
+  }
+
+  // Endereço cadastrado é suficiente para abrir a rota no Google Maps.
+  // Coordenadas servem para desenhar/otimizar pinos, nunca para excluir a parada.
+  function optimizeRoutePreservingUnlocated(items, origin) {
+    const source = Array.isArray(items) ? items.slice() : [];
+    const located = source.filter(hasValidCoordinates);
+    const unlocated = source.filter(item => !hasValidCoordinates(item));
+    const ordered = planner().optimizeStops(located, origin).stops.concat(unlocated);
+    if (items && items.unallocated) ordered.unallocated = Object.assign({}, items.unallocated);
+    if (items && items.activeSiteCountByClient) ordered.activeSiteCountByClient = Object.assign({}, items.activeSiteCountByClient);
+    return ordered;
+  }
+
+  function updateCandidateCoordinates(candidate, point) {
+    if (!candidate || !point) return;
+    const id = String(candidate.id || '');
+    [state.candidates, state.selected].forEach(collection => {
+      const target = collection.find(item => String(item.id || '') === id);
+      if (target) {
+        target.lat = point.lat;
+        target.lng = point.lng;
+        target.mapCoordinatesSource = 'address_geocoded';
+      }
+    });
+  }
+
+  function addReviewItem(candidate, error) {
+    const id = String(candidate && candidate.id || '');
+    const code = String(error && error.code || 'provider_unavailable');
+    const detail = String(error && error.message || 'falha ao consultar o serviço externo');
+    const reason = code === 'not_found'
+      ? 'Endereço cadastrado; o provedor não encontrou correspondência segura. ' + detail
+      : code === 'invalid_query'
+        ? 'Endereço cadastrado; o provedor não confirmou uma consulta válida. ' + detail
+        : 'Endereço cadastrado; serviço de geocodificação indisponível. ' + detail;
+    const existing = state.review.find(item => String(item.id || '') === id);
+    const next = { id, name: candidate && candidate.name, address: candidate && candidate.address, reason, geocodeStatus: code };
+    if (existing) Object.assign(existing, next);
+    else state.review.push(next);
+  }
+
+  function queueSelectedGeocoding(items) {
+    (Array.isArray(items) ? items : []).forEach(item => {
+      if (!item || hasValidCoordinates(item) || state.geocodingIds.has(String(item.id || ''))) return;
+      state.geocodingIds.add(String(item.id || ''));
+      state.geocodeQueue.push(item);
+    });
+    if (state.geocodeQueue.length && !state.geocoding) void drainGeocodingQueue(state.geocodeGeneration);
+  }
+
+  function queueMapGeocoding(items) {
+    (Array.isArray(items) ? items : []).forEach(item => {
+      if (!item || hasValidCoordinates(item) || state.geocodingIds.has(String(item.id || ''))) return;
+      const id = String(item.id || '');
+      state.geocodingIds.add(id);
+      state.geocodeMapOnlyIds.add(id);
+      state.geocodeQueue.push(item);
+    });
+    if (state.geocodeQueue.length && !state.geocoding) void drainGeocodingQueue(state.geocodeGeneration);
+  }
+
+  async function drainGeocodingQueue(generation) {
+    if (state.geocoding || generation !== state.geocodeGeneration) return;
+    state.geocoding = true;
+    let completed = 0;
+    let geocodeSuccessCount = 0;
+    let savedCount = 0;
+    const status = byId('dbs-dispatch-status');
+    try {
+      while (state.geocodeQueue.length && generation === state.geocodeGeneration && byId('dbs-dispatch-route-modal')) {
+        const candidate = state.geocodeQueue.shift();
+        if (!candidate) continue;
+        try {
+          const candidateId = String(candidate.id || '');
+          const stillSelected = state.selected.some(item => String(item.id || '') === candidateId);
+          const neededForMap = state.geocodeMapOnlyIds.has(candidateId);
+          if (!stillSelected && !neededForMap) {
+            state.geocodingIds.delete(candidateId);
+            continue;
+          }
+          const point = await geocodeAddress(candidate.address);
+          if (generation !== state.geocodeGeneration) return;
+          updateCandidateCoordinates(candidate, point);
+          geocodeSuccessCount += 1;
+          state.siteMetrics = planner().summarizeSiteMetrics(state.candidates);
+          if (!state.manualOrder) {
+            state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
+            state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
+          }
+          const coordinates = {
+            siteId: String(candidate.siteId || ''),
+            address: candidate.address,
+            latitude: point.lat,
+            longitude: point.lng
+          };
+          if (UUID.test(coordinates.siteId)) {
+            // Grava cada pino conforme é localizado para não perder o progresso
+            // quando o administrador fecha ou troca o planejamento.
+            const saved = await persistGeocodedSiteCoordinates([coordinates]);
+            if (saved && saved.ok) savedCount += Number(saved.saved || 0);
+          }
+          state.review = state.review.filter(item => String(item.id || '') !== String(candidate.id || ''));
+        } catch (error) {
+          if (generation !== state.geocodeGeneration) return;
+          addReviewItem(candidate, error);
+        } finally {
+          const candidateId = String(candidate.id || '');
+          state.geocodingIds.delete(candidateId);
+          state.geocodeMapOnlyIds.delete(candidateId);
+        }
+        completed += 1;
+        if (status) status.textContent = 'Pinos localizados nesta sessão: ' + completed
+          + ' · ' + savedCount + ' salvo(s) no cadastro · faltam ' + state.geocodeQueue.length
+          + '. A rota e os links do Google Maps continuam disponíveis pelos endereços.';
+        renderLists();
+        if (state.geocodeQueue.length && generation === state.geocodeGeneration) {
+          await new Promise(resolve => setTimeout(resolve, 1100));
+        }
+      }
+    } finally {
+      if (generation === state.geocodeGeneration) {
+        state.geocoding = false;
+        renderLists();
+        if (status && !state.geocodeQueue.length && geocodeSuccessCount === 0 && state.review.length) {
+          status.textContent = 'Não foi possível localizar os pinos nesta tentativa. Os endereços continuam na rota e podem ser abertos no Google Maps.';
+        }
+      }
+    }
+  }
+
   async function buildSuggestions() {
     const button = byId('dbs-dispatch-build');
     const status = byId('dbs-dispatch-status');
     resetPlan();
-    state.geocoding = true;
-    if (button) { button.disabled = true; button.textContent = 'Conferindo endereços…'; }
-    if (status) status.textContent = 'Lendo os locais cadastrados, cruzando OS e equipamentos e posicionando os endereços no mapa. Nenhuma OS será criada nesta etapa.';
+    if (button) { button.disabled = true; button.textContent = 'Carregando locais…'; }
+    if (status) status.textContent = 'Carregando endereços e indicadores reais. A rota não ficará bloqueada pela geocodificação dos pinos.';
     try {
       const audit = getLocationSources();
       state.review = audit.review.slice();
@@ -410,102 +575,53 @@
       if (audit.candidates.length > candidates.length) {
         state.review.push({ reason: 'A lista excede 250 locais. Divida a análise por região para manter o mapa responsivo.' });
       }
-      if (!candidates.length) throw new Error('Não encontrei locais ativos com endereço e vínculo de cliente. Confira os cadastros.');
-      let completed = 0;
-      const queue = candidates.slice();
-      const located = [];
-      const workers = Array.from({ length: 1 }, async () => {
-        while (queue.length) {
-          const candidate = queue.shift();
-          if (!candidate) return;
-          try {
-            if (candidate.lat == null || candidate.lng == null) {
-              const point = await geocodeAddress(candidate.address);
-              candidate.lat = point.lat;
-              candidate.lng = point.lng;
-              candidate.mapCoordinatesSource = 'address_geocoded';
-            }
-            located.push(candidate);
-          } catch (error) {
-            const code = String(error && error.code || 'provider_unavailable');
-            const detail = String(error && error.message || 'falha ao consultar o serviço externo');
-            const reason = code === 'not_found'
-              ? 'Endereço cadastrado; o provedor não encontrou correspondência segura. ' + detail
-              : code === 'invalid_query'
-                ? 'Endereço cadastrado; o provedor não confirmou uma consulta válida. ' + detail
-                : 'Endereço cadastrado; serviço de geocodificação indisponível. ' + detail;
-            state.review.push({
-              id: candidate.id,
-              name: candidate.name,
-              address: candidate.address,
-              reason,
-              geocodeStatus: code
-            });
-          }
-          completed += 1;
-          if (status) status.textContent = 'Posicionando endereços ' + completed + '/' + candidates.length
-            + ' · ' + located.length + ' coordenada(s) disponível(is)…';
-          if (queue.length) await new Promise(resolve => setTimeout(resolve, 1100));
-        }
-      });
-      await Promise.all(workers);
+      if (!candidates.length) {
+        if (status) status.textContent = 'Não encontrei locais ativos com endereço e vínculo de cliente. Confira o cadastro de locais e clientes.';
+        renderLists();
+        return;
+      }
 
-      // Carry the full relational site counts through geocoding so an
-      // address failure cannot make a multi-site client look like a single-site client.
-      candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
       const erp = getErpState();
-      // Enrich all address-bearing sites, including geocoding failures, so their
-      // real OS/equipment indicators remain visible while the address is reviewed.
       const measured = planner().enrichSiteCandidates(
         candidates,
         Array.isArray(erp.ordens) ? erp.ordens : [],
         Array.isArray(erp.equipamentos) ? erp.equipamentos : []
       );
       state.siteMetrics = planner().summarizeSiteMetrics(measured);
-      const route = planner().optimizeStops(measured, originForRoute());
-      state.candidates = route.stops;
-      if (!state.candidates.length) {
-        if (status) status.textContent = 'Nenhum endereço foi posicionado automaticamente. Os indicadores permanecem disponíveis e os cadastros precisam de revisão manual.';
-        renderLists();
-        return;
-      }
+      state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute());
 
-      const persist = state.candidates
-        .filter(item => item.mapCoordinatesSource === 'address_geocoded' && UUID.test(String(item.siteId || '')))
-        .map(item => ({ siteId: String(item.siteId), address: item.address, latitude: Number(item.lat), longitude: Number(item.lng) }));
-      let cacheNote = '';
-      if (persist.length) {
-        try {
-          const saved = await persistGeocodedSiteCoordinates(persist);
-          cacheNote = saved && saved.ok
-            ? ' · ' + Number(saved.saved || 0) + ' coordenada(s) guardada(s) para as próximas aberturas'
-            : ' · cache indisponível; os pontos seguem visíveis nesta sessão';
-        } catch (_) {
-          cacheNote = ' · cache indisponível; os pontos seguem visíveis nesta sessão';
-        }
-      }
-
-      // A rota já nasce com uma sugestão curta e editável, sem abrir OS.
-      state.selected = state.candidates.slice(0, Math.min(5, state.candidates.length))
-        .map(item => Object.assign({}, item, { serviceType: '', cause: '' }));
+      state.selected = state.technician
+        ? state.candidates.slice(0, Math.min(5, state.candidates.length))
+            .map(item => Object.assign({}, item, { serviceType: '', cause: '' }))
+        : [];
       state.manualOrder = false;
-      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
-      if (status) status.textContent = state.candidates.length + ' locais posicionados. '
-        + (originForRoute() ? 'Sequência sugerida a partir do GPS recente do técnico.' : 'Sem GPS recente: sequência inicial calculada pela região mais central e proximidade entre os endereços.')
-        + ' ' + metrics.openOrders + ' OS abertas, ' + metrics.inProgressOrders + ' em atendimento e '
-        + metrics.overdueOrders + ' vencidas.' + cacheNote;
       renderLists();
+
+      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
+      const pendingPins = Math.max(0, metrics.locations - metrics.mappedLocations);
+      if (status) {
+        status.textContent = state.technician
+          ? state.candidates.length + ' locais carregados para ' + getTechnicianLabel(state.technician) + '. '
+            + state.selected.length + ' paradas sugeridas. ' + metrics.mappedLocations + ' com pino salvo e '
+            + pendingPins + ' pino(s) serão localizados em segundo plano; as paradas já são roteáveis pelos endereços. '
+            + metrics.openOrders + ' OS abertas, ' + metrics.inProgressOrders + ' em atendimento e '
+            + metrics.overdueOrders + ' vencidas.'
+          : state.candidates.length + ' locais ativos carregados com endereço. Selecione um técnico para montar a rota. '
+            + metrics.mappedLocations + ' pinos já salvos; os demais serão localizados em segundo plano e continuam disponíveis pelo endereço.';
+      }
+      // Preenche todos os pinos gradualmente sem bloquear o despacho por endereço.
+      // Os endereços continuam selecionáveis/navegáveis durante toda a fila.
+      if (state.candidates.length) queueMapGeocoding(state.candidates);
     } catch (error) {
-      if (status) status.textContent = error && error.message || 'Não foi possível sugerir a rota.';
+      if (status) status.textContent = error && error.message || 'Não foi possível carregar os locais do despacho.';
     } finally {
-      state.geocoding = false;
       if (button) { button.disabled = false; button.textContent = 'Atualizar mapa e sugestão de rota'; }
     }
   }
 
   function reorderSelected() {
     if (state.manualOrder) return;
-    state.selected = planner().optimizeStops(state.selected, originForRoute()).stops;
+    state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
   }
 
   function addStop(id) {
@@ -516,12 +632,11 @@
     }
     const candidate = state.candidates.find(item => String(item.id) === String(id));
     if (!candidate || state.selected.some(item => String(item.id) === String(id))) return;
-    state.selected.push(Object.assign({}, candidate, {
-      serviceType: '',
-      cause: ''
-    }));
+    const added = Object.assign({}, candidate, { serviceType: '', cause: '' });
+    state.selected.push(added);
     reorderSelected();
     renderLists();
+    queueSelectedGeocoding([added]);
   }
 
   function addNearestFive() {
@@ -533,12 +648,13 @@
     }
     const selectedIds = new Set(state.selected.map(item => String(item.id)));
     const available = state.candidates.filter(item => !selectedIds.has(String(item.id)));
-    const optimized = planner().optimizeStops(available, originForRoute()).stops;
-    optimized.slice(0, Math.min(5, remainingCapacity)).forEach(item => {
-      state.selected.push(Object.assign({}, item, { serviceType: '', cause: '' }));
-    });
+    const optimized = optimizeRoutePreservingUnlocated(available, originForRoute());
+    const added = optimized.slice(0, Math.min(5, remainingCapacity))
+      .map(item => Object.assign({}, item, { serviceType: '', cause: '' }));
+    state.selected.push(...added);
     reorderSelected();
     renderLists();
+    queueSelectedGeocoding(added);
   }
 
   function removeStop(index) {
@@ -575,8 +691,9 @@
         + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos';
       return '<article class="dbs-dispatch-item"><span class="dbs-dispatch-number">' + (index + 1) + '</span>'
         + '<div><strong>' + safe(item.name) + '</strong><small>' + safe(item.clientName + ' · ' + item.address + distance) + '</small>'
-        + '<small style="color:#365f86;font-weight:800">' + safe(indicators) + '</small></div>'
-        + '<button type="button" class="dbs-dispatch-iconbtn" data-action="add" data-id="' + safe(item.id) + '" aria-label="Adicionar ' + safe(item.name) + '">+</button></article>';
+        + '<small style="color:#365f86;font-weight:800">' + safe(indicators) + '</small>'
+        + '<small style="color:' + (hasValidCoordinates(item) ? '#047857' : '#9a6700') + '">' + (hasValidCoordinates(item) ? 'Pino salvo no mapa' : 'Sem pino ainda · continua roteável pelo endereço') + '</small></div>'
+        + '<button type="button" class="dbs-dispatch-iconbtn" data-action="add" data-id="' + safe(item.id) + '" aria-label="Adicionar ' + safe(item.name) + '"' + (!state.technician ? ' disabled title="Selecione um técnico primeiro"' : '') + '>+</button></article>';
     }).join('') : '<div class="dbs-dispatch-empty">Nenhum outro local corresponde ao filtro.</div>';
 
     selected.innerHTML = state.selected.length ? state.selected.map((item, index) => {
@@ -587,7 +704,7 @@
           + '<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="' + (requiresCause(item.serviceType) ? 'Descreva o defeito, sintoma ou solicitação que motivou esta corretiva (mínimo 5 caracteres)' : 'Descreva o motivo deste atendimento, se necessário') + '">' + safe(item.cause || '') + '</textarea></label>';
       return '<article class="dbs-dispatch-card" style="padding:10px">'
         + '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between">'
-        + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small><small style="display:block;margin-top:3px;color:#365f86;font-size:9px;font-weight:800">OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0) + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos</small></div></div>'
+        + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small><small style="display:block;margin-top:3px;color:#365f86;font-size:9px;font-weight:800">OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0) + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos</small><small style="display:block;margin-top:3px;color:' + (hasValidCoordinates(item) ? '#047857' : '#9a6700') + ';font-size:9px">' + (hasValidCoordinates(item) ? 'Pino salvo' : 'Endereço pronto para navegação; pino em processamento') + '</small></div></div>'
         + '<div class="dbs-dispatch-actions"><button class="dbs-dispatch-iconbtn" type="button" data-action="up" data-index="' + index + '" aria-label="Subir parada">↑</button><button class="dbs-dispatch-iconbtn" type="button" data-action="down" data-index="' + index + '" aria-label="Descer parada">↓</button><button class="dbs-dispatch-iconbtn" type="button" data-action="remove" data-index="' + index + '" aria-label="Remover parada">×</button></div></div>'
         + '<div class="dbs-dispatch-stop-fields"><label>Tipo de atendimento<select data-field="serviceType" data-index="' + index + '">' + typeOptions + '</select></label>'
         + causeField + '</div></article>';
@@ -655,8 +772,7 @@
       }
       state.mapLayer.clearLayers();
       const bounds = [];
-      const techPoint = state.location && Number.isFinite(Number(state.location.latitude))
-        && Number.isFinite(Number(state.location.longitude))
+      const techPoint = state.location && hasValidCoordinates({ lat: state.location.latitude, lng: state.location.longitude })
         ? [Number(state.location.latitude), Number(state.location.longitude)] : null;
       if (techPoint) {
         const recent = Boolean(state.location.is_live);
@@ -673,7 +789,7 @@
       }
 
       const selectedIds = new Set(state.selected.map(item => String(item.id)));
-      const mapped = state.candidates.filter(stop => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)));
+      const mapped = state.candidates.filter(hasValidCoordinates);
       mapped.forEach((stop, index) => {
         const point = [Number(stop.lat), Number(stop.lng)];
         const urgent = Number(stop.overdueOrders || 0) > 0 || Number(stop.emergencyOrders || 0) > 0;
@@ -698,7 +814,7 @@
       });
 
       const routePoints = state.selected
-        .filter(stop => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)))
+        .filter(hasValidCoordinates)
         .map(stop => [Number(stop.lat), Number(stop.lng)]);
       if (routePoints.length > 1) {
         L.polyline(routePoints, { color: '#1d4ed8', weight: 4, opacity: 0.9, dashArray: '8 6' }).addTo(state.mapLayer);
@@ -719,6 +835,7 @@
         metricsElement.innerHTML = [
           ['Locais', metrics.locations],
           ['No mapa', metrics.mappedLocations],
+          ['Endereços sem pino', Math.max(0, metrics.locations - metrics.mappedLocations)],
           ['OS abertas', metrics.openOrders],
           ['Em atendimento', metrics.inProgressOrders],
           ['Vencidas', metrics.overdueOrders],
@@ -734,7 +851,7 @@
         + metrics.openOrders + ' OS abertas · ' + metrics.inProgressOrders + ' em atendimento · '
         + metrics.overdueOrders + ' vencidas · ' + metrics.equipment + ' equipamentos. '
         + metrics.ordersWithoutSpecificSite + ' OS e ' + metrics.equipmentWithoutSpecificSite + ' equipamentos sem vínculo de local específico. '
-        + (unmapped ? unmapped + ' endereço(s) aguardam revisão. ' : '')
+        + (unmapped ? unmapped + ' endereço(s) continuam roteáveis pelo cadastro, mesmo sem pino no mapa. ' : '')
         + (originForRoute() ? 'A rota considera o GPS recente do técnico.' : 'Sem GPS recente: a rota não usa a posição do administrador como origem.')
         + ' Pinos verdes: sem OS pendente; âmbar: OS em aberto/atendimento; vermelhos: OS vencida/emergencial.';
     } catch (error) {
@@ -756,9 +873,9 @@
       + '<button type="button" class="dbs-dispatch-btn secondary" data-action="refresh-location">Atualizar posição do GPS</button></div>'
       + '<div id="dbs-dispatch-location-summary" class="dbs-dispatch-location"><div><strong>Selecione o técnico para consultar a localização.</strong><small>O sistema mostrará a hora da última leitura para diferenciar posição recente de ponto antigo.</small></div></div>'
       + '<label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar a última posição do técnico como ponto de partida da rota</label>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Atualizar mapa e sugestão de rota</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five">Adicionar 5 locais seguintes</button></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Atualizar mapa e sugestão de rota</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five"' + (!state.technician ? ' disabled' : '') + '>Adicionar 5 locais seguintes</button><button type="button" class="dbs-dispatch-btn secondary" data-action="geocode-selected"' + (!state.technician || !state.selected.length ? ' disabled' : '') + '>Localizar pinos das paradas</button></div>'
       + '</section>'
-      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa de clientes e operação</h3><p>Os marcadores representam os endereços ativos cadastrados. A posição é aproximada pelo endereço; não é GPS do cliente.</p><p>Na primeira leitura, os endereços são consultados no Photon/OpenStreetMap e os pontos encontrados ficam guardados no cadastro. As cores e os indicadores usam as OS e os equipamentos reais do DBS CONTROL. A sequência é estimada por proximidade geográfica e não considera trânsito; o Google Maps calcula o trajeto pelas vias. Sem GPS recente do técnico, a rota começa em um local sugerido, nunca na localização do administrador.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Lendo cadastros.</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
+      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa de clientes e operação</h3><p>Os marcadores representam os endereços ativos cadastrados. A posição é aproximada pelo endereço; não é GPS do cliente.</p><p>Todos os endereços cadastrados permanecem selecionáveis e roteáveis. Os pinos são localizados progressivamente pelo Photon/OpenStreetMap apenas nas paradas escolhidas; uma falha de geocodificação não bloqueia a rota pelo endereço. As cores e os indicadores usam as OS e os equipamentos reais do DBS CONTROL. A sequência considera proximidade quando há coordenadas e preserva as paradas sem pino. O Google Maps calcula o trajeto pelas vias. Sem GPS recente do técnico, a rota começa na primeira parada, nunca na localização do administrador.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Lendo cadastros.</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
       + '<section class="dbs-dispatch-columns">'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Rota selecionada e editável</h3><p>Defina o tipo e o motivo de cada atendimento.</p></div><strong id="dbs-dispatch-count">0 paradas</strong></div><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregue a sugestão e adicione os locais que deseja atender.</div></div></div>'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Locais cadastrados próximos</h3><p id="dbs-dispatch-available-count">Aguardando análise</p></div></div><input id="dbs-dispatch-search" type="search" placeholder="Filtrar por loja, cliente, bairro ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Os primeiros cinco locais formam uma sugestão editável após o carregamento do mapa.</div></div></div>'
@@ -769,18 +886,21 @@
       + '</div></div>';
 
     const technicianSelect = byId('dbs-dispatch-technician');
-    technicianSelect.addEventListener('change', async function () {
+    technicianSelect.addEventListener('change', function () {
       state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null;
       resetPlan();
-      await refreshLocation();
-      await buildSuggestions();
-      renderLists();
+      state.location = null;
+      state.originEnabled = false;
+      // Não esperar o GPS: carrega imediatamente todos os endereços e monta
+      // a rota; a posição do técnico é apenas um refinamento opcional da origem.
+      void buildSuggestions();
+      void refreshLocation();
     });
     const toggle = byId('dbs-dispatch-use-origin');
     toggle.addEventListener('change', function () {
       state.originEnabled = Boolean(this.checked);
       if (state.candidates.length) {
-        state.candidates = planner().optimizeStops(state.candidates, originForRoute()).stops;
+        state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
         reorderSelected();
         renderLists();
       } else renderMapAndLinks();
@@ -801,6 +921,7 @@
         return;
       }
       if (action === 'build') { await buildSuggestions(); return; }
+      if (action === 'geocode-selected') { queueSelectedGeocoding(state.selected); return; }
       if (action === 'nearest-five') { addNearestFive(); return; }
       if (action === 'add') { addStop(button.getAttribute('data-id')); return; }
       if (action === 'remove') { removeStop(Number(button.getAttribute('data-index'))); return; }
@@ -852,7 +973,7 @@
       return;
     }
     review.hidden = false;
-    review.innerHTML = '<strong>' + state.review.length + ' cadastro(s) exigem revisão e ficaram fora da rota automática:</strong><ul style="margin:6px 0 0;padding-left:18px">'
+    review.innerHTML = '<strong>' + state.review.length + ' endereço(s) não tiveram o pino confirmado. Eles continuam na rota pelo endereço e podem ser abertos no Google Maps:</strong><ul style="margin:6px 0 0;padding-left:18px">'
       + items.map(item => {
         const mapsButton = item.address
           ? ' <button type="button" class="dbs-dispatch-btn secondary" data-action="review-map" data-id="' + safe(item.id || '') + '">Abrir endereço no Google Maps</button>'
@@ -982,6 +1103,8 @@
     modal.__previousFocus = document.activeElement;
     document.body.appendChild(modal);
     renderModal();
+    // Endereços e lista aparecem primeiro; a consulta de técnicos/RH não bloqueia o mapa.
+    void buildSuggestions();
     const dayTechnician = byId('day-filter-tecnico');
     void loadActiveTechnicians(dayTechnician && dayTechnician.value || '');
     return modal;
