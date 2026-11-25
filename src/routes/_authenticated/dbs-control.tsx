@@ -1319,6 +1319,10 @@ function DbsControlPage() {
             return;
           }
           const result = await listRhFleetTechnicianLocations({ data: { employee_id: employeeId } });
+          if (!result.employee_found) {
+            reply({ ok: false, error: "O vínculo deste técnico não foi encontrado como colaborador ativo no RH." });
+            return;
+          }
           reply({ ok: true, location: result.locations?.[0] ?? null });
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível consultar a última localização autorizada." });
@@ -1374,8 +1378,8 @@ function DbsControlPage() {
               || (siteId && !uuidPattern.test(siteId))
               || assignedId !== technicianEmployeeId
               || !allowedTypes.has(serviceType)
-              || (!isPmoc && (cause.length < 5 || cause.length > 500))
-              || (isPmoc && cause.length > 500)
+              || (/corretiv|emergencial/i.test(serviceType) && (cause.length < 5 || cause.length > 500))
+              || (!/corretiv|emergencial/i.test(serviceType) && cause.length > 500)
               || (isPmoc && String(order?.pmocCompetencia ?? "") !== routeDate.slice(0, 7))
               || (!isPmoc && order?.pmocCompetencia != null)
               || seenStops.has(stopKey)) {
@@ -1385,9 +1389,25 @@ function DbsControlPage() {
             seenStops.add(stopKey);
           }
 
+          const technicianCheck = await listRhFleetTechnicianLocations({ data: { employee_id: technicianEmployeeId } });
+          if (!technicianCheck.employee_found) {
+            reply({ ok: false, error: "O técnico selecionado não está vinculado a um colaborador ativo do RH. Nenhuma OS foi criada." });
+            return;
+          }
           const before = await getCloudStateSingleFlight();
           const currentOrders = Array.isArray(before?.state?.ordens) ? before.state.ordens : [];
           const terminal = (status: unknown) => /conclu[ií]d|finalizad|encerrad|cancelad|arquivad/i.test(String(status ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase());
+          const typeKey = (value: unknown) => {
+            const type = String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            if (/corretiv/.test(type)) return "corretiva";
+            if (/emergencial/.test(type)) return "emergencial";
+            if (/visita/.test(type)) return "visita";
+            if (/inspec/.test(type)) return "inspecao";
+            if (/instal|start.?up/.test(type)) return "instalacao";
+            if (/pmoc/.test(type)) return "pmoc";
+            if (/preventiv/.test(type)) return "preventiva";
+            return type.trim();
+          };
           const duplicates = orders.filter((requested: any) => currentOrders.some((existing: any) => {
             const existingSiteId = String(existing?.siteId ?? existing?.site_id ?? existing?.localId ?? "").trim();
             const existingClientId = String(existing?.clienteId ?? existing?.client_id ?? "").trim();
@@ -1395,8 +1415,7 @@ function DbsControlPage() {
             const sameLocation = requestedSiteId
               ? existingSiteId === requestedSiteId
               : !existingSiteId && existingClientId === String(requested?.clienteId ?? requested?.client_id ?? "");
-            const sameType = String(existing?.tipo ?? existing?.type ?? "").trim().toLocaleLowerCase("pt-BR")
-              === String(requested?.tipo ?? requested?.type ?? "").trim().toLocaleLowerCase("pt-BR");
+            const sameType = typeKey(existing?.tipo ?? existing?.type) === typeKey(requested?.tipo ?? requested?.type);
             return sameLocation && sameType && !terminal(existing?.status)
               && !existing?.excluidaEm && !existing?.deleted_at && !existing?.arquivadaEm;
           }));
