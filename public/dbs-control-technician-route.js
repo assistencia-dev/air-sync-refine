@@ -496,8 +496,8 @@
   async function drainGeocodingQueue(generation) {
     if (state.geocoding || generation !== state.geocodeGeneration) return;
     state.geocoding = true;
-    const successfullyGeocoded = [];
     let completed = 0;
+    let savedCount = 0;
     const status = byId('dbs-dispatch-status');
     try {
       while (state.geocodeQueue.length && generation === state.geocodeGeneration && byId('dbs-dispatch-route-modal')) {
@@ -519,12 +519,18 @@
             state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
             state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
           }
-          successfullyGeocoded.push({
+          const coordinates = {
             siteId: String(candidate.siteId || ''),
             address: candidate.address,
             latitude: point.lat,
             longitude: point.lng
-          });
+          };
+          if (UUID.test(coordinates.siteId)) {
+            // Grava cada pino conforme é localizado para não perder o progresso
+            // quando o administrador fecha ou troca o planejamento.
+            const saved = await persistGeocodedSiteCoordinates([coordinates]);
+            if (saved && saved.ok) savedCount += Number(saved.saved || 0);
+          }
           state.review = state.review.filter(item => String(item.id || '') !== String(candidate.id || ''));
         } catch (error) {
           if (generation !== state.geocodeGeneration) return;
@@ -536,18 +542,11 @@
         }
         completed += 1;
         if (status) status.textContent = 'Pinos localizados nesta sessão: ' + completed
-          + '. Ainda na fila: ' + state.geocodeQueue.length + '. A rota e os links do Google Maps já podem ser usados pelos endereços.';
+          + ' · ' + savedCount + ' salvo(s) no cadastro · faltam ' + state.geocodeQueue.length
+          + '. A rota e os links do Google Maps continuam disponíveis pelos endereços.';
         renderLists();
         if (state.geocodeQueue.length && generation === state.geocodeGeneration) {
           await new Promise(resolve => setTimeout(resolve, 1100));
-        }
-      }
-      const persist = successfullyGeocoded.filter(item => UUID.test(item.siteId));
-      if (persist.length && generation === state.geocodeGeneration) {
-        const saved = await persistGeocodedSiteCoordinates(persist);
-        if (status && saved && saved.ok) {
-          status.textContent = completed + ' parada(s) verificadas. ' + Number(saved.saved || 0)
-            + ' pino(s) guardado(s) no cadastro. A rota continua disponível pelos endereços.';
         }
       }
     } finally {
