@@ -404,7 +404,7 @@ console.log('DBS CONTROL technician-first route: GPS do técnico, locais sem OS 
 assert.ok(!dispatchScript.includes("photon.komoot.io"), "O navegador não deve acessar o Photon diretamente; a chamada precisa passar pelo servidor autenticado.");
 assert.ok(dispatchScript.includes("DBS_CONTROL_GEOCODE_SITE_ADDRESS"), "O mapa deve consultar o geocodificador por meio da ponte autenticada do shell.");
 assert.ok(dispatchScript.includes("Endereço cadastrado; serviço de geocodificação indisponível"), "Falhas de rede do provedor não podem ser rotuladas como endereço ausente.");
-assert.ok(dispatchScript.includes("Endereço cadastrado: "), "O endereço original deve permanecer visível na lista de revisão.");
+assert.ok(dispatchScript.includes("Endereços sem pino no mapa") && dispatchScript.includes("safe(item.address)"), "O endereço original deve permanecer visível na lista de revisão e selecionável.");
 assert.ok(dispatchScript.includes('data-action="review-map"'), "A revisão deve permitir abrir o endereço cadastrado no Google Maps.");
 assert.ok(parentRoute.includes('msg.type === "DBS_CONTROL_GEOCODE_SITE_ADDRESS"'), "O shell deve receber a geocodificação e chamar a ação do servidor.");
 assert.ok(parentRoute.includes("geocodeDbsControlSiteAddress({ data: { address } })"), "A consulta externa deve ocorrer exclusivamente pela função autenticada do servidor.");
