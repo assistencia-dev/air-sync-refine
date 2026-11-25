@@ -4004,7 +4004,8 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                         <p style="font-size:11px;color:var(--text-muted);">Painel de conferência operacional: o que está programado, quem está executando e o que já foi concluído.</p>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <button class="btn btn-primary btn-sm" type="button" onclick="abrirRotaAtividadesDia()" title="Monta etapas no Google Maps para um técnico e a lista visível deste dia">Abrir rota do técnico</button>
+                        <button class="btn btn-primary btn-sm" type="button" onclick="abrirRotaAtividadesDia()" title="Abre as OS já atribuídas ao técnico na data selecionada">Abrir rota do técnico</button>
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="abrirPlanejamentoNovosAtendimentos()" title="Planeja novos atendimentos por endereço e permite abrir novas OS depois da revisão">Planejar novos atendimentos</button>
                     <button class="btn btn-secondary btn-sm" type="button" onclick="renderizarAtividadesDia()">Atualizar conferência</button>
                     </div>
                 </div>
@@ -7334,45 +7335,90 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
         }
 
-        function abrirRotaAtividadesDia() {
+        async function abrirRotaAtividadesDia() {
             const technicianSelect = document.getElementById('day-filter-tecnico');
             const technicianId = String(technicianSelect?.value || '').trim();
             if (!technicianId) {
-                alert('Selecione um único colaborador no filtro da agenda para montar a rota.');
+                alert('Selecione um único técnico no filtro Colaborador da agenda antes de abrir a rota.');
                 technicianSelect?.focus();
                 return;
             }
 
-            const technicianName = technicianSelect?.selectedOptions?.[0]?.textContent?.trim() || 'Colaborador';
+            const currentState = ERP_STATE || {};
+            const technician = (Array.isArray(currentState.tecnicos) ? currentState.tecnicos : [])
+                .find(item => String(item?.id ?? '') === technicianId) || null;
+            const technicianName = technicianSelect?.selectedOptions?.[0]?.textContent?.trim()
+                || technician?.nome || technician?.name || 'Técnico';
             const selectedDate = document.getElementById('day-filter-date')?.value || obterDataFiltroDia();
-            const visibleIds = Array.from(document.querySelectorAll('#day-table-body tr[data-dbs-route-order-id]'))
-                .map(row => String(row.getAttribute('data-dbs-route-order-id') || '').trim())
-                .filter(Boolean);
-            const visibleOrders = visibleIds
-                .map(id => (ERP_STATE.ordens || []).find(order => String(order.id) === id))
-                .filter(order => order && String(order.tecnicoId ?? order.employeeId ?? '') === technicianId);
+            const sourceOrders = Array.isArray(currentState.ordens) ? currentState.ordens : [];
+            const dayOrders = sourceOrders.filter(order => {
+                if (!order) return false;
+                const orderTechnicianId = String(order.tecnicoId ?? order.employeeId ?? order.employee_id ?? order.tecnico_id ?? '').trim();
+                const orderDate = typeof dataOSParaISO === 'function'
+                    ? dataOSParaISO(order.data)
+                    : String(order.data ?? '').slice(0, 10);
+                return orderTechnicianId === technicianId && orderDate === selectedDate;
+            });
 
-            if (!visibleOrders.length) {
-                alert('Não há OS visíveis deste colaborador para a data e os filtros selecionados.');
+            if (!dayOrders.length) {
+                alert('Não há OS atribuídas a ' + technicianName + ' em ' + selectedDate + '. Confira a data e o responsável na agenda.');
                 return;
             }
 
-            const state = ERP_STATE || {};
-            const plan = window.DbsControlRoutePlanner?.buildStops(
-                visibleOrders,
-                state.clientes,
-                state.locais || state.sites || state.unidades
-            );
-            if (!plan) {
-                alert('O planejador de rota ainda não foi carregado. Atualize a tela e tente novamente.');
+            const planner = window.DbsControlRoutePlanner;
+            if (!planner || typeof planner.buildStops !== 'function' || typeof planner.buildRouteLegs !== 'function') {
+                alert('O módulo de rotas ainda não terminou de carregar. Atualize o DBS CONTROL e tente novamente.');
                 return;
             }
+
+            const sites = currentState.locais || currentState.sites || currentState.unidades || [];
+            const clients = currentState.clientes || [];
+            const plan = planner.buildStops(dayOrders, clients, sites);
             if (!plan.stops.length) {
-                alert('Não há OS em aberto com endereço cadastrado para montar a rota. OS concluídas/canceladas são ignoradas.');
+                const detail = plan.missingAddressCount
+                    ? ' Há ' + plan.missingAddressCount + ' OS sem endereço utilizável no cadastro.'
+                    : '';
+                alert('Não há OS em aberto com endereço para montar a rota deste técnico. OS concluídas/canceladas são ignoradas.' + detail);
                 return;
             }
 
-            const legs = window.DbsControlRoutePlanner.buildRouteLegs(plan.stops);
+            // Só usa o GPS como origem quando o DBS FLEET confirmou leitura atual.
+            // Última batida de ponto ou coordenada antiga nunca substitui a localização do administrador.
+            const employeeId = String(
+                technician?.employeeId || technician?.employee_id ||
+                technician?.rhEmployeeId || technician?.rh_employee_id || technicianId
+            ).trim();
+            let gpsResult = null;
+            let routeOrigin = null;
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)
+                && typeof window.DbsControlRequestTechnicianLocation === 'function') {
+                try {
+                    gpsResult = await window.DbsControlRequestTechnicianLocation(employeeId);
+                    const location = gpsResult?.location;
+                    const hasGps = location && location.is_live === true
+                        && Number.isFinite(Number(location.latitude))
+                        && Number.isFinite(Number(location.longitude))
+                        && Number(location.latitude) >= -90 && Number(location.latitude) <= 90
+                        && Number(location.longitude) >= -180 && Number(location.longitude) <= 180;
+                    if (gpsResult?.ok && hasGps) {
+                        routeOrigin = { lat: Number(location.latitude), lng: Number(location.longitude) };
+                    }
+                } catch (error) {
+                    gpsResult = { ok: false, error: error instanceof Error ? error.message : 'GPS indisponível' };
+                }
+            }
+
+            // Horários agendados têm prioridade. Sem agenda completa, ordenar os
+            // endereços com coordenadas salvas por proximidade e preservar os demais.
+            if (!plan.sortedBySchedule) {
+                const located = plan.stops.filter(stop => planner.hasCoordinates?.(stop));
+                const unlocated = plan.stops.filter(stop => !planner.hasCoordinates?.(stop));
+                if (located.length > 1) {
+                    plan.stops = planner.optimizeStops(located, routeOrigin).stops.concat(unlocated);
+                    plan.stops.forEach((stop, index) => { stop.sequence = index + 1; });
+                }
+            }
+            const legs = planner.buildRouteLegs(plan.stops, routeOrigin);
             const modal = document.createElement('div');
             modal.id = 'dbs-route-planner-modal';
             modal.setAttribute('role', 'dialog');
@@ -7385,7 +7431,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 style.id = 'dbs-route-planner-modal-style';
                 style.textContent = [
                     '#dbs-route-planner-modal{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.58)}',
-                    '#dbs-route-planner-modal .dbs-route-dialog{width:min(720px,100%);max-height:min(88vh,900px);overflow:auto;border:1px solid #dbe5ef;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.28);color:#17324d}',
+                    '#dbs-route-planner-modal .dbs-route-dialog{width:min(820px,100%);max-height:min(90vh,940px);overflow:auto;border:1px solid #dbe5ef;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.28);color:#17324d}',
                     '#dbs-route-planner-modal .dbs-route-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:20px 22px;background:#f4f8fc;border-bottom:1px solid #e3ebf3}',
                     '#dbs-route-planner-modal h2{margin:0;font-size:19px;font-weight:850;color:#173b60}',
                     '#dbs-route-planner-modal p{margin:5px 0 0;font-size:12px;line-height:1.5;color:#63768a}',
@@ -7396,12 +7442,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     '#dbs-route-planner-modal li{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border:1px solid #e3ebf3;border-radius:11px;background:#fff}',
                     '#dbs-route-planner-modal .dbs-route-number{display:grid;place-items:center;flex:0 0 28px;height:28px;border-radius:9px;background:#e9f3ff;color:#155a9c;font-size:12px;font-weight:900}',
                     '#dbs-route-planner-modal .dbs-route-address{font-size:12px;font-weight:800;color:#234564;overflow-wrap:anywhere}',
-                    '#dbs-route-planner-modal .dbs-route-meta{display:block;margin-top:4px;font-size:11px;color:#718399}',
+                    '#dbs-route-planner-modal .dbs-route-meta{display:block;margin-top:4px;font-size:11px;color:#718399;line-height:1.45}',
                     '#dbs-route-planner-modal .dbs-route-legs{display:grid;gap:9px;margin-top:17px}',
                     '#dbs-route-planner-modal .dbs-route-leg{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #dbe5ef;border-radius:12px}',
                     '#dbs-route-planner-modal .dbs-route-leg b{display:block;font-size:12px;color:#24435f}',
                     '#dbs-route-planner-modal .dbs-route-leg small{display:block;margin-top:3px;color:#718399;font-size:10px}',
                     '#dbs-route-planner-modal .dbs-route-open{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 14px;border:0;border-radius:9px;background:#1769d1;color:#fff;text-decoration:none;font-size:12px;font-weight:850;white-space:nowrap;cursor:pointer}',
+                    '#dbs-route-planner-modal .dbs-route-open.secondary{background:#fff;color:#245273;border:1px solid #d2dfeb}',
                     '#dbs-route-planner-modal .dbs-route-open:focus-visible,#dbs-route-planner-modal .dbs-route-close:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}',
                     '@media(max-width:560px){#dbs-route-planner-modal{padding:8px;align-items:flex-end}#dbs-route-planner-modal .dbs-route-dialog{max-height:92vh;border-radius:16px}#dbs-route-planner-modal .dbs-route-head,#dbs-route-planner-modal .dbs-route-body{padding:15px}#dbs-route-planner-modal .dbs-route-leg{align-items:stretch;flex-direction:column}#dbs-route-planner-modal .dbs-route-open{width:100%}}'
                 ].join('');
@@ -7412,25 +7459,52 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 ? escDbsControl(String(value ?? ''))
                 : String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
             const stopList = plan.stops.map(stop => {
-                const protocols = (stop.orders || []).map(order => order.protocol || order.id).filter(Boolean).join(', ');
-                return '<li><span class="dbs-route-number">' + stop.sequence + '</span><div><div class="dbs-route-address">' + safe(stop.label) + ' · ' + safe(stop.address) + '</div><small class="dbs-route-meta">' + safe(protocols || 'OS vinculada') + '</small></div></li>';
+                const protocols = (stop.orders || []).map(order => {
+                    const code = order.protocol || order.id || 'OS';
+                    const type = order.serviceType ? ' · ' + order.serviceType : '';
+                    const status = order.status ? ' · ' + order.status : '';
+                    return code + type + status;
+                }).join('<br>');
+                const scheduled = stop.scheduledAt
+                    ? ' · Agendamento: ' + new Date(stop.scheduledAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                    : '';
+                const addressUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stop.address);
+                return '<li><span class="dbs-route-number">' + stop.sequence + '</span><div style="min-width:0;flex:1"><div class="dbs-route-address">' + safe(stop.label) + ' · ' + safe(stop.address) + '</div>'
+                    + '<small class="dbs-route-meta">' + safe(protocols || 'OS vinculada') + safe(scheduled) + '</small>'
+                    + '<button type="button" class="dbs-route-open secondary" style="margin-top:7px;min-height:34px" data-dbs-maps-url="' + safe(addressUrl) + '">Abrir este endereço</button>'
+                    + '</div></li>';
             }).join('');
+            const legs = planner.buildRouteLegs(plan.stops, routeOrigin);
             const legList = legs.map(leg => {
                 const title = 'Etapa ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop;
-                const startLabel = leg.origin ? 'Saída: parada ' + (leg.firstStop - 1) : 'Saída: localização atual do aparelho';
+                const startLabel = leg.index > 1
+                    ? 'Continua após a parada ' + (leg.firstStop - 1)
+                    : routeOrigin ? 'Origem: GPS recente do técnico' : 'Sem GPS recente: início na primeira parada';
                 const link = leg.url
-                    ? '<button type="button" class="dbs-route-open" data-dbs-maps-url="' + safe(leg.url) + '">Abrir etapa no Maps →</button>'
-                    : '<span style="font-size:11px;color:#a33b42">Endereços muito longos para um único link. Abra as paradas individualmente.</span>';
+                    ? '<button type="button" class="dbs-route-open" data-dbs-maps-url="' + safe(leg.url) + '">Abrir etapa no Google Maps →</button>'
+                    : '<span style="font-size:11px;color:#a33b42">Endereços muito longos para uma única etapa. Use os botões de cada endereço acima.</span>';
                 return '<div class="dbs-route-leg"><div><b>' + safe(title) + '</b><small>' + safe(startLabel) + ' · destino: ' + safe(plan.stops[leg.lastStop - 1]?.label || '') + '</small></div>' + link + '</div>';
             }).join('');
 
-            modal.innerHTML = '<div class="dbs-route-dialog"><div class="dbs-route-head"><div><h2 id="dbs-route-planner-title">Rota do dia · ' + safe(technicianName) + '</h2><p>' + safe(selectedDate) + ' · ' + plan.stops.length + ' paradas · ' + plan.includedOrderCount + ' OS abertas</p></div><button type="button" class="dbs-route-close" aria-label="Fechar">×</button></div>' +
-                '<div class="dbs-route-body"><div class="dbs-route-note">A sequência preserva a ordem da agenda; só usa horário quando todas as paradas têm agendamento válido. O Google Maps calcula o trajeto, mas o DBS não otimiza trânsito nem altera a agenda. ' +
-                (plan.ignoredTerminalCount ? plan.ignoredTerminalCount + ' OS concluídas/canceladas foram ignoradas. ' : '') +
-                (plan.missingAddressCount ? plan.missingAddressCount + ' OS sem endereço utilizável ficaram fora da rota. ' : '') +
-                'As paradas são agrupadas por endereço e as etapas seguintes começam no último endereço da etapa anterior.</div><ol>' + stopList + '</ol><div class="dbs-route-legs">' + legList + '</div></div></div>';
+            const gpsLocation = gpsResult?.location;
+            const gpsNote = routeOrigin
+                ? 'GPS recente confirmado para o técnico em ' + (gpsLocation?.last_position_at ? new Date(gpsLocation.last_position_at).toLocaleString('pt-BR') : 'agora') + '.'
+                : gpsLocation
+                    ? 'Há uma última posição registrada (' + (gpsLocation.last_position_at ? new Date(gpsLocation.last_position_at).toLocaleString('pt-BR') : 'sem horário') + '), mas ela não é recente; não será usada como origem.'
+                    : 'GPS recente indisponível; o DBS não usará a localização do administrador. O início será a primeira parada.';
+            const sequenceNote = plan.sortedBySchedule
+                ? 'Sequência preservada conforme os horários agendados.'
+                : 'Sequência sugerida pela menor distância estimada entre os endereços que possuem coordenadas salvas. As demais paradas continuam na lista e na rota por endereço.';
+            const warningParts = [];
+            if (plan.ignoredTerminalCount) warningParts.push(plan.ignoredTerminalCount + ' OS concluídas/canceladas foram ignoradas.');
+            if (plan.missingAddressCount) warningParts.push(plan.missingAddressCount + ' OS sem endereço utilizável ficaram fora da rota.');
+            if (plan.stops.some(stop => !planner.hasCoordinates?.(stop))) warningParts.push('Algumas paradas não têm pino no mapa, mas continuam abrindo pelo endereço cadastrado.');
+
+            modal.innerHTML = '<div class="dbs-route-dialog"><div class="dbs-route-head"><div><h2 id="dbs-route-planner-title">Rota das OS do dia · ' + safe(technicianName) + '</h2><p>' + safe(selectedDate) + ' · ' + plan.stops.length + ' paradas · ' + plan.includedOrderCount + ' OS em aberto/em atendimento</p></div><button type="button" class="dbs-route-close" aria-label="Fechar">×</button></div>'
+                + '<div class="dbs-route-body"><div class="dbs-route-note"><strong>' + safe(gpsNote) + '</strong><br>' + safe(sequenceNote) + ' ' + safe(warningParts.join(' ')) + ' O Google Maps calcula o trajeto pelas vias; abrir a rota não altera a agenda nem modifica nenhuma OS.</div>'
+                + '<ol>' + stopList + '</ol><div class="dbs-route-legs">' + legList + '</div></div></div>';
             modal.addEventListener('click', event => {
-                if (event.target === modal || event.target.closest('.dbs-route-close')) fecharModalRotaAtividades();
+                if (event.target === modal || (event.target instanceof Element && event.target.closest('.dbs-route-close'))) fecharModalRotaAtividades();
             });
             modal.addEventListener('keydown', event => {
                 if (event.key === 'Escape') fecharModalRotaAtividades();
