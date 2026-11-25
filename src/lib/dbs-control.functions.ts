@@ -4614,8 +4614,8 @@ export const saveDbsControlSiteMapCoordinates = createServerFn({ method: "POST" 
     const normalizeAddress = (value: unknown) => String(value ?? "")
       .trim()
       .normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "")
-      .replace(/\\s+/g, " ")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
       .toLocaleLowerCase("pt-BR");
     const addressFromJson = (value: any) => {
       if (typeof value === "string") return value.trim();
