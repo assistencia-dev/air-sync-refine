@@ -27,6 +27,7 @@ assert.match(migration, /location_source text CHECK/, "O SOS deve identificar se
 assert.match(migration, /CREATE EXTENSION IF NOT EXISTS pg_cron/, "A retenção deve ter agendamento automático no Postgres.");
 assert.match(migration, /cron\.schedule\(/, "A limpeza de retenção deve estar agendada diariamente.");
 assert.match(migration, /dbs_fleet_cleanup_retention/, "A função de retenção automática deve existir.");
+assert.ok(migration.includes("AS " + "$$") && migration.includes("END;\n" + "$$;"), "A função de retenção deve usar delimitadores dollar-quote SQL válidos.");
 assert.match(migration, /rh_employee_location_sessions_one_active_employee/, "Deve impedir duas sessões simultâneas por funcionário.");
 assert.match(migration, /accuracy_m numeric\(10,2\) NOT NULL CHECK \(accuracy_m BETWEEN 0 AND 250\)/, "Pontos devem ter limite de precisão.");
 
@@ -53,6 +54,7 @@ assert.match(functions, /input\?\.consent !== true/, "O servidor deve recusar in
 assert.match(functions, /accuracy_m > 250/, "O servidor deve rejeitar leituras imprecisas.");
 assert.match(functions, /now\.getTime\(\) - Date\.parse\(session\.last_position_at\) < 20_000/, "O servidor deve aplicar intervalo mínimo de gravação.");
 assert.match(functions, /elapsed >= 60_000 \|\| movedMeters >= 50/, "A trilha deve ser limitada por tempo ou deslocamento.");
+assert.match(functions, /FLEET_LOCATION_FRESHNESS_MS = 180_000/, "O servidor deve considerar recente a posição recebida nos últimos 3 minutos.");
 assert.match(functions, /14 \* 60 \* 60 \* 1000/, "Sessões devem expirar em até 14 horas.");
 assert.match(functions, /30 \* 24 \* 60 \* 60 \* 1000/, "Pontos de localização devem ter retenção de 30 dias.");
 assert.match(functions, /90 \* 24 \* 60 \* 60 \* 1000/, "Alertas SOS resolvidos devem ter retenção de 90 dias.");
@@ -68,6 +70,8 @@ assert.match(functions, /requireRh\(context\);[\s\S]*?rh_employee_location_sessi
 assert.match(functions, /requireRh\(context\);[\s\S]*?rh_employee_location_points/, "O histórico de trajetos deve ser restrito ao RH.");
 assert.match(functions, /!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//, "A validação de data deve usar dígitos reais, não barra invertida literal.");
 
+assert.match(fleet, /FLEET_LOCATION_FRESHNESS_MS = 180_000/, "O mapa deve usar janela de localização de 3 minutos.");
+assert.match(fleet, /GPS atualizado nos últimos 3 minutos/, "O mapa deve indicar claramente a idade do sinal.");
 assert.match(fleet, /navigator\.geolocation\.watchPosition/, "O colaborador deve compartilhar posição com GPS ativo e visível.");
 assert.match(fleet, /navigator\.geolocation\.clearWatch/, "A leitura do GPS deve ser encerrada ao pausar ou desmontar.");
 assert.match(fleet, /document\.visibilityState !== "visible"/, "A coleta deve pausar quando o portal sair de primeiro plano.");

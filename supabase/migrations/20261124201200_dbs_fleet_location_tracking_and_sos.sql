@@ -112,7 +112,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 BEGIN
   DELETE FROM public.rh_employee_location_points
   WHERE recorded_at < now() - interval '30 days';
@@ -125,7 +125,7 @@ BEGIN
   WHERE created_at < now() - interval '90 days'
     AND status = 'RESOLVED';
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.dbs_fleet_cleanup_retention() FROM PUBLIC, anon, authenticated, service_role;
 

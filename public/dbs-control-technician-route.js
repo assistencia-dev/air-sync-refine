@@ -302,12 +302,12 @@
     }
     state.originEnabled = Boolean(location.is_live);
     if (toggle) {
-      toggle.disabled = false;
+      toggle.disabled = !location.is_live;
       toggle.checked = state.originEnabled;
     }
     const status = location.location_source === 'ponto'
       ? 'Última coordenada da batida de ponto · NÃO é rastreamento ao vivo'
-      : location.is_live ? 'GPS recente · posição atualizada' : 'Última posição conhecida · pode estar desatualizada';
+      : location.is_live ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida · pode estar desatualizada';
     const accuracy = location.accuracy_m == null ? '' : ' · precisão aproximada ±' + Math.round(Number(location.accuracy_m)) + ' m';
     if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
       + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
@@ -558,11 +558,17 @@
         && Number.isFinite(Number(state.location.longitude))
         ? [Number(state.location.latitude), Number(state.location.longitude)] : null;
       if (origin) {
-        L.circleMarker(origin, { radius: 10, color: '#064e3b', weight: 3, fillColor: '#34d399', fillOpacity: 1 })
-          .bindPopup('<strong>Última posição de ' + safe(getTechnicianLabel(state.technician)) + '</strong><br>' + safe(dateTime(state.location.last_position_at))
+        const recentOrigin = Boolean(state.location.is_live);
+        L.circleMarker(origin, {
+          radius: 10,
+          color: recentOrigin ? '#064e3b' : '#92400e',
+          weight: 3,
+          fillColor: recentOrigin ? '#34d399' : '#fbbf24',
+          fillOpacity: 1
+        }).bindPopup('<strong>Última posição de ' + safe(getTechnicianLabel(state.technician)) + '</strong><br>' + safe(dateTime(state.location.last_position_at))
             + '<br>' + (state.location.location_source === 'ponto'
               ? 'Última batida de ponto · sem rastreamento ao vivo'
-              : state.location.is_live ? 'GPS recente' : 'Última posição conhecida')).addTo(state.mapLayer);
+              : state.location.is_live ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida · sinal acima de 3 minutos')).addTo(state.mapLayer);
         bounds.push(origin);
       }
       const plottedStops = state.selected.length ? state.selected : state.candidates.slice(0, 100);
@@ -583,7 +589,7 @@
       else state.map.setView([-22.9, -43.2], 10);
       setTimeout(() => state.map && state.map.invalidateSize(), 120);
       if (status) status.textContent = origin
-        ? (state.location.is_live ? 'Pino verde: GPS recente do técnico. ' : 'Pino verde: última posição conhecida (confira a data). ')
+        ? (state.location.is_live ? 'Pino verde: GPS atualizado nos últimos 3 minutos. ' : 'Pino âmbar: última posição conhecida, sem atualização nos últimos 3 minutos. ')
           + 'Pinos azuis: locais selecionados ou sugestões próximas.'
         : state.candidates.length
           ? 'Sem coordenada GPS do técnico. Pinos azuis mostram as sugestões por proximidade geográfica.'
