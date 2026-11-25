@@ -268,7 +268,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-5/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-6/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
