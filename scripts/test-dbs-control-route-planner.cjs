@@ -98,6 +98,29 @@ assert.equal(siteSummary.mappedLocations, 1);
 assert.equal(siteSummary.openOrders, 3);
 assert.equal(siteSummary.equipment, 1);
 
+const ambiguousClientMetrics = planner.enrichSiteCandidates(
+  [
+    { id: 's1', siteId: 's1', clientId: 'shared-client', lat: 0, lng: 1 },
+    { id: 's2', siteId: 's2', clientId: 'shared-client', lat: 0, lng: 2 }
+  ],
+  [
+    { id: 'site-order', siteId: 's1', clienteId: 'shared-client', status: 'Aberta' },
+    { id: 'client-order', clienteId: 'shared-client', status: 'Aberta' }
+  ],
+  [
+    { id: 'site-equipment', siteId: 's2', clienteId: 'shared-client', status: 'ativo' },
+    { id: 'client-equipment', clienteId: 'shared-client', status: 'ativo' }
+  ],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(ambiguousClientMetrics[0].openOrders, 1, 'OS ligada a uma loja deve contar somente naquela loja.');
+assert.equal(ambiguousClientMetrics[1].openOrders, 0, 'OS que só informa o cliente não pode ser replicada em todas as lojas.');
+assert.equal(ambiguousClientMetrics.unallocated.orders, 1, 'OS sem local em cliente com várias lojas deve aparecer como não alocada.');
+assert.equal(ambiguousClientMetrics.unallocated.equipment, 1, 'Equipamento sem local em cliente com várias lojas deve aparecer como não alocado.');
+const ambiguousSummary = planner.summarizeSiteMetrics(ambiguousClientMetrics);
+assert.equal(ambiguousSummary.ordersWithoutSpecificSite, 1);
+assert.equal(ambiguousSummary.equipmentWithoutSpecificSite, 1);
+
 const scheduled = planner.buildStops([
   { id: 'late', clienteId: 'c1', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T15:00:00-03:00' },
   { id: 'early', clienteId: 'c1', status: 'Aberta', endereco: 'Rua B, 2', scheduledAt: '2026-11-24T09:00:00-03:00' }
