@@ -289,7 +289,7 @@ assert.match(dispatchScript, /state\.siteMetrics = planner\(\)\.summarizeSiteMet
 assert.match(dispatchScript, /Cadastros a revisar/, 'O mapa deve expor registros de endereço que exigem conferência.');
 
 assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'Coordenadas geocodificadas devem ser cacheadas no cadastro relacional do local.');
-assert.match(dispatchScript, /state\.selected = state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável sem abrir OS automaticamente.');
+assert.match(dispatchScript, /state\.selected = state\.technician\s*\?\s*state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável após escolher um técnico, sem abrir OS automaticamente.');
 assert.match(dispatchScript, /Pinos verdes: sem OS pendente/, 'A legenda do mapa deve diferenciar locais por situação operacional real.');
 assert.match(dispatchScript, /Sem GPS recente: a rota não usa a posição do administrador como origem/, 'Sem GPS do técnico, o planejador não pode presumir a localização do administrador.');
 assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'O shell deve persistir coordenadas de endereço com validação administrativa.');
