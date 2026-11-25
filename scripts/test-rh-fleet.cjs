@@ -82,7 +82,7 @@ assert.match(fleet, /não rastreia em segundo plano/, "A limitação do navegado
 assert.match(pontoWorkspace, /DbsFleetAdminPanel/, "O DBS FLEET deve estar acessível no RH.");
 assert.doesNotMatch(pontoWorkspace, /DbsFleetEmployeePanel/, "O Ponto não deve montar um rastreador duplicado.");
 assert.match(fleet, /export function DbsFleetEmployeeDock\(/, "O dock do colaborador deve existir.");
-assert.match(fleet, /className=\{open \? "fixed[\\s\\S]*DbsFleetEmployeePanel/, "O painel fica oculto por CSS, mas permanece montado durante a navegação.");
+assert.ok(fleet.includes("className={`fixed bottom-24") && fleet.includes("<DbsFleetEmployeePanel />"), "O painel permanece montado e oculto por CSS durante a navegação.");
 assert.match(authenticatedRoute, /<DbsFleetEmployeeDock \/>/, "O rastreador deve persistir no layout autenticado em todos os módulos.");
 assert.match(pontoWorkspace, /view==="acessos" \? <section[\s\S]*?<DbsFleetAdminPanel \/>/, "A nova aba do FLEET não pode substituir Acessos e jornada.");
 assert.match(fleet, /status\.data\?\.sosAvailable/, "O SOS deve permanecer acessível durante o intervalo da jornada.");
