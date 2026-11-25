@@ -825,6 +825,43 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
  * Retorna também a idade do ponto para a tela nunca apresentar posição antiga
  * como se fosse localização ao vivo.
  */
+/**
+ * Verifica o vínculo ativo no RH sem depender das tabelas de GPS.
+ * A criação de OS em lote deve continuar disponível mesmo quando o técnico
+ * ainda não iniciou o compartilhamento de localização.
+ */
+export const verifyRhDbsControlTechnician = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { employee_id: string }) => {
+    const employeeId = String(input?.employee_id ?? "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)) {
+      throw new Error("Colaborador inválido para atribuição de OS.");
+    }
+    return { employee_id: employeeId };
+  })
+  .handler(async ({ context, data }) => {
+    await requireRh(context);
+    const { data: employee, error } = await supabaseAdmin.from("rh_employees")
+      .select("id, full_name, unit")
+      .eq("id", data.employee_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return {
+      employee_found: Boolean(employee),
+      employee: employee ? {
+        id: String(employee.id),
+        full_name: String(employee.full_name ?? "Colaborador"),
+        unit: employee.unit ?? null,
+      } : null,
+    };
+  });
+
+/**
+ * Lê a última posição compartilhada de um técnico ativo do RH.
+ * Se a migração do DBS FLEET ainda não estiver no banco, devolve apenas
+ * o estado de indisponibilidade do GPS; o despacho por endereços continua.
+ */
 export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((input: { employee_id?: string | null }) => {
@@ -836,6 +873,18 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
   })
   .handler(async ({ context, data }) => {
     await requireRh(context);
+    let requestedEmployee: any = null;
+    if (data.employee_id) {
+      const employeeResult = await supabaseAdmin.from("rh_employees")
+        .select("id, full_name, unit")
+        .eq("id", data.employee_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (employeeResult.error) throw new Error(employeeResult.error.message);
+      requestedEmployee = employeeResult.data;
+      if (!requestedEmployee) return { employee_found: false, locations: [] };
+    }
+
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     let query = fleetDb.from("rh_employee_location_sessions")
       .select("id, employee_id, work_date, started_at, ended_at, last_latitude, last_longitude, last_accuracy_m, last_position_at")
@@ -845,16 +894,31 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
       .limit(1000);
     if (data.employee_id) query = query.eq("employee_id", data.employee_id);
     const { data: sessions, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) {
+      const missingFleetTable = error.code === "42P01"
+        || error.code === "PGRST205"
+        || /relation .*rh_employee_location_sessions.*does not exist|could not find the table .*rh_employee_location_sessions.* in the schema cache/i.test(String(error.message ?? ""));
+      if (missingFleetTable) {
+        return {
+          employee_found: data.employee_id ? Boolean(requestedEmployee) : undefined,
+          locations: [],
+          location_unavailable_reason: "O módulo de GPS do DBS FLEET ainda não está disponível neste banco. A rota pode ser planejada pelos endereços cadastrados; a posição aparecerá assim que o compartilhamento e a estrutura do FLEET estiverem ativos.",
+        };
+      }
+      throw new Error(error.message);
+    }
+
     const latestByEmployee = new Map<string, any>();
     for (const session of sessions ?? []) {
       const employeeId = String(session.employee_id ?? "");
       if (employeeId && !latestByEmployee.has(employeeId)) latestByEmployee.set(employeeId, session);
     }
     const employeeIds = data.employee_id ? [data.employee_id] : [...latestByEmployee.keys()];
-    const employeeResult: any = employeeIds.length
-      ? await supabaseAdmin.from("rh_employees").select("id, full_name, unit").eq("is_active", true).in("id", employeeIds)
-      : { data: [], error: null };
+    const employeeResult: any = data.employee_id
+      ? { data: requestedEmployee ? [requestedEmployee] : [], error: null }
+      : employeeIds.length
+        ? await supabaseAdmin.from("rh_employees").select("id, full_name, unit").eq("is_active", true).in("id", employeeIds)
+        : { data: [], error: null };
     if (employeeResult.error) throw new Error(employeeResult.error.message);
     const employees = employeeResult.data ?? [];
     const employeeById = new Map(employees.map((employee: any) => [String(employee.id), employee]));
