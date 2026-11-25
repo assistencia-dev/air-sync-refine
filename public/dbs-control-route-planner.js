@@ -66,7 +66,15 @@
   }
 
   function scheduleTime(order) {
-    const raw = firstText(order && order.scheduledAt, order && order.scheduled_at);
+    const raw = firstText(
+      order && order.scheduledAt,
+      order && order.scheduled_at,
+      order && order.horarioAgendado,
+      order && order.horario_agendado,
+      order && order.horaAgendada,
+      order && order.hora_agendada,
+      order && order.horario
+    );
     if (!raw) return null;
     const parsed = Date.parse(raw);
     return Number.isFinite(parsed) ? parsed : null;
@@ -100,7 +108,9 @@
       const orderInfo = {
         id: asText(order.id),
         protocol: firstText(order.protocolo, order.protocol, order.id),
-        scheduledAt: firstText(order.scheduledAt, order.scheduled_at),
+        scheduledAt: firstText(order.scheduledAt, order.scheduled_at, order.horarioAgendado, order.horario_agendado, order.horaAgendada, order.hora_agendada, order.horario),
+        serviceType: firstText(order.tipo, order.type, order.service_type),
+        status: firstText(order.status, order.situacao, order.statusOS),
         sourceIndex
       };
 
@@ -113,7 +123,11 @@
           siteName: firstText(site && site.nome, site && site.name),
           orders: [],
           sourceIndex,
-          scheduledTimes: []
+          scheduledTimes: [],
+          lat: coordinate(site && (site.latitude ?? site.lat ?? site.map_latitude ?? site.location_lat), -90, 90)
+            ?? coordinate(client && (client.latitude ?? client.lat ?? client.map_latitude), -90, 90),
+          lng: coordinate(site && (site.longitude ?? site.lng ?? site.map_longitude ?? site.location_lng), -180, 180)
+            ?? coordinate(client && (client.longitude ?? client.lng ?? client.map_longitude ?? client.long), -180, 180)
         };
         entries.push(stop);
       }
@@ -136,6 +150,8 @@
       clientName: stop.clientName,
       siteName: stop.siteName,
       orders: stop.orders,
+      lat: stop.lat,
+      lng: stop.lng,
       scheduledAt: stop.scheduledTimes.length ? new Date(Math.min(...stop.scheduledTimes)).toISOString() : null
     }));
 
