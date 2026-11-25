@@ -327,7 +327,7 @@
     };
     const candidateSitesByClient = new Map();
     const knownSiteCountByClient = new Map(
-      Object.entries(Array.isArray(candidateRows.activeSiteCountByClient) ? {} : (candidateRows.activeSiteCountByClient || {}))
+      Object.entries(candidateRows.activeSiteCountByClient || {})
         .map(([clientId, count]) => [clientId, Number(count) || 0])
     );
     candidateRows.forEach(candidate => {
