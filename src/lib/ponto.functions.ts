@@ -729,7 +729,7 @@ export const listRhFleetOverview = createServerFn({ method: "GET" })
     const visibleSessions = (sessions ?? []).map((session: any) => staleSessions.some((stale: any) => stale.id === session.id)
       ? { ...session, ended_at: new Date().toISOString(), end_reason: "expired" }
       : session);
-    const employeeIds = [...new Set(visibleSessions.map((session: any) => session.employee_id))];
+    const employeeIds: string[] = [...new Set<string>(visibleSessions.map((session: any) => String(session.employee_id)))];
     const employees = employeeIds.length
       ? ((await supabaseAdmin.from("rh_employees").select("id, full_name, unit").in("id", employeeIds)).data ?? [])
       : [];
@@ -743,7 +743,7 @@ export const listRhFleetOverview = createServerFn({ method: "GET" })
       .in("status", ["OPEN", "ACKNOWLEDGED"])
       .order("created_at", { ascending: false }).limit(100);
     if (sosError) throw new Error(sosError.message);
-    const sosEmployeeIds = [...new Set((sosAlerts ?? []).map((alert: any) => alert.employee_id))];
+    const sosEmployeeIds: string[] = [...new Set<string>((sosAlerts ?? []).map((alert: any) => String(alert.employee_id)))];
     const sosEmployees = sosEmployeeIds.length
       ? ((await supabaseAdmin.from("rh_employees").select("id, full_name, unit").in("id", sosEmployeeIds)).data ?? [])
       : [];
