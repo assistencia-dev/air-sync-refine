@@ -1110,5 +1110,8 @@
     return modal;
   }
 
-  window.abrirRotaAtividadesDia = openPlanner;
+  // Esta é uma operação diferente da navegação das OS já atribuídas ao técnico.
+  // A função global abrirRotaAtividadesDia permanece no módulo legado da agenda.
+  window.abrirPlanejamentoNovosAtendimentos = openPlanner;
+  window.DbsControlRequestTechnicianLocation = employeeId => requestTechnicianLocation(employeeId);
 })();
