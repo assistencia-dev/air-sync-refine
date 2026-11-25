@@ -176,6 +176,7 @@ console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domí
 
 // O novo despacho começa pelo técnico e pelos locais, não depende de OS existentes.
 const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
+new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O algoritmo atualizado deve ter cache busting.');
 assert.match(html, /dbs-control-technician-route\.js\?v=20261125-1/, 'O novo despacho deve ser carregado depois do shell legado.');
@@ -188,6 +189,14 @@ assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida po
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
 assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
 assert.match(dispatchScript, /causaSolicitacao: cause/, 'A descrição do problema deve ser preservada na OS.');
+
+assert.ok((dispatchScript.match(/serviceType: ''/g) || []).length >= 2, 'Toda parada deve começar sem tipo pré-selecionado, exigindo classificação explícita.');
+assert.match(dispatchScript, /Selecione o tipo de atendimento/, 'A interface deve orientar a classificação individual da parada.');
+assert.match(dispatchScript, /Rota planejada para '\s*\+\s*routeDate/, 'A data e a ordem da parada devem acompanhar a OS criada.');
+assert.match(dispatchScript, /Photon\\/OpenStreetMap/, 'A interface deve informar a consulta externa de geocodificação.');
+assert.match(dispatchScript, /não considera trânsito/, 'A interface deve explicar que a sugestão inicial usa proximidade e não trânsito.');
+assert.match(dispatchScript, /state\.selected\.length >= 50/, 'A interface deve impedir seleção acima de 50 locais por lote.');
+assert.match(dispatchScript, /Motivo \\/ problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
 assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
 assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
 
