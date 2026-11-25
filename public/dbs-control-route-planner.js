@@ -228,12 +228,15 @@
     const seen = new Set();
     const linkedClients = new Set();
     const activeSiteCountByClient = new Map();
+    const countedActiveSiteIds = new Set();
     list(sites).forEach(site => {
       if (!site || typeof site !== 'object') return;
       const status = normalizeKey(site.status ?? site.situacao ?? 'ativo');
       const siteId = firstText(site.id, site.siteId, site.site_id);
       const clientId = firstText(site.clienteId, site.client_id, site.clientId);
-      if (!siteId || !clientId || /inativ|inactive|arquiv|archiv|cancelad/.test(status)) return;
+      if (!siteId || !clientId || countedActiveSiteIds.has(siteId)
+        || /inativ|inactive|arquiv|archiv|cancelad/.test(status)) return;
+      countedActiveSiteIds.add(siteId);
       activeSiteCountByClient.set(clientId, (activeSiteCountByClient.get(clientId) || 0) + 1);
     });
 
