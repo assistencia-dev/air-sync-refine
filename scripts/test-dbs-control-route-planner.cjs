@@ -120,6 +120,14 @@ assert.equal(ambiguousClientMetrics.unallocated.equipment, 1, 'Equipamento sem l
 const ambiguousSummary = planner.summarizeSiteMetrics(ambiguousClientMetrics);
 assert.equal(ambiguousSummary.ordersWithoutSpecificSite, 1);
 assert.equal(ambiguousSummary.equipmentWithoutSpecificSite, 1);
+const hiddenSiblingSiteMetrics = planner.enrichSiteCandidates(
+  [{ id: 'only-geocoded-site', siteId: 's1', clientId: 'multi-site-client', clientSiteCount: 2, lat: 0, lng: 1 }],
+  [{ id: 'legacy-client-order', clienteId: 'multi-site-client', status: 'Aberta' }],
+  [],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(hiddenSiblingSiteMetrics[0].openOrders, 0, 'Endereço de outra loja incompleto não autoriza atribuir OS do cliente à única loja geocodificada.');
+assert.equal(hiddenSiblingSiteMetrics.unallocated.orders, 1, 'OS de cliente com mais de uma unidade deve continuar sem local até conciliação.');
 
 const scheduled = planner.buildStops([
   { id: 'late', clienteId: 'c1', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T15:00:00-03:00' },
