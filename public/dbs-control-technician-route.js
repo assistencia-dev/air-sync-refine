@@ -872,6 +872,8 @@
     technicianSelect.addEventListener('change', function () {
       state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null;
       resetPlan();
+      state.location = null;
+      state.originEnabled = false;
       // Não esperar o GPS: carrega imediatamente todos os endereços e monta
       // a rota; a posição do técnico é apenas um refinamento opcional da origem.
       void buildSuggestions();
