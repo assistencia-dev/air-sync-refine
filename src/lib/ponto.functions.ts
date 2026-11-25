@@ -882,7 +882,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         .maybeSingle();
       if (employeeResult.error) throw new Error(employeeResult.error.message);
       requestedEmployee = employeeResult.data;
-      if (!requestedEmployee) return { employee_found: false, locations: [] };
+      if (!requestedEmployee) return { employee_found: false, locations: [], location_unavailable_reason: null };
     }
 
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -925,6 +925,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
     const now = Date.now();
     return {
       employee_found: data.employee_id ? employeeById.has(data.employee_id) : undefined,
+      location_unavailable_reason: null,
       locations: [...latestByEmployee.values()].map((session: any) => {
         const employee = employeeById.get(String(session.employee_id));
         const hasCoordinates = session.last_latitude != null && session.last_longitude != null;
