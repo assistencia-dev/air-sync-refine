@@ -276,7 +276,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-3/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-7/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-8/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
@@ -388,7 +388,7 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-7"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-8"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
@@ -401,7 +401,10 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  assert.ok(dispatchScript.includes("function optimizeRoutePreservingUnlocated"), "A ordem da rota deve preservar locais sem coordenadas.");
  assert.ok(dispatchScript.includes("const unlocated = source.filter(item => !hasValidCoordinates(item))"), "Endereços sem pino devem continuar como paradas selecionáveis.");
  assert.ok(dispatchScript.includes("state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute())"), "A lista completa de locais deve ser mantida após a leitura dos indicadores.");
- assert.ok(dispatchScript.includes("queueSelectedGeocoding(state.selected)"), "A geocodificação deve ocorrer apenas nas paradas selecionadas.");
+ assert.ok(dispatchScript.includes("queueMapGeocoding(state.candidates)"), "O mapa deve localizar todos os clientes em segundo plano, sem bloquear a rota por endereço.");
+ assert.ok(dispatchScript.includes("persistGeocodedSiteCoordinates([coordinates])"), "Cada pino localizado deve ser salvo incrementalmente para preservar o progresso.");
+ assert.ok(dispatchScript.includes("queueSelectedGeocoding(state.selected)"), "A ação manual deve permitir tentar novamente os pinos das paradas selecionadas.");
+ assert.ok(dispatchScript.includes("setTimeout(resolve, 1100)"), "As consultas públicas de geocodificação devem ser sequenciais e espaçadas.");
  assert.ok(!/const workers = Array.from\(\{ length: 1 \}, async \(\) => \{/.test(dispatchScript), "O mapa não deve geocodificar todos os clientes em sequência antes de liberar a rota.");
  assert.ok(dispatchScript.includes("A rota e os links do Google Maps já podem ser usados pelos endereços"), "Links da rota devem ficar disponíveis mesmo durante geocodificação.");
  assert.ok(dispatchScript.includes("Endereços sem pino"), "A interface deve contar endereços que ainda não possuem marcador.");
