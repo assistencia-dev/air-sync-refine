@@ -324,7 +324,7 @@
 
   async function loadTechnicianLocations() {
     state.employeeLocationsLoaded = false; renderTeamList();
-    try { const result = await requestTechnicianLocations(); state.employeeLocations = result && result.ok && Array.isArray(result.locations) ? result.locations : []; }
+    try { const result = await requestTechnicianLocations(); state.employeeLocations = result && result.ok && Array.isArray(result.locations) ? result.locations : []; if (result && result.ok && Array.isArray(result.employees)) state.staff = result.employees; }
     catch (_) { state.employeeLocations = []; }
     state.employeeLocationsLoaded = true; renderTeamList(); renderMapAndLinks();
   }
@@ -697,7 +697,7 @@
       const id = String(employee.id), location = locations.get(id);
       const hasPoint = Boolean(location && hasValidCoordinates({ lat: location.latitude, lng: location.longitude }));
       const status = !hasPoint ? 'Sem localização' : location.is_live ? 'GPS recente' : 'Última posição · ' + ageLabel(location.position_age_ms);
-      return '<div class="dbs-dispatch-team-row"><span class="dbs-dispatch-team-dot ' + (hasPoint ? (location.is_live ? 'live' : 'stale') : 'none') + '"></span><div><strong>' + safe(employee.nome || employee.name || 'Colaborador') + '</strong><small>' + safe(status) + '</small></div></div>';
+      return '<div class="dbs-dispatch-team-row"><span class="dbs-dispatch-team-dot ' + (hasPoint ? (location.is_live ? 'live' : 'stale') : 'none') + '"></span><div><strong>' + safe(employee.full_name || employee.nome || employee.name || 'Colaborador') + '</strong><small>' + safe(status) + '</small></div></div>';
     }).join('');
   }
 

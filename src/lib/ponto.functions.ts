@@ -916,7 +916,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         .maybeSingle();
       if (employeeResult.error) throw new Error(employeeResult.error.message);
       requestedEmployee = employeeResult.data;
-      if (!requestedEmployee) return { employee_found: false, locations: [], location_unavailable_reason: null };
+      if (!requestedEmployee) return { employee_found: false, employees: [], locations: [], location_unavailable_reason: null };
     }
 
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -933,15 +933,24 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         || error.code === "PGRST205"
         || /relation .*rh_employee_location_sessions.*does not exist|could not find the table .*rh_employee_location_sessions.* in the schema cache/i.test(String(error.message ?? ""));
       if (missingFleetTable) {
+        const employeeRosterResult = data.employee_id
+          ? { data: requestedEmployee ? [requestedEmployee] : [], error: null }
+          : await supabaseAdmin.from("rh_employees")
+            .select("id, full_name, unit")
+            .eq("is_active", true)
+            .order("full_name", { ascending: true });
+        if (employeeRosterResult.error) throw new Error(employeeRosterResult.error.message);
+        const employees = employeeRosterResult.data ?? [];
         const fallbackLocation = requestedEmployee
           ? await readLatestPontoGpsLocation(requestedEmployee)
           : null;
         return {
           employee_found: data.employee_id ? Boolean(requestedEmployee) : undefined,
+          employees,
           locations: fallbackLocation ? [fallbackLocation] : [],
           location_unavailable_reason: fallbackLocation
             ? "O rastreamento ao vivo do DBS FLEET ainda não está ativo neste banco. O pino mostra somente a última coordenada registrada na batida de ponto; não acompanha o deslocamento em tempo real."
-            : "O rastreamento ao vivo do DBS FLEET ainda não está ativo neste banco e não há batida de ponto com coordenadas para este técnico. A rota continua disponível pelos endereços cadastrados.",
+            : "O rastreamento ao vivo do DBS FLEET ainda não está ativo neste banco. Não há posições GPS recentes para exibir no mapa; o cadastro da equipe continua disponível.",
         };
       }
       throw new Error(error.message);
@@ -952,12 +961,12 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
       const employeeId = String(session.employee_id ?? "");
       if (employeeId && !latestByEmployee.has(employeeId)) latestByEmployee.set(employeeId, session);
     }
-    const employeeIds = data.employee_id ? [data.employee_id] : [...latestByEmployee.keys()];
     const employeeResult: any = data.employee_id
       ? { data: requestedEmployee ? [requestedEmployee] : [], error: null }
-      : employeeIds.length
-        ? await supabaseAdmin.from("rh_employees").select("id, full_name, unit").eq("is_active", true).in("id", employeeIds)
-        : { data: [], error: null };
+      : await supabaseAdmin.from("rh_employees")
+        .select("id, full_name, unit")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
     if (employeeResult.error) throw new Error(employeeResult.error.message);
     const employees = employeeResult.data ?? [];
     const employeeById = new Map<string, any>(employees.map((employee: any) => [String(employee.id), employee]));
@@ -992,6 +1001,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
       if (fallbackLocation) {
         return {
           employee_found: employeeById.has(data.employee_id),
+          employees,
           locations: [fallbackLocation],
           location_unavailable_reason: "Não há sessão de rastreamento ativo do DBS FLEET para este técnico. O pino mostra somente a última coordenada registrada na batida de ponto; não acompanha o deslocamento em tempo real.",
         };
@@ -999,6 +1009,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
     }
     return {
       employee_found: data.employee_id ? employeeById.has(data.employee_id) : undefined,
+      employees,
       location_unavailable_reason: null,
       locations,
     };

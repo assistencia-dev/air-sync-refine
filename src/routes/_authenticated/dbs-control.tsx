@@ -1345,7 +1345,7 @@ function DbsControlPage() {
         try {
           if (employeeModeRef.current) { reply({ ok: false, error: "A visualização da equipe é restrita à administração." }); return; }
           const result = await listRhFleetTechnicianLocations({ data: { employee_id: null } });
-          reply({ ok: true, locations: Array.isArray(result.locations) ? result.locations : [] });
+          reply({ ok: true, employees: Array.isArray(result.employees) ? result.employees : [], locations: Array.isArray(result.locations) ? result.locations : [] });
         } catch (error) { reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível consultar as posições da equipe." }); }
         return;
       }

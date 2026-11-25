@@ -377,10 +377,15 @@ assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da mig
 assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
 assert.match(parentRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'O bridge precisa responder ao carregamento dos técnicos ativos.');
 assert.match(technicianRoute, /Mapa de lojas, clientes e colaboradores/, 'O mapa inclui lojas, clientes e colaboradores.');
+assert.match(technicianRoute, /state\.staff = result\.employees/, 'A lista lateral recebe todos os funcionários ativos, não só cargos técnicos.');
+assert.match(technicianRoute, /employee\.full_name \|\| employee\.nome/, 'O cadastro do RH deve exibir o nome completo do colaborador.');
 assert.match(technicianRoute, /GPS recente/, 'O mapa identifica GPS recente.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
+assert.match(pontoFunctions, /\.select\("id, full_name, unit"\)\s*\.eq\("is_active", true\)\s*\.order\("full_name", \{ ascending: true \}\)/, 'O mapa deve recuperar todos os colaboradores ativos do RH, inclusive sem sessão de GPS.');
+assert.match(pontoFunctions, /employees,\s*locations/, 'A função de localização deve devolver o cadastro completo e os pinos disponíveis.');
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_LIST_TECHNICIAN_LOCATIONS"/, 'O shell deve enviar as posições dos colaboradores.');
+assert.match(parentRoute, /employees: Array\.isArray\(result\.employees\) \? result\.employees : \[\]/, 'O shell deve devolver a lista administrativa de todos os colaboradores.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell recebe consulta individual de localização.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS"/, 'O shell deve receber a aprovação de criação em lote.');
 assert.match(parentRoute, /changes: \{ ordens: orders \}/, 'A aprovação precisa enviar a lista efetivamente recebida para a camada relacional.');
