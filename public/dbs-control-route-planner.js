@@ -158,6 +158,26 @@
       const previousStop = start > 0 ? source[start - 1] : null;
       const group = source.slice(start, start + maxStopsPerLeg);
       const destination = group[group.length - 1];
+      // With one stop and no fresh technician GPS, open the customer location
+      // instead of silently generating directions from the administrator's phone.
+      if (!previousStop && !routeOrigin && group.length === 1) {
+        const searchParams = new URLSearchParams();
+        searchParams.set('api', '1');
+        searchParams.set('query', destination.address);
+        const url = 'https://www.google.com/maps/search/?' + searchParams.toString();
+        legs.push({
+          index: legs.length + 1,
+          firstStop: start + 1,
+          lastStop: start + 1,
+          origin: '',
+          destination: destination.address,
+          url: url.length <= 2048 ? url : null,
+          tooLong: url.length > 2048,
+          kind: 'location'
+        });
+        start += group.length;
+        continue;
+      }
       const params = new URLSearchParams();
       params.set('api', '1');
       let originValue = previousStop ? previousStop.address : '';
@@ -182,7 +202,7 @@
       const url = 'https://www.google.com/maps/dir/?' + params.toString();
       legs.push({
         index: legs.length + 1,
-        firstStop: previousStop ? start + 1 : (routeOrigin ? start + 1 : Math.min(start + 2, source.length)),
+        firstStop: start + 1,
         lastStop: start + group.length,
         origin: originValue,
         destination: destination.address,
