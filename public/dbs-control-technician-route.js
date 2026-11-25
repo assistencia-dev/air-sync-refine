@@ -332,25 +332,40 @@
     return planner().buildSiteCandidates(sites, Array.isArray(erp.clientes) ? erp.clientes : []);
   }
 
-  async function geocodeAddress(address) {
-    const query = /brasil|brazil/i.test(address) ? address : address + ', Brasil';
-    const url = 'https://photon.komoot.io/api/?limit=1&lang=pt&q=' + encodeURIComponent(query);
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error('Geocodificação indisponível (' + response.status + ').');
-    const data = await response.json();
-    const feature = Array.isArray(data.features) ? data.features[0] : null;
-    const properties = feature && feature.properties || {};
-    if (!feature || !/brasil|brazil/i.test(String(properties.country || ''))) {
-      throw new Error('Endereço não localizado no Brasil.');
-    }
-    if (!properties.city && !properties.county && !properties.state) {
-      throw new Error('O resultado não confirmou cidade/região.');
-    }
-    const coordinates = feature.geometry && feature.geometry.coordinates;
-    if (!Array.isArray(coordinates) || !Number.isFinite(Number(coordinates[0])) || !Number.isFinite(Number(coordinates[1]))) {
-      throw new Error('O endereço não retornou coordenadas válidas.');
-    }
-    return { lat: Number(coordinates[1]), lng: Number(coordinates[0]) };
+  function geocodeAddress(address) {
+    return new Promise((resolve, reject) => {
+      const requestId = 'dispatch-geocode-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      let done = false;
+      const finish = value => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timer);
+        if (value && value.ok && Number.isFinite(Number(value.latitude)) && Number.isFinite(Number(value.longitude))) {
+          resolve({ lat: Number(value.latitude), lng: Number(value.longitude) });
+          return;
+        }
+        const error = new Error(value && value.message || 'O serviço de geocodificação não respondeu. O endereço foi preservado.');
+        error.code = value && value.code || 'provider_unavailable';
+        reject(error);
+      };
+      const onMessage = event => {
+        if (event.source !== window.parent || event.data?.type !== 'DBS_CONTROL_SITE_ADDRESS_GEOCODE_RESULT'
+          || String(event.data.requestId || '') !== requestId) return;
+        finish(event.data);
+      };
+      const timer = setTimeout(() => finish({
+        ok: false,
+        code: 'provider_unavailable',
+        message: 'A aplicação não respondeu à consulta de geocodificação. O endereço foi preservado.'
+      }), 12000);
+      window.addEventListener('message', onMessage);
+      window.parent.postMessage({
+        type: 'DBS_CONTROL_GEOCODE_SITE_ADDRESS',
+        requestId,
+        address: String(address || '').trim()
+      }, window.location.origin);
+    });
   }
 
   function persistGeocodedSiteCoordinates(coordinates) {
@@ -399,7 +414,7 @@
       let completed = 0;
       const queue = candidates.slice();
       const located = [];
-      const workers = Array.from({ length: 2 }, async () => {
+      const workers = Array.from({ length: 1 }, async () => {
         while (queue.length) {
           const candidate = queue.shift();
           if (!candidate) return;
@@ -412,17 +427,25 @@
             }
             located.push(candidate);
           } catch (error) {
+            const code = String(error && error.code || 'provider_unavailable');
+            const detail = String(error && error.message || 'falha ao consultar o serviço externo');
+            const reason = code === 'not_found'
+              ? 'Endereço cadastrado; o provedor não encontrou correspondência segura. ' + detail
+              : code === 'invalid_query'
+                ? 'Endereço cadastrado; o provedor não confirmou uma consulta válida. ' + detail
+                : 'Endereço cadastrado; serviço de geocodificação indisponível. ' + detail;
             state.review.push({
               id: candidate.id,
               name: candidate.name,
               address: candidate.address,
-              reason: 'Endereço não localizado: ' + (error && error.message || 'revise o cadastro')
+              reason,
+              geocodeStatus: code
             });
           }
           completed += 1;
           if (status) status.textContent = 'Posicionando endereços ' + completed + '/' + candidates.length
             + ' · ' + located.length + ' coordenada(s) disponível(is)…';
-          if (queue.length) await new Promise(resolve => setTimeout(resolve, 900));
+          if (queue.length) await new Promise(resolve => setTimeout(resolve, 1100));
         }
       });
       await Promise.all(workers);
@@ -769,6 +792,14 @@
       const action = button.getAttribute('data-action');
       if (action === 'close') { closePlanner(); return; }
       if (action === 'refresh-location') { await refreshLocation(); return; }
+      if (action === 'review-map') {
+        const item = state.review.find(entry => String(entry.id || '') === String(button.getAttribute('data-id') || ''));
+        if (item && item.address) {
+          const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.address);
+          window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_MAPS', url }, window.location.origin);
+        }
+        return;
+      }
       if (action === 'build') { await buildSuggestions(); return; }
       if (action === 'nearest-five') { addNearestFive(); return; }
       if (action === 'add') { addStop(button.getAttribute('data-id')); return; }
@@ -822,7 +853,14 @@
     }
     review.hidden = false;
     review.innerHTML = '<strong>' + state.review.length + ' cadastro(s) exigem revisão e ficaram fora da rota automática:</strong><ul style="margin:6px 0 0;padding-left:18px">'
-      + items.map(item => '<li>' + safe(item.name || item.id || 'Registro') + ': ' + safe(item.reason || 'Conferir cadastro') + '</li>').join('')
+      + items.map(item => {
+        const mapsButton = item.address
+          ? ' <button type="button" class="dbs-dispatch-btn secondary" data-action="review-map" data-id="' + safe(item.id || '') + '">Abrir endereço no Google Maps</button>'
+          : '';
+        return '<li><strong>' + safe(item.name || item.id || 'Registro') + '</strong>: ' + safe(item.reason || 'Conferir cadastro')
+          + (item.address ? '<br><small>Endereço cadastrado: ' + safe(item.address) + '</small>' : '')
+          + mapsButton + '</li>';
+      }).join('')
       + (state.review.length > items.length ? '<li>Mais ' + (state.review.length - items.length) + ' registro(s).</li>' : '')
       + '</ul>';
   }
