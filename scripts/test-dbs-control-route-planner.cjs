@@ -273,6 +273,10 @@ assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve disti
 assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
 assert.match(dispatchScript, /enrichSiteCandidates/, 'Os locais devem receber indicadores calculados pelas OS e equipamentos reais.');
 assert.match(dispatchScript, /summarizeSiteMetrics/, 'O painel do mapa deve exibir indicadores agregados da operação.');
+assert.match(dispatchScript, /enrichSiteCandidates\(\s*candidates,/, 'Os indicadores devem considerar todos os locais com endereço, inclusive os que aguardam geocodificação.');
+assert.match(dispatchScript, /state\.siteMetrics = planner\(\)\.summarizeSiteMetrics\(measured\)/, 'O resumo operacional não pode descartar locais ainda sem coordenadas.');
+assert.match(dispatchScript, /Cadastros a revisar/, 'O mapa deve expor registros de endereço que exigem conferência.');
+
 assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'Coordenadas geocodificadas devem ser cacheadas no cadastro relacional do local.');
 assert.match(dispatchScript, /state\.selected = state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável sem abrir OS automaticamente.');
 assert.match(dispatchScript, /Pinos verdes: sem OS pendente/, 'A legenda do mapa deve diferenciar locais por situação operacional real.');
