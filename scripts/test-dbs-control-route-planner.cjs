@@ -227,6 +227,9 @@ const gpsLegs = planner.buildRouteLegs(proximityRoute.stops, { lat: 0, lng: 0 })
 assert.equal(new URL(gpsLegs[0].url).searchParams.get('origin'), '0,0', 'O primeiro trajeto do Maps deve sair da última posição do técnico.');
 
 assert.match(pontoFunctions, /export const listRhFleetTechnicianLocations = createServerFn/, 'A leitura da localização deve ocorrer numa função de servidor.');
+assert.match(pontoFunctions, /export const verifyRhDbsControlTechnician = createServerFn/, 'A atribuição deve validar o vínculo RH sem depender das tabelas GPS.');
+assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da migração Fleet deve virar aviso, não bloquear a rota por endereço.');
+assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
