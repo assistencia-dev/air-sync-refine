@@ -92,13 +92,13 @@ console.log('DBS CONTROL route planner: endereços, deduplicação, estados, eta
 const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
 const technicianRoute = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 const dbsControlFunctions = fs.readFileSync('src/lib/dbs-control.functions.ts', 'utf8');
-const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
+const pontoFunctionsSource = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(technicianRoute, /typeof ERP_STATE !== 'undefined'/, 'O planejador deve ler o estado lexical do iframe, não depender de window.ERP_STATE.');
 assert.match(technicianRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'A lista do seletor deve vir dos colaboradores ativos do RH.');
 assert.match(parentRoute, /listRhPontoEmployees\(\)/, 'O bridge administrativo deve consultar o RH para a lista ativa de técnicos.');
 assert.match(dbsControlFunctions, /row\.address_json\.texto/, 'A hidratação deve aproveitar o campo texto dos endereços reais dos locais.');
-assert.match(pontoFunctions, /readLatestPontoGpsLocation/, 'Sem a tabela do FLEET, o sistema deve tentar a última coordenada válida do ponto.');
-assert.match(pontoFunctions, /location_source: "ponto"/, 'A coordenada do ponto deve ser marcada como última posição, nunca como rastreamento ao vivo.');
+assert.match(pontoFunctionsSource, /readLatestPontoGpsLocation/, 'Sem a tabela do FLEET, o sistema deve tentar a última coordenada válida do ponto.');
+assert.match(pontoFunctionsSource, /location_source: "ponto"/, 'A coordenada do ponto deve ser marcada como última posição, nunca como rastreamento ao vivo.');
 const pmocHelper = fs.readFileSync('public/dbs-control-pmoc-route.js', 'utf8');
 const pmocWindow = {};
 vm.runInNewContext(pmocHelper, { window: pmocWindow, Math, String, Array, Object, Map, Set }, {
