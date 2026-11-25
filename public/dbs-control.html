@@ -9477,11 +9477,9 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                               </div>
                               ${(() => {
                                 const savedObservations = [...new Set([o.observacaoTecnico, o.observacoesTecnico, o.observacao, o.observacaoComplementarTecnico, o.observacoes, o.obs, o.observation].map(value => String(value ?? '').trim()).filter(Boolean))];
-                                return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Novas notas serão anexadas ao histórico.</small></div>` : '';
+                                return savedObservations.length ? `<div class="employee-observation-history"><strong>Observações já registradas</strong><p>${savedObservations.map(escHtml).join('<br><br>')}</p><small>Observações anteriores preservadas no histórico da OS.</small></div>` : '';
                               })()}
-                              <label class="employee-observation-field">Observação complementar do técnico <span class="field-optional">Opcional · acrescentada ao histórico</span>
-                                <textarea id="dbs-mob-observacao-${o.id}" rows="3" placeholder="Acrescente recomendações, restrições ou detalhes úteis. As observações já salvas serão preservadas." oninput="agendarRascunhoExecucaoMobile('${o.id}')"></textarea>
-                              </label>
+
                               ${tipoPermiteChecklist(o.tipo) ? `
                                 <section class="pmoc-result-card">
                                   <label for="pmoc-resultado-${o.id}">Resultado desta preventiva / PMOC</label>
@@ -9792,7 +9790,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const os = ERP_STATE.ordens.find(o => String(o.id) === String(osId));
             const canvas = document.getElementById(`sig-canvas-${osId}`);
             const relatoInput = document.getElementById(`dbs-mob-relato-${osId}`);
-            const observationInput = document.getElementById(`dbs-mob-observacao-${osId}`);
+
             const resultInput = document.getElementById(`dbs-mob-result-${osId}`);
             const pendingNoteInput = document.getElementById(`dbs-mob-pending-note-${osId}`);
             const noPartsInput = document.getElementById(`dbs-mob-no-parts-${osId}`);
@@ -9806,7 +9804,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             const atendimentoStatus = normalizarStatusAtendimentoMobile(resultInput?.value);
             const atendimentoStatusLabel = rotuloStatusAtendimentoMobile(atendimentoStatus);
             const pendingReason = String(pendingNoteInput?.value || '').trim();
-            const observationText = String(observationInput?.value || '').trim();
+
             const noPartsConfirmed = Boolean(noPartsInput?.checked);
             const technicalChecklist = os.checklistTecnico && typeof os.checklistTecnico === 'object' ? os.checklistTecnico : {};
             const technicalChecklistTotal = Object.values(DBS_CHECKLIST_TECNICO || {}).flat().length;
@@ -9895,18 +9893,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                 const signatureUpload = uploadedAttachments.find(item => item.field === 'assinatura');
                 if (signature && (!signatureUpload || signatureUpload.error || !signatureUpload.result?.storagePath || !signatureUpload.result?.signedUrl)) {
                     throw new Error('A assinatura foi capturada, mas o armazenamento seguro ainda não confirmou o arquivo. A OS NÃO será concluída. A assinatura e o relato permanecem salvos neste dispositivo; verifique a conexão e tente novamente.');
-                }
-
-                if (observationText) {
-                    const observationKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
-                        .find(key => os[key] == null || typeof os[key] === 'string') || 'observacaoComplementarTecnico';
-                    const existingObservation = typeof os[observationKey] === 'string' ? os[observationKey].trim() : '';
-                    const alreadyRecorded = existingObservation.split(/\n\n/).some(entry => entry.endsWith('] ' + observationText));
-                    if (!alreadyRecorded) {
-                        const actor = ERP_STATE.sessionTecnicoLogado?.nome || os.tecnicoNome || 'Técnico';
-                        const entry = `[${new Date().toLocaleString('pt-BR')} · ${actor}] ${observationText}`;
-                        os[observationKey] = existingObservation ? `${existingObservation}\n\n${entry}` : entry;
-                    }
                 }
                 if (atendimentoStatus !== 'concluida' && pendingReason) {
                     const pendingKey = ['observacao', 'observacaoTecnico', 'observacaoComplementarTecnico']
