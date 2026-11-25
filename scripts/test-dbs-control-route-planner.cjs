@@ -402,3 +402,11 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  assert.ok(parentRoute.includes('posicao: String(registration.position || registration.cargo || "").trim()'), "O shell deve enviar o cargo RH real e não inventar o cargo Técnico quando está vazio.");
  assert.ok(dispatchScript.includes("function queueSelectedGeocoding(items)"), "A fila progressiva de pinos deve existir.");
  assert.ok(dispatchScript.includes("state.geocodeGeneration"), "A troca de técnico/reabertura deve invalidar uma fila de geocodificação anterior.");
+
+
+ // GPS must refine a route, never block its initial rendering or overwrite another technician's origin.
+ assert.match(dispatchScript, /state\.locationGeneration/, "Consultas GPS antigas devem ser invalidadas ao trocar de técnico.");
+ assert.match(dispatchScript, /if \(generation !== state\.locationGeneration\) return;/, "Uma resposta GPS atrasada não pode atualizar a rota do técnico seguinte.");
+ assert.match(dispatchScript, /void buildSuggestions\(\);\s*void refreshLocation\(\);/, "A rota por endereço deve carregar em paralelo à consulta GPS, sem aguardar o GPS.");
+ assert.match(dispatchScript, /toggle\.disabled = true;/, "O GPS deve ficar desabilitado como origem enquanto não houver posição recente autorizada.");
+ assert.match(dispatchScript, /state\.location = null;\s*state\.originEnabled = false;/, "Ao trocar de técnico, a origem anterior não pode ser reutilizada.");
