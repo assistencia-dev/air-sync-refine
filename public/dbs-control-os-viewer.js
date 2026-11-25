@@ -11,7 +11,7 @@
     if (canonical) return canonical;
     const diagnostic = first(order?.diagnostico, order?.technical_opinion);
     const execution = first(order?.trabalhoExecutado, order?.servicoExecutado, order?.servico_executado);
-    const normalizeReport = value => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+    const normalizeReport = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
     if (diagnostic && execution && normalizeReport(diagnostic) === normalizeReport(execution)) return diagnostic;
     if (diagnostic && execution) return `Diagnóstico: ${diagnostic}\\nTrabalho realizado: ${execution}`;
     return first(execution, diagnostic, '');
