@@ -53,6 +53,13 @@ const dateTime = (value?: string | null) => value
   ? new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
   : "—";
 
+const FLEET_LOCATION_FRESHNESS_MS = 180_000;
+const isRecentFleetPosition = (session: FleetSession) => Boolean(
+  !session.ended_at
+  && session.last_position_at
+  && Date.now() - Date.parse(session.last_position_at) <= FLEET_LOCATION_FRESHNESS_MS
+);
+
 const timeSince = (value?: string | null) => {
   if (!value) return "Aguardando primeira leitura";
   const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 60_000));
@@ -160,9 +167,16 @@ function FleetMap({
         if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return;
         bounds.push(coords);
         const name = session.employee?.full_name ?? "Colaborador";
-        const marker = L.marker(coords).addTo(layer);
+        const recent = isRecentFleetPosition(session);
+        const marker = L.circleMarker(coords, {
+          radius: recent ? 10 : 8,
+          color: recent ? "#047857" : "#b45309",
+          fillColor: recent ? "#34d399" : "#fbbf24",
+          fillOpacity: 0.95,
+          weight: 3,
+        }).addTo(layer);
         marker.bindPopup(
-          `<strong>${String(name).replace(/[&<>"]/g, "")}</strong><br>${String(session.employee?.unit ?? "Sem unidade").replace(/[&<>"]/g, "")}<br>${dateTime(session.last_position_at)}<br>Precisão ±${Math.round(Number(session.last_accuracy_m ?? 0))} m`,
+          `<strong>${String(name).replace(/[&<>"]/g, "")}</strong><br>${String(session.employee?.unit ?? "Sem unidade").replace(/[&<>"]/g, "")}<br>${recent ? "GPS atualizado nos últimos 3 minutos" : session.ended_at ? "Sessão encerrada · última posição" : "Sem atualização nos últimos 3 minutos"}<br>${dateTime(session.last_position_at)}<br>Precisão ±${Math.round(Number(session.last_accuracy_m ?? 0))} m`,
         );
       });
     }
@@ -435,7 +449,7 @@ export function DbsFleetAdminPanel() {
 
   const sessions: FleetSession[] = query.data?.sessions ?? [];
   const alerts: any[] = query.data?.sosAlerts ?? [];
-  const liveCount = sessions.filter((session) => !session.ended_at && session.last_position_at && Date.now() - Date.parse(session.last_position_at) < 120_000).length;
+  const liveCount = sessions.filter(isRecentFleetPosition).length;
   const routePoints: FleetPoint[] = routeQuery.data?.points ?? [];
 
   return (
@@ -454,7 +468,7 @@ export function DbsFleetAdminPanel() {
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Sessões no dia</p><p className="mt-1 text-2xl font-black">{sessions.length}</p></div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Posições recentes</p><p className="mt-1 text-2xl font-black">{liveCount}</p></div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3"><p className="text-[10px] font-black uppercase text-slate-400">Posições nos últimos 3 min</p><p className="mt-1 text-2xl font-black">{liveCount}</p></div>
           <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 p-3"><p className="text-[10px] font-black uppercase text-rose-200">SOS em aberto</p><p className="mt-1 text-2xl font-black text-rose-100">{alerts.length}</p></div>
         </div>
       </header>
@@ -485,16 +499,16 @@ export function DbsFleetAdminPanel() {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-sky-700">Mapa da equipe</p><h4 className="mt-1 text-base font-black text-slate-900">{selectedSessionId ? "Trajeto da sessão selecionada" : "Última posição compartilhada"}</h4></div>{selectedSessionId && <button type="button" onClick={() => setSelectedSessionId(null)} className="text-xs font-black text-sky-700 underline">Voltar ao mapa da equipe</button>}</div>
           <FleetMap sessions={sessions} routePoints={routePoints} selectedSessionId={selectedSessionId} />
-          <p className="mt-3 text-[10px] leading-5 text-slate-500">Posições atualizadas a cada nova leitura do dispositivo. Um status sem sinal indica que o portal pode estar fechado, em segundo plano ou sem GPS; não significa que o colaborador esteja parado.</p>
+          <p className="mt-3 text-[10px] leading-5 text-slate-500">O mapa é atualizado a cada 15 segundos e considera recente uma posição recebida nos últimos 3 minutos. O pino verde indica sinal recente; o âmbar indica última posição antiga, sessão encerrada ou ausência de atualização. O portal precisa permanecer aberto e visível no aparelho do técnico.</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-sky-700">Equipe do dia</p><h4 className="mt-1 text-base font-black text-slate-900">Sessões e deslocamentos</h4></div><Navigation className="h-5 w-5 text-slate-400" /></div>
           <div className="mt-3 max-h-[430px] space-y-2 overflow-y-auto">
             {sessions.map((session) => {
-              const recent = Boolean(session.last_position_at && Date.now() - Date.parse(session.last_position_at) < 120_000);
+              const recent = isRecentFleetPosition(session);
               const hasLocation = session.last_latitude != null && session.last_longitude != null;
               return <article key={session.id} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-xs font-black text-slate-900">{session.employee?.full_name ?? "Colaborador"}</p><p className="mt-0.5 text-[10px] text-slate-500">{session.employee?.unit ?? "Sem unidade"} · início {dateTime(session.started_at)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black ${session.ended_at ? "bg-slate-100 text-slate-600" : recent ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{session.ended_at ? "Encerrado" : recent ? "Com sinal" : "Sem sinal"}</span></div>
+                <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-xs font-black text-slate-900">{session.employee?.full_name ?? "Colaborador"}</p><p className="mt-0.5 text-[10px] text-slate-500">{session.employee?.unit ?? "Sem unidade"} · início {dateTime(session.started_at)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black ${session.ended_at ? "bg-slate-100 text-slate-600" : recent ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{session.ended_at ? "Encerrado" : recent ? "Com sinal · até 3 min" : "Sem sinal recente"}</span></div>
                 <p className="mt-2 text-[10px] font-bold text-slate-500">{timeSince(session.last_position_at)} · {hasLocation ? `±${Math.round(Number(session.last_accuracy_m ?? 0))} m` : "Sem coordenadas"}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button type="button" onClick={() => setSelectedSessionId(session.id)} className="min-h-9 rounded-lg bg-slate-900 px-3 py-2 text-[10px] font-black text-white">Ver deslocamento</button>
