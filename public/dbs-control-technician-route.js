@@ -342,7 +342,7 @@
     const available = state.candidates.filter(item => !selectedIds.has(String(item.id)));
     const optimized = planner().optimizeStops(available, originForRoute()).stops;
     optimized.slice(0, 5).forEach(item => {
-      state.selected.push(Object.assign({}, item, { serviceType: 'Manutenção Corretiva', cause: '' }));
+      state.selected.push(Object.assign({}, item, { serviceType: '', cause: '' }));
     });
     reorderSelected();
     renderLists();
