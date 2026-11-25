@@ -381,3 +381,9 @@ assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 dev
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
 assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-4"), "A correção deve ser servida sem cache antigo.");
+
+
+// The address map must include more than 100 sites (the current customer set has 135).
+assert.ok(dispatchScript.includes("audit.candidates.slice(0, 250)"), "O mapa não pode descartar filiais após a centésima; deve suportar pelo menos 135 endereços.");
+assert.ok(dispatchScript.includes("A lista excede 250 locais."), "Somente listas acima do limite ampliado podem ser direcionadas à divisão por região.");
+assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação do mapa não pode alterar o limite de emissão de até 50 OS por lote.");
