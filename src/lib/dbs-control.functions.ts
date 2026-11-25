@@ -4731,7 +4731,10 @@ export const geocodeDbsControlSiteAddress = createServerFn({ method: "POST" })
           signal: controller.signal,
         });
         lastStatus = response.status;
-        if (response.status === 400 && attempt + 1 < queries.length) continue;
+        if (response.status === 400 && attempt + 1 < queries.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+          continue;
+        }
         if (!response.ok) {
           return {
             ok: false,
