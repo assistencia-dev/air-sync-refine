@@ -295,7 +295,8 @@ assert.match(existingRoute, /Sem GPS recente: início na primeira parada/, 'Sem 
 assert.doesNotMatch(existingRoute, /DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'Abrir rota não pode criar nem alterar OS existentes.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
-assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
+assert.match(dispatchScript, /location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
+assert.match(dispatchScript, /state\.originEnabled = Boolean\(location\.is_live\)/, 'A posição antiga não pode ser ativada automaticamente como origem.');
 assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
 assert.match(dispatchScript, /enrichSiteCandidates/, 'Os locais devem receber indicadores calculados pelas OS e equipamentos reais.');
 assert.match(dispatchScript, /summarizeSiteMetrics/, 'O painel do mapa deve exibir indicadores agregados da operação.');
