@@ -193,10 +193,10 @@ assert.match(dispatchScript, /causaSolicitacao: cause/, 'A descrição do proble
 assert.ok((dispatchScript.match(/serviceType: ''/g) || []).length >= 2, 'Toda parada deve começar sem tipo pré-selecionado, exigindo classificação explícita.');
 assert.match(dispatchScript, /Selecione o tipo de atendimento/, 'A interface deve orientar a classificação individual da parada.');
 assert.match(dispatchScript, /Rota planejada para '\s*\+\s*routeDate/, 'A data e a ordem da parada devem acompanhar a OS criada.');
-assert.match(dispatchScript, /Photon\\/OpenStreetMap/, 'A interface deve informar a consulta externa de geocodificação.');
+assert.match(dispatchScript, /Photon[/]OpenStreetMap/, 'A interface deve informar a consulta externa de geocodificação.');
 assert.match(dispatchScript, /não considera trânsito/, 'A interface deve explicar que a sugestão inicial usa proximidade e não trânsito.');
 assert.match(dispatchScript, /state\.selected\.length >= 50/, 'A interface deve impedir seleção acima de 50 locais por lote.');
-assert.match(dispatchScript, /Motivo \\/ problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
+assert.match(dispatchScript, /Motivo . problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
 assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
 assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
 
