@@ -8,7 +8,7 @@ import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { DbsInventoryPage } from "./dbs-inventory";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates } from "@/lib/dbs-control.functions";
 import {
   deleteDbsControlLocalSyncCommand,
   getDbsControlLocalSyncSummary,
@@ -1367,6 +1367,28 @@ function DbsControlPage() {
         }
         return;
       }
+      if (msg.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SITE_MAP_COORDINATES_RESULT",
+            requestId,
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, error: "A atualização das coordenadas dos locais é restrita à administração." });
+            return;
+          }
+          const coordinates = Array.isArray(msg.coordinates) ? msg.coordinates : [];
+          const result = await saveDbsControlSiteMapCoordinates({ data: { coordinates } });
+          reply({ ok: true, saved: result.saved, skipped: result.skipped });
+        } catch (error) {
+          reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível guardar as coordenadas dos endereços." });
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS") {
         const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
         const reply = (payload: Record<string, unknown>) => {
@@ -1468,7 +1490,7 @@ function DbsControlPage() {
           }
 
           const result = await applyDbsControlDelta({
-            data: { requestId, changes: { ordens } },
+            data: { requestId, changes: { ordens: orders } },
           });
           const cloud = await getCloudStateSingleFlight();
           if (cloud?.state) {

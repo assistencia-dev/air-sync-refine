@@ -960,7 +960,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         : { data: [], error: null };
     if (employeeResult.error) throw new Error(employeeResult.error.message);
     const employees = employeeResult.data ?? [];
-    const employeeById = new Map(employees.map((employee: any) => [String(employee.id), employee]));
+    const employeeById = new Map<string, any>(employees.map((employee: any) => [String(employee.id), employee]));
     const now = Date.now();
     const locations = [...latestByEmployee.values()].map((session: any) => {
         const employee = employeeById.get(String(session.employee_id));

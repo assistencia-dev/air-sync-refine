@@ -150,22 +150,49 @@
 
   function buildRouteLegs(stops, routeOrigin) {
     const source = list(stops).filter(stop => stop && asText(stop.address));
-    const maxStopsPerLeg = 4; // 3 waypoints + destino: compatível com navegador móvel.
+    const maxStopsPerLeg = 4; // 3 waypoints + destino; sem GPS, a primeira parada vira a origem.
     const legs = [];
+    let start = 0;
 
-    for (let start = 0; start < source.length; start += maxStopsPerLeg) {
+    while (start < source.length) {
+      const previousStop = start > 0 ? source[start - 1] : null;
       const group = source.slice(start, start + maxStopsPerLeg);
-      const originStop = start > 0 ? source[start - 1] : null;
       const destination = group[group.length - 1];
-      const waypoints = group.slice(0, -1).map(stop => stop.address);
+      // With one stop and no fresh technician GPS, open the customer location
+      // instead of silently generating directions from the administrator's phone.
+      if (!previousStop && !routeOrigin && group.length === 1) {
+        const searchParams = new URLSearchParams();
+        searchParams.set('api', '1');
+        searchParams.set('query', destination.address);
+        const url = 'https://www.google.com/maps/search/?' + searchParams.toString();
+        legs.push({
+          index: legs.length + 1,
+          firstStop: start + 1,
+          lastStop: start + 1,
+          origin: '',
+          destination: destination.address,
+          url: url.length <= 2048 ? url : null,
+          tooLong: url.length > 2048,
+          kind: 'location'
+        });
+        start += group.length;
+        continue;
+      }
       const params = new URLSearchParams();
       params.set('api', '1');
-      let originValue = originStop ? originStop.address : '';
-      if (!originStop && routeOrigin) {
+      let originValue = previousStop ? previousStop.address : '';
+      if (!previousStop && routeOrigin) {
         if (typeof routeOrigin === 'string') originValue = routeOrigin.trim();
         else if (Number.isFinite(Number(routeOrigin.lat)) && Number.isFinite(Number(routeOrigin.lng))) {
           originValue = Number(routeOrigin.lat) + ',' + Number(routeOrigin.lng);
         } else originValue = asText(routeOrigin.address);
+      }
+      // Nunca deixar o Maps usar a localização do administrador por engano
+      // quando a rota está sendo planejada sem GPS recente do técnico.
+      const waypoints = group.slice(0, -1).map(stop => stop.address);
+      if (!previousStop && !originValue && group.length > 1) {
+        originValue = group[0].address;
+        waypoints.shift();
       }
       if (originValue) params.set('origin', originValue);
       params.set('destination', destination.address);
@@ -182,6 +209,7 @@
         url: url.length <= 2048 ? url : null,
         tooLong: url.length > 2048
       });
+      start += group.length;
     }
 
     return legs;
@@ -199,6 +227,18 @@
     const review = [];
     const seen = new Set();
     const linkedClients = new Set();
+    const activeSiteCountByClient = new Map();
+    const countedActiveSiteIds = new Set();
+    list(sites).forEach(site => {
+      if (!site || typeof site !== 'object') return;
+      const status = normalizeKey(site.status ?? site.situacao ?? 'ativo');
+      const siteId = firstText(site.id, site.siteId, site.site_id);
+      const clientId = firstText(site.clienteId, site.client_id, site.clientId);
+      if (!siteId || !clientId || countedActiveSiteIds.has(siteId)
+        || /inativ|inactive|arquiv|archiv|cancelad/.test(status)) return;
+      countedActiveSiteIds.add(siteId);
+      activeSiteCountByClient.set(clientId, (activeSiteCountByClient.get(clientId) || 0) + 1);
+    });
 
     list(sites).forEach(site => {
       if (!site || typeof site !== 'object') return;
@@ -230,6 +270,7 @@
         id: siteId,
         siteId,
         clientId,
+        clientSiteCount: activeSiteCountByClient.get(clientId) || 0,
         name: firstText(site.nome, site.name, site.razaoSocial, client.nome, client.name, 'Local de atendimento'),
         clientName: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         address,
@@ -255,6 +296,7 @@
         id: 'client:' + clientId,
         siteId: null,
         clientId,
+        clientSiteCount: activeSiteCountByClient.get(clientId) || 0,
         name: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         clientName: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         address,
@@ -264,7 +306,106 @@
       });
     });
 
-    return { candidates, review };
+    return { candidates, review, activeSiteCountByClient: Object.fromEntries(activeSiteCountByClient) };
+  }
+
+  function enrichSiteCandidates(candidates, orders, equipment, nowValue = Date.now()) {
+    const candidateRows = list(candidates);
+    const sourceOrders = list(orders).filter(order => order && !order.deleted_at && !order.excluidaEm && !order.arquivadaEm);
+    const sourceEquipment = list(equipment).filter(item => item && !item.deleted_at);
+    const normalizeStatus = value => normalizeKey(value).replace(/[_-]+/g, ' ');
+    const isCancelled = order => /cancelad/.test(normalizeStatus(order.status ?? order.situacao));
+    const isTerminal = order => terminalStatus(order) || isCancelled(order);
+    const isInProgress = order => /em atendimento|em andamento|execucao|deslocamento|em campo|in loco/.test(normalizeStatus(order.status ?? order.situacao));
+    const isEmergency = order => [order.type, order.tipo, order.prioridade, order.priority]
+      .map(normalizeStatus).join(' ').match(/emergenc|urgente|critico|alta|high/) !== null;
+    const isOverdue = order => {
+      if (isTerminal(order)) return false;
+      const raw = firstText(order.sla, order.sla_deadline, order.slaDeadline);
+      const due = raw ? Date.parse(raw) : NaN;
+      return Number.isFinite(due) && due < nowValue;
+    };
+    const candidateSitesByClient = new Map();
+    const knownSiteCountByClient = new Map(
+      Object.entries(candidateRows.activeSiteCountByClient || {})
+        .map(([clientId, count]) => [clientId, Number(count) || 0])
+    );
+    candidateRows.forEach(candidate => {
+      const clientId = asText(candidate && (candidate.clientId ?? candidate.client_id));
+      if (!clientId) return;
+      const sites = candidateSitesByClient.get(clientId) || [];
+      sites.push(asText(candidate.siteId ?? candidate.site_id ?? candidate.id));
+      candidateSitesByClient.set(clientId, sites);
+      const knownCount = Number(candidate.clientSiteCount);
+      const previousCount = knownSiteCountByClient.get(clientId) || 0;
+      knownSiteCountByClient.set(clientId, Math.max(previousCount, Number.isFinite(knownCount) ? knownCount : sites.length));
+    });
+    const isUniqueClientSite = clientId => {
+      const matches = candidateRows.filter(candidate => asText(candidate && (candidate.clientId ?? candidate.client_id)) === clientId);
+      const knownActiveSites = Number(knownSiteCountByClient.get(clientId) ?? (matches[0] && matches[0].clientSiteCount));
+      if (knownActiveSites > 1) return false;
+      if (knownActiveSites === 1) return matches.length === 1 && Boolean(matches[0]?.siteId ?? matches[0]?.site_id);
+      return matches.length === 1;
+    };
+    const belongsToCandidate = (record, siteId, clientId) => {
+      const recordSiteId = asText(record.siteId ?? record.localId ?? record.site_id);
+      const recordClientId = asText(record.clienteId ?? record.client_id ?? record.clientId);
+      if (recordSiteId) return recordSiteId === siteId;
+      return Boolean(clientId && recordClientId === clientId && isUniqueClientSite(clientId));
+    };
+
+    const enriched = candidateRows.map(candidate => {
+      const siteId = asText(candidate.siteId ?? candidate.site_id ?? candidate.id);
+      const clientId = asText(candidate.clientId ?? candidate.client_id);
+      const siteOrders = sourceOrders.filter(order => belongsToCandidate(order, siteId, clientId));
+      const siteEquipment = sourceEquipment.filter(item => belongsToCandidate(item, siteId, clientId));
+      const activeOrders = siteOrders.filter(order => !isTerminal(order));
+      const inProgressCount = activeOrders.filter(isInProgress).length;
+      const openCount = activeOrders.length - inProgressCount;
+      const overdueCount = activeOrders.filter(isOverdue).length;
+      const emergencyCount = activeOrders.filter(isEmergency).length;
+      const activeEquipmentCount = siteEquipment.filter(item => !/inativ|baixad|desativ|arquiv/.test(normalizeStatus(item.status))).length;
+      return {
+        ...candidate,
+        totalOrders: siteOrders.length,
+        openOrders: openCount,
+        inProgressOrders: inProgressCount,
+        overdueOrders: overdueCount,
+        emergencyOrders: emergencyCount,
+        equipmentCount: siteEquipment.length,
+        activeEquipmentCount,
+        mapCoordinatesSource: candidate.mapCoordinatesSource || (candidate.lat != null && candidate.lng != null ? 'saved' : null)
+      };
+    });
+
+    const ordersWithoutSpecificSite = sourceOrders.filter(order => {
+      const siteId = asText(order.siteId ?? order.localId ?? order.site_id);
+      const clientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
+      return !siteId && !isTerminal(order) && (!clientId || !isUniqueClientSite(clientId));
+    }).length;
+    const equipmentWithoutSpecificSite = sourceEquipment.filter(item => {
+      const siteId = asText(item.siteId ?? item.localId ?? item.site_id);
+      const clientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
+      return !siteId && (!clientId || !isUniqueClientSite(clientId));
+    }).length;
+    enriched.unallocated = { orders: ordersWithoutSpecificSite, equipment: equipmentWithoutSpecificSite };
+    return enriched;
+  }
+
+  function summarizeSiteMetrics(candidates) {
+    const sites = list(candidates);
+    const unallocated = sites.unallocated || {};
+    return {
+      locations: sites.length,
+      mappedLocations: sites.filter(site => coordinate(site.lat, -90, 90) !== null && coordinate(site.lng, -180, 180) !== null).length,
+      openOrders: sites.reduce((sum, site) => sum + Number(site.openOrders || 0), 0),
+      inProgressOrders: sites.reduce((sum, site) => sum + Number(site.inProgressOrders || 0), 0),
+      overdueOrders: sites.reduce((sum, site) => sum + Number(site.overdueOrders || 0), 0),
+      emergencyOrders: sites.reduce((sum, site) => sum + Number(site.emergencyOrders || 0), 0),
+      equipment: sites.reduce((sum, site) => sum + Number(site.equipmentCount || 0), 0),
+      ordersWithoutSpecificSite: Number(unallocated.orders || 0),
+      equipmentWithoutSpecificSite: Number(unallocated.equipment || 0)
+    };
   }
 
   const radians = degrees => degrees * Math.PI / 180;
@@ -322,6 +463,7 @@
       cursor = next;
     }
 
+    if (Array.isArray(stops) && stops.unallocated) ordered.unallocated = { ...stops.unallocated };
     return {
       stops: ordered,
       distanceEstimateKm: Math.round(ordered.reduce((total, stop) => total + (stop.distanceFromPreviousKm || 0), 0) * 10) / 10,
@@ -334,6 +476,8 @@
     orderAddress,
     buildStops,
     buildSiteCandidates,
+    enrichSiteCandidates,
+    summarizeSiteMetrics,
     distanceKm,
     optimizeStops,
     buildRouteLegs

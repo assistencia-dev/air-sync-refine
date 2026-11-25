@@ -63,12 +63,79 @@ assert.equal(legs.length, 2, 'Mais de quatro paradas devem ser divididas em etap
 const firstUrl = new URL(legs[0].url);
 assert.equal(firstUrl.searchParams.get('api'), '1');
 assert.equal(firstUrl.searchParams.get('destination'), routeStops[3].address);
-assert.equal(firstUrl.searchParams.get('waypoints').split('|').length, 3);
-assert.equal(firstUrl.searchParams.get('origin'), null, 'A primeira etapa deve permitir que o Maps use a localização atual do aparelho.');
+assert.equal(firstUrl.searchParams.get('waypoints').split('|').length, 2, 'Sem GPS do técnico, a primeira parada deve ser a origem para não usar a posição do administrador.');
+assert.equal(firstUrl.searchParams.get('origin'), routeStops[0].address, 'Sem GPS recente do técnico, a primeira parada da sugestão deve ser a origem explícita.');
 const secondUrl = new URL(legs[1].url);
 assert.equal(secondUrl.searchParams.get('origin'), routeStops[3].address, 'A etapa seguinte deve começar no último endereço da etapa anterior.');
 assert.equal(secondUrl.searchParams.get('destination'), routeStops[4].address);
 assert.equal(secondUrl.searchParams.get('travelmode'), 'driving');
+const singleStopWithoutGps = planner.buildRouteLegs([{ address: 'Rua Única, 55, Niterói, RJ' }]);
+assert.equal(new URL(singleStopWithoutGps[0].url).pathname, '/maps/search/', 'Um único local sem GPS do técnico deve abrir a localização, nunca iniciar a navegação a partir do administrador.');
+assert.equal(new URL(singleStopWithoutGps[0].url).searchParams.get('query'), 'Rua Única, 55, Niterói, RJ');
+
+
+const siteMetrics = planner.enrichSiteCandidates(
+  [{ id: 's1', siteId: 's1', clientId: 'c1', lat: -22.9, lng: -43.2 }],
+  [
+    { id: 'open', siteId: 's1', clienteId: 'c1', status: 'Aberta' },
+    { id: 'progress', siteId: 's1', clienteId: 'c1', status: 'Em Atendimento' },
+    { id: 'late', siteId: 's1', clienteId: 'c1', status: 'Aberta', sla: '2026-11-24T10:00:00-03:00' },
+    { id: 'urgent', siteId: 's1', clienteId: 'c1', status: 'Aberta', tipo: 'Manutenção Corretiva', prioridade: 'alta' },
+    { id: 'done', siteId: 's1', clienteId: 'c1', status: 'Concluída' },
+    { id: 'cancelled', siteId: 's1', clienteId: 'c1', status: 'Cancelada' }
+  ],
+  [{ id: 'eq1', siteId: 's1', clienteId: 'c1', status: 'ativo' }],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(siteMetrics[0].openOrders, 3, 'Indicador de OS abertas deve excluir concluídas e canceladas e separar atendimento em andamento.');
+assert.equal(siteMetrics[0].inProgressOrders, 1, 'Indicador de OS em atendimento deve usar o status real da OS.');
+assert.equal(siteMetrics[0].overdueOrders, 1, 'OS só deve ser marcada vencida quando o SLA cadastrado expirou.');
+assert.equal(siteMetrics[0].emergencyOrders, 1, 'Atendimentos emergenciais devem aparecer como indicador separado.');
+assert.equal(siteMetrics[0].equipmentCount, 1, 'O mapa deve mostrar equipamentos vinculados ao local.');
+const newlyGeocodedSite = planner.enrichSiteCandidates(
+  [{ id: 'new-site', siteId: 'new-site', clientId: 'new-client', lat: -22.9, lng: -43.2, mapCoordinatesSource: 'address_geocoded' }],
+  [],
+  [],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(newlyGeocodedSite[0].mapCoordinatesSource, 'address_geocoded', 'Coordenadas da primeira geocodificação precisam continuar identificadas para serem persistidas.');
+
+const siteSummary = planner.summarizeSiteMetrics(siteMetrics);
+assert.equal(siteSummary.locations, 1);
+assert.equal(siteSummary.mappedLocations, 1);
+assert.equal(siteSummary.openOrders, 3);
+assert.equal(siteSummary.equipment, 1);
+
+const ambiguousClientMetrics = planner.enrichSiteCandidates(
+  [
+    { id: 's1', siteId: 's1', clientId: 'shared-client', lat: 0, lng: 1 },
+    { id: 's2', siteId: 's2', clientId: 'shared-client', lat: 0, lng: 2 }
+  ],
+  [
+    { id: 'site-order', siteId: 's1', clienteId: 'shared-client', status: 'Aberta' },
+    { id: 'client-order', clienteId: 'shared-client', status: 'Aberta' }
+  ],
+  [
+    { id: 'site-equipment', siteId: 's2', clienteId: 'shared-client', status: 'ativo' },
+    { id: 'client-equipment', clienteId: 'shared-client', status: 'ativo' }
+  ],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(ambiguousClientMetrics[0].openOrders, 1, 'OS ligada a uma loja deve contar somente naquela loja.');
+assert.equal(ambiguousClientMetrics[1].openOrders, 0, 'OS que só informa o cliente não pode ser replicada em todas as lojas.');
+assert.equal(ambiguousClientMetrics.unallocated.orders, 1, 'OS sem local em cliente com várias lojas deve aparecer como não alocada.');
+assert.equal(ambiguousClientMetrics.unallocated.equipment, 1, 'Equipamento sem local em cliente com várias lojas deve aparecer como não alocado.');
+const ambiguousSummary = planner.summarizeSiteMetrics(ambiguousClientMetrics);
+assert.equal(ambiguousSummary.ordersWithoutSpecificSite, 1);
+assert.equal(ambiguousSummary.equipmentWithoutSpecificSite, 1);
+const hiddenSiblingSiteMetrics = planner.enrichSiteCandidates(
+  [{ id: 'only-geocoded-site', siteId: 's1', clientId: 'multi-site-client', clientSiteCount: 2, lat: 0, lng: 1 }],
+  [{ id: 'legacy-client-order', clienteId: 'multi-site-client', status: 'Aberta' }],
+  [],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(hiddenSiblingSiteMetrics[0].openOrders, 0, 'Endereço de outra loja incompleto não autoriza atribuir OS do cliente à única loja geocodificada.');
+assert.equal(hiddenSiblingSiteMetrics.unallocated.orders, 1, 'OS de cliente com mais de uma unidade deve continuar sem local até conciliação.');
 
 const scheduled = planner.buildStops([
   { id: 'late', clienteId: 'c1', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T15:00:00-03:00' },
@@ -84,7 +151,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O planejador deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O planejador atualizado deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
@@ -93,6 +160,19 @@ const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx',
 const technicianRoute = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 const dbsControlFunctions = fs.readFileSync('src/lib/dbs-control.functions.ts', 'utf8');
 const pontoFunctionsSource = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
+const mapMigration = fs.readFileSync('supabase/migrations/20261125143000_dbs_control_site_map_coordinates.sql', 'utf8');
+assert.match(mapMigration, /add column if not exists map_latitude/);
+assert.match(mapMigration, /add column if not exists map_longitude/);
+assert.match(mapMigration, /between -90 and 90/);
+assert.match(mapMigration, /between -180 and 180/);
+assert.match(mapMigration, /dbs_control_reset_site_map_coordinates_on_address_change/);
+assert.match(mapMigration, /before update of address_json on public\.dbs_control_sites/);
+
+assert.ok(mapMigration.includes("map_latitude is not null") && mapMigration.includes("map_longitude is not null"), 'Latitude e longitude precisam ser gravadas juntas.');
+assert.ok(dbsControlFunctions.includes(".replace(/[" + String.fromCharCode(92) + "u0300-" + String.fromCharCode(92) + "u036f]/g, " + String.fromCharCode(34) + String.fromCharCode(34) + ")"), 'A validação de endereço deve normalizar acentos corretamente.');
+assert.ok(dbsControlFunctions.includes(".replace(/" + String.fromCharCode(92) + "s+/g, " + String.fromCharCode(34) + " " + String.fromCharCode(34) + ")"), 'A validação de endereço deve normalizar espaços corretamente.');
+
+
 assert.match(technicianRoute, /typeof ERP_STATE !== 'undefined'/, 'O planejador deve ler o estado lexical do iframe, não depender de window.ERP_STATE.');
 assert.match(technicianRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'A lista do seletor deve vir dos colaboradores ativos do RH.');
 assert.match(parentRoute, /listRhPontoEmployees\(\)/, 'O bridge administrativo deve consultar o RH para a lista ativa de técnicos.');
@@ -187,13 +267,32 @@ console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domí
 const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-2/, 'O novo despacho deve ser carregado depois do shell legado.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O algoritmo atualizado deve ter cache busting.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-3/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
 assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
 assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
+assert.match(dispatchScript, /enrichSiteCandidates/, 'Os locais devem receber indicadores calculados pelas OS e equipamentos reais.');
+assert.match(dispatchScript, /summarizeSiteMetrics/, 'O painel do mapa deve exibir indicadores agregados da operação.');
+assert.match(dispatchScript, /enrichSiteCandidates\(\s*candidates,/, 'Os indicadores devem considerar todos os locais com endereço, inclusive os que aguardam geocodificação.');
+assert.match(dispatchScript, /state\.siteMetrics = planner\(\)\.summarizeSiteMetrics\(measured\)/, 'O resumo operacional não pode descartar locais ainda sem coordenadas.');
+assert.match(dispatchScript, /Cadastros a revisar/, 'O mapa deve expor registros de endereço que exigem conferência.');
+
+assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'Coordenadas geocodificadas devem ser cacheadas no cadastro relacional do local.');
+assert.match(dispatchScript, /state\.selected = state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável sem abrir OS automaticamente.');
+assert.match(dispatchScript, /Pinos verdes: sem OS pendente/, 'A legenda do mapa deve diferenciar locais por situação operacional real.');
+assert.match(dispatchScript, /Sem GPS recente: a rota não usa a posição do administrador como origem/, 'Sem GPS do técnico, o planejador não pode presumir a localização do administrador.');
+assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'O shell deve persistir coordenadas de endereço com validação administrativa.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES"/, 'A ponte autenticada deve persistir coordenadas geocodificadas.');
+assert.match(dbsControlFunctions, /export const saveDbsControlSiteMapCoordinates = createServerFn/, 'O salvamento das coordenadas deve ocorrer exclusivamente no servidor.');
+assert.match(dbsControlFunctions, /normalizeAddress\(addressFromJson\(row\.address_json\)\)/, 'A coordenada só pode ser salva se o endereço não mudou desde a geocodificação.');
+assert.match(dbsControlFunctions, /const mapSelect = "id,client_id,name,address_json,map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status/, 'A hidratação deve ler o cache de coordenadas relacional quando as colunas estiverem disponíveis.');
+assert.match(dbsControlFunctions, /const baseSelect = "id,client_id,name,address_json,contact_name/, 'A hidratação deve manter compatibilidade com bancos anteriores à migração aditiva.');
+assert.match(dbsControlFunctions, /return missingCoordinatesSchema \? querySites\(baseSelect\) : withMapCoordinates/, 'A ausência das colunas novas não pode interromper a leitura operacional do DBS CONTROL.');
+assert.match(dbsControlFunctions, /Nenhuma coordenada foi gravada/, 'O sistema deve informar claramente quando o cache de mapa ainda não existe no banco.');
+
 assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
 assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
@@ -208,6 +307,16 @@ assert.match(dispatchScript, /state\.selected\.length >= 50/, 'A interface deve 
 assert.match(dispatchScript, /Motivo . problema \(obrigatório\)/, 'A corretiva deve exibir justificativa obrigatória.');
 assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
 assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
+
+const duplicateSiteRepresentations = planner.buildSiteCandidates(
+  [
+    { id: 'single-site', clienteId: 'single-client', nome: 'Única loja', endereco: 'Rua Única, 10, Niterói, RJ' },
+    { id: 'single-site', clienteId: 'single-client', nome: 'Única loja', endereco: 'Rua Única, 10, Niterói, RJ' }
+  ],
+  [{ id: 'single-client', nome: 'Cliente com uma loja' }]
+);
+assert.equal(duplicateSiteRepresentations.candidates.length, 1);
+assert.equal(duplicateSiteRepresentations.candidates[0].clientSiteCount, 1, 'As listas compatíveis sites/locais não podem duplicar a contagem de unidades.');
 
 const siteAudit = planner.buildSiteCandidates(
   [
@@ -246,6 +355,10 @@ assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localiz
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS"/, 'O shell deve receber a aprovação de criação em lote.');
+assert.match(parentRoute, /changes: \{ ordens: orders \}/, 'A aprovação precisa enviar a lista efetivamente recebida para a camada relacional.');
+assert.doesNotMatch(parentRoute, /changes: \{ ordens \}/, 'A aprovação não pode referenciar uma variável inexistente.');
+assert.match(pontoFunctionsSource, /new Map<string, any>\(employees\.map/, 'A consulta de localizações deve manter a tipagem do cadastro do RH.');
+
 assert.match(parentRoute, /assignedId !== technicianEmployeeId/, 'Toda OS do lote deve ser atribuída ao técnico selecionado.');
 assert.match(parentRoute, /technicianCheck\.employee_found/, 'O servidor deve rejeitar técnico sem vínculo ativo no RH.');
 assert.match(parentRoute, /Nenhuma OS foi criada/, 'A detecção de duplicidade deve bloquear o lote antes de gravar.');
