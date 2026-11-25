@@ -276,7 +276,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-3/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-9/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-10/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
@@ -388,7 +388,7 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-9"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-10"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
@@ -433,3 +433,9 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  // Opening dispatch must load the site/address catalogue before waiting for the RH technician selector.
  assert.match(dispatchScript, /renderModal\(\);\s*\/\/ Endereços e lista aparecem primeiro;[\s\S]*void buildSuggestions\(\);\s*const dayTechnician/, "A lista de endereços deve abrir sem aguardar a resposta do RH.");
  assert.doesNotMatch(dispatchScript, /Nenhum técnico ativo encontrado no RH[\s\S]{0,400}void buildSuggestions\(\)/, "A ausência de técnico disponível não pode ser a etapa que inicia o carregamento do mapa.");
+
+
+ // The asynchronous geocoding queue must finish without referencing the removed batch accumulator.
+ assert.ok(dispatchScript.includes("let geocodeSuccessCount = 0"), "A fila precisa acompanhar os resultados que realmente tiveram coordenadas.");
+ assert.ok(dispatchScript.includes("geocodeSuccessCount === 0"), "A finalização da fila não pode referenciar um acumulador removido.");
+ assert.ok(!dispatchScript.includes("successfullyGeocoded"), "A gravação incremental não deve depender do antigo lote acumulado.");
