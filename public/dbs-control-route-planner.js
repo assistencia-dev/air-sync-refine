@@ -213,6 +213,11 @@
         review.push({ id: siteId, name: firstText(site.nome, site.name, 'Local sem nome'), reason: 'Local sem vínculo válido com cliente; revisar cadastro.' });
         return;
       }
+      const clientStatus = normalizeKey(client.status ?? client.situacao ?? 'ativo');
+      if (/inativ|arquiv|cancelad/.test(clientStatus)) {
+        review.push({ id: siteId, name: firstText(site.nome, site.name, 'Local sem nome'), reason: 'Cliente inativo/arquivado; local não incluído na rota.' });
+        return;
+      }
       linkedClients.add(clientId);
       const address = addressFrom(site) || addressFrom(client);
       if (!address) {
@@ -239,6 +244,8 @@
     list(clients).forEach(client => {
       const clientId = firstText(client && client.id);
       if (!clientId || linkedClients.has(clientId) || seen.has('client:' + clientId)) return;
+      const clientStatus = normalizeKey(client.status ?? client.situacao ?? 'ativo');
+      if (/inativ|arquiv|cancelad/.test(clientStatus)) return;
       const address = addressFrom(client);
       if (!address) return;
       seen.add('client:' + clientId);
