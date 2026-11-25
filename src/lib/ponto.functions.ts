@@ -5,6 +5,7 @@ import { distanceMeters, validatePontoGps } from "@/lib/ponto-geo";
 
 // DBS FLEET usa tabelas privadas acessadas somente pelo cliente server-side.
 const fleetDb: any = supabaseAdmin;
+const FLEET_LOCATION_FRESHNESS_MS = 180_000;
 
 const TYPES = ["entrada", "almoco_saida", "almoco_retorno", "saida"] as const;
 type PointType = (typeof TYPES)[number];
@@ -965,7 +966,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         const employee = employeeById.get(String(session.employee_id));
         const hasCoordinates = session.last_latitude != null && session.last_longitude != null;
         const positionAgeMs = session.last_position_at ? Math.max(0, now - Date.parse(session.last_position_at)) : null;
-        const isLive = Boolean(!session.ended_at && positionAgeMs != null && positionAgeMs <= 120_000 && hasCoordinates);
+        const isLive = Boolean(!session.ended_at && positionAgeMs != null && positionAgeMs <= FLEET_LOCATION_FRESHNESS_MS && hasCoordinates);
         return {
           session_id: session.id,
           employee_id: session.employee_id,
