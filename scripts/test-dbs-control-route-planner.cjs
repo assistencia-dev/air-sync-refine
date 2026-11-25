@@ -364,3 +364,20 @@ assert.match(parentRoute, /technicianCheck\.employee_found/, 'O servidor deve re
 assert.match(parentRoute, /Nenhuma OS foi criada/, 'A detecção de duplicidade deve bloquear o lote antes de gravar.');
 
 console.log('DBS CONTROL technician-first route: GPS do técnico, locais sem OS prévia, proximidade, edição e OS em lote atribuídas verificados.');
+
+
+// Server-side geocoding must avoid browser CORS failures from the public Photon endpoint.
+assert.ok(!dispatchScript.includes("photon.komoot.io"), "O navegador não deve acessar o Photon diretamente; a chamada precisa passar pelo servidor autenticado.");
+assert.ok(dispatchScript.includes("DBS_CONTROL_GEOCODE_SITE_ADDRESS"), "O mapa deve consultar o geocodificador por meio da ponte autenticada do shell.");
+assert.ok(dispatchScript.includes("Endereço cadastrado; serviço de geocodificação indisponível"), "Falhas de rede do provedor não podem ser rotuladas como endereço ausente.");
+assert.ok(dispatchScript.includes("Endereço cadastrado: "), "O endereço original deve permanecer visível na lista de revisão.");
+assert.ok(dispatchScript.includes('data-action="review-map"'), "A revisão deve permitir abrir o endereço cadastrado no Google Maps.");
+assert.ok(parentRoute.includes('msg.type === "DBS_CONTROL_GEOCODE_SITE_ADDRESS"'), "O shell deve receber a geocodificação e chamar a ação do servidor.");
+assert.ok(parentRoute.includes("geocodeDbsControlSiteAddress({ data: { address } })"), "A consulta externa deve ocorrer exclusivamente pela função autenticada do servidor.");
+assert.ok(dbsControlFunctions.includes("export const geocodeDbsControlSiteAddress = createServerFn"), "A geocodificação deve existir como função server-side autenticada.");
+assert.ok(dbsControlFunctions.includes('administrativeRoles = ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"]'), "A geocodificação deve ser restrita aos papéis administrativos.");
+assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")'), "O servidor deve montar a chamada Photon com URL e parâmetros estruturados.");
+assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
+assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
+assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-4"), "A correção deve ser servida sem cache antigo.");
