@@ -205,7 +205,7 @@
       const siteId = firstText(site.id, site.siteId, site.site_id);
       const clientId = firstText(site.clienteId, site.client_id, site.clientId);
       const status = normalizeKey(site.status ?? site.situacao ?? 'ativo');
-      if (/inativ|arquiv|cancelad/.test(status)) return;
+      if (/inativ|inactive|arquiv|archiv|cancelad/.test(status)) return;
       if (!siteId || seen.has(siteId)) return;
       seen.add(siteId);
       const client = clientMap.get(clientId);
@@ -214,7 +214,7 @@
         return;
       }
       const clientStatus = normalizeKey(client.status ?? client.situacao ?? 'ativo');
-      if (/inativ|arquiv|cancelad/.test(clientStatus)) {
+      if (/inativ|inactive|arquiv|archiv|cancelad/.test(clientStatus)) {
         review.push({ id: siteId, name: firstText(site.nome, site.name, 'Local sem nome'), reason: 'Cliente inativo/arquivado; local não incluído na rota.' });
         return;
       }
@@ -245,7 +245,7 @@
       const clientId = firstText(client && client.id);
       if (!clientId || linkedClients.has(clientId) || seen.has('client:' + clientId)) return;
       const clientStatus = normalizeKey(client.status ?? client.situacao ?? 'ativo');
-      if (/inativ|arquiv|cancelad/.test(clientStatus)) return;
+      if (/inativ|inactive|arquiv|archiv|cancelad/.test(clientStatus)) return;
       const address = addressFrom(client);
       if (!address) return;
       seen.add('client:' + clientId);
