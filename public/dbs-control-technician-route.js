@@ -330,7 +330,7 @@
     const candidate = state.candidates.find(item => String(item.id) === String(id));
     if (!candidate || state.selected.some(item => String(item.id) === String(id))) return;
     state.selected.push(Object.assign({}, candidate, {
-      serviceType: 'Manutenção Corretiva',
+      serviceType: '',
       cause: ''
     }));
     reorderSelected();
@@ -384,7 +384,7 @@
     }).join('') : '<div class="dbs-dispatch-empty">Nenhum outro local corresponde ao filtro.</div>';
 
     selected.innerHTML = state.selected.length ? state.selected.map((item, index) => {
-      const typeOptions = SERVICE_TYPES.map(type => '<option value="' + safe(type) + '"' + (item.serviceType === type ? ' selected' : '') + '>' + safe(type) + '</option>').join('');
+      const typeOptions = '<option value="">Selecione o tipo de atendimento</option>' + SERVICE_TYPES.map(type => '<option value="' + safe(type) + '"' + (item.serviceType === type ? ' selected' : '') + '>' + safe(type) + '</option>').join('');
       const causeField = isPmoc(item.serviceType)
         ? '<label>Observação PMOC (opcional)<input data-field="cause" data-index="' + index + '" maxlength="500" value="' + safe(item.cause || '') + '" placeholder="Observação complementar, se necessário"></label>'
         : '<label>' + (requiresCause(item.serviceType) ? 'Motivo / problema (obrigatório)' : 'Motivo / observação (opcional)')
@@ -643,6 +643,7 @@
         data: routeDate,
         desc: type + ' · ' + stop.name + (cause ? ' · ' + cause : ''),
         observacao: 'OS criada pelo planejamento de rota do DBS CONTROL. Técnico: ' + getTechnicianLabel(technician)
+          + '. Rota planejada para ' + routeDate + ', parada ' + (index + 1) + ' de ' + state.selected.length
           + '. Endereço: ' + stop.address + (cause ? '. Motivo informado: ' + cause : ''),
         createdAt: createdAt,
         updatedAt: createdAt,
