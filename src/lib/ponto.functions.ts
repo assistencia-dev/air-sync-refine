@@ -818,3 +818,67 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
     if (auditError) console.error("DBS FLEET: status do SOS atualizado, mas a auditoria falhou:", auditError.message);
     return updated;
   });
+
+/**
+ * Última posição compartilhada de um colaborador do RH.
+ * A consulta é exclusiva do servidor e exige papel administrativo de RH.
+ * Retorna também a idade do ponto para a tela nunca apresentar posição antiga
+ * como se fosse localização ao vivo.
+ */
+export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((input?: { employee_id?: string | null }) => {
+    const employeeId = String(input?.employee_id ?? "").trim();
+    if (employeeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)) {
+      throw new Error("Colaborador inválido para consultar a localização.");
+    }
+    return { employee_id: employeeId || null };
+  })
+  .handler(async ({ context, data }) => {
+    await requireRh(context);
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    let query = fleetDb.from("rh_employee_location_sessions")
+      .select("id, employee_id, work_date, started_at, ended_at, last_latitude, last_longitude, last_accuracy_m, last_position_at")
+      .gte("started_at", cutoff)
+      .order("last_position_at", { ascending: false, nullsFirst: false })
+      .order("started_at", { ascending: false })
+      .limit(1000);
+    if (data.employee_id) query = query.eq("employee_id", data.employee_id);
+    const { data: sessions, error } = await query;
+    if (error) throw new Error(error.message);
+    const latestByEmployee = new Map<string, any>();
+    for (const session of sessions ?? []) {
+      const employeeId = String(session.employee_id ?? "");
+      if (employeeId && !latestByEmployee.has(employeeId)) latestByEmployee.set(employeeId, session);
+    }
+    const employeeIds = [...latestByEmployee.keys()];
+    const employees = employeeIds.length
+      ? (await supabaseAdmin.from("rh_employees").select("id, full_name, unit").in("id", employeeIds)).data ?? []
+      : [];
+    const employeeById = new Map(employees.map((employee: any) => [String(employee.id), employee]));
+    const now = Date.now();
+    return {
+      locations: [...latestByEmployee.values()].map((session: any) => {
+        const employee = employeeById.get(String(session.employee_id));
+        const hasCoordinates = session.last_latitude != null && session.last_longitude != null;
+        const positionAgeMs = session.last_position_at ? Math.max(0, now - Date.parse(session.last_position_at)) : null;
+        const isLive = Boolean(!session.ended_at && positionAgeMs != null && positionAgeMs <= 120_000 && hasCoordinates);
+        return {
+          session_id: session.id,
+          employee_id: session.employee_id,
+          full_name: employee?.full_name ?? "Colaborador",
+          unit: employee?.unit ?? null,
+          work_date: session.work_date,
+          started_at: session.started_at,
+          ended_at: session.ended_at,
+          latitude: hasCoordinates ? Number(session.last_latitude) : null,
+          longitude: hasCoordinates ? Number(session.last_longitude) : null,
+          accuracy_m: session.last_accuracy_m == null ? null : Number(session.last_accuracy_m),
+          last_position_at: session.last_position_at,
+          position_age_ms: positionAgeMs,
+          is_live: isLive,
+          location_status: !hasCoordinates ? "unavailable" : isLive ? "live" : "last_known",
+        };
+      }),
+    };
+  });
