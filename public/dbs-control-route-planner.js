@@ -227,6 +227,15 @@
     const review = [];
     const seen = new Set();
     const linkedClients = new Set();
+    const activeSiteCountByClient = new Map();
+    list(sites).forEach(site => {
+      if (!site || typeof site !== 'object') return;
+      const status = normalizeKey(site.status ?? site.situacao ?? 'ativo');
+      const siteId = firstText(site.id, site.siteId, site.site_id);
+      const clientId = firstText(site.clienteId, site.client_id, site.clientId);
+      if (!siteId || !clientId || /inativ|inactive|arquiv|archiv|cancelad/.test(status)) return;
+      activeSiteCountByClient.set(clientId, (activeSiteCountByClient.get(clientId) || 0) + 1);
+    });
 
     list(sites).forEach(site => {
       if (!site || typeof site !== 'object') return;
@@ -258,6 +267,7 @@
         id: siteId,
         siteId,
         clientId,
+        clientSiteCount: activeSiteCountByClient.get(clientId) || 0,
         name: firstText(site.nome, site.name, site.razaoSocial, client.nome, client.name, 'Local de atendimento'),
         clientName: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         address,
@@ -283,6 +293,7 @@
         id: 'client:' + clientId,
         siteId: null,
         clientId,
+        clientSiteCount: activeSiteCountByClient.get(clientId) || 0,
         name: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         clientName: firstText(client.nome, client.name, client.trade_name, 'Cliente'),
         address,
@@ -319,7 +330,12 @@
       sites.push(asText(candidate.siteId ?? candidate.site_id ?? candidate.id));
       candidateSitesByClient.set(clientId, sites);
     });
-    const isUniqueClientSite = clientId => (candidateSitesByClient.get(clientId) || []).length === 1;
+    const isUniqueClientSite = clientId => {
+      const matches = candidateRows.filter(candidate => asText(candidate && (candidate.clientId ?? candidate.client_id)) === clientId);
+      if (matches.length !== 1) return false;
+      const knownActiveSites = Number(matches[0].clientSiteCount);
+      return Number.isFinite(knownActiveSites) ? knownActiveSites <= 1 : matches.length === 1;
+    };
     const belongsToCandidate = (record, siteId, clientId) => {
       const recordSiteId = asText(record.siteId ?? record.localId ?? record.site_id);
       const recordClientId = asText(record.clienteId ?? record.client_id ?? record.clientId);
