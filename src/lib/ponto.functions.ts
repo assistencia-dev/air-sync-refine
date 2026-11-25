@@ -827,7 +827,7 @@ export const updateRhFleetSos = createServerFn({ method: "POST" })
  */
 export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((input?: { employee_id?: string | null }) => {
+  .validator((input: { employee_id?: string | null }) => {
     const employeeId = String(input?.employee_id ?? "").trim();
     if (employeeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeId)) {
       throw new Error("Colaborador inválido para consultar a localização.");
@@ -852,7 +852,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
       if (employeeId && !latestByEmployee.has(employeeId)) latestByEmployee.set(employeeId, session);
     }
     const employeeIds = data.employee_id ? [data.employee_id] : [...latestByEmployee.keys()];
-    const employeeResult = employeeIds.length
+    const employeeResult: any = employeeIds.length
       ? await supabaseAdmin.from("rh_employees").select("id, full_name, unit").eq("is_active", true).in("id", employeeIds)
       : { data: [], error: null };
     if (employeeResult.error) throw new Error(employeeResult.error.message);
