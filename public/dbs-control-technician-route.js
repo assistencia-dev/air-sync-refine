@@ -247,7 +247,7 @@
     const data = await response.json();
     const feature = Array.isArray(data.features) ? data.features[0] : null;
     const properties = feature && feature.properties || {};
-    if (!feature || (properties.country && !/brasil|brazil/i.test(String(properties.country)))) {
+    if (!feature || !/brasil|brazil/i.test(String(properties.country || ''))) {
       throw new Error('Endereço não localizado no Brasil.');
     }
     if (!properties.city && !properties.county && !properties.state) {
@@ -282,7 +282,7 @@
       let completed = 0;
       const queue = candidates.slice();
       const located = [];
-      const workers = Array.from({ length: 4 }, async () => {
+      const workers = Array.from({ length: 2 }, async () => {
         while (queue.length) {
           const candidate = queue.shift();
           if (!candidate) return;
@@ -303,7 +303,7 @@
           }
           completed += 1;
           if (status) status.textContent = 'Conferindo endereços ' + completed + '/' + candidates.length + '…';
-          await new Promise(resolve => setTimeout(resolve, 280));
+          if (queue.length) await new Promise(resolve => setTimeout(resolve, 1000));
         }
       });
       await Promise.all(workers);
@@ -510,7 +510,7 @@
       + '<label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar a última posição do técnico como ponto de partida da rota</label>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Sugerir rota pelas proximidades</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five">Adicionar 5 locais mais próximos</button></div>'
       + '</section>'
-      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa da equipe e das lojas</h3><p>O marcador verde representa a última localização do técnico; os azuis são os locais sugeridos.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Aguardando dados.</span></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
+      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa da equipe e das lojas</h3><p>O marcador verde representa a última localização do técnico; os azuis são os locais sugeridos.</p><p>Ao solicitar a sugestão, os endereços cadastrados são consultados no serviço Photon/OpenStreetMap para obter coordenadas; revise os pontos antes de aprovar.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Aguardando dados.</span></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
       + '<section class="dbs-dispatch-columns">'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Rota selecionada e editável</h3><p>Defina o tipo e o motivo de cada atendimento.</p></div><strong id="dbs-dispatch-count">0 paradas</strong></div><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregue a sugestão e adicione os locais que deseja atender.</div></div></div>'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Locais cadastrados próximos</h3><p id="dbs-dispatch-available-count">Aguardando análise</p></div></div><input id="dbs-dispatch-search" type="search" placeholder="Filtrar por loja, cliente, bairro ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Clique em “Sugerir rota pelas proximidades”.</div></div></div>'
