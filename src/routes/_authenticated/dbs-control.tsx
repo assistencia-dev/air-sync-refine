@@ -18,7 +18,7 @@ import {
   withDbsControlLocalSyncLock,
   type DbsControlLocalSyncCommand,
 } from "@/lib/dbs-control.local-sync";
-import { listRhFleetTechnicianLocations } from "@/lib/ponto.functions";
+import { listRhFleetTechnicianLocations, verifyRhDbsControlTechnician } from "@/lib/ponto.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -1323,7 +1323,7 @@ function DbsControlPage() {
             reply({ ok: false, error: "O vínculo deste técnico não foi encontrado como colaborador ativo no RH." });
             return;
           }
-          reply({ ok: true, location: result.locations?.[0] ?? null });
+          reply({ ok: true, location: result.locations?.[0] ?? null, warning: result.location_unavailable_reason ?? null });
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível consultar a última localização autorizada." });
         }
@@ -1389,7 +1389,7 @@ function DbsControlPage() {
             seenStops.add(stopKey);
           }
 
-          const technicianCheck = await listRhFleetTechnicianLocations({ data: { employee_id: technicianEmployeeId } });
+          const technicianCheck = await verifyRhDbsControlTechnician({ data: { employee_id: technicianEmployeeId } });
           if (!technicianCheck.employee_found) {
             reply({ ok: false, error: "O técnico selecionado não está vinculado a um colaborador ativo do RH. Nenhuma OS foi criada." });
             return;
