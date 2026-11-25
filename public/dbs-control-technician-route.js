@@ -170,9 +170,10 @@
   function originForRoute() {
     const location = state.location;
     if (!state.originEnabled || !location) return null;
+    if (!planner().hasCoordinates({ lat: location.latitude, lng: location.longitude })) return null;
     const lat = Number(location.latitude);
     const lng = Number(location.longitude);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat: lat, lng: lng } : null;
+    return { lat: lat, lng: lng };
   }
 
   function resetPlan() {
@@ -324,7 +325,7 @@
     }
     state.location = result.location || null;
     const location = state.location;
-    const hasCoordinates = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    const hasCoordinates = Boolean(location && planner().hasCoordinates({ lat: location.latitude, lng: location.longitude }));
     if (!location || !hasCoordinates) {
       const gpsMessage = String(result.warning || '').trim();
       if (box) box.innerHTML = '<strong>' + safe(gpsMessage ? 'GPS ainda indisponível neste banco' : 'Nenhuma posição compartilhada encontrada.') + '</strong><small>'
@@ -427,8 +428,7 @@
   }
 
   function hasValidCoordinates(item) {
-    return Boolean(item && item.lat !== null && item.lat !== undefined && item.lng !== null && item.lng !== undefined
-      && item.lat !== '' && item.lng !== '' && Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lng)));
+    return Boolean(planner() && planner().hasCoordinates(item));
   }
 
   // Endereço cadastrado é suficiente para abrir a rota no Google Maps.
@@ -754,8 +754,7 @@
       }
       state.mapLayer.clearLayers();
       const bounds = [];
-      const techPoint = state.location && Number.isFinite(Number(state.location.latitude))
-        && Number.isFinite(Number(state.location.longitude))
+      const techPoint = state.location && hasValidCoordinates({ lat: state.location.latitude, lng: state.location.longitude })
         ? [Number(state.location.latitude), Number(state.location.longitude)] : null;
       if (techPoint) {
         const recent = Boolean(state.location.is_live);
@@ -772,7 +771,7 @@
       }
 
       const selectedIds = new Set(state.selected.map(item => String(item.id)));
-      const mapped = state.candidates.filter(stop => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)));
+      const mapped = state.candidates.filter(hasValidCoordinates);
       mapped.forEach((stop, index) => {
         const point = [Number(stop.lat), Number(stop.lng)];
         const urgent = Number(stop.overdueOrders || 0) > 0 || Number(stop.emergencyOrders || 0) > 0;
@@ -797,7 +796,7 @@
       });
 
       const routePoints = state.selected
-        .filter(stop => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)))
+        .filter(hasValidCoordinates)
         .map(stop => [Number(stop.lat), Number(stop.lng)]);
       if (routePoints.length > 1) {
         L.polyline(routePoints, { color: '#1d4ed8', weight: 4, opacity: 0.9, dashArray: '8 6' }).addTo(state.mapLayer);
