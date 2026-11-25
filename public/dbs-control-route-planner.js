@@ -374,7 +374,7 @@
         emergencyOrders: emergencyCount,
         equipmentCount: siteEquipment.length,
         activeEquipmentCount,
-        mapCoordinatesSource: candidate.lat != null && candidate.lng != null ? 'saved' : null
+        mapCoordinatesSource: candidate.mapCoordinatesSource || (candidate.lat != null && candidate.lng != null ? 'saved' : null)
       };
     });
 
