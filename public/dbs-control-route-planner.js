@@ -150,22 +150,29 @@
 
   function buildRouteLegs(stops, routeOrigin) {
     const source = list(stops).filter(stop => stop && asText(stop.address));
-    const maxStopsPerLeg = 4; // 3 waypoints + destino: compatível com navegador móvel.
+    const maxStopsPerLeg = 4; // 3 waypoints + destino; sem GPS, a primeira parada vira a origem.
     const legs = [];
+    let start = 0;
 
-    for (let start = 0; start < source.length; start += maxStopsPerLeg) {
+    while (start < source.length) {
+      const previousStop = start > 0 ? source[start - 1] : null;
       const group = source.slice(start, start + maxStopsPerLeg);
-      const originStop = start > 0 ? source[start - 1] : null;
       const destination = group[group.length - 1];
-      const waypoints = group.slice(0, -1).map(stop => stop.address);
       const params = new URLSearchParams();
       params.set('api', '1');
-      let originValue = originStop ? originStop.address : '';
-      if (!originStop && routeOrigin) {
+      let originValue = previousStop ? previousStop.address : '';
+      if (!previousStop && routeOrigin) {
         if (typeof routeOrigin === 'string') originValue = routeOrigin.trim();
         else if (Number.isFinite(Number(routeOrigin.lat)) && Number.isFinite(Number(routeOrigin.lng))) {
           originValue = Number(routeOrigin.lat) + ',' + Number(routeOrigin.lng);
         } else originValue = asText(routeOrigin.address);
+      }
+      // Nunca deixar o Maps usar a localização do administrador por engano
+      // quando a rota está sendo planejada sem GPS recente do técnico.
+      const waypoints = group.slice(0, -1).map(stop => stop.address);
+      if (!previousStop && !originValue && group.length > 1) {
+        originValue = group[0].address;
+        waypoints.shift();
       }
       if (originValue) params.set('origin', originValue);
       params.set('destination', destination.address);
@@ -175,13 +182,14 @@
       const url = 'https://www.google.com/maps/dir/?' + params.toString();
       legs.push({
         index: legs.length + 1,
-        firstStop: start + 1,
+        firstStop: previousStop ? start + 1 : (routeOrigin ? start + 1 : Math.min(start + 2, source.length)),
         lastStop: start + group.length,
         origin: originValue,
         destination: destination.address,
         url: url.length <= 2048 ? url : null,
         tooLong: url.length > 2048
       });
+      start += group.length;
     }
 
     return legs;
@@ -267,6 +275,66 @@
     return { candidates, review };
   }
 
+  function enrichSiteCandidates(candidates, orders, equipment, nowValue = Date.now()) {
+    const sourceOrders = list(orders).filter(order => order && !order.deleted_at && !order.excluidaEm && !order.arquivadaEm);
+    const sourceEquipment = list(equipment).filter(item => item && !item.deleted_at);
+    const normalizeStatus = value => normalizeKey(value).replace(/[_-]+/g, ' ');
+    const isCancelled = order => /cancelad/.test(normalizeStatus(order.status ?? order.situacao));
+    const isTerminal = order => terminalStatus(order) || isCancelled(order);
+    const isInProgress = order => /em atendimento|em andamento|execucao|deslocamento|em campo|in loco/.test(normalizeStatus(order.status ?? order.situacao));
+    const isEmergency = order => /emergenc|urgente|critico/.test(normalizeStatus(order.type ?? order.tipo ?? order.prioridade ?? order.priority));
+    const isOverdue = order => {
+      if (isTerminal(order)) return false;
+      const raw = firstText(order.sla, order.sla_deadline, order.slaDeadline);
+      const due = raw ? Date.parse(raw) : NaN;
+      return Number.isFinite(due) && due < nowValue;
+    };
+    return list(candidates).map(candidate => {
+      const siteId = asText(candidate.siteId ?? candidate.site_id ?? candidate.id);
+      const clientId = asText(candidate.clientId ?? candidate.client_id);
+      const siteOrders = sourceOrders.filter(order => {
+        const orderSiteId = asText(order.siteId ?? order.localId ?? order.site_id);
+        const orderClientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
+        return (orderSiteId && orderSiteId === siteId) || (!orderSiteId && clientId && orderClientId === clientId);
+      });
+      const siteEquipment = sourceEquipment.filter(item => {
+        const equipmentSiteId = asText(item.siteId ?? item.localId ?? item.site_id);
+        const equipmentClientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
+        return (equipmentSiteId && equipmentSiteId === siteId) || (!equipmentSiteId && clientId && equipmentClientId === clientId);
+      });
+      const activeOrders = siteOrders.filter(order => !isTerminal(order));
+      const inProgressCount = activeOrders.filter(isInProgress).length;
+      const openCount = activeOrders.length - inProgressCount;
+      const overdueCount = activeOrders.filter(isOverdue).length;
+      const emergencyCount = activeOrders.filter(isEmergency).length;
+      const activeEquipmentCount = siteEquipment.filter(item => !/inativ|baixad|desativ|arquiv/.test(normalizeStatus(item.status))).length;
+      return {
+        ...candidate,
+        totalOrders: siteOrders.length,
+        openOrders: openCount,
+        inProgressOrders: inProgressCount,
+        overdueOrders: overdueCount,
+        emergencyOrders: emergencyCount,
+        equipmentCount: siteEquipment.length,
+        activeEquipmentCount,
+        mapCoordinatesSource: candidate.lat != null && candidate.lng != null ? 'saved' : null
+      };
+    });
+  }
+
+  function summarizeSiteMetrics(candidates) {
+    const sites = list(candidates);
+    return {
+      locations: sites.length,
+      mappedLocations: sites.filter(site => coordinate(site.lat, -90, 90) !== null && coordinate(site.lng, -180, 180) !== null).length,
+      openOrders: sites.reduce((sum, site) => sum + Number(site.openOrders || 0), 0),
+      inProgressOrders: sites.reduce((sum, site) => sum + Number(site.inProgressOrders || 0), 0),
+      overdueOrders: sites.reduce((sum, site) => sum + Number(site.overdueOrders || 0), 0),
+      emergencyOrders: sites.reduce((sum, site) => sum + Number(site.emergencyOrders || 0), 0),
+      equipment: sites.reduce((sum, site) => sum + Number(site.equipmentCount || 0), 0)
+    };
+  }
+
   const radians = degrees => degrees * Math.PI / 180;
   function distanceKm(a, b) {
     const dLat = radians(b.lat - a.lat);
@@ -334,6 +402,8 @@
     orderAddress,
     buildStops,
     buildSiteCandidates,
+    enrichSiteCandidates,
+    summarizeSiteMetrics,
     distanceKm,
     optimizeStops,
     buildRouteLegs
