@@ -624,6 +624,7 @@
       state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null;
       resetPlan();
       await refreshLocation();
+      await buildSuggestions();
       renderLists();
     });
     const toggle = byId('dbs-dispatch-use-origin');
