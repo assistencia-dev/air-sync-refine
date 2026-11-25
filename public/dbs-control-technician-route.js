@@ -307,7 +307,7 @@
     }
     const status = location.location_source === 'ponto'
       ? 'Última coordenada da batida de ponto · NÃO é rastreamento ao vivo'
-      : location.is_live ? 'GPS recente · posição atualizada' : 'Última posição conhecida · pode estar desatualizada';
+      : location.is_live ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida · pode estar desatualizada';
     const accuracy = location.accuracy_m == null ? '' : ' · precisão aproximada ±' + Math.round(Number(location.accuracy_m)) + ' m';
     if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
       + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
@@ -562,7 +562,7 @@
           .bindPopup('<strong>Última posição de ' + safe(getTechnicianLabel(state.technician)) + '</strong><br>' + safe(dateTime(state.location.last_position_at))
             + '<br>' + (state.location.location_source === 'ponto'
               ? 'Última batida de ponto · sem rastreamento ao vivo'
-              : state.location.is_live ? 'GPS recente' : 'Última posição conhecida')).addTo(state.mapLayer);
+              : state.location.is_live ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida · sinal acima de 3 minutos')).addTo(state.mapLayer);
         bounds.push(origin);
       }
       const plottedStops = state.selected.length ? state.selected : state.candidates.slice(0, 100);
@@ -583,7 +583,7 @@
       else state.map.setView([-22.9, -43.2], 10);
       setTimeout(() => state.map && state.map.invalidateSize(), 120);
       if (status) status.textContent = origin
-        ? (state.location.is_live ? 'Pino verde: GPS recente do técnico. ' : 'Pino verde: última posição conhecida (confira a data). ')
+        ? (state.location.is_live ? 'Pino verde: GPS atualizado nos últimos 3 minutos. ' : 'Pino verde: última posição conhecida, sem atualização nos últimos 3 minutos. ')
           + 'Pinos azuis: locais selecionados ou sugestões próximas.'
         : state.candidates.length
           ? 'Sem coordenada GPS do técnico. Pinos azuis mostram as sugestões por proximidade geográfica.'
