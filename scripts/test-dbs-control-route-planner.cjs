@@ -286,6 +286,16 @@ assert.match(dispatchScript, /Motivo . problema \(obrigatório\)/, 'A corretiva 
 assert.match(dispatchScript, /corretiv\|emergencial/, 'A justificativa da corretiva/emergência deve ser obrigatória.');
 assert.match(dispatchScript, /window\.parent\.postMessage\(\{[\s\S]*DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'A emissão em lote deve usar a ponte autenticada do shell.');
 
+const duplicateSiteRepresentations = planner.buildSiteCandidates(
+  [
+    { id: 'single-site', clienteId: 'single-client', nome: 'Única loja', endereco: 'Rua Única, 10, Niterói, RJ' },
+    { id: 'single-site', clienteId: 'single-client', nome: 'Única loja', endereco: 'Rua Única, 10, Niterói, RJ' }
+  ],
+  [{ id: 'single-client', nome: 'Cliente com uma loja' }]
+);
+assert.equal(duplicateSiteRepresentations.candidates.length, 1);
+assert.equal(duplicateSiteRepresentations.candidates[0].clientSiteCount, 1, 'As listas compatíveis sites/locais não podem duplicar a contagem de unidades.');
+
 const siteAudit = planner.buildSiteCandidates(
   [
     { id: 'site-1', clienteId: 'c1', nome: 'Loja Centro', endereco: 'Rua A, 10, Rio de Janeiro, RJ', lat: 0, lng: 1, status: 'ativo' },
