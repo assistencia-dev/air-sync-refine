@@ -241,6 +241,7 @@ assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da mig
 assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
 assert.match(parentRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'O bridge precisa responder ao carregamento dos técnicos ativos.');
 assert.match(technicianRoute, /Mapa-base carregado/, 'O mapa-base deve aparecer antes da geocodificação dos endereços.');
+assert.match(technicianRoute, /GPS atualizado nos últimos 3 minutos/, 'O mapa da rota deve identificar a posição recebida dentro da janela de 3 minutos.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
