@@ -470,9 +470,15 @@
         const candidate = state.geocodeQueue.shift();
         if (!candidate) continue;
         try {
+          const stillSelected = state.selected.some(item => String(item.id || '') === String(candidate.id || ''));
+          if (!stillSelected) {
+            state.geocodingIds.delete(String(candidate.id || ''));
+            continue;
+          }
           const point = await geocodeAddress(candidate.address);
           if (generation !== state.geocodeGeneration) return;
           updateCandidateCoordinates(candidate, point);
+          state.siteMetrics = planner().summarizeSiteMetrics(state.candidates);
           successfullyGeocoded.push({
             siteId: String(candidate.siteId || ''),
             address: candidate.address,
@@ -487,8 +493,8 @@
           state.geocodingIds.delete(String(candidate.id || ''));
         }
         completed += 1;
-        if (status) status.textContent = 'Localizando pinos das paradas selecionadas: '
-          + completed + '/' + total + '. A rota e os links do Google Maps já podem ser usados pelos endereços.';
+        if (status) status.textContent = 'Pinos localizados nesta sessão: ' + completed
+          + '. Ainda na fila: ' + state.geocodeQueue.length + '. A rota e os links do Google Maps já podem ser usados pelos endereços.';
         renderLists();
         if (state.geocodeQueue.length && generation === state.geocodeGeneration) {
           await new Promise(resolve => setTimeout(resolve, 1100));
@@ -786,6 +792,7 @@
         metricsElement.innerHTML = [
           ['Locais', metrics.locations],
           ['No mapa', metrics.mappedLocations],
+          ['Endereços sem pino', Math.max(0, metrics.locations - metrics.mappedLocations)],
           ['OS abertas', metrics.openOrders],
           ['Em atendimento', metrics.inProgressOrders],
           ['Vencidas', metrics.overdueOrders],
@@ -801,7 +808,7 @@
         + metrics.openOrders + ' OS abertas · ' + metrics.inProgressOrders + ' em atendimento · '
         + metrics.overdueOrders + ' vencidas · ' + metrics.equipment + ' equipamentos. '
         + metrics.ordersWithoutSpecificSite + ' OS e ' + metrics.equipmentWithoutSpecificSite + ' equipamentos sem vínculo de local específico. '
-        + (unmapped ? unmapped + ' endereço(s) aguardam revisão. ' : '')
+        + (unmapped ? unmapped + ' endereço(s) continuam roteáveis pelo cadastro, mesmo sem pino no mapa. ' : '')
         + (originForRoute() ? 'A rota considera o GPS recente do técnico.' : 'Sem GPS recente: a rota não usa a posição do administrador como origem.')
         + ' Pinos verdes: sem OS pendente; âmbar: OS em aberto/atendimento; vermelhos: OS vencida/emergencial.';
     } catch (error) {
@@ -825,7 +832,7 @@
       + '<label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar a última posição do técnico como ponto de partida da rota</label>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Atualizar mapa e sugestão de rota</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five"' + (!state.technician ? ' disabled' : '') + '>Adicionar 5 locais seguintes</button><button type="button" class="dbs-dispatch-btn secondary" data-action="geocode-selected"' + (!state.technician || !state.selected.length ? ' disabled' : '') + '>Localizar pinos das paradas</button></div>'
       + '</section>'
-      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa de clientes e operação</h3><p>Os marcadores representam os endereços ativos cadastrados. A posição é aproximada pelo endereço; não é GPS do cliente.</p><p>Na primeira leitura, os endereços são consultados no Photon/OpenStreetMap e os pontos encontrados ficam guardados no cadastro. As cores e os indicadores usam as OS e os equipamentos reais do DBS CONTROL. A sequência é estimada por proximidade geográfica e não considera trânsito; o Google Maps calcula o trajeto pelas vias. Sem GPS recente do técnico, a rota começa em um local sugerido, nunca na localização do administrador.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Lendo cadastros.</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
+      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa de clientes e operação</h3><p>Os marcadores representam os endereços ativos cadastrados. A posição é aproximada pelo endereço; não é GPS do cliente.</p><p>Todos os endereços cadastrados permanecem selecionáveis e roteáveis. Os pinos são localizados progressivamente apenas nas paradas escolhidas; uma falha de geocodificação não bloqueia a rota pelo endereço. As cores e os indicadores usam as OS e os equipamentos reais do DBS CONTROL. A sequência considera proximidade quando há coordenadas e preserva as paradas sem pino. O Google Maps calcula o trajeto pelas vias. Sem GPS recente do técnico, a rota começa na primeira parada, nunca na localização do administrador.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Lendo cadastros.</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
       + '<section class="dbs-dispatch-columns">'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Rota selecionada e editável</h3><p>Defina o tipo e o motivo de cada atendimento.</p></div><strong id="dbs-dispatch-count">0 paradas</strong></div><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregue a sugestão e adicione os locais que deseja atender.</div></div></div>'
       + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Locais cadastrados próximos</h3><p id="dbs-dispatch-available-count">Aguardando análise</p></div></div><input id="dbs-dispatch-search" type="search" placeholder="Filtrar por loja, cliente, bairro ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Os primeiros cinco locais formam uma sugestão editável após o carregamento do mapa.</div></div></div>'
