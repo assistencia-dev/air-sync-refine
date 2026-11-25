@@ -26,7 +26,11 @@
     geocodeGeneration: 0,
     locationGeneration: 0,
     technicians: [],
-    techniciansLoaded: false
+    staff: [],
+    techniciansLoaded: false,
+    employeeLocations: [],
+    employeeLocationsLoaded: false,
+    suggestionsSeeded: false
   };
 
   const SERVICE_TYPES = [
@@ -139,13 +143,18 @@
         throw new Error(result && result.error || 'Não foi possível consultar o cadastro ativo do RH.');
       }
       state.technicians = result.technicians;
+      state.staff = Array.isArray(result.employees) ? result.employees : result.technicians;
       state.techniciansLoaded = true;
+      renderTeamList();
     } catch (error) {
       state.technicians = [];
+      state.staff = [];
       state.techniciansLoaded = true;
+      renderTeamList();
       loadError = error && error.message || 'Consulta do RH indisponível.';
     }
     const technicians = getTechnicians();
+    renderTeamList();
     const keepId = String(preferredId || state.technician?.id || '');
     select.innerHTML = '<option value="">'
       + (technicians.length ? 'Selecione um técnico ativo' : 'Nenhum técnico ativo encontrado no RH')
@@ -182,6 +191,7 @@
     state.review = [];
     state.siteMetrics = null;
     state.manualOrder = false;
+    state.suggestionsSeeded = false;
     state.result = null;
     state.geocoding = false;
     state.geocodeQueue = [];
@@ -226,6 +236,15 @@
       '#dbs-dispatch-route-modal .dbs-dispatch-metric span{font-size:9px;font-weight:800;color:#65798f}',
       '#dbs-dispatch-route-modal .dbs-dispatch-route-label{border:0;border-radius:8px;background:#1d4ed8;color:white;font-size:10px;font-weight:900;box-shadow:0 2px 8px #0f172a33}',
       '#dbs-dispatch-route-modal .dbs-dispatch-map{height:300px;min-height:240px;overflow:hidden;border:1px solid #d8e2ec;border-radius:13px;background:#eaf0f5}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-map-layout{display:grid;grid-template-columns:minmax(0,1fr) 245px;gap:10px;align-items:stretch;margin-top:10px}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-panel{padding:11px;border:1px solid #d8e2ec;border-radius:12px;background:#fff;min-width:0}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team{display:grid;gap:7px;max-height:360px;overflow:auto;margin-top:9px}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-row{display:flex;gap:8px;align-items:center;padding:7px;border:1px solid #e7edf3;border-radius:9px}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-row strong{display:block;font-size:10px;color:#24435f}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-row small{display:block;font-size:9px;color:#718399}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:#cbd5e1}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-dot.live{background:#7c3aed}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-team-dot.stale{background:#c4b5fd}',
       '#dbs-dispatch-route-modal .dbs-dispatch-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}',
       '#dbs-dispatch-route-modal .dbs-dispatch-list{display:grid;gap:8px;max-height:390px;overflow:auto;margin-top:10px}',
       '#dbs-dispatch-route-modal .dbs-dispatch-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px;border:1px solid #e0e8f0;border-radius:11px;background:#fff}',
@@ -245,7 +264,7 @@
       '#dbs-dispatch-route-modal .dbs-dispatch-maplink{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 11px;border:1px solid #dce5ee;border-radius:10px;background:#fff}',
       '#dbs-dispatch-route-modal .dbs-dispatch-maplink span{font-size:10px;color:#50677e}',
       '#dbs-dispatch-route-modal .dbs-dispatch-empty{padding:18px;border:1px dashed #cbd7e2;border-radius:10px;background:#fff;text-align:center;font-size:11px;color:#73869a}',
-      '@media(max-width:760px){#dbs-dispatch-route-modal{padding:5px;align-items:flex-end}#dbs-dispatch-route-modal .dbs-dispatch-dialog{max-height:96vh;border-radius:16px}#dbs-dispatch-route-modal .dbs-dispatch-toolbar{grid-template-columns:1fr 1fr}#dbs-dispatch-route-modal .dbs-dispatch-toolbar .dbs-dispatch-btn{grid-column:1 / -1;width:100%}#dbs-dispatch-route-modal .dbs-dispatch-columns{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-map{height:260px}#dbs-dispatch-route-modal .dbs-dispatch-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#dbs-dispatch-route-modal .dbs-dispatch-metric:first-child{grid-column:span 2}#dbs-dispatch-route-modal .dbs-dispatch-stop-fields{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-footer{align-items:stretch}#dbs-dispatch-route-modal .dbs-dispatch-footer .dbs-dispatch-btn{width:100%}}'
+      '@media(max-width:760px){#dbs-dispatch-route-modal{padding:5px;align-items:flex-end}#dbs-dispatch-route-modal .dbs-dispatch-dialog{max-height:96vh;border-radius:16px}#dbs-dispatch-route-modal .dbs-dispatch-toolbar{grid-template-columns:1fr 1fr}#dbs-dispatch-route-modal .dbs-dispatch-toolbar .dbs-dispatch-btn{grid-column:1 / -1;width:100%}#dbs-dispatch-route-modal .dbs-dispatch-columns{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-map{height:260px}#dbs-dispatch-route-modal .dbs-dispatch-map-layout{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-team{max-height:160px}#dbs-dispatch-route-modal .dbs-dispatch-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}#dbs-dispatch-route-modal .dbs-dispatch-stop-fields{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-footer{align-items:stretch}#dbs-dispatch-route-modal .dbs-dispatch-footer .dbs-dispatch-btn{width:100%}}'
     ].join('');
     document.head.appendChild(style);
   }
@@ -291,69 +310,53 @@
     });
   }
 
+  function requestTechnicianLocations() {
+    return new Promise(resolve => {
+      const requestId = 'dispatch-team-locations-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      let done = false;
+      const finish = value => { if (done) return; done = true; window.removeEventListener('message', onMessage); clearTimeout(timer); resolve(value); };
+      const onMessage = event => { if (event.source === window.parent && event.data?.type === 'DBS_CONTROL_TECHNICIAN_LOCATIONS_RESULT' && String(event.data.requestId || '') === requestId) finish(event.data); };
+      const timer = setTimeout(() => finish({ ok: false, error: 'Consulta da equipe indisponível.' }), 12000);
+      window.addEventListener('message', onMessage);
+      window.parent.postMessage({ type: 'DBS_CONTROL_LIST_TECHNICIAN_LOCATIONS', requestId }, window.location.origin);
+    });
+  }
+
+  async function loadTechnicianLocations() {
+    state.employeeLocationsLoaded = false; renderTeamList();
+    try { const result = await requestTechnicianLocations(); state.employeeLocations = result && result.ok && Array.isArray(result.locations) ? result.locations : []; }
+    catch (_) { state.employeeLocations = []; }
+    state.employeeLocationsLoaded = true; renderTeamList(); renderMapAndLinks();
+  }
+
   async function refreshLocation() {
     const generation = ++state.locationGeneration;
     const employeeId = getEmployeeId(state.technician);
-    state.location = null;
-    state.originEnabled = false;
+    state.location = null; state.originEnabled = false;
     const box = byId('dbs-dispatch-location-summary');
-    if (box) box.innerHTML = '<strong>Consultando última posição compartilhada…</strong><small>O planejamento dos endereços continua carregado enquanto o GPS é consultado.</small>';
+    if (box) box.innerHTML = '<strong>Consultando localização…</strong>';
     const toggle = byId('dbs-dispatch-use-origin');
-    if (toggle) {
-      toggle.checked = false;
-      toggle.disabled = true;
-    }
-    if (!employeeId) {
-      if (generation !== state.locationGeneration) return;
-      if (box) box.innerHTML = '<strong>Este técnico ainda não está vinculado a um colaborador do RH.</strong><small>A rota continua disponível pelos endereços cadastrados; o GPS não será usado como origem.</small>';
-      renderMapAndLinks();
-      return;
-    }
+    if (toggle) { toggle.checked = false; toggle.disabled = true; }
+    if (!employeeId) { if (generation !== state.locationGeneration) return; if (box) box.innerHTML = '<strong>Selecione um técnico do RH.</strong>'; renderTeamList(); renderMapAndLinks(); return; }
     let result;
-    try {
-      result = await requestTechnicianLocation(employeeId);
-    } catch (error) {
-      if (generation !== state.locationGeneration) return;
-      if (box) box.innerHTML = '<strong>Consulta de GPS indisponível.</strong><small>' + safe(error && error.message || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
-      renderMapAndLinks();
-      return;
-    }
+    try { result = await requestTechnicianLocation(employeeId); }
+    catch (error) { if (generation !== state.locationGeneration) return; if (box) box.innerHTML = '<strong>Localização indisponível.</strong><small>' + safe(error && error.message || '') + '</small>'; renderMapAndLinks(); return; }
     if (generation !== state.locationGeneration) return;
-    if (!result || !result.ok) {
-      if (box) box.innerHTML = '<strong>Não foi possível obter a posição.</strong><small>' + safe(result && result.error || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
-      renderMapAndLinks();
-      return;
-    }
+    if (!result || !result.ok) { if (box) box.innerHTML = '<strong>Não foi possível consultar o técnico.</strong>'; renderMapAndLinks(); return; }
     state.location = result.location || null;
     const location = state.location;
     const hasCoordinates = Boolean(location && planner().hasCoordinates({ lat: location.latitude, lng: location.longitude }));
-    if (!location || !hasCoordinates) {
-      const gpsMessage = String(result.warning || '').trim();
-      if (box) box.innerHTML = '<strong>' + safe(gpsMessage ? 'GPS ainda indisponível neste banco' : 'Nenhuma posição compartilhada encontrada.') + '</strong><small>'
-        + safe(gpsMessage || 'O mapa dos clientes continua disponível pelos endereços cadastrados, mesmo sem GPS do técnico.')
-        + ' A rota poderá ser organizada pelos endereços, sem afirmar onde o técnico está.</small>';
-      renderMapAndLinks();
-      return;
-    }
+    if (!hasCoordinates) { if (box) box.innerHTML = '<strong>Sem posição registrada para este técnico.</strong>'; if (toggle) toggle.disabled = true; renderTeamList(); renderMapAndLinks(); return; }
     state.originEnabled = Boolean(location.is_live);
-    if (toggle) {
-      toggle.disabled = !location.is_live;
-      toggle.checked = state.originEnabled;
-    }
-    const status = location.location_source === 'ponto'
-      ? 'Última coordenada da batida de ponto · NÃO é rastreamento ao vivo'
-      : location.is_live ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida · pode estar desatualizada';
-    const accuracy = location.accuracy_m == null ? '' : ' · precisão aproximada ±' + Math.round(Number(location.accuracy_m)) + ' m';
-    if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
-      + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
-      + ' (' + safe(ageLabel(location.position_age_ms)) + ')' + safe(accuracy) + '</small>';
-    if (location.is_live && !state.manualOrder) {
-      state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
-      state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
-      renderLists();
-    } else {
-      renderMapAndLinks();
-    }
+    if (toggle) { toggle.disabled = false; toggle.checked = state.originEnabled; }
+    const age = ageLabel(location.position_age_ms);
+    const sourceLabel = location.location_source === 'ponto' ? 'última posição do ponto' : 'posição registrada pelo FLEET';
+    if (box) box.innerHTML = '<strong>' + safe(location.is_live ? 'GPS recente' : 'posição anterior') + ' de ' + safe(location.full_name || getTechnicianLabel(state.technician)) + '</strong><small>' + safe(dateTime(location.last_position_at)) + ' · ' + safe(age) + ' · ' + safe(sourceLabel) + '</small>';
+    state.employeeLocations = state.employeeLocations.filter(item => String(item.employee_id || '') !== employeeId);
+    state.employeeLocations.push(Object.assign({}, location, { employee_id: employeeId }));
+    state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
+    if (state.originEnabled && !state.manualOrder) seedNearestStops();
+    renderTeamList(); renderLists();
   }
 
   function getLocationSources() {
@@ -436,9 +439,7 @@
   // Coordenadas servem para desenhar/otimizar pinos, nunca para excluir a parada.
   function optimizeRoutePreservingUnlocated(items, origin) {
     const source = Array.isArray(items) ? items.slice() : [];
-    const located = source.filter(hasValidCoordinates);
-    const unlocated = source.filter(item => !hasValidCoordinates(item));
-    const ordered = planner().optimizeStops(located, origin).stops.concat(unlocated);
+    const ordered = planner().rankSitesByDistance(source, origin);
     if (items && items.unallocated) ordered.unallocated = Object.assign({}, items.unallocated);
     if (items && items.activeSiteCountByClient) ordered.activeSiteCountByClient = Object.assign({}, items.activeSiteCountByClient);
     return ordered;
@@ -562,66 +563,32 @@
   }
 
   async function buildSuggestions() {
-    const button = byId('dbs-dispatch-build');
-    const status = byId('dbs-dispatch-status');
-    resetPlan();
-    if (button) { button.disabled = true; button.textContent = 'Carregando locais…'; }
-    if (status) status.textContent = 'Carregando endereços e indicadores reais. A rota não ficará bloqueada pela geocodificação dos pinos.';
+    const button = byId('dbs-dispatch-build'); const status = byId('dbs-dispatch-status');
+    resetPlan(); if (button) { button.disabled = true; button.textContent = 'Atualizando…'; }
+    if (status) status.textContent = 'Carregando lojas e clientes…';
     try {
-      const audit = getLocationSources();
-      state.review = audit.review.slice();
-      const candidates = audit.candidates.slice(0, 250);
-      candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
-      if (audit.candidates.length > candidates.length) {
-        state.review.push({ reason: 'A lista excede 250 locais. Divida a análise por região para manter o mapa responsivo.' });
-      }
-      if (!candidates.length) {
-        if (status) status.textContent = 'Não encontrei locais ativos com endereço e vínculo de cliente. Confira o cadastro de locais e clientes.';
-        renderLists();
-        return;
-      }
-
+      const audit = getLocationSources(); state.review = audit.review.slice();
+      const candidates = audit.candidates.slice(0, 250); candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
+      if (audit.candidates.length > candidates.length) state.review.push({ reason: 'Mais de 250 locais; filtre por região.' });
+      if (!candidates.length) { if (status) status.textContent = 'Nenhuma loja ativa com endereço cadastrado.'; renderLists(); return; }
       const erp = getErpState();
-      const measured = planner().enrichSiteCandidates(
-        candidates,
-        Array.isArray(erp.ordens) ? erp.ordens : [],
-        Array.isArray(erp.equipamentos) ? erp.equipamentos : []
-      );
+      const measured = planner().enrichSiteCandidates(candidates, Array.isArray(erp.ordens) ? erp.ordens : [], Array.isArray(erp.equipamentos) ? erp.equipamentos : []);
       state.siteMetrics = planner().summarizeSiteMetrics(measured);
-      state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute());
-
-      state.selected = state.technician
-        ? state.candidates.slice(0, Math.min(5, state.candidates.length))
-            .map(item => Object.assign({}, item, { serviceType: '', cause: '' }))
-        : [];
-      state.manualOrder = false;
-      renderLists();
-
-      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
-      const pendingPins = Math.max(0, metrics.locations - metrics.mappedLocations);
-      if (status) {
-        status.textContent = state.technician
-          ? state.candidates.length + ' locais carregados para ' + getTechnicianLabel(state.technician) + '. '
-            + state.selected.length + ' paradas sugeridas. ' + metrics.mappedLocations + ' com pino salvo e '
-            + pendingPins + ' pino(s) serão localizados em segundo plano; as paradas já são roteáveis pelos endereços. '
-            + metrics.openOrders + ' OS abertas, ' + metrics.inProgressOrders + ' em atendimento e '
-            + metrics.overdueOrders + ' vencidas.'
-          : state.candidates.length + ' locais ativos carregados com endereço. Selecione um técnico para montar a rota. '
-            + metrics.mappedLocations + ' pinos já salvos; os demais serão localizados em segundo plano e continuam disponíveis pelo endereço.';
-      }
-      // Preenche todos os pinos gradualmente sem bloquear o despacho por endereço.
-      // Os endereços continuam selecionáveis/navegáveis durante toda a fila.
-      if (state.candidates.length) queueMapGeocoding(state.candidates);
-    } catch (error) {
-      if (status) status.textContent = error && error.message || 'Não foi possível carregar os locais do despacho.';
-    } finally {
-      if (button) { button.disabled = false; button.textContent = 'Atualizar mapa e sugestão de rota'; }
-    }
+      state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute()); state.selected = [];
+      seedNearestStops(); state.manualOrder = false; renderLists();
+      const mapped = state.candidates.filter(hasValidCoordinates).length;
+      if (status) status.textContent = state.technician ? (originForRoute() ? state.selected.length + ' lojas mais próximas sugeridas para ' + getTechnicianLabel(state.technician) + '.' : 'Técnico selecionado. Escolha uma posição ou lojas manualmente.') : 'Selecione um técnico para ordenar as lojas por proximidade.';
+      if (mapped < state.candidates.length) queueMapGeocoding(state.candidates);
+    } catch (error) { if (status) status.textContent = error && error.message || 'Falha ao carregar os locais.'; }
+    finally { if (button) { button.disabled = false; button.textContent = 'Atualizar lista'; } }
   }
 
-  function reorderSelected() {
-    if (state.manualOrder) return;
-    state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
+  function reorderSelected() { if (state.manualOrder) return; state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute()); }
+
+  function seedNearestStops() {
+    if (state.suggestionsSeeded || state.selected.length || !state.technician || !originForRoute() || state.manualOrder) return;
+    const nearest = state.candidates.filter(hasValidCoordinates).slice(0, 5);
+    if (nearest.length) { state.selected = nearest.map(item => Object.assign({}, item, { serviceType: '', cause: '' })); state.suggestionsSeeded = true; }
   }
 
   function addStop(id) {
@@ -673,46 +640,24 @@
   }
 
   function renderLists() {
-    const selected = byId('dbs-dispatch-selected');
-    const available = byId('dbs-dispatch-available');
-    const count = byId('dbs-dispatch-count');
-    const availableCount = byId('dbs-dispatch-available-count');
+    const selected = byId('dbs-dispatch-selected'), available = byId('dbs-dispatch-available'), count = byId('dbs-dispatch-count'), availableCount = byId('dbs-dispatch-available-count');
     if (!selected || !available) return;
-    if (count) count.textContent = state.selected.length + ' paradas';
+    if (count) count.textContent = state.selected.length + ' selecionadas';
     const chosen = new Set(state.selected.map(item => String(item.id)));
     const search = String(byId('dbs-dispatch-search') && byId('dbs-dispatch-search').value || '').trim().toLocaleLowerCase('pt-BR');
-    const rows = state.candidates.filter(item => !chosen.has(String(item.id))
-      && (!search || [item.name, item.clientName, item.address].join(' ').toLocaleLowerCase('pt-BR').includes(search)));
-    if (availableCount) availableCount.textContent = rows.length + ' locais disponíveis';
+    const rows = state.candidates.filter(item => !chosen.has(String(item.id)) && (!search || [item.name, item.clientName, item.address].join(' ').toLocaleLowerCase('pt-BR').includes(search)));
+    if (availableCount) availableCount.textContent = rows.length + ' disponíveis';
     available.innerHTML = rows.length ? rows.map((item, index) => {
-      const distance = item.distanceFromTechnicianKm != null ? ' · ' + item.distanceFromTechnicianKm.toLocaleString('pt-BR') + ' km do técnico'
-        : item.distanceFromPreviousKm != null ? ' · ' + item.distanceFromPreviousKm.toLocaleString('pt-BR') + ' km da parada anterior' : '';
-      const indicators = 'OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0)
-        + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos';
-      return '<article class="dbs-dispatch-item"><span class="dbs-dispatch-number">' + (index + 1) + '</span>'
-        + '<div><strong>' + safe(item.name) + '</strong><small>' + safe(item.clientName + ' · ' + item.address + distance) + '</small>'
-        + '<small style="color:#365f86;font-weight:800">' + safe(indicators) + '</small>'
-        + '<small style="color:' + (hasValidCoordinates(item) ? '#047857' : '#9a6700') + '">' + (hasValidCoordinates(item) ? 'Pino salvo no mapa' : 'Sem pino ainda · continua roteável pelo endereço') + '</small></div>'
-        + '<button type="button" class="dbs-dispatch-iconbtn" data-action="add" data-id="' + safe(item.id) + '" aria-label="Adicionar ' + safe(item.name) + '"' + (!state.technician ? ' disabled title="Selecione um técnico primeiro"' : '') + '>+</button></article>';
-    }).join('') : '<div class="dbs-dispatch-empty">Nenhum outro local corresponde ao filtro.</div>';
-
+      const distance = item.distanceFromTechnicianKm != null ? ' · ' + item.distanceFromTechnicianKm.toLocaleString('pt-BR') + ' km do técnico' : '';
+      return '<article class="dbs-dispatch-item"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div><strong>' + safe(item.name) + '</strong><small>' + safe((item.clientName || 'Cliente') + ' · ' + item.address + distance) + '</small></div><button type="button" class="dbs-dispatch-iconbtn" data-action="add" data-id="' + safe(item.id) + '" aria-label="Adicionar ' + safe(item.name) + '"' + (!state.technician ? ' disabled' : '') + '>+</button></article>';
+    }).join('') : '<div class="dbs-dispatch-empty">Nenhum local corresponde à busca.</div>';
     selected.innerHTML = state.selected.length ? state.selected.map((item, index) => {
-      const typeOptions = '<option value="">Selecione o tipo de atendimento</option>' + SERVICE_TYPES.map(type => '<option value="' + safe(type) + '"' + (item.serviceType === type ? ' selected' : '') + '>' + safe(type) + '</option>').join('');
-      const causeField = isPmoc(item.serviceType)
-        ? '<label>Observação PMOC (opcional)<input data-field="cause" data-index="' + index + '" maxlength="500" value="' + safe(item.cause || '') + '" placeholder="Observação complementar, se necessário"></label>'
-        : '<label>' + (requiresCause(item.serviceType) ? 'Motivo / problema (obrigatório)' : 'Motivo / observação (opcional)')
-          + '<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="' + (requiresCause(item.serviceType) ? 'Descreva o defeito, sintoma ou solicitação que motivou esta corretiva (mínimo 5 caracteres)' : 'Descreva o motivo deste atendimento, se necessário') + '">' + safe(item.cause || '') + '</textarea></label>';
-      return '<article class="dbs-dispatch-card" style="padding:10px">'
-        + '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between">'
-        + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small><small style="display:block;margin-top:3px;color:#365f86;font-size:9px;font-weight:800">OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0) + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos</small><small style="display:block;margin-top:3px;color:' + (hasValidCoordinates(item) ? '#047857' : '#9a6700') + ';font-size:9px">' + (hasValidCoordinates(item) ? 'Pino salvo' : 'Endereço pronto para navegação; pino em processamento') + '</small></div></div>'
-        + '<div class="dbs-dispatch-actions"><button class="dbs-dispatch-iconbtn" type="button" data-action="up" data-index="' + index + '" aria-label="Subir parada">↑</button><button class="dbs-dispatch-iconbtn" type="button" data-action="down" data-index="' + index + '" aria-label="Descer parada">↓</button><button class="dbs-dispatch-iconbtn" type="button" data-action="remove" data-index="' + index + '" aria-label="Remover parada">×</button></div></div>'
-        + '<div class="dbs-dispatch-stop-fields"><label>Tipo de atendimento<select data-field="serviceType" data-index="' + index + '">' + typeOptions + '</select></label>'
-        + causeField + '</div></article>';
-    }).join('') : '<div class="dbs-dispatch-empty">O DBS sugere os cinco primeiros locais por proximidade. Defina o tipo e o motivo de cada atendimento e reorganize tudo antes de abrir as OS.</div>';
-
-    showReview();
-    validateCreateButton();
-    renderMapAndLinks();
+      const options = '<option value="">Tipo de OS</option>' + SERVICE_TYPES.map(type => '<option value="' + safe(type) + '"' + (item.serviceType === type ? ' selected' : '') + '>' + safe(type) + '</option>').join('');
+      const cause = isPmoc(item.serviceType) ? '<label>Descrição / observação (opcional)<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="Detalhe do serviço">' + safe(item.cause || '') + '</textarea></label>' : '<label>' + (requiresCause(item.serviceType) ? 'Descreva o problema' : 'Descrição / observação (opcional)') + '<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="' + (requiresCause(item.serviceType) ? 'Defeito ou solicitação (mínimo 5 caracteres)' : 'Detalhe do atendimento') + '">' + safe(item.cause || '') + '</textarea></label>';
+      return '<article class="dbs-dispatch-card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center;justify-content:space-between"><div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small></div></div><div class="dbs-dispatch-actions"><button class="dbs-dispatch-iconbtn" type="button" data-action="up" data-index="' + index + '" aria-label="Subir parada">↑</button><button class="dbs-dispatch-iconbtn" type="button" data-action="down" data-index="' + index + '" aria-label="Descer parada">↓</button><button class="dbs-dispatch-iconbtn" type="button" data-action="remove" data-index="' + index + '" aria-label="Remover parada">×</button></div></div><div class="dbs-dispatch-stop-fields"><label>Tipo de atendimento<select data-field="serviceType" data-index="' + index + '">' + options + '</select></label>' + cause + '</div></article>';
+    }).join('') : '<div class="dbs-dispatch-empty">Escolha lojas na lista ou use a sugestão por proximidade.</div>';
+    const nearestButton = byId('dbs-dispatch-nearest-five'); if (nearestButton) nearestButton.disabled = !state.technician || !originForRoute();
+    showReview(); validateCreateButton(); renderMapAndLinks();
   }
 
   function loadLeaflet() {
@@ -742,215 +687,101 @@
     });
   }
 
+  function renderTeamList() {
+    const container = byId('dbs-dispatch-team'); if (!container) return;
+    if (!state.techniciansLoaded) { container.innerHTML = '<div class="dbs-dispatch-empty">Carregando equipe…</div>'; return; }
+    const staff = (state.staff || state.technicians).filter(item => item && item.id && item.is_active !== false);
+    if (!staff.length) { container.innerHTML = '<div class="dbs-dispatch-empty">Nenhum colaborador ativo.</div>'; return; }
+    const locations = new Map(state.employeeLocations.map(item => [String(item.employee_id || ''), item]));
+    container.innerHTML = staff.map(employee => {
+      const id = String(employee.id), location = locations.get(id);
+      const hasPoint = Boolean(location && hasValidCoordinates({ lat: location.latitude, lng: location.longitude }));
+      const status = !hasPoint ? 'Sem localização' : location.is_live ? 'GPS recente' : 'Última posição · ' + ageLabel(location.position_age_ms);
+      return '<div class="dbs-dispatch-team-row"><span class="dbs-dispatch-team-dot ' + (hasPoint ? (location.is_live ? 'live' : 'stale') : 'none') + '"></span><div><strong>' + safe(employee.nome || employee.name || 'Colaborador') + '</strong><small>' + safe(status) + '</small></div></div>';
+    }).join('');
+  }
+
   async function renderMapAndLinks() {
-    const mapElement = byId('dbs-dispatch-map');
-    const links = byId('dbs-dispatch-maplinks');
-    const status = byId('dbs-dispatch-map-status');
-    const metricsElement = byId('dbs-dispatch-metrics');
+    const mapElement = byId('dbs-dispatch-map'), links = byId('dbs-dispatch-maplinks'), status = byId('dbs-dispatch-map-status'), metricsElement = byId('dbs-dispatch-metrics');
     const legs = planner() && planner().buildRouteLegs(state.selected, originForRoute());
-    if (links) {
-      links.innerHTML = legs && legs.length ? legs.map(leg => {
-        const title = 'Etapa ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop;
-        return leg.url
-          ? '<div class="dbs-dispatch-maplink"><span>' + safe(title) + '</span><button type="button" class="dbs-dispatch-btn" data-dbs-maps-url="' + safe(leg.url) + '">Abrir no Google Maps →</button></div>'
-          : '<div class="dbs-dispatch-status">Etapa longa para um único link; abra as paradas individualmente.</div>';
-      }).join('') : '<div class="dbs-dispatch-empty">A sugestão inicial será exibida após posicionar os endereços cadastrados.</div>';
-    }
-    if (!mapElement) return;
-    if (!state.candidates.length && !state.location && status) {
-      status.textContent = 'Mapa-base carregado. Os endereços cadastrados serão posicionados automaticamente pelo endereço registrado.';
-    }
+    if (links) links.innerHTML = legs && legs.length ? legs.map(leg => '<div class="dbs-dispatch-maplink"><span>Trecho ' + leg.index + ' · paradas ' + leg.firstStop + '–' + leg.lastStop + '</span><button type="button" class="dbs-dispatch-btn" data-dbs-maps-url="' + safe(leg.url) + '">Abrir no Maps</button></div>').join('') : '';
+    renderTeamList(); if (!mapElement) return;
     try {
       const L = await loadLeaflet();
-      if (!state.map) {
-        state.mapLibrary = L;
-        state.map = L.map(mapElement, { scrollWheelZoom: false, preferCanvas: true });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(state.map);
-        state.mapLayer = L.layerGroup().addTo(state.map);
-      }
-      state.mapLayer.clearLayers();
-      const bounds = [];
-      const techPoint = state.location && hasValidCoordinates({ lat: state.location.latitude, lng: state.location.longitude })
-        ? [Number(state.location.latitude), Number(state.location.longitude)] : null;
-      if (techPoint) {
-        const recent = Boolean(state.location.is_live);
-        L.circleMarker(techPoint, {
-          radius: 11,
-          color: recent ? '#064e3b' : '#92400e',
-          weight: 3,
-          fillColor: recent ? '#34d399' : '#fbbf24',
-          fillOpacity: 1
-        }).bindPopup('<strong>Última posição de ' + safe(getTechnicianLabel(state.technician)) + '</strong><br>'
-          + safe(dateTime(state.location.last_position_at)) + '<br>'
-          + (recent ? 'GPS atualizado nos últimos 3 minutos' : 'Última posição conhecida; não usada como origem da rota')).addTo(state.mapLayer);
-        bounds.push(techPoint);
-      }
-
-      const selectedIds = new Set(state.selected.map(item => String(item.id)));
-      const mapped = state.candidates.filter(hasValidCoordinates);
-      mapped.forEach((stop, index) => {
-        const point = [Number(stop.lat), Number(stop.lng)];
-        const urgent = Number(stop.overdueOrders || 0) > 0 || Number(stop.emergencyOrders || 0) > 0;
-        const pending = Number(stop.openOrders || 0) > 0 || Number(stop.inProgressOrders || 0) > 0;
-        const color = urgent ? '#b91c1c' : pending ? '#b45309' : '#047857';
-        const fill = urgent ? '#f87171' : pending ? '#fbbf24' : '#34d399';
-        const popup = '<strong>' + safe(stop.name) + '</strong><br>' + safe(stop.clientName || 'Cliente')
-          + '<br>' + safe(stop.address)
-          + '<hr style="margin:6px 0;border:0;border-top:1px solid #e2e8f0">'
-          + 'OS abertas: <strong>' + Number(stop.openOrders || 0) + '</strong>'
-          + ' · em atendimento: <strong>' + Number(stop.inProgressOrders || 0) + '</strong>'
-          + '<br>OS vencidas: <strong>' + Number(stop.overdueOrders || 0) + '</strong>'
-          + ' · emergenciais: <strong>' + Number(stop.emergencyOrders || 0) + '</strong>'
-          + '<br>Equipamentos cadastrados: <strong>' + Number(stop.equipmentCount || 0) + '</strong>'
-          + '<br><small>Posição aproximada, calculada pelo endereço cadastrado.</small>';
-        L.circleMarker(point, {
-          radius: selectedIds.has(String(stop.id)) ? 8 : 6,
-          color, weight: selectedIds.has(String(stop.id)) ? 4 : 2,
-          fillColor: fill, fillOpacity: 0.92
-        }).bindPopup(popup).addTo(state.mapLayer);
+      if (!state.map) { state.mapLibrary = L; state.map = L.map(mapElement, { scrollWheelZoom: false, preferCanvas: true }); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(state.map); state.mapLayer = L.layerGroup().addTo(state.map); }
+      state.mapLayer.clearLayers(); const bounds = [], selectedEmployeeId = getEmployeeId(state.technician), employeePositions = new Map();
+      state.employeeLocations.forEach(location => { const id = String(location && location.employee_id || ''); if (id && hasValidCoordinates({ lat: location.latitude, lng: location.longitude })) employeePositions.set(id, location); });
+      if (selectedEmployeeId && state.location && hasValidCoordinates({ lat: state.location.latitude, lng: state.location.longitude })) employeePositions.set(selectedEmployeeId, Object.assign({}, state.location, { employee_id: selectedEmployeeId }));
+      employeePositions.forEach((location, employeeId) => {
+        const point = [Number(location.latitude), Number(location.longitude)], selected = employeeId === selectedEmployeeId, live = Boolean(location.is_live);
+        const employee = state.staff.find(item => String(item.id || '') === employeeId) || state.technicians.find(item => String(item.id || '') === employeeId);
+        const name = location.full_name || employee && (employee.nome || employee.name) || 'Colaborador';
+        L.circleMarker(point, { radius: selected ? 11 : 8, color: selected ? '#1d4ed8' : '#6d28d9', weight: selected ? 4 : 2, fillColor: live ? (selected ? '#60a5fa' : '#c4b5fd') : '#ddd6fe', fillOpacity: 0.95 }).bindPopup('<strong>' + safe(name) + (selected ? ' · técnico selecionado' : '') + '</strong><br>' + safe(live ? 'GPS recente' : 'Última posição registrada') + '<br>' + safe(dateTime(location.last_position_at)) + '<br><small>' + safe(ageLabel(location.position_age_ms)) + '</small>').addTo(state.mapLayer);
         bounds.push(point);
       });
-
-      const routePoints = state.selected
-        .filter(hasValidCoordinates)
-        .map(stop => [Number(stop.lat), Number(stop.lng)]);
+      const selectedIds = new Set(state.selected.map(item => String(item.id))), mapped = state.candidates.filter(hasValidCoordinates);
+      mapped.forEach(stop => {
+        const point = [Number(stop.lat), Number(stop.lng)], urgent = Number(stop.overdueOrders || 0) > 0 || Number(stop.emergencyOrders || 0) > 0, pending = Number(stop.openOrders || 0) > 0 || Number(stop.inProgressOrders || 0) > 0;
+        const color = urgent ? '#b91c1c' : pending ? '#b45309' : '#047857', fill = urgent ? '#f87171' : pending ? '#fbbf24' : '#34d399';
+        L.circleMarker(point, { radius: selectedIds.has(String(stop.id)) ? 8 : 6, color, weight: selectedIds.has(String(stop.id)) ? 4 : 2, fillColor: fill, fillOpacity: 0.92 }).bindPopup('<strong>' + safe(stop.name) + '</strong><br>' + safe(stop.clientName || 'Cliente') + '<br>' + safe(stop.address)).addTo(state.mapLayer); bounds.push(point);
+      });
+      const routeOrigin = originForRoute(), routePoints = [];
+      if (routeOrigin) routePoints.push([Number(routeOrigin.lat), Number(routeOrigin.lng)]);
+      state.selected.filter(hasValidCoordinates).forEach(stop => routePoints.push([Number(stop.lat), Number(stop.lng)]));
       if (routePoints.length > 1) {
         L.polyline(routePoints, { color: '#1d4ed8', weight: 4, opacity: 0.9, dashArray: '8 6' }).addTo(state.mapLayer);
-        routePoints.forEach((point, index) => {
-          L.circleMarker(point, { radius: 10, color: '#1e40af', weight: 2, fillColor: '#2563eb', fillOpacity: 0.25 })
-            .bindTooltip('Parada ' + (index + 1), { permanent: true, direction: 'top', className: 'dbs-dispatch-route-label' })
-            .addTo(state.mapLayer);
-        });
+        state.selected.filter(hasValidCoordinates).forEach((stop, index) => L.circleMarker([Number(stop.lat), Number(stop.lng)], { radius: 10, color: '#1e40af', weight: 2, fillColor: '#2563eb', fillOpacity: 0.25 }).bindTooltip('Parada ' + (index + 1), { permanent: true, direction: 'top', className: 'dbs-dispatch-route-label' }).addTo(state.mapLayer));
       }
-
-      if (bounds.length > 1) state.map.fitBounds(L.latLngBounds(bounds).pad(0.16));
-      else if (bounds.length === 1) state.map.setView(bounds[0], 13);
-      else state.map.setView([-22.9, -43.2], 10);
+      if (bounds.length > 1) state.map.fitBounds(L.latLngBounds(bounds).pad(0.16)); else if (bounds.length === 1) state.map.setView(bounds[0], 13); else state.map.setView([-22.9, -43.2], 10);
       setTimeout(() => state.map && state.map.invalidateSize(), 120);
-
-      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
-      if (metricsElement) {
-        metricsElement.innerHTML = [
-          ['Locais', metrics.locations],
-          ['No mapa', metrics.mappedLocations],
-          ['Endereços sem pino', Math.max(0, metrics.locations - metrics.mappedLocations)],
-          ['OS abertas', metrics.openOrders],
-          ['Em atendimento', metrics.inProgressOrders],
-          ['Vencidas', metrics.overdueOrders],
-          ['Emergenciais', metrics.emergencyOrders],
-          ['Equipamentos', metrics.equipment],
-          ['OS sem local definido', metrics.ordersWithoutSpecificSite],
-          ['Equip. sem local definido', metrics.equipmentWithoutSpecificSite],
-          ['Cadastros a revisar', state.review.length]
-        ].map(([label, value]) => '<div class="dbs-dispatch-metric"><strong>' + Number(value).toLocaleString('pt-BR') + '</strong><span>' + safe(label) + '</span></div>').join('');
-      }
-      const unmapped = Math.max(0, metrics.locations - metrics.mappedLocations);
-      if (status) status.textContent = metrics.mappedLocations + '/' + metrics.locations + ' locais posicionados pelo endereço. '
-        + metrics.openOrders + ' OS abertas · ' + metrics.inProgressOrders + ' em atendimento · '
-        + metrics.overdueOrders + ' vencidas · ' + metrics.equipment + ' equipamentos. '
-        + metrics.ordersWithoutSpecificSite + ' OS e ' + metrics.equipmentWithoutSpecificSite + ' equipamentos sem vínculo de local específico. '
-        + (unmapped ? unmapped + ' endereço(s) continuam roteáveis pelo cadastro, mesmo sem pino no mapa. ' : '')
-        + (originForRoute() ? 'A rota considera o GPS recente do técnico.' : 'Sem GPS recente: a rota não usa a posição do administrador como origem.')
-        + ' Pinos verdes: sem OS pendente; âmbar: OS em aberto/atendimento; vermelhos: OS vencida/emergencial.';
-    } catch (error) {
-      if (status) status.textContent = error && error.message || 'Mapa indisponível. A lista e os links do Google Maps continuam funcionando.';
-    }
+      const liveEmployees = [...employeePositions.values()].filter(location => location.is_live).length;
+      if (metricsElement) metricsElement.innerHTML = [['Lojas e clientes', state.candidates.length], ['Colaboradores no mapa', employeePositions.size], ['GPS recente', liveEmployees]].map(([label,value]) => '<div class="dbs-dispatch-metric"><strong>' + Number(value).toLocaleString('pt-BR') + '</strong><span>' + safe(label) + '</span></div>').join('');
+      if (status) status.textContent = state.candidates.length + ' lojas/clientes · ' + mapped.length + ' no mapa · ' + employeePositions.size + ' colaboradores com posição. ' + (routeOrigin ? 'Lojas ordenadas da mais próxima à mais distante do técnico.' : 'Selecione uma posição para ordenar por distância.');
+    } catch (error) { if (status) status.textContent = error && error.message || 'Mapa indisponível.'; }
   }
 
   function renderModal() {
-    const modal = byId('dbs-dispatch-route-modal');
-    if (!modal) return;
+    const modal = byId('dbs-dispatch-route-modal'); if (!modal) return;
     const selected = state.technician ? String(state.technician.id) : '';
     const options = getTechnicians().map(tech => '<option value="' + safe(tech.id) + '"' + (String(tech.id) === selected ? ' selected' : '') + '>' + safe(getTechnicianLabel(tech)) + '</option>').join('');
-    modal.innerHTML = '<div class="dbs-dispatch-dialog">'
-      + '<header class="dbs-dispatch-head"><div><p style="color:#93c5fd;font-size:9px;font-weight:900;letter-spacing:.16em;text-transform:uppercase">DBS CONTROL · despacho inteligente</p><h2 id="dbs-dispatch-title">Planejar rota antes de abrir OS</h2><p style="color:#c6d3df">Visualize todos os locais cadastrados, acompanhe indicadores das OS, escolha o técnico e revise uma rota editável antes de abrir qualquer OS.</p></div><button type="button" class="dbs-dispatch-close" data-action="close" aria-label="Fechar">×</button></header>'
-      + '<div class="dbs-dispatch-body">'
-      + '<section class="dbs-dispatch-card"><div class="dbs-dispatch-toolbar">'
-      + '<label>Técnico responsável<select id="dbs-dispatch-technician"><option value="">Selecione um técnico</option>' + options + '</select></label>'
-      + '<label>Data da rota<input id="dbs-dispatch-date" type="date" value="' + safe((byId('day-filter-date') && byId('day-filter-date').value) || currentDate()) + '"></label>'
-      + '<button type="button" class="dbs-dispatch-btn secondary" data-action="refresh-location">Atualizar posição do GPS</button></div>'
-      + '<div id="dbs-dispatch-location-summary" class="dbs-dispatch-location"><div><strong>Selecione o técnico para consultar a localização.</strong><small>O sistema mostrará a hora da última leitura para diferenciar posição recente de ponto antigo.</small></div></div>'
-      + '<label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar a última posição do técnico como ponto de partida da rota</label>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-build" data-action="build">Atualizar mapa e sugestão de rota</button><button type="button" class="dbs-dispatch-btn secondary" data-action="nearest-five"' + (!state.technician ? ' disabled' : '') + '>Adicionar 5 locais seguintes</button><button type="button" class="dbs-dispatch-btn secondary" data-action="geocode-selected"' + (!state.technician || !state.selected.length ? ' disabled' : '') + '>Localizar pinos das paradas</button></div>'
-      + '</section>'
-      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Mapa de clientes e operação</h3><p>Os marcadores representam os endereços ativos cadastrados. A posição é aproximada pelo endereço; não é GPS do cliente.</p><p>Todos os endereços cadastrados permanecem selecionáveis e roteáveis. Os pinos são localizados progressivamente pelo Photon/OpenStreetMap apenas nas paradas escolhidas; uma falha de geocodificação não bloqueia a rota pelo endereço. As cores e os indicadores usam as OS e os equipamentos reais do DBS CONTROL. A sequência considera proximidade quando há coordenadas e preserva as paradas sem pino. O Google Maps calcula o trajeto pelas vias. Sem GPS recente do técnico, a rota começa na primeira parada, nunca na localização do administrador.</p></div><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Lendo cadastros.</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div id="dbs-dispatch-map" class="dbs-dispatch-map" style="margin-top:10px"></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
-      + '<section class="dbs-dispatch-columns">'
-      + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Rota selecionada e editável</h3><p>Defina o tipo e o motivo de cada atendimento.</p></div><strong id="dbs-dispatch-count">0 paradas</strong></div><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregue a sugestão e adicione os locais que deseja atender.</div></div></div>'
-      + '<div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><h3>Locais cadastrados próximos</h3><p id="dbs-dispatch-available-count">Aguardando análise</p></div></div><input id="dbs-dispatch-search" type="search" placeholder="Filtrar por loja, cliente, bairro ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Os primeiros cinco locais formam uma sugestão editável após o carregamento do mapa.</div></div></div>'
-      + '</section>'
-      + '<div id="dbs-dispatch-review" class="dbs-dispatch-review" hidden></div>'
-      + '<div id="dbs-dispatch-status" class="dbs-dispatch-status" role="status" aria-live="polite">O mapa e a sugestão são carregados sem abrir OS. Nenhuma OS será criada até sua confirmação.</div>'
-      + '<footer class="dbs-dispatch-footer"><div><strong>Etapa final: criação em lote</strong><p>As OS serão atribuídas ao técnico escolhido. Locais não selecionados não serão alterados.</p></div><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-create" data-action="create" disabled>Revisar e abrir OS em lote</button></footer>'
-      + '</div></div>';
-
+    modal.innerHTML = '<div class="dbs-dispatch-dialog"><header class="dbs-dispatch-head"><div><p style="color:#93c5fd;font-size:9px;font-weight:900;letter-spacing:.16em;text-transform:uppercase">DBS CONTROL</p><h2 id="dbs-dispatch-title">Planejar rota e abrir OS</h2><p style="color:#c6d3df">Escolha o técnico. As lojas serão ordenadas pela distância até ele.</p></div><button type="button" class="dbs-dispatch-close" data-action="close" aria-label="Fechar">×</button></header><div class="dbs-dispatch-body">'
+      + '<section class="dbs-dispatch-card"><div class="dbs-dispatch-toolbar"><label>Técnico<select id="dbs-dispatch-technician"><option value="">Selecione</option>' + options + '</select></label><label>Data<input id="dbs-dispatch-date" type="date" value="' + safe((byId('day-filter-date') && byId('day-filter-date').value) || currentDate()) + '"></label><button type="button" class="dbs-dispatch-btn secondary" data-action="refresh-location">Atualizar GPS</button></div><div id="dbs-dispatch-location-summary" class="dbs-dispatch-location"><strong>Selecione um técnico.</strong></div><label class="dbs-dispatch-origin-toggle"><input id="dbs-dispatch-use-origin" type="checkbox" disabled> Usar última posição como referência</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="dbs-dispatch-btn secondary" id="dbs-dispatch-build" data-action="build">Atualizar lista</button><button type="button" class="dbs-dispatch-btn secondary" id="dbs-dispatch-nearest-five" data-action="nearest-five" disabled>Adicionar próximos 5</button></div></section>'
+      + '<section class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3>Mapa de lojas, clientes e colaboradores</h3><span id="dbs-dispatch-map-status" style="font-size:10px;color:#6b7f93">Carregando…</span></div><div id="dbs-dispatch-metrics" class="dbs-dispatch-metrics" aria-live="polite"></div><div class="dbs-dispatch-map-layout"><div id="dbs-dispatch-map" class="dbs-dispatch-map"></div><aside class="dbs-dispatch-team-panel"><h3>Equipe cadastrada</h3><div id="dbs-dispatch-team" class="dbs-dispatch-team"><div class="dbs-dispatch-empty">Carregando equipe…</div></div></aside></div><div id="dbs-dispatch-maplinks" class="dbs-dispatch-maplinks"></div></section>'
+      + '<section class="dbs-dispatch-columns"><div class="dbs-dispatch-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h3>Rota selecionada</h3><strong id="dbs-dispatch-count">0 selecionadas</strong></div><p>Adicione, remova ou mude a ordem. Cada loja pode ter seu próprio tipo e descrição.</p><div id="dbs-dispatch-selected" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Aguardando técnico e lojas.</div></div></div><div class="dbs-dispatch-card"><h3>Outras lojas e clientes</h3><p id="dbs-dispatch-available-count">Aguardando lista</p><input id="dbs-dispatch-search" type="search" placeholder="Buscar loja, cliente ou endereço"><div id="dbs-dispatch-available" class="dbs-dispatch-list"><div class="dbs-dispatch-empty">Carregando locais…</div></div></div></section><div id="dbs-dispatch-review" class="dbs-dispatch-review" hidden></div><div id="dbs-dispatch-status" class="dbs-dispatch-status" role="status" aria-live="polite">Selecione o técnico para ver a sugestão.</div><footer class="dbs-dispatch-footer"><div><strong>PMOC e corretiva no mesmo lote</strong><p>Revise a sequência e abra as OS selecionadas.</p></div><button type="button" class="dbs-dispatch-btn" id="dbs-dispatch-create" data-action="create" disabled>Abrir OS selecionadas</button></footer></div></div>';
     const technicianSelect = byId('dbs-dispatch-technician');
     technicianSelect.addEventListener('change', function () {
-      state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null;
-      resetPlan();
-      state.location = null;
-      state.originEnabled = false;
-      // Não esperar o GPS: carrega imediatamente todos os endereços e monta
-      // a rota; a posição do técnico é apenas um refinamento opcional da origem.
-      void buildSuggestions();
-      void refreshLocation();
+      state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null; resetPlan(); state.location = null; state.originEnabled = false;
+      const toggle = byId('dbs-dispatch-use-origin'); if (toggle) { toggle.checked = false; toggle.disabled = true; }
+      void buildSuggestions(); void refreshLocation();
     });
     const toggle = byId('dbs-dispatch-use-origin');
-    toggle.addEventListener('change', function () {
-      state.originEnabled = Boolean(this.checked);
-      if (state.candidates.length) {
-        state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
-        reorderSelected();
-        renderLists();
-      } else renderMapAndLinks();
-    });
+    toggle.addEventListener('change', function () { state.originEnabled = Boolean(this.checked); state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute()); if (state.originEnabled && !state.manualOrder) seedNearestStops(); reorderSelected(); renderLists(); });
     byId('dbs-dispatch-search').addEventListener('input', renderLists);
     modal.addEventListener('click', async function (event) {
-      const button = event.target instanceof Element ? event.target.closest('[data-action]') : null;
-      if (!button) return;
+      const button = event.target instanceof Element ? event.target.closest('[data-action]') : null; if (!button) return;
       const action = button.getAttribute('data-action');
       if (action === 'close') { closePlanner(); return; }
-      if (action === 'refresh-location') { await refreshLocation(); return; }
-      if (action === 'review-map') {
-        const item = state.review.find(entry => String(entry.id || '') === String(button.getAttribute('data-id') || ''));
-        if (item && item.address) {
-          const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.address);
-          window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_MAPS', url }, window.location.origin);
-        }
-        return;
-      }
+      if (action === 'refresh-location') { await Promise.all([refreshLocation(), loadTechnicianLocations()]); return; }
+      if (action === 'review-map') { const item = state.review.find(entry => String(entry.id || '') === String(button.getAttribute('data-id') || '')); if (item && item.address) window.parent.postMessage({ type: 'DBS_CONTROL_OPEN_MAPS', url: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.address) }, window.location.origin); return; }
       if (action === 'build') { await buildSuggestions(); return; }
-      if (action === 'geocode-selected') { queueSelectedGeocoding(state.selected); return; }
       if (action === 'nearest-five') { addNearestFive(); return; }
       if (action === 'add') { addStop(button.getAttribute('data-id')); return; }
       if (action === 'remove') { removeStop(Number(button.getAttribute('data-index'))); return; }
       if (action === 'up') { moveStop(Number(button.getAttribute('data-index')), -1); return; }
       if (action === 'down') { moveStop(Number(button.getAttribute('data-index')), 1); return; }
-      if (action === 'create') { await createOrders(); }
+      if (action === 'create') await createOrders();
     });
     modal.addEventListener('change', function (event) {
-      const field = event.target instanceof Element ? event.target.getAttribute('data-field') : null;
-      if (!field) return;
-      const index = Number(event.target.getAttribute('data-index'));
-      const stop = state.selected[index];
-      if (!stop) return;
-      stop[field] = event.target.value;
-      if (field === 'serviceType') renderLists();
-      else validateCreateButton();
+      const field = event.target instanceof Element ? event.target.getAttribute('data-field') : null; if (!field) return;
+      const index = Number(event.target.getAttribute('data-index')), stop = state.selected[index]; if (!stop) return;
+      stop[field] = event.target.value; if (field === 'serviceType') renderLists(); else validateCreateButton();
     });
     modal.addEventListener('input', function (event) {
-      const field = event.target instanceof Element ? event.target.getAttribute('data-field') : null;
-      if (field !== 'cause') return;
-      const stop = state.selected[Number(event.target.getAttribute('data-index'))];
-      if (stop) stop.cause = event.target.value;
-      validateCreateButton();
+      const field = event.target instanceof Element ? event.target.getAttribute('data-field') : null; if (field !== 'cause') return;
+      const stop = state.selected[Number(event.target.getAttribute('data-index'))]; if (stop) stop.cause = event.target.value; validateCreateButton();
     });
-    if (selected) {
-      state.technician = getTechnicians().find(item => String(item.id) === selected) || null;
-      void refreshLocation();
-    }
-    void renderMapAndLinks();
+    if (selected) { state.technician = getTechnicians().find(item => String(item.id) === selected) || null; void refreshLocation(); }
+    renderTeamList(); void renderMapAndLinks();
   }
 
   function validateCreateButton() {
@@ -964,26 +795,10 @@
   }
 
   function showReview() {
-    const review = byId('dbs-dispatch-review');
-    if (!review) return;
-    const items = state.review.slice(0, 20);
-    if (!items.length) {
-      review.hidden = true;
-      review.textContent = '';
-      return;
-    }
+    const review = byId('dbs-dispatch-review'); if (!review) return;
+    const items = state.review.slice(0, 20); if (!items.length) { review.hidden = true; review.textContent = ''; return; }
     review.hidden = false;
-    review.innerHTML = '<strong>' + state.review.length + ' endereço(s) não tiveram o pino confirmado. Eles continuam na rota pelo endereço e podem ser abertos no Google Maps:</strong><ul style="margin:6px 0 0;padding-left:18px">'
-      + items.map(item => {
-        const mapsButton = item.address
-          ? ' <button type="button" class="dbs-dispatch-btn secondary" data-action="review-map" data-id="' + safe(item.id || '') + '">Abrir endereço no Google Maps</button>'
-          : '';
-        return '<li><strong>' + safe(item.name || item.id || 'Registro') + '</strong>: ' + safe(item.reason || 'Conferir cadastro')
-          + (item.address ? '<br><small>Endereço cadastrado: ' + safe(item.address) + '</small>' : '')
-          + mapsButton + '</li>';
-      }).join('')
-      + (state.review.length > items.length ? '<li>Mais ' + (state.review.length - items.length) + ' registro(s).</li>' : '')
-      + '</ul>';
+    review.innerHTML = '<details><summary>Endereços sem pino no mapa (' + state.review.length + ') — continuam selecionáveis pelo endereço</summary><ul style="margin:6px 0 0;padding-left:18px">' + items.map(item => '<li>' + safe(item.name || item.id || 'Registro') + (item.address ? ' · ' + safe(item.address) : '') + (item.address ? ' <button type="button" class="dbs-dispatch-btn secondary" data-action="review-map" data-id="' + safe(item.id || '') + '">Maps</button>' : '') + '</li>').join('') + (state.review.length > items.length ? '<li>+' + (state.review.length - items.length) + ' endereço(s)</li>' : '') + '</ul></details>';
   }
 
   async function createOrders() {

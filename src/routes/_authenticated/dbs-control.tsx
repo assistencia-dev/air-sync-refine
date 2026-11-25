@@ -1331,10 +1331,22 @@ function DbsControlPage() {
                 is_active: true,
               };
             });
-          reply({ ok: true, technicians });
+          reply({ ok: true, technicians, employees: technicians });
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível carregar os técnicos ativos do RH." });
         }
+        return;
+      }
+      if (msg.type === "DBS_CONTROL_LIST_TECHNICIAN_LOCATIONS") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({ type: "DBS_CONTROL_TECHNICIAN_LOCATIONS_RESULT", requestId, ...payload }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) { reply({ ok: false, error: "A visualização da equipe é restrita à administração." }); return; }
+          const result = await listRhFleetTechnicianLocations({ data: { employee_id: null } });
+          reply({ ok: true, locations: Array.isArray(result.locations) ? result.locations : [] });
+        } catch (error) { reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível consultar as posições da equipe." }); }
         return;
       }
       if (msg.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION") {
