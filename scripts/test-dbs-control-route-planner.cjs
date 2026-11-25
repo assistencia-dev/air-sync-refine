@@ -388,7 +388,7 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-6"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-7"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
