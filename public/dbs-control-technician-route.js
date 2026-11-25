@@ -58,7 +58,7 @@
     return 'há ' + Math.floor(hours / 24) + ' dia(s)';
   };
   const isPmoc = value => /pmoc/i.test(String(value || ''));
-  const requiresCause = value => !isPmoc(value);
+  const requiresCause = value => /corretiv|emergencial/i.test(String(value || ''));
   const planner = () => window.DbsControlRoutePlanner;
 
   function getTechnicians() {
@@ -385,9 +385,10 @@
 
     selected.innerHTML = state.selected.length ? state.selected.map((item, index) => {
       const typeOptions = SERVICE_TYPES.map(type => '<option value="' + safe(type) + '"' + (item.serviceType === type ? ' selected' : '') + '>' + safe(type) + '</option>').join('');
-      const causeField = requiresCause(item.serviceType)
-        ? '<label>Motivo / problema a registrar na OS<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="Descreva o que motivou este atendimento (mínimo de 5 caracteres)">' + safe(item.cause || '') + '</textarea></label>'
-        : '<label>Observação PMOC (opcional)<input data-field="cause" data-index="' + index + '" maxlength="500" value="' + safe(item.cause || '') + '" placeholder="Observação complementar, se necessário"></label>';
+      const causeField = isPmoc(item.serviceType)
+        ? '<label>Observação PMOC (opcional)<input data-field="cause" data-index="' + index + '" maxlength="500" value="' + safe(item.cause || '') + '" placeholder="Observação complementar, se necessário"></label>'
+        : '<label>' + (requiresCause(item.serviceType) ? 'Motivo / problema (obrigatório)' : 'Motivo / observação (opcional)')
+          + '<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="' + (requiresCause(item.serviceType) ? 'Descreva o defeito, sintoma ou solicitação que motivou esta corretiva (mínimo 5 caracteres)' : 'Descreva o motivo deste atendimento, se necessário') + '">' + safe(item.cause || '') + '</textarea></label>';
       return '<article class="dbs-dispatch-card" style="padding:10px">'
         + '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between">'
         + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small></div></div>'
