@@ -213,7 +213,10 @@
     const location = state.location;
     const hasCoordinates = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
     if (!location || !hasCoordinates) {
-      if (box) box.innerHTML = '<strong>Nenhuma posição compartilhada encontrada.</strong><small>O técnico precisa autorizar o DBS FLEET durante a jornada. A rota poderá ser organizada pela proximidade entre os endereços, mas sem afirmar onde ele está.</small>';
+      const gpsMessage = String(result.warning || '').trim();
+      if (box) box.innerHTML = '<strong>' + safe(gpsMessage ? 'GPS ainda indisponível neste banco' : 'Nenhuma posição compartilhada encontrada.') + '</strong><small>'
+        + safe(gpsMessage || 'O técnico precisa autorizar o DBS FLEET durante a jornada.')
+        + ' A rota poderá ser organizada pela proximidade entre os endereços, sem afirmar onde o técnico está.</small>';
       renderMapAndLinks();
       return;
     }
