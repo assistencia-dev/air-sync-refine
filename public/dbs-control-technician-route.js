@@ -10,6 +10,7 @@
     candidates: [],
     selected: [],
     review: [],
+    siteMetrics: null,
     map: null,
     mapLayer: null,
     mapLibrary: null,
@@ -171,6 +172,7 @@
     state.candidates = [];
     state.selected = [];
     state.review = [];
+    state.siteMetrics = null;
     state.manualOrder = false;
     state.result = null;
     state.geocoding = false;
@@ -427,13 +429,16 @@
 
       // Carry the full relational site counts through geocoding so an
       // address failure cannot make a multi-site client look like a single-site client.
-      located.activeSiteCountByClient = audit.activeSiteCountByClient || {};
+      candidates.activeSiteCountByClient = audit.activeSiteCountByClient || {};
       const erp = getErpState();
+      // Enrich all address-bearing sites, including geocoding failures, so their
+      // real OS/equipment indicators remain visible while the address is reviewed.
       const measured = planner().enrichSiteCandidates(
-        located,
+        candidates,
         Array.isArray(erp.ordens) ? erp.ordens : [],
         Array.isArray(erp.equipamentos) ? erp.equipamentos : []
       );
+      state.siteMetrics = planner().summarizeSiteMetrics(measured);
       const route = planner().optimizeStops(measured, originForRoute());
       state.candidates = route.stops;
       if (!state.candidates.length) throw new Error('Nenhum endereço foi geocodificado com confiança. Os cadastros que falharam foram separados para revisão.');
@@ -457,7 +462,7 @@
       state.selected = state.candidates.slice(0, Math.min(5, state.candidates.length))
         .map(item => Object.assign({}, item, { serviceType: '', cause: '' }));
       state.manualOrder = false;
-      const metrics = planner().summarizeSiteMetrics(state.candidates);
+      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
       if (status) status.textContent = state.candidates.length + ' locais posicionados. '
         + (originForRoute() ? 'Sequência sugerida a partir do GPS recente do técnico.' : 'Sem GPS recente: sequência inicial calculada pela região mais central e proximidade entre os endereços.')
         + ' ' + metrics.openOrders + ' OS abertas, ' + metrics.inProgressOrders + ' em atendimento e '
@@ -682,7 +687,7 @@
       else state.map.setView([-22.9, -43.2], 10);
       setTimeout(() => state.map && state.map.invalidateSize(), 120);
 
-      const metrics = planner().summarizeSiteMetrics(state.candidates);
+      const metrics = state.siteMetrics || planner().summarizeSiteMetrics(state.candidates);
       if (metricsElement) {
         metricsElement.innerHTML = [
           ['Locais', metrics.locations],
@@ -693,7 +698,8 @@
           ['Emergenciais', metrics.emergencyOrders],
           ['Equipamentos', metrics.equipment],
           ['OS sem local definido', metrics.ordersWithoutSpecificSite],
-          ['Equip. sem local definido', metrics.equipmentWithoutSpecificSite]
+          ['Equip. sem local definido', metrics.equipmentWithoutSpecificSite],
+          ['Cadastros a revisar', state.review.length]
         ].map(([label, value]) => '<div class="dbs-dispatch-metric"><strong>' + Number(value).toLocaleString('pt-BR') + '</strong><span>' + safe(label) + '</span></div>').join('');
       }
       const unmapped = Math.max(0, metrics.locations - metrics.mappedLocations);
