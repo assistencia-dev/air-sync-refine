@@ -32,7 +32,7 @@ const clients = [
   { id: 'c3', nome: 'Cliente sem endereço', endereco: '' }
 ];
 const sites = [
-  { id: 's1', clienteId: 'c1', nome: 'Filial Centro', endereco: 'Rua das Flores, 25, Niterói, RJ' },
+  { id: 's1', clienteId: 'c1', nome: 'Filial Centro', endereco: 'Rua das Flores, 25, Niterói, RJ', latitude: -22.9, longitude: -43.1 },
   { id: 's2', clienteId: 'c2', nome: 'Unidade Norte', endereco: 'Rua do Porto, 80, São Gonçalo, RJ' }
 ];
 const orders = [
@@ -53,6 +53,8 @@ assert.equal(plan.includedOrderCount, 4, 'A contagem deve considerar apenas OS a
 assert.equal(plan.missingAddressCount, 1, 'Local de atendimento como setor não pode ser confundido com endereço postal.');
 assert.equal(plan.ignoredTerminalCount, 3, 'OS concluídas e canceladas não devem entrar na rota.');
 assert.equal(plan.stops[0].address, 'Rua das Flores, 25, Niterói, RJ', 'O local específico deve prevalecer sobre o endereço geral do cliente.');
+assert.equal(plan.stops[0].lat, -22.9, 'A parada deve carregar a latitude salva do local para otimização da rota.');
+assert.equal(plan.stops[0].lng, -43.1, 'A parada deve carregar a longitude salva do local para otimização da rota.');
 
 const fallback = planner.buildStops([
   { id: 'os-client', clienteId: 'c2', status: 'Aberta' }
@@ -159,7 +161,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-3/, 'O planejador atualizado deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-4/, 'O planejador atualizado deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
@@ -275,9 +277,22 @@ console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domí
 const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-3/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-10/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
-assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-4/, 'O algoritmo atualizado deve ter cache busting.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-11/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.doesNotMatch(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O planejador de novas OS não pode sobrescrever o atalho da rota das OS existentes.');
+assert.match(dispatchScript, /window\.abrirPlanejamentoNovosAtendimentos = openPlanner/, 'O planejamento de novos atendimentos deve ter uma ação global separada.');
+assert.match(html, /onclick="abrirPlanejamentoNovosAtendimentos\(\)"/, 'A tela deve oferecer um botão separado para planejar novas OS.');
+const existingRouteStart = html.indexOf("async function abrirRotaAtividadesDia()");
+const existingRouteEnd = html.indexOf("function renderizarHistoricoOperacional()", existingRouteStart);
+assert.ok(existingRouteStart >= 0 && existingRouteEnd > existingRouteStart, 'O botão Abrir rota do técnico deve usar o planejador da agenda diária.');
+const existingRoute = html.slice(existingRouteStart, existingRouteEnd);
+assert.match(existingRoute, /dataOSParaISO\(order\.data\)/, 'A rota do técnico deve filtrar as OS pela data selecionada.');
+assert.match(existingRoute, /orderTechnicianId === technicianId/, 'A rota deve incluir somente OS atribuídas ao técnico selecionado.');
+assert.match(existingRoute, /window\.DbsControlRequestTechnicianLocation/, 'A rota deve consultar a posição autorizada do técnico.');
+assert.match(existingRoute, /location\.is_live === true/, 'Somente o GPS recente pode ser usado como origem da rota.');
+assert.match(existingRoute, /planner\.optimizeStops\(located, routeOrigin\)/, 'Sem horários agendados completos, a rota deve otimizar por proximidade quando houver coordenadas.');
+assert.match(existingRoute, /Sem GPS recente: início na primeira parada/, 'Sem GPS atual, a rota não deve usar a posição do administrador.');
+assert.doesNotMatch(existingRoute, /DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS/, 'Abrir rota não pode criar nem alterar OS existentes.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
 assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
@@ -388,7 +403,7 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-10"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-11"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
