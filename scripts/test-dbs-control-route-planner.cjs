@@ -69,6 +69,10 @@ const secondUrl = new URL(legs[1].url);
 assert.equal(secondUrl.searchParams.get('origin'), routeStops[3].address, 'A etapa seguinte deve começar no último endereço da etapa anterior.');
 assert.equal(secondUrl.searchParams.get('destination'), routeStops[4].address);
 assert.equal(secondUrl.searchParams.get('travelmode'), 'driving');
+const singleStopWithoutGps = planner.buildRouteLegs([{ address: 'Rua Única, 55, Niterói, RJ' }]);
+assert.equal(new URL(singleStopWithoutGps[0].url).pathname, '/maps/search/', 'Um único local sem GPS do técnico deve abrir a localização, nunca iniciar a navegação a partir do administrador.');
+assert.equal(new URL(singleStopWithoutGps[0].url).searchParams.get('query'), 'Rua Única, 55, Niterói, RJ');
+
 
 const siteMetrics = planner.enrichSiteCandidates(
   [{ id: 's1', siteId: 's1', clientId: 'c1', lat: -22.9, lng: -43.2 }],
@@ -76,7 +80,7 @@ const siteMetrics = planner.enrichSiteCandidates(
     { id: 'open', siteId: 's1', clienteId: 'c1', status: 'Aberta' },
     { id: 'progress', siteId: 's1', clienteId: 'c1', status: 'Em Atendimento' },
     { id: 'late', siteId: 's1', clienteId: 'c1', status: 'Aberta', sla: '2026-11-24T10:00:00-03:00' },
-    { id: 'urgent', siteId: 's1', clienteId: 'c1', status: 'Aberta', tipo: 'Atendimento Emergencial' },
+    { id: 'urgent', siteId: 's1', clienteId: 'c1', status: 'Aberta', tipo: 'Manutenção Corretiva', prioridade: 'alta' },
     { id: 'done', siteId: 's1', clienteId: 'c1', status: 'Concluída' },
     { id: 'cancelled', siteId: 's1', clienteId: 'c1', status: 'Cancelada' }
   ],
