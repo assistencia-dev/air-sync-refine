@@ -55,3 +55,39 @@ comment on column public.dbs_control_sites.map_geocode_provider is
   'Provedor utilizado para geocodificar o endereço (ex.: Photon/OpenStreetMap).';
 comment on column public.dbs_control_sites.map_geocode_status is
   'Situação da geocodificação: pending, resolved ou review.';
+
+-- If the registered address changes, discard the old map point. The next
+-- map review will geocode the new address; technician GPS remains separate.
+create or replace function public.dbs_control_reset_site_map_coordinates_on_address_change()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.address_json is distinct from old.address_json then
+    new.map_latitude := null;
+    new.map_longitude := null;
+    new.map_geocoded_at := null;
+    new.map_geocode_provider := null;
+    new.map_geocode_status := 'pending';
+  end if;
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'dbs_control_sites_reset_map_coordinates_on_address_change'
+      and tgrelid = 'public.dbs_control_sites'::regclass
+      and not tgisinternal
+  ) then
+    create trigger dbs_control_sites_reset_map_coordinates_on_address_change
+      before update of address_json on public.dbs_control_sites
+      for each row
+      execute function public.dbs_control_reset_site_map_coordinates_on_address_change();
+  end if;
+end;
+$$;
