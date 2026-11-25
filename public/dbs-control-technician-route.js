@@ -23,6 +23,7 @@
     geocodeQueue: [],
     geocodingIds: new Set(),
     geocodeGeneration: 0,
+    locationGeneration: 0,
     technicians: [],
     techniciansLoaded: false
   };
@@ -185,6 +186,7 @@
     state.geocodeQueue = [];
     state.geocodingIds = new Set();
     state.geocodeGeneration += 1;
+    state.locationGeneration += 1;
   }
 
   function ensureStyle() {
@@ -288,21 +290,35 @@
   }
 
   async function refreshLocation() {
+    const generation = ++state.locationGeneration;
     const employeeId = getEmployeeId(state.technician);
     state.location = null;
     state.originEnabled = false;
     const box = byId('dbs-dispatch-location-summary');
-    if (box) box.innerHTML = '<strong>Consultando última posição compartilhada…</strong><small>Consulta segura ao DBS FLEET do RH.</small>';
+    if (box) box.innerHTML = '<strong>Consultando última posição compartilhada…</strong><small>O planejamento dos endereços continua carregado enquanto o GPS é consultado.</small>';
     const toggle = byId('dbs-dispatch-use-origin');
-    if (toggle) toggle.checked = false;
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
     if (!employeeId) {
-      if (box) box.innerHTML = '<strong>Este técnico ainda não está vinculado a um colaborador do RH.</strong><small>Sem o vínculo, o DBS não consegue associar a posição autorizada do GPS. O planejamento continua disponível pela região central.</small>';
+      if (generation !== state.locationGeneration) return;
+      if (box) box.innerHTML = '<strong>Este técnico ainda não está vinculado a um colaborador do RH.</strong><small>A rota continua disponível pelos endereços cadastrados; o GPS não será usado como origem.</small>';
       renderMapAndLinks();
       return;
     }
-    const result = await requestTechnicianLocation(employeeId);
+    let result;
+    try {
+      result = await requestTechnicianLocation(employeeId);
+    } catch (error) {
+      if (generation !== state.locationGeneration) return;
+      if (box) box.innerHTML = '<strong>Consulta de GPS indisponível.</strong><small>' + safe(error && error.message || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
+      renderMapAndLinks();
+      return;
+    }
+    if (generation !== state.locationGeneration) return;
     if (!result || !result.ok) {
-      if (box) box.innerHTML = '<strong>Não foi possível obter a posição.</strong><small>' + safe(result && result.error || 'Verifique o vínculo e as permissões do RH.') + '</small>';
+      if (box) box.innerHTML = '<strong>Não foi possível obter a posição.</strong><small>' + safe(result && result.error || 'O mapa e a navegação pelos endereços continuam disponíveis.') + '</small>';
       renderMapAndLinks();
       return;
     }
@@ -313,7 +329,7 @@
       const gpsMessage = String(result.warning || '').trim();
       if (box) box.innerHTML = '<strong>' + safe(gpsMessage ? 'GPS ainda indisponível neste banco' : 'Nenhuma posição compartilhada encontrada.') + '</strong><small>'
         + safe(gpsMessage || 'O mapa dos clientes continua disponível pelos endereços cadastrados, mesmo sem GPS do técnico.')
-        + ' A rota poderá ser organizada pela proximidade entre os endereços, sem afirmar onde o técnico está.</small>';
+        + ' A rota poderá ser organizada pelos endereços, sem afirmar onde o técnico está.</small>';
       renderMapAndLinks();
       return;
     }
@@ -329,7 +345,13 @@
     if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
       + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
       + ' (' + safe(ageLabel(location.position_age_ms)) + ')' + safe(accuracy) + '</small>';
-    renderMapAndLinks();
+    if (location.is_live && !state.manualOrder) {
+      state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
+      state.selected = optimizeRoutePreservingUnlocated(state.selected, originForRoute());
+      renderLists();
+    } else {
+      renderMapAndLinks();
+    }
   }
 
   function getLocationSources() {
@@ -847,12 +869,13 @@
       + '</div></div>';
 
     const technicianSelect = byId('dbs-dispatch-technician');
-    technicianSelect.addEventListener('change', async function () {
+    technicianSelect.addEventListener('change', function () {
       state.technician = getTechnicians().find(item => String(item.id) === String(this.value)) || null;
       resetPlan();
-      await refreshLocation();
-      await buildSuggestions();
-      renderLists();
+      // Não esperar o GPS: carrega imediatamente todos os endereços e monta
+      // a rota; a posição do técnico é apenas um refinamento opcional da origem.
+      void buildSuggestions();
+      void refreshLocation();
     });
     const toggle = byId('dbs-dispatch-use-origin');
     toggle.addEventListener('change', function () {
