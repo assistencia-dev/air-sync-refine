@@ -277,7 +277,7 @@ console.log('DBS CONTROL Maps launcher: ponte iframe-shell, validação de domí
 const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-4/, 'O algoritmo atualizado deve ter cache busting.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-5/, 'O algoritmo atualizado deve ter cache busting.');
 assert.match(html, /dbs-control-technician-route\.js\?v=20261125-12/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.doesNotMatch(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O planejador de novas OS não pode sobrescrever o atalho da rota das OS existentes.');
 assert.match(dispatchScript, /window\.abrirPlanejamentoNovosAtendimentos = openPlanner/, 'O planejamento de novos atendimentos deve ter uma ação global separada.');
@@ -408,7 +408,7 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-11"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-12"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
