@@ -7418,7 +7418,6 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     plan.stops.forEach((stop, index) => { stop.sequence = index + 1; });
                 }
             }
-            const legs = planner.buildRouteLegs(plan.stops, routeOrigin);
             const modal = document.createElement('div');
             modal.id = 'dbs-route-planner-modal';
             modal.setAttribute('role', 'dialog');
