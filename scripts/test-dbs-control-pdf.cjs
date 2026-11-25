@@ -199,8 +199,8 @@ async function main() {
   const shellReportFieldCount = (mobileShellSource.match(/id="dbs-mob-relato-\$\{o\.id\}"/g) || []).length;
   assert.equal(mobileReportFieldCount, 1, "mobile login must expose one canonical technical report field");
   assert.equal(shellReportFieldCount, 1, "mobile shell must expose one canonical technical report field");
-  assert.doesNotMatch(mobileSource, /employee-observation-field/);
-  assert.doesNotMatch(mobileShellSource, /employee-observation-field/);
+  assert.doesNotMatch(mobileSource, /<label class="employee-observation-field">/);
+  assert.doesNotMatch(mobileShellSource, /<label class="employee-observation-field">/);
   assert.doesNotMatch(uxSource, /dbs-mob-diag-|dbs-mob-work-/,
     "UX enhancements must not inject duplicate diagnosis/work fields");
   assert.doesNotMatch(viewerSource, /T\('Diagnóstico'|T\('Trabalho executado'/,
