@@ -205,6 +205,11 @@
       '#dbs-dispatch-route-modal .dbs-dispatch-location small{display:block;margin-top:3px;font-size:10px;color:#65798f;line-height:1.45}',
       '#dbs-dispatch-route-modal .dbs-dispatch-origin-toggle{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px;color:#27445e}',
       '#dbs-dispatch-route-modal .dbs-dispatch-origin-toggle input{width:16px;min-height:16px;margin:0}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-metrics{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;margin-top:11px}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-metric{display:flex;flex-direction:column;gap:2px;min-width:0;padding:9px 10px;border:1px solid #dfe8f0;border-radius:10px;background:#f8fbfe}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-metric strong{font-size:18px;line-height:1.1;color:#173b60}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-metric span{font-size:9px;font-weight:800;color:#65798f}',
+      '#dbs-dispatch-route-modal .dbs-dispatch-route-label{border:0;border-radius:8px;background:#1d4ed8;color:white;font-size:10px;font-weight:900;box-shadow:0 2px 8px #0f172a33}',
       '#dbs-dispatch-route-modal .dbs-dispatch-map{height:300px;min-height:240px;overflow:hidden;border:1px solid #d8e2ec;border-radius:13px;background:#eaf0f5}',
       '#dbs-dispatch-route-modal .dbs-dispatch-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}',
       '#dbs-dispatch-route-modal .dbs-dispatch-list{display:grid;gap:8px;max-height:390px;overflow:auto;margin-top:10px}',
@@ -225,7 +230,7 @@
       '#dbs-dispatch-route-modal .dbs-dispatch-maplink{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 11px;border:1px solid #dce5ee;border-radius:10px;background:#fff}',
       '#dbs-dispatch-route-modal .dbs-dispatch-maplink span{font-size:10px;color:#50677e}',
       '#dbs-dispatch-route-modal .dbs-dispatch-empty{padding:18px;border:1px dashed #cbd7e2;border-radius:10px;background:#fff;text-align:center;font-size:11px;color:#73869a}',
-      '@media(max-width:760px){#dbs-dispatch-route-modal{padding:5px;align-items:flex-end}#dbs-dispatch-route-modal .dbs-dispatch-dialog{max-height:96vh;border-radius:16px}#dbs-dispatch-route-modal .dbs-dispatch-toolbar{grid-template-columns:1fr 1fr}#dbs-dispatch-route-modal .dbs-dispatch-toolbar .dbs-dispatch-btn{grid-column:1 / -1;width:100%}#dbs-dispatch-route-modal .dbs-dispatch-columns{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-map{height:260px}#dbs-dispatch-route-modal .dbs-dispatch-stop-fields{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-footer{align-items:stretch}#dbs-dispatch-route-modal .dbs-dispatch-footer .dbs-dispatch-btn{width:100%}}'
+      '@media(max-width:760px){#dbs-dispatch-route-modal{padding:5px;align-items:flex-end}#dbs-dispatch-route-modal .dbs-dispatch-dialog{max-height:96vh;border-radius:16px}#dbs-dispatch-route-modal .dbs-dispatch-toolbar{grid-template-columns:1fr 1fr}#dbs-dispatch-route-modal .dbs-dispatch-toolbar .dbs-dispatch-btn{grid-column:1 / -1;width:100%}#dbs-dispatch-route-modal .dbs-dispatch-columns{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-map{height:260px}#dbs-dispatch-route-modal .dbs-dispatch-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#dbs-dispatch-route-modal .dbs-dispatch-metric:first-child{grid-column:span 2}#dbs-dispatch-route-modal .dbs-dispatch-stop-fields{grid-template-columns:1fr}#dbs-dispatch-route-modal .dbs-dispatch-footer{align-items:stretch}#dbs-dispatch-route-modal .dbs-dispatch-footer .dbs-dispatch-btn{width:100%}}'
     ].join('');
     document.head.appendChild(style);
   }
@@ -530,8 +535,11 @@
     available.innerHTML = rows.length ? rows.map((item, index) => {
       const distance = item.distanceFromTechnicianKm != null ? ' · ' + item.distanceFromTechnicianKm.toLocaleString('pt-BR') + ' km do técnico'
         : item.distanceFromPreviousKm != null ? ' · ' + item.distanceFromPreviousKm.toLocaleString('pt-BR') + ' km da parada anterior' : '';
+      const indicators = 'OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0)
+        + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos';
       return '<article class="dbs-dispatch-item"><span class="dbs-dispatch-number">' + (index + 1) + '</span>'
-        + '<div><strong>' + safe(item.name) + '</strong><small>' + safe(item.clientName + ' · ' + item.address + distance) + '</small></div>'
+        + '<div><strong>' + safe(item.name) + '</strong><small>' + safe(item.clientName + ' · ' + item.address + distance) + '</small>'
+        + '<small style="color:#365f86;font-weight:800">' + safe(indicators) + '</small></div>'
         + '<button type="button" class="dbs-dispatch-iconbtn" data-action="add" data-id="' + safe(item.id) + '" aria-label="Adicionar ' + safe(item.name) + '">+</button></article>';
     }).join('') : '<div class="dbs-dispatch-empty">Nenhum outro local corresponde ao filtro.</div>';
 
@@ -543,7 +551,7 @@
           + '<textarea data-field="cause" data-index="' + index + '" maxlength="500" placeholder="' + (requiresCause(item.serviceType) ? 'Descreva o defeito, sintoma ou solicitação que motivou esta corretiva (mínimo 5 caracteres)' : 'Descreva o motivo deste atendimento, se necessário') + '">' + safe(item.cause || '') + '</textarea></label>';
       return '<article class="dbs-dispatch-card" style="padding:10px">'
         + '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between">'
-        + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small></div></div>'
+        + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="dbs-dispatch-number">' + (index + 1) + '</span><div style="min-width:0"><strong style="display:block;font-size:11px;color:#24435f">' + safe(item.name) + '</strong><small style="display:block;margin-top:3px;color:#718399;font-size:10px;overflow-wrap:anywhere">' + safe(item.address) + '</small><small style="display:block;margin-top:3px;color:#365f86;font-size:9px;font-weight:800">OS: ' + Number(item.openOrders || 0) + ' abertas · ' + Number(item.inProgressOrders || 0) + ' em atendimento · ' + Number(item.overdueOrders || 0) + ' vencidas · ' + Number(item.equipmentCount || 0) + ' equipamentos</small></div></div>'
         + '<div class="dbs-dispatch-actions"><button class="dbs-dispatch-iconbtn" type="button" data-action="up" data-index="' + index + '" aria-label="Subir parada">↑</button><button class="dbs-dispatch-iconbtn" type="button" data-action="down" data-index="' + index + '" aria-label="Descer parada">↓</button><button class="dbs-dispatch-iconbtn" type="button" data-action="remove" data-index="' + index + '" aria-label="Remover parada">×</button></div></div>'
         + '<div class="dbs-dispatch-stop-fields"><label>Tipo de atendimento<select data-field="serviceType" data-index="' + index + '">' + typeOptions + '</select></label>'
         + causeField + '</div></article>';
