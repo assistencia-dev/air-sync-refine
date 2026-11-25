@@ -87,7 +87,7 @@
       if (!item || item.is_active === false || item.active === false
         || item.deleted || item.deleted_at || item.archived_at || item.archivedAt) return false;
       const status = String(item.status || item.situacao || '').normalize('NFD')
-        .replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase();
+        .replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
       if (/^(inativ[oa]|arquivad[oa]|excluid[oa]|cancelad[oa])$/.test(status)) return false;
       const employeeId = getEmployeeId(item);
       if (!employeeId || seen.has(employeeId)) return false;
