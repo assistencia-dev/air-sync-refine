@@ -380,10 +380,25 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-5"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-6"), "A correção deve ser servida sem cache antigo.");
 
 
 // The address map must include more than 100 sites (the current customer set has 135).
 assert.ok(dispatchScript.includes("audit.candidates.slice(0, 250)"), "O mapa não pode descartar filiais após a centésima; deve suportar pelo menos 135 endereços.");
 assert.ok(dispatchScript.includes("A lista excede 250 locais."), "Somente listas acima do limite ampliado podem ser direcionadas à divisão por região.");
 assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação do mapa não pode alterar o limite de emissão de até 50 OS por lote.");
+
+
+ // Technician route must remain usable before address geocoding finishes.
+ assert.ok(dispatchScript.includes("function optimizeRoutePreservingUnlocated"), "A ordem da rota deve preservar locais sem coordenadas.");
+ assert.ok(dispatchScript.includes("const unlocated = source.filter(item => !hasValidCoordinates(item))"), "Endereços sem pino devem continuar como paradas selecionáveis.");
+ assert.ok(dispatchScript.includes("state.candidates = optimizeRoutePreservingUnlocated(measured, originForRoute())"), "A lista completa de locais deve ser mantida após a leitura dos indicadores.");
+ assert.ok(dispatchScript.includes("queueSelectedGeocoding(state.selected)"), "A geocodificação deve ocorrer apenas nas paradas selecionadas.");
+ assert.ok(!/const workers = Array.from\(\{ length: 1 \}, async \(\) => \{/.test(dispatchScript), "O mapa não deve geocodificar todos os clientes em sequência antes de liberar a rota.");
+ assert.ok(dispatchScript.includes("A rota e os links do Google Maps já podem ser usados pelos endereços"), "Links da rota devem ficar disponíveis mesmo durante geocodificação.");
+ assert.ok(dispatchScript.includes("Endereços sem pino"), "A interface deve contar endereços que ainda não possuem marcador.");
+ assert.ok(dispatchScript.includes("Endereço pronto para navegação; pino em processamento"), "Paradas sem coordenadas devem continuar disponíveis para navegação.");
+ assert.ok(dispatchScript.includes("if (!/(tecnic|hvac|refriger|instalad|mecanic|manutenc)/.test(role)) return false;"), "O seletor deve listar apenas colaboradores com cargo técnico real.");
+ assert.ok(parentRoute.includes('posicao: String(registration.position || registration.cargo || "").trim()'), "O shell deve enviar o cargo RH real e não inventar o cargo Técnico quando está vazio.");
+ assert.ok(dispatchScript.includes("function queueSelectedGeocoding(items)"), "A fila progressiva de pinos deve existir.");
+ assert.ok(dispatchScript.includes("state.geocodeGeneration"), "A troca de técnico/reabertura deve invalidar uma fila de geocodificação anterior.");
