@@ -352,6 +352,10 @@ assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localiz
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_CREATE_DISPATCH_ROUTE_ORDERS"/, 'O shell deve receber a aprovação de criação em lote.');
+assert.match(parentRoute, /changes: \{ ordens: orders \}/, 'A aprovação precisa enviar a lista efetivamente recebida para a camada relacional.');
+assert.doesNotMatch(parentRoute, /changes: \{ ordens \}/, 'A aprovação não pode referenciar uma variável inexistente.');
+assert.match(pontoFunctionsSource, /new Map<string, any>\(employees\.map/, 'A consulta de localizações deve manter a tipagem do cadastro do RH.');
+
 assert.match(parentRoute, /assignedId !== technicianEmployeeId/, 'Toda OS do lote deve ser atribuída ao técnico selecionado.');
 assert.match(parentRoute, /technicianCheck\.employee_found/, 'O servidor deve rejeitar técnico sem vínculo ativo no RH.');
 assert.match(parentRoute, /Nenhuma OS foi criada/, 'A detecção de duplicidade deve bloquear o lote antes de gravar.');
