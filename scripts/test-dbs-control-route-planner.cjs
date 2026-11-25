@@ -268,7 +268,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-4/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-5/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
@@ -380,4 +380,10 @@ assert.ok(dbsControlFunctions.includes('new URL("https://photon.komoot.io/api/")
 assert.ok(dbsControlFunctions.includes("response.status === 400"), "HTTP 400 deve acionar uma consulta simplificada, sem rotular o endereço como inexistente.");
 assert.ok(dbsControlFunctions.includes('code: "provider_unavailable"'), "Erros de rede e serviço precisam de categoria própria.");
 assert.ok(parentRoute.includes('requested.pathname.startsWith("/maps/search/")'), "O shell deve permitir pesquisa do endereço no Google Maps com host validado.");
-assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-4"), "A correção deve ser servida sem cache antigo.");
+assert.ok(html.includes("dbs-control-technician-route.js?v=20261125-5"), "A correção deve ser servida sem cache antigo.");
+
+
+// The address map must include more than 100 sites (the current customer set has 135).
+assert.ok(dispatchScript.includes("audit.candidates.slice(0, 250)"), "O mapa não pode descartar filiais após a centésima; deve suportar pelo menos 135 endereços.");
+assert.ok(dispatchScript.includes("A lista excede 250 locais."), "Somente listas acima do limite ampliado podem ser direcionadas à divisão por região.");
+assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação do mapa não pode alterar o limite de emissão de até 50 OS por lote.");
