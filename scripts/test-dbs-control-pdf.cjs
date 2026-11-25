@@ -4,6 +4,10 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../public/dbs-control-pdf.js"), "utf8");
+const mobileSource = fs.readFileSync(path.join(__dirname, "../public/dbs-control.html"), "utf8");
+const mobileShellSource = fs.readFileSync(path.join(__dirname, "../public/dbs-control-shell.html"), "utf8");
+const uxSource = fs.readFileSync(path.join(__dirname, "../public/dbs-control-ux.js"), "utf8");
+const viewerSource = fs.readFileSync(path.join(__dirname, "../public/dbs-control-os-viewer.js"), "utf8");
 
 function createPdfDocument() {
   let pages = 1;
@@ -154,6 +158,15 @@ async function main() {
     trabalhoExecutado: "Executada medição de corrente e tensão.",
   });
 
+  const duplicateLegacyReportText = "Cortina de com 120x180x210. Tensão 220w.";
+  const duplicateLegacyReport = await render({
+    id: "os-9", protocolo: "OS-9", clienteId: "client-1", tipo: "Corretiva", status: "Concluída",
+    desc: "Equipamento apresentando vazamento.",
+    relatoTecnico: duplicateLegacyReportText,
+    diagnostico: duplicateLegacyReportText,
+    trabalhoExecutado: duplicateLegacyReportText,
+  });
+
   assert.match(noEquipment.text, /Todos os equipamentos da unidade/);
   assert.match(multipleEquipment.text, /TAG-001/);
   assert.match(multipleEquipment.text, /TAG-002/);
@@ -171,10 +184,29 @@ async function main() {
   assert.match(withProblemAndExecution.text, /Cliente relata que o equipamento não refrigera e apresenta ruído\./);
   assert.match(withProblemAndExecution.text, /Capacitor de partida com falha\./);
   assert.match(withProblemAndExecution.text, /Realizada inspeção elétrica e substituição do capacitor\./);
+  assert.match(withProblemAndExecution.text, /RELATÓRIO DO TÉCNICO/);
+  assert.doesNotMatch(withProblemAndExecution.text, /DIAGNÓSTICO TÉCNICO|AÇÃO \/ PEÇAS/);
   assert.match(legacyProblem.text, /Equipamento desarma após alguns minutos de funcionamento\./);
   assert.match(legacyProblem.text, /Executada medição de corrente e tensão\./);
 
-  console.log("DBS Control PDF: equipment, checklist, parts, photo evidence and customer problem + technician execution scenarios passed.");
+  assert.equal((duplicateLegacyReport.text.match(/Cortina de com 120x180x210/g) || []).length, 1,
+    "a same-text legacy diagnosis and execution must render only once");
+  assert.equal((duplicateLegacyReport.text.match(/Tensão 220w/g) || []).length, 1,
+    "the technician's report must not repeat the same text");
+  assert.doesNotMatch(duplicateLegacyReport.text, /DIAGNÓSTICO TÉCNICO|AÇÃO \/ PEÇAS/);
+
+  const mobileReportFieldCount = (mobileSource.match(/data-testid="technical-report"/g) || []).length;
+  const shellReportFieldCount = (mobileShellSource.match(/id="dbs-mob-relato-\$\{o\.id\}"/g) || []).length;
+  assert.equal(mobileReportFieldCount, 1, "mobile login must expose one canonical technical report field");
+  assert.equal(shellReportFieldCount, 1, "mobile shell must expose one canonical technical report field");
+  assert.doesNotMatch(mobileSource, /employee-observation-field/);
+  assert.doesNotMatch(mobileShellSource, /employee-observation-field/);
+  assert.doesNotMatch(uxSource, /dbs-mob-diag-|dbs-mob-work-/,
+    "UX enhancements must not inject duplicate diagnosis/work fields");
+  assert.doesNotMatch(viewerSource, /T\('Diagnóstico'|T\('Trabalho executado'/,
+    "OS viewer must present one technical report instead of separate diagnosis/work fields");
+
+  console.log("DBS Control PDF: equipment, checklist, parts, photo evidence, one technical report, legacy fallback and mobile UI scenarios passed.");
 }
 
 main().catch(error => {
