@@ -1490,7 +1490,7 @@ function DbsControlPage() {
           }
 
           const result = await applyDbsControlDelta({
-            data: { requestId, changes: { ordens } },
+            data: { requestId, changes: { ordens: orders } },
           });
           const cloud = await getCloudStateSingleFlight();
           if (cloud?.state) {
