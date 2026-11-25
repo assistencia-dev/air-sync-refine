@@ -157,6 +157,10 @@ assert.match(mapMigration, /add column if not exists map_latitude/);
 assert.match(mapMigration, /add column if not exists map_longitude/);
 assert.match(mapMigration, /between -90 and 90/);
 assert.match(mapMigration, /between -180 and 180/);
+assert.match(mapMigration, /map_latitude is not null[\\s\\S]*map_longitude is not null/, 'Latitude e longitude precisam ser gravadas juntas.');
+assert.ok(dbsControlFunctions.includes(String.raw`.replace(/[\\u0300-\\u036f]/g, "")`), 'A validação de endereço deve normalizar acentos corretamente.');
+assert.ok(dbsControlFunctions.includes(String.raw`.replace(/\\s+/g, " ")`), 'A validação de endereço deve normalizar espaços corretamente.');
+
 
 assert.match(technicianRoute, /typeof ERP_STATE !== 'undefined'/, 'O planejador deve ler o estado lexical do iframe, não depender de window.ERP_STATE.');
 assert.match(technicianRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'A lista do seletor deve vir dos colaboradores ativos do RH.');
