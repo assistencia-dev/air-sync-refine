@@ -319,7 +319,7 @@ assert.match(dbsControlFunctions, /const baseSelect = "id,client_id,name,address
 assert.match(dbsControlFunctions, /return missingCoordinatesSchema \? querySites\(baseSelect\) : withMapCoordinates/, 'A ausência das colunas novas não pode interromper a leitura operacional do DBS CONTROL.');
 assert.match(dbsControlFunctions, /Nenhuma coordenada foi gravada/, 'O sistema deve informar claramente quando o cache de mapa ainda não existe no banco.');
 
-assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
+assert.match(dispatchScript, /rankSitesByDistance/, 'A sequência deve ser sugerida da loja mais próxima à mais distante do técnico.');
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
 assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
 assert.match(dispatchScript, /causaSolicitacao: cause/, 'A descrição do problema deve ser preservada na OS.');
