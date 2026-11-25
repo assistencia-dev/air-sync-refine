@@ -605,7 +605,7 @@
     }
     if (!mapElement) return;
     if (!state.candidates.length && !state.location && status) {
-      status.textContent = 'Carregando mapa-base. Os endereços cadastrados serão posicionados automaticamente.';
+      status.textContent = 'Mapa-base carregado. Os endereços cadastrados serão posicionados automaticamente pelo endereço registrado.';
     }
     try {
       const L = await loadLeaflet();
