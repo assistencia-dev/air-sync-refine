@@ -6,6 +6,16 @@
   const L = v => (Array.isArray(v) ? v : []);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   const first = (...v) => v.find(x => x !== undefined && x !== null && String(x).trim() !== '');
+  const technicalReport = order => {
+    const canonical = first(order?.relatoTecnico, order?.relato_tecnico);
+    if (canonical) return canonical;
+    const diagnostic = first(order?.diagnostico, order?.technical_opinion);
+    const execution = first(order?.trabalhoExecutado, order?.servicoExecutado, order?.servico_executado);
+    const normalizeReport = value => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+    if (diagnostic && execution && normalizeReport(diagnostic) === normalizeReport(execution)) return diagnostic;
+    if (diagnostic && execution) return `Diagnóstico: ${diagnostic}\\nTrabalho realizado: ${execution}`;
+    return first(execution, diagnostic, '');
+  };
   const find = (rows, id) => (id == null ? null : L(rows).find(r => [r.id, r.employeeId].some(k => k != null && String(k) === String(id))));
   const fmt = v => { if (!v) return ''; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleString('pt-BR'); };
   const isImg = s => /^data:image\//i.test(s) || /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(s);
@@ -119,7 +129,7 @@
       sec('Atendimento', `<div class="osv-grid">${F('Status', o.status)}${F('Tipo', o.tipo)}${F('Prioridade', first(o.prioridade, o.priority))}${F('SLA', o.sla)}${F('Data', o.data)}${F('Início', fmt(o.startedAt))}${F('Conclusão', fmt(first(o.concluidoEm, o.completedAt)))}${F('Técnico', first(tec.nome, o.tecnicoNome))}${F('Serviço', first(srv.nome, srv.descricao, o.servicoNome))}</div>`),
       sec('Cliente e local', `<div class="osv-grid">${F('Cliente', cli.nome)}${F('CNPJ/CPF', cli.cnpj)}${F('Contato', first(cli.contato, o.contatoNome))}${F('Telefone', first(cli.telefone, cli.phone))}${F('Local de atendimento', first(o.localAtendimento, site.nome))}${F('Endereço', first(site.endereco, o.endereco, cli.endereco))}</div>`),
       sec(`Equipamentos (${eqs.length})`, eqs.length ? `<ul class="osv-list">${eqs.map(e => `<li><span><strong>${esc(first(e.tag, 'S/N'))}</strong> ${esc([e.tipo, e.marca, e.modelo, e.capacidade].filter(Boolean).join(' · '))}${e.ambiente ? `<br><small style="color:#64748b">${esc(e.ambiente)}</small>` : ''}${e.serie ? ` <small style="color:#64748b">Série ${esc(e.serie)}</small>` : ''}</span></li>`).join('')}</ul>` : ''),
-      sec('Descrição e execução', T('Solicitação / problema', first(o.desc, o.descricao)) + T('Relato técnico', o.relatoTecnico) + T('Diagnóstico', o.diagnostico) + T('Trabalho executado', o.trabalhoExecutado) + T('Observação', o.observacao) + T('Observação técnica', first(o.observacaoTecnico, o.observacaoComplementarTecnico))),
+      sec('Descrição e execução', T('Solicitação / problema', first(o.desc, o.descricao)) + T('Relatório do técnico', technicalReport(o)) + T('Observação', o.observacao) + T('Observação técnica', first(o.observacaoTecnico, o.observacaoComplementarTecnico))),
       pend ? sec('Pendência', `<div class="osv-text" style="border-color:#f59e0b">${esc(pend[0])}</div>`) : '',
       sec('Checklist', checklist.length ? `<ul class="osv-list">${checklist.map(c => `<li><span>${esc(typeof c === 'string' ? c : first(c.item, c.label, c.nome, c.descricao))}</span><span class="osv-chip">${c.ok || c.done || c.checked || c.concluido ? '✓ Conferido' : 'Pendente'}</span></li>`).join('')}</ul>` : ''),
       sec('Peças e materiais', pecas.length ? `<ul class="osv-list">${pecas.map(p => `<li><span>${esc(typeof p === 'string' ? p : first(p.nome, p.descricao, p.name, p.item))}</span><span>${esc(typeof p === 'object' ? first(p.qtd, p.quantidade, p.quantity, '') : '')}</span></li>`).join('')}</ul>` : ''),
