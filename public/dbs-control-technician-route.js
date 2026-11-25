@@ -485,7 +485,6 @@
     state.geocoding = true;
     const successfullyGeocoded = [];
     let completed = 0;
-    const total = state.geocodeQueue.length;
     const status = byId('dbs-dispatch-status');
     try {
       while (state.geocodeQueue.length && generation === state.geocodeGeneration && byId('dbs-dispatch-route-modal')) {
