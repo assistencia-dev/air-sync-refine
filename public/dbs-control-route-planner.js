@@ -148,7 +148,7 @@
     };
   }
 
-  function buildRouteLegs(stops) {
+  function buildRouteLegs(stops, routeOrigin) {
     const source = list(stops).filter(stop => stop && asText(stop.address));
     const maxStopsPerLeg = 4; // 3 waypoints + destino: compatível com navegador móvel.
     const legs = [];
@@ -160,7 +160,14 @@
       const waypoints = group.slice(0, -1).map(stop => stop.address);
       const params = new URLSearchParams();
       params.set('api', '1');
-      if (originStop) params.set('origin', originStop.address);
+      let originValue = originStop ? originStop.address : '';
+      if (!originStop && routeOrigin) {
+        if (typeof routeOrigin === 'string') originValue = routeOrigin.trim();
+        else if (Number.isFinite(Number(routeOrigin.lat)) && Number.isFinite(Number(routeOrigin.lng))) {
+          originValue = Number(routeOrigin.lat) + ',' + Number(routeOrigin.lng);
+        } else originValue = asText(routeOrigin.address);
+      }
+      if (originValue) params.set('origin', originValue);
       params.set('destination', destination.address);
       if (waypoints.length) params.set('waypoints', waypoints.join('|'));
       params.set('travelmode', 'driving');
@@ -170,7 +177,7 @@
         index: legs.length + 1,
         firstStop: start + 1,
         lastStop: start + group.length,
-        origin: originStop ? originStop.address : '',
+        origin: originValue,
         destination: destination.address,
         url: url.length <= 2048 ? url : null,
         tooLong: url.length > 2048
