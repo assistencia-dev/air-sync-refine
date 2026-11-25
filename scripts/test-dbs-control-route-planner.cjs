@@ -12,6 +12,14 @@ vm.runInNewContext(helper, { window, URLSearchParams, Date, Math, String, Array,
 
 const planner = window.DbsControlRoutePlanner;
 assert.ok(planner, 'O planejador deve ser exposto para o DBS Control.');
+
+ // Null/empty GPS values are not valid coordinate pairs. Real zero coordinates remain valid.
+ assert.equal(planner.hasCoordinates({ lat: null, lng: null }), false, "Coordenadas nulas não podem virar o ponto 0,0.");
+ assert.equal(planner.hasCoordinates({ lat: "", lng: "" }), false, "Coordenadas vazias não podem virar o ponto 0,0.");
+ assert.equal(planner.hasCoordinates({ latitude: null, longitude: -43.2 }), false, "Par incompleto não pode gerar pino.");
+ assert.equal(planner.hasCoordinates({ lat: 0, lng: 0 }), true, "Zero só é válido quando foi realmente informado como coordenada.");
+ assert.equal(planner.hasCoordinates({ lat: -22.9, lng: -43.2 }), true, "Coordenadas reais do Rio devem ser aceitas.");
+
 assert.equal(
   planner.addressFrom({ address_json: { logradouro: 'Rua das Flores', numero: '25', bairro: 'Centro', cidade: 'Niterói', uf: 'RJ' } }),
   'Rua das Flores, 25, Centro, Niterói, RJ',
@@ -151,7 +159,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O planejador atualizado deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-3/, 'O planejador atualizado deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
@@ -268,7 +276,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-6/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-7/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
@@ -410,3 +418,10 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  assert.match(dispatchScript, /void buildSuggestions\(\);\s*void refreshLocation\(\);/, "A rota por endereço deve carregar em paralelo à consulta GPS, sem aguardar o GPS.");
  assert.match(dispatchScript, /toggle\.disabled = true;/, "O GPS deve ficar desabilitado como origem enquanto não houver posição recente autorizada.");
  assert.match(dispatchScript, /state\.location = null;\s*state\.originEnabled = false;/, "Ao trocar de técnico, a origem anterior não pode ser reutilizada.");
+
+
+ // Only real coordinates may create map markers/origins; address-only locations stay selectable and navigable.
+ assert.ok(dispatchScript.includes("const mapped = state.candidates.filter(hasValidCoordinates)"), "O mapa não deve transformar latitude/longitude nulas em pinos 0,0.");
+ assert.ok(dispatchScript.includes(".filter(hasValidCoordinates)"), "A linha da rota deve ignorar paradas sem coordenadas até localizar o pino.");
+ assert.ok(dispatchScript.includes("planner().hasCoordinates({ lat: location.latitude, lng: location.longitude })"), "GPS incompleto não pode aparecer como origem em 0,0.");
+ assert.ok(dispatchScript.includes("planner().hasCoordinates(item)"), "A triagem de coordenadas deve usar a validação compartilhada.");
