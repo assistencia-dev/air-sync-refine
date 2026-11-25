@@ -406,7 +406,7 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  assert.ok(dispatchScript.includes("queueSelectedGeocoding(state.selected)"), "A ação manual deve permitir tentar novamente os pinos das paradas selecionadas.");
  assert.ok(dispatchScript.includes("setTimeout(resolve, 1100)"), "As consultas públicas de geocodificação devem ser sequenciais e espaçadas.");
  assert.ok(!/const workers = Array.from\(\{ length: 1 \}, async \(\) => \{/.test(dispatchScript), "O mapa não deve geocodificar todos os clientes em sequência antes de liberar a rota.");
- assert.ok(dispatchScript.includes("A rota e os links do Google Maps já podem ser usados pelos endereços"), "Links da rota devem ficar disponíveis mesmo durante geocodificação.");
+ assert.ok(dispatchScript.includes("A rota e os links do Google Maps continuam disponíveis pelos endereços"), "Links da rota devem ficar disponíveis mesmo durante geocodificação.");
  assert.ok(dispatchScript.includes("Endereços sem pino"), "A interface deve contar endereços que ainda não possuem marcador.");
  assert.ok(dispatchScript.includes("Endereço pronto para navegação; pino em processamento"), "Paradas sem coordenadas devem continuar disponíveis para navegação.");
  assert.ok(dispatchScript.includes("if (!/(tecnic|hvac|refriger|instalad|mecanic|manutenc)/.test(role)) return false;"), "O seletor deve listar apenas colaboradores com cargo técnico real.");
@@ -428,3 +428,8 @@ assert.ok(dispatchScript.includes("state.selected.length >= 50"), "A ampliação
  assert.ok(dispatchScript.includes(".filter(hasValidCoordinates)"), "A linha da rota deve ignorar paradas sem coordenadas até localizar o pino.");
  assert.ok(dispatchScript.includes("planner().hasCoordinates({ lat: location.latitude, lng: location.longitude })"), "GPS incompleto não pode aparecer como origem em 0,0.");
  assert.ok(dispatchScript.includes("planner().hasCoordinates(item)"), "A triagem de coordenadas deve usar a validação compartilhada.");
+
+
+ // Opening dispatch must load the site/address catalogue before waiting for the RH technician selector.
+ assert.match(dispatchScript, /renderModal\(\);\s*\/\/ Endereços e lista aparecem primeiro;[\s\S]*void buildSuggestions\(\);\s*const dayTechnician/, "A lista de endereços deve abrir sem aguardar a resposta do RH.");
+ assert.doesNotMatch(dispatchScript, /Nenhum técnico ativo encontrado no RH[\s\S]{0,400}void buildSuggestions\(\)/, "A ausência de técnico disponível não pode ser a etapa que inicia o carregamento do mapa.");
