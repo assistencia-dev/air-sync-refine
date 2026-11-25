@@ -396,6 +396,8 @@
         + causeField + '</div></article>';
     }).join('') : '<div class="dbs-dispatch-empty">Selecione os locais que deseja atender. O DBS sugere a sequência a partir da posição do técnico, e você pode reorganizar tudo antes de abrir as OS.</div>';
 
+    showReview();
+    validateCreateButton();
     renderMapAndLinks();
   }
 
@@ -623,7 +625,7 @@
       ? window.crypto.randomUUID()
       : 'dispatch-route-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     const createdAt = new Date().toISOString();
-    const orders = state.selected.map(stop => {
+    const orders = state.selected.map((stop, index) => {
       const type = stop.serviceType;
       const cause = String(stop.cause || '').trim();
       const idKey = stop.siteId || stop.clientId;
@@ -647,7 +649,7 @@
         rotaOrigem: requestId,
         rotaTecnicoId: String(technician.id),
         rotaData: routeDate,
-        rotaSequencia: stop.sequence,
+        rotaSequencia: index + 1,
         ...(isPmoc(type) ? { pmocCompetencia: routeDate.slice(0, 7), pmocOrigemRota: requestId } : {})
       };
     });
