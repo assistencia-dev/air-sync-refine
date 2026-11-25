@@ -157,10 +157,9 @@
       state.technician = null;
       if (status) {
         status.textContent = loadError
-          ? 'GPS do técnico indisponível (' + loadError + '). O mapa de clientes será carregado pelo endereço cadastrado.'
-          : 'Selecione um técnico para usar o GPS como origem. O mapa de clientes será carregado independentemente.';
+          ? 'Consulta de técnicos indisponível (' + loadError + '). Os endereços continuam disponíveis para navegação.'
+          : 'Selecione um técnico para usar o GPS como origem. Os endereços já estão carregados para planejamento.';
       }
-      void buildSuggestions();
     }
   }
 
@@ -1102,6 +1101,8 @@
     modal.__previousFocus = document.activeElement;
     document.body.appendChild(modal);
     renderModal();
+    // Endereços e lista aparecem primeiro; a consulta de técnicos/RH não bloqueia o mapa.
+    void buildSuggestions();
     const dayTechnician = byId('day-filter-tecnico');
     void loadActiveTechnicians(dayTechnician && dayTechnician.value || '');
     return modal;
