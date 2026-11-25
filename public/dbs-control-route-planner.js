@@ -296,32 +296,42 @@
   }
 
   function enrichSiteCandidates(candidates, orders, equipment, nowValue = Date.now()) {
+    const candidateRows = list(candidates);
     const sourceOrders = list(orders).filter(order => order && !order.deleted_at && !order.excluidaEm && !order.arquivadaEm);
     const sourceEquipment = list(equipment).filter(item => item && !item.deleted_at);
     const normalizeStatus = value => normalizeKey(value).replace(/[_-]+/g, ' ');
     const isCancelled = order => /cancelad/.test(normalizeStatus(order.status ?? order.situacao));
     const isTerminal = order => terminalStatus(order) || isCancelled(order);
     const isInProgress = order => /em atendimento|em andamento|execucao|deslocamento|em campo|in loco/.test(normalizeStatus(order.status ?? order.situacao));
-    const isEmergency = order => /emergenc|urgente|critico/.test(normalizeStatus(order.type ?? order.tipo ?? order.prioridade ?? order.priority));
+    const isEmergency = order => [order.type, order.tipo, order.prioridade, order.priority]
+      .map(normalizeStatus).join(' ').match(/emergenc|urgente|critico|alta|high/) !== null;
     const isOverdue = order => {
       if (isTerminal(order)) return false;
       const raw = firstText(order.sla, order.sla_deadline, order.slaDeadline);
       const due = raw ? Date.parse(raw) : NaN;
       return Number.isFinite(due) && due < nowValue;
     };
-    return list(candidates).map(candidate => {
+    const candidateSitesByClient = new Map();
+    candidateRows.forEach(candidate => {
+      const clientId = asText(candidate && (candidate.clientId ?? candidate.client_id));
+      if (!clientId) return;
+      const sites = candidateSitesByClient.get(clientId) || [];
+      sites.push(asText(candidate.siteId ?? candidate.site_id ?? candidate.id));
+      candidateSitesByClient.set(clientId, sites);
+    });
+    const isUniqueClientSite = clientId => (candidateSitesByClient.get(clientId) || []).length === 1;
+    const belongsToCandidate = (record, siteId, clientId) => {
+      const recordSiteId = asText(record.siteId ?? record.localId ?? record.site_id);
+      const recordClientId = asText(record.clienteId ?? record.client_id ?? record.clientId);
+      if (recordSiteId) return recordSiteId === siteId;
+      return Boolean(clientId && recordClientId === clientId && isUniqueClientSite(clientId));
+    };
+
+    const enriched = candidateRows.map(candidate => {
       const siteId = asText(candidate.siteId ?? candidate.site_id ?? candidate.id);
       const clientId = asText(candidate.clientId ?? candidate.client_id);
-      const siteOrders = sourceOrders.filter(order => {
-        const orderSiteId = asText(order.siteId ?? order.localId ?? order.site_id);
-        const orderClientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
-        return (orderSiteId && orderSiteId === siteId) || (!orderSiteId && clientId && orderClientId === clientId);
-      });
-      const siteEquipment = sourceEquipment.filter(item => {
-        const equipmentSiteId = asText(item.siteId ?? item.localId ?? item.site_id);
-        const equipmentClientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
-        return (equipmentSiteId && equipmentSiteId === siteId) || (!equipmentSiteId && clientId && equipmentClientId === clientId);
-      });
+      const siteOrders = sourceOrders.filter(order => belongsToCandidate(order, siteId, clientId));
+      const siteEquipment = sourceEquipment.filter(item => belongsToCandidate(item, siteId, clientId));
       const activeOrders = siteOrders.filter(order => !isTerminal(order));
       const inProgressCount = activeOrders.filter(isInProgress).length;
       const openCount = activeOrders.length - inProgressCount;
@@ -340,10 +350,24 @@
         mapCoordinatesSource: candidate.lat != null && candidate.lng != null ? 'saved' : null
       };
     });
+
+    const ordersWithoutSpecificSite = sourceOrders.filter(order => {
+      const siteId = asText(order.siteId ?? order.localId ?? order.site_id);
+      const clientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
+      return !siteId && clientId && (candidateSitesByClient.get(clientId) || []).length > 1 && !isTerminal(order);
+    }).length;
+    const equipmentWithoutSpecificSite = sourceEquipment.filter(item => {
+      const siteId = asText(item.siteId ?? item.localId ?? item.site_id);
+      const clientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
+      return !siteId && clientId && (candidateSitesByClient.get(clientId) || []).length > 1;
+    }).length;
+    enriched.unallocated = { orders: ordersWithoutSpecificSite, equipment: equipmentWithoutSpecificSite };
+    return enriched;
   }
 
   function summarizeSiteMetrics(candidates) {
     const sites = list(candidates);
+    const unallocated = sites.unallocated || {};
     return {
       locations: sites.length,
       mappedLocations: sites.filter(site => coordinate(site.lat, -90, 90) !== null && coordinate(site.lng, -180, 180) !== null).length,
@@ -351,7 +375,9 @@
       inProgressOrders: sites.reduce((sum, site) => sum + Number(site.inProgressOrders || 0), 0),
       overdueOrders: sites.reduce((sum, site) => sum + Number(site.overdueOrders || 0), 0),
       emergencyOrders: sites.reduce((sum, site) => sum + Number(site.emergencyOrders || 0), 0),
-      equipment: sites.reduce((sum, site) => sum + Number(site.equipmentCount || 0), 0)
+      equipment: sites.reduce((sum, site) => sum + Number(site.equipmentCount || 0), 0),
+      ordersWithoutSpecificSite: Number(unallocated.orders || 0),
+      equipmentWithoutSpecificSite: Number(unallocated.equipment || 0)
     };
   }
 
@@ -410,6 +436,7 @@
       cursor = next;
     }
 
+    if (Array.isArray(stops) && stops.unallocated) ordered.unallocated = { ...stops.unallocated };
     return {
       stops: ordered,
       distanceEstimateKm: Math.round(ordered.reduce((total, stop) => total + (stop.distanceFromPreviousKm || 0), 0) * 10) / 10,
