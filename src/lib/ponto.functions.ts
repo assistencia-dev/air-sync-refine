@@ -851,13 +851,16 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
       const employeeId = String(session.employee_id ?? "");
       if (employeeId && !latestByEmployee.has(employeeId)) latestByEmployee.set(employeeId, session);
     }
-    const employeeIds = [...latestByEmployee.keys()];
-    const employees = employeeIds.length
-      ? (await supabaseAdmin.from("rh_employees").select("id, full_name, unit").in("id", employeeIds)).data ?? []
-      : [];
+    const employeeIds = data.employee_id ? [data.employee_id] : [...latestByEmployee.keys()];
+    const employeeResult = employeeIds.length
+      ? await supabaseAdmin.from("rh_employees").select("id, full_name, unit").eq("is_active", true).in("id", employeeIds)
+      : { data: [], error: null };
+    if (employeeResult.error) throw new Error(employeeResult.error.message);
+    const employees = employeeResult.data ?? [];
     const employeeById = new Map(employees.map((employee: any) => [String(employee.id), employee]));
     const now = Date.now();
     return {
+      employee_found: data.employee_id ? employeeById.has(data.employee_id) : undefined,
       locations: [...latestByEmployee.values()].map((session: any) => {
         const employee = employeeById.get(String(session.employee_id));
         const hasCoordinates = session.last_latitude != null && session.last_longitude != null;
