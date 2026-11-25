@@ -326,12 +326,16 @@
       return Number.isFinite(due) && due < nowValue;
     };
     const candidateSitesByClient = new Map();
+    const knownSiteCountByClient = new Map();
     candidateRows.forEach(candidate => {
       const clientId = asText(candidate && (candidate.clientId ?? candidate.client_id));
       if (!clientId) return;
       const sites = candidateSitesByClient.get(clientId) || [];
       sites.push(asText(candidate.siteId ?? candidate.site_id ?? candidate.id));
       candidateSitesByClient.set(clientId, sites);
+      const knownCount = Number(candidate.clientSiteCount);
+      const previousCount = knownSiteCountByClient.get(clientId) || 0;
+      knownSiteCountByClient.set(clientId, Math.max(previousCount, Number.isFinite(knownCount) ? knownCount : sites.length));
     });
     const isUniqueClientSite = clientId => {
       const matches = candidateRows.filter(candidate => asText(candidate && (candidate.clientId ?? candidate.client_id)) === clientId);
@@ -373,12 +377,12 @@
     const ordersWithoutSpecificSite = sourceOrders.filter(order => {
       const siteId = asText(order.siteId ?? order.localId ?? order.site_id);
       const clientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
-      return !siteId && clientId && (candidateSitesByClient.get(clientId) || []).length > 1 && !isTerminal(order);
+      return !siteId && clientId && Number(knownSiteCountByClient.get(clientId) || 0) > 1 && !isTerminal(order);
     }).length;
     const equipmentWithoutSpecificSite = sourceEquipment.filter(item => {
       const siteId = asText(item.siteId ?? item.localId ?? item.site_id);
       const clientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
-      return !siteId && clientId && (candidateSitesByClient.get(clientId) || []).length > 1;
+      return !siteId && clientId && Number(knownSiteCountByClient.get(clientId) || 0) > 1;
     }).length;
     enriched.unallocated = { orders: ordersWithoutSpecificSite, equipment: equipmentWithoutSpecificSite };
     return enriched;
