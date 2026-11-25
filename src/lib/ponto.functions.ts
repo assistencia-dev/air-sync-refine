@@ -857,6 +857,39 @@ export const verifyRhDbsControlTechnician = createServerFn({ method: "GET" })
     };
   });
 
+async function readLatestPontoGpsLocation(employee: { id: string; full_name?: string | null; unit?: string | null }) {
+  const { data, error } = await supabaseAdmin.from("rh_ponto_records")
+    .select("id, employee_id, punch_type, punched_at, latitude, longitude, gps_accuracy_m")
+    .eq("employee_id", employee.id)
+    .not("latitude", "is", null)
+    .not("longitude", "is", null)
+    .order("punched_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const point = data?.[0];
+  if (!point || point.latitude == null || point.longitude == null) return null;
+  const recordedAt = point.punched_at ?? null;
+  const parsedAt = recordedAt ? Date.parse(recordedAt) : NaN;
+  return {
+    session_id: null,
+    employee_id: String(employee.id),
+    full_name: employee.full_name ?? "Colaborador",
+    unit: employee.unit ?? null,
+    work_date: null,
+    started_at: null,
+    ended_at: recordedAt,
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+    accuracy_m: point.gps_accuracy_m == null ? null : Number(point.gps_accuracy_m),
+    last_position_at: recordedAt,
+    position_age_ms: Number.isFinite(parsedAt) ? Math.max(0, Date.now() - parsedAt) : null,
+    is_live: false,
+    location_status: "last_known",
+    location_source: "ponto",
+    punch_type: point.punch_type ?? null,
+  };
+}
+
 /**
  * Lê a última posição compartilhada de um técnico ativo do RH.
  * Se a migração do DBS FLEET ainda não estiver no banco, devolve apenas
@@ -899,10 +932,15 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
         || error.code === "PGRST205"
         || /relation .*rh_employee_location_sessions.*does not exist|could not find the table .*rh_employee_location_sessions.* in the schema cache/i.test(String(error.message ?? ""));
       if (missingFleetTable) {
+        const fallbackLocation = requestedEmployee
+          ? await readLatestPontoGpsLocation(requestedEmployee)
+          : null;
         return {
           employee_found: data.employee_id ? Boolean(requestedEmployee) : undefined,
-          locations: [],
-          location_unavailable_reason: "O módulo de GPS do DBS FLEET ainda não está disponível neste banco. A rota pode ser planejada pelos endereços cadastrados; a posição aparecerá assim que o compartilhamento e a estrutura do FLEET estiverem ativos.",
+          locations: fallbackLocation ? [fallbackLocation] : [],
+          location_unavailable_reason: fallbackLocation
+            ? "O rastreamento ao vivo do DBS FLEET ainda não está ativo neste banco. O pino mostra somente a última coordenada registrada na batida de ponto; não acompanha o deslocamento em tempo real."
+            : "O rastreamento ao vivo do DBS FLEET ainda não está ativo neste banco e não há batida de ponto com coordenadas para este técnico. A rota continua disponível pelos endereços cadastrados.",
         };
       }
       throw new Error(error.message);
@@ -923,10 +961,7 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
     const employees = employeeResult.data ?? [];
     const employeeById = new Map(employees.map((employee: any) => [String(employee.id), employee]));
     const now = Date.now();
-    return {
-      employee_found: data.employee_id ? employeeById.has(data.employee_id) : undefined,
-      location_unavailable_reason: null,
-      locations: [...latestByEmployee.values()].map((session: any) => {
+    const locations = [...latestByEmployee.values()].map((session: any) => {
         const employee = employeeById.get(String(session.employee_id));
         const hasCoordinates = session.last_latitude != null && session.last_longitude != null;
         const positionAgeMs = session.last_position_at ? Math.max(0, now - Date.parse(session.last_position_at)) : null;
@@ -946,7 +981,24 @@ export const listRhFleetTechnicianLocations = createServerFn({ method: "GET" })
           position_age_ms: positionAgeMs,
           is_live: isLive,
           location_status: !hasCoordinates ? "unavailable" : isLive ? "live" : "last_known",
+          location_source: "fleet",
         };
-      }),
+      });
+    if (data.employee_id && !locations.some((location: any) => location.latitude != null && location.longitude != null)) {
+      const fallbackLocation = requestedEmployee
+        ? await readLatestPontoGpsLocation(requestedEmployee)
+        : null;
+      if (fallbackLocation) {
+        return {
+          employee_found: employeeById.has(data.employee_id),
+          locations: [fallbackLocation],
+          location_unavailable_reason: "Não há sessão de rastreamento ativo do DBS FLEET para este técnico. O pino mostra somente a última coordenada registrada na batida de ponto; não acompanha o deslocamento em tempo real.",
+        };
+      }
+    }
+    return {
+      employee_found: data.employee_id ? employeeById.has(data.employee_id) : undefined,
+      location_unavailable_reason: null,
+      locations,
     };
   });

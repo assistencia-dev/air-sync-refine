@@ -18,7 +18,7 @@ import {
   withDbsControlLocalSyncLock,
   type DbsControlLocalSyncCommand,
 } from "@/lib/dbs-control.local-sync";
-import { listRhFleetTechnicianLocations, verifyRhDbsControlTechnician } from "@/lib/ponto.functions";
+import { listRhFleetTechnicianLocations, listRhPontoEmployees, verifyRhDbsControlTechnician } from "@/lib/ponto.functions";
 import {
   getFieldControlIntegrationStatus,
   saveFieldControlApiKey,
@@ -1299,6 +1299,44 @@ function DbsControlPage() {
     const handler = async (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const msg = event.data || {};
+      if (msg.type === "DBS_CONTROL_LIST_ACTIVE_TECHNICIANS") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_ACTIVE_TECHNICIANS_RESULT",
+            requestId,
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, error: "A consulta de técnicos é restrita à administração." });
+            return;
+          }
+          const employees = await listRhPontoEmployees();
+          const technicians = (Array.isArray(employees) ? employees : [])
+            .filter((employee: any) => employee?.id && employee.is_active !== false)
+            .map((employee: any) => {
+              const registration = employee.registration_data && typeof employee.registration_data === "object"
+                ? employee.registration_data : {};
+              return {
+                id: String(employee.id),
+                employeeId: String(employee.id),
+                nome: String(employee.full_name ?? "Colaborador"),
+                email: String(registration.email ?? "").trim().toLowerCase(),
+                fone: registration.phone || registration.telefone || "",
+                telefone: registration.phone || registration.telefone || "",
+                posicao: registration.position || registration.cargo || "Técnico",
+                unit: employee.unit ?? null,
+                is_active: true,
+              };
+            });
+          reply({ ok: true, technicians });
+        } catch (error) {
+          reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível carregar os técnicos ativos do RH." });
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION") {
         const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
         const reply = (payload: Record<string, unknown>) => {

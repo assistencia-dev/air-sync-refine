@@ -90,6 +90,15 @@ assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
 
 const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx', 'utf8');
+const technicianRoute = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
+const dbsControlFunctions = fs.readFileSync('src/lib/dbs-control.functions.ts', 'utf8');
+const pontoFunctionsSource = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
+assert.match(technicianRoute, /typeof ERP_STATE !== 'undefined'/, 'O planejador deve ler o estado lexical do iframe, não depender de window.ERP_STATE.');
+assert.match(technicianRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'A lista do seletor deve vir dos colaboradores ativos do RH.');
+assert.match(parentRoute, /listRhPontoEmployees\(\)/, 'O bridge administrativo deve consultar o RH para a lista ativa de técnicos.');
+assert.match(dbsControlFunctions, /row\.address_json\.texto/, 'A hidratação deve aproveitar o campo texto dos endereços reais dos locais.');
+assert.match(pontoFunctionsSource, /readLatestPontoGpsLocation/, 'Sem a tabela do FLEET, o sistema deve tentar a última coordenada válida do ponto.');
+assert.match(pontoFunctionsSource, /location_source: "ponto"/, 'A coordenada do ponto deve ser marcada como última posição, nunca como rastreamento ao vivo.');
 const pmocHelper = fs.readFileSync('public/dbs-control-pmoc-route.js', 'utf8');
 const pmocWindow = {};
 vm.runInNewContext(pmocHelper, { window: pmocWindow, Math, String, Array, Object, Map, Set }, {
@@ -179,7 +188,7 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-1/, 'O novo despacho deve ser carregado depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-2/, 'O novo despacho deve ser carregado depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
@@ -230,6 +239,8 @@ assert.match(pontoFunctions, /export const listRhFleetTechnicianLocations = crea
 assert.match(pontoFunctions, /export const verifyRhDbsControlTechnician = createServerFn/, 'A atribuição deve validar o vínculo RH sem depender das tabelas GPS.');
 assert.match(pontoFunctions, /location_unavailable_reason:/, 'A ausência da migração Fleet deve virar aviso, não bloquear a rota por endereço.');
 assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id: technicianEmployeeId \} \}\)/, 'A criação de OS deve validar o técnico independentemente do GPS.');
+assert.match(parentRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'O bridge precisa responder ao carregamento dos técnicos ativos.');
+assert.match(technicianRoute, /Mapa-base carregado/, 'O mapa-base deve aparecer antes da geocodificação dos endereços.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');
 assert.match(pontoFunctions, /employee_found:/, 'O servidor deve confirmar o vínculo ativo do técnico, mesmo sem sessão GPS.');
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_GET_TECHNICIAN_LOCATION"/, 'O shell deve receber consulta de localização.');
