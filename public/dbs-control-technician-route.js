@@ -79,9 +79,7 @@
 
   function getTechnicians() {
     const erp = getErpState();
-    const source = state.techniciansLoaded
-      ? state.technicians
-      : (Array.isArray(erp.tecnicos) ? erp.tecnicos : []);
+    const source = state.techniciansLoaded ? state.technicians : [];
     const seen = new Set();
     return source.filter(item => {
       if (!item || item.is_active === false || item.active === false
@@ -125,6 +123,7 @@
     const select = byId('dbs-dispatch-technician');
     if (!select) return;
     const status = byId('dbs-dispatch-status');
+    let loadError = null;
     try {
       const result = await requestActiveTechnicians();
       if (!result || !result.ok || !Array.isArray(result.technicians)) {
@@ -133,9 +132,9 @@
       state.technicians = result.technicians;
       state.techniciansLoaded = true;
     } catch (error) {
-      state.techniciansLoaded = false;
-      if (status) status.textContent = (error && error.message || 'Consulta do RH indisponível.')
-        + ' A lista já carregada no DBS será mantida como alternativa.';
+      state.technicians = [];
+      state.techniciansLoaded = true;
+      loadError = error && error.message || 'Consulta do RH indisponível.';
     }
     const technicians = getTechnicians();
     const keepId = String(preferredId || state.technician?.id || '');
@@ -148,7 +147,9 @@
     else {
       state.technician = null;
       if (!technicians.length && status) {
-        status.textContent = 'O RH não retornou técnicos ativos vinculados. Confira o cadastro e o vínculo do colaborador.';
+        status.textContent = loadError
+          ? 'Falha ao carregar técnicos ativos do RH: ' + loadError
+          : 'O RH não retornou técnicos ativos vinculados. Confira o cadastro e o vínculo do colaborador.';
       }
     }
   }
@@ -559,10 +560,12 @@
       if (origin) {
         L.circleMarker(origin, { radius: 10, color: '#064e3b', weight: 3, fillColor: '#34d399', fillOpacity: 1 })
           .bindPopup('<strong>Última posição de ' + safe(getTechnicianLabel(state.technician)) + '</strong><br>' + safe(dateTime(state.location.last_position_at))
-            + '<br>' + (state.location.is_live ? 'GPS recente' : 'Última posição conhecida')).addTo(state.mapLayer);
+            + '<br>' + (state.location.location_source === 'ponto'
+              ? 'Última batida de ponto · sem rastreamento ao vivo'
+              : state.location.is_live ? 'GPS recente' : 'Última posição conhecida')).addTo(state.mapLayer);
         bounds.push(origin);
       }
-      const plottedStops = state.selected.length ? state.selected : state.candidates.slice(0, 15);
+      const plottedStops = state.selected.length ? state.selected : state.candidates.slice(0, 100);
       const coordinates = plottedStops.map((stop, index) => {
         const point = [Number(stop.lat), Number(stop.lng)];
         L.circleMarker(point, {
@@ -805,6 +808,7 @@
     state.requestId = null;
     state.creating = false;
     state.result = null;
+    state.technician = null;
     const modal = document.createElement('div');
     modal.id = 'dbs-dispatch-route-modal';
     modal.setAttribute('role', 'dialog');
