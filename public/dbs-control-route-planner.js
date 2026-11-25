@@ -306,7 +306,7 @@
       });
     });
 
-    return { candidates, review };
+    return { candidates, review, activeSiteCountByClient: Object.fromEntries(activeSiteCountByClient) };
   }
 
   function enrichSiteCandidates(candidates, orders, equipment, nowValue = Date.now()) {
@@ -326,7 +326,10 @@
       return Number.isFinite(due) && due < nowValue;
     };
     const candidateSitesByClient = new Map();
-    const knownSiteCountByClient = new Map();
+    const knownSiteCountByClient = new Map(
+      Object.entries(Array.isArray(candidateRows.activeSiteCountByClient) ? {} : (candidateRows.activeSiteCountByClient || {}))
+        .map(([clientId, count]) => [clientId, Number(count) || 0])
+    );
     candidateRows.forEach(candidate => {
       const clientId = asText(candidate && (candidate.clientId ?? candidate.client_id));
       if (!clientId) return;
@@ -339,9 +342,10 @@
     });
     const isUniqueClientSite = clientId => {
       const matches = candidateRows.filter(candidate => asText(candidate && (candidate.clientId ?? candidate.client_id)) === clientId);
-      if (matches.length !== 1) return false;
-      const knownActiveSites = Number(matches[0].clientSiteCount);
-      return Number.isFinite(knownActiveSites) ? knownActiveSites <= 1 : matches.length === 1;
+      const knownActiveSites = Number(knownSiteCountByClient.get(clientId) ?? (matches[0] && matches[0].clientSiteCount));
+      if (knownActiveSites > 1) return false;
+      if (knownActiveSites === 1) return matches.length === 1 && Boolean(matches[0]?.siteId ?? matches[0]?.site_id);
+      return matches.length === 1;
     };
     const belongsToCandidate = (record, siteId, clientId) => {
       const recordSiteId = asText(record.siteId ?? record.localId ?? record.site_id);
@@ -377,12 +381,12 @@
     const ordersWithoutSpecificSite = sourceOrders.filter(order => {
       const siteId = asText(order.siteId ?? order.localId ?? order.site_id);
       const clientId = asText(order.clienteId ?? order.client_id ?? order.clientId);
-      return !siteId && clientId && Number(knownSiteCountByClient.get(clientId) || 0) > 1 && !isTerminal(order);
+      return !siteId && !isTerminal(order) && (!clientId || !isUniqueClientSite(clientId));
     }).length;
     const equipmentWithoutSpecificSite = sourceEquipment.filter(item => {
       const siteId = asText(item.siteId ?? item.localId ?? item.site_id);
       const clientId = asText(item.clienteId ?? item.client_id ?? item.clientId);
-      return !siteId && clientId && Number(knownSiteCountByClient.get(clientId) || 0) > 1;
+      return !siteId && (!clientId || !isUniqueClientSite(clientId));
     }).length;
     enriched.unallocated = { orders: ordersWithoutSpecificSite, equipment: equipmentWithoutSpecificSite };
     return enriched;
