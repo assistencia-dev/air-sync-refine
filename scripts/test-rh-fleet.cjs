@@ -27,7 +27,7 @@ assert.match(migration, /location_source text CHECK/, "O SOS deve identificar se
 assert.match(migration, /CREATE EXTENSION IF NOT EXISTS pg_cron/, "A retenção deve ter agendamento automático no Postgres.");
 assert.match(migration, /cron\.schedule\(/, "A limpeza de retenção deve estar agendada diariamente.");
 assert.match(migration, /dbs_fleet_cleanup_retention/, "A função de retenção automática deve existir.");
-assert.ok(migration.includes("AS $") && migration.includes("END;\n$;"), "A função de retenção deve usar delimitadores dollar-quote SQL válidos.");
+assert.ok(migration.includes("AS " + "$$") && migration.includes("END;\n" + "$$;"), "A função de retenção deve usar delimitadores dollar-quote SQL válidos.");
 assert.match(migration, /rh_employee_location_sessions_one_active_employee/, "Deve impedir duas sessões simultâneas por funcionário.");
 assert.match(migration, /accuracy_m numeric\(10,2\) NOT NULL CHECK \(accuracy_m BETWEEN 0 AND 250\)/, "Pontos devem ter limite de precisão.");
 
