@@ -92,6 +92,14 @@ assert.equal(siteMetrics[0].inProgressOrders, 1, 'Indicador de OS em atendimento
 assert.equal(siteMetrics[0].overdueOrders, 1, 'OS só deve ser marcada vencida quando o SLA cadastrado expirou.');
 assert.equal(siteMetrics[0].emergencyOrders, 1, 'Atendimentos emergenciais devem aparecer como indicador separado.');
 assert.equal(siteMetrics[0].equipmentCount, 1, 'O mapa deve mostrar equipamentos vinculados ao local.');
+const newlyGeocodedSite = planner.enrichSiteCandidates(
+  [{ id: 'new-site', siteId: 'new-site', clientId: 'new-client', lat: -22.9, lng: -43.2, mapCoordinatesSource: 'address_geocoded' }],
+  [],
+  [],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(newlyGeocodedSite[0].mapCoordinatesSource, 'address_geocoded', 'Coordenadas da primeira geocodificação precisam continuar identificadas para serem persistidas.');
+
 const siteSummary = planner.summarizeSiteMetrics(siteMetrics);
 assert.equal(siteSummary.locations, 1);
 assert.equal(siteSummary.mappedLocations, 1);
