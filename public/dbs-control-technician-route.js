@@ -22,6 +22,7 @@
     geocoding: false,
     geocodeQueue: [],
     geocodingIds: new Set(),
+    geocodeMapOnlyIds: new Set(),
     geocodeGeneration: 0,
     locationGeneration: 0,
     technicians: [],
@@ -186,6 +187,7 @@
     state.geocoding = false;
     state.geocodeQueue = [];
     state.geocodingIds = new Set();
+    state.geocodeMapOnlyIds = new Set();
     state.geocodeGeneration += 1;
     state.locationGeneration += 1;
   }
@@ -480,6 +482,17 @@
     if (state.geocodeQueue.length && !state.geocoding) void drainGeocodingQueue(state.geocodeGeneration);
   }
 
+  function queueMapGeocoding(items) {
+    (Array.isArray(items) ? items : []).forEach(item => {
+      if (!item || hasValidCoordinates(item) || state.geocodingIds.has(String(item.id || ''))) return;
+      const id = String(item.id || '');
+      state.geocodingIds.add(id);
+      state.geocodeMapOnlyIds.add(id);
+      state.geocodeQueue.push(item);
+    });
+    if (state.geocodeQueue.length && !state.geocoding) void drainGeocodingQueue(state.geocodeGeneration);
+  }
+
   async function drainGeocodingQueue(generation) {
     if (state.geocoding || generation !== state.geocodeGeneration) return;
     state.geocoding = true;
@@ -491,9 +504,11 @@
         const candidate = state.geocodeQueue.shift();
         if (!candidate) continue;
         try {
-          const stillSelected = state.selected.some(item => String(item.id || '') === String(candidate.id || ''));
-          if (!stillSelected) {
-            state.geocodingIds.delete(String(candidate.id || ''));
+          const candidateId = String(candidate.id || '');
+          const stillSelected = state.selected.some(item => String(item.id || '') === candidateId);
+          const neededForMap = state.geocodeMapOnlyIds.has(candidateId);
+          if (!stillSelected && !neededForMap) {
+            state.geocodingIds.delete(candidateId);
             continue;
           }
           const point = await geocodeAddress(candidate.address);
@@ -515,7 +530,9 @@
           if (generation !== state.geocodeGeneration) return;
           addReviewItem(candidate, error);
         } finally {
-          state.geocodingIds.delete(String(candidate.id || ''));
+          const candidateId = String(candidate.id || '');
+          state.geocodingIds.delete(candidateId);
+          state.geocodeMapOnlyIds.delete(candidateId);
         }
         completed += 1;
         if (status) status.textContent = 'Pinos localizados nesta sessão: ' + completed
@@ -586,13 +603,15 @@
         status.textContent = state.technician
           ? state.candidates.length + ' locais carregados para ' + getTechnicianLabel(state.technician) + '. '
             + state.selected.length + ' paradas sugeridas. ' + metrics.mappedLocations + ' com pino salvo e '
-            + pendingPins + ' roteáveis pelo endereço enquanto o pino é localizado. '
+            + pendingPins + ' pino(s) serão localizados em segundo plano; as paradas já são roteáveis pelos endereços. '
             + metrics.openOrders + ' OS abertas, ' + metrics.inProgressOrders + ' em atendimento e '
             + metrics.overdueOrders + ' vencidas.'
           : state.candidates.length + ' locais ativos carregados com endereço. Selecione um técnico para montar a rota. '
-            + metrics.mappedLocations + ' pinos já salvos; os demais locais permanecem selecionáveis pelo endereço.';
+            + metrics.mappedLocations + ' pinos já salvos; os demais serão localizados em segundo plano e continuam disponíveis pelo endereço.';
       }
-      if (state.technician && state.selected.length) queueSelectedGeocoding(state.selected);
+      // Preenche todos os pinos gradualmente sem bloquear o despacho por endereço.
+      // Os endereços continuam selecionáveis/navegáveis durante toda a fila.
+      if (state.candidates.length) queueMapGeocoding(state.candidates);
     } catch (error) {
       if (status) status.textContent = error && error.message || 'Não foi possível carregar os locais do despacho.';
     } finally {
