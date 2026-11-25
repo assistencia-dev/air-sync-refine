@@ -379,6 +379,7 @@ assert.match(parentRoute, /verifyRhDbsControlTechnician\(\{ data: \{ employee_id
 assert.match(parentRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'O bridge precisa responder ao carregamento dos técnicos ativos.');
 assert.match(technicianRoute, /Mapa de lojas, clientes e colaboradores/, 'O mapa inclui lojas, clientes e colaboradores.');
 assert.match(technicianRoute, /state\.staff = result\.employees/, 'A lista lateral recebe todos os funcionários ativos, não só cargos técnicos.');
+assert.match(technicianRoute, /if \(!state\.staff\.length\) state\.staff = state\.technicians/, 'A resposta limitada do seletor não pode sobrescrever o cadastro completo do RH já carregado.');
 assert.match(technicianRoute, /employee\.full_name \|\| employee\.nome/, 'O cadastro do RH deve exibir o nome completo do colaborador.');
 assert.match(technicianRoute, /GPS recente/, 'O mapa identifica GPS recente.');
 assert.match(pontoFunctions, /await requireRh\(context\)/, 'A leitura da localização deve ser restrita ao RH.');

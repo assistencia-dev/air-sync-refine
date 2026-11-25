@@ -143,12 +143,11 @@
         throw new Error(result && result.error || 'Não foi possível consultar o cadastro ativo do RH.');
       }
       state.technicians = result.technicians;
-      state.staff = Array.isArray(result.employees) ? result.employees : result.technicians;
+      if (!state.staff.length) state.staff = state.technicians;
       state.techniciansLoaded = true;
       renderTeamList();
     } catch (error) {
       state.technicians = [];
-      state.staff = [];
       state.techniciansLoaded = true;
       renderTeamList();
       loadError = error && error.message || 'Consulta do RH indisponível.';

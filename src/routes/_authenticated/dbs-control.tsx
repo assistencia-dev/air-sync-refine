@@ -1331,7 +1331,7 @@ function DbsControlPage() {
                 is_active: true,
               };
             });
-          reply({ ok: true, technicians, employees: technicians });
+          reply({ ok: true, technicians });
         } catch (error) {
           reply({ ok: false, error: error instanceof Error ? error.message : "Não foi possível carregar os técnicos ativos do RH." });
         }
