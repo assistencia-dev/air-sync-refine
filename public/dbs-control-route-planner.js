@@ -221,6 +221,12 @@
     return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null;
   }
 
+  function hasCoordinates(value) {
+    return Boolean(value
+      && coordinate(value.lat ?? value.latitude, -90, 90) !== null
+      && coordinate(value.lng ?? value.longitude, -180, 180) !== null);
+  }
+
   function buildSiteCandidates(sites, clients) {
     const clientMap = new Map(list(clients).map(client => [asText(client && client.id), client]));
     const candidates = [];
@@ -479,6 +485,7 @@
     enrichSiteCandidates,
     summarizeSiteMetrics,
     distanceKm,
+    hasCoordinates,
     optimizeStops,
     buildRouteLegs
   };
