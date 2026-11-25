@@ -20,7 +20,9 @@ begin
       check (
         (map_latitude is null and map_longitude is null)
         or (
-          map_latitude between -90 and 90
+          map_latitude is not null
+          and map_longitude is not null
+          and map_latitude between -90 and 90
           and map_longitude between -180 and 180
         )
       );
