@@ -344,8 +344,8 @@ assert.doesNotMatch(ux, /quick-flow\{display:none!important\}/, "O guia de fluxo
 assert.doesNotMatch(ux, /table th:nth-child\((?:7|9)\).*display:none/i, "Colunas do dashboard não devem ser removidas da visualização.");
 assert.match(ux, /overflow-x:auto!important/, "Tabelas amplas devem usar rolagem horizontal em telas estreitas.");
 assert.match(theme, /employee-observation-field/, "O tema deve contemplar a área de observações do colaborador.");
-assert.match(html, /employee-observation-field/, "A execução deve oferecer campo complementar separado para observações técnicas.");
-assert.match(html, /Novas notas serão anexadas ao histórico/, "O técnico deve ser informado de que as notas anteriores serão preservadas.");
+assert.doesNotMatch(html, /employee-observation-field/, "A execução mobile deve manter um único campo de relato técnico.");
+assert.match(html, /Observações anteriores preservadas no histórico da OS/, "As observações antigas devem continuar preservadas.");
 assert.match(cloudFunctions, /mergeAppendOnlyCollaboratorObservations\(/, "A gravação do colaborador deve mesclar observações sem substituir o histórico.");
 assert.match(completedOsGuardMigration, /DBS_OS_COMPLETED_LOCKED/, "A guarda relacional deve preservar OS concluída e campos assinados contra autosaves antigos.");
 assert.match(deltaMigration, /v_expected is null or v_expected <> v_current\.version/, "A RPC deve rejeitar gravações sem a versão esperada ou com versão antiga.");
