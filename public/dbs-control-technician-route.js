@@ -18,7 +18,9 @@
     creating: false,
     result: null,
     manualOrder: false,
-    geocoding: false
+    geocoding: false,
+    technicians: [],
+    techniciansLoaded: false
   };
 
   const SERVICE_TYPES = [
@@ -61,17 +63,94 @@
   const requiresCause = value => /corretiv|emergencial/i.test(String(value || ''));
   const planner = () => window.DbsControlRoutePlanner;
 
-  function getTechnicians() {
-    return Array.isArray(window.ERP_STATE && window.ERP_STATE.tecnicos)
-      ? window.ERP_STATE.tecnicos.filter(item => item && item.id)
-      : [];
+  // ERP_STATE é declarado como "let" no script principal do iframe. Nesse
+  // caso ele existe no escopo global léxico, mas NÃO em window.ERP_STATE.
+  function getErpState() {
+    if (typeof ERP_STATE !== 'undefined' && ERP_STATE && typeof ERP_STATE === 'object') return ERP_STATE;
+    return window.ERP_STATE && typeof window.ERP_STATE === 'object' ? window.ERP_STATE : {};
   }
 
   function getEmployeeId(technician) {
     const value = String(technician && (
-      technician.employeeId || technician.employee_id || technician.rhEmployeeId || technician.rh_employee_id
+      technician.employeeId || technician.employee_id || technician.rhEmployeeId || technician.rh_employee_id || technician.id
     ) || '').trim();
     return UUID.test(value) ? value : '';
+  }
+
+  function getTechnicians() {
+    const erp = getErpState();
+    const source = state.techniciansLoaded
+      ? state.technicians
+      : (Array.isArray(erp.tecnicos) ? erp.tecnicos : []);
+    const seen = new Set();
+    return source.filter(item => {
+      if (!item || item.is_active === false || item.active === false
+        || item.deleted || item.deleted_at || item.archived_at || item.archivedAt) return false;
+      const status = String(item.status || item.situacao || '').normalize('NFD')
+        .replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase();
+      if (/^(inativ[oa]|arquivad[oa]|excluid[oa]|cancelad[oa])$/.test(status)) return false;
+      const employeeId = getEmployeeId(item);
+      if (!employeeId || seen.has(employeeId)) return false;
+      seen.add(employeeId);
+      return true;
+    }).map(item => {
+      const employeeId = getEmployeeId(item);
+      return { ...item, id: employeeId, employeeId };
+    });
+  }
+
+  function requestActiveTechnicians() {
+    return new Promise(resolve => {
+      const requestId = 'dispatch-technicians-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      let done = false;
+      const finish = value => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const onMessage = event => {
+        if (event.source !== window.parent || event.data?.type !== 'DBS_CONTROL_ACTIVE_TECHNICIANS_RESULT'
+          || String(event.data.requestId || '') !== requestId) return;
+        finish(event.data);
+      };
+      const timer = setTimeout(() => finish({ ok: false, error: 'A consulta dos técnicos ativos expirou.' }), 12000);
+      window.addEventListener('message', onMessage);
+      window.parent.postMessage({ type: 'DBS_CONTROL_LIST_ACTIVE_TECHNICIANS', requestId }, window.location.origin);
+    });
+  }
+
+  async function loadActiveTechnicians(preferredId) {
+    const select = byId('dbs-dispatch-technician');
+    if (!select) return;
+    const status = byId('dbs-dispatch-status');
+    try {
+      const result = await requestActiveTechnicians();
+      if (!result || !result.ok || !Array.isArray(result.technicians)) {
+        throw new Error(result && result.error || 'Não foi possível consultar o cadastro ativo do RH.');
+      }
+      state.technicians = result.technicians;
+      state.techniciansLoaded = true;
+    } catch (error) {
+      state.techniciansLoaded = false;
+      if (status) status.textContent = (error && error.message || 'Consulta do RH indisponível.')
+        + ' A lista já carregada no DBS será mantida como alternativa.';
+    }
+    const technicians = getTechnicians();
+    const keepId = String(preferredId || state.technician?.id || '');
+    select.innerHTML = '<option value="">'
+      + (technicians.length ? 'Selecione um técnico ativo' : 'Nenhum técnico ativo encontrado no RH')
+      + '</option>'
+      + technicians.map(tech => '<option value="' + safe(tech.id) + '">' + safe(getTechnicianLabel(tech)) + '</option>').join('');
+    select.value = technicians.some(tech => String(tech.id) === keepId) ? keepId : '';
+    if (select.value) select.dispatchEvent(new Event('change'));
+    else {
+      state.technician = null;
+      if (!technicians.length && status) {
+        status.textContent = 'O RH não retornou técnicos ativos vinculados. Confira o cadastro e o vínculo do colaborador.';
+      }
+    }
   }
 
   function getTechnicianLabel(technician) {
@@ -225,7 +304,9 @@
       toggle.disabled = false;
       toggle.checked = state.originEnabled;
     }
-    const status = location.is_live ? 'GPS recente · posição atualizada' : 'Última posição conhecida · pode estar desatualizada';
+    const status = location.location_source === 'ponto'
+      ? 'Última coordenada da batida de ponto · NÃO é rastreamento ao vivo'
+      : location.is_live ? 'GPS recente · posição atualizada' : 'Última posição conhecida · pode estar desatualizada';
     const accuracy = location.accuracy_m == null ? '' : ' · precisão aproximada ±' + Math.round(Number(location.accuracy_m)) + ' m';
     if (box) box.innerHTML = '<strong>' + safe(status) + '</strong><small>' + safe(location.full_name || getTechnicianLabel(state.technician))
       + ' · ' + safe(location.unit || 'Unidade não informada') + '<br>Registrada em ' + safe(dateTime(location.last_position_at))
@@ -234,12 +315,12 @@
   }
 
   function getLocationSources() {
-    const erp = window.ERP_STATE || {};
+    const erp = getErpState();
     const sites = []
       .concat(Array.isArray(erp.locais) ? erp.locais : [])
       .concat(Array.isArray(erp.sites) ? erp.sites : [])
       .concat(Array.isArray(erp.unidades) ? erp.unidades : []);
-    return planner().buildSiteCandidates(sites, erp.clientes || []);
+    return planner().buildSiteCandidates(sites, Array.isArray(erp.clientes) ? erp.clientes : []);
   }
 
   async function geocodeAddress(address) {
@@ -457,9 +538,8 @@
       }).join('') : '<div class="dbs-dispatch-empty">Adicione locais à rota para montar as etapas do Google Maps.</div>';
     }
     if (!mapElement) return;
-    if (!state.candidates.length && !state.location) {
-      if (status) status.textContent = 'O mapa aparecerá depois de carregar a posição e os endereços.';
-      return;
+    if (!state.candidates.length && !state.location && status) {
+      status.textContent = 'Carregando mapa-base. Os pontos dos locais aparecerão após a leitura dos endereços.';
     }
     try {
       const L = await loadLeaflet();
@@ -502,7 +582,9 @@
       if (status) status.textContent = origin
         ? (state.location.is_live ? 'Pino verde: GPS recente do técnico. ' : 'Pino verde: última posição conhecida (confira a data). ')
           + 'Pinos azuis: locais selecionados ou sugestões próximas.'
-        : 'Sem coordenada GPS do técnico. Pinos azuis mostram as sugestões por proximidade geográfica.';
+        : state.candidates.length
+          ? 'Sem coordenada GPS do técnico. Pinos azuis mostram as sugestões por proximidade geográfica.'
+          : 'Mapa-base carregado. Selecione um técnico e clique em “Sugerir rota pelas proximidades” para posicionar os locais.';
     } catch (error) {
       if (status) status.textContent = error && error.message || 'Mapa indisponível. A lista e os links do Google Maps continuam funcionando.';
     }
@@ -586,6 +668,7 @@
       state.technician = getTechnicians().find(item => String(item.id) === selected) || null;
       void refreshLocation();
     }
+    void renderMapAndLinks();
   }
 
   function validateCreateButton() {
@@ -731,13 +814,7 @@
     document.body.appendChild(modal);
     renderModal();
     const dayTechnician = byId('day-filter-tecnico');
-    if (dayTechnician && dayTechnician.value) {
-      const select = byId('dbs-dispatch-technician');
-      if (select) {
-        select.value = dayTechnician.value;
-        select.dispatchEvent(new Event('change'));
-      }
-    }
+    void loadActiveTechnicians(dayTechnician && dayTechnician.value || '');
     return modal;
   }
 
