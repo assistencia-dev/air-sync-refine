@@ -288,7 +288,10 @@ assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'O shell d
 assert.match(parentRoute, /msg\.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES"/, 'A ponte autenticada deve persistir coordenadas geocodificadas.');
 assert.match(dbsControlFunctions, /export const saveDbsControlSiteMapCoordinates = createServerFn/, 'O salvamento das coordenadas deve ocorrer exclusivamente no servidor.');
 assert.match(dbsControlFunctions, /normalizeAddress\(addressFromJson\(row\.address_json\)\)/, 'A coordenada só pode ser salva se o endereço não mudou desde a geocodificação.');
-assert.match(dbsControlFunctions, /map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status/, 'A hidratação deve ler o cache de coordenadas relacional.');
+assert.match(dbsControlFunctions, /const mapSelect = "id,client_id,name,address_json,map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status/, 'A hidratação deve ler o cache de coordenadas relacional quando as colunas estiverem disponíveis.');
+assert.match(dbsControlFunctions, /const baseSelect = "id,client_id,name,address_json,contact_name/, 'A hidratação deve manter compatibilidade com bancos anteriores à migração aditiva.');
+assert.match(dbsControlFunctions, /return missingCoordinatesSchema \? querySites\(baseSelect\) : withMapCoordinates/, 'A ausência das colunas novas não pode interromper a leitura operacional do DBS CONTROL.');
+assert.match(dbsControlFunctions, /Nenhuma coordenada foi gravada/, 'O sistema deve informar claramente quando o cache de mapa ainda não existe no banco.');
 
 assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
