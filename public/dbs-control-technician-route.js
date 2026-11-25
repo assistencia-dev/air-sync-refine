@@ -496,6 +496,7 @@
     if (state.geocoding || generation !== state.geocodeGeneration) return;
     state.geocoding = true;
     let completed = 0;
+    let geocodeSuccessCount = 0;
     let savedCount = 0;
     const status = byId('dbs-dispatch-status');
     try {
@@ -513,6 +514,7 @@
           const point = await geocodeAddress(candidate.address);
           if (generation !== state.geocodeGeneration) return;
           updateCandidateCoordinates(candidate, point);
+          geocodeSuccessCount += 1;
           state.siteMetrics = planner().summarizeSiteMetrics(state.candidates);
           if (!state.manualOrder) {
             state.candidates = optimizeRoutePreservingUnlocated(state.candidates, originForRoute());
@@ -552,8 +554,8 @@
       if (generation === state.geocodeGeneration) {
         state.geocoding = false;
         renderLists();
-        if (status && !state.geocodeQueue.length && successfullyGeocoded.length === 0 && state.review.length) {
-          status.textContent = 'Não foi possível criar todos os pinos. Os endereços continuam na rota e podem ser abertos no Google Maps.';
+        if (status && !state.geocodeQueue.length && geocodeSuccessCount === 0 && state.review.length) {
+          status.textContent = 'Não foi possível localizar os pinos nesta tentativa. Os endereços continuam na rota e podem ser abertos no Google Maps.';
         }
       }
     }
