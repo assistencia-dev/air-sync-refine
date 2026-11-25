@@ -63,12 +63,36 @@ assert.equal(legs.length, 2, 'Mais de quatro paradas devem ser divididas em etap
 const firstUrl = new URL(legs[0].url);
 assert.equal(firstUrl.searchParams.get('api'), '1');
 assert.equal(firstUrl.searchParams.get('destination'), routeStops[3].address);
-assert.equal(firstUrl.searchParams.get('waypoints').split('|').length, 3);
-assert.equal(firstUrl.searchParams.get('origin'), null, 'A primeira etapa deve permitir que o Maps use a localização atual do aparelho.');
+assert.equal(firstUrl.searchParams.get('waypoints').split('|').length, 2, 'Sem GPS do técnico, a primeira parada deve ser a origem para não usar a posição do administrador.');
+assert.equal(firstUrl.searchParams.get('origin'), routeStops[0].address, 'Sem GPS recente do técnico, a primeira parada da sugestão deve ser a origem explícita.');
 const secondUrl = new URL(legs[1].url);
 assert.equal(secondUrl.searchParams.get('origin'), routeStops[3].address, 'A etapa seguinte deve começar no último endereço da etapa anterior.');
 assert.equal(secondUrl.searchParams.get('destination'), routeStops[4].address);
 assert.equal(secondUrl.searchParams.get('travelmode'), 'driving');
+
+const siteMetrics = planner.enrichSiteCandidates(
+  [{ id: 's1', siteId: 's1', clientId: 'c1', lat: -22.9, lng: -43.2 }],
+  [
+    { id: 'open', siteId: 's1', clienteId: 'c1', status: 'Aberta' },
+    { id: 'progress', siteId: 's1', clienteId: 'c1', status: 'Em Atendimento' },
+    { id: 'late', siteId: 's1', clienteId: 'c1', status: 'Aberta', sla: '2026-11-24T10:00:00-03:00' },
+    { id: 'urgent', siteId: 's1', clienteId: 'c1', status: 'Aberta', tipo: 'Atendimento Emergencial' },
+    { id: 'done', siteId: 's1', clienteId: 'c1', status: 'Concluída' },
+    { id: 'cancelled', siteId: 's1', clienteId: 'c1', status: 'Cancelada' }
+  ],
+  [{ id: 'eq1', siteId: 's1', clienteId: 'c1', status: 'ativo' }],
+  Date.parse('2026-11-25T15:00:00Z')
+);
+assert.equal(siteMetrics[0].openOrders, 3, 'Indicador de OS abertas deve excluir concluídas e canceladas e separar atendimento em andamento.');
+assert.equal(siteMetrics[0].inProgressOrders, 1, 'Indicador de OS em atendimento deve usar o status real da OS.');
+assert.equal(siteMetrics[0].overdueOrders, 1, 'OS só deve ser marcada vencida quando o SLA cadastrado expirou.');
+assert.equal(siteMetrics[0].emergencyOrders, 1, 'Atendimentos emergenciais devem aparecer como indicador separado.');
+assert.equal(siteMetrics[0].equipmentCount, 1, 'O mapa deve mostrar equipamentos vinculados ao local.');
+const siteSummary = planner.summarizeSiteMetrics(siteMetrics);
+assert.equal(siteSummary.locations, 1);
+assert.equal(siteSummary.mappedLocations, 1);
+assert.equal(siteSummary.openOrders, 3);
+assert.equal(siteSummary.equipment, 1);
 
 const scheduled = planner.buildStops([
   { id: 'late', clienteId: 'c1', status: 'Aberta', endereco: 'Rua A, 1', scheduledAt: '2026-11-24T15:00:00-03:00' },
@@ -84,7 +108,7 @@ const partialSchedule = planner.buildStops([
 assert.equal(partialSchedule.sortedBySchedule, false, 'Não deve ordenar parcialmente se alguma parada não tiver horário.');
 assert.equal(partialSchedule.stops[0].orders[0].id, 'timed', 'A ordem original deve ser preservada quando faltarem horários.');
 
-assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O planejador deve entrar com cache busting próprio.');
+assert.match(html, /dbs-control-route-planner\.js\?v=20261125-2/, 'O planejador atualizado deve entrar com cache busting próprio.');
 assert.match(html, /abrirRotaAtividadesDia\(\)/, 'A agenda administrativa deve oferecer o atalho de rota.');
 assert.match(html, /id="day-filter-tecnico"/, 'A seleção de técnico permanece disponível na conferência diária.');
 console.log('DBS CONTROL route planner: endereços, deduplicação, estados, etapas móveis e sequência segura verificados.');
@@ -93,6 +117,12 @@ const parentRoute = fs.readFileSync('src/routes/_authenticated/dbs-control.tsx',
 const technicianRoute = fs.readFileSync('public/dbs-control-technician-route.js', 'utf8');
 const dbsControlFunctions = fs.readFileSync('src/lib/dbs-control.functions.ts', 'utf8');
 const pontoFunctionsSource = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
+const mapMigration = fs.readFileSync('supabase/migrations/20261125143000_dbs_control_site_map_coordinates.sql', 'utf8');
+assert.match(mapMigration, /add column if not exists map_latitude/);
+assert.match(mapMigration, /add column if not exists map_longitude/);
+assert.match(mapMigration, /between -90 and 90/);
+assert.match(mapMigration, /between -180 and 180/);
+
 assert.match(technicianRoute, /typeof ERP_STATE !== 'undefined'/, 'O planejador deve ler o estado lexical do iframe, não depender de window.ERP_STATE.');
 assert.match(technicianRoute, /DBS_CONTROL_LIST_ACTIVE_TECHNICIANS/, 'A lista do seletor deve vir dos colaboradores ativos do RH.');
 assert.match(parentRoute, /listRhPontoEmployees\(\)/, 'O bridge administrativo deve consultar o RH para a lista ativa de técnicos.');
@@ -188,12 +218,24 @@ const dispatchScript = fs.readFileSync('public/dbs-control-technician-route.js',
 new vm.Script(dispatchScript, { filename: 'public/dbs-control-technician-route.js' });
 const pontoFunctions = fs.readFileSync('src/lib/ponto.functions.ts', 'utf8');
 assert.match(html, /dbs-control-route-planner\.js\?v=20261125-1/, 'O algoritmo atualizado deve ter cache busting.');
-assert.match(html, /dbs-control-technician-route\.js\?v=20261125-2/, 'O novo despacho deve ser carregado depois do shell legado.');
+assert.match(html, /dbs-control-technician-route\.js\?v=20261125-3/, 'O mapa e o despacho atualizados devem ser carregados depois do shell legado.');
 assert.match(dispatchScript, /window\.abrirRotaAtividadesDia = openPlanner/, 'O botão antigo deve abrir o novo fluxo independente de OS.');
 assert.doesNotMatch(dispatchScript, /data-dbs-route-order-id/, 'O novo fluxo não pode depender de OS visíveis na agenda.');
 assert.match(dispatchScript, /DBS_CONTROL_GET_TECHNICIAN_LOCATION/, 'O novo fluxo deve consultar a última posição do técnico no RH.');
 assert.match(dispatchScript, /state\.location\.is_live/, 'A interface deve distinguir GPS recente de última posição conhecida.');
 assert.match(dispatchScript, /buildSiteCandidates/, 'A rota deve nascer do cadastro de lojas e locais.');
+assert.match(dispatchScript, /enrichSiteCandidates/, 'Os locais devem receber indicadores calculados pelas OS e equipamentos reais.');
+assert.match(dispatchScript, /summarizeSiteMetrics/, 'O painel do mapa deve exibir indicadores agregados da operação.');
+assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'Coordenadas geocodificadas devem ser cacheadas no cadastro relacional do local.');
+assert.match(dispatchScript, /state\.selected = state\.candidates\.slice\(0, Math\.min\(5/, 'A rota deve apresentar uma sugestão inicial editável sem abrir OS automaticamente.');
+assert.match(dispatchScript, /Pinos verdes: sem OS pendente/, 'A legenda do mapa deve diferenciar locais por situação operacional real.');
+assert.match(dispatchScript, /Sem GPS recente: a rota não usa a posição do administrador como origem/, 'Sem GPS do técnico, o planejador não pode presumir a localização do administrador.');
+assert.match(dispatchScript, /DBS_CONTROL_SAVE_SITE_MAP_COORDINATES/, 'O shell deve persistir coordenadas de endereço com validação administrativa.');
+assert.match(parentRoute, /msg\.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES"/, 'A ponte autenticada deve persistir coordenadas geocodificadas.');
+assert.match(dbsControlFunctions, /export const saveDbsControlSiteMapCoordinates = createServerFn/, 'O salvamento das coordenadas deve ocorrer exclusivamente no servidor.');
+assert.match(dbsControlFunctions, /normalizeAddress\(addressFromJson\(row\.address_json\)\)/, 'A coordenada só pode ser salva se o endereço não mudou desde a geocodificação.');
+assert.match(dbsControlFunctions, /map_latitude,map_longitude,map_geocoded_at,map_geocode_provider,map_geocode_status/, 'A hidratação deve ler o cache de coordenadas relacional.');
+
 assert.match(dispatchScript, /optimizeStops/, 'A sequência deve ser sugerida por proximidade geográfica.');
 assert.match(dispatchScript, /data-action="create"/, 'A criação das OS deve ficar numa ação final explícita.');
 assert.match(dispatchScript, /employeeId: employeeId/, 'As OS devem receber o vínculo do colaborador selecionado.');
