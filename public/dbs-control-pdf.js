@@ -389,9 +389,15 @@
     // diagnosis/execution. The old fallback let a populated execution report hide
     // the problem description entered when the OS was opened.
     const problemDescription = first(order.desc, order.descricao, order.description, order.request, order.sintoma, '—');
-    const diagnostic = first(order.diagnostico, order.technical_opinion, '—');
-    const action = first(order.acaoNecessaria, order.recomendacao, unique(list(order.pecasUsadas).map(part => part.nome || part.descricao || part.name)), '—');
-    const report = first(order.relatoTecnico, order.trabalhoExecutado, order.servicoExecutado, order.servico_executado, '—');
+    const report = (() => {
+      const canonical = first(order.relatoTecnico, order.relato_tecnico);
+      if (canonical) return canonical;
+      const diagnostic = first(order.diagnostico, order.technical_opinion);
+      const execution = first(order.trabalhoExecutado, order.servicoExecutado, order.servico_executado);
+      if (diagnostic && execution && normalize(diagnostic) === normalize(execution)) return diagnostic;
+      if (diagnostic && execution) return `Diagnóstico: ${diagnostic}\nTrabalho realizado: ${execution}`;
+      return first(diagnostic, execution, '—');
+    })();
     const observationValues = uniqueValues([order.observacaoTecnico, order.observacoesTecnico, order.observacao, order.observacaoComplementarTecnico, order.observacoes, order.obs, order.observation]);
     const observations = observationValues.length && normalize(observationValues.join(' ')) !== normalize(report) ? observationValues.join('\n') : '';
     const attachmentRows = uniqueValues([
@@ -451,11 +457,10 @@
       page.y += height + 1.6;
     });
 
-    drawSectionHeader(4, 'Relato do problema, diagnóstico e execução');
+    drawSectionHeader(4, 'Relato do problema e execução');
     let nextSectionNumber = 5;
     paragraph('Problema relatado pelo cliente', problemDescription);
-    inlineRow([{ label: 'Diagnóstico técnico', value: diagnostic, width: 93 }, { label: 'Ação / peças', value: action, width: 89 }]);
-    paragraph('Relatório técnico / trabalho executado', report);
+    paragraph('Relatório do técnico', report);
     inlineRow([{ label: 'Evidências registradas', value: evidenceText, width: 132 }, { label: !employeeMode && includeValues && totalValue != null ? 'Valor do atendimento' : 'Registro', value: !employeeMode && includeValues && totalValue != null ? money(totalValue) : (attachmentRows.length ? `${attachmentRows.length} anexo(s)` : 'Sem anexos'), width: 50 }]);
 
     const evidenceSources = [
