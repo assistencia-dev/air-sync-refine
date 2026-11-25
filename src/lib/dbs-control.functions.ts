@@ -744,7 +744,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
     clienteId: String(row.client_id),
     nome: row.name || "Local",
     endereco: row.address_json && typeof row.address_json === "object"
-      ? [
+      ? String(row.address_json.texto || row.address_json.endereco || row.address_json.address || [
           row.address_json.logradouro,
           row.address_json.numero,
           row.address_json.complemento,
@@ -752,7 +752,7 @@ async function hydrateDbsControlStateFromCanonicalDb(
           row.address_json.cidade,
           row.address_json.uf,
           row.address_json.cep,
-        ].filter(Boolean).join(", ")
+        ].filter(Boolean).join(", ")).trim()
       : String(row.address_json || ""),
     contato: row.contact_name || "",
     telefone: row.contact_phone || "",
