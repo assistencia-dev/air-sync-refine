@@ -4678,3 +4678,119 @@ export const saveDbsControlSiteMapCoordinates = createServerFn({ method: "POST" 
     return { saved, skipped };
   });
 
+
+
+export const geocodeDbsControlSiteAddress = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { address: string }) => {
+    const address = String(input?.address ?? "").replace(/\s+/g, " ").trim().slice(0, 700);
+    if (address.length < 5) throw new Error("Informe o endereço cadastrado para posicionar a filial.");
+    return { address };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsControlUser(context);
+    const administrativeRoles = ["SUPER_ADMIN", "ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
+    if (!administrativeRoles.includes(user.role_key)) {
+      throw new Error("A geocodificação do mapa é restrita à administração.");
+    }
+
+    const normalize = (value: string) => value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/\s*,\s*/g, ", ")
+      .replace(/,{2,}/g, ",")
+      .trim();
+    const base = normalize(data.address).replace(/,?\s*(Brasil|Brazil)$/i, "").trim();
+    if (base.length < 5) return { ok: false, code: "invalid_query", message: "O endereço cadastrado está incompleto para a consulta; nenhum dado foi alterado." };
+
+    const pieces = base.split(",").map((part) => part.trim()).filter(Boolean);
+    const simplified = pieces
+      .filter((part, index) => index !== 2 && !/^\d{5}-?\d{3}$/.test(part))
+      .slice(0, 7)
+      .join(", ");
+    const queries = Array.from(new Set([base + ", Brasil", (simplified || base) + ", Brasil"]));
+
+    let payload: any = null;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < queries.length; attempt += 1) {
+      const url = new URL("https://photon.komoot.io/api/");
+      url.searchParams.set("q", queries[attempt]);
+      url.searchParams.set("limit", "1");
+      if (attempt === 0) url.searchParams.set("lang", "pt");
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/geo+json, application/json",
+            "User-Agent": "DBS Air Solutions geocoding contact: assistencia@dbsair.com.br",
+          },
+          signal: controller.signal,
+        });
+        lastStatus = response.status;
+        if (response.status === 400 && attempt + 1 < queries.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+          continue;
+        }
+        if (!response.ok) {
+          return {
+            ok: false,
+            code: "provider_unavailable",
+            message: "O serviço de geocodificação respondeu HTTP " + response.status + ". O endereço foi preservado para nova tentativa.",
+          };
+        }
+        payload = await response.json();
+        break;
+      } catch (error) {
+        const detail = error instanceof Error && error.name === "AbortError" ? "tempo limite excedido" : "falha de rede";
+        return {
+          ok: false,
+          code: "provider_unavailable",
+          message: "O serviço de geocodificação está indisponível (" + detail + "). O endereço foi preservado.",
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    if (!payload) {
+      return {
+        ok: false,
+        code: lastStatus === 400 ? "provider_unavailable" : "not_found",
+        message: lastStatus === 400
+          ? "O provedor recusou a consulta (HTTP 400) mesmo após simplificação. O endereço foi preservado."
+          : "O provedor não retornou uma resposta válida. O endereço foi preservado.",
+      };
+    }
+
+    const features = Array.isArray(payload?.features) ? payload.features : [];
+    const brazilFeature = features.find((feature: any) => {
+      const properties = feature?.properties ?? {};
+      const country = normalize(String(properties.country ?? ""));
+      const countryCode = String(properties.countrycode ?? properties.country_code ?? "").toLowerCase();
+      const isBrazil = countryCode === "br" || /brasil|brazil/.test(country);
+      const coordinates = feature?.geometry?.coordinates;
+      const lng = Number(coordinates?.[0]);
+      const lat = Number(coordinates?.[1]);
+      const hasRegion = Boolean(properties.city || properties.county || properties.state || properties.district || properties.locality);
+      return isBrazil && hasRegion && Array.isArray(coordinates)
+        && Number.isFinite(lat) && Number.isFinite(lng)
+        && lat >= -35 && lat <= 6 && lng >= -75 && lng <= -33;
+    });
+
+    if (!brazilFeature) {
+      return {
+        ok: false,
+        code: features.length ? "invalid_query" : "not_found",
+        message: features.length
+          ? "O resultado não confirmou com segurança uma localização no Brasil. O endereço cadastrado foi mantido."
+          : "O provedor não encontrou correspondência para este endereço. O cadastro foi mantido.",
+      };
+    }
+
+    const [longitude, latitude] = brazilFeature.geometry.coordinates.map(Number);
+    return { ok: true, latitude, longitude, provider: "Photon/OpenStreetMap" };
+  });

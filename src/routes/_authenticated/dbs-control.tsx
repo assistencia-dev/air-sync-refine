@@ -8,7 +8,7 @@ import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { DbsInventoryPage } from "./dbs-inventory";
 import { supabase } from "@/integrations/supabase/client";
-import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates } from "@/lib/dbs-control.functions";
+import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates, geocodeDbsControlSiteAddress } from "@/lib/dbs-control.functions";
 import {
   deleteDbsControlLocalSyncCommand,
   getDbsControlLocalSyncSummary,
@@ -1367,6 +1367,36 @@ function DbsControlPage() {
         }
         return;
       }
+      if (msg.type === "DBS_CONTROL_GEOCODE_SITE_ADDRESS") {
+        const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
+        const reply = (payload: Record<string, unknown>) => {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: "DBS_CONTROL_SITE_ADDRESS_GEOCODE_RESULT",
+            requestId,
+            ...payload,
+          }, window.location.origin);
+        };
+        try {
+          if (employeeModeRef.current) {
+            reply({ ok: false, code: "forbidden", message: "A geocodificação do mapa é restrita à administração." });
+            return;
+          }
+          const address = String(msg.address ?? "").trim();
+          if (!requestId || address.length < 5 || address.length > 700) {
+            reply({ ok: false, code: "invalid_query", message: "Endereço cadastrado inválido para consulta. O cadastro foi preservado." });
+            return;
+          }
+          const result = await geocodeDbsControlSiteAddress({ data: { address } });
+          reply(result);
+        } catch (error) {
+          reply({
+            ok: false,
+            code: "provider_unavailable",
+            message: error instanceof Error ? error.message : "O serviço de geocodificação não respondeu. O endereço foi preservado.",
+          });
+        }
+        return;
+      }
       if (msg.type === "DBS_CONTROL_SAVE_SITE_MAP_COORDINATES") {
         const requestId = String(msg.requestId ?? "").trim().slice(0, 160);
         const reply = (payload: Record<string, unknown>) => {
@@ -1519,7 +1549,7 @@ function DbsControlPage() {
           const allowedHosts = new Set(["www.google.com", "maps.google.com"]);
           if (requested.protocol !== "https:"
             || !allowedHosts.has(requested.hostname)
-            || !requested.pathname.startsWith("/maps/dir/")) return;
+            || !(requested.pathname.startsWith("/maps/dir/") || requested.pathname.startsWith("/maps/search/"))) return;
           setMapsLaunchUrl(requested.toString());
         } catch {
           // Ignorar mensagens de navegação malformadas ou fora do domínio permitido.
