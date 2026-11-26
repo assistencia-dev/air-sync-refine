@@ -559,6 +559,57 @@ CREATE TRIGGER trg_dbs_control_inventory_request_receipt_refresh
 AFTER UPDATE OF quantity_received ON public.dbs_control_purchase_items
 FOR EACH ROW EXECUTE FUNCTION public.dbs_control_refresh_inventory_request_received_quantity();
 
+CREATE OR REPLACE FUNCTION public.dbs_control_release_inventory_request_commitment()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+DECLARE
+  v_line record;
+  v_release numeric(18,4);
+BEGIN
+  IF NOT (
+    (NEW.approval_status='rejected' AND OLD.approval_status IS DISTINCT FROM NEW.approval_status)
+    OR (NEW.status='cancelled' AND OLD.status IS DISTINCT FROM NEW.status)
+  ) OR NEW.source_inventory_request_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  FOR v_line IN
+    SELECT source_inventory_request_item_id,quantity,quantity_received
+      FROM public.dbs_control_purchase_items
+     WHERE purchase_id=NEW.id AND source_inventory_request_item_id IS NOT NULL
+     FOR UPDATE
+  LOOP
+    v_release:=greatest(0,v_line.quantity-coalesce(v_line.quantity_received,0));
+    IF v_release>0 THEN
+      UPDATE public.dbs_control_inventory_request_items
+         SET quantity_ordered=greatest(0,quantity_ordered-v_release),
+             updated_at=now()
+       WHERE id=v_line.source_inventory_request_item_id;
+    END IF;
+  END LOOP;
+
+  UPDATE public.dbs_control_inventory_requests
+     SET status=CASE
+       WHEN status='partially_fulfilled' THEN status
+       ELSE 'waiting_purchase' END,
+         version=version+1,updated_at=now()
+   WHERE id=NEW.source_inventory_request_id
+     AND status NOT IN ('fulfilled','rejected','cancelled');
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_dbs_control_inventory_request_purchase_release
+  ON public.dbs_control_purchases;
+CREATE TRIGGER trg_dbs_control_inventory_request_purchase_release
+AFTER UPDATE OF approval_status,status ON public.dbs_control_purchases
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_release_inventory_request_commitment();
+
+REVOKE ALL ON FUNCTION public.dbs_control_release_inventory_request_commitment() FROM PUBLIC,anon,authenticated;
+
 REVOKE ALL ON FUNCTION public.dbs_control_create_inventory_request(jsonb) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_decide_inventory_request(uuid,uuid,text,text,bigint,jsonb) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_fulfill_inventory_request_from_central(uuid,uuid,uuid,uuid,numeric,text) FROM PUBLIC,anon,authenticated;
