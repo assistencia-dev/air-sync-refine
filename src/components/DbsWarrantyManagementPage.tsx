@@ -57,7 +57,7 @@ export function DbsWarrantyManagementPage() {
   const [supplierDocument, setSupplierDocument] = useState("");
   const [customerWorkOrderId, setCustomerWorkOrderId] = useState("");
   const [coverageType, setCoverageType] = useState<"part"|"service"|"work_order">("part");
-  const [customerPartId, setCustomerPartId] = useState("");
+  const [customerWorkOrderPartId, setCustomerWorkOrderPartId] = useState("");
   const [customerStartsOn, setCustomerStartsOn] = useState(dateToday());
   const [customerExpiresOn, setCustomerExpiresOn] = useState("");
   const [customerDuration, setCustomerDuration] = useState("");
@@ -83,6 +83,7 @@ export function DbsWarrantyManagementPage() {
   const suppliers = data?.suppliers ?? [];
   const receipts = data?.receiptItems ?? [];
   const workOrders = data?.workOrders ?? [];
+  const workOrderParts = (data?.workOrderParts ?? []).filter((row: any) => String(row.workOrderId) === String(customerWorkOrderId));
 
   const supplierMutation = useMutation({
     mutationFn: () => createDbsSupplierWarranty({ data: {
@@ -112,7 +113,7 @@ export function DbsWarrantyManagementPage() {
     mutationFn: () => createDbsCustomerWarranty({ data: {
       workOrderId: customerWorkOrderId,
       coverageType,
-      partId: coverageType === "part" ? customerPartId || undefined : undefined,
+      workOrderPartId: coverageType === "part" ? customerWorkOrderPartId || undefined : undefined,
       startsOn: customerStartsOn,
       expiresOn: customerExpiresOn || undefined,
       durationMonths: customerDuration ? Number(customerDuration) : undefined,
@@ -120,7 +121,7 @@ export function DbsWarrantyManagementPage() {
     } }),
     onSuccess: async () => {
       setMessage("Cobertura de garantia DBS vinculada à OS.");
-      setCustomerPartId(""); setCustomerTerms(""); setCustomerExpiresOn(""); setCustomerDuration("");
+      setCustomerWorkOrderPartId(""); setCustomerTerms(""); setCustomerExpiresOn(""); setCustomerDuration("");
       await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-overview"] });
     },
     onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível registrar a cobertura."),
@@ -161,8 +162,6 @@ export function DbsWarrantyManagementPage() {
     return all.filter((row: any) => row.status !== "void" && expiryLabel(String(row.expires_on)) !== "Vigente");
   }, [supplierWarranties, customerWarranties]);
 
-  const selectedReceipt = receipts.find((row: any) => String(row.id) === receiptItemId);
-  const eligibleSupplierParts = parts.filter((part: any) => !supplierPartId || String(part.id) === supplierPartId);
 
   if (overview.isLoading) return <div className="p-6 text-sm text-slate-600">Carregando garantias…</div>;
   if (overview.isError) return <div role="alert" className="m-5 rounded-xl border border-rose-200 bg-white p-5 text-sm text-rose-800">Não foi possível carregar as garantias. Atualize a tela e tente novamente.</div>;
@@ -247,16 +246,16 @@ export function DbsWarrantyManagementPage() {
         {data?.canManage && <form onSubmit={e=>{e.preventDefault();customerMutation.mutate();}} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="font-bold text-slate-900">Registrar cobertura de garantia DBS</h2>
           <label className="block text-sm font-semibold text-slate-700">Ordem de Serviço
-            <select required value={customerWorkOrderId} onChange={e=>setCustomerWorkOrderId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione a OS</option>{workOrders.map((wo:any)=><option key={wo.id} value={wo.id}>{wo.protocol||wo.id} · {wo.type||"OS"}</option>)}</select>
+            <select required value={customerWorkOrderId} onChange={e=>{setCustomerWorkOrderId(e.target.value);setCustomerWorkOrderPartId("");}} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione a OS</option>{workOrders.map((wo:any)=><option key={wo.id} value={wo.id}>{wo.protocol||wo.id} · {wo.type||"OS"}</option>)}</select>
           </label>
           <label className="block text-sm font-semibold text-slate-700">Cobertura
             <select value={coverageType} onChange={e=>setCoverageType(e.target.value as typeof coverageType)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="part">Peça instalada</option><option value="service">Serviço executado</option><option value="work_order">OS / atendimento</option></select>
           </label>
-          {coverageType==="part"&&<label className="block text-sm font-semibold text-slate-700">Peça (selecione a peça instalada)<select required value={customerPartId} onChange={e=>setCustomerPartId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione a peça</option>{parts.map((p:any)=><option key={p.id} value={p.id}>{p.sku} · {p.name}</option>)}</select></label>}
+          {coverageType==="part"&&<label className="block text-sm font-semibold text-slate-700">Peça realmente registrada na OS<select required value={customerWorkOrderPartId} onChange={e=>setCustomerWorkOrderPartId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione o item da OS</option>{workOrderParts.map((p:any)=><option key={p.id} value={p.id}>{p.partSku} · {p.partName}</option>)}</select></label>}
           <div className="grid grid-cols-2 gap-3"><label className="block text-sm font-semibold text-slate-700">Início<input type="date" required value={customerStartsOn} onChange={e=>setCustomerStartsOn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label><label className="block text-sm font-semibold text-slate-700">Término<input type="date" value={customerExpiresOn} onChange={e=>setCustomerExpiresOn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label></div>
           <label className="block text-sm font-semibold text-slate-700">Duração em meses (alternativa à data de término)<input type="number" min="0" max="600" value={customerDuration} onChange={e=>setCustomerDuration(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label>
           <label className="block text-sm font-semibold text-slate-700">Termos da cobertura DBS<textarea value={customerTerms} onChange={e=>setCustomerTerms(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label>
-          <button disabled={customerMutation.isPending || !customerWorkOrderId || (!customerExpiresOn && !customerDuration) || (coverageType==="part"&&!customerPartId)} className="min-h-11 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-50">{customerMutation.isPending?"Salvando…":"Registrar cobertura DBS"}</button>
+          <button disabled={customerMutation.isPending || !customerWorkOrderId || (!customerExpiresOn && !customerDuration) || (coverageType==="part"&&!customerWorkOrderPartId)} className="min-h-11 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-50">{customerMutation.isPending?"Salvando…":"Registrar cobertura DBS"}</button>
         </form>}
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Coberturas DBS vinculadas à OS</h2>
