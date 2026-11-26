@@ -243,11 +243,22 @@ BEGIN
     RAISE EXCEPTION 'DBS_GAS_REFILL_RECEIPT_QUANTITY_UNAVAILABLE' USING errcode='23514';
   END IF;
 
-  SELECT * INTO v_receipt_item
-    FROM public.dbs_control_purchase_receipt_items
-   WHERE purchase_item_id=v_item.id AND part_id=v_item.part_id
-   ORDER BY created_at ASC LIMIT 1;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_GAS_REFILL_RECEIPT_ITEM_NOT_FOUND' USING errcode='23503'; END IF;
+  SELECT receipt_line.* INTO v_receipt_item
+    FROM public.dbs_control_purchase_receipt_items receipt_line
+   WHERE receipt_line.purchase_item_id=v_item.id
+     AND receipt_line.part_id=v_item.part_id
+     AND receipt_line.quantity_received - coalesce((
+       SELECT sum(refill_event.quantity_consumed)
+         FROM public.dbs_control_gas_refill_events refill_event
+        WHERE refill_event.receipt_item_id=receipt_line.id
+          AND refill_event.scope_key=v_scope
+     ),0) >= 1
+   ORDER BY receipt_line.created_at ASC, receipt_line.id
+   LIMIT 1
+   FOR UPDATE OF receipt_line;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_GAS_REFILL_RECEIPT_LINE_QUANTITY_UNAVAILABLE' USING errcode='23514';
+  END IF;
 
   SELECT * INTO v_part
     FROM public.dbs_control_parts
