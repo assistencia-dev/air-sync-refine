@@ -4153,11 +4153,13 @@ export const getDbsOperationalWarrantyRecords = createServerFn({ method: "GET" }
     ]);
     for(const result of [supplier,customer,gas,claims]) if(result.error) throw new Error(result.error.message);
     const partIds=[...new Set([...(supplier.data??[]),...(customer.data??[])].map((row:any)=>String(row.part_id)).filter(Boolean))];
+    const workOrderIds=[...new Set((customer.data??[]).map((row:any)=>String(row.work_order_id)).filter(Boolean))];
+    const clientIds=[...new Set((customer.data??[]).map((row:any)=>String(row.client_id)).filter(Boolean))];
     const [parts,cylinders,orders,clients]=await Promise.all([
       partIds.length?(supabaseAdmin as any).from("dbs_control_parts").select("id,sku,name").in("id",partIds):Promise.resolve({data:[],error:null}),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders").select("id,serial_number,refrigerant_type").eq("scope_key",scopeKey).limit(500),
-      (supabaseAdmin as any).from("dbs_control_work_orders").select("id,protocol,client_id").limit(2000),
-      (supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name").limit(1000),
+      workOrderIds.length?(supabaseAdmin as any).from("dbs_control_work_orders").select("id,protocol,client_id").in("id",workOrderIds):Promise.resolve({data:[],error:null}),
+      clientIds.length?(supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name").in("id",clientIds):Promise.resolve({data:[],error:null}),
     ]);
     for(const result of [parts,cylinders,orders,clients]) if(result.error) throw new Error(result.error.message);
     const map=(rows:any[])=>new Map(rows.map(row=>[String(row.id),row]));
@@ -4194,6 +4196,13 @@ export const createDbsWarrantyClaim = createServerFn({ method: "POST" })
   .handler(async({context,data})=>{
     const user=await requireDbsInventoryAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const table=data.supplierWarrantyId?"dbs_control_supplier_warranties":
+      data.customerWarrantyId?"dbs_control_customer_warranties":"dbs_control_gas_cylinder_warranties";
+    const warrantyId=data.supplierWarrantyId??data.customerWarrantyId??data.gasCylinderWarrantyId;
+    const {data:warranty,error:warrantyError}=await (supabaseAdmin as any).from(table)
+      .select("id").eq("id",warrantyId).eq("scope_key",scopeKey).maybeSingle();
+    if(warrantyError) throw new Error(warrantyError.message);
+    if(!warranty) throw new Error("A garantia não pertence à empresa deste usuário.");
     const row={
       scope_key:scopeKey,supplier_warranty_id:data.supplierWarrantyId,
       customer_warranty_id:data.customerWarrantyId,gas_cylinder_warranty_id:data.gasCylinderWarrantyId,
