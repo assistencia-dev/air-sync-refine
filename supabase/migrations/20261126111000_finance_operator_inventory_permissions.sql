@@ -73,28 +73,30 @@ BEGIN
 END;
 $finance_rpc$;
 
--- A aprovação continua vinculada ao mesmo fluxo transacional, ao escopo e à
--- versão esperada. Apenas o perfil de consulta permanece sem permissão.
+-- Mantém aprovação restrita ao SUPER_ADMIN e FINANCEIRO_OPERADOR.
+-- Substitui a lista atual de perfis sem pressupor a formatação do corpo SQL.
 DO $finance_approval$
 DECLARE
   v_definition text;
-  v_old text := $old$v_actor_role NOT IN (
-    'SUPER_ADMIN'
-  )$old$;
-  v_new text := $new$v_actor_role NOT IN (
-    'SUPER_ADMIN','FINANCEIRO_OPERADOR'
-  )$new$;
+  v_rewritten text;
 BEGIN
   SELECT pg_get_functiondef(
     'public.dbs_control_decide_purchase_approval(uuid,uuid,text,text,bigint)'::regprocedure
   ) INTO v_definition;
 
-  IF position(v_old IN v_definition) = 0 THEN
+  v_rewritten := regexp_replace(
+    v_definition,
+    'v_actor_role[[:space:]]+NOT[[:space:]]+IN[[:space:]]*\\([^)]*\\)',
+    'v_actor_role NOT IN (''SUPER_ADMIN'',''FINANCEIRO_OPERADOR'')',
+    'i'
+  );
+
+  IF v_rewritten IS NOT DISTINCT FROM v_definition
+     OR position('FINANCEIRO_LEITURA' IN v_rewritten)>0 THEN
     RAISE EXCEPTION 'Migration Finance Operator: guarda de aprovação mudou; nenhuma função foi substituída.';
   END IF;
 
-  v_definition := replace(v_definition, v_old, v_new);
-  EXECUTE v_definition;
+  EXECUTE v_rewritten;
 END;
 $finance_approval$;
 
