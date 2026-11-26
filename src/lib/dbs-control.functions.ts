@@ -4268,6 +4268,26 @@ export const saveDbsPartPricingPolicy = createServerFn({ method: "POST" })
     return result;
   });
 
+export const saveDbsPartPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{policyType:"markup"|"gross_margin";rateBasisPoints:number})=>{
+    if(!["markup","gross_margin"].includes(input?.policyType)
+      || !Number.isSafeInteger(input.rateBasisPoints)
+      || (input.policyType==="markup"&&(input.rateBasisPoints<1||input.rateBasisPoints>1000000))
+      || (input.policyType==="gross_margin"&&(input.rateBasisPoints<1||input.rateBasisPoints>9900))) {
+      throw new Error("Informe uma política de preço válida.");
+    }
+    return {policyType:input.policyType,rateBasisPoints:input.rateBasisPoints};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_set_part_pricing_policy",{
+      p_actor_user_id:user.id,p_policy_type:data.policyType,p_rate_basis_points:data.rateBasisPoints,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
