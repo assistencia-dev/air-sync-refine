@@ -1645,7 +1645,7 @@ function DbsControlPage() {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
         if (section === "purchases") {
-          void navigate({ to: "/treasury" });
+          void navigate({ to: "/dbs-inventory?section=purchases" });
           return;
         }
         const target = mountDbsMaterialsPortal(iframeRef.current, "parts");
