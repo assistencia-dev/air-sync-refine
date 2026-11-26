@@ -4936,7 +4936,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     const admin = supabaseAdmin as any;
     if (data.partId) {
       const { data: part, error } = await admin.from("dbs_control_parts")
-        .select("id,name,status").eq("id", data.partId).maybeSingle();
+        .select("id,name,status").eq("id", data.partId).eq("scope_key", scopeKey).maybeSingle();
       if (error) throw new Error(error.message);
       if (!part || part.status !== "ativo") throw new Error("Peça não encontrada ou inativa.");
     }
@@ -4971,10 +4971,21 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       if (!data.vehicleLabel) data.vehicleLabel = cylinder.vehicle_label ?? null;
     }
     if (data.employeeId) {
+      const scopedUsersForEmployee = await admin.from("users").select("id")
+        .eq("company_id", companyId).eq("status", "ativo");
+      if (scopedUsersForEmployee.error) throw new Error(scopedUsersForEmployee.error.message);
+      const scopedUserIdsForEmployee = (scopedUsersForEmployee.data ?? []).map((row: any) => row.id);
+      const employeeAccess = scopedUserIdsForEmployee.length
+        ? await admin.from("rh_employee_access").select("employee_id")
+            .eq("employee_id", data.employeeId).in("user_id", scopedUserIdsForEmployee).eq("access_enabled", true).maybeSingle()
+        : { data: null, error: null };
+      if (employeeAccess.error) throw new Error(employeeAccess.error.message);
       const { data: employee, error } = await admin.from("rh_employees")
         .select("id,is_active").eq("id", data.employeeId).maybeSingle();
       if (error) throw new Error(error.message);
-      if (!employee || employee.is_active !== true) throw new Error("Colaborador não encontrado ou inativo.");
+      if (!employee || employee.is_active !== true || !employeeAccess.data) {
+        throw new Error("Colaborador não encontrado, inativo ou fora da empresa vinculada.");
+      }
     }
     const payload = {
       request_type: data.requestType, part_id: data.partId, work_order_id: data.workOrderId,
