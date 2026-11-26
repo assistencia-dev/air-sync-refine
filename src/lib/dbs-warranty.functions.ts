@@ -97,24 +97,37 @@ async function requireWarrantyFinance(context: { userId: string }) {
   return scope;
 }
 
+function addWarrantyMonths(startsOn: string, months: number) {
+  const [year, month, day] = startsOn.split("-").map(Number);
+  const targetMonthIndex = month - 1 + months;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const targetMonth = (targetMonthIndex % 12) + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, targetMonth - 1, Math.min(day, lastDay))).toISOString().slice(0, 10);
+}
+
 function normalizeWarrantyFields(input: any) {
   const startsOn = String(input?.startsOn ?? "").trim();
-  const expiresOn = String(input?.expiresOn ?? "").trim();
+  const expiresOnProvided = Boolean(String(input?.expiresOn ?? "").trim());
   const durationMonths = input?.durationMonths == null || input.durationMonths === ""
     ? null
     : Number(input.durationMonths);
+  if (!isIsoDate(startsOn)) throw new Error("Informe uma data válida de início da garantia.");
+  if (durationMonths != null && (!Number.isInteger(durationMonths) || durationMonths < 0 || durationMonths > 600)) {
+    throw new Error("Duração da garantia inválida.");
+  }
+  const expiresOn = expiresOnProvided
+    ? String(input.expiresOn).trim()
+    : durationMonths != null ? addWarrantyMonths(startsOn, durationMonths) : "";
+  if (!isIsoDate(expiresOn) || expiresOn < startsOn) {
+    throw new Error("Informe a data de término ou uma duração válida em meses.");
+  }
   const terms = String(input?.terms ?? "").trim().slice(0, 4000);
   const notes = String(input?.notes ?? "").trim().slice(0, 2000);
   const evidence = Array.isArray(input?.evidence)
     ? input.evidence.slice(0, 20).map((entry: unknown) => String(entry ?? "").trim().slice(0, 500)).filter(Boolean)
     : [];
-  if (!isIsoDate(startsOn) || !isIsoDate(expiresOn) || expiresOn < startsOn) {
-    throw new Error("Informe as datas válidas de início e término da garantia.");
-  }
-  if (durationMonths != null && (!Number.isInteger(durationMonths) || durationMonths < 0 || durationMonths > 600)) {
-    throw new Error("Duração da garantia inválida.");
-  }
-  return { startsOn, expiresOn, durationMonths, terms, notes, evidence };
+  return { startsOn, expiresOn, expiresOnProvided, durationMonths, terms, notes, evidence };
 }
 
 export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
@@ -256,6 +269,7 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
     if (!part.data || part.data.status !== "ativo") throw new Error("Peça não encontrada ou inativa.");
 
     let receiptSupplierId: string | null = null;
+    let effectiveStartsOn = data.startsOn;
     if (data.sourceReceiptItemId) {
       const item = await (supabaseAdmin as any).from("dbs_control_purchase_receipt_items")
         .select("id,part_id,receipt_id").eq("id", data.sourceReceiptItemId).maybeSingle();
@@ -264,12 +278,21 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
         throw new Error("O item do recebimento não corresponde à peça selecionada.");
       }
       const receipt = await (supabaseAdmin as any).from("dbs_control_purchase_receipts")
-        .select("id,purchase_id,scope_key").eq("id", item.data.receipt_id).eq("scope_key", scope.scopeKey).maybeSingle();
+        .select("id,purchase_id,scope_key,received_at").eq("id", item.data.receipt_id).eq("scope_key", scope.scopeKey).maybeSingle();
       if (receipt.error) throw new Error(receipt.error.message);
       if (!receipt.data) throw new Error("Recebimento não encontrado no escopo financeiro.");
       const purchase = await (supabaseAdmin as any).from("dbs_control_purchases")
-        .select("supplier_id,supplier_name").eq("id", receipt.data.purchase_id).eq("scope_key", scope.scopeKey).maybeSingle();
+        .select("supplier_id,supplier_name,purchase_date").eq("id", receipt.data.purchase_id).eq("scope_key", scope.scopeKey).maybeSingle();
       if (purchase.error) throw new Error(purchase.error.message);
+      if (data.startAnchor === "receipt_date") {
+        const receivedAt = String(receipt.data.received_at ?? "");
+        if (!isIsoDate(receivedAt.slice(0, 10))) throw new Error("O recebimento não possui data válida para iniciar a garantia.");
+        effectiveStartsOn = receivedAt.slice(0, 10);
+      } else if (data.startAnchor === "invoice_date") {
+        const invoiceDate = String(purchase.data?.purchase_date ?? "");
+        if (!isIsoDate(invoiceDate)) throw new Error("A compra não possui data válida de nota fiscal para iniciar a garantia.");
+        effectiveStartsOn = invoiceDate;
+      }
       receiptSupplierId = purchase.data?.supplier_id ?? null;
       if (data.supplierId && receiptSupplierId && data.supplierId !== receiptSupplierId) {
         throw new Error("O fornecedor escolhido não corresponde ao recebimento informado.");
@@ -287,7 +310,10 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
       supplier_id: supplierId, source_receipt_item_id: data.sourceReceiptItemId,
       serial_number: data.serialNumber, lot_number: data.lotNumber,
       quantity_covered: data.quantityCovered, provider_name: data.providerName,
-      start_anchor: data.startAnchor, starts_on: data.startsOn, expires_on: data.expiresOn,
+      start_anchor: data.startAnchor, starts_on: effectiveStartsOn,
+      expires_on: data.expiresOnProvided && effectiveStartsOn === data.startsOn
+        ? data.expiresOn
+        : data.durationMonths != null ? addWarrantyMonths(effectiveStartsOn, data.durationMonths) : data.expiresOn,
       duration_months: data.durationMonths, terms: data.terms, document_reference: data.documentReference,
       notes: data.notes, evidence: data.evidence, created_by: scope.id, updated_by: scope.id,
     }).select("id,part_id,supplier_id,serial_number,lot_number,starts_on,expires_on,status").single();
@@ -302,7 +328,7 @@ export const createDbsCustomerWarranty = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
     workOrderId: string; coverageType: "part" | "service" | "work_order";
-    workOrderPartId?: string; partId?: string; startsOn: string; expiresOn: string;
+    workOrderPartId?: string; startsOn: string; expiresOn?: string;
     durationMonths?: number | null; terms?: string; notes?: string; evidence?: string[];
   }) => {
     const fields = normalizeWarrantyFields(input);
@@ -311,7 +337,6 @@ export const createDbsCustomerWarranty = createServerFn({ method: "POST" })
       workOrderId: requiredId(input.workOrderId, "OS"),
       coverageType: input.coverageType,
       workOrderPartId: optionalId(input.workOrderPartId, "Item da OS"),
-      partId: optionalId(input.partId, "Peça"),
       ...fields,
     };
   })
@@ -322,18 +347,17 @@ export const createDbsCustomerWarranty = createServerFn({ method: "POST" })
       .in("created_by_user_id", scope.scopedUserIds).is("deleted_at", null).maybeSingle();
     if (workOrder.error) throw new Error(workOrder.error.message);
     if (!workOrder.data) throw new Error("OS não encontrada no escopo financeiro.");
-    let partId = data.partId;
+    let partId: string | null = null;
     if (data.workOrderPartId) {
       const orderPart = await (supabaseAdmin as any).from("dbs_control_work_order_parts")
         .select("id,work_order_id,part_id").eq("id", data.workOrderPartId)
         .eq("work_order_id", data.workOrderId).maybeSingle();
       if (orderPart.error) throw new Error(orderPart.error.message);
       if (!orderPart.data) throw new Error("Peça não encontrada nesta OS.");
-      if (partId && partId !== orderPart.data.part_id) throw new Error("A peça escolhida não corresponde ao item instalado na OS.");
       partId = orderPart.data.part_id;
     }
-    if (data.coverageType === "part" && !partId && !data.workOrderPartId) {
-      throw new Error("Selecione a peça instalada ou o item da OS coberto.");
+    if (data.coverageType === "part" && !data.workOrderPartId) {
+      throw new Error("Selecione a peça instalada a partir dos itens registrados na OS.");
     }
     const saved = await (supabaseAdmin as any).from("dbs_control_customer_warranties").insert({
       company_id: scope.companyId, scope_key: scope.scopeKey,
