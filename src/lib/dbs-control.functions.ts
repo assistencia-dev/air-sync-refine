@@ -5211,15 +5211,41 @@ export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
       .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(1000);
     if (requests.error) throw new Error(requests.error.message);
-    const ids = (requests.data ?? []).map((row: any) => row.id);
-    const links = ids.length
-      ? await admin.from("dbs_control_material_request_purchase_links")
-          .select("id,material_request_id,purchase_id,purchase_item_id,quantity_linked,created_at")
-          .in("material_request_id", ids).order("created_at")
-      : { data: [], error: null };
-    if (links.error) throw new Error(links.error.message);
-    return { requests: requests.data ?? [], purchaseLinks: links.data ?? [] };
+    const ids = (requests.data ?? []).map((row: any) => String(row.id));
+    const cylinderIds = [...new Set((requests.data ?? []).map((row: any) => String(row.gas_cylinder_id ?? "")).filter(Boolean))];
+    const [links, cylinders, gasRefillEvents] = await Promise.all([
+      ids.length
+        ? admin.from("dbs_control_material_request_purchase_links")
+            .select("id,material_request_id,purchase_id,purchase_item_id,quantity_linked,created_at")
+            .in("material_request_id", ids).order("created_at")
+        : Promise.resolve({ data: [], error: null }),
+      cylinderIds.length
+        ? admin.from("dbs_control_gas_cylinders")
+            .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
+            .eq("scope_key", scopeKey).in("id", cylinderIds)
+        : Promise.resolve({ data: [], error: null }),
+      ids.length
+        ? admin.from("dbs_control_gas_refill_events")
+            .select("id,material_request_id,gas_cylinder_id,part_id,purchase_id,purchase_item_id,receipt_item_id,unit_cost_cents,total_cost_cents,total_charges_after,ledger_entry_id,created_at")
+            .eq("scope_key", scopeKey).in("material_request_id", ids)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const result of [links, cylinders, gasRefillEvents]) {
+      if (result.error) throw new Error("Falha ao carregar vínculos de compras ou recargas: " + result.error.message);
+    }
+    const cylinderById = new Map((cylinders.data ?? []).map((row: any) => [String(row.id), row]));
+    const eventByRequestId = new Map((gasRefillEvents.data ?? []).map((row: any) => [String(row.material_request_id), row]));
+    return {
+      requests: (requests.data ?? []).map((row: any) => ({
+        ...row,
+        gasCylinder: cylinderById.get(String(row.gas_cylinder_id ?? "")) ?? null,
+        gasRefillEvent: eventByRequestId.get(String(row.id)) ?? null,
+      })),
+      purchaseLinks: links.data ?? [],
+      gasRefillEvents: gasRefillEvents.data ?? [],
+    };
   });
+
 
 export const decideDbsMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -5270,6 +5296,40 @@ export const linkDbsMaterialRequestPurchase = createServerFn({ method: "POST" })
 async function requireDbsMaterialRequestActor(context: DbsInventoryAdminContext) {
   return requireDbsInventoryFinanceAdmin(context);
 }
+
+export const fulfillDbsGasRefillRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestId: string;
+    totalChargesAfter: number;
+    expectedVersion: number;
+    idempotencyKey: string;
+  }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (!Number.isSafeInteger(input?.totalChargesAfter) || input.totalChargesAfter <= 0) {
+      throw new Error("Informe a capacidade final de cargas da botija.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Atualize a solicitação antes de concluir a recarga.");
+    }
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) {
+      throw new Error("Chave de segurança da recarga inválida.");
+    }
+    return { requestId, totalChargesAfter: input.totalChargesAfter, expectedVersion: input.expectedVersion, idempotencyKey };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_fulfill_gas_refill_request", {
+      p_request_id: data.requestId,
+      p_actor_user_id: user.id,
+      p_total_charges: data.totalChargesAfter,
+      p_idempotency_key: data.idempotencyKey,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
 
 export const fulfillDbsMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
