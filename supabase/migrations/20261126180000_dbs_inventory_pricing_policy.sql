@@ -7,6 +7,8 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS public.dbs_control_inventory_pricing_policies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   scope_key text NOT NULL UNIQUE CHECK (scope_key = 'dbs-control:global'),
+  company_id uuid REFERENCES public.companies(id) ON DELETE RESTRICT,
+  owner_user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
   pricing_method text NOT NULL CHECK (pricing_method IN ('markup','gross_margin')),
   rate_bps integer NOT NULL CHECK (rate_bps > 0 AND rate_bps <= 99000),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -38,11 +40,38 @@ AS $function$
 DECLARE
   v_method text := lower(btrim(coalesce(p_pricing_method,'')));
   v_policy public.dbs_control_inventory_pricing_policies%rowtype;
+  v_actor public.users%rowtype;
+  v_owner public.users%rowtype;
+  v_owner_user_id uuid;
   v_scope text;
   v_new_version bigint;
   v_updated_parts integer := 0;
   v_price numeric;
 BEGIN
+  SELECT * INTO v_actor FROM public.users
+   WHERE id=p_actor_user_id AND status='ativo';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DBS_INVENTORY_PRICING_POLICY_FORBIDDEN' USING errcode='42501';
+  END IF;
+  IF v_actor.role_key::text='SUPER_ADMIN' THEN
+    v_owner_user_id := v_actor.id;
+  ELSIF v_actor.role_key::text='FINANCEIRO_OPERADOR' THEN
+    SELECT owner.id INTO v_owner_user_id
+      FROM public.treasury_viewer_access access
+      JOIN public.users owner
+        ON owner.id=access.owner_user_id
+       AND owner.status='ativo'
+       AND owner.role_key::text='SUPER_ADMIN'
+       AND owner.company_id IS NOT DISTINCT FROM v_actor.company_id
+     WHERE access.viewer_user_id=v_actor.id
+       AND access.enabled=true;
+  END IF;
+  SELECT * INTO v_owner FROM public.users
+   WHERE id=v_owner_user_id AND status='ativo' AND role_key::text='SUPER_ADMIN';
+  IF v_owner.id IS NULL THEN
+    RAISE EXCEPTION 'DBS_INVENTORY_PRICING_POLICY_OWNER_INVALID' USING errcode='42501';
+  END IF;
+
   v_scope := public.dbs_control_inventory_finance_scope_key(p_actor_user_id);
   IF v_scope IS NULL OR p_expected_version IS NULL OR p_expected_version < 0
      OR v_method NOT IN ('markup','gross_margin')
@@ -58,6 +87,10 @@ BEGIN
    FOR UPDATE;
 
   IF FOUND THEN
+    IF v_policy.owner_user_id IS DISTINCT FROM v_owner_user_id
+       OR v_policy.company_id IS DISTINCT FROM v_owner.company_id THEN
+      RAISE EXCEPTION 'DBS_INVENTORY_PRICING_POLICY_OWNER_MISMATCH' USING errcode='42501';
+    END IF;
     IF v_policy.version IS DISTINCT FROM p_expected_version THEN
       RAISE EXCEPTION 'DBS_INVENTORY_PRICING_POLICY_VERSION_CONFLICT' USING errcode='40001';
     END IF;
@@ -72,8 +105,8 @@ BEGIN
     END IF;
     v_new_version := 1;
     INSERT INTO public.dbs_control_inventory_pricing_policies(
-      scope_key,pricing_method,rate_bps,version,updated_by
-    ) VALUES ('dbs-control:global',v_method,p_rate_bps,v_new_version,p_actor_user_id)
+      scope_key,company_id,owner_user_id,pricing_method,rate_bps,version,updated_by
+    ) VALUES ('dbs-control:global',v_owner.company_id,v_owner_user_id,v_method,p_rate_bps,v_new_version,p_actor_user_id)
     RETURNING * INTO v_policy;
   END IF;
 
