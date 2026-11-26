@@ -38,13 +38,14 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_inventory_request_items (
   quantity numeric(18,4) NOT NULL CHECK (quantity > 0),
   unit_label text NOT NULL DEFAULT 'un',
   quantity_ready_for_dispatch numeric(18,4) NOT NULL DEFAULT 0 CHECK (quantity_ready_for_dispatch >= 0),
+  quantity_ordered numeric(18,4) NOT NULL DEFAULT 0 CHECK (quantity_ordered >= 0),
   quantity_fulfilled numeric(18,4) NOT NULL DEFAULT 0 CHECK (quantity_fulfilled >= 0),
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','mapped','partially_fulfilled','fulfilled','rejected')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(request_id,line_no),
-  CHECK (quantity_ready_for_dispatch <= quantity),
-  CHECK (quantity_fulfilled <= quantity)
+  CHECK (quantity_ready_for_dispatch + quantity_ordered <= quantity),
+  CHECK (quantity_fulfilled <= quantity_ready_for_dispatch)
 );
 
 CREATE TABLE IF NOT EXISTS public.dbs_control_inventory_request_history (
@@ -434,6 +435,8 @@ DECLARE
   v_request public.dbs_control_inventory_requests%rowtype;
   v_result jsonb;
   v_purchase_id uuid;
+  v_purchase_item record;
+  v_request_item record;
 BEGIN
   IF v_actor IS NULL OR NOT (
     public.dbs_control_is_admin_actor(v_actor)
@@ -445,7 +448,8 @@ BEGIN
   SELECT company_id INTO v_actor_company FROM public.users WHERE id=v_actor AND status='ativo';
   SELECT * INTO v_request FROM public.dbs_control_inventory_requests WHERE id=v_request_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_NOT_FOUND' USING ERRCODE='23503'; END IF;
-  IF v_actor_company IS NOT NULL AND v_actor_company IS DISTINCT FROM v_request.company_id THEN
+  IF (v_actor_company IS NOT NULL AND v_actor_company IS DISTINCT FROM v_request.company_id)
+     OR nullif(p_payload->>'scope_key','') IS DISTINCT FROM v_request.scope_key THEN
     RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
   IF v_request.status NOT IN ('waiting_purchase','purchase_registered','partially_fulfilled','ready_for_dispatch') THEN
@@ -462,13 +466,32 @@ BEGIN
      AND (source_inventory_request_id IS NULL OR source_inventory_request_id=v_request_id);
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
 
-  UPDATE public.dbs_control_purchase_items pi
-     SET source_inventory_request_item_id=ri.id
-    FROM public.dbs_control_inventory_request_items ri
-   WHERE pi.purchase_id=v_purchase_id
-     AND ri.request_id=v_request_id
-     AND ri.resolved_part_id=pi.part_id
-     AND pi.source_inventory_request_item_id IS NULL;
+  FOR v_purchase_item IN
+    SELECT id,part_id,quantity FROM public.dbs_control_purchase_items
+     WHERE purchase_id=v_purchase_id ORDER BY created_at,id
+  LOOP
+    SELECT ri.id,ri.quantity,ri.quantity_ready_for_dispatch,ri.quantity_ordered
+      INTO v_request_item
+      FROM public.dbs_control_inventory_request_items ri
+     WHERE ri.request_id=v_request_id
+       AND ri.resolved_part_id=v_purchase_item.part_id
+       AND ri.quantity-ri.quantity_ready_for_dispatch-ri.quantity_ordered>=v_purchase_item.quantity
+       AND ri.status<>'rejected'
+     ORDER BY ri.line_no
+     FOR UPDATE
+     LIMIT 1;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'DBS_PURCHASE_REQUEST_QUANTITY_EXCEEDED' USING ERRCODE='23514';
+    END IF;
+    UPDATE public.dbs_control_purchase_items
+       SET source_inventory_request_item_id=v_request_item.id
+     WHERE id=v_purchase_item.id
+       AND (source_inventory_request_item_id IS NULL OR source_inventory_request_item_id=v_request_item.id);
+    IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_REQUEST_ITEM_LINK_CONFLICT' USING ERRCODE='23505'; END IF;
+    UPDATE public.dbs_control_inventory_request_items
+       SET quantity_ordered=quantity_ordered+v_purchase_item.quantity,updated_at=now()
+     WHERE id=v_request_item.id;
+  END LOOP;
 
   UPDATE public.dbs_control_inventory_requests
      SET status='purchase_registered',version=version+1,updated_at=now()
@@ -506,6 +529,7 @@ BEGIN
   END IF;
   UPDATE public.dbs_control_inventory_request_items
      SET quantity_ready_for_dispatch=least(quantity,greatest(quantity_fulfilled,quantity_ready_for_dispatch+v_delta)),
+         quantity_ordered=greatest(0,quantity_ordered-v_delta),
          status=CASE WHEN quantity_fulfilled>=quantity THEN 'fulfilled' ELSE 'mapped' END,
          updated_at=now()
    WHERE id=v_item.id;
