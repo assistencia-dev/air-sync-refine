@@ -111,7 +111,7 @@ export function DbsOperationalInventoryPage({
         destinationStockId: destinationStockId || undefined,
         description: description.trim(),
         quantity: Number(quantity),
-        unitLabel: unitLabel.trim() || "un",
+        unitLabel: requestType === "gas_refill" ? "recarga" : unitLabel.trim() || "un",
         reason: reason.trim(),
         needByDate: needByDate || undefined,
         vehicleLabel: vehicleLabel.trim() || undefined,
@@ -145,6 +145,7 @@ export function DbsOperationalInventoryPage({
   const operationalStocks = overview.data?.operationalStocks ?? [];
   const employees = overview.data?.employees ?? [];
   const gasCylinders = overview.data?.gasCylinders ?? [];
+  const canChooseDestination = overview.data?.canChooseDestination === true;
   const supplierWarranties = warrantyOverview.data?.supplierWarranties ?? [];
   const customerWarranties = warrantyOverview.data?.customerWarranties ?? [];
   const warrantyLabel = (expiresOn: string) => {
@@ -352,7 +353,7 @@ export function DbsOperationalInventoryPage({
                 <p className="mt-1 text-sm text-slate-600">Informe o que precisa e por que é necessário.</p>
               </div>
               <label className="block text-sm font-semibold">Tipo de necessidade
-                <select value={requestType} onChange={(e) => { setRequestType(e.target.value as RequestType); setPartId(""); }}
+                <select value={requestType} onChange={(e) => { const next = e.target.value as RequestType; setRequestType(next); setPartId(""); setGasCylinderId(""); setDestinationStockId(""); if (next === "gas_refill") { setQuantity("1"); setUnitLabel("recarga"); } else if (requestType === "gas_refill") { setQuantity("1"); setUnitLabel("un"); } }}
                   className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
                   {Object.entries(requestLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -393,7 +394,7 @@ export function DbsOperationalInventoryPage({
                   {employees.map((employee: any) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
                 </select>
               </label>}
-              {requestType !== "part" && <label className="block text-sm font-semibold">Estoque / veículo de destino (opcional)
+              {requestType !== "part" && requestType !== "gas_refill" && canChooseDestination && <label className="block text-sm font-semibold">Estoque / veículo de destino (opcional)
                 <select value={destinationStockId} onChange={(e) => setDestinationStockId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
                   <option value="">Definir depois pelo Financeiro</option>
                   {operationalStocks.map((stock: any) => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
@@ -404,7 +405,14 @@ export function DbsOperationalInventoryPage({
                   placeholder={requestType === "part" ? "Ex.: filtro secador 1/2" : "Informe o material ou ferramenta"}
                   className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 font-normal" />
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              {requestType === "gas_refill" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm font-semibold">Quantidade<input readOnly value="1" className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-normal" /></label>
+                  <label className="block text-sm font-semibold">Unidade<input readOnly value="recarga" className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 font-normal" /></label>
+                  <p className="col-span-2 text-xs text-slate-600">Uma solicitação representa uma recarga para a botija escolhida. O Financeiro confirma a compra e define a capacidade de cargas após a recarga.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
                 <label className="block text-sm font-semibold">Quantidade
                   <input required type="number" min="0.0001" step="0.0001" value={quantity} onChange={(e) => setQuantity(e.target.value)}
                     className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 font-normal" />
@@ -414,6 +422,7 @@ export function DbsOperationalInventoryPage({
                     className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 font-normal" />
                 </label>
               </div>
+              )}
               <label className="block text-sm font-semibold">Necessidade / justificativa
                 <textarea required minLength={5} maxLength={2000} rows={3} value={reason} onChange={(e) => setReason(e.target.value)}
                   placeholder="Explique a necessidade da peça, ferramenta ou insumo."
