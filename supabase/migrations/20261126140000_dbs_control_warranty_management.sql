@@ -2,6 +2,11 @@
 -- Os prazos são configurados pelo Financeiro; nenhuma duração legal/comercial é presumida.
 BEGIN;
 
+-- Garante os identificadores antes de instalar os gatilhos de garantia.
+ALTER TABLE public.dbs_control_purchase_receipt_items
+  ADD COLUMN IF NOT EXISTS serial_number text,
+  ADD COLUMN IF NOT EXISTS lot_number text;
+
 CREATE TABLE IF NOT EXISTS public.dbs_control_part_warranty_defaults (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   scope_key text NOT NULL,
@@ -213,17 +218,17 @@ BEGIN
       SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
         INTO v_restore FROM public.dbs_control_supplier_warranties WHERE id=OLD.supplier_warranty_id;
       UPDATE public.dbs_control_supplier_warranties SET status=v_restore,updated_at=now()
-       WHERE id=OLD.supplier_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+       WHERE id=OLD.supplier_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed','credit');
     ELSIF OLD.customer_warranty_id IS NOT NULL THEN
       SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
         INTO v_restore FROM public.dbs_control_customer_warranties WHERE id=OLD.customer_warranty_id;
       UPDATE public.dbs_control_customer_warranties SET status=v_restore,updated_at=now()
-       WHERE id=OLD.customer_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+       WHERE id=OLD.customer_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed','credit');
     ELSIF OLD.gas_cylinder_warranty_id IS NOT NULL THEN
       SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
         INTO v_restore FROM public.dbs_control_gas_cylinder_warranties WHERE id=OLD.gas_cylinder_warranty_id;
       UPDATE public.dbs_control_gas_cylinder_warranties SET status=v_restore,updated_at=now()
-       WHERE id=OLD.gas_cylinder_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+       WHERE id=OLD.gas_cylinder_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed','credit');
     END IF;
   END IF;
   RETURN NEW;
@@ -298,7 +303,7 @@ BEGIN
          resolution_reference=nullif(trim(coalesce(p_resolution_reference,'')),''),
          replacement_supplier_warranty_id=p_replacement_supplier_warranty_id,
          assigned_to=p_actor_user_id,
-         closed_at=CASE WHEN p_status IN ('closed','rejected','replacement','credit','approved') THEN now() ELSE NULL END,
+         closed_at=CASE WHEN p_status IN ('closed','rejected','replacement','credit') THEN now() ELSE NULL END,
          updated_at=now()
    WHERE id=p_claim_id;
 
