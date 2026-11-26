@@ -167,6 +167,8 @@ export function DbsInventoryPage({
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
+  const [purchaseReceiptSerials, setPurchaseReceiptSerials] = useState<Record<string,string>>({});
+  const [purchaseReceiptLots, setPurchaseReceiptLots] = useState<Record<string,string>>({});
   const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
@@ -485,8 +487,11 @@ export function DbsInventoryPage({
     const items = selected.map((item: any) => ({
       purchaseItemId: String(item.id),
       quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+      serialNumber: String(purchaseReceiptSerials[item.id] ?? "").trim(),
+      lotNumber: String(purchaseReceiptLots[item.id] ?? "").trim(),
     }));
-    if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0)) {
+    if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0
+      || (item.serialNumber && item.quantityReceived !== 1))) {
       setMessage("Informe quantidades válidas para os itens conferidos.");
       return;
     }
@@ -504,6 +509,8 @@ export function DbsInventoryPage({
         for (const item of selected) delete next[item.id];
         return next;
       });
+      setPurchaseReceiptSerials((previous)=>{const next={...previous};for(const item of selected)delete next[item.id];return next;});
+      setPurchaseReceiptLots((previous)=>{const next={...previous};for(const item of selected)delete next[item.id];return next;});
     }
   }
 
@@ -1620,6 +1627,10 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <input aria-label={"Número de série de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptSerials[item.id]??""} onChange={e=>setPurchaseReceiptSerials(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Número de série (1 unidade)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                                <input aria-label={"Lote de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptLots[item.id]??""} onChange={e=>setPurchaseReceiptLots(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Lote (opcional)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                              </div>
                               </label>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
@@ -1670,6 +1681,10 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                 <input aria-label={"Número de série de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptSerials[item.id]??""} onChange={e=>setPurchaseReceiptSerials(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Número de série (1 unidade)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                                 <input aria-label={"Lote de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptLots[item.id]??""} onChange={e=>setPurchaseReceiptLots(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Lote (opcional)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                               </div>
                               </label>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
