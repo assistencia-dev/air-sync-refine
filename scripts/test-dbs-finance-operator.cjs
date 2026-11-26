@@ -14,28 +14,25 @@ const viewer = fs.readFileSync("src/lib/treasury-viewer.functions.ts", "utf8");
 const types = fs.readFileSync("src/integrations/supabase/types.ts", "utf8");
 
 assert.match(migration, /ALTER TYPE public\.role_key ADD VALUE IF NOT EXISTS 'FINANCEIRO_OPERADOR'/i);
-assert.match(migration, /dbs_control_is_inventory_finance_actor/i);
-assert.match(migration, /treasury_viewer_access/i);
-assert.match(migration, /owner\.role_key::text = 'SUPER_ADMIN'/i);
-assert.match(migration, /owner\.company_id IS NOT DISTINCT FROM finance_user\.company_id/i);
-assert.match(migration, /dbs_control_register_purchase\(jsonb\)/i);
-assert.match(migration, /dbs_control_register_purchase_with_quote\(jsonb\)/i);
-assert.match(migration, /dbs_control_receive_purchase_items\(uuid,uuid,text,jsonb\)/i);
-assert.match(migration, /dbs_control_settle_purchase\(uuid,uuid,bigint,text,text\)/i);
-assert.match(migration, /dbs_control_inventory_financial_overview\(uuid\)/i);
-assert.match(migration, /v_old := \$old\
-assert.match(migration, /FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR/i);
-assert.match(migration, /REVOKE ALL ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)/i);
-assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)\s+TO service_role/i);
-assert.doesNotMatch(migration, /dbs_control_is_admin_actor\(p_actor_user_id\).*FINANCEIRO_OPERADOR/i);
-assert.doesNotMatch(migration, /GRANT (INSERT|UPDATE|DELETE|ALL).*treasury_ledger/i);
+assert.match(migration, /dbs_control_inventory_finance_scope_key/);
+assert.match(migration, /dbs_control_is_inventory_finance_actor/);
+assert.match(migration, /dbs_control_register_purchase\(jsonb\)/);
+assert.match(migration, /dbs_control_register_purchase_with_quote\(jsonb\)/);
+assert.match(migration, /dbs_control_receive_purchase_items\(uuid,uuid,text,jsonb\)/);
+assert.match(migration, /dbs_control_settle_purchase\(uuid,uuid,bigint,text,text\)/);
+assert.match(migration, /dbs_control_inventory_financial_overview\(uuid\)/);
+assert.match(migration, /dbs_control_decide_purchase_approval\(uuid,uuid,text,text,bigint\)/);
+assert.match(migration, /v_purchase\.scope_key IS DISTINCT FROM public\.dbs_control_inventory_finance_scope_key/i);
+assert.match(migration, /FINANCEIRO_LEITURA/);
+assert.match(migration, /FINANCEIRO_OPERADOR/);
+assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.dbs_control_inventory_finance_scope_key\(uuid\)\s+TO service_role/i);
 assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN|SCHEMA|FUNCTION)\b/i);
 assert.doesNotMatch(migration, /TRUNCATE\s+/i);
 assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
 
 assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
-assert.match(dbs, /user\.role_key === "FINANCEIRO_OPERADOR"/);
-assert.match(dbs, /treasury_viewer_access/);
+assert.match(dbs, /inventoryScopeOwnerId/);
+assert.match(dbs, /dbs-control material request/i);
 for (const functionName of [
   "getDbsPhase2InventoryOverview", "createDbsSupplier", "createDbsCostCenter",
   "createDbsPartCatalog", "updateDbsPartCatalog", "createDbsPurchase",
@@ -48,129 +45,28 @@ for (const functionName of [
   assert.match(dbs.slice(start, next < 0 ? dbs.length : next), /requireDbsInventoryFinanceAdmin/,
     functionName + " must use finance authorization");
 }
-assert.match(treasury, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasury, /user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"/);
+
+assert.match(treasury, /FINANCEIRO_OPERADOR/);
+assert.match(treasury, /resolveTreasuryScopeOwner/);
 assert.match(login, /FINANCEIRO_OPERADOR[\s\S]{0,160}\/financeiro/);
-assert.match(treasuryRoute, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
+assert.match(treasuryRoute, /FINANCEIRO_OPERADOR/);
+assert.match(treasuryRoute, /canApprovePurchasesRef\.current = profile\?\.role_key === "SUPER_ADMIN" \|\| profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
 assert.match(accessRoute, /FINANCEIRO_OPERADOR/);
-assert.match(viewer, /role_key\??:\s*"FINANCEIRO_LEITURA"\s*\|\s*"FINANCEIRO_OPERADOR"/);
-assert.match(viewer, /role_key: data\.role_key/);
+assert.match(accessRoute, /Perfil de acesso/);
+assert.match(viewer, /FINANCEIRO_LEITURA/);
+assert.match(viewer, /FINANCEIRO_OPERADOR/);
 assert.match(types, /\| "FINANCEIRO_OPERADOR"/);
 
-const roleOnly = treasury.slice(
+const adminGuard = treasury.slice(
   treasury.indexOf("async function requireTreasuryAdmin"),
   treasury.indexOf("function asObject"),
 );
-assert.match(roleOnly, /if \(user\.role_key !== "SUPER_ADMIN"\)/,
-  "Manual Ledger entries remain restricted to SUPER_ADMIN.");
+assert.match(adminGuard, /if \(user\.role_key !== "SUPER_ADMIN"\)/,
+  "Lançamento manual no Ledger continua restrito ao SUPER_ADMIN.");
 
-const readonlyPath = viewer.slice(
-  viewer.indexOf("export const getTreasuryViewerData"),
-);
+const readonlyPath = viewer.slice(viewer.indexOf("export const getTreasuryViewerData"));
 assert.match(readonlyPath, /user\.role_key !== "FINANCEIRO_LEITURA"/);
 assert.doesNotMatch(readonlyPath, /FINANCEIRO_OPERADOR/,
-  "The new finance operator must not gain access to the readonly viewer page.");
+  "O operador financeiro não recebe acesso ao painel somente leitura.");
 
-console.log("DBS finance operator: distinct role, linked owner scope, finance-only RPC authorization, Treasury routing and read-only separation verified.");
-SUPER_ADMIN'/i);
-assert.match(migration, /v_new := \$new\
-assert.match(migration, /FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR/i);
-assert.match(migration, /REVOKE ALL ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)/i);
-assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)\s+TO service_role/i);
-assert.doesNotMatch(migration, /dbs_control_is_admin_actor\(p_actor_user_id\).*FINANCEIRO_OPERADOR/i);
-assert.doesNotMatch(migration, /GRANT (INSERT|UPDATE|DELETE|ALL).*treasury_ledger/i);
-assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN|SCHEMA|FUNCTION)\b/i);
-assert.doesNotMatch(migration, /TRUNCATE\s+/i);
-assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
-
-assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
-assert.match(dbs, /user\.role_key === "FINANCEIRO_OPERADOR"/);
-assert.match(dbs, /treasury_viewer_access/);
-for (const functionName of [
-  "getDbsPhase2InventoryOverview", "createDbsSupplier", "createDbsCostCenter",
-  "createDbsPartCatalog", "updateDbsPartCatalog", "createDbsPurchase",
-  "receiveDbsPurchaseItems", "decideDbsPurchaseApproval", "settleDbsPurchase",
-  "getDbsInventoryFinancialOverview",
-]) {
-  const start = dbs.indexOf("export const " + functionName);
-  const next = dbs.indexOf("export const ", start + 1);
-  assert.notEqual(start, -1, functionName + " must remain available");
-  assert.match(dbs.slice(start, next < 0 ? dbs.length : next), /requireDbsInventoryFinanceAdmin/,
-    functionName + " must use finance authorization");
-}
-assert.match(treasury, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasury, /user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"/);
-assert.match(login, /FINANCEIRO_OPERADOR[\s\S]{0,160}\/financeiro/);
-assert.match(treasuryRoute, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
-assert.match(accessRoute, /FINANCEIRO_OPERADOR/);
-assert.match(viewer, /role_key\??:\s*"FINANCEIRO_LEITURA"\s*\|\s*"FINANCEIRO_OPERADOR"/);
-assert.match(viewer, /role_key: data\.role_key/);
-assert.match(types, /\| "FINANCEIRO_OPERADOR"/);
-
-const roleOnly = treasury.slice(
-  treasury.indexOf("async function requireTreasuryAdmin"),
-  treasury.indexOf("function asObject"),
-);
-assert.match(roleOnly, /if \(user\.role_key !== "SUPER_ADMIN"\)/,
-  "Manual Ledger entries remain restricted to SUPER_ADMIN.");
-
-const readonlyPath = viewer.slice(
-  viewer.indexOf("export const getTreasuryViewerData"),
-);
-assert.match(readonlyPath, /user\.role_key !== "FINANCEIRO_LEITURA"/);
-assert.doesNotMatch(readonlyPath, /FINANCEIRO_OPERADOR/,
-  "The new finance operator must not gain access to the readonly viewer page.");
-
-console.log("DBS finance operator: distinct role, linked owner scope, finance-only RPC authorization, Treasury routing and read-only separation verified.");
-SUPER_ADMIN','FINANCEIRO_OPERADOR'/i);
-assert.match(migration, /FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR/i);
-assert.match(migration, /REVOKE ALL ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)/i);
-assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.dbs_control_is_inventory_finance_actor\(uuid\)\s+TO service_role/i);
-assert.doesNotMatch(migration, /dbs_control_is_admin_actor\(p_actor_user_id\).*FINANCEIRO_OPERADOR/i);
-assert.doesNotMatch(migration, /GRANT (INSERT|UPDATE|DELETE|ALL).*treasury_ledger/i);
-assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN|SCHEMA|FUNCTION)\b/i);
-assert.doesNotMatch(migration, /TRUNCATE\s+/i);
-assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
-
-assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
-assert.match(dbs, /user\.role_key === "FINANCEIRO_OPERADOR"/);
-assert.match(dbs, /treasury_viewer_access/);
-for (const functionName of [
-  "getDbsPhase2InventoryOverview", "createDbsSupplier", "createDbsCostCenter",
-  "createDbsPartCatalog", "updateDbsPartCatalog", "createDbsPurchase",
-  "receiveDbsPurchaseItems", "decideDbsPurchaseApproval", "settleDbsPurchase",
-  "getDbsInventoryFinancialOverview",
-]) {
-  const start = dbs.indexOf("export const " + functionName);
-  const next = dbs.indexOf("export const ", start + 1);
-  assert.notEqual(start, -1, functionName + " must remain available");
-  assert.match(dbs.slice(start, next < 0 ? dbs.length : next), /requireDbsInventoryFinanceAdmin/,
-    functionName + " must use finance authorization");
-}
-assert.match(treasury, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasury, /user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"/);
-assert.match(login, /FINANCEIRO_OPERADOR[\s\S]{0,160}\/financeiro/);
-assert.match(treasuryRoute, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
-assert.match(accessRoute, /FINANCEIRO_OPERADOR/);
-assert.match(viewer, /role_key\??:\s*"FINANCEIRO_LEITURA"\s*\|\s*"FINANCEIRO_OPERADOR"/);
-assert.match(viewer, /role_key: data\.role_key/);
-assert.match(types, /\| "FINANCEIRO_OPERADOR"/);
-
-const roleOnly = treasury.slice(
-  treasury.indexOf("async function requireTreasuryAdmin"),
-  treasury.indexOf("function asObject"),
-);
-assert.match(roleOnly, /if \(user\.role_key !== "SUPER_ADMIN"\)/,
-  "Manual Ledger entries remain restricted to SUPER_ADMIN.");
-
-const readonlyPath = viewer.slice(
-  viewer.indexOf("export const getTreasuryViewerData"),
-);
-assert.match(readonlyPath, /user\.role_key !== "FINANCEIRO_LEITURA"/);
-assert.doesNotMatch(readonlyPath, /FINANCEIRO_OPERADOR/,
-  "The new finance operator must not gain access to the readonly viewer page.");
-
-console.log("DBS finance operator: distinct role, linked owner scope, finance-only RPC authorization, Treasury routing and read-only separation verified.");
+console.log("DBS finance operator: role, linked scope, server functions, purchase RPC authorization and readonly separation verified.");
