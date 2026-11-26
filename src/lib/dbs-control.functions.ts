@@ -3531,7 +3531,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
 
 export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number; serialNumber?: string; lotNumber?: string }> }) => {
     const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
     const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
@@ -3543,7 +3543,14 @@ export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
         if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
           throw new Error("A quantidade conferida deve ser maior que zero.");
         }
-        return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
+        const serialNumber=String(item.serialNumber??"").trim();
+        if(serialNumber&&item.quantityReceived!==1) throw new Error("Informe número de série apenas quando receber exatamente uma unidade.");
+        return {
+          purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"),
+          quantity_received: item.quantityReceived,
+          serial_number: serialNumber.slice(0,180)||null,
+          lot_number: String(item.lotNumber??"").trim().slice(0,180)||null,
+        };
       }),
     };
   })
