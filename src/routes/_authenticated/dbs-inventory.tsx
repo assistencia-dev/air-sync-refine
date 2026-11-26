@@ -39,8 +39,11 @@ function DbsInventoryRoute() {
   }
   const role = String((profile.data as any)?.role_key ?? "");
   const operationalRoles = ["ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
-  if (role === "SUPER_ADMIN" || role === "FINANCEIRO_OPERADOR") {
+  if (role === "SUPER_ADMIN") {
     return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+  }
+  if (role === "FINANCEIRO_OPERADOR") {
+    return <DbsInventoryPage financialOnly initialSection={search.section} initialQuoteId={search.quote_id} />;
   }
   if (operationalRoles.includes(role)) return <DbsOperationalInventoryPage />;
   return <main className="min-h-screen bg-[#f8fafc] p-6 text-sm text-slate-600">Acesso ao estoque não autorizado.</main>;
@@ -79,12 +82,14 @@ type DbsInventoryPageProps = {
   embedded?: boolean;
   initialSection?: DbsInventorySection;
   initialQuoteId?: string;
+  financialOnly?: boolean;
 };
 
 export function DbsInventoryPage({
   embedded = false,
   initialSection = "parts",
   initialQuoteId,
+  financialOnly = false,
 }: DbsInventoryPageProps = {}) {
   const overview = useQuery({
     queryKey: ["dbs-phase2-inventory-overview"],
@@ -730,8 +735,8 @@ export function DbsInventoryPage({
         </nav>}
         {moduleSection === "parts" && <nav aria-label="Peças e Estoque" className="dbs-op-tabs mb-5">
           <button type="button" role="tab" aria-selected={partsView==="catalog"} onClick={()=>setPartsView("catalog")} className={partsView==="catalog"?"dbs-op-tab is-active":"dbs-op-tab"}>Catálogo de Peças</button>
-          <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoques</button>
-          <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>
+          {!financialOnly && <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoques</button>}
+          {!financialOnly && <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>}
           <button type="button" role="tab" aria-selected={partsView==="settings"} onClick={()=>setPartsView("settings")} className={partsView==="settings"?"dbs-op-tab is-active":"dbs-op-tab"}>Cadastros Básicos {(!suppliers.length||!measureUnits.length||!costCenters.length)&&<span className="dbs-op-dot" aria-label="Configuração pendente"/>}</button>
         </nav>}
         {message && <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950 shadow-sm"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-600" />{message}</div>}
