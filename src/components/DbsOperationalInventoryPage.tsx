@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Package, RefreshCw, Send, Wrench } from "lucide-react";
 import {
@@ -13,6 +13,8 @@ type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 type DbsOperationalInventoryPageProps = {
   initialSection?: "parts" | "purchases";
   initialQuoteId?: string;
+  initialRequestType?: RequestType;
+  requestToken?: number;
 };
 
 const requestLabels: Record<RequestType, string> = {
@@ -43,11 +45,13 @@ function requestKey() {
 export function DbsOperationalInventoryPage({
   initialSection = "parts",
   initialQuoteId = "",
+  initialRequestType,
+  requestToken = 0,
 }: DbsOperationalInventoryPageProps) {
   const queryClient = useQueryClient();
-  const [section, setSection] = useState<OperationalSection>(initialSection === "purchases" ? "requests" : "parts");
+  const [section, setSection] = useState<OperationalSection>(initialRequestType ? "request" : initialSection === "purchases" ? "requests" : "parts");
   const [search, setSearch] = useState("");
-  const [requestType, setRequestType] = useState<RequestType>("part");
+  const [requestType, setRequestType] = useState<RequestType>(initialRequestType ?? "part");
   const [partId, setPartId] = useState("");
   const [workOrderId, setWorkOrderId] = useState("");
   const [description, setDescription] = useState("");
@@ -69,6 +73,18 @@ export function DbsOperationalInventoryPage({
   const [useError, setUseError] = useState("");
   const [useSuccess, setUseSuccess] = useState("");
   const [useRequestKey, setUseRequestKey] = useState(requestKey);
+
+  useEffect(() => {
+    if (!initialRequestType || requestToken < 1) return;
+    setRequestType(initialRequestType);
+    setSection("request");
+    setDescription("");
+    setReason("");
+    setQuantity("1");
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIdempotencyKey(requestKey());
+  }, [initialRequestType, requestToken]);
 
   const overview = useQuery({
     queryKey: ["dbs-operational-inventory-overview"],
