@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Boxes, PackageSearch, Search, Warehouse, ArrowLeftRight, ClipboardList, Plus, RotateCcw } from "lucide-react";
 import {
   createDbsOperationalStock,
+  createDbsInventoryRequest,
+  getDbsInventoryRequests,
   getDbsOperationalInventoryOverview,
   releaseDbsOperationalStockReservation,
   reserveDbsOperationalStockForWorkOrder,
@@ -29,6 +31,11 @@ type OperationalReservation = {
   id: string; stockId: string; workOrderId: string; partId: string; quantity: number;
   purpose: string; status: string; createdAt: string;
 };
+type InventoryRequest = {
+  id: string; requestNumber: string; workOrderId: string | null; urgency: string;
+  reason: string; status: string; createdAt: string;
+  items: Array<{ id: string; itemType: string; requestedLabel: string; quantity: number; unitLabel: string; status: string }>;
+};
 type OperationalData = {
   parts?: OperationalPart[];
   operationalStocks?: OperationalStock[];
@@ -50,6 +57,11 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
     queryFn: () => getDbsOperationalInventoryOverview(),
     retry: 1,
   });
+  const inventoryRequests = useQuery({
+    queryKey: ["dbs-inventory-requests"],
+    queryFn: () => getDbsInventoryRequests() as Promise<InventoryRequest[]>,
+    retry: 1,
+  });
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<"all" | "available" | "empty">("all");
   const [busy, setBusy] = useState(false);
@@ -66,6 +78,17 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
   const [reservePurpose, setReservePurpose] = useState<"TROCA_PECA" | "ATIVO_EQUIPAMENTO">("TROCA_PECA");
   const [newStockCenterId, setNewStockCenterId] = useState("");
   const [newStockName, setNewStockName] = useState("");
+  const [requestItemType, setRequestItemType] = useState<"part"|"tool"|"supply"|"gas">("part");
+  const [requestPartId, setRequestPartId] = useState("");
+  const [requestItemLabel, setRequestItemLabel] = useState("");
+  const [requestItemSku, setRequestItemSku] = useState("");
+  const [requestItemDescription, setRequestItemDescription] = useState("");
+  const [requestQuantity, setRequestQuantity] = useState("1");
+  const [requestUnit, setRequestUnit] = useState("un");
+  const [requestWorkOrderId, setRequestWorkOrderId] = useState("");
+  const [requestCostCenterId, setRequestCostCenterId] = useState("");
+  const [requestReason, setRequestReason] = useState("");
+  const [requestUrgency, setRequestUrgency] = useState<"normal"|"urgent">("normal");
 
   const data = inventory.data as OperationalData | undefined;
   const parts = data?.parts ?? [];
@@ -154,6 +177,42 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
       purpose: reservePurpose,
       idempotencyKey: "op-reserve:" + crypto.randomUUID(),
     } }), "Peça reservada para a OS. A baixa física ocorrerá no fluxo de conclusão.");
+  }
+
+  async function saveInventoryRequest(event: FormEvent) {
+    event.preventDefault();
+    const selectedPart = parts.find((part) => part.id === requestPartId);
+    const label = selectedPart?.name ?? requestItemLabel.trim();
+    if (!label || label.length < 2 || Number(requestQuantity) <= 0 || requestReason.trim().length < 5) {
+      setNotice("Informe o material, uma quantidade e a necessidade do pedido.");
+      return;
+    }
+    await runAction(async () => {
+      const result = await createDbsInventoryRequest({ data: {
+        idempotencyKey: "inventory-request:" + crypto.randomUUID(),
+        reason: requestReason.trim(),
+        urgency: requestUrgency,
+        workOrderId: requestWorkOrderId || null,
+        costCenterId: requestCostCenterId || null,
+        items: [{
+          itemType: requestItemType,
+          partId: requestPartId || null,
+          requestedLabel: label,
+          requestedSku: selectedPart?.sku || requestItemSku.trim() || undefined,
+          description: requestItemDescription.trim() || selectedPart?.description || undefined,
+          quantity: Number(requestQuantity),
+          unitLabel: requestUnit.trim() || "un",
+        }],
+      }});
+      await inventoryRequests.refetch();
+      return result;
+    }, "Solicitação enviada ao Financeiro para análise.");
+    setRequestPartId("");
+    setRequestItemLabel("");
+    setRequestItemSku("");
+    setRequestItemDescription("");
+    setRequestQuantity("1");
+    setRequestReason("");
   }
 
   async function saveOperationalStock(event: FormEvent) {
@@ -257,6 +316,72 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
               {filteredParts.length === 0 && <p className="p-6 text-sm text-slate-500">Nenhuma peça encontrada com esse filtro.</p>}
             </>
           )}
+        </section>
+
+        <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-4">
+            <h2 className="font-bold">Solicitar material ao Financeiro</h2>
+            <p className="mt-1 text-xs text-slate-500">Use uma peça cadastrada ou descreva uma nova necessidade. O pedido fica vinculado à OS e ao centro de custo quando informados.</p>
+          </div>
+          <form onSubmit={saveInventoryRequest} className="grid gap-3 p-4 lg:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-600">Tipo de material
+              <select value={requestItemType} onChange={(event)=>{setRequestItemType(event.target.value as typeof requestItemType);setRequestPartId("");}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                <option value="part">Peça</option><option value="tool">Ferramenta</option><option value="supply">Insumo / material de consumo</option><option value="gas">Gás / cilindro</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Peça cadastrada (opcional)
+              <select value={requestPartId} onChange={(event)=>{setRequestPartId(event.target.value);const part=parts.find((entry)=>entry.id===event.target.value);if(part){setRequestItemLabel(part.name);setRequestItemSku(part.sku);setRequestItemDescription(part.description);}}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                <option value="">Não está cadastrada / descrever abaixo</option>
+                {activeParts.map((part)=><option key={part.id} value={part.id}>{part.sku} · {part.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Descrição solicitada *
+              <input required maxLength={180} value={requestItemLabel} onChange={(event)=>setRequestItemLabel(event.target.value)} placeholder="Nome da peça, ferramenta ou insumo" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">SKU / código (opcional)
+              <input maxLength={80} value={requestItemSku} onChange={(event)=>setRequestItemSku(event.target.value)} placeholder="Código existente ou referência" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Quantidade *
+              <input required type="number" min="0.001" step="0.001" value={requestQuantity} onChange={(event)=>setRequestQuantity(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Unidade
+              <input maxLength={30} value={requestUnit} onChange={(event)=>setRequestUnit(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Ordem de serviço (opcional)
+              <select value={requestWorkOrderId} onChange={(event)=>{setRequestWorkOrderId(event.target.value);const order=workOrders.find((entry)=>entry.id===event.target.value);if(order?.costCenterId)setRequestCostCenterId(order.costCenterId);}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                <option value="">Sem OS vinculada</option>
+                {workOrders.map((order)=><option key={order.id} value={order.id}>{order.protocol} · {order.status}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Centro de custo / equipe
+              <select value={requestCostCenterId} onChange={(event)=>setRequestCostCenterId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                <option value="">Não especificado</option>
+                {costCenters.map((center)=><option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Prioridade
+              <select value={requestUrgency} onChange={(event)=>setRequestUrgency(event.target.value as typeof requestUrgency)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"><option value="normal">Normal</option><option value="urgent">Urgente</option></select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600 lg:col-span-2">Necessidade / justificativa *
+              <textarea required minLength={5} maxLength={2000} value={requestReason} onChange={(event)=>setRequestReason(event.target.value)} placeholder="Informe por que o material é necessário e como será utilizado." className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal" />
+            </label>
+            <div className="flex justify-end lg:col-span-2">
+              <button type="submit" disabled={busy || !requestItemLabel.trim() || Number(requestQuantity)<=0 || requestReason.trim().length<5} className="min-h-11 rounded-xl bg-blue-700 px-5 text-sm font-bold text-white disabled:opacity-50">{busy ? "Enviando..." : "Enviar solicitação ao Financeiro"}</button>
+            </div>
+          </form>
+        </section>
+
+        <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-4"><h2 className="font-bold">Minhas solicitações de materiais</h2></div>
+          {inventoryRequests.isLoading && <p className="p-4 text-sm text-slate-500">Carregando solicitações...</p>}
+          {inventoryRequests.isError && <p className="p-4 text-sm text-rose-700">Não foi possível consultar as solicitações.</p>}
+          {!inventoryRequests.isLoading && !inventoryRequests.isError && <div className="divide-y divide-slate-100">
+            {inventoryRequests.data?.slice(0,12).map((request)=> <article key={request.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="min-w-0"><p className="font-semibold">{request.requestNumber}</p><p className="mt-1 text-xs text-slate-600">{request.items.map((item)=>item.requestedLabel+" · "+quantity(item.quantity)+" "+item.unitLabel).join(" / ")}</p><p className="mt-1 text-xs text-slate-500">{request.reason}</p></div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{request.status==="pending_finance"?"Em análise":request.status==="waiting_purchase"?"Aguardando compra":request.status==="ready_for_dispatch"?"Disponível para envio":request.status==="partially_fulfilled"?"Atendida parcialmente":request.status==="fulfilled"?"Atendida":request.status==="rejected"?"Rejeitada":request.status==="purchase_registered"?"Compra em andamento":request.status}</span>
+            </article>)}
+            {!inventoryRequests.data?.length && <p className="p-4 text-sm text-slate-500">Nenhuma solicitação registrada.</p>}
+          </div>}
         </section>
 
         {!inventory.isLoading && !inventory.isError && <>
