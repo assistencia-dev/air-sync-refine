@@ -47,7 +47,7 @@ function TreasuryPage() {
         .select("role_key, status")
         .eq("auth_id", auth.user.id)
         .maybeSingle();
-      if (error || !user || user.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(user.role_key)) {
+      if (error || !user || user.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA", "FINANCEIRO_OPERADOR"].includes(user.role_key)) {
         if (!cancelled) navigate({ to: "/portal", replace: true });
         return;
       }
@@ -58,7 +58,7 @@ function TreasuryPage() {
   }, [navigate]);
 
   useEffect(() => {
-    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN";
+    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR";
     iframeRef.current?.contentWindow?.postMessage(
       { type: "DBS_TREASURY_APPROVAL_CAPABILITY", canApprovePurchases: canApprovePurchasesRef.current },
       window.location.origin,
