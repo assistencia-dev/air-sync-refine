@@ -92,7 +92,7 @@ BEGIN
       company_id,scope_key,claim_type,supplier_warranty_id,work_order_id,
       issue_description,status,opened_by
     ) VALUES (
-      v_supplier.company_id,v_scope,'supplier',v_supplier.id,NULLIF(v_supplier.source_receipt_item_id::text,'')::uuid,
+      v_supplier.company_id,v_scope,'supplier',v_supplier.id,NULL,
       v_issue,'opened',p_actor_user_id
     ) RETURNING * INTO v_claim;
     UPDATE public.dbs_control_supplier_warranties SET status='claimed',updated_by=p_actor_user_id,updated_at=now()
@@ -147,6 +147,7 @@ DECLARE
   v_note text := left(btrim(coalesce(p_note,'')),2000);
   v_key text := nullif(btrim(p_idempotency_key),'');
   v_resolved boolean;
+  v_from_status text;
 BEGIN
   v_scope := public.dbs_control_inventory_finance_scope_key(p_actor_user_id);
   IF v_scope IS NULL OR p_claim_id IS NULL OR p_expected_version IS NULL OR p_expected_version < 1
@@ -177,6 +178,7 @@ BEGIN
   IF v_claim.version<>p_expected_version THEN
     RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_VERSION_CONFLICT' USING errcode='40001';
   END IF;
+  v_from_status := v_claim.status;
   IF v_claim.status IN ('rejected','replaced','credited','closed') THEN
     RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_FINALIZED' USING errcode='23514';
   END IF;
@@ -193,7 +195,7 @@ BEGIN
   INSERT INTO public.dbs_control_warranty_claim_history(
     company_id,scope_key,claim_id,from_status,to_status,note,idempotency_key,changed_by
   ) VALUES (
-    v_claim.company_id,v_scope,v_claim.id,v_previous.to_status,v_status,v_note,v_key,p_actor_user_id
+    v_claim.company_id,v_scope,v_claim.id,v_from_status,v_status,v_note,v_key,p_actor_user_id
   );
 
   IF v_claim.claim_type='supplier' AND v_status IN ('rejected','closed') THEN
