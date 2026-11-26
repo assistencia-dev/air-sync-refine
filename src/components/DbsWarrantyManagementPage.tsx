@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, FileClock, 
 import {
   createDbsCustomerWarranty,
   createDbsSupplierWarranty,
+  getDbsWarrantyClaimHistory,
   getDbsWarrantyOverview,
   openDbsWarrantyClaim,
   updateDbsWarrantyClaim,
@@ -68,11 +69,19 @@ export function DbsWarrantyManagementPage() {
   const [claimKey, setClaimKey] = useState(idempotencyKey);
   const [claimNotes, setClaimNotes] = useState<Record<string, string>>({});
   const [claimStatus, setClaimStatus] = useState<Record<string, string>>({});
+  const [historyClaimId, setHistoryClaimId] = useState("");
   const [message, setMessage] = useState("");
 
   const overview = useQuery({
     queryKey: ["dbs-warranty-overview"],
     queryFn: () => getDbsWarrantyOverview(),
+    retry: 1,
+  });
+
+  const claimHistory = useQuery({
+    queryKey: ["dbs-warranty-claim-history", historyClaimId],
+    queryFn: () => getDbsWarrantyClaimHistory({ data: { claimId: historyClaimId } }),
+    enabled: Boolean(historyClaimId),
     retry: 1,
   });
   const data = overview.data;
@@ -150,6 +159,7 @@ export function DbsWarrantyManagementPage() {
     onSuccess: async () => {
       setMessage("Status e histórico do chamado atualizados.");
       await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-overview"] });
+      if (historyClaimId) await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-claim-history", historyClaimId] });
     },
     onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o chamado."),
   });
@@ -287,6 +297,14 @@ export function DbsWarrantyManagementPage() {
             <div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold text-slate-900">{claim.claim_type==="supplier"?"Fornecedor / fabricante":"Cobertura DBS"}</div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{claimStatusLabel[claim.status]||claim.status}</span></div>
             <p className="mt-2 text-sm text-slate-700">{claim.issue_description}</p>
             <p className="mt-1 text-xs text-slate-500">Aberto em {String(claim.opened_at).slice(0,10)} · Versão {claim.version}</p>
+            <button type="button" onClick={() => setHistoryClaimId(current => current === claim.id ? "" : claim.id)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><FileClock className="h-4 w-4"/>{historyClaimId === claim.id ? "Ocultar histórico" : "Ver histórico"}</button>
+            {historyClaimId === claim.id && <div className="mt-3 rounded-xl bg-slate-50 p-3">
+              {claimHistory.isLoading ? <p className="text-xs text-slate-500">Carregando histórico…</p> : claimHistory.isError ? <p className="text-xs text-rose-700">Não foi possível carregar o histórico.</p> : (claimHistory.data ?? []).map((event:any)=><div key={event.id} className="border-l-2 border-blue-200 py-1 pl-3 text-xs text-slate-600">
+                <p className="font-semibold text-slate-800">{event.from_status ? (claimStatusLabel[event.from_status] || event.from_status) + " → " : ""}{claimStatusLabel[event.to_status] || event.to_status}</p>
+                {event.note && <p className="mt-0.5">{event.note}</p>}
+                <p className="mt-0.5 text-[11px] text-slate-400">{new Date(event.created_at).toLocaleString("pt-BR")}</p>
+              </div>)}
+            </div>}
             {claim.resolution&&<p className="mt-2 text-sm text-slate-600">Decisão: {claim.resolution}</p>}
             {data?.canManage&&<div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
               <select value={claimStatus[claim.id]||claim.status} onChange={e=>setClaimStatus(current=>({...current,[claim.id]:e.target.value}))} className="min-h-10 rounded-lg border border-slate-200 bg-white px-2 text-sm"><option value="under_review">Em análise</option><option value="approved">Aprovado</option><option value="rejected">Recusado</option><option value="replaced">Substituído</option><option value="credited">Creditado</option><option value="closed">Encerrado</option></select>
