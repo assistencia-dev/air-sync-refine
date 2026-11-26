@@ -11,6 +11,7 @@ type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 
 type DbsOperationalInventoryPageProps = {
   initialSection?: "parts" | "purchases";
+  initialQuoteId?: string;
 };
 
 const requestLabels: Record<RequestType, string> = {
@@ -40,6 +41,7 @@ function requestKey() {
 
 export function DbsOperationalInventoryPage({
   initialSection = "parts",
+  initialQuoteId = "",
 }: DbsOperationalInventoryPageProps) {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<OperationalSection>(initialSection === "purchases" ? "requests" : "parts");
@@ -118,6 +120,7 @@ export function DbsOperationalInventoryPage({
   return (
     <section className="min-h-full bg-slate-50 px-3 py-4 text-slate-900 sm:px-5">
       <div className="mx-auto max-w-6xl space-y-4">
+        {initialQuoteId && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">Cotação {initialQuoteId} preservada para análise e conversão pelo Financeiro. O DBS Control não registra compras.</div>}
         <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-bold">Peças, estoque e solicitações</h2>
