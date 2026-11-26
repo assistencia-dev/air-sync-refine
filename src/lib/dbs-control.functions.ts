@@ -3920,7 +3920,7 @@ export const getDbsInventoryRequests = createServerFn({ method: "GET" })
     const ids = (requests.data ?? []).map((row:any)=>String(row.id));
     const items = ids.length
       ? await (supabaseAdmin as any).from("dbs_control_inventory_request_items")
-          .select("id,request_id,line_no,item_type,part_id,resolved_part_id,requested_label,requested_sku,description,quantity,unit_label,quantity_ready_for_dispatch,quantity_fulfilled,status")
+          .select("id,request_id,line_no,item_type,part_id,resolved_part_id,requested_label,requested_sku,description,quantity,unit_label,quantity_ready_for_dispatch,quantity_ordered,quantity_fulfilled,status")
           .in("request_id",ids).order("line_no")
       : {data:[],error:null};
     if (items.error) throw new Error(items.error.message);
@@ -3955,6 +3955,7 @@ export const getDbsInventoryRequests = createServerFn({ method: "GET" })
           description:item.description ? String(item.description) : null,
           quantity:Number(item.quantity),unitLabel:String(item.unit_label),
           quantityReadyForDispatch:Number(item.quantity_ready_for_dispatch ?? 0),
+          quantityOrdered:Number(item.quantity_ordered ?? 0),
           quantityFulfilled:Number(item.quantity_fulfilled ?? 0),status:String(item.status),
           currentPart:part ? {
             id:String(part.id),sku:String(part.sku ?? ""),name:String(part.name ?? ""),
