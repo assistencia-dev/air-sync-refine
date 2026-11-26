@@ -4176,6 +4176,43 @@ export const getDbsOperationalWarrantyRecords = createServerFn({ method: "GET" }
     };
   });
 
+export const createDbsGasCylinderWarranty = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    cylinderId:string;serialNumber:string;supplierId?:string;startDate:string;endDate:string;
+    terms?:string;invoiceReference?:string;evidence?:Array<Record<string,unknown>>;
+  })=>{
+    const serial=String(input.serialNumber??"").trim();
+    const start=String(input.startDate??"");
+    const end=String(input.endDate??"");
+    if(serial.length<1||serial.length>180||!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<start)
+      throw new Error("Informe número de série e período de garantia válidos.");
+    return {cylinderId:requireInventoryId(input.cylinderId,"Cilindro"),serialNumber:serial,
+      supplierId:input.supplierId?requireInventoryId(input.supplierId,"Fornecedor"):null,
+      startDate:start,endDate:end,terms:String(input.terms??"").trim().slice(0,2000)||null,
+      invoiceReference:String(input.invoiceReference??"").trim().slice(0,180)||null,
+      evidence:Array.isArray(input.evidence)?input.evidence.slice(0,20):[]};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    const [cylinder,supplier]=await Promise.all([
+      admin.from("dbs_control_gas_cylinders").select("id,serial_number").eq("id",data.cylinderId).eq("scope_key",scopeKey).maybeSingle(),
+      data.supplierId?admin.from("dbs_control_suppliers").select("id,name").eq("id",data.supplierId).eq("scope_key",scopeKey).maybeSingle():Promise.resolve({data:null,error:null}),
+    ]);
+    for(const result of [cylinder,supplier]) if(result.error) throw new Error(result.error.message);
+    if(!cylinder.data||String(cylinder.data.serial_number)!==data.serialNumber) throw new Error("O número de série não corresponde ao cilindro selecionado.");
+    const {data:record,error}=await admin.from("dbs_control_gas_cylinder_warranties").insert({
+      scope_key:scopeKey,cylinder_id:data.cylinderId,supplier_id:data.supplierId,
+      supplier_name_snapshot:supplier.data?.name??null,serial_number:data.serialNumber,
+      start_date:data.startDate,end_date:data.endDate,terms:data.terms,
+      invoice_reference:data.invoiceReference,evidence:data.evidence,status:"active",
+    }).select("id,serial_number,start_date,end_date,status").single();
+    if(error) throw new Error(error.message);
+    return record;
+  });
+
 export const createDbsWarrantyClaim = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input:{
@@ -4230,15 +4267,13 @@ export const updateDbsWarrantyClaim = createServerFn({ method: "POST" })
   })
   .handler(async({context,data})=>{
     const user=await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
-    const {data:claim,error}=await (supabaseAdmin as any).from("dbs_control_warranty_claims").update({
-      status:data.status,resolution:data.resolution,resolution_reference:data.resolutionReference,
-      replacement_supplier_warranty_id:data.replacementSupplierWarrantyId,
-      assigned_to:user.id,closed_at:data.status==="closed"?new Date().toISOString():null,updated_at:new Date().toISOString(),
-    }).eq("id",data.claimId).eq("scope_key",scopeKey).select("id,status,closed_at").maybeSingle();
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_update_warranty_claim",{
+      p_claim_id:data.claimId,p_actor_user_id:user.id,p_status:data.status,
+      p_resolution:data.resolution,p_resolution_reference:data.resolutionReference,
+      p_replacement_supplier_warranty_id:data.replacementSupplierWarrantyId,
+    });
     if(error) throw new Error(error.message);
-    if(!claim) throw new Error("Reclamação não encontrada neste escopo.");
-    return claim;
+    return result;
   });
 
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
