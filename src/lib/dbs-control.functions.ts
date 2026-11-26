@@ -3689,7 +3689,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         .select("id,scope_key,status")
         .eq("id",data.sourceInventoryRequestId).eq("scope_key",scopeKey).maybeSingle();
       if (sourceRequestError) throw new Error(sourceRequestError.message);
-      if (!sourceRequest || !["waiting_purchase","purchase_registered","partially_fulfilled"].includes(sourceRequest.status)) {
+      if (!sourceRequest || !["waiting_purchase","purchase_registered","partially_fulfilled","ready_for_dispatch"].includes(sourceRequest.status)) {
         throw new Error("A solicitação de origem não está aguardando compra neste escopo.");
       }
     }
