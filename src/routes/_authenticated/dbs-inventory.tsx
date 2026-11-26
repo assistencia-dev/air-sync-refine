@@ -848,6 +848,26 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
+          <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="font-bold text-slate-900">Política de preço de revenda</h2><p className="mt-1 max-w-2xl text-xs text-slate-500">O Financeiro define a regra uma única vez. O sistema calcula e atualiza os preços do catálogo quando o custo muda no recebimento. Nenhum percentual padrão é aplicado automaticamente.</p></div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">Financeiro</span>
+            </div>
+            {pricingPolicyQuery.isError && <p role="alert" className="mt-3 text-xs text-rose-700">Não foi possível carregar a política de preços.</p>}
+            <form onSubmit={savePricingPolicy} className="mt-4 grid gap-3 sm:grid-cols-[1.2fr_1fr_auto] sm:items-end">
+              <label className="text-xs font-semibold text-slate-600">Critério de cálculo
+                <select value={pricingPolicyType} onChange={(event)=>setPricingPolicyType(event.target.value as typeof pricingPolicyType)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                  <option value="markup">Acréscimo sobre o custo (markup)</option>
+                  <option value="gross_margin">Margem bruta sobre o preço de venda</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">{pricingPolicyType==="markup"?"Percentual de acréscimo":"Percentual de margem bruta"}
+                <div className="mt-1 flex min-h-10 items-center rounded-lg border border-slate-200 px-3"><input required type="number" min="0.01" max={pricingPolicyType==="gross_margin"?"99":"10000"} step="0.01" value={pricingRatePercent} onChange={(event)=>setPricingRatePercent(event.target.value)} className="w-full border-0 p-0 text-sm outline-none"/><span className="text-sm text-slate-500">%</span></div>
+              </label>
+              <button type="submit" disabled={busy||pricingPolicyQuery.isLoading||!Number.isFinite(Number(pricingRatePercent))||Number(pricingRatePercent)<=0||(pricingPolicyType==="gross_margin"&&Number(pricingRatePercent)>=99)} className="min-h-10 rounded-lg bg-slate-800 px-4 text-xs font-bold text-white disabled:opacity-50">{busy?"Salvando...":"Salvar política"}</button>
+            </form>
+            {pricingPolicy ? <p className="mt-3 text-xs text-emerald-700">Política ativa · versão {pricingPolicy.version} · preços calculados pelo custo vigente</p> : <p className="mt-3 text-xs text-amber-700">Política ainda não configurada. O cadastro de novas peças ficará bloqueado até o Financeiro definir o critério e a taxa.</p>}
+          </section>
           {partsView === "catalog" && <>
 <Sheet open={activeDrawer === "new-part"} onOpenChange={(open)=>setActiveDrawer(open?"new-part":null)}>
   <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[560px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
@@ -885,14 +905,16 @@ export function DbsInventoryPage({
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-800">Preço de revenda calculado</p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-blue-950">{money(previewSaleCents)}</p>
+                  <p className="mt-1 text-[11px] text-blue-800">{pricingPolicy ? (pricingPolicyType==="markup"?"Aplicando acréscimo de ":"Aplicando margem bruta de ")+policyRate.toLocaleString("pt-BR")+"% conforme política financeira." : "Configure a política financeira para liberar o cadastro da peça."}</p>
+                </div>
               </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
               </label>
-              <button disabled={busy || !suppliers.length || !measureUnits.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
+              <button disabled={busy || !suppliers.length || !measureUnits.length || !pricingPolicy} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
                 {busy ? "Salvando..." : catalogPartId ? "Salvar cadastro da peça" : "Cadastrar peça no catálogo"}
               </button>
             </form>
