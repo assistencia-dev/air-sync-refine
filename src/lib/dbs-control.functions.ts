@@ -3313,8 +3313,14 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
 }
 
 async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext) {
-  const user = await requireDbsInventoryAdmin(context);
-  if (user.role_key !== "SUPER_ADMIN") {
+  const { data: user, error } = await supabaseAdmin
+    .from("users")
+    .select("id,auth_id,username,full_name,email,role_key,unit_id,company_id,status")
+    .eq("auth_id", context.userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!user || user.status !== "ativo") throw new Error("Acesso financeiro não autorizado.");
+  if (!["SUPER_ADMIN", "FINANCEIRO_OPERADOR"].includes(user.role_key)) {
     throw new Error("Cadastro de peças, custos e compras é restrito ao Financeiro.");
   }
   return user;
