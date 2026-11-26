@@ -3236,6 +3236,7 @@ export const Constants = {
         "CLIENTE_PF",
         "COLABORADOR",
         "FINANCEIRO_LEITURA",
+        "FINANCEIRO_OPERADOR",
       ],
     },
   },
