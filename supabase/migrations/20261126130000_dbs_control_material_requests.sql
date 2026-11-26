@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_material_requests (
     CHECK (request_type IN ('part','new_part','tool','supply','gas_refill')),
   part_id uuid REFERENCES public.dbs_control_parts(id) ON DELETE RESTRICT,
   work_order_id uuid REFERENCES public.dbs_control_work_orders(id) ON DELETE RESTRICT,
+  gas_cylinder_id uuid REFERENCES public.dbs_control_gas_cylinders(id) ON DELETE RESTRICT,
   destination_stock_id uuid REFERENCES public.dbs_control_operational_stocks(id) ON DELETE SET NULL,
   employee_id uuid REFERENCES public.rh_employees(id) ON DELETE SET NULL,
   vehicle_label text,
@@ -32,7 +33,8 @@ CREATE TABLE IF NOT EXISTS public.dbs_control_material_requests (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (fulfilled_quantity <= quantity),
   CHECK (request_type <> 'part' OR (part_id IS NOT NULL AND work_order_id IS NOT NULL)),
-  CHECK (request_type <> 'new_part' OR part_id IS NULL)
+  CHECK (request_type <> 'new_part' OR part_id IS NULL),
+  CHECK (request_type <> 'gas_refill' OR gas_cylinder_id IS NOT NULL)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS dbs_control_material_requests_idempotency_uidx
