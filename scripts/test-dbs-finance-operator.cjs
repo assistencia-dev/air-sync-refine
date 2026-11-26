@@ -49,7 +49,7 @@ for (const functionName of [
     functionName + " must use finance authorization");
 }
 assert.match(treasury, /"FINANCEIRO_OPERADOR"/);
-assert.match(treasury, /role_key === "FINANCEIRO_OPERADOR"/);
+assert.match(treasury, /user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"/);
 assert.match(login, /FINANCEIRO_OPERADOR[\s\S]{0,160}\/financeiro/);
 assert.match(treasuryRoute, /"FINANCEIRO_OPERADOR"/);
 assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
