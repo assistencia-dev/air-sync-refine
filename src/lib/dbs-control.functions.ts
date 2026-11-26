@@ -4232,20 +4232,56 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return saved.data;
   });
 
+export const getDbsPartPricingPolicy = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({context})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id ? "company:"+user.company_id : "user:"+user.id;
+    const {data,error}=await (supabaseAdmin as any).from("dbs_control_part_pricing_policies")
+      .select("id,policy_type,rate_basis_points,version,updated_at")
+      .eq("scope_key",scopeKey).eq("is_active",true).maybeSingle();
+    if(error) throw new Error(error.message);
+    return data ? {
+      id:String(data.id),policyType:String(data.policy_type),
+      rateBasisPoints:Number(data.rate_basis_points),version:Number(data.version),
+      updatedAt:String(data.updated_at),
+    } : null;
+  });
+
+export const saveDbsPartPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{policyType:"markup"|"gross_margin";rateBasisPoints:number})=>{
+    if(!["markup","gross_margin"].includes(input?.policyType)
+      || !Number.isSafeInteger(input.rateBasisPoints)
+      || (input.policyType==="markup"&&(input.rateBasisPoints<1||input.rateBasisPoints>1000000))
+      || (input.policyType==="gross_margin"&&(input.rateBasisPoints<1||input.rateBasisPoints>9900))) {
+      throw new Error("Informe uma política de preço válida.");
+    }
+    return {policyType:input.policyType,rateBasisPoints:input.rateBasisPoints};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_set_part_pricing_policy",{
+      p_actor_user_id:user.id,p_policy_type:data.policyType,p_rate_basis_points:data.rateBasisPoints,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
@@ -4266,7 +4302,7 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
       measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId, stock_quantity: 0, reserved_quantity: 0,
-      cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
+      cost_cents: data.costCents, status: "ativo",
     }) .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").single();
     if (saved.error) throw new Error(saved.error.message);
     return saved.data;
@@ -4274,7 +4310,7 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
 
 export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
