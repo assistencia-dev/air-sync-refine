@@ -193,10 +193,10 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       : { data: [], error: null };
     if (parts.error) throw new Error("Falha ao consultar catálogo de peças das garantias: " + parts.error.message);
 
-    const purchaseById = new Map((purchases.data ?? []).map((row: any) => [String(row.id), row]));
-    const receiptById = new Map((receipts.data ?? []).map((row: any) => [String(row.id), row]));
-    const supplierById = new Map((suppliers.data ?? []).map((row: any) => [String(row.id), row]));
-    const partsById = new Map((parts.data ?? []).map((row: any) => [String(row.id), row]));
+    const purchaseById = new Map<string, any>((purchases.data ?? []).map((row: any) => [String(row.id), row]));
+    const receiptById = new Map<string, any>((receipts.data ?? []).map((row: any) => [String(row.id), row]));
+    const supplierById = new Map<string, any>((suppliers.data ?? []).map((row: any) => [String(row.id), row]));
+    const partsById = new Map<string, any>((parts.data ?? []).map((row: any) => [String(row.id), row]));
     const receiptOptions = (receiptItems.data ?? []).map((item: any) => {
       const receipt = receiptById.get(String(item.receipt_id));
       const purchase = receipt ? purchaseById.get(String(receipt.purchase_id)) : null;
