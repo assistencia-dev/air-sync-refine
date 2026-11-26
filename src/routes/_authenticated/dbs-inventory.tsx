@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
+  getDbsInventoryRequests, decideDbsInventoryRequest, fulfillDbsInventoryRequestFromCentral,
   createDbsOperationalStock, setDbsOperationalStockStatus, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
@@ -96,9 +97,14 @@ export function DbsInventoryPage({
     queryFn: () => getDbsPhase2InventoryOverview(),
     retry: 1,
   });
+  const inventoryRequestsQuery = useQuery({
+    queryKey: ["dbs-inventory-requests-finance"],
+    queryFn: () => getDbsInventoryRequests(),
+    retry: 1,
+  });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
-  type PurchasesView = "new" | "approval" | "orders";
+  type PurchasesView = "new" | "approval" | "orders" | "requests";
   type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
   type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
@@ -154,6 +160,11 @@ export function DbsInventoryPage({
   const [busy, setBusy] = useState(false);
   const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
   const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
+  const [inventoryRequestMappings, setInventoryRequestMappings] = useState<Record<string,string>>({});
+  const [inventoryRequestReasons, setInventoryRequestReasons] = useState<Record<string,string>>({});
+  const [inventoryRequestDestinationStocks, setInventoryRequestDestinationStocks] = useState<Record<string,string>>({});
+  const [inventoryRequestBusyId, setInventoryRequestBusyId] = useState<string|null>(null);
+  const [purchaseSourceRequestId, setPurchaseSourceRequestId] = useState("");
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -250,6 +261,8 @@ export function DbsInventoryPage({
     }) : [];
   const reservations = [...(data?.reservations ?? []).map((r:any)=>({...r,is_operational:false})), ...(data?.operationalReservations ?? []).map((r:any)=>({...r,is_operational:true}))];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
+  const inventoryRequests = (inventoryRequestsQuery.data ?? []) as any[];
+  const pendingInventoryRequests = inventoryRequests.filter((request:any)=>["pending_finance","waiting_purchase","purchase_registered","ready_for_dispatch","partially_fulfilled"].includes(request.status));
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
   );
@@ -372,7 +385,7 @@ export function DbsInventoryPage({
     }
     const sourceQuoteId = quotePurchase.data?.quote?.id ? String(quotePurchase.data.quote.id) : undefined;
     const purchaseFingerprint = JSON.stringify({
-      supplierId, costCenterId, documentNumber: purchaseDocument.trim(), purchaseDate, sourceQuoteId, items,
+      supplierId, costCenterId, documentNumber: purchaseDocument.trim(), purchaseDate, sourceQuoteId, sourceInventoryRequestId: purchaseSourceRequestId || undefined, items,
     });
     const operation = await getPersistentPurchaseIdempotencyKey("purchase-register", purchaseFingerprint);
     const saved = await runAction(() => createDbsPurchase({ data: {
@@ -380,12 +393,14 @@ export function DbsInventoryPage({
       documentNumber: purchaseDocument.trim() || undefined,
       purchaseDate,
       sourceQuoteId,
+      sourceInventoryRequestId: purchaseSourceRequestId || undefined,
       idempotencyKey: "purchase-register:" + operation.key,
       items,
     } }), "Pedido registrado para análise financeira. O estoque só será atualizado após aprovação e conferência do recebimento físico.");
     if (saved) {
       clearPersistentPurchaseIdempotencyKey(operation.storageKey);
       setPurchaseDocument("");
+      setPurchaseSourceRequestId("");
       setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
       setActiveDrawer(null);
     }
@@ -393,6 +408,57 @@ export function DbsInventoryPage({
 
   function updatePurchaseLine(index: number, patch: Partial<(typeof purchaseLines)[number]>) {
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
+  }
+
+  async function decideInventoryRequest(request: any, decision: "approve"|"waiting_purchase"|"reject") {
+    const itemMappings = request.items
+      .filter((item:any)=>!item.resolvedPartId)
+      .map((item:any)=>({requestItemId:item.id,partId:inventoryRequestMappings[item.id]||""}));
+    if (itemMappings.some((item:any)=>!item.partId)) {
+      setMessage("Vincule cada item solicitado a uma peça do catálogo ou cadastre a peça antes de aprovar.");
+      return;
+    }
+    const reason=String(inventoryRequestReasons[request.id]??"").trim();
+    if(decision==="reject"&&reason.length<5){setMessage("Informe o motivo da rejeição.");return;}
+    setInventoryRequestBusyId(request.id);
+    const saved=await runAction(()=>decideDbsInventoryRequest({data:{
+      requestId:request.id,decision,reason:reason||undefined,expectedVersion:Number(request.version),itemMappings,
+    }}),decision==="reject"?"Solicitação rejeitada.":"Solicitação analisada; o sistema conferiu o saldo central e definiu o que já pode ser expedido e o que precisa de compra.");
+    if(saved) {
+      await inventoryRequestsQuery.refetch();
+      setInventoryRequestReasons((current)=>{const next={...current};delete next[request.id];return next;});
+    }
+    setInventoryRequestBusyId(null);
+  }
+
+  async function fulfillInventoryRequest(request: any,item: any) {
+    const stockId=inventoryRequestDestinationStocks[item.id]||"";
+    const available=Math.max(0,Number(item.quantityReadyForDispatch??0)-Number(item.quantityFulfilled??0));
+    if(!stockId||available<=0){setMessage("Selecione o estoque de destino e confirme a quantidade disponível para expedição.");return;}
+    setInventoryRequestBusyId(request.id);
+    const saved=await runAction(()=>fulfillDbsInventoryRequestFromCentral({data:{
+      requestId:request.id,requestItemId:item.id,destinationStockId:stockId,quantity:available,
+      idempotencyKey:"request-fulfill:"+request.id+":"+item.id+":"+crypto.randomUUID(),
+    }}),"Peça transferida do estoque central para o estoque operacional vinculado à solicitação.");
+    if(saved){await inventoryRequestsQuery.refetch();await overview.refetch();}
+    setInventoryRequestBusyId(null);
+  }
+
+  function openPurchaseFromInventoryRequest(request:any) {
+    const requestedLines=request.items.filter((item:any)=>item.resolvedPartId)
+      .map((item:any)=>{
+        const part=parts.find((entry:any)=>String(entry.id)===String(item.resolvedPartId));
+        const unitId=String(part?.purchase_measure_unit_id||part?.measure_unit_id||"");
+        const factor=unitId?conversionFor(String(part?.id||""),unitId):0;
+        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityFulfilled??0));
+        return {partId:String(item.resolvedPartId),description:String(part?.name??item.requestedLabel),
+          quantity:String(remaining),unitCost:"",purchaseUnitId:unitId,conversionFactor:factor};
+      }).filter((line:any)=>Number(line.quantity)>0&&line.purchaseUnitId&&line.conversionFactor>0);
+    if(!requestedLines.length){setMessage("A solicitação não possui itens vinculados ao catálogo com quantidade pendente para compra.");return;}
+    setPurchaseSourceRequestId(request.id);
+    if(request.costCenterId)setCostCenterId(request.costCenterId);
+    setPurchaseLines(requestedLines);
+    setModuleSection("purchases");setPurchasesView("new");setActiveDrawer("new-purchase");
   }
 
   async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
@@ -1134,6 +1200,7 @@ export function DbsInventoryPage({
             <button type="button" role="tab" aria-selected={purchasesView==="new"} onClick={()=>setPurchasesView("new")} className={purchasesView==="new"?"dbs-op-tab is-active":"dbs-op-tab"}>Pedidos em aberto</button>
             <button type="button" role="tab" aria-selected={purchasesView==="approval"} onClick={()=>setPurchasesView("approval")} className={purchasesView==="approval"?"dbs-op-tab is-active":"dbs-op-tab"}>Aprovações <span className="dbs-op-count">{pendingPurchases.length}</span></button>
             <button type="button" role="tab" aria-selected={purchasesView==="orders"} onClick={()=>setPurchasesView("orders")} className={purchasesView==="orders"?"dbs-op-tab is-active":"dbs-op-tab"}>Recebimento físico <span className="dbs-op-count">{purchasesAwaitingReceipt.length}</span></button>
+            <button type="button" role="tab" aria-selected={purchasesView==="requests"} onClick={()=>setPurchasesView("requests")} className={purchasesView==="requests"?"dbs-op-tab is-active":"dbs-op-tab"}>Solicitações DBS Control <span className="dbs-op-count">{pendingInventoryRequests.length}</span></button>
           </nav>
           {purchasesView === "approval" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1384,7 +1451,64 @@ export function DbsInventoryPage({
                 {!purchasesOpen.length&&<p className="py-8 text-center text-sm text-slate-500">Nenhum pedido registrado.</p>}
               </div>
             </section>
-          </>}          {purchasesView === "orders" && <>
+          </>}          {purchasesView === "requests" && <>
+            <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+                <div><h2 className="font-bold">Solicitações do DBS Control</h2><p className="mt-1 text-xs text-slate-500">Vincule cada material ao catálogo, confira saldo e encaminhe para compra quando necessário.</p></div>
+                <span className="dbs-op-count">{pendingInventoryRequests.length} em andamento</span>
+              </div>
+              {inventoryRequestsQuery.isLoading && <p className="p-5 text-sm text-slate-500">Carregando solicitações...</p>}
+              {inventoryRequestsQuery.isError && <p role="alert" className="p-5 text-sm text-rose-700">Não foi possível carregar as solicitações do DBS Control.</p>}
+              {!inventoryRequestsQuery.isLoading && !inventoryRequestsQuery.isError && <div className="divide-y divide-slate-100">
+                {pendingInventoryRequests.map((request:any)=><article key={request.id} className="space-y-4 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><p className="font-bold">{request.requestNumber} {request.urgency==="urgent"&&<span className="ml-2 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">Urgente</span>}</p>
+                      <p className="mt-1 text-xs text-slate-500">{request.workOrderId?"OS "+request.workOrderId+" · ":""}{new Date(request.createdAt).toLocaleString("pt-BR")} · {request.reason}</p></div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{request.status==="pending_finance"?"Aguardando análise":request.status==="waiting_purchase"?"Aguardando compra":request.status==="purchase_registered"?"Compra registrada":request.status==="ready_for_dispatch"?"Pronta para expedição":"Atendimento parcial"}</span>
+                  </div>
+                  <div className="space-y-3">
+                    {request.items.map((item:any)=><div key={item.id} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)]">
+                      <div><p className="font-semibold text-sm">{item.requestedLabel}</p><p className="mt-1 text-xs text-slate-500">{item.itemType==="part"?"Peça":item.itemType==="tool"?"Ferramenta":item.itemType==="supply"?"Insumo":"Gás / cilindro"} · {item.quantity} {item.unitLabel} {item.requestedSku?"· "+item.requestedSku:""}</p>
+                        {item.description&&<p className="mt-1 text-xs text-slate-500">{item.description}</p>}</div>
+                      <div>
+                        {!item.resolvedPartId ? <label className="text-xs font-semibold text-slate-600">Vincular ao catálogo oficial *
+                          <select value={inventoryRequestMappings[item.id]||""} onChange={(event)=>setInventoryRequestMappings(current=>({...current,[item.id]:event.target.value}))} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                            <option value="">Selecione a peça correspondente</option>
+                            {parts.filter((part:any)=>part.status==="ativo").map((part:any)=><option key={part.id} value={part.id}>{part.sku} · {part.name}</option>)}
+                          </select>
+                        </label> : <p className="text-xs text-emerald-700">Vinculado: {item.currentPart?.sku} · {item.currentPart?.name}</p>}
+                        {item.currentPart&&<p className="mt-1 text-xs text-slate-500">Saldo central disponível: {item.currentPart.centralAvailableQuantity}</p>}
+                        <p className="mt-1 text-xs text-slate-500">Disponível para expedição: {Math.max(0,item.quantityReadyForDispatch-item.quantityFulfilled)} / {item.quantity}</p>
+                      </div>
+                    </div>)}
+                  </div>
+                  {request.status==="pending_finance" && <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Motivo / observação
+                      <input value={inventoryRequestReasons[request.id]||""} onChange={(event)=>setInventoryRequestReasons(current=>({...current,[request.id]:event.target.value}))} placeholder="Observação para o operador (opcional)" maxLength={1000} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={busy||inventoryRequestBusyId===request.id} onClick={()=>void decideInventoryRequest(request,"approve")} className="min-h-10 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white disabled:opacity-50">Analisar / aprovar</button>
+                      <button type="button" disabled={busy||inventoryRequestBusyId===request.id||String(inventoryRequestReasons[request.id]||"").trim().length<5} onClick={()=>void decideInventoryRequest(request,"reject")} className="min-h-10 rounded-lg border border-rose-200 px-4 text-xs font-bold text-rose-700 disabled:opacity-50">Rejeitar</button>
+                    </div>
+                  </div>}
+                  {["waiting_purchase","purchase_registered","partially_fulfilled"].includes(request.status) && <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} disabled={request.status==="purchase_registered"} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700 disabled:opacity-40">{request.status==="purchase_registered"?"Compra já registrada":"Preparar compra vinculada"}</button>
+                  </div>}
+                  {(request.status==="ready_for_dispatch"||request.status==="waiting_purchase"||request.status==="partially_fulfilled"||request.status==="purchase_registered") && request.items.filter((item:any)=>item.resolvedPartId&&item.quantityReadyForDispatch>item.quantityFulfilled).map((item:any)=><div key={"dispatch-"+item.id} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Estoque de destino
+                      <select value={inventoryRequestDestinationStocks[item.id]||""} onChange={(event)=>setInventoryRequestDestinationStocks(current=>({...current,[item.id]:event.target.value}))} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                        <option value="">Selecione o estoque operacional</option>
+                        {operationalStocks.filter((stock:any)=>stock.status==="active"&&(!request.costCenterId||String(stock.cost_center_id)===String(request.costCenterId))).map((stock:any)=><option key={stock.id} value={stock.id}>{stock.name}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" disabled={busy||inventoryRequestBusyId===request.id||!inventoryRequestDestinationStocks[item.id]} onClick={()=>void fulfillInventoryRequest(request,item)} className="min-h-10 rounded-lg bg-emerald-700 px-4 text-xs font-bold text-white disabled:opacity-50">Transferir {Math.max(0,item.quantityReadyForDispatch-item.quantityFulfilled)} para a equipe</button>
+                  </div>)}
+                </article>)}
+                {!pendingInventoryRequests.length&&<p className="p-6 text-sm text-slate-500">Nenhuma solicitação aguardando análise, compra ou expedição.</p>}
+              </div>}
+            </section>
+          </>}
+          {purchasesView === "orders" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-white p-5 sm:p-6">
               <div>
