@@ -19,7 +19,7 @@ assert.doesNotMatch(ux, /\+ Cadastrar peça agora/);
 assert.doesNotMatch(ux, /function quickPart\(\)[\s\S]*?\+ Cadastrar peça/);
 
 assert.match(html, /Solicitar materiais/);
-assert.match(html, /drawer:\s*materialsSection/);
+assert.match(html, /section:\s*materialsSection/);
 const legacySwitch = html.slice(
   html.indexOf("const materialsSection = employeeTab"),
   html.indexOf("const materialsSection = employeeTab") + 1400,
