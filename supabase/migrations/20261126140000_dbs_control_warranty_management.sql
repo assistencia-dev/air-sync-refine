@@ -210,7 +210,7 @@ DECLARE
 BEGIN
   IF NEW.status<>'consumed' OR OLD.status='consumed' THEN RETURN NEW; END IF;
 
-  SELECT w.id,w.client_id,w.company_id,w.completed_at,w.status
+  SELECT w.id,w.client_id,w.completed_at,w.status
     INTO v_order FROM public.dbs_control_work_orders w
    WHERE w.id=NEW.work_order_id AND w.deleted_at IS NULL;
   IF NOT FOUND OR v_order.client_id IS NULL THEN RETURN NEW; END IF;
@@ -224,8 +224,8 @@ BEGIN
     scope_key,company_id,work_order_id,source_reservation_id,part_id,client_id,
     quantity_covered,start_date,end_date,terms,status
   ) VALUES (
-    NEW.scope_key,v_order.company_id,NEW.work_order_id,NEW.id,NEW.part_id,v_order.client_id,
-    NEW.quantity_covered,v_start,
+    NEW.scope_key,NEW.company_id,NEW.work_order_id,NEW.id,NEW.part_id,v_order.client_id,
+    NEW.quantity,v_start,
     (v_start + make_interval(months=>v_default.customer_warranty_months))::date,
     v_default.customer_terms,'active'
   ) ON CONFLICT(source_reservation_id) DO NOTHING;
