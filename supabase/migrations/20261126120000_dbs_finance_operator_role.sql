@@ -23,7 +23,7 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  IF public.dbs_control_is_admin_actor(v_actor.id) THEN
+  IF v_actor.role_key::text = 'SUPER_ADMIN' THEN
     RETURN CASE
       WHEN v_actor.company_id IS NOT NULL THEN 'company:' || v_actor.company_id::text
       ELSE 'user:' || v_actor.id::text
