@@ -231,7 +231,7 @@ END;
 $function$;
 DROP TRIGGER IF EXISTS trg_dbs_control_sync_warranty_claim_status ON public.dbs_control_warranty_claims;
 CREATE TRIGGER trg_dbs_control_sync_warranty_claim_status
-AFTER INSERT OR UPDATE OF status ON public.dbs_control_warranty_claims
+AFTER INSERT OR UPDATE ON public.dbs_control_warranty_claims
 FOR EACH ROW EXECUTE FUNCTION public.dbs_control_sync_warranty_claim_status();
 REVOKE ALL ON FUNCTION public.dbs_control_sync_warranty_claim_status() FROM PUBLIC,anon,authenticated;
 
@@ -265,12 +265,12 @@ BEGIN
 
   INSERT INTO public.dbs_control_supplier_warranties(
     scope_key,company_id,purchase_id,purchase_item_id,receipt_id,receipt_item_id,
-    part_id,supplier_id,supplier_name_snapshot,quantity_covered,start_rule,
+    part_id,supplier_id,supplier_name_snapshot,serial_number,lot_number,quantity_covered,start_rule,
     start_date,end_date,terms,invoice_reference,status
   ) VALUES (
     v_purchase.scope_key,v_purchase.company_id,v_purchase.id,NEW.purchase_item_id,
     NEW.receipt_id,NEW.id,NEW.part_id,v_purchase.supplier_id,v_purchase.supplier_name,
-    NEW.quantity_received,v_default.supplier_start_rule,v_start,
+    NEW.serial_number,NEW.lot_number,NEW.quantity_received,v_default.supplier_start_rule,v_start,
     (v_start + make_interval(months=>v_default.supplier_warranty_months))::date,
     v_default.supplier_terms,v_purchase.document_number,'active'
   );
