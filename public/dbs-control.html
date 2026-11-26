@@ -6753,6 +6753,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     ? 'purchases'
                     : employeeTab === 'tab-pecas' ? 'parts' : null;
                 if (materialsSection && !employeeMode && window.parent !== window) {
+                    // Oculta imediatamente o formulário HTML legado (que contém
+                    // campos históricos de valores) antes de pedir a montagem
+                    // do portal React com os dados autorizados por perfil.
+                    Array.from(target.children).forEach(child => {
+                        if (child.dataset?.dbsMaterialsReactRoot === 'true') return;
+                        child.hidden = true;
+                    });
                     window.parent.postMessage({
                         type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE',
                         section: materialsSection,
