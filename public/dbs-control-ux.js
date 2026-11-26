@@ -36,6 +36,10 @@
     // Peças passam a existir primeiro no catálogo financeiro. O técnico não
     // cria SKU/saldo/custo local dentro da OS; envia uma solicitação rastreável.
     if(window.parent!==window){
+      var navItem = Array.from(document.querySelectorAll(".nav-item")).find(function(item){
+        return String(item.getAttribute("onclick") || "").indexOf("switchTab('tab-compras'") >= 0;
+      }) || null;
+      if(typeof window.switchTab === "function") window.switchTab("tab-compras", navItem);
       window.parent.postMessage({ type:"DBS_CONTROL_OPEN_INVENTORY_DRAWER", drawer:"request" },window.location.origin);
       return;
     }
