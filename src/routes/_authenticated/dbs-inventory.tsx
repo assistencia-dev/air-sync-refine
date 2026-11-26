@@ -450,7 +450,7 @@ export function DbsInventoryPage({
         const part=parts.find((entry:any)=>String(entry.id)===String(item.resolvedPartId));
         const unitId=String(part?.purchase_measure_unit_id||part?.measure_unit_id||"");
         const factor=unitId?conversionFor(String(part?.id||""),unitId):0;
-        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0));
+        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityOrdered??0));
         return {partId:String(item.resolvedPartId),description:String(part?.name??item.requestedLabel),
           quantity:String(remaining),unitCost:"",purchaseUnitId:unitId,conversionFactor:factor};
       }).filter((line:any)=>Number(line.quantity)>0&&line.purchaseUnitId&&line.conversionFactor>0);
@@ -1496,11 +1496,10 @@ export function DbsInventoryPage({
                     </div>
                   </div>}
                   {["waiting_purchase","purchase_registered","partially_fulfilled","ready_for_dispatch"].includes(request.status)
-                    && request.items.some((item:any)=>Number(item.quantityReadyForDispatch)<Number(item.quantity))
+                    && request.items.some((item:any)=>Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityOrdered??0)>0)
                     && <div className="flex flex-wrap items-center gap-2">
-                      {request.linkedPurchases?.some((purchase:any)=>!["received","cancelled"].includes(purchase.status)&&purchase.approvalStatus!=="rejected")
-                        ? <span className="text-xs text-slate-500">Compra em andamento. O próximo pedido será liberado após o recebimento ou encerramento da compra atual.</span>
-                        : <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700">Preparar compra vinculada</button>}
+                      <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700">Preparar compra vinculada</button>
+                      {request.linkedPurchases?.length>0&&<span className="text-xs text-slate-500">{request.linkedPurchases.length} compra(s) vinculada(s)</span>}
                     </div>}
                   {(request.status==="ready_for_dispatch"||request.status==="waiting_purchase"||request.status==="partially_fulfilled"||request.status==="purchase_registered") && request.items.filter((item:any)=>item.resolvedPartId&&item.quantityReadyForDispatch>item.quantityFulfilled).map((item:any)=><div key={"dispatch-"+item.id} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-end">
                     <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Estoque de destino
