@@ -4834,12 +4834,18 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários do escopo: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const employeeAccess = scopedUserIds.length
-      ? await (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
-          .in("user_id", scopedUserIds).eq("access_enabled", true)
-      : { data: [], error: null };
+    const [employeeAccess, linkedEmployees] = scopedUserIds.length ? await Promise.all([
+      (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
+        .in("user_id", scopedUserIds).eq("access_enabled", true),
+      (supabaseAdmin as any).from("rh_employees").select("id")
+        .in("ponto_portal_user_id", scopedUserIds).eq("dbs_control_access_enabled", true).eq("is_active", true),
+    ]) : [{ data: [], error: null }, { data: [], error: null }];
     if (employeeAccess.error) throw new Error("Falha ao carregar vínculos operacionais: " + employeeAccess.error.message);
-    const employeeIds = [...new Set((employeeAccess.data ?? []).map((row: any) => row.employee_id).filter(Boolean))];
+    if (linkedEmployees.error) throw new Error("Falha ao carregar colaboradores vinculados: " + linkedEmployees.error.message);
+    const employeeIds = [...new Set([
+      ...(employeeAccess.data ?? []).map((row: any) => row.employee_id),
+      ...(linkedEmployees.data ?? []).map((row: any) => row.id),
+    ].filter(Boolean))];
     const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
@@ -4971,8 +4977,11 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       if (!data.vehicleLabel) data.vehicleLabel = cylinder.vehicle_label ?? null;
     }
     if (data.employeeId) {
-      const scopedUsersForEmployee = await admin.from("users").select("id")
-        .eq("company_id", companyId).eq("status", "ativo");
+      let scopedUsersForEmployeeQuery = admin.from("users").select("id").eq("status", "ativo");
+      scopedUsersForEmployeeQuery = companyId
+        ? scopedUsersForEmployeeQuery.eq("company_id", companyId)
+        : scopedUsersForEmployeeQuery.eq("id", user.id);
+      const scopedUsersForEmployee = await scopedUsersForEmployeeQuery;
       if (scopedUsersForEmployee.error) throw new Error(scopedUsersForEmployee.error.message);
       const scopedUserIdsForEmployee = (scopedUsersForEmployee.data ?? []).map((row: any) => row.id);
       const employeeAccess = scopedUserIdsForEmployee.length
