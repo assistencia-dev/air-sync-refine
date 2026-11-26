@@ -528,7 +528,6 @@ export function DbsInventoryPage({
       setCatalogPartUnitId("");
       setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
-      setCatalogPartSale("");
       return;
     }
     setCatalogPartName(String(part.name ?? ""));
