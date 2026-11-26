@@ -4058,6 +4058,173 @@ export const fulfillDbsInventoryRequestFromCentral = createServerFn({ method: "P
     return result;
   });
 
+export const getDbsPartWarrantyDefaults = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async({context})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const {data,error}=await (supabaseAdmin as any).from("dbs_control_part_warranty_defaults")
+      .select("id,part_id,supplier_id,supplier_warranty_months,supplier_start_rule,supplier_terms,customer_warranty_months,customer_start_rule,customer_terms,version")
+      .eq("scope_key",scopeKey).limit(1000);
+    if(error) throw new Error(error.message);
+    return data??[];
+  });
+
+export const saveDbsPartWarrantyDefaults = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    partId:string;supplierId?:string|null;supplierWarrantyMonths?:number|null;
+    supplierStartRule:"invoice_date"|"receipt_date";supplierTerms?:string;
+    customerWarrantyMonths?:number|null;customerTerms?:string;
+  })=>{
+    const supplierMonths=input.supplierWarrantyMonths==null?null:Number(input.supplierWarrantyMonths);
+    const customerMonths=input.customerWarrantyMonths==null?null:Number(input.customerWarrantyMonths);
+    for(const months of [supplierMonths,customerMonths]) {
+      if(months!==null&&(!Number.isSafeInteger(months)||months<0||months>1200)) throw new Error("Informe um prazo de garantia entre 0 e 1.200 meses ou deixe em branco.");
+    }
+    if(!["invoice_date","receipt_date"].includes(input.supplierStartRule)) throw new Error("Regra de início da garantia do fornecedor inválida.");
+    return {
+      partId:requireInventoryId(input.partId,"Peça"),
+      supplierId:input.supplierId?requireInventoryId(input.supplierId,"Fornecedor"):null,
+      supplierWarrantyMonths:supplierMonths,supplierStartRule:input.supplierStartRule,
+      supplierTerms:String(input.supplierTerms??"").trim().slice(0,2000)||null,
+      customerWarrantyMonths:customerMonths,
+      customerTerms:String(input.customerTerms??"").trim().slice(0,2000)||null,
+    };
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    const [part,supplier]=await Promise.all([
+      admin.from("dbs_control_parts").select("id,supplier_id").eq("id",data.partId).maybeSingle(),
+      data.supplierId?admin.from("dbs_control_suppliers").select("id").eq("id",data.supplierId).eq("scope_key",scopeKey).eq("status","active").maybeSingle():Promise.resolve({data:null,error:null}),
+    ]);
+    for(const result of [part,supplier]) if(result.error) throw new Error(result.error.message);
+    if(!part.data) throw new Error("Peça não encontrada.");
+    const effectiveSupplier=data.supplierId??part.data.supplier_id;
+    const {data:scopeSupplier,error:scopeError}=await admin.from("dbs_control_suppliers")
+      .select("id").eq("id",effectiveSupplier).eq("scope_key",scopeKey).maybeSingle();
+    if(scopeError) throw new Error(scopeError.message);
+    if(!scopeSupplier) throw new Error("A peça não pertence ao escopo financeiro atual.");
+    if(data.supplierId&&!supplier.data) throw new Error("Fornecedor de garantia não encontrado ou inativo.");
+    const {data:result,error}=await admin.from("dbs_control_part_warranty_defaults").upsert({
+      scope_key:scopeKey,part_id:data.partId,supplier_id:data.supplierId,
+      supplier_warranty_months:data.supplierWarrantyMonths,
+      supplier_start_rule:data.supplierStartRule,supplier_terms:data.supplierTerms,
+      customer_warranty_months:data.customerWarrantyMonths,customer_terms:data.customerTerms,
+      updated_by:user.id,updated_at:new Date().toISOString(),
+    },{onConflict:"scope_key,part_id"}).select().single();
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const getDbsOperationalWarrantyRecords = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async({context})=>{
+    const {data:user,error:userError}=await supabaseAdmin.from("users")
+      .select("id,company_id,role_key,status").eq("auth_id",context.userId).maybeSingle();
+    if(userError) throw new Error(userError.message);
+    if(!user||user.status!=="ativo"||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso às garantias não autorizado.");
+    }
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const [supplier,customer,gas,claims]=await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_supplier_warranties")
+        .select("id,purchase_id,purchase_item_id,receipt_id,receipt_item_id,part_id,supplier_id,supplier_name_snapshot,serial_number,lot_number,quantity_covered,start_rule,start_date,end_date,terms,invoice_reference,certificate_reference,evidence,status,replacement_of")
+        .eq("scope_key",scopeKey).order("end_date").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_customer_warranties")
+        .select("id,work_order_id,part_id,client_id,supplier_warranty_id,serial_number,lot_number,quantity_covered,start_date,end_date,terms,status")
+        .eq("scope_key",scopeKey).order("end_date").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinder_warranties")
+        .select("id,cylinder_id,supplier_id,supplier_name_snapshot,serial_number,start_date,end_date,terms,invoice_reference,evidence,status")
+        .eq("scope_key",scopeKey).order("end_date").limit(500),
+      (supabaseAdmin as any).from("dbs_control_warranty_claims")
+        .select("id,claim_number,supplier_warranty_id,customer_warranty_id,gas_cylinder_warranty_id,opened_by,assigned_to,issue_description,supplier_protocol,requested_resolution,resolution,resolution_reference,evidence,status,opened_at,closed_at,replacement_supplier_warranty_id")
+        .eq("scope_key",scopeKey).order("opened_at",{ascending:false}).limit(500),
+    ]);
+    for(const result of [supplier,customer,gas,claims]) if(result.error) throw new Error(result.error.message);
+    const partIds=[...new Set([...(supplier.data??[]),...(customer.data??[])].map((row:any)=>String(row.part_id)).filter(Boolean))];
+    const [parts,cylinders,orders,clients]=await Promise.all([
+      partIds.length?(supabaseAdmin as any).from("dbs_control_parts").select("id,sku,name").in("id",partIds):Promise.resolve({data:[],error:null}),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinders").select("id,serial_number,refrigerant_type").eq("scope_key",scopeKey).limit(500),
+      (supabaseAdmin as any).from("dbs_control_work_orders").select("id,protocol,client_id").limit(2000),
+      (supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name").limit(1000),
+    ]);
+    for(const result of [parts,cylinders,orders,clients]) if(result.error) throw new Error(result.error.message);
+    const map=(rows:any[])=>new Map(rows.map(row=>[String(row.id),row]));
+    const partMap=map(parts.data??[]),cylinderMap=map(cylinders.data??[]),orderMap=map(orders.data??[]),clientMap=map(clients.data??[]);
+    return {
+      supplierWarranties:(supplier.data??[]).map((row:any)=>({ ...row,part:partMap.get(String(row.part_id))??null })),
+      customerWarranties:(customer.data??[]).map((row:any)=>({
+        ...row,part:partMap.get(String(row.part_id))??null,
+        workOrder:orderMap.get(String(row.work_order_id))??null,
+        client:clientMap.get(String(row.client_id))??null,
+      })),
+      gasCylinderWarranties:(gas.data??[]).map((row:any)=>({...row,cylinder:cylinderMap.get(String(row.cylinder_id))??null})),
+      claims:claims.data??[],
+    };
+  });
+
+export const createDbsWarrantyClaim = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    supplierWarrantyId?:string;customerWarrantyId?:string;gasCylinderWarrantyId?:string;
+    issueDescription:string;requestedResolution?:string;evidence?:Array<Record<string,unknown>>;
+  })=>{
+    const targetIds=[input.supplierWarrantyId,input.customerWarrantyId,input.gasCylinderWarrantyId].filter(Boolean);
+    const issueDescription=String(input.issueDescription??"").trim();
+    if(targetIds.length!==1||issueDescription.length<5||issueDescription.length>3000) throw new Error("Selecione uma única garantia e descreva o problema.");
+    return {
+      supplierWarrantyId:input.supplierWarrantyId?requireInventoryId(input.supplierWarrantyId,"Garantia fornecedor"):null,
+      customerWarrantyId:input.customerWarrantyId?requireInventoryId(input.customerWarrantyId,"Garantia DBS"):null,
+      gasCylinderWarrantyId:input.gasCylinderWarrantyId?requireInventoryId(input.gasCylinderWarrantyId,"Garantia cilindro"):null,
+      issueDescription,requestedResolution:String(input.requestedResolution??"").trim().slice(0,1000)||null,
+      evidence:Array.isArray(input.evidence)?input.evidence.slice(0,20):[],
+    };
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const row={
+      scope_key:scopeKey,supplier_warranty_id:data.supplierWarrantyId,
+      customer_warranty_id:data.customerWarrantyId,gas_cylinder_warranty_id:data.gasCylinderWarrantyId,
+      opened_by:user.id,issue_description:data.issueDescription,
+      requested_resolution:data.requestedResolution,evidence:data.evidence,status:"opened",
+    };
+    const {data:claim,error}=await (supabaseAdmin as any).from("dbs_control_warranty_claims")
+      .insert(row).select("id,claim_number,status,opened_at").single();
+    if(error) throw new Error(error.message);
+    return claim;
+  });
+
+export const updateDbsWarrantyClaim = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    claimId:string;status:"in_review"|"approved"|"rejected"|"replacement"|"credit"|"closed";
+    resolution?:string;resolutionReference?:string;replacementSupplierWarrantyId?:string;
+  })=>{
+    if(!["in_review","approved","rejected","replacement","credit","closed"].includes(input?.status)) throw new Error("Status de reclamação inválido.");
+    const resolution=String(input.resolution??"").trim();
+    if(["approved","rejected","replacement","credit","closed"].includes(input.status)&&resolution.length<5) throw new Error("Registre a análise ou solução da reclamação.");
+    return {claimId:requireInventoryId(input.claimId,"Reclamação"),status:input.status,
+      resolution:resolution.slice(0,3000),resolutionReference:String(input.resolutionReference??"").trim().slice(0,240)||null,
+      replacementSupplierWarrantyId:input.replacementSupplierWarrantyId?requireInventoryId(input.replacementSupplierWarrantyId,"Garantia substituta"):null};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const {data:claim,error}=await (supabaseAdmin as any).from("dbs_control_warranty_claims").update({
+      status:data.status,resolution:data.resolution,resolution_reference:data.resolutionReference,
+      replacement_supplier_warranty_id:data.replacementSupplierWarrantyId,
+      assigned_to:user.id,closed_at:data.status==="closed"?new Date().toISOString():null,updated_at:new Date().toISOString(),
+    }).eq("id",data.claimId).eq("scope_key",scopeKey).select("id,status,closed_at").maybeSingle();
+    if(error) throw new Error(error.message);
+    if(!claim) throw new Error("Reclamação não encontrada neste escopo.");
+    return claim;
+  });
+
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
