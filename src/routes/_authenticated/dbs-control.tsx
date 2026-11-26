@@ -1674,7 +1674,7 @@ function DbsControlPage() {
         }
         setInventoryPortals((current) => ({
           ...current,
-          [section]: { target, quoteId: String(msg.quoteId || "") },
+          [section]: { target, quoteId: String(msg.quoteId || ""), requestToken: (current[section]?.requestToken ?? 0) + 1 },
         }));
         return;
       }
