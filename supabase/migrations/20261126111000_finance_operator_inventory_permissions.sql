@@ -29,8 +29,7 @@ DO $finance_rpc$
 DECLARE
   v_signature text;
   v_definition text;
-  v_old text;
-  v_new text;
+  v_rewritten text;
   v_signatures text[] := ARRAY[
     'public.dbs_control_register_purchase(jsonb)',
     'public.dbs_control_register_purchase_with_quote(jsonb)',
@@ -52,22 +51,25 @@ BEGIN
       'public.dbs_control_upsert_part_safe(jsonb)',
       'public.dbs_control_receive_purchase(jsonb)'
     ) THEN
-      v_old := 'v_actor is null or not public.dbs_control_is_admin_actor(v_actor)';
-      v_new := 'v_actor is null or not (public.dbs_control_is_admin_actor(v_actor) or public.dbs_control_is_finance_actor(v_actor))';
-      IF position(v_old IN lower(v_definition)) = 0 THEN
-        v_old := 'v_actor IS NULL OR NOT public.dbs_control_is_admin_actor(v_actor)';
-        v_new := 'v_actor IS NULL OR NOT (public.dbs_control_is_admin_actor(v_actor) OR public.dbs_control_is_finance_actor(v_actor))';
-      END IF;
+      v_rewritten := regexp_replace(
+        v_definition,
+        'v_actor[[:space:]]+is[[:space:]]+null[[:space:]]+or[[:space:]]+not[[:space:]]+public\.dbs_control_is_admin_actor[[:space:]]*\([[:space:]]*v_actor[[:space:]]*\)',
+        'v_actor IS NULL OR NOT (public.dbs_control_is_admin_actor(v_actor) OR public.dbs_control_is_finance_actor(v_actor))',
+        'i'
+      );
     ELSE
-      v_old := 'p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id)';
-      v_new := 'p_actor_user_id IS NULL OR NOT (public.dbs_control_is_admin_actor(p_actor_user_id) OR public.dbs_control_is_finance_actor(p_actor_user_id))';
+      v_rewritten := regexp_replace(
+        v_definition,
+        'p_actor_user_id[[:space:]]+IS[[:space:]]+NULL[[:space:]]+OR[[:space:]]+NOT[[:space:]]+public\.dbs_control_is_admin_actor[[:space:]]*\([[:space:]]*p_actor_user_id[[:space:]]*\)',
+        'p_actor_user_id IS NULL OR NOT (public.dbs_control_is_admin_actor(p_actor_user_id) OR public.dbs_control_is_finance_actor(p_actor_user_id))',
+        'i'
+      );
     END IF;
 
-    IF position(v_old IN v_definition) = 0 THEN
+    IF v_rewritten IS NOT DISTINCT FROM v_definition THEN
       RAISE EXCEPTION 'Migration Finance Operator: guarda de autorização mudou em %; nenhuma função foi substituída.', v_signature;
     END IF;
-    v_definition := replace(v_definition, v_old, v_new);
-    EXECUTE v_definition;
+    EXECUTE v_rewritten;
   END LOOP;
 END;
 $finance_rpc$;
@@ -77,15 +79,18 @@ $finance_rpc$;
 DO $finance_approval$
 DECLARE
   v_definition text;
-  v_old text := $old$'SUPER_ADMIN'$old$;
-  v_new text := $new$'SUPER_ADMIN','FINANCEIRO_OPERADOR'$new$;
+  v_old text := $old$v_actor_role NOT IN (
+    'SUPER_ADMIN'
+  )$old$;
+  v_new text := $new$v_actor_role NOT IN (
+    'SUPER_ADMIN','FINANCEIRO_OPERADOR'
+  )$new$;
 BEGIN
   SELECT pg_get_functiondef(
     'public.dbs_control_decide_purchase_approval(uuid,uuid,text,text,bigint)'::regprocedure
   ) INTO v_definition;
 
-  IF position('v_actor_role NOT IN (' IN v_definition) = 0
-     OR position(v_old IN v_definition) = 0 THEN
+  IF position(v_old IN v_definition) = 0 THEN
     RAISE EXCEPTION 'Migration Finance Operator: guarda de aprovação mudou; nenhuma função foi substituída.';
   END IF;
 
