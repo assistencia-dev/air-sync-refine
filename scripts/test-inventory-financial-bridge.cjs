@@ -635,14 +635,14 @@ assert.match(phase2Ui, /purchase-receipt/);
 assert.match(phase2Ui, /sourceQuoteId/);
 assert.match(phase2Ui, /Conferir composição/);
 assert.match(phase2Ui, /data\?\.canApprovePurchases === true/);
-assert.match(treasuryFunctions, /async function requirePurchaseApprovalActor[\s\S]*?if \(user\.role_key !== "SUPER_ADMIN"\)/);
+assert.match(treasuryFunctions, /async function requirePurchaseApprovalActor[\s\S]*?if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
 const purchaseApprovalGuard = treasuryFunctions.slice(
   treasuryFunctions.indexOf("async function requirePurchaseApprovalActor"),
   treasuryFunctions.indexOf("function asObject", treasuryFunctions.indexOf("async function requirePurchaseApprovalActor")),
 );
-assert.match(purchaseApprovalGuard, /if \(user\.role_key !== "SUPER_ADMIN"\)/);
+assert.match(purchaseApprovalGuard, /if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
 assert.doesNotMatch(purchaseApprovalGuard, /\|\|\s*user\.role_key/);
-assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]\.includes\(data\.role_key\)/);
+assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA", "FINANCEIRO_OPERADOR"\]\.includes\(data\.role_key\)/);
 assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
 assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
 assert.match(treasuryHtml, /approval-purchase-items/);
