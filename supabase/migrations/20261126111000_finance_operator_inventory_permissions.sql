@@ -35,9 +35,9 @@ DECLARE
     'public.dbs_control_register_purchase_with_quote(jsonb)',
     'public.dbs_control_upsert_part(jsonb)',
     'public.dbs_control_upsert_part_safe(jsonb)',
-    'public.dbs_control_receive_purchase(jsonb)',
     'public.dbs_control_receive_purchase_items(uuid,uuid,text,jsonb)',
-    'public.dbs_control_reverse_inventory_movement(uuid,uuid,text,text)'
+    'public.dbs_control_reverse_inventory_movement(uuid,uuid,text,text)',
+    'public.dbs_control_operational_stock_transfer(uuid,uuid,numeric,uuid,uuid,text,text)'
   ];
 BEGIN
   FOREACH v_signature IN ARRAY v_signatures LOOP
@@ -49,7 +49,6 @@ BEGIN
       'public.dbs_control_register_purchase_with_quote(jsonb)',
       'public.dbs_control_upsert_part(jsonb)',
       'public.dbs_control_upsert_part_safe(jsonb)',
-      'public.dbs_control_receive_purchase(jsonb)'
     ) THEN
       v_rewritten := regexp_replace(
         v_definition,
