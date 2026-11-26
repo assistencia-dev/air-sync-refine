@@ -815,9 +815,11 @@ export function DbsInventoryPage({
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 sm:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-800">Preço de revenda calculado</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{catalogCalculatedSaleCents == null ? "Configure a política no Financeiro" : money(catalogCalculatedSaleCents)}</p>
+                  <p className="mt-1 text-xs text-slate-600">{pricingPolicy ? (pricingPolicy.pricing_method === "markup" ? `Markup de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% sobre o custo de referência` : `Margem bruta alvo de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% sobre o preço de venda`) : "O sistema não usa percentual presumido. Configure markup ou margem bruta em Cadastros básicos → Preço e revenda."}</p>
+                </div>
               </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
@@ -839,16 +841,42 @@ export function DbsInventoryPage({
               <button type="button" role="tab" aria-selected={settingsView==="cost-centers"} onClick={()=>setSettingsView("cost-centers")} className={settingsView==="cost-centers"?"dbs-op-tab is-active":"dbs-op-tab"}>Centros de custo <span className="dbs-op-count">{costCenters.length}</span></button>
               <button type="button" role="tab" aria-selected={settingsView==="units"} onClick={()=>setSettingsView("units")} className={settingsView==="units"?"dbs-op-tab is-active":"dbs-op-tab"}>Unidades <span className="dbs-op-count">{measureUnits.length}</span></button>
               <button type="button" role="tab" aria-selected={settingsView==="conversions"} onClick={()=>setSettingsView("conversions")} className={settingsView==="conversions"?"dbs-op-tab is-active":"dbs-op-tab"}>Conversões <span className="dbs-op-count">{unitConversions.length}</span></button>
+              <button type="button" role="tab" aria-selected={settingsView==="pricing"} onClick={()=>setSettingsView("pricing")} className={settingsView==="pricing"?"dbs-op-tab is-active":"dbs-op-tab"}>Preço e revenda</button>
             </nav>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
-                <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
+                {settingsView !== "pricing" && <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>}
               </div>
               {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>{inventoryRecordActions("supplier",supplier,supplier.name)}</div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
               {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>{inventoryRecordActions("cost_center",center,center.name)}</div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
               {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{unit.name} {unit.is_system&&<span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Padrão</span>}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>{inventoryRecordActions("measure_unit",unit,unit.name)}</div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
               {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));const label=(from?.code||"Compra")+" → "+(to?.code||"Base");return <div key={conversion.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"} · {Number(conversion.factor).toLocaleString("pt-BR")} ×</p></div>{inventoryRecordActions("unit_conversion",conversion,label)}</div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
+              {settingsView==="pricing"&&<form onSubmit={savePricingPolicy} className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="md:col-span-2">
+                  <h3 className="text-base font-bold text-slate-900">Política de preço de revenda</h3>
+                  <p className="mt-1 max-w-3xl text-sm text-slate-600">Defina como o sistema transforma o custo de referência/custo médio em preço de catálogo. A alteração recalcula os preços de todas as peças e não movimenta estoque nem cria lançamento financeiro.</p>
+                </div>
+                <label className="block text-xs font-bold text-slate-600">Método de cálculo
+                  <select value={pricingMethod} onChange={e=>setPricingMethod(e.target.value as "markup"|"gross_margin")} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal">
+                    <option value="markup">Markup sobre o custo</option>
+                    <option value="gross_margin">Margem bruta alvo sobre venda</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-bold text-slate-600">Percentual (%)
+                  <input required type="number" min="0.01" max={pricingMethod==="gross_margin" ? "99.99" : "990"} step="0.01" value={pricingRate} onChange={e=>setPricingRate(e.target.value)} placeholder="Informe o percentual definido pela DBS" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 md:col-span-2">
+                  {pricingMethod==="markup"
+                    ? "Exemplo de fórmula: custo × (1 + markup). Um markup de 30% aplicado sobre custo de R$ 100,00 gera preço de R$ 130,00."
+                    : "Exemplo de fórmula: custo ÷ (1 − margem). Uma margem bruta de 30% sobre a venda, com custo de R$ 100,00, gera preço de R$ 142,86."}
+                  <p className="mt-1 text-xs text-slate-500">Os exemplos explicam a fórmula, não definem a política da empresa. Nenhum percentual é pré-cadastrado.</p>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-2">
+                  <p className="text-xs text-slate-500">{pricingPolicy ? `Política atual: ${pricingPolicy.pricing_method==="markup"?"Markup":"Margem bruta"} de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% · versão ${pricingPolicy.version}` : "Ainda não há política configurada. O cadastro de novas peças ficará bloqueado até esta definição."}</p>
+                  <button type="submit" disabled={busy||!pricingRate} className="min-h-11 rounded-xl bg-[#1557a0] px-5 text-sm font-bold text-white disabled:opacity-40">{busy?"Salvando…":"Salvar política e recalcular catálogo"}</button>
+                </div>
+              </form>}
             </section>
             <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar fornecedor" : "Novo fornecedor"}</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
               <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
