@@ -4821,3 +4821,227 @@ export const geocodeDbsControlSiteAddress = createServerFn({ method: "POST" })
     const [longitude, latitude] = brazilFeature.geometry.coordinates.map(Number);
     return { ok: true, latitude, longitude, provider: "Photon/OpenStreetMap" };
   });
+
+// Operação: consulta de estoque sem valores financeiros.
+export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const companyId = user.company_id;
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const scopedUsers = companyId
+      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
+      : { data: [{ id: user.id }], error: null };
+    if (scopedUsers.error) throw new Error("Falha ao identificar usuários do escopo: " + scopedUsers.error.message);
+    const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
+    const [parts, stocks, balances, workOrders, requests] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
+        .eq("status", "ativo").order("name").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_operational_stocks")
+        .select("id,cost_center_id,name,status,created_at")
+        .eq("scope_key", scopeKey).eq("status", "active").order("created_at"),
+      (supabaseAdmin as any).from("dbs_control_operational_stock_balances")
+        .select("id,stock_id,part_id,quantity,reserved_quantity,version")
+        .eq("scope_key", scopeKey).limit(5000),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,type,created_at")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500)
+        : Promise.resolve({ data: [], error: null }),
+      (supabaseAdmin as any).from("dbs_control_material_requests")
+        .select("id,request_type,part_id,work_order_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,version,created_at,updated_at")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(500),
+    ]);
+    for (const result of [parts, stocks, balances, workOrders, requests]) {
+      if (result.error) throw new Error("Falha ao carregar materiais operacionais: " + result.error.message);
+    }
+    return {
+      parts: parts.data ?? [],
+      operationalStocks: stocks.data ?? [],
+      operationalBalances: balances.data ?? [],
+      workOrders: workOrders.data ?? [],
+      materialRequests: requests.data ?? [],
+    };
+  });
+
+export const createDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestType: "part" | "new_part" | "tool" | "supply" | "gas_refill";
+    partId?: string;
+    workOrderId?: string;
+    destinationStockId?: string;
+    employeeId?: string;
+    vehicleLabel?: string;
+    description: string;
+    quantity: number;
+    unitLabel?: string;
+    reason: string;
+    needByDate?: string;
+    idempotencyKey: string;
+  }) => {
+    const requestType = input?.requestType;
+    if (!["part", "new_part", "tool", "supply", "gas_refill"].includes(requestType)) {
+      throw new Error("Tipo de solicitação inválido.");
+    }
+    const description = String(input?.description ?? "").trim().slice(0, 240);
+    const reason = String(input?.reason ?? "").trim().slice(0, 2000);
+    const unitLabel = String(input?.unitLabel ?? "un").trim().slice(0, 24) || "un";
+    const vehicleLabel = String(input?.vehicleLabel ?? "").trim().slice(0, 80) || null;
+    const needByDate = String(input?.needByDate ?? "").trim() || null;
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (description.length < 2 || reason.length < 5) throw new Error("Descreva o material e a necessidade (mínimo 5 caracteres).");
+    if (!Number.isFinite(input?.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
+      throw new Error("Informe uma quantidade maior que zero e dentro do limite.");
+    }
+    if (requestType === "part" && (!input?.partId || !input?.workOrderId)) {
+      throw new Error("Para solicitar uma peça cadastrada, selecione a peça e a OS.");
+    }
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de segurança da solicitação inválida.");
+    if (needByDate && !isValidIsoCalendarDate(needByDate)) throw new Error("Data necessária inválida.");
+    return {
+      requestType,
+      partId: input.partId ? requireInventoryId(input.partId, "Peça") : null,
+      workOrderId: input.workOrderId ? requireInventoryId(input.workOrderId, "OS") : null,
+      destinationStockId: input.destinationStockId ? requireInventoryId(input.destinationStockId, "Estoque operacional") : null,
+      employeeId: input.employeeId ? requireInventoryId(input.employeeId, "Colaborador") : null,
+      vehicleLabel, description, quantity: Number(input.quantity.toFixed(4)),
+      unitLabel, reason, needByDate, idempotencyKey,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryAdmin(context);
+    const companyId = user.company_id;
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    if (data.partId) {
+      const { data: part, error } = await admin.from("dbs_control_parts")
+        .select("id,name,status").eq("id", data.partId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!part || part.status !== "ativo") throw new Error("Peça não encontrada ou inativa.");
+    }
+    if (data.workOrderId) {
+      const { data: order, error } = await admin.from("dbs_control_work_orders")
+        .select("id,created_by_user_id").eq("id", data.workOrderId).is("deleted_at", null).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!order) throw new Error("Ordem de serviço não encontrada ou arquivada.");
+      const scopedUsers = companyId
+        ? await admin.from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
+        : { data: [{ id: user.id }], error: null };
+      if (scopedUsers.error) throw new Error(scopedUsers.error.message);
+      const allowedCreatorIds = new Set((scopedUsers.data ?? []).map((row: any) => String(row.id)));
+      if (!allowedCreatorIds.has(String(order.created_by_user_id))) {
+        throw new Error("A OS não pertence ao escopo operacional deste usuário.");
+      }
+    }
+    if (data.destinationStockId) {
+      const { data: stock, error } = await admin.from("dbs_control_operational_stocks")
+        .select("id").eq("id", data.destinationStockId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!stock) throw new Error("Estoque operacional de destino não encontrado ou inativo.");
+    }
+    if (data.employeeId) {
+      const { data: employee, error } = await admin.from("rh_employees")
+        .select("id,is_active").eq("id", data.employeeId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!employee || employee.is_active !== true) throw new Error("Colaborador não encontrado ou inativo.");
+    }
+    const payload = {
+      request_type: data.requestType, part_id: data.partId, work_order_id: data.workOrderId,
+      destination_stock_id: data.destinationStockId, employee_id: data.employeeId,
+      vehicle_label: data.vehicleLabel, description: data.description, quantity: data.quantity,
+      unit_label: data.unitLabel, reason: data.reason, need_by_date: data.needByDate,
+    };
+    const requestHash = JSON.stringify(payload);
+    const existing = await admin.from("dbs_control_material_requests")
+      .select("id,request_hash,status,version,created_at")
+      .eq("scope_key", scopeKey).eq("idempotency_key", data.idempotencyKey).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (existing.data) {
+      if (existing.data.request_hash !== requestHash) throw new Error("A chave da solicitação já foi utilizada com dados diferentes.");
+      return { ...existing.data, replayed: true };
+    }
+    const saved = await admin.from("dbs_control_material_requests").insert({
+      company_id: companyId, scope_key: scopeKey, ...payload,
+      status: "pending", requested_by: user.id, request_hash: requestHash,
+      idempotency_key: data.idempotencyKey, version: 1,
+    }).select("id,request_type,part_id,work_order_id,description,quantity,unit_label,reason,status,version,created_at").single();
+    if (saved.error) {
+      if (saved.error.code === "23505") {
+        const replay = await admin.from("dbs_control_material_requests")
+          .select("id,request_hash,status,version,created_at")
+          .eq("scope_key", scopeKey).eq("idempotency_key", data.idempotencyKey).maybeSingle();
+        if (!replay.error && replay.data?.request_hash === requestHash) return { ...replay.data, replayed: true };
+      }
+      throw new Error(saved.error.message);
+    }
+    return { ...saved.data, replayed: false };
+  });
+
+export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const admin = supabaseAdmin as any;
+    const requests = await admin.from("dbs_control_material_requests")
+      .select("id,request_type,part_id,work_order_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
+      .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(1000);
+    if (requests.error) throw new Error(requests.error.message);
+    const ids = (requests.data ?? []).map((row: any) => row.id);
+    const links = ids.length
+      ? await admin.from("dbs_control_material_request_purchase_links")
+          .select("id,material_request_id,purchase_id,purchase_item_id,quantity_linked,created_at")
+          .in("material_request_id", ids).order("created_at")
+      : { data: [], error: null };
+    if (links.error) throw new Error(links.error.message);
+    return { requests: requests.data ?? [], purchaseLinks: links.data ?? [] };
+  });
+
+export const decideDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { requestId: string; status: "in_review" | "approved" | "rejected" | "awaiting_purchase" | "ready_for_delivery" | "cancelled"; note?: string; expectedVersion: number }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const status = input?.status;
+    const note = String(input?.note ?? "").trim().slice(0, 2000);
+    if (!["in_review", "approved", "rejected", "awaiting_purchase", "ready_for_delivery", "cancelled"].includes(status)) {
+      throw new Error("Etapa de solicitação inválida.");
+    }
+    if (status === "rejected" && note.length < 5) throw new Error("Informe o motivo da rejeição.");
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) throw new Error("Atualize a solicitação antes de decidir.");
+    return { requestId, status, note, expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_material_request", {
+      p_request_id: data.requestId, p_actor_user_id: user.id,
+      p_status: data.status, p_note: data.note, p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const linkDbsMaterialRequestPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { requestId: string; purchaseId: string; purchaseItemId: string; quantityLinked: number; expectedVersion: number }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
+    const purchaseItemId = requireInventoryId(input?.purchaseItemId, "Item da compra");
+    if (!Number.isFinite(input?.quantityLinked) || input.quantityLinked <= 0 ||
+      !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Quantidade vinculada ou versão inválida.");
+    }
+    return { requestId, purchaseId, purchaseItemId, quantityLinked: Number(input.quantityLinked.toFixed(4)), expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_link_material_request_purchase", {
+      p_request_id: data.requestId, p_purchase_id: data.purchaseId,
+      p_purchase_item_id: data.purchaseItemId, p_actor_user_id: user.id,
+      p_quantity_linked: data.quantityLinked, p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
