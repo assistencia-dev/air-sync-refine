@@ -170,7 +170,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     const purchaseIds = [...new Set((receipts.data ?? []).map((row: any) => String(row.purchase_id)).filter(Boolean))];
     const purchases = purchaseIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchases")
-          .select("id,supplier_id,supplier_name").eq("scope_key", scope.scopeKey).in("id", purchaseIds)
+          .select("id,supplier_id,supplier_name,purchase_date").eq("scope_key", scope.scopeKey).in("id", purchaseIds)
       : { data: [], error: null };
     if (purchases.error) throw new Error("Falha ao consultar fornecedores dos recebimentos: " + purchases.error.message);
 
@@ -210,6 +210,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         receivedAt: receipt?.received_at ?? null,
         supplierId: purchase?.supplier_id ?? null,
         supplierName: purchase?.supplier_name ?? "",
+        purchaseDate: purchase?.purchase_date ?? null,
         partSku: part?.sku ?? "",
         partName: part?.name ?? "Peça",
       };
