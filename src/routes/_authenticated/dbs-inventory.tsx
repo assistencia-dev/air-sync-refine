@@ -16,7 +16,7 @@ import {
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog,
+  updateDbsPartCatalog, getDbsPartPricingPolicy, saveDbsPartPricingPolicy,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -102,6 +102,11 @@ export function DbsInventoryPage({
     queryFn: () => getDbsInventoryRequests(),
     retry: 1,
   });
+  const pricingPolicyQuery = useQuery({
+    queryKey: ["dbs-part-pricing-policy"],
+    queryFn: () => getDbsPartPricingPolicy(),
+    retry: 1,
+  });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders" | "requests";
@@ -120,6 +125,13 @@ export function DbsInventoryPage({
     setModuleSection(initialSection);
   }, [initialSection]);
   useEffect(() => {
+    const policy = pricingPolicyQuery.data as any;
+    if (policy?.policyType && Number.isFinite(Number(policy.rateBasisPoints))) {
+      setPricingPolicyType(policy.policyType === "gross_margin" ? "gross_margin" : "markup");
+      setPricingRatePercent((Number(policy.rateBasisPoints) / 100).toString());
+    }
+  }, [pricingPolicyQuery.data]);
+  useEffect(() => {
     const openFromHeader = (event: Event) => {
       const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
       if (drawer === "part") {
@@ -133,8 +145,7 @@ export function DbsInventoryPage({
         setCatalogPartUnitId("");
         setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
-        setCatalogPartSale("");
-        setActiveDrawer("new-part");
+          setActiveDrawer("new-part");
       } else if (drawer === "purchase") {
         setModuleSection("purchases");
         setPurchasesView("new");
@@ -165,6 +176,8 @@ export function DbsInventoryPage({
   const [inventoryRequestDestinationStocks, setInventoryRequestDestinationStocks] = useState<Record<string,string>>({});
   const [inventoryRequestBusyId, setInventoryRequestBusyId] = useState<string|null>(null);
   const [purchaseSourceRequestId, setPurchaseSourceRequestId] = useState("");
+  const [pricingPolicyType, setPricingPolicyType] = useState<"markup"|"gross_margin">("markup");
+  const [pricingRatePercent, setPricingRatePercent] = useState("30");
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -176,7 +189,6 @@ export function DbsInventoryPage({
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
   const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
-  const [catalogPartSale, setCatalogPartSale] = useState("");
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
   const [transferSourceStockId, setTransferSourceStockId] = useState("central");
@@ -318,6 +330,14 @@ export function DbsInventoryPage({
   const availableParts = activeParts.filter((part: any) =>
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
   );
+  const pricingPolicy = pricingPolicyQuery.data as any;
+  const policyRate = Number(pricingRatePercent);
+  const referenceCostCents = Math.round(Number(catalogPartCost || 0) * 100);
+  const previewSaleCents = pricingPolicyType === "markup"
+    ? Math.round(referenceCostCents * (100 + policyRate) / 100)
+    : policyRate > 0 && policyRate < 100
+      ? Math.round(referenceCostCents * 100 / (100 - policyRate))
+      : 0;
 
   async function runAction(action: () => Promise<unknown>, success: string): Promise<boolean> {
     setBusy(true);
@@ -518,7 +538,21 @@ export function DbsInventoryPage({
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
     setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
-    setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
+  }
+
+  async function savePricingPolicy(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const percent=Number(pricingRatePercent);
+    if(!Number.isFinite(percent)||percent<=0||
+      (pricingPolicyType==="gross_margin"&&percent>=99)||
+      (pricingPolicyType==="markup"&&percent>10000)) {
+      setMessage("Informe uma taxa válida. A margem bruta deve ficar abaixo de 99%.");
+      return;
+    }
+    const saved=await runAction(()=>saveDbsPartPricingPolicy({data:{
+      policyType:pricingPolicyType,rateBasisPoints:Math.round(percent*100),
+    }}),"Política de preços salva. O preço de revenda do catálogo foi recalculado sem alterar quantidades ou lançamentos financeiros.");
+    if(saved) await pricingPolicyQuery.refetch();
   }
 
   async function saveCatalogPart(event: React.FormEvent<HTMLFormElement>) {
@@ -535,7 +569,6 @@ export function DbsInventoryPage({
       measureUnitId: catalogPartUnitId,
       purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
-      saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
     let saved = false;
     if (catalogPartId) {
