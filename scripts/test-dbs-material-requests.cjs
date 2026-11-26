@@ -14,6 +14,8 @@ for (const table of [
 }
 assert.match(migration, /REFERENCES public\.dbs_control_parts\(id\) ON DELETE RESTRICT/i);
 assert.match(migration, /REFERENCES public\.dbs_control_work_orders\(id\) ON DELETE RESTRICT/i);
+assert.match(migration, /gas_cylinder_id uuid REFERENCES public\.dbs_control_gas_cylinders\(id\) ON DELETE RESTRICT/i);
+assert.match(migration, /request_type <> 'gas_refill' OR gas_cylinder_id IS NOT NULL/i);
 assert.match(migration, /REFERENCES public\.dbs_control_purchases\(id\) ON DELETE RESTRICT/i);
 assert.match(migration, /REFERENCES public\.dbs_control_purchase_items\(id\) ON DELETE RESTRICT/i);
 assert.match(migration, /UNIQUE\(scope_key, idempotency_key\)/i);
