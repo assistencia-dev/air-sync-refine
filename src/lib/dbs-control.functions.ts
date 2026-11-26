@@ -5045,3 +5045,55 @@ export const linkDbsMaterialRequestPurchase = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return result;
   });
+
+async function requireDbsMaterialRequestActor(context: DbsInventoryAdminContext) {
+  const user = await requireDbsControlUser(context);
+  if (DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number])) {
+    return user;
+  }
+  if (user.role_key === "FINANCEIRO_OPERADOR") {
+    return requireDbsInventoryFinanceAdmin(context);
+  }
+  throw new Error("A entrega de material exige perfil operacional autorizado ou Financeiro.");
+}
+
+export const fulfillDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestId: string;
+    quantity: number;
+    destinationStockId: string;
+    idempotencyKey: string;
+    expectedVersion: number;
+  }) => {
+    if (!Number.isFinite(input?.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
+      throw new Error("Quantidade de entrega inválida.");
+    }
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) {
+      throw new Error("Chave de segurança da entrega inválida.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Atualize a solicitação antes de confirmar a entrega.");
+    }
+    return {
+      requestId: requireInventoryId(input.requestId, "Solicitação"),
+      quantity: Number(input.quantity.toFixed(4)),
+      destinationStockId: requireInventoryId(input.destinationStockId, "Estoque operacional"),
+      idempotencyKey,
+      expectedVersion: input.expectedVersion,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsMaterialRequestActor(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_fulfill_material_request", {
+      p_request_id: data.requestId,
+      p_actor_user_id: user.id,
+      p_quantity: data.quantity,
+      p_destination_stock_id: data.destinationStockId,
+      p_idempotency_key: data.idempotencyKey,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
