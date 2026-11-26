@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Archive, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { DbsOperationalInventoryPage } from "@/components/DbsOperationalInventoryPage";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +29,21 @@ export const Route = createFileRoute("/_authenticated/dbs-inventory")({
 
 function DbsInventoryRoute() {
   const search = Route.useSearch();
-  return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+  const profile = useQuery({
+    queryKey: ["dbs-inventory-role"],
+    queryFn: () => getMyProfile(),
+    retry: false,
+  });
+  if (profile.isLoading) {
+    return <main className="min-h-screen bg-[#f8fafc] p-6 text-sm text-slate-500">Validando acesso ao estoque...</main>;
+  }
+  const role = String((profile.data as any)?.role_key ?? "");
+  const operationalRoles = ["ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
+  if (role === "SUPER_ADMIN") {
+    return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+  }
+  if (operationalRoles.includes(role)) return <DbsOperationalInventoryPage />;
+  return <main className="min-h-screen bg-[#f8fafc] p-6 text-sm text-slate-600">Acesso ao estoque não autorizado.</main>;
 }
 
 function money(cents: unknown) {
