@@ -6,6 +6,7 @@ import { decideDbsPurchaseApprovalFromTreasury, getTreasuryCloudState, postTreas
 import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
 import { DbsInventoryPage } from "./dbs-inventory";
+import { DbsFinanceMaterialRequestsPage } from "@/components/DbsFinanceMaterialRequestsPage";
 
 
 export const Route = createFileRoute("/_authenticated/treasury")({
@@ -34,7 +35,7 @@ function TreasuryPage() {
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [financeWorkspace, setFinanceWorkspace] = useState<"treasury" | "inventory">("treasury");
+  const [financeWorkspace, setFinanceWorkspace] = useState<"treasury" | "inventory" | "requests">("treasury");
 
   useEffect(() => {
     let cancelled = false;
@@ -256,10 +257,13 @@ function TreasuryPage() {
       {(profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") && <nav aria-label="Áreas do Financeiro" className="flex shrink-0 gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
         <button type="button" onClick={() => setFinanceWorkspace("treasury")} aria-pressed={financeWorkspace === "treasury"} className={financeWorkspace === "treasury" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>DBS TREASURY</button>
         <button type="button" onClick={() => setFinanceWorkspace("inventory")} aria-pressed={financeWorkspace === "inventory"} className={financeWorkspace === "inventory" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>Peças, estoque e compras</button>
+        <button type="button" onClick={() => setFinanceWorkspace("requests")} aria-pressed={financeWorkspace === "requests"} className={financeWorkspace === "requests" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>Solicitações do DBS Control</button>
       </nav>}
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100dvh - 64px)" }}>
         {financeWorkspace === "inventory" && (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") ? (
           <div className="h-full min-h-0 overflow-y-auto"><DbsInventoryPage embedded initialSection="parts" /></div>
+        ) : financeWorkspace === "requests" && (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") ? (
+          <div className="h-full min-h-0 overflow-y-auto"><DbsFinanceMaterialRequestsPage /></div>
         ) : <>
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 p-5">
           {cloudError ? (
