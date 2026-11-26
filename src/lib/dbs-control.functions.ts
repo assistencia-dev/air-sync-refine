@@ -3375,6 +3375,50 @@ function calculateDbsPartSaleCents(costCents: number, policy: { pricing_method: 
   return saleCents;
 }
 
+type DbsOperationalMaterialActor = {
+  user: DbsControlUser;
+  companyId: string | null;
+  scopeKey: string;
+  ownerUserId: string;
+  scopedUserIds: string[];
+  employee: any | null;
+  collaboratorBase: Awaited<ReturnType<typeof getCollaboratorBaseScope>> | null;
+};
+
+async function resolveDbsOperationalMaterialActor(context: { userId: string }): Promise<DbsOperationalMaterialActor> {
+  const user = await requireDbsControlUser(context);
+  let employee: any | null = null;
+  let collaboratorBase: Awaited<ReturnType<typeof getCollaboratorBaseScope>> | null = null;
+  if (user.role_key === "COLABORADOR") {
+    employee = await getCollaboratorEmployee(user.id);
+    if (!employee) throw new Error("Vínculo ativo do colaborador com o DBS Control não encontrado.");
+    collaboratorBase = await getCollaboratorBaseScope(employee);
+    if (collaboratorBase.baseId && !collaboratorBase.baseActive) {
+      throw new Error("A base vinculada ao colaborador está inativa. Solicite a regularização ao RH.");
+    }
+  } else if (!DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number])) {
+    throw new Error("Acesso ao estoque operacional não autorizado.");
+  }
+
+  const resolved = await resolveDbsControlScope(user, collaboratorBase);
+  const scopedUsers = resolved.companyId
+    ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", resolved.companyId).eq("status", "ativo")
+    : { data: [{ id: resolved.ownerUserId }], error: null };
+  if (scopedUsers.error) throw new Error("Falha ao resolver o escopo operacional: " + scopedUsers.error.message);
+  const scopedUserIds = [...new Set((scopedUsers.data ?? []).map((row: any) => String(row.id)).filter(Boolean))];
+  if (!scopedUserIds.length) throw new Error("O escopo operacional não possui usuários ativos vinculados.");
+
+  return {
+    user,
+    companyId: resolved.companyId,
+    scopeKey: resolved.scopeKey,
+    ownerUserId: resolved.ownerUserId,
+    scopedUserIds,
+    employee,
+    collaboratorBase,
+  };
+}
+
 function requireInventoryId(value: string, label: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(label + " inválido.");
@@ -4902,26 +4946,16 @@ export const geocodeDbsControlSiteAddress = createServerFn({ method: "POST" })
 export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
-    const scopedUsers = companyId
-      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
-      : { data: [{ id: user.id }], error: null };
-    if (scopedUsers.error) throw new Error("Falha ao identificar usuários do escopo: " + scopedUsers.error.message);
-    const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [employeeAccess, linkedEmployees] = scopedUserIds.length ? await Promise.all([
-      (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
-        .in("user_id", scopedUserIds).eq("access_enabled", true),
-      (supabaseAdmin as any).from("rh_employees").select("id")
-        .in("ponto_portal_user_id", scopedUserIds).eq("dbs_control_access_enabled", true).eq("is_active", true),
-    ]) : [{ data: [], error: null }, { data: [], error: null }];
-    if (employeeAccess.error) throw new Error("Falha ao carregar vínculos operacionais: " + employeeAccess.error.message);
-    if (linkedEmployees.error) throw new Error("Falha ao carregar colaboradores vinculados: " + linkedEmployees.error.message);
-    const employeeIds = [...new Set([
-      ...(employeeAccess.data ?? []).map((row: any) => row.employee_id),
-      ...(linkedEmployees.data ?? []).map((row: any) => row.id),
-    ].filter(Boolean))];
+    const actor = await resolveDbsOperationalMaterialActor(context);
+    const { user, companyId, scopeKey, scopedUserIds, employee, collaboratorBase } = actor;
+    const isCollaborator = user.role_key === "COLABORADOR";
+    const employeeIds = isCollaborator && employee
+      ? [String(employee.id)]
+      : [...new Set([
+          ...(await (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
+            .in("user_id", scopedUserIds).eq("access_enabled", true)).data ?? [],
+        ].map((row: any) => String(row.employee_id)).filter(Boolean))];
+
     const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
@@ -4932,36 +4966,70 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       (supabaseAdmin as any).from("dbs_control_operational_stock_balances")
         .select("id,stock_id,part_id,quantity,reserved_quantity,version")
         .eq("scope_key", scopeKey).limit(5000),
-      scopedUserIds.length
+      isCollaborator
         ? (supabaseAdmin as any).from("dbs_control_work_orders")
-            .select("id,protocol,status,type,created_at")
-            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .select("id,protocol,status,type,client_id,assigned_employee_id,created_at")
+            .eq("assigned_employee_id", employee.id).is("deleted_at", null)
             .order("created_at", { ascending: false }).limit(500)
-        : Promise.resolve({ data: [], error: null }),
+        : (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,type,client_id,created_by_user_id,created_at")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500),
       (supabaseAdmin as any).from("dbs_control_material_requests")
         .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,version,created_at,updated_at")
-        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(500),
-      employeeIds.length
-        ? (supabaseAdmin as any).from("rh_employees").select("id,full_name,unit,is_active")
-            .in("id", employeeIds).eq("is_active", true).order("full_name")
-        : Promise.resolve({ data: [], error: null }),
+        .eq("scope_key", scopeKey)
+        .order("created_at", { ascending: false }).limit(500),
+      isCollaborator
+        ? (supabaseAdmin as any).from("rh_employees")
+            .select("id,full_name,unit,is_active").eq("id", employee.id).eq("is_active", true)
+        : (supabaseAdmin as any).from("rh_employees")
+            .select("id,full_name,unit,is_active").in("id", employeeIds).eq("is_active", true)
+            .order("full_name"),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
         .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
-        .eq("scope_key", scopeKey).eq("status", "active").order("assigned_at", { ascending: false }),
+        .eq("scope_key", scopeKey).eq("status", "active")
+        .order("assigned_at", { ascending: false }),
     ]);
     for (const result of [parts, stocks, balances, workOrders, requests, employees, gasCylinders]) {
       if (result.error) throw new Error("Falha ao carregar materiais operacionais: " + result.error.message);
     }
+
+    let visibleWorkOrders = workOrders.data ?? [];
+    let visibleGasCylinders = gasCylinders.data ?? [];
+    let visibleRequests = requests.data ?? [];
+    if (isCollaborator) {
+      const permittedClients = new Set((collaboratorBase?.clientIds ?? []).map(String));
+      visibleWorkOrders = visibleWorkOrders.filter((order: any) => {
+        if (collaboratorBase?.baseId) {
+          return collaboratorBase.baseActive && permittedClients.has(String(order.client_id ?? ""));
+        }
+        return true;
+      });
+      const visibleWorkOrderIds = new Set(visibleWorkOrders.map((order: any) => String(order.id)));
+      visibleGasCylinders = visibleGasCylinders.filter((cylinder: any) => String(cylinder.employee_id) === String(employee.id));
+      visibleRequests = visibleRequests.filter((request: any) =>
+        String(request.requested_by ?? "") === String(user.id)
+      );
+      visibleWorkOrders = visibleWorkOrders.map((order: any) => ({
+        id: order.id, protocol: order.protocol, status: order.status, type: order.type,
+        client_id: order.client_id, created_at: order.created_at,
+      }));
+      visibleRequests = visibleRequests.filter((request: any) =>
+        !request.work_order_id || visibleWorkOrderIds.has(String(request.work_order_id))
+      );
+    }
+
     return {
       parts: parts.data ?? [],
       operationalStocks: stocks.data ?? [],
       operationalBalances: balances.data ?? [],
-      workOrders: workOrders.data ?? [],
-      materialRequests: requests.data ?? [],
+      workOrders: visibleWorkOrders,
+      materialRequests: visibleRequests,
       employees: employees.data ?? [],
-      gasCylinders: gasCylinders.data ?? [],
+      gasCylinders: visibleGasCylinders,
     };
   });
+
 
 export const createDbsMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
