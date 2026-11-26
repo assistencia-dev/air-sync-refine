@@ -37,7 +37,7 @@ assert.match(functions, /pricingPolicy/);
 assert.match(functions, /sale_cents: saleCents/);
 assert.doesNotMatch(functions.slice(functions.indexOf("export const createDbsPartCatalog"), functions.indexOf("export const updateDbsPartCatalog")), /saleCents: number/);
 assert.doesNotMatch(functions.slice(functions.indexOf("export const updateDbsPartCatalog"), functions.indexOf("type DbsInventoryMasterUpdateInput")), /saleCents: number/);
-assert.match(inventoryUi, /Política de revenda/i);
+assert.match(inventoryUi, /Política de preço de revenda/i);
 assert.match(inventoryUi, /markup/);
 assert.match(inventoryUi, /gross_margin/);
 assert.doesNotMatch(inventoryUi, /Preço de venda \(R\$\)[\s\S]{0,300}onChange=\{e=>setCatalogPartSale/i);
