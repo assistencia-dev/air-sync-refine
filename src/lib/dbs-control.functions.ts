@@ -3312,6 +3312,34 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
   return user;
 }
 
+async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext) {
+  const user = await requireDbsControlUser(context);
+  const legacyAdmin = DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number]);
+  if (!legacyAdmin && user.role_key !== "FINANCEIRO_OPERADOR") {
+    throw new Error("Operação financeira restrita ao Financeiro.");
+  }
+  if (user.role_key === "FINANCEIRO_OPERADOR") {
+    const { data: access, error: accessError } = await (supabaseAdmin as any)
+      .from("treasury_viewer_access")
+      .select("owner_user_id,enabled")
+      .eq("viewer_user_id", user.id)
+      .maybeSingle();
+    if (accessError || !access || access.enabled !== true) {
+      throw new Error("O acesso financeiro está desativado ou sem vínculo com o responsável.");
+    }
+    const { data: owner, error: ownerError } = await (supabaseAdmin as any)
+      .from("users")
+      .select("id,company_id,role_key,status")
+      .eq("id", access.owner_user_id)
+      .maybeSingle();
+    if (ownerError || !owner || owner.status !== "ativo" || owner.role_key !== "SUPER_ADMIN"
+      || owner.company_id !== user.company_id) {
+      throw new Error("O responsável pelo escopo financeiro não está ativo ou não corresponde à empresa vinculada.");
+    }
+  }
+  return user;
+}
+
 function requireInventoryId(value: string, label: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(label + " inválido.");
@@ -3481,7 +3509,7 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3504,7 +3532,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
     return { movementId, idempotencyKey, reason };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reverse_inventory_movement", {
       p_movement_id: data.movementId,
       p_actor_user_id: user.id,
@@ -3534,7 +3562,7 @@ export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3557,7 +3585,7 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_registered_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3591,7 +3619,7 @@ export const decideDbsPurchaseApproval = createServerFn({ method: "POST" })
     return { purchaseId, decision, reason: reason || null, expectedVersion: input?.expectedVersion ?? null };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3646,7 +3674,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const companyId = user.company_id;
     const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
     const [supplier, center] = await Promise.all([
@@ -3743,7 +3771,7 @@ export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" }
 export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_inventory_financial_overview", {
       p_actor_user_id: user.id,
     });
@@ -3763,7 +3791,7 @@ export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" }
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const companyId = user.company_id;
     const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
     const scopedUsers = companyId
@@ -3864,7 +3892,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItemRows,
       sourceQuotes: sourceQuotes.data ?? [],
-      canApprovePurchases: user.role_key === "SUPER_ADMIN",
+      canApprovePurchases: user.role_key === "SUPER_ADMIN" || user.role_key === "FINANCEIRO_OPERADOR",
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
@@ -3894,7 +3922,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
     return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
       company_id:user.company_id,scope_key:scopeKey,name:data.name,
@@ -3924,7 +3952,7 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return { code, name };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const saved = await (supabaseAdmin as any).from("dbs_control_cost_centers").upsert({
       company_id: user.company_id, scope_key: scopeKey, code: data.code, name: data.name,
@@ -3951,7 +3979,7 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const [supplier, unit, purchaseUnit, duplicate] = await Promise.all([
@@ -3993,7 +4021,7 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
@@ -4074,7 +4102,7 @@ export const updateDbsInventoryMasterData = createServerFn({ method: "POST" })
     throw new Error("Tipo de cadastro não permitido.");
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const now = new Date().toISOString();
@@ -4169,7 +4197,7 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro"), action: input.action };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const isPart = data.entity === "part";
@@ -4268,7 +4296,7 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro") };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const table = data.entity === "part" ? "dbs_control_parts"
@@ -4382,7 +4410,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
       company_id:user.company_id,scope_key:scopeKey,code:data.code,
@@ -4404,7 +4432,7 @@ export const createDbsUnitConversion = createServerFn({ method: "POST" })
     return {fromUnitId:requireInventoryId(input.fromUnitId,"Unidade de compra"),toUnitId:requireInventoryId(input.toUnitId,"Unidade-base"),factor:input.factor};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_unit_conversions").upsert({
       company_id:user.company_id,scope_key:scopeKey,from_unit_id:data.fromUnitId,to_unit_id:data.toUnitId,
@@ -4467,7 +4495,7 @@ export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
     return {quoteId};
   })
   .handler(async ({context,data})=>{
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const admin=supabaseAdmin as any;
     let quoteQuery=admin.from("dbs_control_quotes")
