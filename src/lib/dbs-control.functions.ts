@@ -3740,7 +3740,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
 export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryFinanceAdmin(context);
+    const user = await requireDbsInventoryAdmin(context);
     const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_reconcile_work_order_financials", {
       p_actor_user_id: user.id,
     });
