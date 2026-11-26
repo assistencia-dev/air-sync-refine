@@ -3772,8 +3772,15 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
-    const [parts, stocks, balances] = await Promise.all([
+    const companyId = user.company_id;
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const scopedUsers = companyId
+      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
+      : { data: [{ id: user.id }], error: null };
+    if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
+    const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
+
+    const [parts, stocks, balances, costCenters, workOrders, reservations] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status")
         .order("name").limit(1000),
@@ -3783,8 +3790,20 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       (supabaseAdmin as any).from("dbs_control_operational_stock_balances")
         .select("id,stock_id,part_id,quantity,reserved_quantity,version")
         .eq("scope_key", scopeKey).limit(5000),
+      (supabaseAdmin as any).from("dbs_control_cost_centers")
+        .select("id,code,name,status")
+        .eq("scope_key", scopeKey).eq("status", "active").order("code").limit(500),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,client_id,cost_center_id,created_at,type")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500)
+        : Promise.resolve({ data: [], error: null }),
+      (supabaseAdmin as any).from("dbs_control_operational_reservations")
+        .select("id,stock_id,work_order_id,part_id,quantity,purpose,status,created_at")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(500),
     ]);
-    for (const result of [parts, stocks, balances]) {
+    for (const result of [parts, stocks, balances, costCenters, workOrders, reservations]) {
       if (result.error) throw new Error("Falha ao carregar o estoque operacional: " + result.error.message);
     }
 
@@ -3833,6 +3852,21 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       operationalStocks: (stocks.data ?? []).map((stock: any) => ({
         id: String(stock.id), costCenterId: stock.cost_center_id ? String(stock.cost_center_id) : null,
         name: String(stock.name ?? ""), status: String(stock.status ?? ""),
+      })),
+      costCenters: (costCenters.data ?? []).map((center: any) => ({
+        id: String(center.id), code: String(center.code ?? ""), name: String(center.name ?? ""),
+      })),
+      workOrders: (workOrders.data ?? []).map((order: any) => ({
+        id: String(order.id), protocol: String(order.protocol ?? order.id),
+        status: String(order.status ?? ""), clientId: order.client_id ? String(order.client_id) : null,
+        costCenterId: order.cost_center_id ? String(order.cost_center_id) : null,
+        createdAt: String(order.created_at ?? ""), type: String(order.type ?? ""),
+      })),
+      operationalReservations: (reservations.data ?? []).map((reservation: any) => ({
+        id: String(reservation.id), stockId: String(reservation.stock_id),
+        workOrderId: String(reservation.work_order_id), partId: String(reservation.part_id),
+        quantity: Number(reservation.quantity ?? 0), purpose: String(reservation.purpose ?? ""),
+        status: String(reservation.status ?? ""), createdAt: String(reservation.created_at ?? ""),
       })),
       operationalBalances,
     };
