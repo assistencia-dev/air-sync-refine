@@ -294,7 +294,7 @@ export function DbsFinanceMaterialRequestsPage() {
           <h3 className="text-sm font-bold text-slate-700">Histórico recente</h3>
           {recentRequests.slice(0, 20).map((request: any) => <div key={request.id} className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-sm font-semibold">{request.description}</p><p className="text-xs text-slate-500">{labels[request.request_type] ?? request.request_type} · {Number(request.fulfilled_quantity ?? 0).toLocaleString("pt-BR")}/{Number(request.quantity).toLocaleString("pt-BR")} atendidos</p>
-              {request.request_type === "gas_refill" && request.gasRefillEvent && <p className="mt-1 text-xs text-slate-600">Botija {request.gasRefillEvent.total_charges_after} cargas · Custo: {moneyFromCents(Number(request.gasRefillEvent.total_cost_cents))} · Ledger {request.gasRefillEvent.ledger_entry_id}</p>}</div>
+              {request.request_type === "gas_refill" && request.gasRefillEvent && <p className="mt-1 text-xs text-slate-600">Botija {request.gasRefillEvent.total_charges_after} cargas · Custo: {(Number(request.gasRefillEvent.total_cost_cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · Ledger {request.gasRefillEvent.ledger_entry_id}</p>}</div>
             <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${statusStyle[request.status as QueueStatus] ?? "bg-slate-100"}`}>{statusLabels[request.status as QueueStatus] ?? request.status}</span>
           </div>)}
         </div>}
