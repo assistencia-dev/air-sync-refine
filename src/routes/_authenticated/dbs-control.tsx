@@ -6,7 +6,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
-import { DbsInventoryPage } from "./dbs-inventory";
+import { DbsOperationalInventoryPage } from "@/components/DbsOperationalInventoryPage";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates, geocodeDbsControlSiteAddress } from "@/lib/dbs-control.functions";
 import {
@@ -2970,15 +2970,11 @@ function DbsControlPage() {
         />
       </div>
       {inventoryPortals.parts && createPortal(
-        <DbsInventoryPage embedded initialSection="parts" />,
+        <DbsOperationalInventoryPage initialSection="parts" />,
         inventoryPortals.parts.target,
       )}
       {inventoryPortals.purchases && createPortal(
-        <DbsInventoryPage
-          embedded
-          initialSection="purchases"
-          initialQuoteId={inventoryPortals.purchases.quoteId}
-        />,
+        <DbsOperationalInventoryPage initialSection="purchases" />,
         inventoryPortals.purchases.target,
       )}
       {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}
