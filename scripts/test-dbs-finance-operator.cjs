@@ -31,6 +31,11 @@ assert.doesNotMatch(migration, /TRUNCATE\s+/i);
 assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
 
 assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
+assert.match(dbs, /if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
+assert.doesNotMatch(dbs.slice(dbs.indexOf("async function requireDbsInventoryFinanceAdmin"), dbs.indexOf("function getDbsInventoryFinanceScope")), /DBS_INVENTORY_ADMIN_ROLES/);
+assert.doesNotMatch(migration, /IF public\.dbs_control_is_admin_actor\(v_actor\.id\) THEN/);
+assert.match(migration, /IF v_actor\.role_key::text = 'SUPER_ADMIN' THEN/);
+assert.match(dbs, /async function requireDbsMaterialRequestActor[\s\S]*return requireDbsInventoryFinanceAdmin\(context\)/);
 assert.match(dbs, /inventoryScopeOwnerId/);
 assert.match(dbs, /export const createDbsMaterialRequest/);
 assert.match(dbs, /export const getDbsFinanceMaterialRequests/);
