@@ -3356,6 +3356,25 @@ function getDbsInventoryFinanceScope(user: DbsInventoryFinanceActor) {
   };
 }
 
+function calculateDbsPartSaleCents(costCents: number, policy: { pricing_method: string; rate_bps: number } | null | undefined) {
+  if (!policy) throw new Error("Configure a política de preço de revenda no Financeiro antes de cadastrar peças.");
+  if (!Number.isSafeInteger(costCents) || costCents < 0) throw new Error("Custo de referência inválido.");
+  const rateBps = Number(policy.rate_bps);
+  if (!Number.isInteger(rateBps) || rateBps <= 0 || rateBps > 99000) {
+    throw new Error("A política de preço de revenda está inválida. Revise o Financeiro.");
+  }
+  const rawSaleCents = policy.pricing_method === "markup"
+    ? costCents * (10000 + rateBps) / 10000
+    : policy.pricing_method === "gross_margin" && rateBps < 10000
+      ? costCents * 10000 / (10000 - rateBps)
+      : Number.NaN;
+  const saleCents = Math.round(rawSaleCents);
+  if (!Number.isSafeInteger(saleCents) || saleCents < 0 || saleCents > 2147483647) {
+    throw new Error("O preço calculado excede o limite permitido. Revise o custo ou a política.");
+  }
+  return saleCents;
+}
+
 function requireInventoryId(value: string, label: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(label + " inválido.");
@@ -3899,6 +3918,10 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,cost_center_id,created_at,metadata")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100);
     if (inventoryMovements.error) throw new Error("Falha ao carregar histórico de movimentações: " + inventoryMovements.error.message);
+    const pricingPolicy = await (supabaseAdmin as any).from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps,version,updated_at,updated_by")
+      .eq("scope_key", "dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error("Falha ao carregar política de preço de revenda: " + pricingPolicy.error.message);
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -3907,6 +3930,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchaseItems: purchaseItemRows,
       sourceQuotes: sourceQuotes.data ?? [],
       canApprovePurchases: user.role_key === "SUPER_ADMIN" || user.role_key === "FINANCEIRO_OPERADOR",
+      pricingPolicy: pricingPolicy.data ?? null,
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
@@ -3976,20 +4000,49 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return saved.data;
   });
 
+export const saveDbsInventoryPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { pricingMethod: "markup" | "gross_margin"; rateBps: number; expectedVersion: number }) => {
+    if (input?.pricingMethod !== "markup" && input?.pricingMethod !== "gross_margin") {
+      throw new Error("Selecione uma regra válida para o preço de revenda.");
+    }
+    if (!Number.isSafeInteger(input?.rateBps) || input.rateBps <= 0 || input.rateBps > 99000) {
+      throw new Error("Informe um percentual válido maior que zero.");
+    }
+    if (input.pricingMethod === "gross_margin" && input.rateBps >= 10000) {
+      throw new Error("A margem bruta precisa ser menor que 100%.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 0) {
+      throw new Error("Versão da política inválida. Atualize a tela.");
+    }
+    return { pricingMethod: input.pricingMethod, rateBps: input.rateBps, expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_save_inventory_pricing_policy", {
+      p_actor_user_id: user.id,
+      p_pricing_method: data.pricingMethod,
+      p_rate_bps: data.rateBps,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
@@ -4007,10 +4060,14 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
     if (data.purchaseMeasureUnitId && !purchaseUnit.data) throw new Error("Unidade de compra não encontrada ou inativa neste escopo.");
     if (duplicate.data) throw new Error("Já existe uma peça cadastrada com este SKU.");
+    const pricingPolicy = await admin.from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps").eq("scope_key","dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error(pricingPolicy.error.message);
+    const saleCents = calculateDbsPartSaleCents(data.costCents, pricingPolicy.data);
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
       measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId, stock_quantity: 0, reserved_quantity: 0,
-      cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
+      cost_cents: data.costCents, sale_cents: saleCents, status: "ativo",
     }) .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").single();
     if (saved.error) throw new Error(saved.error.message);
     return saved.data;
@@ -4018,20 +4075,20 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
 
 export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) throw new Error("Versão da peça inválida. Atualize a tela e tente novamente.");
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
@@ -4055,10 +4112,14 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     if (Number(existing.data.stock_quantity) > 0 && Number(existing.data.cost_cents ?? 0) !== data.costCents) {
       throw new Error("O custo médio de uma peça com saldo não pode ser alterado manualmente. Faça o ajuste por recebimento/estorno.");
     }
+    const pricingPolicy = await admin.from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps").eq("scope_key","dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error(pricingPolicy.error.message);
+    const saleCents = calculateDbsPartSaleCents(data.costCents, pricingPolicy.data);
     const saved = await admin.from("dbs_control_parts").update({
       sku: data.sku, name: data.name, description: data.description,
       supplier_id: data.supplierId, measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId,
-      cost_cents: data.costCents, sale_cents: data.saleCents,
+      cost_cents: data.costCents, sale_cents: saleCents,
       version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
     }).eq("id", data.partId).eq("version", data.expectedVersion)
        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").maybeSingle();
