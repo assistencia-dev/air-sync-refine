@@ -18,6 +18,7 @@ import {
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
   updateDbsPartCatalog, getDbsPartPricingPolicy, saveDbsPartPricingPolicy,
   getDbsPartWarrantyDefaults, saveDbsPartWarrantyDefaults,
+  getDbsOperationalWarrantyRecords, createDbsGasCylinderWarranty, updateDbsWarrantyClaim,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -113,9 +114,14 @@ export function DbsInventoryPage({
     queryFn: () => getDbsPartWarrantyDefaults(),
     retry: 1,
   });
+  const warrantyRecordsQuery = useQuery({
+    queryKey: ["dbs-warranty-finance"],
+    queryFn: () => getDbsOperationalWarrantyRecords(),
+    retry: 1,
+  });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
-  type PurchasesView = "new" | "approval" | "orders" | "requests";
+  type PurchasesView = "new" | "approval" | "orders" | "requests" | "warranties";
   type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
   type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
@@ -184,6 +190,16 @@ export function DbsInventoryPage({
   const [inventoryRequestDestinationStocks, setInventoryRequestDestinationStocks] = useState<Record<string,string>>({});
   const [inventoryRequestBusyId, setInventoryRequestBusyId] = useState<string|null>(null);
   const [purchaseSourceRequestId, setPurchaseSourceRequestId] = useState("");
+  const [warrantyClaimStatuses, setWarrantyClaimStatuses] = useState<Record<string,string>>({});
+  const [warrantyClaimResolutions, setWarrantyClaimResolutions] = useState<Record<string,string>>({});
+  const [warrantyClaimReplacements, setWarrantyClaimReplacements] = useState<Record<string,string>>({});
+  const [gasWarrantyCylinderId, setGasWarrantyCylinderId] = useState("");
+  const [gasWarrantySerial, setGasWarrantySerial] = useState("");
+  const [gasWarrantySupplierId, setGasWarrantySupplierId] = useState("");
+  const [gasWarrantyStartDate, setGasWarrantyStartDate] = useState("");
+  const [gasWarrantyEndDate, setGasWarrantyEndDate] = useState("");
+  const [gasWarrantyTerms, setGasWarrantyTerms] = useState("");
+  const [gasWarrantyInvoice, setGasWarrantyInvoice] = useState("");
   const [pricingPolicyType, setPricingPolicyType] = useState<"markup"|"gross_margin">("markup");
   const [pricingRatePercent, setPricingRatePercent] = useState("30");
   const [supplierWarrantyMonths, setSupplierWarrantyMonths] = useState("");
@@ -288,6 +304,11 @@ export function DbsInventoryPage({
   const workOrderFinancials = data?.workOrderFinancials ?? [];
   const inventoryRequests = (inventoryRequestsQuery.data ?? []) as any[];
   const pendingInventoryRequests = inventoryRequests.filter((request:any)=>["pending_finance","waiting_purchase","purchase_registered","ready_for_dispatch","partially_fulfilled"].includes(request.status));
+  const warrantyRecordsData = warrantyRecordsQuery.data as any;
+  const supplierWarrantyRows = warrantyRecordsData?.supplierWarranties ?? [];
+  const customerWarrantyRows = warrantyRecordsData?.customerWarranties ?? [];
+  const gasWarrantyRows = warrantyRecordsData?.gasCylinderWarranties ?? [];
+  const warrantyClaimRows = warrantyRecordsData?.claims ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
   );
@@ -492,6 +513,34 @@ export function DbsInventoryPage({
     if(request.costCenterId)setCostCenterId(request.costCenterId);
     setPurchaseLines(requestedLines);
     setModuleSection("purchases");setPurchasesView("new");setActiveDrawer("new-purchase");
+  }
+
+  async function saveWarrantyClaim(claim:any) {
+    const status=String(warrantyClaimStatuses[claim.id]??claim.status);
+    const resolution=String(warrantyClaimResolutions[claim.id]??claim.resolution??"").trim();
+    if(!resolution||resolution.length<5){setMessage("Registre a solução ou a análise da reclamação antes de salvar.");return;}
+    const replacementId=status==="replacement"?String(warrantyClaimReplacements[claim.id]??""): "";
+    if(status==="replacement"&&claim.supplier_warranty_id&&!replacementId){setMessage("Selecione a nova garantia/peça de reposição para concluir a substituição.");return;}
+    const saved=await runAction(()=>updateDbsWarrantyClaim({data:{
+      claimId:claim.id,status:status as any,resolution,
+      resolutionReference:claim.resolution_reference??undefined,
+      replacementSupplierWarrantyId:replacementId||undefined,
+    }}),"Tratativa de garantia atualizada e registrada no histórico.");
+    if(saved) await warrantyRecordsQuery.refetch();
+  }
+
+  async function saveGasCylinderWarranty(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!gasWarrantyCylinderId||!gasWarrantySerial.trim()||!gasWarrantyStartDate||!gasWarrantyEndDate||gasWarrantyEndDate<gasWarrantyStartDate){
+      setMessage("Selecione um cilindro, informe a série e o período de garantia.");
+      return;
+    }
+    const saved=await runAction(()=>createDbsGasCylinderWarranty({data:{
+      cylinderId:gasWarrantyCylinderId,serialNumber:gasWarrantySerial.trim(),
+      supplierId:gasWarrantySupplierId||undefined,startDate:gasWarrantyStartDate,
+      endDate:gasWarrantyEndDate,terms:gasWarrantyTerms,invoiceReference:gasWarrantyInvoice,
+    }}),"Garantia do cilindro cadastrada.");
+    if(saved){await warrantyRecordsQuery.refetch();setGasWarrantyCylinderId("");setGasWarrantySerial("");setGasWarrantySupplierId("");setGasWarrantyStartDate("");setGasWarrantyEndDate("");setGasWarrantyTerms("");setGasWarrantyInvoice("");}
   }
 
   async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
@@ -1314,6 +1363,7 @@ export function DbsInventoryPage({
             <button type="button" role="tab" aria-selected={purchasesView==="approval"} onClick={()=>setPurchasesView("approval")} className={purchasesView==="approval"?"dbs-op-tab is-active":"dbs-op-tab"}>Aprovações <span className="dbs-op-count">{pendingPurchases.length}</span></button>
             <button type="button" role="tab" aria-selected={purchasesView==="orders"} onClick={()=>setPurchasesView("orders")} className={purchasesView==="orders"?"dbs-op-tab is-active":"dbs-op-tab"}>Recebimento físico <span className="dbs-op-count">{purchasesAwaitingReceipt.length}</span></button>
             <button type="button" role="tab" aria-selected={purchasesView==="requests"} onClick={()=>setPurchasesView("requests")} className={purchasesView==="requests"?"dbs-op-tab is-active":"dbs-op-tab"}>Solicitações DBS Control <span className="dbs-op-count">{pendingInventoryRequests.length}</span></button>
+            <button type="button" role="tab" aria-selected={purchasesView==="warranties"} onClick={()=>setPurchasesView("warranties")} className={purchasesView==="warranties"?"dbs-op-tab is-active":"dbs-op-tab"}>Garantias <span className="dbs-op-count">{supplierWarrantyRows.length+customerWarrantyRows.length+gasWarrantyRows.length}</span></button>
           </nav>
           {purchasesView === "approval" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1626,6 +1676,74 @@ export function DbsInventoryPage({
                 </article>)}
                 {!pendingInventoryRequests.length&&<p className="p-6 text-sm text-slate-500">Nenhuma solicitação aguardando análise, compra ou expedição.</p>}
               </div>}
+            </section>
+          </>}
+          {purchasesView === "warranties" && <>
+            <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-4"><h2 className="font-bold">Garantias de peças e serviços</h2><p className="mt-1 text-xs text-slate-500">Consulte a cobertura de fornecedor separadamente da garantia DBS ao cliente. A rastreabilidade de lote e série vem do recebimento físico.</p></div>
+              {warrantyRecordsQuery.isLoading&&<p className="p-4 text-sm text-slate-500">Carregando garantias...</p>}
+              {warrantyRecordsQuery.isError&&<p role="alert" className="p-4 text-sm text-rose-700">Não foi possível carregar as garantias.</p>}
+              {!warrantyRecordsQuery.isLoading&&!warrantyRecordsQuery.isError&&<div className="grid gap-4 p-4 xl:grid-cols-2">
+                <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Fornecedor / fabricante</h3>
+                  <div className="space-y-2">{supplierWarrantyRows.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 p-3"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-semibold">{row.part?.name??"Peça"} · {row.supplier_name_snapshot??"Fornecedor"}</p><span className="text-xs font-bold">{new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")}</span></div><p className="mt-1 text-xs text-slate-500">Série: {row.serial_number??"—"} · Lote: {row.lot_number??"—"} · Qtd.: {row.quantity_covered} · Status: {row.status}</p><p className="mt-1 text-xs text-slate-500">Nota/documento: {row.invoice_reference??"—"} · Certificado: {row.certificate_reference??"—"}</p>{row.terms&&<p className="mt-1 text-xs text-slate-600">{row.terms}</p>}</article>)}
+                  {!supplierWarrantyRows.length&&<p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Nenhuma garantia de fornecedor registrada.</p>}</div>
+                </div>
+                <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Garantia DBS / cliente</h3>
+                  <div className="space-y-2">{customerWarrantyRows.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 p-3"><p className="text-sm font-semibold">{row.part?.name??"Peça"} · {row.client?.trade_name??row.client?.legal_name??"Cliente"}</p><p className="mt-1 text-xs text-slate-500">OS {row.workOrder?.protocol??row.work_order_id} · Qtd.: {row.quantity_covered} · Até {new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")} · {row.status}</p>{row.terms&&<p className="mt-1 text-xs text-slate-600">{row.terms}</p>}</article>)}
+                  {!customerWarrantyRows.length&&<p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Nenhuma garantia DBS registrada.</p>}</div>
+                </div>
+              </div>}
+            </section>
+
+            <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-bold">Garantia de cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Registre a cobertura adquirida do fornecedor vinculada ao número de série do cilindro.</p>
+              <form onSubmit={saveGasCylinderWarranty} className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <label className="text-xs font-semibold text-slate-600">Cilindro
+                  <select required value={gasWarrantyCylinderId} onChange={event=>{const cylinder=gasCylinders.find((row:any)=>String(row.id)===event.target.value);setGasWarrantyCylinderId(event.target.value);setGasWarrantySerial(String(cylinder?.serial_number??""));}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{gasCylinders.map((row:any)=><option key={row.id} value={row.id}>{row.refrigerant_type} · {row.serial_number}</option>)}</select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Número de série
+                  <input required maxLength={180} value={gasWarrantySerial} onChange={event=>setGasWarrantySerial(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Fornecedor
+                  <select value={gasWarrantySupplierId} onChange={event=>setGasWarrantySupplierId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"><option value="">Não informado</option>{activeSuppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Início
+                  <input required type="date" value={gasWarrantyStartDate} onChange={event=>setGasWarrantyStartDate(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Vencimento
+                  <input required type="date" min={gasWarrantyStartDate||undefined} value={gasWarrantyEndDate} onChange={event=>setGasWarrantyEndDate(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Nota / documento
+                  <input maxLength={180} value={gasWarrantyInvoice} onChange={event=>setGasWarrantyInvoice(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600 sm:col-span-2 xl:col-span-3">Termos / observações
+                  <textarea rows={2} maxLength={2000} value={gasWarrantyTerms} onChange={event=>setGasWarrantyTerms(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal"/>
+                </label>
+                <div className="sm:col-span-2 xl:col-span-3"><button type="submit" disabled={busy||!gasWarrantyCylinderId} className="min-h-10 rounded-lg bg-slate-800 px-4 text-xs font-bold text-white disabled:opacity-50">Salvar garantia do cilindro</button></div>
+              </form>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-4"><h2 className="font-bold">Reclamações e tratativas</h2><p className="mt-1 text-xs text-slate-500">Registre análise, aprovação, rejeição, crédito ou substituição. A substituição mantém vínculo com a garantia anterior.</p></div>
+              <div className="divide-y divide-slate-100">
+                {warrantyClaimRows.map((claim:any)=><article key={claim.id} className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-sm">{claim.claim_number??claim.id}</p><p className="mt-1 text-xs text-slate-500">{claim.issue_description}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(claim.opened_at).toLocaleString("pt-BR")}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{claim.status}</span></div>
+                  {!["closed","rejected","replacement","credit"].includes(claim.status)&&<div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-slate-600">Status da tratativa
+                      <select value={warrantyClaimStatuses[claim.id]??claim.status} onChange={event=>setWarrantyClaimStatuses(current=>({...current,[claim.id]:event.target.value}))} className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"><option value="in_review">Em análise</option><option value="approved">Aprovada</option><option value="rejected">Rejeitada</option><option value="replacement">Substituição</option><option value="credit">Crédito</option><option value="closed">Encerrada</option></select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">Registro da análise / solução
+                      <input value={warrantyClaimResolutions[claim.id]??claim.resolution??""} onChange={event=>setWarrantyClaimResolutions(current=>({...current,[claim.id]:event.target.value}))} maxLength={3000} placeholder="Descreva a tratativa" className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                    </label>
+                    {warrantyClaimStatuses[claim.id]==="replacement"&&<label className="text-xs font-semibold text-slate-600 sm:col-span-2">Nova garantia do item substituto
+                      <select value={warrantyClaimReplacements[claim.id]??""} onChange={event=>setWarrantyClaimReplacements(current=>({...current,[claim.id]:event.target.value}))} className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"><option value="">Selecione garantia do novo item</option>{supplierWarrantyRows.filter((row:any)=>!row.replacement_of&&row.status==="active").map((row:any)=><option key={row.id} value={row.id}>{row.part?.sku} · {row.part?.name} · Série {row.serial_number??"—"}</option>)}</select>
+                    </label>}
+                    <div className="sm:col-span-2"><button type="button" disabled={busy} onClick={()=>void saveWarrantyClaim(claim)} className="min-h-9 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white disabled:opacity-50">Salvar tratativa</button></div>
+                  </div>}
+                  {claim.resolution&&<p className="text-xs text-slate-600">Última tratativa: {claim.resolution}</p>}
+                </article>)}
+                {!warrantyClaimRows.length&&<p className="p-6 text-sm text-slate-500">Nenhuma reclamação registrada.</p>}
+              </div>
             </section>
           </>}
           {purchasesView === "orders" && <>
