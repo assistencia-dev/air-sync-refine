@@ -106,7 +106,8 @@ assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
 
 assert.match(financeAccess, /access_type\?: "read_only" \| "operator"/);
 assert.match(financeAccess, /FINANCEIRO_OPERADOR/);
-assert.match(financeAccess, /roleKey === "FINANCEIRO_LEITURA"/);
+assert.match(financeAccess, /roleKey = data.access_type === "operator" \? "FINANCEIRO_OPERADOR" : "FINANCEIRO_LEITURA"/);
+assert.match(financeAccess, /treasury_viewer_access/);
 assert.match(financeAccessPage, /Financeiro · operador/);
 assert.match(financeAccessPage, /Financeiro · somente consulta/);
 assert.match(roleTypes, /"FINANCEIRO_OPERADOR"/);
