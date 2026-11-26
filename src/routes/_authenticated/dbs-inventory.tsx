@@ -39,7 +39,7 @@ function DbsInventoryRoute() {
   }
   const role = String((profile.data as any)?.role_key ?? "");
   const operationalRoles = ["ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
-  if (role === "SUPER_ADMIN") {
+  if (role === "SUPER_ADMIN" || role === "FINANCEIRO_OPERADOR") {
     return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
   }
   if (operationalRoles.includes(role)) return <DbsOperationalInventoryPage />;
