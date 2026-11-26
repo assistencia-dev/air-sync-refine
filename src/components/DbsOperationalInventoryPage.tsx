@@ -4,6 +4,7 @@ import { ClipboardList, Package, RefreshCw, Send, Wrench } from "lucide-react";
 import {
   createDbsMaterialRequest,
   getDbsOperationalInventoryOverview,
+  reserveDbsOperationalStockForWorkOrder,
 } from "@/lib/dbs-control.functions";
 
 type OperationalSection = "parts" | "requests";
@@ -58,6 +59,13 @@ export function DbsOperationalInventoryPage({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(requestKey);
+  const [usePartId, setUsePartId] = useState("");
+  const [useWorkOrderId, setUseWorkOrderId] = useState("");
+  const [useStockId, setUseStockId] = useState("");
+  const [useQuantity, setUseQuantity] = useState("1");
+  const [useError, setUseError] = useState("");
+  const [useSuccess, setUseSuccess] = useState("");
+  const [useRequestKey, setUseRequestKey] = useState(requestKey);
 
   const overview = useQuery({
     queryKey: ["dbs-operational-inventory-overview"],
@@ -101,6 +109,32 @@ export function DbsOperationalInventoryPage({
   const parts = overview.data?.parts ?? [];
   const workOrders = overview.data?.workOrders ?? [];
   const materialRequests = overview.data?.materialRequests ?? [];
+  const operationalStocks = overview.data?.operationalStocks ?? [];
+  const reservePart = useMutation({
+    mutationFn: () => {
+      const selectedStock = operationalStocks.find((stock: any) => String(stock.id) === useStockId);
+      if (!selectedStock) throw new Error("Selecione o estoque operacional de destino.");
+      return reserveDbsOperationalStockForWorkOrder({ data: {
+        workOrderId: useWorkOrderId,
+        costCenterId: String(selectedStock.cost_center_id),
+        stockId: useStockId,
+        partId: usePartId,
+        quantity: Number(useQuantity),
+        purpose: "TROCA_PECA",
+        idempotencyKey: useRequestKey,
+      } });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["dbs-operational-inventory-overview"] });
+      setUseSuccess("Peça reservada para a OS. O consumo será confirmado pelo fluxo de conclusão da ordem.");
+      setUseError("");
+      setUseRequestKey(requestKey());
+    },
+    onError: (error) => {
+      setUseError(error instanceof Error ? error.message : "Não foi possível reservar a peça.");
+      setUseSuccess("");
+    },
+  });
   const availableParts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return parts.filter((part: any) => !term
@@ -182,6 +216,41 @@ export function DbsOperationalInventoryPage({
               })}
             </div>
             <p className="text-xs text-slate-500">A disponibilidade considera as quantidades reservadas em ordens de serviço.</p>
+            <form onSubmit={(e) => { e.preventDefault(); setUseError(""); setUseSuccess(""); reservePart.mutate(); }} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div>
+                <h3 className="font-bold">Usar peça em uma OS</h3>
+                <p className="mt-1 text-sm text-slate-600">Reserve a quantidade no estoque operacional; a baixa será feita no encerramento da OS.</p>
+              </div>
+              {useError && <p role="alert" className="text-sm text-rose-700">{useError}</p>}
+              {useSuccess && <p role="status" className="text-sm text-emerald-700">{useSuccess}</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-semibold">Peça
+                  <select required value={usePartId} onChange={(e) => setUsePartId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                    <option value="">Selecione</option>
+                    {parts.map((part: any) => <option key={part.id} value={part.id}>{part.sku} · {part.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold">OS
+                  <select required value={useWorkOrderId} onChange={(e) => setUseWorkOrderId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                    <option value="">Selecione</option>
+                    {workOrders.map((order: any) => <option key={order.id} value={order.id}>{order.protocol || order.id} · {order.status}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold">Estoque operacional
+                  <select required value={useStockId} onChange={(e) => setUseStockId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                    <option value="">Selecione</option>
+                    {operationalStocks.map((stock: any) => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold">Quantidade
+                  <input type="number" min="0.0001" step="0.0001" required value={useQuantity} onChange={(e) => setUseQuantity(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 font-normal" />
+                </label>
+              </div>
+              <button type="submit" disabled={reservePart.isPending || !operationalStocks.length} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 font-bold text-white hover:bg-blue-800 disabled:opacity-50">
+                <Package className="h-4 w-4" /> {reservePart.isPending ? "Reservando…" : "Reservar peça para OS"}
+              </button>
+              {!operationalStocks.length && <p className="text-xs text-amber-700">Não há estoque operacional ativo neste escopo. Solicite ao Financeiro a configuração do destino.</p>}
+            </form>
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
