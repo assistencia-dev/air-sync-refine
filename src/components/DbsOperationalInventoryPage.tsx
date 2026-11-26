@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, PackageSearch, Search, Warehouse, ArrowLeftRight, ClipboardList, Plus, RotateCcw } from "lucide-react";
 import {
@@ -104,21 +105,23 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
       }));
   }
 
-  async function runAction(action: () => Promise<unknown>, success: string) {
+  async function runAction(action: () => Promise<unknown>, success: string): Promise<unknown> {
     setBusy(true);
     setNotice("");
     try {
-      await action();
+      const result = await action();
       await inventory.refetch();
       setNotice(success);
+      return result;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível concluir a operação.");
+      return undefined;
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveTransfer(event: React.FormEvent) {
+  async function saveTransfer(event: FormEvent) {
     event.preventDefault();
     if (!transferPartId || !Number.isFinite(Number(transferQuantity)) || Number(transferQuantity) <= 0
       || (!transferSourceId && !transferDestinationId) || transferSourceId === transferDestinationId) {
@@ -136,7 +139,7 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
     setTransferReference("");
   }
 
-  async function saveReservation(event: React.FormEvent) {
+  async function saveReservation(event: FormEvent) {
     event.preventDefault();
     if (!canReserve || !selectedReserveStock?.costCenterId) {
       setNotice("Selecione uma OS, um estoque operacional e uma peça com quantidade válida.");
@@ -153,7 +156,7 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
     } }), "Peça reservada para a OS. A baixa física ocorrerá no fluxo de conclusão.");
   }
 
-  async function saveOperationalStock(event: React.FormEvent) {
+  async function saveOperationalStock(event: FormEvent) {
     event.preventDefault();
     if (!newStockCenterId || newStockName.trim().length < 2) {
       setNotice("Selecione o centro de custo e informe o nome do estoque.");
