@@ -182,7 +182,10 @@ BEGIN
       RAISE EXCEPTION 'DBS_INVENTORY_REQUEST_ITEM_INVALID' USING ERRCODE='22023';
     END IF;
     IF v_part IS NOT NULL THEN
-      SELECT name INTO v_label FROM public.dbs_control_parts WHERE id=v_part AND status='ativo';
+      SELECT p.name INTO v_label
+        FROM public.dbs_control_parts p
+        JOIN public.dbs_control_suppliers s ON s.id=p.supplier_id
+       WHERE p.id=v_part AND p.status='ativo' AND s.scope_key=v_scope AND s.status='active';
       IF NOT FOUND THEN RAISE EXCEPTION 'DBS_INVENTORY_REQUEST_PART_INVALID' USING ERRCODE='23503'; END IF;
     END IF;
     IF v_label IS NULL OR char_length(v_label) NOT BETWEEN 2 AND 180 THEN
@@ -264,7 +267,10 @@ BEGIN
     v_item_id := nullif(v_item->>'request_item_id','')::uuid;
     v_part_id := nullif(v_item->>'part_id','')::uuid;
     IF v_item_id IS NULL OR v_part_id IS NULL OR NOT EXISTS (
-      SELECT 1 FROM public.dbs_control_parts WHERE id=v_part_id AND status='ativo'
+      SELECT 1 FROM public.dbs_control_parts p
+      JOIN public.dbs_control_suppliers s ON s.id=p.supplier_id
+       WHERE p.id=v_part_id AND p.status='ativo'
+         AND s.scope_key=v_request.scope_key AND s.status='active'
     ) THEN
       RAISE EXCEPTION 'DBS_INVENTORY_REQUEST_MAPPING_INVALID' USING ERRCODE='22023';
     END IF;
