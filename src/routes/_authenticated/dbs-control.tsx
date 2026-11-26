@@ -1637,25 +1637,8 @@ function DbsControlPage() {
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_DRAWER") {
         if (employeeModeRef.current) return;
-        // Peças novas e compras são cadastros financeiros; o operador não
-        // abre formulários de custo dentro do DBS CONTROL.
+        // Novo cadastro e compra pertencem ao Financeiro, fora do estoque operacional.
         void navigate({ to: "/treasury" });
-        return;
-        const drawer = msg.drawer === "purchase" ? "purchase" : "part";
-        const section: DbsMaterialsSection = drawer === "purchase" ? "purchases" : "parts";
-        const target = mountDbsMaterialsPortal(iframeRef.current, section);
-        if (!target) {
-          iframeRef.current?.contentWindow?.postMessage({
-            type: "DBS_CONTROL_MATERIALS_PORTAL_ERROR",
-            error: "A tela de materiais não foi encontrada. Atualize o DBS Control e tente novamente.",
-          }, window.location.origin);
-          return;
-        }
-        setInventoryPortals((current) => ({
-          ...current,
-          [section]: { target, quoteId: "" },
-        }));
-        window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer", { detail: { drawer } }));
         return;
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
