@@ -61,6 +61,9 @@ BEGIN
         ('public.dbs_control_receive_purchase_items(uuid,uuid,text,jsonb)',
          'IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_admin_actor(p_actor_user_id) THEN',
          'IF p_actor_user_id IS NULL OR NOT public.dbs_control_is_inventory_finance_actor(p_actor_user_id) THEN'),
+        ('public.dbs_control_receive_registered_purchase(uuid,uuid,text)',
+         'if p_actor_user_id is null or not public.dbs_control_is_admin_actor(p_actor_user_id) then',
+         'if p_actor_user_id is null or not public.dbs_control_is_inventory_finance_actor(p_actor_user_id) then'),
         ('public.dbs_control_settle_purchase(uuid,uuid,bigint,text,text)',
          'if p_actor_user_id is null or not public.dbs_control_is_admin_actor(p_actor_user_id) then',
          'if p_actor_user_id is null or not public.dbs_control_is_inventory_finance_actor(p_actor_user_id) then'),
@@ -109,6 +112,14 @@ BEGIN
   v_new := $new$and viewer.role_key::text in ('FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR');$new$;
   IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
     RAISE EXCEPTION 'DBS finance role migration: escopo read-only do Treasury mudou; migração abortada.';
+  END IF;
+  v_def := replace(v_def, v_old, v_new);
+  v_old := $old$and owner.status = 'ativo'$old$;
+  v_new := $new$and owner.status = 'ativo'
+   and owner.role_key::text = 'SUPER_ADMIN'
+   and owner.company_id IS NOT DISTINCT FROM viewer.company_id$new$;
+  IF position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: validação do proprietário do Treasury mudou; migração abortada.';
   END IF;
   EXECUTE replace(v_def, v_old, v_new);
 END;
