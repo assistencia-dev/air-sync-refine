@@ -435,6 +435,7 @@ DECLARE
   v_request public.dbs_control_inventory_requests%rowtype;
   v_result jsonb;
   v_purchase_id uuid;
+  v_existing_request_id uuid;
   v_purchase_item record;
   v_request_item record;
 BEGIN
@@ -460,11 +461,20 @@ BEGIN
   v_purchase_id := nullif(v_result->>'purchase_id','')::uuid;
   IF v_purchase_id IS NULL THEN RAISE EXCEPTION 'DBS_PURCHASE_REGISTER_RESULT_INVALID' USING ERRCODE='23514'; END IF;
 
+  SELECT source_inventory_request_id INTO v_existing_request_id
+    FROM public.dbs_control_purchases
+   WHERE id=v_purchase_id AND scope_key=v_request.scope_key
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_NOT_FOUND' USING ERRCODE='23503'; END IF;
+  IF v_existing_request_id IS NOT NULL THEN
+    IF v_existing_request_id IS DISTINCT FROM v_request_id THEN
+      RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505';
+    END IF;
+    RETURN v_result || jsonb_build_object('source_inventory_request_id',v_request_id);
+  END IF;
   UPDATE public.dbs_control_purchases
      SET source_inventory_request_id=v_request_id,updated_at=now()
-   WHERE id=v_purchase_id AND scope_key=v_request.scope_key
-     AND (source_inventory_request_id IS NULL OR source_inventory_request_id=v_request_id);
-  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+   WHERE id=v_purchase_id AND scope_key=v_request.scope_key;
 
   FOR v_purchase_item IN
     SELECT id,part_id,quantity FROM public.dbs_control_purchase_items
@@ -478,8 +488,8 @@ BEGIN
        AND ri.quantity-ri.quantity_ready_for_dispatch-ri.quantity_ordered>=v_purchase_item.quantity
        AND ri.status<>'rejected'
      ORDER BY ri.line_no
-     FOR UPDATE
-     LIMIT 1;
+     LIMIT 1
+     FOR UPDATE;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'DBS_PURCHASE_REQUEST_QUANTITY_EXCEEDED' USING ERRCODE='23514';
     END IF;
