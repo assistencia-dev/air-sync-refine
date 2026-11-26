@@ -174,10 +174,18 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       : { data: [], error: null };
     if (purchases.error) throw new Error("Falha ao consultar fornecedores dos recebimentos: " + purchases.error.message);
 
+    const workOrderIds = (workOrders.data ?? []).map((row: any) => String(row.id));
+    const workOrderParts = workOrderIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_work_order_parts")
+          .select("id,work_order_id,part_id").in("work_order_id", workOrderIds).limit(5000)
+      : { data: [], error: null };
+    if (workOrderParts.error) throw new Error("Falha ao consultar itens das OS para garantia: " + workOrderParts.error.message);
+
     const partIds = [...new Set([
       ...(supplierWarranties.data ?? []).map((row: any) => String(row.part_id)),
       ...(customerWarranties.data ?? []).map((row: any) => String(row.part_id ?? "")),
       ...(receiptItems.data ?? []).map((row: any) => String(row.part_id)),
+      ...(workOrderParts.data ?? []).map((row: any) => String(row.part_id)),
     ].filter(Boolean))];
     const parts = partIds.length
       ? await (supabaseAdmin as any).from("dbs_control_parts")
@@ -227,6 +235,13 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       suppliers: suppliers.data ?? [],
       parts: warrantyParts,
       receiptItems: receiptOptions,
+      workOrderParts: (workOrderParts.data ?? []).map((row: any) => ({
+        id: row.id,
+        workOrderId: row.work_order_id,
+        partId: row.part_id,
+        partSku: partsById.get(String(row.part_id))?.sku ?? "",
+        partName: partsById.get(String(row.part_id))?.name ?? "Peça",
+      })),
       workOrders: (workOrders.data ?? []).map((row: any) => ({
         id: row.id, protocol: row.protocol, clientId: row.client_id, type: row.type, createdAt: row.created_at,
       })),
@@ -239,7 +254,7 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
     partId: string; supplierId?: string; sourceReceiptItemId?: string;
     serialNumber?: string; lotNumber?: string; quantityCovered?: number;
     providerName?: string; startAnchor: "invoice_date" | "receipt_date" | "installation_date" | "manual_date";
-    startsOn: string; expiresOn: string; durationMonths?: number | null;
+    startsOn: string; expiresOn?: string; durationMonths?: number | null;
     terms?: string; documentReference?: string; notes?: string; evidence?: string[];
   }) => {
     const fields = normalizeWarrantyFields(input);
@@ -270,6 +285,9 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
 
     let receiptSupplierId: string | null = null;
     let effectiveStartsOn = data.startsOn;
+    if ((data.startAnchor === "receipt_date" || data.startAnchor === "invoice_date") && !data.sourceReceiptItemId) {
+      throw new Error("Vincule o item do recebimento para usar a data de recebimento ou nota fiscal como início da garantia.");
+    }
     if (data.sourceReceiptItemId) {
       const item = await (supabaseAdmin as any).from("dbs_control_purchase_receipt_items")
         .select("id,part_id,receipt_id").eq("id", data.sourceReceiptItemId).maybeSingle();
