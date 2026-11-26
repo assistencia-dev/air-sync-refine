@@ -3815,7 +3815,10 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
 
     // Este DTO é operacional por contrato: não consulta nem devolve custo,
     // preço, fornecedor, compra, contas a pagar ou qualquer saldo financeiro.
-    const operationalBalances = (balances.data ?? []).map((row: any) => ({
+    const activeOperationalStockIds = new Set((stocks.data ?? []).map((stock: any) => String(stock.id)));
+    const operationalBalances = (balances.data ?? [])
+      .filter((row: any) => activeOperationalStockIds.has(String(row.stock_id)))
+      .map((row: any) => ({
       id: String(row.id),
       stockId: String(row.stock_id),
       partId: String(row.part_id),
