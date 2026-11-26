@@ -232,6 +232,8 @@ DECLARE
   v_part_id uuid;
   v_qty numeric(18,4);
   v_ready numeric(18,4);
+  v_committed numeric(18,4);
+  v_part_stock record;
   v_pending boolean := false;
   v_new_status text;
 BEGIN
@@ -290,8 +292,26 @@ BEGIN
        WHERE request_id=p_request_id
        ORDER BY line_no
     LOOP
-      SELECT greatest(0,coalesce(stock_quantity,0)-coalesce(reserved_quantity,0))
-        INTO v_ready FROM public.dbs_control_parts WHERE id=v_part_id;
+      -- Serializa a alocação por SKU para que aprovações concorrentes não
+      -- prometam o mesmo saldo central a solicitações diferentes.
+      SELECT stock_quantity,reserved_quantity
+        INTO v_part_stock
+        FROM public.dbs_control_parts
+       WHERE id=v_part_id
+       FOR UPDATE;
+      IF NOT FOUND THEN RAISE EXCEPTION 'DBS_INVENTORY_REQUEST_PART_INVALID' USING ERRCODE='23503'; END IF;
+
+      SELECT coalesce(sum(greatest(0,ri.quantity_ready_for_dispatch-ri.quantity_fulfilled)),0)
+        INTO v_committed
+        FROM public.dbs_control_inventory_request_items ri
+        JOIN public.dbs_control_inventory_requests rq ON rq.id=ri.request_id
+       WHERE ri.resolved_part_id=v_part_id
+         AND ri.status<>'rejected'
+         AND (rq.id=p_request_id OR rq.status IN
+           ('ready_for_dispatch','waiting_purchase','purchase_registered','partially_fulfilled'));
+
+      v_ready := greatest(0,coalesce(v_part_stock.stock_quantity,0)
+        -coalesce(v_part_stock.reserved_quantity,0)-coalesce(v_committed,0));
       UPDATE public.dbs_control_inventory_request_items
          SET quantity_ready_for_dispatch=least(quantity,coalesce(v_ready,0)),
              status=CASE WHEN least(quantity,coalesce(v_ready,0))>=quantity THEN 'mapped' ELSE 'pending' END,
