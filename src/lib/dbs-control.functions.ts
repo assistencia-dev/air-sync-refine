@@ -3318,11 +3318,8 @@ type DbsInventoryFinanceActor = Awaited<ReturnType<typeof requireDbsControlUser>
 
 async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext): Promise<DbsInventoryFinanceActor> {
   const user = await requireDbsControlUser(context);
-  const legacyAdmin = DBS_INVENTORY_ADMIN_ROLES.includes(
-    user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number],
-  );
-  if (!legacyAdmin && user.role_key !== "FINANCEIRO_OPERADOR") {
-    throw new Error("Operação financeira restrita ao Financeiro.");
+  if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
+    throw new Error("Custos, catálogo e compras são restritos ao Financeiro.");
   }
 
   let inventoryScopeOwnerId = user.id;
@@ -5113,14 +5110,7 @@ export const linkDbsMaterialRequestPurchase = createServerFn({ method: "POST" })
   });
 
 async function requireDbsMaterialRequestActor(context: DbsInventoryAdminContext) {
-  const user = await requireDbsControlUser(context);
-  if (DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number])) {
-    return user;
-  }
-  if (user.role_key === "FINANCEIRO_OPERADOR") {
-    return requireDbsInventoryFinanceAdmin(context);
-  }
-  throw new Error("A entrega de material exige perfil operacional autorizado ou Financeiro.");
+  return requireDbsInventoryFinanceAdmin(context);
 }
 
 export const fulfillDbsMaterialRequest = createServerFn({ method: "POST" })
