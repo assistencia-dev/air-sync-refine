@@ -48,7 +48,7 @@ BEGIN
       'public.dbs_control_register_purchase(jsonb)',
       'public.dbs_control_register_purchase_with_quote(jsonb)',
       'public.dbs_control_upsert_part(jsonb)',
-      'public.dbs_control_upsert_part_safe(jsonb)',
+      'public.dbs_control_upsert_part_safe(jsonb)'
     ) THEN
       v_rewritten := regexp_replace(
         v_definition,
