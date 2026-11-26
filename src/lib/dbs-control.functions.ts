@@ -5050,7 +5050,7 @@ export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const requests = await admin.from("dbs_control_material_requests")
       .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
