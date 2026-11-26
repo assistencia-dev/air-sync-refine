@@ -6,7 +6,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
-import { DbsInventoryPage } from "./dbs-inventory";
+import { DbsOperationalInventoryPage } from "@/components/DbsOperationalInventoryPage";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates, geocodeDbsControlSiteAddress } from "@/lib/dbs-control.functions";
 import {
@@ -1637,6 +1637,10 @@ function DbsControlPage() {
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_DRAWER") {
         if (employeeModeRef.current) return;
+        // Peças novas e compras são cadastros financeiros; o operador não
+        // abre formulários de custo dentro do DBS CONTROL.
+        void navigate({ to: "/treasury" });
+        return;
         const drawer = msg.drawer === "purchase" ? "purchase" : "part";
         const section: DbsMaterialsSection = drawer === "purchase" ? "purchases" : "parts";
         const target = mountDbsMaterialsPortal(iframeRef.current, section);
@@ -1657,7 +1661,11 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
         if (employeeModeRef.current) return;
         const section: DbsMaterialsSection = msg.section === "purchases" ? "purchases" : "parts";
-        const target = mountDbsMaterialsPortal(iframeRef.current, section);
+        if (section === "purchases") {
+          void navigate({ to: "/treasury" });
+          return;
+        }
+        const target = mountDbsMaterialsPortal(iframeRef.current, "parts");
         if (!target) {
           iframeRef.current?.contentWindow?.postMessage({
             type: "DBS_CONTROL_MATERIALS_PORTAL_ERROR",
@@ -2970,16 +2978,8 @@ function DbsControlPage() {
         />
       </div>
       {inventoryPortals.parts && createPortal(
-        <DbsInventoryPage embedded initialSection="parts" />,
+        <DbsOperationalInventoryPage embedded />,
         inventoryPortals.parts.target,
-      )}
-      {inventoryPortals.purchases && createPortal(
-        <DbsInventoryPage
-          embedded
-          initialSection="purchases"
-          initialQuoteId={inventoryPortals.purchases.quoteId}
-        />,
-        inventoryPortals.purchases.target,
       )}
       {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}
       <MobileAdminNavigation active="operation" />
