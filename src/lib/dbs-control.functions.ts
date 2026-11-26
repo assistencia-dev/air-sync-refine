@@ -3405,7 +3405,7 @@ async function resolveDbsOperationalMaterialActor(context: { userId: string }): 
     ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", resolved.companyId).eq("status", "ativo")
     : { data: [{ id: resolved.ownerUserId }], error: null };
   if (scopedUsers.error) throw new Error("Falha ao resolver o escopo operacional: " + scopedUsers.error.message);
-  const scopedUserIds = [...new Set((scopedUsers.data ?? []).map((row: any) => String(row.id)).filter(Boolean))];
+  const scopedUserIds: string[] = [...new Set<string>((scopedUsers.data ?? []).map((row: any) => String(row.id)).filter((id: string) => Boolean(id)))];
   if (!scopedUserIds.length) throw new Error("O escopo operacional não possui usuários ativos vinculados.");
 
   return {
