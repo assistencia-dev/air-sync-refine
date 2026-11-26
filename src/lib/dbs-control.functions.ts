@@ -4834,7 +4834,13 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       : { data: [{ id: user.id }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários do escopo: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
-    const [parts, stocks, balances, workOrders, requests] = await Promise.all([
+    const employeeAccess = scopedUserIds.length
+      ? await (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
+          .in("user_id", scopedUserIds).eq("access_enabled", true)
+      : { data: [], error: null };
+    if (employeeAccess.error) throw new Error("Falha ao carregar vínculos operacionais: " + employeeAccess.error.message);
+    const employeeIds = [...new Set((employeeAccess.data ?? []).map((row: any) => row.employee_id).filter(Boolean))];
+    const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
         .eq("status", "ativo").order("name").limit(1000),
@@ -4851,10 +4857,17 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
             .order("created_at", { ascending: false }).limit(500)
         : Promise.resolve({ data: [], error: null }),
       (supabaseAdmin as any).from("dbs_control_material_requests")
-        .select("id,request_type,part_id,work_order_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,version,created_at,updated_at")
+        .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,version,created_at,updated_at")
         .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(500),
+      employeeIds.length
+        ? (supabaseAdmin as any).from("rh_employees").select("id,full_name,unit,is_active")
+            .in("id", employeeIds).eq("is_active", true).order("full_name")
+        : Promise.resolve({ data: [], error: null }),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinders")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
+        .eq("scope_key", scopeKey).eq("status", "active").order("assigned_at", { ascending: false }),
     ]);
-    for (const result of [parts, stocks, balances, workOrders, requests]) {
+    for (const result of [parts, stocks, balances, workOrders, requests, employees, gasCylinders]) {
       if (result.error) throw new Error("Falha ao carregar materiais operacionais: " + result.error.message);
     }
     return {
@@ -4863,6 +4876,8 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       operationalBalances: balances.data ?? [],
       workOrders: workOrders.data ?? [],
       materialRequests: requests.data ?? [],
+      employees: employees.data ?? [],
+      gasCylinders: gasCylinders.data ?? [],
     };
   });
 
@@ -4874,6 +4889,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     workOrderId?: string;
     destinationStockId?: string;
     employeeId?: string;
+    gasCylinderId?: string;
     vehicleLabel?: string;
     description: string;
     quantity: number;
@@ -4896,6 +4912,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     if (!Number.isFinite(input?.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
       throw new Error("Informe uma quantidade maior que zero e dentro do limite.");
     }
+    if (requestType === "gas_refill" && !input?.gasCylinderId) throw new Error("Selecione a botija de gás para solicitar a recarga.");
     if (requestType === "part" && (!input?.partId || !input?.workOrderId)) {
       throw new Error("Para solicitar uma peça cadastrada, selecione a peça e a OS.");
     }
@@ -4907,6 +4924,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       workOrderId: input.workOrderId ? requireInventoryId(input.workOrderId, "OS") : null,
       destinationStockId: input.destinationStockId ? requireInventoryId(input.destinationStockId, "Estoque operacional") : null,
       employeeId: input.employeeId ? requireInventoryId(input.employeeId, "Colaborador") : null,
+      gasCylinderId: input.gasCylinderId ? requireInventoryId(input.gasCylinderId, "Botija de gás") : null,
       vehicleLabel, description, quantity: Number(input.quantity.toFixed(4)),
       unitLabel, reason, needByDate, idempotencyKey,
     };
@@ -4942,6 +4960,16 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       if (!stock) throw new Error("Estoque operacional de destino não encontrado ou inativo.");
     }
+    if (data.gasCylinderId) {
+      const { data: cylinder, error } = await admin.from("dbs_control_gas_cylinders")
+        .select("id,employee_id,vehicle_label,status,scope_key")
+        .eq("id", data.gasCylinderId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!cylinder) throw new Error("Botija de gás não encontrada ou inativa neste escopo.");
+      if (data.employeeId && data.employeeId !== cylinder.employee_id) throw new Error("O colaborador informado não corresponde à botija selecionada.");
+      data.employeeId = cylinder.employee_id;
+      if (!data.vehicleLabel) data.vehicleLabel = cylinder.vehicle_label ?? null;
+    }
     if (data.employeeId) {
       const { data: employee, error } = await admin.from("rh_employees")
         .select("id,is_active").eq("id", data.employeeId).maybeSingle();
@@ -4951,7 +4979,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     const payload = {
       request_type: data.requestType, part_id: data.partId, work_order_id: data.workOrderId,
       destination_stock_id: data.destinationStockId, employee_id: data.employeeId,
-      vehicle_label: data.vehicleLabel, description: data.description, quantity: data.quantity,
+      gas_cylinder_id: data.gasCylinderId, vehicle_label: data.vehicleLabel, description: data.description, quantity: data.quantity,
       unit_label: data.unitLabel, reason: data.reason, need_by_date: data.needByDate,
     };
     const requestHash = JSON.stringify(payload);
@@ -4987,7 +5015,7 @@ export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const requests = await admin.from("dbs_control_material_requests")
-      .select("id,request_type,part_id,work_order_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
+      .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(1000);
     if (requests.error) throw new Error(requests.error.message);
     const ids = (requests.data ?? []).map((row: any) => row.id);
