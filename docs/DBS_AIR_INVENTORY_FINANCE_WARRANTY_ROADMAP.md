@@ -12,7 +12,7 @@
 
 ## Fases
 
-### Fase 1 — Base de garantias (migration adicionada ao repositório)
+### Fase 1 — Base de garantias (estrutura aditiva criada no repositório)
 
 - Garantia de fornecedor/fabricante por SKU, lote ou número de série, com vínculo opcional ao item do recebimento físico.
 - Cobertura de garantia da DBS separada da garantia do fornecedor, rastreada por OS e peça/serviço.
@@ -20,14 +20,14 @@
 - Tabelas protegidas por RLS, sem leitura/gravação direta para `authenticated`; acesso futuro será por funções servidoras autorizadas.
 - Datas de início e término são explícitas; o banco não inventa prazo padrão ou regra legal.
 
-### Fase 2 — Papéis e limites de acesso
+### Fase 2 — Papéis e limites de acesso (implementação inicial no branch)
 
 - Criar um papel financeiro operacional distinto de `FINANCEIRO_LEITURA`.
 - Permitir ao Financeiro gerir catálogo, preços, fornecedores, cotações, compras, aprovações e recebimentos.
 - Manter custo e dados financeiros fora do DTO operacional e de todas as rotas do técnico/operador.
 - Validar as mesmas regras nos handlers, funções SQL/RPC e escopo da empresa.
 
-### Fase 3 — DBS Control operacional
+### Fase 3 — DBS Control operacional (visão segura e solicitações implementadas em parte)
 
 - Catálogo operacional de consulta: descrição/SKU/unidade/quantidade disponível, sem custo.
 - Solicitação de peça/ferramenta/insumo para o Financeiro com quantidade, justificativa e OS/centro de custo.
@@ -50,4 +50,6 @@
 
 ## Situação desta entrega
 
-A Fase 1 adiciona somente a estrutura relacional de garantias e seu teste estático. A migration ainda precisa ser revisada/aplicada no ambiente Supabase oficial por meio do fluxo controlado de migrações. Nenhuma tabela nova foi criada na produção por esta alteração de código. As fases 2–5 continuam necessárias para a experiência completa descrita.
+A Fase 1 cria a estrutura relacional e testes estáticos de garantias. A Fase 2 inclui o perfil FINANCEIRO_OPERADOR separado do FINANCEIRO_LEITURA, com guardas de servidor/RPC e navegação. A Fase 3 inclui consulta operacional sem valores financeiros, reserva de peça por OS, solicitação de peça/ferramenta/insumo/recarga de botija e fila financeira inicial com vínculo de-para e transferência idempotente do saldo central ao estoque operacional.
+
+A interface e os contratos desta branch ainda precisam passar por toda a validação CI antes de qualquer merge. As regras de preço configurável, movimentação/custódia completa de ferramentas e cilindros, criação automática da garantia ao receber, vínculo real de lote/série consumido na OS e consulta completa de garantias continuam para as próximas fases. As migrations ainda não foram aplicadas no Supabase oficial e nenhuma tabela/dado de produção foi alterado.
