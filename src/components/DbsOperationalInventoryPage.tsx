@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Package, RefreshCw, Send, Wrench } from "lucide-react";
+import { CalendarClock, ClipboardList, Package, RefreshCw, Send, ShieldCheck, Wrench } from "lucide-react";
 import {
   createDbsMaterialRequest,
   getDbsOperationalInventoryOverview,
   reserveDbsOperationalStockForWorkOrder,
 } from "@/lib/dbs-control.functions";
+import { getDbsWarrantyOverview } from "@/lib/dbs-warranty.functions";
 
-type OperationalSection = "parts" | "request" | "requests";
+type OperationalSection = "parts" | "request" | "requests" | "warranties";
 type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 
 type DbsOperationalInventoryPageProps = {
@@ -92,6 +93,13 @@ export function DbsOperationalInventoryPage({
     retry: 1,
   });
 
+  const warrantyOverview = useQuery({
+    queryKey: ["dbs-warranty-overview"],
+    queryFn: () => getDbsWarrantyOverview(),
+    enabled: section === "warranties",
+    retry: 1,
+  });
+
   const submitRequest = useMutation({
     mutationFn: () => createDbsMaterialRequest({
       data: {
@@ -137,6 +145,15 @@ export function DbsOperationalInventoryPage({
   const operationalStocks = overview.data?.operationalStocks ?? [];
   const employees = overview.data?.employees ?? [];
   const gasCylinders = overview.data?.gasCylinders ?? [];
+  const supplierWarranties = warrantyOverview.data?.supplierWarranties ?? [];
+  const customerWarranties = warrantyOverview.data?.customerWarranties ?? [];
+  const warrantyLabel = (expiresOn: string) => {
+    const today = new Date();
+    const todayKey = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())).toISOString().slice(0, 10);
+    if (expiresOn < todayKey) return "Vencida";
+    const days = Math.ceil((Date.parse(expiresOn + "T00:00:00Z") - Date.parse(todayKey + "T00:00:00Z")) / 86400000);
+    return days <= 30 ? `Vence em ${days} dia(s)` : "Vigente";
+  };
   const reservePart = useMutation({
     mutationFn: () => {
       const selectedStock = operationalStocks.find((stock: any) => String(stock.id) === useStockId);
@@ -205,6 +222,10 @@ export function DbsOperationalInventoryPage({
           <button type="button" onClick={() => { setSection("request"); setSuccessMessage(""); }}
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
             <Send className="h-4 w-4" /> Solicitar material
+          </button>
+          <button type="button" onClick={() => setSection("warranties")} aria-pressed={section === "warranties"}
+            className={section === "warranties" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
+            <ShieldCheck className="h-4 w-4" /> Garantias
           </button>
         </nav>
 
@@ -278,6 +299,50 @@ export function DbsOperationalInventoryPage({
               </button>
               {!operationalStocks.length && <p className="text-xs text-amber-700">Não há estoque operacional ativo neste escopo. Solicite ao Financeiro a configuração do destino.</p>}
             </form>
+          </div>
+        ) : section === "warranties" ? (
+          <div className="space-y-4">
+            {warrantyOverview.isLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Carregando garantias…</div>
+            ) : warrantyOverview.isError ? (
+              <div role="alert" className="rounded-2xl border border-rose-200 bg-white p-5 text-sm text-rose-800">Não foi possível consultar as garantias. Atualize e tente novamente.</div>
+            ) : (
+              <>
+                <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-blue-700"/><h3 className="font-bold">Garantia do fornecedor / fabricante</h3></div>
+                  <p className="mt-1 text-sm text-slate-600">Consulte cobertura, série, lote e vencimento. Valores de compra e custos não são exibidos.</p>
+                  <div className="mt-3 space-y-2">
+                    {supplierWarranties.map((row: any) => <article key={row.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div><p className="text-sm font-semibold text-slate-900">{row.partSku} · {row.partName}</p><p className="text-xs text-slate-600">{row.supplierName}</p></div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{warrantyLabel(String(row.expires_on))}</span>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                        <p>Série: {row.serial_number || "—"} · Lote: {row.lot_number || "—"}</p>
+                        <p>Validade: {row.starts_on} até {row.expires_on}</p>
+                      </div>
+                      {row.terms && <p className="mt-2 text-sm text-slate-700">{row.terms}</p>}
+                    </article>)}
+                    {!supplierWarranties.length && <p className="text-sm text-slate-500">Nenhuma garantia de fornecedor vinculada a este cadastro.</p>}
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-blue-700"/><h3 className="font-bold">Cobertura DBS ao cliente</h3></div>
+                  <p className="mt-1 text-sm text-slate-600">Consulta da cobertura concedida, vinculada à OS e ao item ou serviço registrado.</p>
+                  <div className="mt-3 space-y-2">
+                    {customerWarranties.map((row: any) => <article key={row.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div><p className="text-sm font-semibold text-slate-900">OS {row.workOrderProtocol || row.work_order_id}</p><p className="text-xs text-slate-600">{row.partName || (row.coverage_type === "service" ? "Serviço" : "Atendimento")} {row.partSku ? "· " + row.partSku : ""}</p></div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{warrantyLabel(String(row.expires_on))}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">Validade: {row.starts_on} até {row.expires_on}</p>
+                      {row.terms && <p className="mt-2 text-sm text-slate-700">{row.terms}</p>}
+                    </article>)}
+                    {!customerWarranties.length && <p className="text-sm text-slate-500">Nenhuma cobertura DBS registrada para as OS deste escopo.</p>}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         ) : section === "request" ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
