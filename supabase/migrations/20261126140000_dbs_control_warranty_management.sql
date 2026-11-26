@@ -235,6 +235,84 @@ AFTER INSERT OR UPDATE ON public.dbs_control_warranty_claims
 FOR EACH ROW EXECUTE FUNCTION public.dbs_control_sync_warranty_claim_status();
 REVOKE ALL ON FUNCTION public.dbs_control_sync_warranty_claim_status() FROM PUBLIC,anon,authenticated;
 
+CREATE OR REPLACE FUNCTION public.dbs_control_update_warranty_claim(
+  p_claim_id uuid,p_actor_user_id uuid,p_status text,p_resolution text,
+  p_resolution_reference text DEFAULT NULL,p_replacement_supplier_warranty_id uuid DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public,pg_temp
+AS $function$
+DECLARE
+  v_user public.users%rowtype;
+  v_claim public.dbs_control_warranty_claims%rowtype;
+  v_scope_key text;
+  v_source_part_id uuid;
+  v_replacement_part_id uuid;
+BEGIN
+  IF p_actor_user_id IS NULL OR NOT (
+    public.dbs_control_is_admin_actor(p_actor_user_id)
+    OR public.dbs_control_is_finance_actor(p_actor_user_id)
+  ) THEN
+    RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_UPDATE_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+  IF p_status NOT IN ('in_review','approved','rejected','replacement','credit','closed')
+     OR p_resolution IS NULL OR char_length(trim(p_resolution))<5
+     OR char_length(p_resolution)>3000 THEN
+    RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_UPDATE_INPUT_INVALID' USING ERRCODE='22023';
+  END IF;
+  SELECT * INTO v_user FROM public.users WHERE id=p_actor_user_id AND status='ativo';
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_ACTOR_INVALID' USING ERRCODE='42501'; END IF;
+  v_scope_key:=CASE WHEN v_user.company_id IS NULL THEN 'user:'||v_user.id::text ELSE 'company:'||v_user.company_id::text END;
+  SELECT * INTO v_claim FROM public.dbs_control_warranty_claims
+   WHERE id=p_claim_id AND scope_key=v_scope_key FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_NOT_FOUND' USING ERRCODE='23503'; END IF;
+  IF v_claim.status IN ('closed','rejected','replacement','credit') THEN
+    RAISE EXCEPTION 'DBS_WARRANTY_CLAIM_ALREADY_RESOLVED' USING ERRCODE='23514';
+  END IF;
+
+  IF p_replacement_supplier_warranty_id IS NOT NULL THEN
+    IF v_claim.supplier_warranty_id IS NULL OR p_status<>'replacement' THEN
+      RAISE EXCEPTION 'DBS_WARRANTY_REPLACEMENT_NOT_ALLOWED' USING ERRCODE='23514';
+    END IF;
+    SELECT part_id INTO v_source_part_id FROM public.dbs_control_supplier_warranties
+     WHERE id=v_claim.supplier_warranty_id AND scope_key=v_scope_key;
+    SELECT part_id INTO v_replacement_part_id FROM public.dbs_control_supplier_warranties
+     WHERE id=p_replacement_supplier_warranty_id AND scope_key=v_scope_key
+       AND status='active' AND replacement_of IS NULL;
+    IF v_source_part_id IS NULL OR v_replacement_part_id IS DISTINCT FROM v_source_part_id THEN
+      RAISE EXCEPTION 'DBS_WARRANTY_REPLACEMENT_PART_MISMATCH' USING ERRCODE='23514';
+    END IF;
+    UPDATE public.dbs_control_supplier_warranties
+       SET replacement_of=v_claim.supplier_warranty_id,updated_at=now()
+     WHERE id=p_replacement_supplier_warranty_id;
+    UPDATE public.dbs_control_supplier_warranties
+       SET status='replaced',updated_at=now()
+     WHERE id=v_claim.supplier_warranty_id;
+  ELSIF p_status='replacement' AND v_claim.supplier_warranty_id IS NOT NULL THEN
+    RAISE EXCEPTION 'DBS_WARRANTY_REPLACEMENT_RECORD_REQUIRED' USING ERRCODE='23514';
+  END IF;
+
+  UPDATE public.dbs_control_warranty_claims
+     SET status=p_status,resolution=trim(p_resolution),
+         resolution_reference=nullif(trim(coalesce(p_resolution_reference,'')),''),
+         replacement_supplier_warranty_id=p_replacement_supplier_warranty_id,
+         assigned_to=p_actor_user_id,
+         closed_at=CASE WHEN p_status IN ('closed','rejected','replacement','credit','approved') THEN now() ELSE NULL END,
+         updated_at=now()
+   WHERE id=p_claim_id;
+
+  RETURN jsonb_build_object('ok',true,'claim_id',p_claim_id,'status',p_status,
+    'replacement_supplier_warranty_id',p_replacement_supplier_warranty_id);
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.dbs_control_update_warranty_claim(uuid,uuid,text,text,text,uuid)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.dbs_control_update_warranty_claim(uuid,uuid,text,text,text,uuid)
+  TO service_role;
+
+
+
 CREATE OR REPLACE FUNCTION public.dbs_control_create_supplier_warranty_on_receipt()
 RETURNS trigger
 LANGUAGE plpgsql
