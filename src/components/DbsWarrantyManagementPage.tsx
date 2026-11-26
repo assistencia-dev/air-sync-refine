@@ -31,6 +31,19 @@ function dateToday() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const warrantyStartAnchorLabels: Record<string, string> = {
+  invoice_date: "Nota fiscal",
+  receipt_date: "Recebimento",
+  installation_date: "Instalação",
+  manual_date: "Manual",
+};
+
+const warrantyCoverageTypeLabels: Record<string, string> = {
+  service: "Serviço",
+  work_order: "Atendimento",
+  part: "Peça",
+};
+
 const claimStatusLabel: Record<string, string> = {
   opened: "Aberto",
   under_review: "Em análise",
@@ -243,7 +256,7 @@ export function DbsWarrantyManagementPage() {
           <h2 className="font-bold text-slate-900">Garantias de fornecedor cadastradas</h2>
           {supplierWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">{row.partSku} · {row.partName}</div><div className="mt-1 text-sm text-slate-600">{row.supplierName}</div></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
-            <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2"><div>Série/lote: {row.serial_number||"—"} / {row.lot_number||"—"}</div><div>Período: {row.starts_on} até {row.expires_on}</div><div>Origem: {({invoice_date:"Nota fiscal",receipt_date:"Recebimento",installation_date:"Instalação",manual_date:"Manual"})[row.start_anchor]||row.start_anchor}</div><div>Quantidade coberta: {row.quantity_covered}</div></div>
+            <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2"><div>Série/lote: {row.serial_number||"—"} / {row.lot_number||"—"}</div><div>Período: {row.starts_on} até {row.expires_on}</div><div>Origem: {warrantyStartAnchorLabels[String(row.start_anchor)] ?? String(row.start_anchor)}</div><div>Quantidade coberta: {row.quantity_covered}</div></div>
             {row.terms&&<p className="mt-3 text-sm text-slate-700">{row.terms}</p>}
             {row.document_reference&&<p className="mt-1 text-xs text-slate-500">Documento: {row.document_reference}</p>}
             <button type="button" onClick={()=>{setClaimType("supplier");setClaimWarrantyId(row.id);setTab("claims");}} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><ClipboardCheck className="h-4 w-4"/> Abrir chamado</button>
@@ -270,7 +283,7 @@ export function DbsWarrantyManagementPage() {
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Coberturas DBS vinculadas à OS</h2>
           {customerWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">OS {row.workOrderProtocol||row.work_order_id}</div><div className="mt-1 text-sm text-slate-600">{row.partName||({service:"Serviço",work_order:"Atendimento",part:"Peça"})[row.coverage_type]||row.coverage_type} {row.partSku&&"· "+row.partSku}</div></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
+            <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">OS {row.workOrderProtocol||row.work_order_id}</div><div className="mt-1 text-sm text-slate-600">{row.partName||warrantyCoverageTypeLabels[String(row.coverage_type)] ?? String(row.coverage_type)} {row.partSku&&"· "+row.partSku}</div></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
             <div className="mt-3 text-sm text-slate-600">Período: {row.starts_on} até {row.expires_on}</div>
             {row.terms&&<p className="mt-2 text-sm text-slate-700">{row.terms}</p>}
             <button type="button" onClick={()=>{setClaimType("customer");setClaimWarrantyId(row.id);setTab("claims");}} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><ClipboardCheck className="h-4 w-4"/> Abrir chamado</button>
