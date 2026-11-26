@@ -32,14 +32,14 @@ async function requireTreasuryReader(context: { userId: string }) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data || data.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(data.role_key)) {
+  if (!data || data.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA", "FINANCEIRO_OPERADOR"].includes(data.role_key)) {
     throw new Error("Acesso ao Financeiro não autorizado.");
   }
   return data;
 }
 
 async function resolveTreasuryScopeOwner(user: { id: string; company_id: string | null; role_key?: string }) {
-  if (user.role_key !== "FINANCEIRO_LEITURA") return user;
+  if (user.role_key !== "FINANCEIRO_LEITURA" && user.role_key !== "FINANCEIRO_OPERADOR") return user;
   const { data: access, error: accessError } = await (supabaseAdmin as any)
     .from("treasury_viewer_access")
     .select("owner_user_id,enabled")
@@ -69,8 +69,8 @@ async function requireTreasuryAdmin(context: { userId: string }) {
 
 async function requirePurchaseApprovalActor(context: { userId: string }) {
   const user = await requireTreasuryReader(context);
-  if (user.role_key !== "SUPER_ADMIN") {
-    throw new Error("Aprovação de compras restrita ao SUPER_ADMIN. O perfil FINANCEIRO_LEITURA é somente para consulta.");
+  if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
+    throw new Error("Aprovação de compras restrita ao Financeiro. O perfil FINANCEIRO_LEITURA é somente para consulta.");
   }
   const owner = await resolveTreasuryScopeOwner(user);
   const scopeKey = owner.company_id ? "company:" + owner.company_id : "user:" + owner.id;
