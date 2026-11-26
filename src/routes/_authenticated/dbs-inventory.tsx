@@ -93,15 +93,7 @@ export function DbsInventoryPage({
     setModuleSection(initialSection);
   }, [initialSection]);
 
-  useEffect(() => {
-    if (!pricingPolicy) {
-      setPricingExpectedVersion(0);
-      return;
-    }
-    setPricingMethod(pricingPolicy.pricing_method === "gross_margin" ? "gross_margin" : "markup");
-    setPricingRate((Number(pricingPolicy.rate_bps) / 100).toFixed(2));
-    setPricingExpectedVersion(Number(pricingPolicy.version) || 0);
-  }, [pricingPolicy?.version, pricingPolicy?.pricing_method, pricingPolicy?.rate_bps]);
+
   useEffect(() => {
     const openFromHeader = (event: Event) => {
       const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
@@ -223,6 +215,15 @@ export function DbsInventoryPage({
     return Number.isSafeInteger(result) && result >= 0 && result <= 2147483647 ? result : null;
   })();
   const parts = data?.parts ?? [];
+  useEffect(() => {
+    if (!pricingPolicy) {
+      setPricingExpectedVersion(0);
+      return;
+    }
+    setPricingMethod(pricingPolicy.pricing_method === "gross_margin" ? "gross_margin" : "markup");
+    setPricingRate((Number(pricingPolicy.rate_bps) / 100).toFixed(2));
+    setPricingExpectedVersion(Number(pricingPolicy.version) || 0);
+  }, [pricingPolicy?.version, pricingPolicy?.pricing_method, pricingPolicy?.rate_bps]);
   const suppliers = data?.suppliers ?? [];
   const measureUnits = data?.measureUnits ?? [];
   const unitConversions = data?.unitConversions ?? [];
