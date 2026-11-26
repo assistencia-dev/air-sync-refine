@@ -83,6 +83,7 @@ for (const table of [
   "dbs_control_customer_warranties",
   "dbs_control_warranty_claims",
   "dbs_control_warranty_claim_history",
+  "dbs_control_gas_refill_events",
 ]) {
   assert.match(backup, new RegExp(`"${table}"`), `Backup must include ${table}.`);
 }
