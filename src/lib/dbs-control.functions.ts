@@ -5169,13 +5169,21 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     }
 
     if (data.employeeId && !isCollaborator) {
-      const employeeAccess = await admin.from("rh_employee_access").select("employee_id")
-        .eq("employee_id", data.employeeId).in("user_id", scopedUserIds).eq("access_enabled", true).maybeSingle();
+      const [employeeAccess, linkedEmployee] = await Promise.all([
+        admin.from("rh_employee_access").select("employee_id")
+          .eq("employee_id", data.employeeId).in("user_id", scopedUserIds).eq("access_enabled", true).maybeSingle(),
+        admin.from("rh_employees").select("id,is_active")
+          .eq("id", data.employeeId).eq("dbs_control_access_enabled", true).eq("is_active", true).maybeSingle(),
+      ]);
       if (employeeAccess.error) throw new Error(employeeAccess.error.message);
-      const { data: linkedEmployee, error } = await admin.from("rh_employees")
-        .select("id,is_active").eq("id", data.employeeId).maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!linkedEmployee || linkedEmployee.is_active !== true || !employeeAccess.data) {
+      if (linkedEmployee.error) throw new Error(linkedEmployee.error.message);
+      const employeeLinked = Boolean(employeeAccess.data || (
+        linkedEmployee.data && scopedUserIds.length > 0
+        && (await admin.from("rh_employees").select("id")
+          .eq("id", data.employeeId).in("ponto_portal_user_id", scopedUserIds)
+          .eq("dbs_control_access_enabled", true).eq("is_active", true).maybeSingle()).data
+      ));
+      if (!linkedEmployee.data || !employeeLinked) {
         throw new Error("Colaborador não encontrado, inativo ou fora da empresa vinculada.");
       }
     }
