@@ -2974,7 +2974,7 @@ function DbsControlPage() {
         inventoryPortals.parts.target,
       )}
       {inventoryPortals.purchases && createPortal(
-        <DbsOperationalInventoryPage initialSection="purchases" />,
+        <DbsOperationalInventoryPage initialSection="purchases" initialQuoteId={inventoryPortals.purchases.quoteId} />,
         inventoryPortals.purchases.target,
       )}
       {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}
