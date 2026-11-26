@@ -7,7 +7,7 @@ import {
   reserveDbsOperationalStockForWorkOrder,
 } from "@/lib/dbs-control.functions";
 
-type OperationalSection = "parts" | "requests";
+type OperationalSection = "parts" | "request" | "requests";
 type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 
 type DbsOperationalInventoryPageProps = {
@@ -186,7 +186,7 @@ export function DbsOperationalInventoryPage({
             className={section === "requests" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
             <ClipboardList className="h-4 w-4" /> Solicitações
           </button>
-          <button type="button" onClick={() => { setSection("requests"); setSuccessMessage(""); }}
+          <button type="button" onClick={() => { setSection("request"); setSuccessMessage(""); }}
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
             <Send className="h-4 w-4" /> Solicitar material
           </button>
@@ -263,7 +263,7 @@ export function DbsOperationalInventoryPage({
               {!operationalStocks.length && <p className="text-xs text-amber-700">Não há estoque operacional ativo neste escopo. Solicite ao Financeiro a configuração do destino.</p>}
             </form>
           </div>
-        ) : (
+        ) : section === "request" ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
             <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div>
@@ -371,9 +371,7 @@ export function DbsOperationalInventoryPage({
               </div>
             </aside>
           </div>
-        )}
-
-        {section === "requests" && (
+        ) : (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
             <h3 className="font-bold">Acompanhamento</h3>
             <div className="mt-3 space-y-2">
