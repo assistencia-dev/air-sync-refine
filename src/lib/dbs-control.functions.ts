@@ -3314,8 +3314,7 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
 
 async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext) {
   const user = await requireDbsControlUser(context);
-  const legacyAdmin = DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number]);
-  if (!legacyAdmin && user.role_key !== "FINANCEIRO_OPERADOR") {
+  if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
     throw new Error("Operação financeira restrita ao Financeiro.");
   }
   if (user.role_key === "FINANCEIRO_OPERADOR") {
