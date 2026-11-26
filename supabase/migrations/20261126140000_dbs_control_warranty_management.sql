@@ -148,6 +148,93 @@ CREATE INDEX IF NOT EXISTS dbs_control_gas_cylinder_warranties_serial_idx
 CREATE INDEX IF NOT EXISTS dbs_control_warranty_claims_queue_idx
   ON public.dbs_control_warranty_claims(scope_key,status,opened_at DESC);
 
+CREATE TABLE IF NOT EXISTS public.dbs_control_warranty_claim_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope_key text NOT NULL,
+  claim_id uuid NOT NULL REFERENCES public.dbs_control_warranty_claims(id) ON DELETE RESTRICT,
+  actor_user_id uuid REFERENCES public.users(id) ON DELETE RESTRICT,
+  previous_status text,
+  new_status text NOT NULL,
+  note text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.dbs_control_warranty_claim_history ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.dbs_control_warranty_claim_history FROM PUBLIC,anon,authenticated;
+GRANT ALL ON public.dbs_control_warranty_claim_history TO service_role;
+CREATE INDEX IF NOT EXISTS dbs_control_warranty_claim_history_claim_idx
+  ON public.dbs_control_warranty_claim_history(scope_key,claim_id,created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.dbs_control_set_warranty_claim_number()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $function$
+BEGIN
+  IF NEW.claim_number IS NULL OR btrim(NEW.claim_number)='' THEN
+    NEW.claim_number:='GAR-'||upper(substr(replace(NEW.id::text,'-',''),1,12));
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+DROP TRIGGER IF EXISTS trg_dbs_control_set_warranty_claim_number ON public.dbs_control_warranty_claims;
+CREATE TRIGGER trg_dbs_control_set_warranty_claim_number
+BEFORE INSERT ON public.dbs_control_warranty_claims
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_set_warranty_claim_number();
+REVOKE ALL ON FUNCTION public.dbs_control_set_warranty_claim_number() FROM PUBLIC,anon,authenticated;
+
+CREATE OR REPLACE FUNCTION public.dbs_control_sync_warranty_claim_status()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $function$
+DECLARE
+  v_restore text;
+BEGIN
+  IF TG_OP='INSERT' THEN
+    IF NEW.supplier_warranty_id IS NOT NULL THEN
+      UPDATE public.dbs_control_supplier_warranties SET status='claim_open',updated_at=now()
+       WHERE id=NEW.supplier_warranty_id AND status='active';
+    ELSIF NEW.customer_warranty_id IS NOT NULL THEN
+      UPDATE public.dbs_control_customer_warranties SET status='claim_open',updated_at=now()
+       WHERE id=NEW.customer_warranty_id AND status='active';
+    ELSE
+      UPDATE public.dbs_control_gas_cylinder_warranties SET status='claim_open',updated_at=now()
+       WHERE id=NEW.gas_cylinder_warranty_id AND status='active';
+    END IF;
+    INSERT INTO public.dbs_control_warranty_claim_history(scope_key,claim_id,actor_user_id,new_status,note)
+    VALUES(NEW.scope_key,NEW.id,NEW.opened_by,'opened',NEW.issue_description);
+    RETURN NEW;
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    INSERT INTO public.dbs_control_warranty_claim_history(
+      scope_key,claim_id,actor_user_id,previous_status,new_status,note,metadata
+    ) VALUES(
+      NEW.scope_key,NEW.id,NEW.assigned_to,OLD.status,NEW.status,NEW.resolution,
+      jsonb_build_object('resolution_reference',NEW.resolution_reference,
+        'replacement_supplier_warranty_id',NEW.replacement_supplier_warranty_id)
+    );
+    IF OLD.supplier_warranty_id IS NOT NULL THEN
+      SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
+        INTO v_restore FROM public.dbs_control_supplier_warranties WHERE id=OLD.supplier_warranty_id;
+      UPDATE public.dbs_control_supplier_warranties SET status=v_restore,updated_at=now()
+       WHERE id=OLD.supplier_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+    ELSIF OLD.customer_warranty_id IS NOT NULL THEN
+      SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
+        INTO v_restore FROM public.dbs_control_customer_warranties WHERE id=OLD.customer_warranty_id;
+      UPDATE public.dbs_control_customer_warranties SET status=v_restore,updated_at=now()
+       WHERE id=OLD.customer_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+    ELSIF OLD.gas_cylinder_warranty_id IS NOT NULL THEN
+      SELECT CASE WHEN end_date>=current_date THEN 'active' ELSE 'expired' END
+        INTO v_restore FROM public.dbs_control_gas_cylinder_warranties WHERE id=OLD.gas_cylinder_warranty_id;
+      UPDATE public.dbs_control_gas_cylinder_warranties SET status=v_restore,updated_at=now()
+       WHERE id=OLD.gas_cylinder_warranty_id AND status='claim_open' AND NEW.status IN ('rejected','closed');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+DROP TRIGGER IF EXISTS trg_dbs_control_sync_warranty_claim_status ON public.dbs_control_warranty_claims;
+CREATE TRIGGER trg_dbs_control_sync_warranty_claim_status
+AFTER INSERT OR UPDATE OF status ON public.dbs_control_warranty_claims
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_sync_warranty_claim_status();
+REVOKE ALL ON FUNCTION public.dbs_control_sync_warranty_claim_status() FROM PUBLIC,anon,authenticated;
+
 CREATE OR REPLACE FUNCTION public.dbs_control_create_supplier_warranty_on_receipt()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -159,7 +246,7 @@ DECLARE
   v_default public.dbs_control_part_warranty_defaults%rowtype;
   v_start date;
 BEGIN
-  SELECT p.id,p.company_id,p.scope_key,p.supplier_id,p.supplier_name,p.purchase_date,
+  SELECT p.id,p.company_id,p.scope_key,p.supplier_id,p.supplier_name,p.purchase_date,p.document_number,
          r.received_at::date AS receipt_date
     INTO v_purchase
     FROM public.dbs_control_purchase_receipts r
@@ -185,7 +272,7 @@ BEGIN
     NEW.receipt_id,NEW.id,NEW.part_id,v_purchase.supplier_id,v_purchase.supplier_name,
     NEW.quantity_received,v_default.supplier_start_rule,v_start,
     (v_start + make_interval(months=>v_default.supplier_warranty_months))::date,
-    v_default.supplier_terms,v_purchase.purchase_date::text,'active'
+    v_default.supplier_terms,v_purchase.document_number,'active'
   );
   RETURN NEW;
 END;
