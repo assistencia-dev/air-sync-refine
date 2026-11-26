@@ -215,7 +215,7 @@ export function DbsWarrantyManagementPage() {
             </select>
           </label>
           <label className="block text-sm font-semibold text-slate-700">Item do recebimento (recomendado)
-            <select value={receiptItemId} onChange={e => { const selected=receipts.find((r:any)=>String(r.id)===e.target.value);setReceiptItemId(e.target.value);if(selected){setSupplierPartId(String(selected.partId));setSupplierId(String(selected.supplierId||""));} }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
+            <select value={receiptItemId} onChange={e => { const selected=receipts.find((r:any)=>String(r.id)===e.target.value);setReceiptItemId(e.target.value);if(selected){setSupplierPartId(String(selected.partId));setSupplierId(String(selected.supplierId||""));if(startAnchor==="receipt_date"&&selected.receivedAt)setSupplierStartsOn(String(selected.receivedAt).slice(0,10));if(startAnchor==="invoice_date"&&selected.purchaseDate)setSupplierStartsOn(String(selected.purchaseDate).slice(0,10));} }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
               <option value="">Sem vínculo de recebimento</option>{receipts.filter((r:any)=>!supplierPartId||String(r.partId)===supplierPartId).map((r:any)=><option key={r.id} value={r.id}>{r.partSku} · {r.receiptNumber||"Recebimento"} · {r.receivedAt?String(r.receivedAt).slice(0,10):""} · {r.supplierName}</option>)}
             </select>
           </label>
@@ -228,7 +228,7 @@ export function DbsWarrantyManagementPage() {
           </div>
           <label className="block text-sm font-semibold text-slate-700">Fabricante / prestador (opcional)<input value={providerName} onChange={e=>setProviderName(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal" /></label>
           <label className="block text-sm font-semibold text-slate-700">Início conforme documento
-            <select value={startAnchor} onChange={e=>setStartAnchor(e.target.value as typeof startAnchor)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="receipt_date">Recebimento físico</option><option value="invoice_date">Nota fiscal</option><option value="installation_date">Instalação</option><option value="manual_date">Data manual</option></select>
+            <select value={startAnchor} onChange={e=>{const next=e.target.value as typeof startAnchor;setStartAnchor(next);const selected=receipts.find((r:any)=>String(r.id)===receiptItemId);if(next==="receipt_date"&&selected?.receivedAt)setSupplierStartsOn(String(selected.receivedAt).slice(0,10));if(next==="invoice_date"&&selected?.purchaseDate)setSupplierStartsOn(String(selected.purchaseDate).slice(0,10));}} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="receipt_date">Recebimento físico</option><option value="invoice_date">Nota fiscal</option><option value="installation_date">Instalação</option><option value="manual_date">Data manual</option></select>
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm font-semibold text-slate-700">Início<input type="date" required value={supplierStartsOn} onChange={e=>setSupplierStartsOn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal" /></label>
