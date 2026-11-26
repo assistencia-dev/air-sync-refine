@@ -1638,7 +1638,7 @@ function DbsControlPage() {
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_DRAWER") {
         if (employeeModeRef.current) return;
         // Novo cadastro e compra pertencem ao Financeiro, fora do estoque operacional.
-        void navigate({ to: "/treasury" });
+        void navigate({ to: "/dbs-inventory" });
         return;
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_FINANCE" || msg.type === "DBS_CONTROL_OPEN_INVENTORY_MODULE") {
