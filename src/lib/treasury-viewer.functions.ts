@@ -41,15 +41,15 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
       await admin.auth.admin.deleteUser(authData.user.id);
       throw new Error("Não foi possível gravar o perfil: " + (profileError?.message || "perfil não retornado"));
     }
-    if (roleKey === "FINANCEIRO_LEITURA") {
-      const { error: accessError } = await admin.from("treasury_viewer_access").insert({
-        viewer_user_id: viewerProfile.id, owner_user_id: user.id, enabled: true, created_by: user.id
-      });
-      if (accessError) {
-        await admin.from("users").delete().eq("id", viewerProfile.id);
-        await admin.auth.admin.deleteUser(authData.user.id);
-        throw new Error("Não foi possível vincular o acesso ao financeiro: " + accessError.message);
-      }
+    // O vínculo define o escopo financeiro da conta; as permissões de escrita
+    // continuam sendo determinadas pelo role_key e pelos guards server-side.
+    const { error: accessError } = await admin.from("treasury_viewer_access").insert({
+      viewer_user_id: viewerProfile.id, owner_user_id: user.id, enabled: true, created_by: user.id
+    });
+    if (accessError) {
+      await admin.from("users").delete().eq("id", viewerProfile.id);
+      await admin.auth.admin.deleteUser(authData.user.id);
+      throw new Error("Não foi possível vincular o acesso ao financeiro: " + accessError.message);
     }
     await admin.from("audit_log").insert({
       actor_user_id: user.id,
