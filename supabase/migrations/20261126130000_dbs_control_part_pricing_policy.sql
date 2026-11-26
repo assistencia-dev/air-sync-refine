@@ -195,7 +195,7 @@ BEGIN
   -- Recalcula o preço de revenda a partir do custo vigente, sem mudar estoque
   -- ou qualquer valor do Ledger. O trigger mantém a mesma regra nas futuras entradas.
   UPDATE public.dbs_control_parts p
-     SET cost_cents=p.cost_cents
+     SET sale_cents=public.dbs_control_calculate_part_sale_cents(s.scope_key,p.cost_cents)
     FROM public.dbs_control_suppliers s
    WHERE s.id=p.supplier_id AND s.scope_key=v_scope_key
      AND p.cost_cents IS NOT NULL;
