@@ -290,10 +290,13 @@ export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
     }
     if (data.sourceReceiptItemId) {
       const item = await (supabaseAdmin as any).from("dbs_control_purchase_receipt_items")
-        .select("id,part_id,receipt_id").eq("id", data.sourceReceiptItemId).maybeSingle();
+        .select("id,part_id,receipt_id,quantity_received").eq("id", data.sourceReceiptItemId).maybeSingle();
       if (item.error) throw new Error(item.error.message);
       if (!item.data || String(item.data.part_id) !== data.partId) {
         throw new Error("O item do recebimento não corresponde à peça selecionada.");
+      }
+      if (data.quantityCovered > Number(item.data.quantity_received ?? 0)) {
+        throw new Error("A quantidade coberta não pode superar a quantidade recebida neste item.");
       }
       const receipt = await (supabaseAdmin as any).from("dbs_control_purchase_receipts")
         .select("id,purchase_id,scope_key,received_at").eq("id", item.data.receipt_id).eq("scope_key", scope.scopeKey).maybeSingle();
