@@ -14,16 +14,17 @@ async function getCaller(context: { userId: string }) {
 
 export const createTreasuryViewer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { full_name: string; email: string; username: string; password: string }) => {
+  .validator((input: { full_name: string; email: string; username: string; password: string; access_type?: "read_only" | "operator" }) => {
     if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
     if (!input.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("E-mail inválido.");
     if (!input.username?.trim() || !/^[a-zA-Z0-9._-]{3,40}$/.test(input.username)) throw new Error("Usuário deve ter de 3 a 40 caracteres (letras, números, ponto, hífen ou sublinhado).");
     if (!input.password || input.password.length < 12) throw new Error("Use uma senha com pelo menos 12 caracteres.");
-    return { full_name: input.full_name.trim(), email: input.email.trim().toLowerCase(), username: input.username.trim(), password: input.password };
+    return { full_name: input.full_name.trim(), email: input.email.trim().toLowerCase(), username: input.username.trim(), password: input.password, access_type: input.access_type === "operator" ? "operator" as const : "read_only" as const };
   })
   .handler(async ({ context, data }) => {
     const { admin, user } = await getCaller(context);
     if (user.role_key !== "SUPER_ADMIN") throw new Error("Somente o administrador principal pode criar esse acesso.");
+    const roleKey = data.access_type === "operator" ? "FINANCEIRO_OPERADOR" : "FINANCEIRO_LEITURA";
     const { data: existing } = await admin.from("users").select("id").or(`email.eq.${data.email},username.eq.${data.username}`).limit(1);
     if (existing?.length) throw new Error("Já existe um usuário com esse e-mail ou nome de acesso.");
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -33,13 +34,15 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
     if (authError || !authData.user) throw new Error(authError?.message || "Não foi possível criar a autenticação.");
     const { data: viewerProfile, error: profileError } = await admin.from("users").insert({
       auth_id: authData.user.id, username: data.username, full_name: data.full_name,
-      email: data.email, role_key: "FINANCEIRO_LEITURA" as any, status: "ativo", created_by: user.id,
+      email: data.email, role_key: roleKey as any, status: "ativo", created_by: user.id,
       company_id: user.company_id ?? null
     }).select("id").single();
     if (profileError || !viewerProfile) {
       await admin.auth.admin.deleteUser(authData.user.id);
       throw new Error("Não foi possível gravar o perfil: " + (profileError?.message || "perfil não retornado"));
     }
+    // O vínculo define o escopo financeiro da conta; as permissões de escrita
+    // continuam sendo determinadas pelo role_key e pelos guards server-side.
     const { error: accessError } = await admin.from("treasury_viewer_access").insert({
       viewer_user_id: viewerProfile.id, owner_user_id: user.id, enabled: true, created_by: user.id
     });
@@ -49,8 +52,9 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
       throw new Error("Não foi possível vincular o acesso ao financeiro: " + accessError.message);
     }
     await admin.from("audit_log").insert({
-      actor_user_id: user.id, action: "created_treasury_viewer",
-      metadata_json: { username: data.username, email: data.email, role_key: "FINANCEIRO_LEITURA" }
+      actor_user_id: user.id,
+      action: roleKey === "FINANCEIRO_OPERADOR" ? "created_treasury_operator" : "created_treasury_viewer",
+      metadata_json: { username: data.username, email: data.email, role_key: roleKey }
     });
     return { ok: true, username: data.username, email: data.email };
   });

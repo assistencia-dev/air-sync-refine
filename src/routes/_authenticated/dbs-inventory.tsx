@@ -3,17 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Archive, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { DbsOperationalInventoryPage } from "@/components/DbsOperationalInventoryPage";
+import { getMyProfile } from "@/lib/admin-profile.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury } from "@/lib/treasury.functions";
 import {
   createDbsPurchase, createDbsSupplier, createDbsMeasureUnit, createDbsUnitConversion,
+  getDbsInventoryRequests, decideDbsInventoryRequest, fulfillDbsInventoryRequestFromCentral,
   createDbsOperationalStock, setDbsOperationalStockStatus, transferDbsOperationalStock, reserveDbsOperationalStockForWorkOrder, releaseDbsOperationalStockReservation,
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog,
+  updateDbsPartCatalog, getDbsPartPricingPolicy, saveDbsPartPricingPolicy,
+  getDbsPartWarrantyDefaults, saveDbsPartWarrantyDefaults,
+  getDbsOperationalWarrantyRecords, createDbsGasCylinderWarranty, updateDbsWarrantyClaim,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -27,7 +32,24 @@ export const Route = createFileRoute("/_authenticated/dbs-inventory")({
 
 function DbsInventoryRoute() {
   const search = Route.useSearch();
-  return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+  const profile = useQuery({
+    queryKey: ["dbs-inventory-role"],
+    queryFn: () => getMyProfile(),
+    retry: false,
+  });
+  if (profile.isLoading) {
+    return <main className="min-h-screen bg-[#f8fafc] p-6 text-sm text-slate-500">Validando acesso ao estoque...</main>;
+  }
+  const role = String((profile.data as any)?.role_key ?? "");
+  const operationalRoles = ["ADMIN_OPERACIONAL", "GESTOR_CONTA", "GESTOR_REGIONAL"];
+  if (role === "SUPER_ADMIN") {
+    return <DbsInventoryPage initialSection={search.section} initialQuoteId={search.quote_id} />;
+  }
+  if (role === "FINANCEIRO_OPERADOR") {
+    return <DbsInventoryPage financialOnly initialSection={search.section} initialQuoteId={search.quote_id} />;
+  }
+  if (operationalRoles.includes(role)) return <DbsOperationalInventoryPage />;
+  return <main className="min-h-screen bg-[#f8fafc] p-6 text-sm text-slate-600">Acesso ao estoque não autorizado.</main>;
 }
 
 function money(cents: unknown) {
@@ -63,21 +85,43 @@ type DbsInventoryPageProps = {
   embedded?: boolean;
   initialSection?: DbsInventorySection;
   initialQuoteId?: string;
+  financialOnly?: boolean;
 };
 
 export function DbsInventoryPage({
   embedded = false,
   initialSection = "parts",
   initialQuoteId,
+  financialOnly = false,
 }: DbsInventoryPageProps = {}) {
   const overview = useQuery({
     queryKey: ["dbs-phase2-inventory-overview"],
     queryFn: () => getDbsPhase2InventoryOverview(),
     retry: 1,
   });
+  const inventoryRequestsQuery = useQuery({
+    queryKey: ["dbs-inventory-requests-finance"],
+    queryFn: () => getDbsInventoryRequests(),
+    retry: 1,
+  });
+  const pricingPolicyQuery = useQuery({
+    queryKey: ["dbs-part-pricing-policy"],
+    queryFn: () => getDbsPartPricingPolicy(),
+    retry: 1,
+  });
+  const warrantyDefaultsQuery = useQuery({
+    queryKey: ["dbs-part-warranty-defaults"],
+    queryFn: () => getDbsPartWarrantyDefaults(),
+    retry: 1,
+  });
+  const warrantyRecordsQuery = useQuery({
+    queryKey: ["dbs-warranty-finance"],
+    queryFn: () => getDbsOperationalWarrantyRecords(),
+    retry: 1,
+  });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
-  type PurchasesView = "new" | "approval" | "orders";
+  type PurchasesView = "new" | "approval" | "orders" | "requests" | "warranties";
   type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
   type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
@@ -93,6 +137,13 @@ export function DbsInventoryPage({
     setModuleSection(initialSection);
   }, [initialSection]);
   useEffect(() => {
+    const policy = pricingPolicyQuery.data as any;
+    if (policy?.policyType && Number.isFinite(Number(policy.rateBasisPoints))) {
+      setPricingPolicyType(policy.policyType === "gross_margin" ? "gross_margin" : "markup");
+      setPricingRatePercent((Number(policy.rateBasisPoints) / 100).toString());
+    }
+  }, [pricingPolicyQuery.data]);
+  useEffect(() => {
     const openFromHeader = (event: Event) => {
       const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
       if (drawer === "part") {
@@ -106,8 +157,7 @@ export function DbsInventoryPage({
         setCatalogPartUnitId("");
         setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
-        setCatalogPartSale("");
-        setActiveDrawer("new-part");
+          setActiveDrawer("new-part");
       } else if (drawer === "purchase") {
         setModuleSection("purchases");
         setPurchasesView("new");
@@ -129,10 +179,34 @@ export function DbsInventoryPage({
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
+  const [purchaseReceiptSerials, setPurchaseReceiptSerials] = useState<Record<string,string>>({});
+  const [purchaseReceiptLots, setPurchaseReceiptLots] = useState<Record<string,string>>({});
   const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
   const [purchaseRejectionReasons, setPurchaseRejectionReasons] = useState<Record<string, string>>({});
+  const [inventoryRequestMappings, setInventoryRequestMappings] = useState<Record<string,string>>({});
+  const [inventoryRequestReasons, setInventoryRequestReasons] = useState<Record<string,string>>({});
+  const [inventoryRequestDestinationStocks, setInventoryRequestDestinationStocks] = useState<Record<string,string>>({});
+  const [inventoryRequestBusyId, setInventoryRequestBusyId] = useState<string|null>(null);
+  const [purchaseSourceRequestId, setPurchaseSourceRequestId] = useState("");
+  const [warrantyClaimStatuses, setWarrantyClaimStatuses] = useState<Record<string,string>>({});
+  const [warrantyClaimResolutions, setWarrantyClaimResolutions] = useState<Record<string,string>>({});
+  const [warrantyClaimReplacements, setWarrantyClaimReplacements] = useState<Record<string,string>>({});
+  const [gasWarrantyCylinderId, setGasWarrantyCylinderId] = useState("");
+  const [gasWarrantySerial, setGasWarrantySerial] = useState("");
+  const [gasWarrantySupplierId, setGasWarrantySupplierId] = useState("");
+  const [gasWarrantyStartDate, setGasWarrantyStartDate] = useState("");
+  const [gasWarrantyEndDate, setGasWarrantyEndDate] = useState("");
+  const [gasWarrantyTerms, setGasWarrantyTerms] = useState("");
+  const [gasWarrantyInvoice, setGasWarrantyInvoice] = useState("");
+  const [pricingPolicyType, setPricingPolicyType] = useState<"markup"|"gross_margin">("markup");
+  const [pricingRatePercent, setPricingRatePercent] = useState("30");
+  const [supplierWarrantyMonths, setSupplierWarrantyMonths] = useState("");
+  const [supplierWarrantyStartRule, setSupplierWarrantyStartRule] = useState<"invoice_date"|"receipt_date">("receipt_date");
+  const [supplierWarrantyTerms, setSupplierWarrantyTerms] = useState("");
+  const [customerWarrantyMonths, setCustomerWarrantyMonths] = useState("");
+  const [customerWarrantyTerms, setCustomerWarrantyTerms] = useState("");
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -144,7 +218,6 @@ export function DbsInventoryPage({
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
   const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
-  const [catalogPartSale, setCatalogPartSale] = useState("");
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
   const [transferSourceStockId, setTransferSourceStockId] = useState("central");
@@ -229,6 +302,13 @@ export function DbsInventoryPage({
     }) : [];
   const reservations = [...(data?.reservations ?? []).map((r:any)=>({...r,is_operational:false})), ...(data?.operationalReservations ?? []).map((r:any)=>({...r,is_operational:true}))];
   const workOrderFinancials = data?.workOrderFinancials ?? [];
+  const inventoryRequests = (inventoryRequestsQuery.data ?? []) as any[];
+  const pendingInventoryRequests = inventoryRequests.filter((request:any)=>["pending_finance","waiting_purchase","purchase_registered","ready_for_dispatch","partially_fulfilled"].includes(request.status));
+  const warrantyRecordsData = warrantyRecordsQuery.data as any;
+  const supplierWarrantyRows = warrantyRecordsData?.supplierWarranties ?? [];
+  const customerWarrantyRows = warrantyRecordsData?.customerWarranties ?? [];
+  const gasWarrantyRows = warrantyRecordsData?.gasCylinderWarranties ?? [];
+  const warrantyClaimRows = warrantyRecordsData?.claims ?? [];
   const pendingPurchases = (data?.purchases ?? []).filter((purchase: any) =>
     purchase.approval_status === "pending" && purchase.status !== "cancelled"
   );
@@ -284,6 +364,14 @@ export function DbsInventoryPage({
   const availableParts = activeParts.filter((part: any) =>
     Number(part.stock_quantity ?? 0) - Number(part.reserved_quantity ?? 0) > 0
   );
+  const pricingPolicy = pricingPolicyQuery.data as any;
+  const policyRate = Number(pricingRatePercent);
+  const referenceCostCents = Math.round(Number(catalogPartCost || 0) * 100);
+  const previewSaleCents = pricingPolicyType === "markup"
+    ? Math.round(referenceCostCents * (100 + policyRate) / 100)
+    : policyRate > 0 && policyRate < 100
+      ? Math.round(referenceCostCents * 100 / (100 - policyRate))
+      : 0;
 
   async function runAction(action: () => Promise<unknown>, success: string): Promise<boolean> {
     setBusy(true);
@@ -351,7 +439,7 @@ export function DbsInventoryPage({
     }
     const sourceQuoteId = quotePurchase.data?.quote?.id ? String(quotePurchase.data.quote.id) : undefined;
     const purchaseFingerprint = JSON.stringify({
-      supplierId, costCenterId, documentNumber: purchaseDocument.trim(), purchaseDate, sourceQuoteId, items,
+      supplierId, costCenterId, documentNumber: purchaseDocument.trim(), purchaseDate, sourceQuoteId, sourceInventoryRequestId: purchaseSourceRequestId || undefined, items,
     });
     const operation = await getPersistentPurchaseIdempotencyKey("purchase-register", purchaseFingerprint);
     const saved = await runAction(() => createDbsPurchase({ data: {
@@ -359,12 +447,14 @@ export function DbsInventoryPage({
       documentNumber: purchaseDocument.trim() || undefined,
       purchaseDate,
       sourceQuoteId,
+      sourceInventoryRequestId: purchaseSourceRequestId || undefined,
       idempotencyKey: "purchase-register:" + operation.key,
       items,
     } }), "Pedido registrado para análise financeira. O estoque só será atualizado após aprovação e conferência do recebimento físico.");
     if (saved) {
       clearPersistentPurchaseIdempotencyKey(operation.storageKey);
       setPurchaseDocument("");
+      setPurchaseSourceRequestId("");
       setPurchaseLines([{ partId:"", description:"", quantity:"1", unitCost:"", purchaseUnitId:"", conversionFactor:0 }]);
       setActiveDrawer(null);
     }
@@ -374,12 +464,94 @@ export function DbsInventoryPage({
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
   }
 
+  async function decideInventoryRequest(request: any, decision: "approve"|"waiting_purchase"|"reject") {
+    const itemMappings = request.items
+      .filter((item:any)=>!item.resolvedPartId)
+      .map((item:any)=>({requestItemId:item.id,partId:inventoryRequestMappings[item.id]||""}));
+    if (itemMappings.some((item:any)=>!item.partId)) {
+      setMessage("Vincule cada item solicitado a uma peça do catálogo ou cadastre a peça antes de aprovar.");
+      return;
+    }
+    const reason=String(inventoryRequestReasons[request.id]??"").trim();
+    if(decision==="reject"&&reason.length<5){setMessage("Informe o motivo da rejeição.");return;}
+    setInventoryRequestBusyId(request.id);
+    const saved=await runAction(()=>decideDbsInventoryRequest({data:{
+      requestId:request.id,decision,reason:reason||undefined,expectedVersion:Number(request.version),itemMappings,
+    }}),decision==="reject"?"Solicitação rejeitada.":"Solicitação analisada; o sistema conferiu o saldo central e definiu o que já pode ser expedido e o que precisa de compra.");
+    if(saved) {
+      await inventoryRequestsQuery.refetch();
+      setInventoryRequestReasons((current)=>{const next={...current};delete next[request.id];return next;});
+    }
+    setInventoryRequestBusyId(null);
+  }
+
+  async function fulfillInventoryRequest(request: any,item: any) {
+    const stockId=inventoryRequestDestinationStocks[item.id]||"";
+    const available=Math.max(0,Number(item.quantityReadyForDispatch??0)-Number(item.quantityFulfilled??0));
+    if(!stockId||available<=0){setMessage("Selecione o estoque de destino e confirme a quantidade disponível para expedição.");return;}
+    setInventoryRequestBusyId(request.id);
+    const saved=await runAction(()=>fulfillDbsInventoryRequestFromCentral({data:{
+      requestId:request.id,requestItemId:item.id,destinationStockId:stockId,quantity:available,
+      idempotencyKey:"request-fulfill:"+request.id+":"+item.id+":"+crypto.randomUUID(),
+    }}),"Peça transferida do estoque central para o estoque operacional vinculado à solicitação.");
+    if(saved){await inventoryRequestsQuery.refetch();await overview.refetch();}
+    setInventoryRequestBusyId(null);
+  }
+
+  function openPurchaseFromInventoryRequest(request:any) {
+    const requestedLines=request.items.filter((item:any)=>item.resolvedPartId)
+      .map((item:any)=>{
+        const part=parts.find((entry:any)=>String(entry.id)===String(item.resolvedPartId));
+        const unitId=String(part?.purchase_measure_unit_id||part?.measure_unit_id||"");
+        const factor=unitId?conversionFor(String(part?.id||""),unitId):0;
+        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityOrdered??0));
+        return {partId:String(item.resolvedPartId),description:String(part?.name??item.requestedLabel),
+          quantity:String(remaining),unitCost:"",purchaseUnitId:unitId,conversionFactor:factor};
+      }).filter((line:any)=>Number(line.quantity)>0&&line.purchaseUnitId&&line.conversionFactor>0);
+    if(!requestedLines.length){setMessage("A solicitação não possui itens vinculados ao catálogo com quantidade pendente para compra.");return;}
+    setPurchaseSourceRequestId(request.id);
+    if(request.costCenterId)setCostCenterId(request.costCenterId);
+    setPurchaseLines(requestedLines);
+    setModuleSection("purchases");setPurchasesView("new");setActiveDrawer("new-purchase");
+  }
+
+  async function saveWarrantyClaim(claim:any) {
+    const status=String(warrantyClaimStatuses[claim.id]??claim.status);
+    const resolution=String(warrantyClaimResolutions[claim.id]??claim.resolution??"").trim();
+    if(!resolution||resolution.length<5){setMessage("Registre a solução ou a análise da reclamação antes de salvar.");return;}
+    const replacementId=status==="replacement"?String(warrantyClaimReplacements[claim.id]??""): "";
+    if(status==="replacement"&&claim.supplier_warranty_id&&!replacementId){setMessage("Selecione a nova garantia/peça de reposição para concluir a substituição.");return;}
+    const saved=await runAction(()=>updateDbsWarrantyClaim({data:{
+      claimId:claim.id,status:status as any,resolution,
+      resolutionReference:claim.resolution_reference??undefined,
+      replacementSupplierWarrantyId:replacementId||undefined,
+    }}),"Tratativa de garantia atualizada e registrada no histórico.");
+    if(saved) await warrantyRecordsQuery.refetch();
+  }
+
+  async function saveGasCylinderWarranty(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!gasWarrantyCylinderId||!gasWarrantySerial.trim()||!gasWarrantyStartDate||!gasWarrantyEndDate||gasWarrantyEndDate<gasWarrantyStartDate){
+      setMessage("Selecione um cilindro, informe a série e o período de garantia.");
+      return;
+    }
+    const saved=await runAction(()=>createDbsGasCylinderWarranty({data:{
+      cylinderId:gasWarrantyCylinderId,serialNumber:gasWarrantySerial.trim(),
+      supplierId:gasWarrantySupplierId||undefined,startDate:gasWarrantyStartDate,
+      endDate:gasWarrantyEndDate,terms:gasWarrantyTerms,invoiceReference:gasWarrantyInvoice,
+    }}),"Garantia do cilindro cadastrada.");
+    if(saved){await warrantyRecordsQuery.refetch();setGasWarrantyCylinderId("");setGasWarrantySerial("");setGasWarrantySupplierId("");setGasWarrantyStartDate("");setGasWarrantyEndDate("");setGasWarrantyTerms("");setGasWarrantyInvoice("");}
+  }
+
   async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
     const items = selected.map((item: any) => ({
       purchaseItemId: String(item.id),
       quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+      serialNumber: String(purchaseReceiptSerials[item.id] ?? "").trim(),
+      lotNumber: String(purchaseReceiptLots[item.id] ?? "").trim(),
     }));
-    if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0)) {
+    if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0
+      || (item.serialNumber && item.quantityReceived !== 1))) {
       setMessage("Informe quantidades válidas para os itens conferidos.");
       return;
     }
@@ -397,6 +569,8 @@ export function DbsInventoryPage({
         for (const item of selected) delete next[item.id];
         return next;
       });
+      setPurchaseReceiptSerials((previous)=>{const next={...previous};for(const item of selected)delete next[item.id];return next;});
+      setPurchaseReceiptLots((previous)=>{const next={...previous};for(const item of selected)delete next[item.id];return next;});
     }
   }
 
@@ -412,6 +586,12 @@ export function DbsInventoryPage({
 
   function selectCatalogPart(partIdValue: string) {
     setCatalogPartId(partIdValue);
+    const warrantyDefaults=(warrantyDefaultsQuery.data??[] as any[]).find((row:any)=>String(row.part_id)===partIdValue);
+    setSupplierWarrantyMonths(warrantyDefaults?.supplier_warranty_months==null?"":String(warrantyDefaults.supplier_warranty_months));
+    setSupplierWarrantyStartRule(warrantyDefaults?.supplier_start_rule==="invoice_date"?"invoice_date":"receipt_date");
+    setSupplierWarrantyTerms(String(warrantyDefaults?.supplier_terms??""));
+    setCustomerWarrantyMonths(warrantyDefaults?.customer_warranty_months==null?"":String(warrantyDefaults.customer_warranty_months));
+    setCustomerWarrantyTerms(String(warrantyDefaults?.customer_terms??""));
     const part = parts.find((entry: any) => String(entry.id) === partIdValue);
     if (!part) {
       setCatalogPartName("");
@@ -421,7 +601,6 @@ export function DbsInventoryPage({
       setCatalogPartUnitId("");
       setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
-      setCatalogPartSale("");
       return;
     }
     setCatalogPartName(String(part.name ?? ""));
@@ -431,7 +610,21 @@ export function DbsInventoryPage({
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
     setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
-    setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
+  }
+
+  async function savePricingPolicy(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const percent=Number(pricingRatePercent);
+    if(!Number.isFinite(percent)||percent<=0||
+      (pricingPolicyType==="gross_margin"&&percent>=99)||
+      (pricingPolicyType==="markup"&&percent>10000)) {
+      setMessage("Informe uma taxa válida. A margem bruta deve ficar abaixo de 99%.");
+      return;
+    }
+    const saved=await runAction(()=>saveDbsPartPricingPolicy({data:{
+      policyType:pricingPolicyType,rateBasisPoints:Math.round(percent*100),
+    }}),"Política de preços salva. O preço de revenda do catálogo foi recalculado sem alterar quantidades ou lançamentos financeiros.");
+    if(saved) await pricingPolicyQuery.refetch();
   }
 
   async function saveCatalogPart(event: React.FormEvent<HTMLFormElement>) {
@@ -448,7 +641,6 @@ export function DbsInventoryPage({
       measureUnitId: catalogPartUnitId,
       purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
-      saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
     let saved = false;
     if (catalogPartId) {
@@ -466,6 +658,18 @@ export function DbsInventoryPage({
       saved = await runAction(() => createDbsPartCatalog({ data: payload }), "Peça cadastrada no catálogo relacional. O saldo inicial permanece zero até o recebimento físico.");
     }
     if (saved) {
+      await overview.refetch();
+      const warrantyPartId=catalogPartId||String((overview.data?.parts??[]).find((part:any)=>String(part.sku)===payload.sku)?.id??"");
+      if(warrantyPartId) {
+        await runAction(()=>saveDbsPartWarrantyDefaults({data:{
+          partId:warrantyPartId,supplierId:catalogPartSupplierId,
+          supplierWarrantyMonths:supplierWarrantyMonths.trim()===""?null:Number(supplierWarrantyMonths),
+          supplierStartRule:supplierWarrantyStartRule,supplierTerms:supplierWarrantyTerms,
+          customerWarrantyMonths:customerWarrantyMonths.trim()===""?null:Number(customerWarrantyMonths),
+          customerTerms:customerWarrantyTerms,
+        }}),"Prazos e regras de garantia atualizados para a peça.");
+        await warrantyDefaultsQuery.refetch();
+      }
       selectCatalogPart("");
       setMasterRecordId("");
       setActiveDrawer(null);
@@ -714,8 +918,8 @@ export function DbsInventoryPage({
         </nav>}
         {moduleSection === "parts" && <nav aria-label="Peças e Estoque" className="dbs-op-tabs mb-5">
           <button type="button" role="tab" aria-selected={partsView==="catalog"} onClick={()=>setPartsView("catalog")} className={partsView==="catalog"?"dbs-op-tab is-active":"dbs-op-tab"}>Catálogo de Peças</button>
-          <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoques</button>
-          <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>
+          {!financialOnly && <button type="button" role="tab" aria-selected={partsView==="stock"} onClick={()=>setPartsView("stock")} className={partsView==="stock"?"dbs-op-tab is-active":"dbs-op-tab"}>Estoques</button>}
+          {!financialOnly && <button type="button" role="tab" aria-selected={partsView==="reservations"} onClick={()=>setPartsView("reservations")} className={partsView==="reservations"?"dbs-op-tab is-active":"dbs-op-tab"}>Reservas para OS <span className="dbs-op-count">{reservations.filter((item:any)=>item.status==="reserved").length}</span></button>}
           <button type="button" role="tab" aria-selected={partsView==="settings"} onClick={()=>setPartsView("settings")} className={partsView==="settings"?"dbs-op-tab is-active":"dbs-op-tab"}>Cadastros Básicos {(!suppliers.length||!measureUnits.length||!costCenters.length)&&<span className="dbs-op-dot" aria-label="Configuração pendente"/>}</button>
         </nav>}
         {message && <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950 shadow-sm"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-600" />{message}</div>}
@@ -728,6 +932,26 @@ export function DbsInventoryPage({
 
         {data && <>
           {moduleSection === "parts" && <>
+          <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="font-bold text-slate-900">Política de preço de revenda</h2><p className="mt-1 max-w-2xl text-xs text-slate-500">O Financeiro define a regra uma única vez. O sistema calcula e atualiza os preços do catálogo quando o custo muda no recebimento. Nenhum percentual padrão é aplicado automaticamente.</p></div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">Financeiro</span>
+            </div>
+            {pricingPolicyQuery.isError && <p role="alert" className="mt-3 text-xs text-rose-700">Não foi possível carregar a política de preços.</p>}
+            <form onSubmit={savePricingPolicy} className="mt-4 grid gap-3 sm:grid-cols-[1.2fr_1fr_auto] sm:items-end">
+              <label className="text-xs font-semibold text-slate-600">Critério de cálculo
+                <select value={pricingPolicyType} onChange={(event)=>setPricingPolicyType(event.target.value as typeof pricingPolicyType)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                  <option value="markup">Acréscimo sobre o custo (markup)</option>
+                  <option value="gross_margin">Margem bruta sobre o preço de venda</option>
+                </select>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">{pricingPolicyType==="markup"?"Percentual de acréscimo":"Percentual de margem bruta"}
+                <div className="mt-1 flex min-h-10 items-center rounded-lg border border-slate-200 px-3"><input required type="number" min="0.01" max={pricingPolicyType==="gross_margin"?"99":"10000"} step="0.01" value={pricingRatePercent} onChange={(event)=>setPricingRatePercent(event.target.value)} className="w-full border-0 p-0 text-sm outline-none"/><span className="text-sm text-slate-500">%</span></div>
+              </label>
+              <button type="submit" disabled={busy||pricingPolicyQuery.isLoading||!Number.isFinite(Number(pricingRatePercent))||Number(pricingRatePercent)<=0||(pricingPolicyType==="gross_margin"&&Number(pricingRatePercent)>=99)} className="min-h-10 rounded-lg bg-slate-800 px-4 text-xs font-bold text-white disabled:opacity-50">{busy?"Salvando...":"Salvar política"}</button>
+            </form>
+            {pricingPolicy ? <p className="mt-3 text-xs text-emerald-700">Política ativa · versão {pricingPolicy.version} · preços calculados pelo custo vigente</p> : <p className="mt-3 text-xs text-amber-700">Política ainda não configurada. O cadastro de novas peças ficará bloqueado até o Financeiro definir o critério e a taxa.</p>}
+          </section>
           {partsView === "catalog" && <>
 <Sheet open={activeDrawer === "new-part"} onOpenChange={(open)=>setActiveDrawer(open?"new-part":null)}>
   <SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[560px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
@@ -765,14 +989,39 @@ export function DbsInventoryPage({
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-800">Preço de revenda calculado</p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-blue-950">{money(previewSaleCents)}</p>
+                  <p className="mt-1 text-[11px] text-blue-800">{pricingPolicy ? (pricingPolicyType==="markup"?"Aplicando acréscimo de ":"Aplicando margem bruta de ")+policyRate.toLocaleString("pt-BR")+"% conforme política financeira." : "Configure a política financeira para liberar o cadastro da peça."}</p>
+                </div>
               </div>
+              <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div><h3 className="text-sm font-bold text-slate-800">Garantias da peça</h3><p className="mt-1 text-[11px] text-slate-500">Os prazos são configuráveis e independentes. Deixe em branco quando não houver cobertura padrão definida.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-600">Garantia do fornecedor (meses)
+                    <input type="number" min="0" max="1200" step="1" value={supplierWarrantyMonths} onChange={e=>setSupplierWarrantyMonths(e.target.value)} placeholder="Não definida" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Início da garantia do fornecedor
+                    <select value={supplierWarrantyStartRule} onChange={e=>setSupplierWarrantyStartRule(e.target.value as typeof supplierWarrantyStartRule)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                      <option value="receipt_date">Recebimento físico</option><option value="invoice_date">Data da nota fiscal / compra</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos do fornecedor
+                    <textarea rows={2} maxLength={2000} value={supplierWarrantyTerms} onChange={e=>setSupplierWarrantyTerms(e.target.value)} placeholder="Condições, exclusões ou observações de cobertura" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal"/>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Garantia DBS ao cliente (meses)
+                    <input type="number" min="0" max="1200" step="1" value={customerWarrantyMonths} onChange={e=>setCustomerWarrantyMonths(e.target.value)} placeholder="Não definida" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                  </label>
+                  <div className="flex items-center rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">A cobertura DBS começa na conclusão da OS que consumir a peça, usando o prazo configurado.</div>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos da garantia DBS
+                    <textarea rows={2} maxLength={2000} value={customerWarrantyTerms} onChange={e=>setCustomerWarrantyTerms(e.target.value)} placeholder="Condições de atendimento e cobertura ao cliente" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal"/>
+                  </label>
+                </div>
+              </section>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
               </label>
-              <button disabled={busy || !suppliers.length || !measureUnits.length} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
+              <button disabled={busy || !suppliers.length || !measureUnits.length || !pricingPolicy} className="mt-4 min-h-11 w-full rounded-xl bg-sky-700 px-4 text-sm font-black text-white disabled:opacity-40">
                 {busy ? "Salvando..." : catalogPartId ? "Salvar cadastro da peça" : "Cadastrar peça no catálogo"}
               </button>
             </form>
@@ -1113,6 +1362,8 @@ export function DbsInventoryPage({
             <button type="button" role="tab" aria-selected={purchasesView==="new"} onClick={()=>setPurchasesView("new")} className={purchasesView==="new"?"dbs-op-tab is-active":"dbs-op-tab"}>Pedidos em aberto</button>
             <button type="button" role="tab" aria-selected={purchasesView==="approval"} onClick={()=>setPurchasesView("approval")} className={purchasesView==="approval"?"dbs-op-tab is-active":"dbs-op-tab"}>Aprovações <span className="dbs-op-count">{pendingPurchases.length}</span></button>
             <button type="button" role="tab" aria-selected={purchasesView==="orders"} onClick={()=>setPurchasesView("orders")} className={purchasesView==="orders"?"dbs-op-tab is-active":"dbs-op-tab"}>Recebimento físico <span className="dbs-op-count">{purchasesAwaitingReceipt.length}</span></button>
+            <button type="button" role="tab" aria-selected={purchasesView==="requests"} onClick={()=>setPurchasesView("requests")} className={purchasesView==="requests"?"dbs-op-tab is-active":"dbs-op-tab"}>Solicitações DBS Control <span className="dbs-op-count">{pendingInventoryRequests.length}</span></button>
+            <button type="button" role="tab" aria-selected={purchasesView==="warranties"} onClick={()=>setPurchasesView("warranties")} className={purchasesView==="warranties"?"dbs-op-tab is-active":"dbs-op-tab"}>Garantias <span className="dbs-op-count">{supplierWarrantyRows.length+customerWarrantyRows.length+gasWarrantyRows.length}</span></button>
           </nav>
           {purchasesView === "approval" && <>
           <section aria-label="Fila de aprovação financeira de compras" className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1220,6 +1471,10 @@ export function DbsInventoryPage({
             <SheetContent side="right" className="dbs-operations-drawer w-[98vw] max-w-[820px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
               <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle className="text-xl font-semibold tracking-tight text-slate-900">Nova compra</SheetTitle><SheetDescription>Fornecedor, centro de custo, cotação e itens do pedido.</SheetDescription></SheetHeader>
               <section className="space-y-4">
+            {purchaseSourceRequestId && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Compra vinculada à solicitação {inventoryRequests.find((request:any)=>request.id===purchaseSourceRequestId)?.requestNumber ?? purchaseSourceRequestId}. A compra, o recebimento e a expedição continuarão ligados a esse pedido.
+              <button type="button" onClick={()=>setPurchaseSourceRequestId("")} className="ml-2 font-bold underline">Remover vínculo</button>
+            </div>}
             <div className="border-b border-slate-100 pb-3">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1363,7 +1618,135 @@ export function DbsInventoryPage({
                 {!purchasesOpen.length&&<p className="py-8 text-center text-sm text-slate-500">Nenhum pedido registrado.</p>}
               </div>
             </section>
-          </>}          {purchasesView === "orders" && <>
+          </>}          {purchasesView === "requests" && <>
+            <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+                <div><h2 className="font-bold">Solicitações do DBS Control</h2><p className="mt-1 text-xs text-slate-500">Vincule cada material ao catálogo, confira saldo e encaminhe para compra quando necessário.</p></div>
+                <span className="dbs-op-count">{pendingInventoryRequests.length} em andamento</span>
+              </div>
+              {inventoryRequestsQuery.isLoading && <p className="p-5 text-sm text-slate-500">Carregando solicitações...</p>}
+              {inventoryRequestsQuery.isError && <p role="alert" className="p-5 text-sm text-rose-700">Não foi possível carregar as solicitações do DBS Control.</p>}
+              {!inventoryRequestsQuery.isLoading && !inventoryRequestsQuery.isError && <div className="divide-y divide-slate-100">
+                {pendingInventoryRequests.map((request:any)=><article key={request.id} className="space-y-4 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><p className="font-bold">{request.requestNumber} {request.urgency==="urgent"&&<span className="ml-2 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">Urgente</span>}</p>
+                      <p className="mt-1 text-xs text-slate-500">{request.workOrderId?"OS "+request.workOrderId+" · ":""}{new Date(request.createdAt).toLocaleString("pt-BR")} · {request.reason}</p></div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{request.status==="pending_finance"?"Aguardando análise":request.status==="waiting_purchase"?"Aguardando compra":request.status==="purchase_registered"?"Compra registrada":request.status==="ready_for_dispatch"?"Pronta para expedição":"Atendimento parcial"}</span>
+                  </div>
+                  <div className="space-y-3">
+                    {request.items.map((item:any)=><div key={item.id} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)]">
+                      <div><p className="font-semibold text-sm">{item.requestedLabel}</p><p className="mt-1 text-xs text-slate-500">{item.itemType==="part"?"Peça":item.itemType==="tool"?"Ferramenta":item.itemType==="supply"?"Insumo":"Gás / cilindro"} · {item.quantity} {item.unitLabel} {item.requestedSku?"· "+item.requestedSku:""}</p>
+                        {item.description&&<p className="mt-1 text-xs text-slate-500">{item.description}</p>}</div>
+                      <div>
+                        {!item.resolvedPartId ? <label className="text-xs font-semibold text-slate-600">Vincular ao catálogo oficial *
+                          <select value={inventoryRequestMappings[item.id]||""} onChange={(event)=>setInventoryRequestMappings(current=>({...current,[item.id]:event.target.value}))} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal">
+                            <option value="">Selecione a peça correspondente</option>
+                            {parts.filter((part:any)=>part.status==="ativo").map((part:any)=><option key={part.id} value={part.id}>{part.sku} · {part.name}</option>)}
+                          </select>
+                        </label> : <p className="text-xs text-emerald-700">Vinculado: {item.currentPart?.sku} · {item.currentPart?.name}</p>}
+                        {item.currentPart&&<p className="mt-1 text-xs text-slate-500">Saldo central disponível: {item.currentPart.centralAvailableQuantity}</p>}
+                        <p className="mt-1 text-xs text-slate-500">Disponível para expedição: {Math.max(0,item.quantityReadyForDispatch-item.quantityFulfilled)} / {item.quantity}</p>
+                      </div>
+                    </div>)}
+                  </div>
+                  {request.status==="pending_finance" && <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Motivo / observação
+                      <input value={inventoryRequestReasons[request.id]||""} onChange={(event)=>setInventoryRequestReasons(current=>({...current,[request.id]:event.target.value}))} placeholder="Observação para o operador (opcional)" maxLength={1000} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal" />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={busy||inventoryRequestBusyId===request.id} onClick={()=>void decideInventoryRequest(request,"approve")} className="min-h-10 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white disabled:opacity-50">Analisar / aprovar</button>
+                      <button type="button" disabled={busy||inventoryRequestBusyId===request.id||String(inventoryRequestReasons[request.id]||"").trim().length<5} onClick={()=>void decideInventoryRequest(request,"reject")} className="min-h-10 rounded-lg border border-rose-200 px-4 text-xs font-bold text-rose-700 disabled:opacity-50">Rejeitar</button>
+                    </div>
+                  </div>}
+                  {["waiting_purchase","purchase_registered","partially_fulfilled","ready_for_dispatch"].includes(request.status)
+                    && request.items.some((item:any)=>Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityOrdered??0)>0)
+                    && <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700">Preparar compra vinculada</button>
+                      {request.linkedPurchases?.length>0&&<span className="text-xs text-slate-500">{request.linkedPurchases.length} compra(s) vinculada(s)</span>}
+                    </div>}
+                  {(request.status==="ready_for_dispatch"||request.status==="waiting_purchase"||request.status==="partially_fulfilled"||request.status==="purchase_registered") && request.items.filter((item:any)=>item.resolvedPartId&&item.quantityReadyForDispatch>item.quantityFulfilled).map((item:any)=><div key={"dispatch-"+item.id} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Estoque de destino
+                      <select value={inventoryRequestDestinationStocks[item.id]||""} onChange={(event)=>setInventoryRequestDestinationStocks(current=>({...current,[item.id]:event.target.value}))} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                        <option value="">Selecione o estoque operacional</option>
+                        {operationalStocks.filter((stock:any)=>stock.status==="active"&&(!request.costCenterId||String(stock.cost_center_id)===String(request.costCenterId))).map((stock:any)=><option key={stock.id} value={stock.id}>{stock.name}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" disabled={busy||inventoryRequestBusyId===request.id||!inventoryRequestDestinationStocks[item.id]} onClick={()=>void fulfillInventoryRequest(request,item)} className="min-h-10 rounded-lg bg-emerald-700 px-4 text-xs font-bold text-white disabled:opacity-50">Transferir {Math.max(0,item.quantityReadyForDispatch-item.quantityFulfilled)} para a equipe</button>
+                  </div>)}
+                </article>)}
+                {!pendingInventoryRequests.length&&<p className="p-6 text-sm text-slate-500">Nenhuma solicitação aguardando análise, compra ou expedição.</p>}
+              </div>}
+            </section>
+          </>}
+          {purchasesView === "warranties" && <>
+            <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-4"><h2 className="font-bold">Garantias de peças e serviços</h2><p className="mt-1 text-xs text-slate-500">Consulte a cobertura de fornecedor separadamente da garantia DBS ao cliente. A rastreabilidade de lote e série vem do recebimento físico.</p></div>
+              {warrantyRecordsQuery.isLoading&&<p className="p-4 text-sm text-slate-500">Carregando garantias...</p>}
+              {warrantyRecordsQuery.isError&&<p role="alert" className="p-4 text-sm text-rose-700">Não foi possível carregar as garantias.</p>}
+              {!warrantyRecordsQuery.isLoading&&!warrantyRecordsQuery.isError&&<div className="grid gap-4 p-4 xl:grid-cols-2">
+                <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Fornecedor / fabricante</h3>
+                  <div className="space-y-2">{supplierWarrantyRows.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 p-3"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-semibold">{row.part?.name??"Peça"} · {row.supplier_name_snapshot??"Fornecedor"}</p><span className="text-xs font-bold">{new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")}</span></div><p className="mt-1 text-xs text-slate-500">Série: {row.serial_number??"—"} · Lote: {row.lot_number??"—"} · Qtd.: {row.quantity_covered} · Status: {row.status}</p><p className="mt-1 text-xs text-slate-500">Nota/documento: {row.invoice_reference??"—"} · Certificado: {row.certificate_reference??"—"}</p>{row.terms&&<p className="mt-1 text-xs text-slate-600">{row.terms}</p>}</article>)}
+                  {!supplierWarrantyRows.length&&<p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Nenhuma garantia de fornecedor registrada.</p>}</div>
+                </div>
+                <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Garantia DBS / cliente</h3>
+                  <div className="space-y-2">{customerWarrantyRows.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 p-3"><p className="text-sm font-semibold">{row.part?.name??"Peça"} · {row.client?.trade_name??row.client?.legal_name??"Cliente"}</p><p className="mt-1 text-xs text-slate-500">OS {row.workOrder?.protocol??row.work_order_id} · Qtd.: {row.quantity_covered} · Até {new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")} · {row.status}</p>{row.terms&&<p className="mt-1 text-xs text-slate-600">{row.terms}</p>}</article>)}
+                  {!customerWarrantyRows.length&&<p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">Nenhuma garantia DBS registrada.</p>}</div>
+                </div>
+              </div>}
+            </section>
+
+            <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
+              <h2 className="font-bold">Garantia de cilindro de gás</h2><p className="mt-1 text-xs text-slate-500">Registre a cobertura adquirida do fornecedor vinculada ao número de série do cilindro.</p>
+              <form onSubmit={saveGasCylinderWarranty} className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <label className="text-xs font-semibold text-slate-600">Cilindro
+                  <select required value={gasWarrantyCylinderId} onChange={event=>{const cylinder=gasCylinders.find((row:any)=>String(row.id)===event.target.value);setGasWarrantyCylinderId(event.target.value);setGasWarrantySerial(String(cylinder?.serial_number??""));}} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{gasCylinders.map((row:any)=><option key={row.id} value={row.id}>{row.refrigerant_type} · {row.serial_number}</option>)}</select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Número de série
+                  <input required maxLength={180} value={gasWarrantySerial} onChange={event=>setGasWarrantySerial(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Fornecedor
+                  <select value={gasWarrantySupplierId} onChange={event=>setGasWarrantySupplierId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"><option value="">Não informado</option>{activeSuppliers.map((supplier:any)=><option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Início
+                  <input required type="date" value={gasWarrantyStartDate} onChange={event=>setGasWarrantyStartDate(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Vencimento
+                  <input required type="date" min={gasWarrantyStartDate||undefined} value={gasWarrantyEndDate} onChange={event=>setGasWarrantyEndDate(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Nota / documento
+                  <input maxLength={180} value={gasWarrantyInvoice} onChange={event=>setGasWarrantyInvoice(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                </label>
+                <label className="text-xs font-semibold text-slate-600 sm:col-span-2 xl:col-span-3">Termos / observações
+                  <textarea rows={2} maxLength={2000} value={gasWarrantyTerms} onChange={event=>setGasWarrantyTerms(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal"/>
+                </label>
+                <div className="sm:col-span-2 xl:col-span-3"><button type="submit" disabled={busy||!gasWarrantyCylinderId} className="min-h-10 rounded-lg bg-slate-800 px-4 text-xs font-bold text-white disabled:opacity-50">Salvar garantia do cilindro</button></div>
+              </form>
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 p-4"><h2 className="font-bold">Reclamações e tratativas</h2><p className="mt-1 text-xs text-slate-500">Registre análise, aprovação, rejeição, crédito ou substituição. A substituição mantém vínculo com a garantia anterior.</p></div>
+              <div className="divide-y divide-slate-100">
+                {warrantyClaimRows.map((claim:any)=><article key={claim.id} className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-sm">{claim.claim_number??claim.id}</p><p className="mt-1 text-xs text-slate-500">{claim.issue_description}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(claim.opened_at).toLocaleString("pt-BR")}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{claim.status}</span></div>
+                  {!["closed","rejected","replacement","credit"].includes(claim.status)&&<div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-slate-600">Status da tratativa
+                      <select value={warrantyClaimStatuses[claim.id]??claim.status} onChange={event=>setWarrantyClaimStatuses(current=>({...current,[claim.id]:event.target.value}))} className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"><option value="in_review">Em análise</option><option value="approved">Aprovada</option><option value="rejected">Rejeitada</option><option value="replacement">Substituição</option><option value="credit">Crédito</option><option value="closed">Encerrada</option></select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">Registro da análise / solução
+                      <input value={warrantyClaimResolutions[claim.id]??claim.resolution??""} onChange={event=>setWarrantyClaimResolutions(current=>({...current,[claim.id]:event.target.value}))} maxLength={3000} placeholder="Descreva a tratativa" className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"/>
+                    </label>
+                    {warrantyClaimStatuses[claim.id]==="replacement"&&<label className="text-xs font-semibold text-slate-600 sm:col-span-2">Nova garantia do item substituto
+                      <select value={warrantyClaimReplacements[claim.id]??""} onChange={event=>setWarrantyClaimReplacements(current=>({...current,[claim.id]:event.target.value}))} className="mt-1 min-h-9 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"><option value="">Selecione garantia do novo item</option>{supplierWarrantyRows.filter((row:any)=>!row.replacement_of&&row.status==="active").map((row:any)=><option key={row.id} value={row.id}>{row.part?.sku} · {row.part?.name} · Série {row.serial_number??"—"}</option>)}</select>
+                    </label>}
+                    <div className="sm:col-span-2"><button type="button" disabled={busy} onClick={()=>void saveWarrantyClaim(claim)} className="min-h-9 rounded-lg bg-blue-700 px-4 text-xs font-bold text-white disabled:opacity-50">Salvar tratativa</button></div>
+                  </div>}
+                  {claim.resolution&&<p className="text-xs text-slate-600">Última tratativa: {claim.resolution}</p>}
+                </article>)}
+                {!warrantyClaimRows.length&&<p className="p-6 text-sm text-slate-500">Nenhuma reclamação registrada.</p>}
+              </div>
+            </section>
+          </>}
+          {purchasesView === "orders" && <>
           <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-white p-5 sm:p-6">
               <div>
@@ -1414,6 +1797,10 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <input aria-label={"Número de série de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptSerials[item.id]??""} onChange={e=>setPurchaseReceiptSerials(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Número de série (1 unidade)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                                <input aria-label={"Lote de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptLots[item.id]??""} onChange={e=>setPurchaseReceiptLots(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Lote (opcional)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                              </div>
                               </label>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
@@ -1464,6 +1851,10 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                 <input aria-label={"Número de série de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptSerials[item.id]??""} onChange={e=>setPurchaseReceiptSerials(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Número de série (1 unidade)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                                 <input aria-label={"Lote de "+(part?.name||part?.sku||item.id)} value={purchaseReceiptLots[item.id]??""} onChange={e=>setPurchaseReceiptLots(prev=>({...prev,[item.id]:e.target.value}))} maxLength={180} placeholder="Lote (opcional)" className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs"/>
+                               </div>
                               </label>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>

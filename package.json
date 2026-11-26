@@ -25,11 +25,12 @@
     "test:treasury-health": "node scripts/check-treasury-ledger-health.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
     "test:phase3-ledger-reporting": "node scripts/test-phase3-ledger-reporting.cjs",
-    "prebuild": "node scripts/test-rh-fleet.cjs && node scripts/test-dbs-control-route-service-types.cjs && node scripts/test-dbs-control-resilience.cjs && node scripts/test-dbs-control-base-scope.cjs && node scripts/test-data-protection.cjs && node scripts/test-performance-contracts.cjs && node scripts/test-inventory-financial-bridge.cjs && node scripts/test-treasury-ledger.cjs && node scripts/test-treasury-date-boundaries.cjs && node scripts/test-dbs-control-pdf.cjs && node scripts/test-phase3-ledger-reporting.cjs && node scripts/test-dbs-control-base-scope-rls.cjs && node scripts/test-rh-benefits.cjs && node scripts/test-rh-point-integrity.cjs && node scripts/check-migration-drift.mjs --local-only && node scripts/check-supabase-project-ref.cjs && node scripts/test-interface-design-system.cjs && node scripts/test-dbs-control-route-planner.cjs",
+    "prebuild": "node scripts/test-rh-fleet.cjs && node scripts/test-dbs-control-route-service-types.cjs && node scripts/test-dbs-control-resilience.cjs && node scripts/test-dbs-control-base-scope.cjs && node scripts/test-data-protection.cjs && node scripts/test-performance-contracts.cjs && node scripts/test-inventory-financial-bridge.cjs && node scripts/test-dbs-operational-inventory-separation.cjs && node scripts/test-treasury-ledger.cjs && node scripts/test-treasury-date-boundaries.cjs && node scripts/test-dbs-control-pdf.cjs && node scripts/test-phase3-ledger-reporting.cjs && node scripts/test-dbs-control-base-scope-rls.cjs && node scripts/test-rh-benefits.cjs && node scripts/test-rh-point-integrity.cjs && node scripts/check-migration-drift.mjs --local-only && node scripts/check-supabase-project-ref.cjs && node scripts/test-interface-design-system.cjs && node scripts/test-dbs-control-route-planner.cjs",
     "test:dbs-control-pdf": "node scripts/test-dbs-control-pdf.cjs",
     "test:interface": "node scripts/test-interface-design-system.cjs",
     "test:treasury-dates": "node scripts/test-treasury-date-boundaries.cjs",
-    "test:dbs-route-planner": "node scripts/test-dbs-control-route-planner.cjs"
+    "test:dbs-route-planner": "node scripts/test-dbs-control-route-planner.cjs",
+    "test:dbs-operational-inventory": "node scripts/test-dbs-operational-inventory-separation.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

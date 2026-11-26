@@ -3312,6 +3312,20 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
   return user;
 }
 
+async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext) {
+  const { data: user, error } = await supabaseAdmin
+    .from("users")
+    .select("id,auth_id,username,full_name,email,role_key,unit_id,company_id,status")
+    .eq("auth_id", context.userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!user || user.status !== "ativo") throw new Error("Acesso financeiro não autorizado.");
+  if (!["SUPER_ADMIN", "FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+    throw new Error("Cadastro de peças, custos e compras é restrito ao Financeiro.");
+  }
+  return user;
+}
+
 function requireInventoryId(value: string, label: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(label + " inválido.");
@@ -3415,7 +3429,7 @@ export const createDbsPartSale = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_create_part_sale", {
       p_payload: {
@@ -3447,7 +3461,7 @@ export const settleDbsPartSale = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_part_sale", {
       p_sale_id: data.saleId,
       p_actor_user_id: user.id,
@@ -3481,7 +3495,7 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3504,7 +3518,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
     return { movementId, idempotencyKey, reason };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reverse_inventory_movement", {
       p_movement_id: data.movementId,
       p_actor_user_id: user.id,
@@ -3517,7 +3531,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
 
 export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number; serialNumber?: string; lotNumber?: string }> }) => {
     const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
     const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
@@ -3529,12 +3543,19 @@ export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
         if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
           throw new Error("A quantidade conferida deve ser maior que zero.");
         }
-        return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
+        const serialNumber=String(item.serialNumber??"").trim();
+        if(serialNumber&&item.quantityReceived!==1) throw new Error("Informe número de série apenas quando receber exatamente uma unidade.");
+        return {
+          purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"),
+          quantity_received: item.quantityReceived,
+          serial_number: serialNumber.slice(0,180)||null,
+          lot_number: String(item.lotNumber??"").trim().slice(0,180)||null,
+        };
       }),
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3557,7 +3578,7 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_registered_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3591,7 +3612,7 @@ export const decideDbsPurchaseApproval = createServerFn({ method: "POST" })
     return { purchaseId, decision, reason: reason || null, expectedVersion: input?.expectedVersion ?? null };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3612,6 +3633,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     purchaseDate: string;
     idempotencyKey: string;
     sourceQuoteId?: string;
+    sourceInventoryRequestId?: string;
     items: Array<{ partId: string; purchaseUnitId: string; quantity: number; unitCostCents: number; conversionFactor: number }>;
   }) => {
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
@@ -3629,6 +3651,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
       purchaseDate,
       idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
       sourceQuoteId: input.sourceQuoteId ? requireInventoryId(input.sourceQuoteId, "Orçamento de origem") : null,
+      sourceInventoryRequestId: input.sourceInventoryRequestId ? requireInventoryId(input.sourceInventoryRequestId, "Solicitação de origem") : null,
       items: items.map((item) => {
         if (!item?.partId || !item?.purchaseUnitId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
             !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0 ||
@@ -3646,7 +3669,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const companyId = user.company_id;
     const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
     const [supplier, center] = await Promise.all([
@@ -3666,6 +3689,16 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         .maybeSingle();
       if (sourceQuoteError) throw new Error(sourceQuoteError.message);
       if (!sourceQuote) throw new Error("O orçamento de origem não foi encontrado neste cadastro.");
+    }
+    if (data.sourceInventoryRequestId) {
+      const { data: sourceRequest, error: sourceRequestError } = await (supabaseAdmin as any)
+        .from("dbs_control_inventory_requests")
+        .select("id,scope_key,status")
+        .eq("id",data.sourceInventoryRequestId).eq("scope_key",scopeKey).maybeSingle();
+      if (sourceRequestError) throw new Error(sourceRequestError.message);
+      if (!sourceRequest || !["waiting_purchase","purchase_registered","partially_fulfilled","ready_for_dispatch"].includes(sourceRequest.status)) {
+        throw new Error("A solicitação de origem não está aguardando compra neste escopo.");
+      }
     }
 
     const resolvedItems = [];
@@ -3703,22 +3736,25 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         unit_cost_cents: item.unitCostCents,
       });
     }
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase_with_quote", {
-      p_payload: {
-        actor_user_id: user.id,
-        company_id: companyId,
-        scope_key: scopeKey,
-        supplier_id: data.supplierId,
-        supplier_name: supplier.data.name,
-        cost_center_id: data.costCenterId,
-        document_number: data.documentNumber,
-        purchase_date: data.purchaseDate,
-        payment_status: "unpaid",
-        idempotency_key: data.idempotencyKey,
-        source_quote_id: data.sourceQuoteId,
-        items: resolvedItems,
-      },
-    });
+    const purchasePayload = {
+      actor_user_id: user.id,
+      company_id: companyId,
+      scope_key: scopeKey,
+      supplier_id: data.supplierId,
+      supplier_name: supplier.data.name,
+      cost_center_id: data.costCenterId,
+      document_number: data.documentNumber,
+      purchase_date: data.purchaseDate,
+      payment_status: "unpaid",
+      idempotency_key: data.idempotencyKey,
+      source_quote_id: data.sourceQuoteId,
+      source_inventory_request_id: data.sourceInventoryRequestId,
+      items: resolvedItems,
+    };
+    const { data: result, error } = await (supabaseAdmin as any).rpc(
+      data.sourceInventoryRequestId ? "dbs_control_register_purchase_with_request" : "dbs_control_register_purchase_with_quote",
+      { p_payload: purchasePayload },
+    );
     if (error) throw new Error(error.message);
     return result;
   });
@@ -3743,7 +3779,7 @@ export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" }
 export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_inventory_financial_overview", {
       p_actor_user_id: user.id,
     });
@@ -3760,10 +3796,490 @@ export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" }
     };
   });
 
-export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
+export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryAdmin(context);
+    const companyId = user.company_id;
+    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const scopedUsers = companyId
+      ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
+      : { data: [{ id: user.id }], error: null };
+    if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
+    const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
+
+    const [parts, stocks, balances, costCenters, workOrders, reservations] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,status")
+        .order("name").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_operational_stocks")
+        .select("id,cost_center_id,name,status")
+        .eq("scope_key", scopeKey).eq("status", "active").order("name").limit(500),
+      (supabaseAdmin as any).from("dbs_control_operational_stock_balances")
+        .select("id,stock_id,part_id,quantity,reserved_quantity,version")
+        .eq("scope_key", scopeKey).limit(5000),
+      (supabaseAdmin as any).from("dbs_control_cost_centers")
+        .select("id,code,name,status")
+        .eq("scope_key", scopeKey).eq("status", "active").order("code").limit(500),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,client_id,cost_center_id,created_at,type")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500)
+        : Promise.resolve({ data: [], error: null }),
+      (supabaseAdmin as any).from("dbs_control_operational_reservations")
+        .select("id,stock_id,work_order_id,part_id,quantity,purpose,status,created_at")
+        .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(500),
+    ]);
+    for (const result of [parts, stocks, balances, costCenters, workOrders, reservations]) {
+      if (result.error) throw new Error("Falha ao carregar o estoque operacional: " + result.error.message);
+    }
+
+    // Este DTO é operacional por contrato: não consulta nem devolve custo,
+    // preço, fornecedor, compra, contas a pagar ou qualquer saldo financeiro.
+    const activeOperationalStockIds = new Set((stocks.data ?? []).map((stock: any) => String(stock.id)));
+    const operationalBalances = (balances.data ?? [])
+      .filter((row: any) => activeOperationalStockIds.has(String(row.stock_id)))
+      .map((row: any) => ({
+      id: String(row.id),
+      stockId: String(row.stock_id),
+      partId: String(row.part_id),
+      quantity: Number(row.quantity ?? 0),
+      reservedQuantity: Number(row.reserved_quantity ?? 0),
+      availableQuantity: Math.max(0, Number(row.quantity ?? 0) - Number(row.reserved_quantity ?? 0)),
+      version: Number(row.version ?? 0),
+    }));
+    const stockByPart = new Map<string, { quantity: number; reservedQuantity: number; availableQuantity: number }>();
+    for (const row of operationalBalances) {
+      const current = stockByPart.get(row.partId) ?? { quantity: 0, reservedQuantity: 0, availableQuantity: 0 };
+      current.quantity += row.quantity;
+      current.reservedQuantity += row.reservedQuantity;
+      current.availableQuantity += row.availableQuantity;
+      stockByPart.set(row.partId, current);
+    }
+    const operationalParts = (parts.data ?? []).map((part: any) => {
+      const centralQuantity = Number(part.stock_quantity ?? 0);
+      const centralReservedQuantity = Number(part.reserved_quantity ?? 0);
+      const operational = stockByPart.get(String(part.id)) ?? { quantity: 0, reservedQuantity: 0, availableQuantity: 0 };
+      return {
+        id: String(part.id),
+        sku: String(part.sku ?? ""),
+        name: String(part.name ?? ""),
+        description: String(part.description ?? ""),
+        status: String(part.status ?? ""),
+        centralQuantity,
+        centralReservedQuantity,
+        centralAvailableQuantity: Math.max(0, centralQuantity - centralReservedQuantity),
+        operationalQuantity: operational.quantity,
+        operationalReservedQuantity: operational.reservedQuantity,
+        operationalAvailableQuantity: operational.availableQuantity,
+        availableQuantity: Math.max(0, centralQuantity - centralReservedQuantity) + operational.availableQuantity,
+      };
+    });
+
+    return {
+      asOf: new Date().toISOString(),
+      parts: operationalParts,
+      operationalStocks: (stocks.data ?? []).map((stock: any) => ({
+        id: String(stock.id), costCenterId: stock.cost_center_id ? String(stock.cost_center_id) : null,
+        name: String(stock.name ?? ""), status: String(stock.status ?? ""),
+      })),
+      costCenters: (costCenters.data ?? []).map((center: any) => ({
+        id: String(center.id), code: String(center.code ?? ""), name: String(center.name ?? ""),
+      })),
+      workOrders: (workOrders.data ?? []).map((order: any) => ({
+        id: String(order.id), protocol: String(order.protocol ?? order.id),
+        status: String(order.status ?? ""), clientId: order.client_id ? String(order.client_id) : null,
+        costCenterId: order.cost_center_id ? String(order.cost_center_id) : null,
+        createdAt: String(order.created_at ?? ""), type: String(order.type ?? ""),
+      })),
+      operationalReservations: (reservations.data ?? []).map((reservation: any) => ({
+        id: String(reservation.id), stockId: String(reservation.stock_id),
+        workOrderId: String(reservation.work_order_id), partId: String(reservation.part_id),
+        quantity: Number(reservation.quantity ?? 0), purpose: String(reservation.purpose ?? ""),
+        status: String(reservation.status ?? ""), createdAt: String(reservation.created_at ?? ""),
+      })),
+      operationalBalances,
+    };
+  });
+
+export const getDbsInventoryRequests = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users").select("id,company_id,role_key,status")
+      .eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" ||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso às solicitações de materiais não autorizado.");
+    }
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const [requests, parts] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_inventory_requests")
+        .select("id,request_number,scope_key,requested_by,cost_center_id,work_order_id,urgency,reason,status,decision_reason,decided_by,decided_at,version,created_at,updated_at")
+        .eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(250),
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,stock_quantity,reserved_quantity,status").order("name").limit(1000),
+    ]);
+    if (requests.error) throw new Error(requests.error.message);
+    if (parts.error) throw new Error(parts.error.message);
+    const ids = (requests.data ?? []).map((row:any)=>String(row.id));
+    const items = ids.length
+      ? await (supabaseAdmin as any).from("dbs_control_inventory_request_items")
+          .select("id,request_id,line_no,item_type,part_id,resolved_part_id,requested_label,requested_sku,description,quantity,unit_label,quantity_ready_for_dispatch,quantity_ordered,quantity_fulfilled,status")
+          .in("request_id",ids).order("line_no")
+      : {data:[],error:null};
+    if (items.error) throw new Error(items.error.message);
+    const linkedPurchases = ids.length
+      ? await (supabaseAdmin as any).from("dbs_control_purchases")
+          .select("id,source_inventory_request_id,status,approval_status,document_number,purchase_date")
+          .in("source_inventory_request_id",ids).order("created_at",{ascending:false})
+      : {data:[],error:null};
+    if (linkedPurchases.error) throw new Error(linkedPurchases.error.message);
+    const partMap = new Map((parts.data ?? []).map((part:any)=>[String(part.id),part]));
+    return (requests.data ?? []).map((request:any)=>({
+      id:String(request.id),requestNumber:String(request.request_number ?? ""),
+      requestedBy:String(request.requested_by),costCenterId:request.cost_center_id ? String(request.cost_center_id) : null,
+      workOrderId:request.work_order_id ? String(request.work_order_id) : null,
+      urgency:String(request.urgency),reason:String(request.reason),status:String(request.status),
+      decisionReason:request.decision_reason ? String(request.decision_reason) : null,
+      decidedBy:request.decided_by ? String(request.decided_by) : null,
+      decidedAt:request.decided_at ? String(request.decided_at) : null,
+      version:Number(request.version ?? 1),createdAt:String(request.created_at),updatedAt:String(request.updated_at),
+      linkedPurchases:(linkedPurchases.data ?? []).filter((purchase:any)=>String(purchase.source_inventory_request_id)===String(request.id)).map((purchase:any)=>({
+        id:String(purchase.id),status:String(purchase.status ?? ""),approvalStatus:String(purchase.approval_status ?? ""),
+        documentNumber:purchase.document_number ? String(purchase.document_number) : null,
+        purchaseDate:purchase.purchase_date ? String(purchase.purchase_date) : null,
+      })),
+      items:(items.data ?? []).filter((item:any)=>String(item.request_id)===String(request.id)).map((item:any)=>{
+        const part=partMap.get(String(item.resolved_part_id ?? item.part_id));
+        return {
+          id:String(item.id),lineNo:Number(item.line_no),itemType:String(item.item_type),
+          partId:item.part_id ? String(item.part_id) : null,
+          resolvedPartId:item.resolved_part_id ? String(item.resolved_part_id) : null,
+          requestedLabel:String(item.requested_label),requestedSku:item.requested_sku ? String(item.requested_sku) : null,
+          description:item.description ? String(item.description) : null,
+          quantity:Number(item.quantity),unitLabel:String(item.unit_label),
+          quantityReadyForDispatch:Number(item.quantity_ready_for_dispatch ?? 0),
+          quantityOrdered:Number(item.quantity_ordered ?? 0),
+          quantityFulfilled:Number(item.quantity_fulfilled ?? 0),status:String(item.status),
+          currentPart:part ? {
+            id:String(part.id),sku:String(part.sku ?? ""),name:String(part.name ?? ""),
+            centralAvailableQuantity:Math.max(0,Number(part.stock_quantity ?? 0)-Number(part.reserved_quantity ?? 0)),
+            active:String(part.status ?? "")==="ativo",
+          } : null,
+        };
+      }),
+    }));
+  });
+
+export const createDbsInventoryRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    idempotencyKey:string;reason:string;urgency?:"normal"|"urgent";
+    workOrderId?:string|null;costCenterId?:string|null;
+    items:Array<{itemType:"part"|"tool"|"supply"|"gas";partId?:string|null;requestedLabel:string;requestedSku?:string;description?:string;quantity:number;unitLabel?:string}>;
+  })=>{
+    const reason=String(input?.reason ?? "").trim();
+    const items=Array.isArray(input?.items)?input.items:[];
+    const idempotencyKey=String(input?.idempotencyKey ?? "").trim();
+    if(reason.length<5||reason.length>2000||idempotencyKey.length<8||idempotencyKey.length>240||!items.length||items.length>30) {
+      throw new Error("Informe a necessidade e ao menos um item válido.");
+    }
+    return {
+      idempotencyKey,reason,urgency:input.urgency==="urgent"?"urgent" as const:"normal" as const,
+      workOrderId:input.workOrderId?requireInventoryId(input.workOrderId,"OS"):null,
+      costCenterId:input.costCenterId?requireInventoryId(input.costCenterId,"Centro de custo"):null,
+      items:items.map((item)=>{
+        const label=String(item?.requestedLabel ?? "").trim();
+        if(!["part","tool","supply","gas"].includes(item.itemType)||label.length<2||label.length>180||
+          !Number.isFinite(item.quantity)||item.quantity<=0) throw new Error("Revise a descrição, categoria e quantidade solicitadas.");
+        return {
+          item_type:item.itemType,
+          part_id:item.partId?requireInventoryId(item.partId,"Peça"):null,
+          requested_label:label,
+          requested_sku:String(item.requestedSku ?? "").trim().slice(0,80)||null,
+          description:String(item.description ?? "").trim().slice(0,1000)||null,
+          quantity:item.quantity,
+          unit_label:String(item.unitLabel ?? "un").trim().slice(0,30)||"un",
+        };
+      }),
+    };
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_create_inventory_request",{
+      p_payload:{
+        actor_user_id:user.id,idempotency_key:data.idempotencyKey,reason:data.reason,urgency:data.urgency,
+        work_order_id:data.workOrderId,cost_center_id:data.costCenterId,items:data.items,
+      },
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const decideDbsInventoryRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    requestId:string;decision:"approve"|"waiting_purchase"|"reject";reason?:string;
+    expectedVersion:number;itemMappings?:Array<{requestItemId:string;partId:string}>;
+  })=>{
+    const requestId=requireInventoryId(input?.requestId,"Solicitação");
+    if(!["approve","waiting_purchase","reject"].includes(input?.decision)) throw new Error("Decisão da solicitação inválida.");
+    const reason=String(input?.reason ?? "").trim();
+    if(input.decision==="reject"&&(reason.length<5||reason.length>1000)) throw new Error("Informe o motivo da rejeição.");
+    if(!Number.isSafeInteger(input.expectedVersion)||input.expectedVersion<1) throw new Error("Atualize a solicitação antes de decidir.");
+    const mappings=Array.isArray(input.itemMappings)?input.itemMappings:[];
+    return {requestId,decision:input.decision,reason:reason||null,expectedVersion:input.expectedVersion,
+      itemMappings:mappings.map(item=>({request_item_id:requireInventoryId(item.requestItemId,"Item da solicitação"),part_id:requireInventoryId(item.partId,"Peça")}))};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_decide_inventory_request",{
+      p_request_id:data.requestId,p_actor_user_id:user.id,p_decision:data.decision,p_reason:data.reason,
+      p_expected_version:data.expectedVersion,p_item_mappings:data.itemMappings,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const fulfillDbsInventoryRequestFromCentral = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{requestId:string;requestItemId:string;destinationStockId:string;quantity:number;idempotencyKey:string})=>{
+    const idempotencyKey=String(input?.idempotencyKey ?? "").trim();
+    if(!Number.isFinite(input?.quantity)||input.quantity<=0||idempotencyKey.length<8||idempotencyKey.length>240)
+      throw new Error("Informe uma quantidade e chave de movimentação válidas.");
+    return {requestId:requireInventoryId(input.requestId,"Solicitação"),
+      requestItemId:requireInventoryId(input.requestItemId,"Item da solicitação"),
+      destinationStockId:requireInventoryId(input.destinationStockId,"Estoque de destino"),
+      quantity:input.quantity,idempotencyKey};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_fulfill_inventory_request_from_central",{
+      p_request_id:data.requestId,p_request_item_id:data.requestItemId,p_actor_user_id:user.id,
+      p_destination_stock_id:data.destinationStockId,p_quantity:data.quantity,p_idempotency_key:data.idempotencyKey,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const getDbsPartWarrantyDefaults = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async({context})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const {data,error}=await (supabaseAdmin as any).from("dbs_control_part_warranty_defaults")
+      .select("id,part_id,supplier_id,supplier_warranty_months,supplier_start_rule,supplier_terms,customer_warranty_months,customer_start_rule,customer_terms,version")
+      .eq("scope_key",scopeKey).limit(1000);
+    if(error) throw new Error(error.message);
+    return data??[];
+  });
+
+export const saveDbsPartWarrantyDefaults = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    partId:string;supplierId?:string|null;supplierWarrantyMonths?:number|null;
+    supplierStartRule:"invoice_date"|"receipt_date";supplierTerms?:string;
+    customerWarrantyMonths?:number|null;customerTerms?:string;
+  })=>{
+    const supplierMonths=input.supplierWarrantyMonths==null?null:Number(input.supplierWarrantyMonths);
+    const customerMonths=input.customerWarrantyMonths==null?null:Number(input.customerWarrantyMonths);
+    for(const months of [supplierMonths,customerMonths]) {
+      if(months!==null&&(!Number.isSafeInteger(months)||months<0||months>1200)) throw new Error("Informe um prazo de garantia entre 0 e 1.200 meses ou deixe em branco.");
+    }
+    if(!["invoice_date","receipt_date"].includes(input.supplierStartRule)) throw new Error("Regra de início da garantia do fornecedor inválida.");
+    return {
+      partId:requireInventoryId(input.partId,"Peça"),
+      supplierId:input.supplierId?requireInventoryId(input.supplierId,"Fornecedor"):null,
+      supplierWarrantyMonths:supplierMonths,supplierStartRule:input.supplierStartRule,
+      supplierTerms:String(input.supplierTerms??"").trim().slice(0,2000)||null,
+      customerWarrantyMonths:customerMonths,
+      customerTerms:String(input.customerTerms??"").trim().slice(0,2000)||null,
+    };
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    const [part,supplier]=await Promise.all([
+      admin.from("dbs_control_parts").select("id,supplier_id").eq("id",data.partId).maybeSingle(),
+      data.supplierId?admin.from("dbs_control_suppliers").select("id").eq("id",data.supplierId).eq("scope_key",scopeKey).eq("status","active").maybeSingle():Promise.resolve({data:null,error:null}),
+    ]);
+    for(const result of [part,supplier]) if(result.error) throw new Error(result.error.message);
+    if(!part.data) throw new Error("Peça não encontrada.");
+    const effectiveSupplier=data.supplierId??part.data.supplier_id;
+    const {data:scopeSupplier,error:scopeError}=await admin.from("dbs_control_suppliers")
+      .select("id").eq("id",effectiveSupplier).eq("scope_key",scopeKey).maybeSingle();
+    if(scopeError) throw new Error(scopeError.message);
+    if(!scopeSupplier) throw new Error("A peça não pertence ao escopo financeiro atual.");
+    if(data.supplierId&&!supplier.data) throw new Error("Fornecedor de garantia não encontrado ou inativo.");
+    const {data:result,error}=await admin.from("dbs_control_part_warranty_defaults").upsert({
+      scope_key:scopeKey,part_id:data.partId,supplier_id:data.supplierId,
+      supplier_warranty_months:data.supplierWarrantyMonths,
+      supplier_start_rule:data.supplierStartRule,supplier_terms:data.supplierTerms,
+      customer_warranty_months:data.customerWarrantyMonths,customer_terms:data.customerTerms,
+      updated_by:user.id,updated_at:new Date().toISOString(),
+    },{onConflict:"scope_key,part_id"}).select().single();
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const getDbsOperationalWarrantyRecords = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async({context})=>{
+    const {data:user,error:userError}=await supabaseAdmin.from("users")
+      .select("id,company_id,role_key,status").eq("auth_id",context.userId).maybeSingle();
+    if(userError) throw new Error(userError.message);
+    if(!user||user.status!=="ativo"||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso às garantias não autorizado.");
+    }
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const [supplier,customer,gas,claims]=await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_supplier_warranties")
+        .select("id,purchase_id,purchase_item_id,receipt_id,receipt_item_id,part_id,supplier_id,supplier_name_snapshot,serial_number,lot_number,quantity_covered,start_rule,start_date,end_date,terms,invoice_reference,certificate_reference,evidence,status,replacement_of")
+        .eq("scope_key",scopeKey).order("end_date").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_customer_warranties")
+        .select("id,work_order_id,part_id,client_id,supplier_warranty_id,serial_number,lot_number,quantity_covered,start_date,end_date,terms,status")
+        .eq("scope_key",scopeKey).order("end_date").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinder_warranties")
+        .select("id,cylinder_id,supplier_id,supplier_name_snapshot,serial_number,start_date,end_date,terms,invoice_reference,evidence,status")
+        .eq("scope_key",scopeKey).order("end_date").limit(500),
+      (supabaseAdmin as any).from("dbs_control_warranty_claims")
+        .select("id,claim_number,supplier_warranty_id,customer_warranty_id,gas_cylinder_warranty_id,opened_by,assigned_to,issue_description,supplier_protocol,requested_resolution,resolution,resolution_reference,evidence,status,opened_at,closed_at,replacement_supplier_warranty_id")
+        .eq("scope_key",scopeKey).order("opened_at",{ascending:false}).limit(500),
+    ]);
+    for(const result of [supplier,customer,gas,claims]) if(result.error) throw new Error(result.error.message);
+    const partIds=[...new Set([...(supplier.data??[]),...(customer.data??[])].map((row:any)=>String(row.part_id)).filter(Boolean))];
+    const workOrderIds=[...new Set((customer.data??[]).map((row:any)=>String(row.work_order_id)).filter(Boolean))];
+    const clientIds=[...new Set((customer.data??[]).map((row:any)=>String(row.client_id)).filter(Boolean))];
+    const [parts,cylinders,orders,clients]=await Promise.all([
+      partIds.length?(supabaseAdmin as any).from("dbs_control_parts").select("id,sku,name").in("id",partIds):Promise.resolve({data:[],error:null}),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinders").select("id,serial_number,refrigerant_type").eq("scope_key",scopeKey).limit(500),
+      workOrderIds.length?(supabaseAdmin as any).from("dbs_control_work_orders").select("id,protocol,client_id").in("id",workOrderIds):Promise.resolve({data:[],error:null}),
+      clientIds.length?(supabaseAdmin as any).from("dbs_control_clients").select("id,legal_name,trade_name").in("id",clientIds):Promise.resolve({data:[],error:null}),
+    ]);
+    for(const result of [parts,cylinders,orders,clients]) if(result.error) throw new Error(result.error.message);
+    const map=(rows:any[])=>new Map(rows.map(row=>[String(row.id),row]));
+    const partMap=map(parts.data??[]),cylinderMap=map(cylinders.data??[]),orderMap=map(orders.data??[]),clientMap=map(clients.data??[]);
+    return {
+      supplierWarranties:(supplier.data??[]).map((row:any)=>({ ...row,part:partMap.get(String(row.part_id))??null })),
+      customerWarranties:(customer.data??[]).map((row:any)=>({
+        ...row,part:partMap.get(String(row.part_id))??null,
+        workOrder:orderMap.get(String(row.work_order_id))??null,
+        client:clientMap.get(String(row.client_id))??null,
+      })),
+      gasCylinderWarranties:(gas.data??[]).map((row:any)=>({...row,cylinder:cylinderMap.get(String(row.cylinder_id))??null})),
+      claims:claims.data??[],
+    };
+  });
+
+export const createDbsGasCylinderWarranty = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    cylinderId:string;serialNumber:string;supplierId?:string;startDate:string;endDate:string;
+    terms?:string;invoiceReference?:string;evidence?:Array<Record<string,unknown>>;
+  })=>{
+    const serial=String(input.serialNumber??"").trim();
+    const start=String(input.startDate??"");
+    const end=String(input.endDate??"");
+    if(serial.length<1||serial.length>180||!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<start)
+      throw new Error("Informe número de série e período de garantia válidos.");
+    return {cylinderId:requireInventoryId(input.cylinderId,"Cilindro"),serialNumber:serial,
+      supplierId:input.supplierId?requireInventoryId(input.supplierId,"Fornecedor"):null,
+      startDate:start,endDate:end,terms:String(input.terms??"").trim().slice(0,2000)||null,
+      invoiceReference:String(input.invoiceReference??"").trim().slice(0,180)||null,
+      evidence:Array.isArray(input.evidence)?input.evidence.slice(0,20):[]};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    const [cylinder,supplier]=await Promise.all([
+      admin.from("dbs_control_gas_cylinders").select("id,serial_number").eq("id",data.cylinderId).eq("scope_key",scopeKey).maybeSingle(),
+      data.supplierId?admin.from("dbs_control_suppliers").select("id,name").eq("id",data.supplierId).eq("scope_key",scopeKey).maybeSingle():Promise.resolve({data:null,error:null}),
+    ]);
+    for(const result of [cylinder,supplier]) if(result.error) throw new Error(result.error.message);
+    if(!cylinder.data||String(cylinder.data.serial_number)!==data.serialNumber) throw new Error("O número de série não corresponde ao cilindro selecionado.");
+    const {data:record,error}=await admin.from("dbs_control_gas_cylinder_warranties").insert({
+      scope_key:scopeKey,cylinder_id:data.cylinderId,supplier_id:data.supplierId,
+      supplier_name_snapshot:supplier.data?.name??null,serial_number:data.serialNumber,
+      start_date:data.startDate,end_date:data.endDate,terms:data.terms,
+      invoice_reference:data.invoiceReference,evidence:data.evidence,status:"active",
+    }).select("id,serial_number,start_date,end_date,status").single();
+    if(error) throw new Error(error.message);
+    return record;
+  });
+
+export const createDbsWarrantyClaim = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    supplierWarrantyId?:string;customerWarrantyId?:string;gasCylinderWarrantyId?:string;
+    issueDescription:string;requestedResolution?:string;evidence?:Array<Record<string,unknown>>;
+  })=>{
+    const targetIds=[input.supplierWarrantyId,input.customerWarrantyId,input.gasCylinderWarrantyId].filter(Boolean);
+    const issueDescription=String(input.issueDescription??"").trim();
+    if(targetIds.length!==1||issueDescription.length<5||issueDescription.length>3000) throw new Error("Selecione uma única garantia e descreva o problema.");
+    return {
+      supplierWarrantyId:input.supplierWarrantyId?requireInventoryId(input.supplierWarrantyId,"Garantia fornecedor"):null,
+      customerWarrantyId:input.customerWarrantyId?requireInventoryId(input.customerWarrantyId,"Garantia DBS"):null,
+      gasCylinderWarrantyId:input.gasCylinderWarrantyId?requireInventoryId(input.gasCylinderWarrantyId,"Garantia cilindro"):null,
+      issueDescription,requestedResolution:String(input.requestedResolution??"").trim().slice(0,1000)||null,
+      evidence:Array.isArray(input.evidence)?input.evidence.slice(0,20):[],
+    };
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const table=data.supplierWarrantyId?"dbs_control_supplier_warranties":
+      data.customerWarrantyId?"dbs_control_customer_warranties":"dbs_control_gas_cylinder_warranties";
+    const warrantyId=data.supplierWarrantyId??data.customerWarrantyId??data.gasCylinderWarrantyId;
+    const {data:warranty,error:warrantyError}=await (supabaseAdmin as any).from(table)
+      .select("id").eq("id",warrantyId).eq("scope_key",scopeKey).maybeSingle();
+    if(warrantyError) throw new Error(warrantyError.message);
+    if(!warranty) throw new Error("A garantia não pertence à empresa deste usuário.");
+    const row={
+      scope_key:scopeKey,supplier_warranty_id:data.supplierWarrantyId,
+      customer_warranty_id:data.customerWarrantyId,gas_cylinder_warranty_id:data.gasCylinderWarrantyId,
+      opened_by:user.id,issue_description:data.issueDescription,
+      requested_resolution:data.requestedResolution,evidence:data.evidence,status:"opened",
+    };
+    const {data:claim,error}=await (supabaseAdmin as any).from("dbs_control_warranty_claims")
+      .insert(row).select("id,claim_number,status,opened_at").single();
+    if(error) throw new Error(error.message);
+    return claim;
+  });
+
+export const updateDbsWarrantyClaim = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    claimId:string;status:"in_review"|"approved"|"rejected"|"replacement"|"credit"|"closed";
+    resolution?:string;resolutionReference?:string;replacementSupplierWarrantyId?:string;
+  })=>{
+    if(!["in_review","approved","rejected","replacement","credit","closed"].includes(input?.status)) throw new Error("Status de reclamação inválido.");
+    const resolution=String(input.resolution??"").trim();
+    if(["approved","rejected","replacement","credit","closed"].includes(input.status)&&resolution.length<5) throw new Error("Registre a análise ou solução da reclamação.");
+    return {claimId:requireInventoryId(input.claimId,"Reclamação"),status:input.status,
+      resolution:resolution.slice(0,3000),resolutionReference:String(input.resolutionReference??"").trim().slice(0,240)||null,
+      replacementSupplierWarrantyId:input.replacementSupplierWarrantyId?requireInventoryId(input.replacementSupplierWarrantyId,"Garantia substituta"):null};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_update_warranty_claim",{
+      p_claim_id:data.claimId,p_actor_user_id:user.id,p_status:data.status,
+      p_resolution:data.resolution,p_resolution_reference:data.resolutionReference,
+      p_replacement_supplier_warranty_id:data.replacementSupplierWarrantyId,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const companyId = user.company_id;
     const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
     const scopedUsers = companyId
@@ -3864,7 +4380,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItemRows,
       sourceQuotes: sourceQuotes.data ?? [],
-      canApprovePurchases: user.role_key === "SUPER_ADMIN",
+      canApprovePurchases: user.role_key === "SUPER_ADMIN" || user.role_key === "FINANCEIRO_OPERADOR",
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
@@ -3894,7 +4410,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
     return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
       company_id:user.company_id,scope_key:scopeKey,name:data.name,
@@ -3924,7 +4440,7 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return { code, name };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const saved = await (supabaseAdmin as any).from("dbs_control_cost_centers").upsert({
       company_id: user.company_id, scope_key: scopeKey, code: data.code, name: data.name,
@@ -3934,24 +4450,80 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return saved.data;
   });
 
+export const getDbsPartPricingPolicy = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({context})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const scopeKey=user.company_id ? "company:"+user.company_id : "user:"+user.id;
+    const {data,error}=await (supabaseAdmin as any).from("dbs_control_part_pricing_policies")
+      .select("id,policy_type,rate_basis_points,version,updated_at")
+      .eq("scope_key",scopeKey).eq("is_active",true).maybeSingle();
+    if(error) throw new Error(error.message);
+    return data ? {
+      id:String(data.id),policyType:String(data.policy_type),
+      rateBasisPoints:Number(data.rate_basis_points),version:Number(data.version),
+      updatedAt:String(data.updated_at),
+    } : null;
+  });
+
+export const saveDbsPartPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{policyType:"markup"|"gross_margin";rateBasisPoints:number})=>{
+    if(!["markup","gross_margin"].includes(input?.policyType)
+      || !Number.isSafeInteger(input.rateBasisPoints)
+      || (input.policyType==="markup"&&(input.rateBasisPoints<1||input.rateBasisPoints>1000000))
+      || (input.policyType==="gross_margin"&&(input.rateBasisPoints<1||input.rateBasisPoints>9900))) {
+      throw new Error("Informe uma política de preço válida.");
+    }
+    return {policyType:input.policyType,rateBasisPoints:input.rateBasisPoints};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_set_part_pricing_policy",{
+      p_actor_user_id:user.id,p_policy_type:data.policyType,p_rate_basis_points:data.rateBasisPoints,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const saveDbsPartPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{policyType:"markup"|"gross_margin";rateBasisPoints:number})=>{
+    if(!["markup","gross_margin"].includes(input?.policyType)
+      || !Number.isSafeInteger(input.rateBasisPoints)
+      || (input.policyType==="markup"&&(input.rateBasisPoints<1||input.rateBasisPoints>1000000))
+      || (input.policyType==="gross_margin"&&(input.rateBasisPoints<1||input.rateBasisPoints>9900))) {
+      throw new Error("Informe uma política de preço válida.");
+    }
+    return {policyType:input.policyType,rateBasisPoints:input.rateBasisPoints};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_set_part_pricing_policy",{
+      p_actor_user_id:user.id,p_policy_type:data.policyType,p_rate_basis_points:data.rateBasisPoints,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const [supplier, unit, purchaseUnit, duplicate] = await Promise.all([
@@ -3968,7 +4540,7 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
       measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId, stock_quantity: 0, reserved_quantity: 0,
-      cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
+      cost_cents: data.costCents, status: "ativo",
     }) .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").single();
     if (saved.error) throw new Error(saved.error.message);
     return saved.data;
@@ -3976,28 +4548,28 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
 
 export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) throw new Error("Versão da peça inválida. Atualize a tela e tente novamente.");
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
-      admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
+      admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents,supplier_id").eq("id", data.partId).maybeSingle(),
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       data.purchaseMeasureUnitId ? admin.from("dbs_control_measure_units").select("id").eq("id",data.purchaseMeasureUnitId).eq("scope_key",scopeKey).eq("status","active").maybeSingle() : Promise.resolve({data:null,error:null}),
@@ -4005,6 +4577,11 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     ]);
     for (const result of [existing, supplier, unit, purchaseUnit, duplicate]) if (result.error) throw new Error(result.error.message);
     if (!existing.data) throw new Error("Peça não encontrada.");
+    const existingSupplier = existing.data.supplier_id
+      ? await admin.from("dbs_control_suppliers").select("id").eq("id",existing.data.supplier_id).eq("scope_key",scopeKey).maybeSingle()
+      : {data:null,error:null};
+    if(existingSupplier.error) throw new Error(existingSupplier.error.message);
+    if(!existingSupplier.data) throw new Error("Esta peça não pertence ao escopo financeiro do usuário.");
     if (Number(existing.data.version) !== data.expectedVersion) throw new Error("A peça foi alterada por outro usuário. Atualize a tela e tente novamente.");
     if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
@@ -4016,7 +4593,7 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     const saved = await admin.from("dbs_control_parts").update({
       sku: data.sku, name: data.name, description: data.description,
       supplier_id: data.supplierId, measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId,
-      cost_cents: data.costCents, sale_cents: data.saleCents,
+      cost_cents: data.costCents,
       version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
     }).eq("id", data.partId).eq("version", data.expectedVersion)
        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").maybeSingle();
@@ -4074,7 +4651,7 @@ export const updateDbsInventoryMasterData = createServerFn({ method: "POST" })
     throw new Error("Tipo de cadastro não permitido.");
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const now = new Date().toISOString();
@@ -4169,7 +4746,7 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro"), action: input.action };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const isPart = data.entity === "part";
@@ -4268,7 +4845,7 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro") };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const table = data.entity === "part" ? "dbs_control_parts"
@@ -4382,7 +4959,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
       company_id:user.company_id,scope_key:scopeKey,code:data.code,
@@ -4404,7 +4981,7 @@ export const createDbsUnitConversion = createServerFn({ method: "POST" })
     return {fromUnitId:requireInventoryId(input.fromUnitId,"Unidade de compra"),toUnitId:requireInventoryId(input.toUnitId,"Unidade-base"),factor:input.factor};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const saved=await (supabaseAdmin as any).from("dbs_control_unit_conversions").upsert({
       company_id:user.company_id,scope_key:scopeKey,from_unit_id:data.fromUnitId,to_unit_id:data.toUnitId,
@@ -4445,7 +5022,14 @@ export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
 export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({context})=>{
-    const user=await requireDbsInventoryAdmin(context);
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users").select("id,company_id,role_key,status")
+      .eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" ||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso ao catálogo de referência não autorizado.");
+    }
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const [suppliers,measureUnits,unitConversions,costCenters]=await Promise.all([
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,status").eq("scope_key",scopeKey).eq("status","active").order("name"),
@@ -4467,7 +5051,7 @@ export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
     return {quoteId};
   })
   .handler(async ({context,data})=>{
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const admin=supabaseAdmin as any;
     let quoteQuery=admin.from("dbs_control_quotes")
