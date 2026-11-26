@@ -13,7 +13,7 @@ import {
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog,
+  saveDbsInventoryPricingPolicy, updateDbsPartCatalog,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -78,7 +78,7 @@ export function DbsInventoryPage({
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders";
-  type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
+  type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions" | "pricing";
   type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
   const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
@@ -92,6 +92,16 @@ export function DbsInventoryPage({
   useEffect(() => {
     setModuleSection(initialSection);
   }, [initialSection]);
+
+  useEffect(() => {
+    if (!pricingPolicy) {
+      setPricingExpectedVersion(0);
+      return;
+    }
+    setPricingMethod(pricingPolicy.pricing_method === "gross_margin" ? "gross_margin" : "markup");
+    setPricingRate((Number(pricingPolicy.rate_bps) / 100).toFixed(2));
+    setPricingExpectedVersion(Number(pricingPolicy.version) || 0);
+  }, [pricingPolicy?.version, pricingPolicy?.pricing_method, pricingPolicy?.rate_bps]);
   useEffect(() => {
     const openFromHeader = (event: Event) => {
       const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
@@ -106,7 +116,6 @@ export function DbsInventoryPage({
         setCatalogPartUnitId("");
         setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
-        setCatalogPartSale("");
         setActiveDrawer("new-part");
       } else if (drawer === "purchase") {
         setModuleSection("purchases");
@@ -144,7 +153,9 @@ export function DbsInventoryPage({
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
   const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
-  const [catalogPartSale, setCatalogPartSale] = useState("");
+  const [pricingMethod, setPricingMethod] = useState<"markup" | "gross_margin">("markup");
+  const [pricingRate, setPricingRate] = useState("");
+  const [pricingExpectedVersion, setPricingExpectedVersion] = useState(0);
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
   const [transferSourceStockId, setTransferSourceStockId] = useState("central");
@@ -199,6 +210,18 @@ export function DbsInventoryPage({
   });
 
   const data = overview.data;
+  const pricingPolicy = data?.pricingPolicy ?? null;
+  const catalogCalculatedSaleCents = (() => {
+    if (!pricingPolicy) return null;
+    const cost = Math.round(Number(catalogPartCost || 0) * 100);
+    const rate = Number(pricingPolicy.rate_bps);
+    if (!Number.isSafeInteger(cost) || cost < 0 || !Number.isInteger(rate) || rate <= 0) return null;
+    const raw = pricingPolicy.pricing_method === "markup"
+      ? cost * (10000 + rate) / 10000
+      : pricingPolicy.pricing_method === "gross_margin" && rate < 10000 ? cost * 10000 / (10000 - rate) : Number.NaN;
+    const result = Math.round(raw);
+    return Number.isSafeInteger(result) && result >= 0 && result <= 2147483647 ? result : null;
+  })();
   const parts = data?.parts ?? [];
   const suppliers = data?.suppliers ?? [];
   const measureUnits = data?.measureUnits ?? [];
@@ -421,7 +444,6 @@ export function DbsInventoryPage({
       setCatalogPartUnitId("");
       setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
-      setCatalogPartSale("");
       return;
     }
     setCatalogPartName(String(part.name ?? ""));
@@ -431,11 +453,16 @@ export function DbsInventoryPage({
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
     setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
-    setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
   }
 
   async function saveCatalogPart(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!pricingPolicy) {
+      setMessage("Configure a política de preço de revenda no Financeiro antes de cadastrar peças.");
+      setPartsView("settings");
+      setSettingsView("pricing");
+      return;
+    }
     if (!catalogPartSupplierId || !catalogPartUnitId || !catalogPartName.trim() || !catalogPartSku.trim()) {
       setMessage("Informe código, nome, fornecedor e unidade-base da peça.");
       return;
@@ -448,7 +475,6 @@ export function DbsInventoryPage({
       measureUnitId: catalogPartUnitId,
       purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
-      saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
     let saved = false;
     if (catalogPartId) {
@@ -469,6 +495,29 @@ export function DbsInventoryPage({
       selectCatalogPart("");
       setMasterRecordId("");
       setActiveDrawer(null);
+    }
+  }
+
+  async function savePricingPolicy(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const percentage = Number(pricingRate);
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 990) {
+      setMessage("Informe um percentual maior que zero e de até 990%.");
+      return;
+    }
+    const rateBps = Math.round(percentage * 100);
+    if (pricingMethod === "gross_margin" && rateBps >= 10000) {
+      setMessage("A margem bruta precisa ser menor que 100%.");
+      return;
+    }
+    const saved = await runAction(() => saveDbsInventoryPricingPolicy({ data: {
+      pricingMethod,
+      rateBps,
+      expectedVersion: pricingExpectedVersion,
+    } }), "Política atualizada. Os preços do catálogo foram recalculados sem movimentar o estoque.");
+    if (saved) {
+      setPricingExpectedVersion(pricingExpectedVersion + 1);
+      void overview.refetch();
     }
   }
 
