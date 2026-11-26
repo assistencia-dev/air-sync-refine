@@ -89,8 +89,84 @@ BEGIN
   -- Mantém FINANCEIRO_LEITURA fora e adiciona exclusivamente FINANCEIRO_OPERADOR.
   v_signature := 'public.dbs_control_decide_purchase_approval(uuid,uuid,text,text,bigint)';
   SELECT pg_get_functiondef(v_signature::regprocedure) INTO v_def;
-  v_old := $old$v_actor_role NOT IN ('SUPER_ADMIN')$old$;
-  v_new := $new$v_actor_role NOT IN ('SUPER_ADMIN','FINANCEIRO_OPERADOR')$new$;
+  v_old := $old
+  IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: guarda de aprovação mudou; migração abortada.';
+  END IF;
+  EXECUTE replace(v_def, v_old, v_new);
+END;
+$patch$;
+
+-- O novo operador consulta o Ledger somente no escopo do responsável ativo
+-- vinculado; FINANCEIRO_LEITURA mantém exatamente a mesma permissão de leitura.
+DO $patch_scope$
+DECLARE
+  v_def text;
+  v_old text;
+  v_new text;
+BEGIN
+  SELECT pg_get_functiondef('private.dbs_my_treasury_scope_keys()'::regprocedure)
+    INTO v_def;
+  v_old := $old$and viewer.role_key = 'FINANCEIRO_LEITURA'::public.role_key;$old$;
+  v_new := $new$and viewer.role_key::text in ('FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR');$new$;
+  IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: escopo read-only do Treasury mudou; migração abortada.';
+  END IF;
+  v_def := replace(v_def, v_old, v_new);
+  v_old := $old$and owner.status = 'ativo'$old$;
+  v_new := $new$and owner.status = 'ativo'
+   and owner.role_key::text = 'SUPER_ADMIN'
+   and owner.company_id IS NOT DISTINCT FROM viewer.company_id$new$;
+  IF position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: validação do proprietário do Treasury mudou; migração abortada.';
+  END IF;
+  EXECUTE replace(v_def, v_old, v_new);
+END;
+$patch_scope$;
+
+NOTIFY pgrst, 'reload schema';
+COMMIT;
+SUPER_ADMIN'
+  ) THEN$old$;
+  v_new := $new
+  IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: guarda de aprovação mudou; migração abortada.';
+  END IF;
+  EXECUTE replace(v_def, v_old, v_new);
+END;
+$patch$;
+
+-- O novo operador consulta o Ledger somente no escopo do responsável ativo
+-- vinculado; FINANCEIRO_LEITURA mantém exatamente a mesma permissão de leitura.
+DO $patch_scope$
+DECLARE
+  v_def text;
+  v_old text;
+  v_new text;
+BEGIN
+  SELECT pg_get_functiondef('private.dbs_my_treasury_scope_keys()'::regprocedure)
+    INTO v_def;
+  v_old := $old$and viewer.role_key = 'FINANCEIRO_LEITURA'::public.role_key;$old$;
+  v_new := $new$and viewer.role_key::text in ('FINANCEIRO_LEITURA','FINANCEIRO_OPERADOR');$new$;
+  IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: escopo read-only do Treasury mudou; migração abortada.';
+  END IF;
+  v_def := replace(v_def, v_old, v_new);
+  v_old := $old$and owner.status = 'ativo'$old$;
+  v_new := $new$and owner.status = 'ativo'
+   and owner.role_key::text = 'SUPER_ADMIN'
+   and owner.company_id IS NOT DISTINCT FROM viewer.company_id$new$;
+  IF position(v_old IN v_def) = 0 THEN
+    RAISE EXCEPTION 'DBS finance role migration: validação do proprietário do Treasury mudou; migração abortada.';
+  END IF;
+  EXECUTE replace(v_def, v_old, v_new);
+END;
+$patch_scope$;
+
+NOTIFY pgrst, 'reload schema';
+COMMIT;
+SUPER_ADMIN','FINANCEIRO_OPERADOR'
+  ) THEN$new$;
   IF v_def IS NULL OR position(v_old IN v_def) = 0 THEN
     RAISE EXCEPTION 'DBS finance role migration: guarda de aprovação mudou; migração abortada.';
   END IF;
