@@ -32,7 +32,9 @@ assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
 
 assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
 assert.match(dbs, /inventoryScopeOwnerId/);
-assert.match(dbs, /dbs-control material request/i);
+assert.match(dbs, /export const createDbsMaterialRequest/);
+assert.match(dbs, /export const getDbsFinanceMaterialRequests/);
+assert.match(dbs, /export const fulfillDbsMaterialRequest/);
 for (const functionName of [
   "getDbsPhase2InventoryOverview", "createDbsSupplier", "createDbsCostCenter",
   "createDbsPartCatalog", "updateDbsPartCatalog", "createDbsPurchase",
