@@ -234,13 +234,14 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
       setNotice("Descreva o defeito ou a ocorrência para abrir a reclamação.");
       return;
     }
-    await runAction(()=>createDbsWarrantyClaim({data:{
+    const created=await runAction(()=>createDbsWarrantyClaim({data:{
       supplierWarrantyId:warrantyClaimTarget.kind==="supplier"?warrantyClaimTarget.id:undefined,
       customerWarrantyId:warrantyClaimTarget.kind==="customer"?warrantyClaimTarget.id:undefined,
       gasCylinderWarrantyId:warrantyClaimTarget.kind==="gas"?warrantyClaimTarget.id:undefined,
       issueDescription:warrantyClaimDescription.trim(),
       requestedResolution:warrantyClaimResolution.trim()||undefined,
     }}),"Reclamação de garantia registrada com protocolo.");
+    if(!created) return;
     await warrantyRecords.refetch();
     setWarrantyClaimTarget(null);setWarrantyClaimDescription("");setWarrantyClaimResolution("");
   }
@@ -253,8 +254,8 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
       setNotice("Informe o material, uma quantidade e a necessidade do pedido.");
       return;
     }
-    await runAction(async () => {
-      const result = await createDbsInventoryRequest({ data: {
+    const result = await runAction(async () => {
+      const created = await createDbsInventoryRequest({ data: {
         idempotencyKey: "inventory-request:" + crypto.randomUUID(),
         reason: requestReason.trim(),
         urgency: requestUrgency,
@@ -271,8 +272,9 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
         }],
       }});
       await inventoryRequests.refetch();
-      return result;
+      return created;
     }, "Solicitação enviada ao Financeiro para análise.");
+    if (!result) return;
     setRequestPartId("");
     setRequestItemLabel("");
     setRequestItemSku("");
