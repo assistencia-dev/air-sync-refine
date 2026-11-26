@@ -450,7 +450,7 @@ export function DbsInventoryPage({
         const part=parts.find((entry:any)=>String(entry.id)===String(item.resolvedPartId));
         const unitId=String(part?.purchase_measure_unit_id||part?.measure_unit_id||"");
         const factor=unitId?conversionFor(String(part?.id||""),unitId):0;
-        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0)-Number(item.quantityFulfilled??0));
+        const remaining=Math.max(0,Number(item.quantity)-Number(item.quantityReadyForDispatch??0));
         return {partId:String(item.resolvedPartId),description:String(part?.name??item.requestedLabel),
           quantity:String(remaining),unitCost:"",purchaseUnitId:unitId,conversionFactor:factor};
       }).filter((line:any)=>Number(line.quantity)>0&&line.purchaseUnitId&&line.conversionFactor>0);
@@ -1308,6 +1308,10 @@ export function DbsInventoryPage({
             <SheetContent side="right" className="dbs-operations-drawer w-[98vw] max-w-[820px] overflow-y-auto border-l border-slate-200 bg-white p-5 sm:p-7">
               <SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle className="text-xl font-semibold tracking-tight text-slate-900">Nova compra</SheetTitle><SheetDescription>Fornecedor, centro de custo, cotação e itens do pedido.</SheetDescription></SheetHeader>
               <section className="space-y-4">
+            {purchaseSourceRequestId && <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Compra vinculada à solicitação {inventoryRequests.find((request:any)=>request.id===purchaseSourceRequestId)?.requestNumber ?? purchaseSourceRequestId}. A compra, o recebimento e a expedição continuarão ligados a esse pedido.
+              <button type="button" onClick={()=>setPurchaseSourceRequestId("")} className="ml-2 font-bold underline">Remover vínculo</button>
+            </div>}
             <div className="border-b border-slate-100 pb-3">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -1491,9 +1495,13 @@ export function DbsInventoryPage({
                       <button type="button" disabled={busy||inventoryRequestBusyId===request.id||String(inventoryRequestReasons[request.id]||"").trim().length<5} onClick={()=>void decideInventoryRequest(request,"reject")} className="min-h-10 rounded-lg border border-rose-200 px-4 text-xs font-bold text-rose-700 disabled:opacity-50">Rejeitar</button>
                     </div>
                   </div>}
-                  {["waiting_purchase","purchase_registered","partially_fulfilled"].includes(request.status) && <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} disabled={request.status==="purchase_registered"} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700 disabled:opacity-40">{request.status==="purchase_registered"?"Compra já registrada":"Preparar compra vinculada"}</button>
-                  </div>}
+                  {["waiting_purchase","purchase_registered","partially_fulfilled","ready_for_dispatch"].includes(request.status)
+                    && request.items.some((item:any)=>Number(item.quantityReadyForDispatch)<Number(item.quantity))
+                    && <div className="flex flex-wrap items-center gap-2">
+                      {request.linkedPurchases?.some((purchase:any)=>!["received","cancelled"].includes(purchase.status)&&purchase.approvalStatus!=="rejected")
+                        ? <span className="text-xs text-slate-500">Compra em andamento. O próximo pedido será liberado após o recebimento ou encerramento da compra atual.</span>
+                        : <button type="button" onClick={()=>openPurchaseFromInventoryRequest(request)} className="min-h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700">Preparar compra vinculada</button>}
+                    </div>}
                   {(request.status==="ready_for_dispatch"||request.status==="waiting_purchase"||request.status==="partially_fulfilled"||request.status==="purchase_registered") && request.items.filter((item:any)=>item.resolvedPartId&&item.quantityReadyForDispatch>item.quantityFulfilled).map((item:any)=><div key={"dispatch-"+item.id} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-end">
                     <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Estoque de destino
                       <select value={inventoryRequestDestinationStocks[item.id]||""} onChange={(event)=>setInventoryRequestDestinationStocks(current=>({...current,[item.id]:event.target.value}))} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
