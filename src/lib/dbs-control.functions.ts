@@ -4949,12 +4949,25 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
     const actor = await resolveDbsOperationalMaterialActor(context);
     const { user, companyId, scopeKey, scopedUserIds, employee, collaboratorBase } = actor;
     const isCollaborator = user.role_key === "COLABORADOR";
-    const employeeIds = isCollaborator && employee
-      ? [String(employee.id)]
-      : [...new Set([
-          ...(await (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
-            .in("user_id", scopedUserIds).eq("access_enabled", true)).data ?? [],
-        ].map((row: any) => String(row.employee_id)).filter(Boolean))];
+    const [employeeAccess, linkedEmployees] = isCollaborator ? [
+      { data: [{ employee_id: employee?.id }], error: null },
+      { data: [], error: null },
+    ] : await Promise.all([
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
+            .in("user_id", scopedUserIds).eq("access_enabled", true)
+        : Promise.resolve({ data: [], error: null }),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employees").select("id")
+            .in("ponto_portal_user_id", scopedUserIds).eq("dbs_control_access_enabled", true).eq("is_active", true)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (employeeAccess.error) throw new Error("Falha ao carregar vínculos de colaboradores: " + employeeAccess.error.message);
+    if (linkedEmployees.error) throw new Error("Falha ao carregar colaboradores do escopo: " + linkedEmployees.error.message);
+    const employeeIds = [...new Set([
+      ...(employeeAccess.data ?? []).map((row: any) => String(row.employee_id ?? "")),
+      ...(linkedEmployees.data ?? []).map((row: any) => String(row.id ?? "")),
+    ].filter(Boolean))];
 
     const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
@@ -4976,7 +4989,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
             .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
             .order("created_at", { ascending: false }).limit(500),
       (supabaseAdmin as any).from("dbs_control_material_requests")
-        .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,version,created_at,updated_at")
+        .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,requested_by,version,created_at,updated_at")
         .eq("scope_key", scopeKey)
         .order("created_at", { ascending: false }).limit(500),
       isCollaborator
@@ -5080,66 +5093,91 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const actor = await resolveDbsOperationalMaterialActor(context);
+    const { user, companyId, scopeKey, scopedUserIds, employee, collaboratorBase } = actor;
+    const isCollaborator = user.role_key === "COLABORADOR";
     const admin = supabaseAdmin as any;
+
+    if (isCollaborator) {
+      if (!employee?.id) throw new Error("O vínculo do colaborador com o RH não está ativo.");
+      if (data.employeeId && String(data.employeeId) !== String(employee.id)) {
+        throw new Error("O colaborador só pode solicitar material em seu próprio nome.");
+      }
+      if (!data.employeeId) data.employeeId = String(employee.id);
+      if (data.requestType === "gas_refill" && String(data.gasCylinderId || "") === "") {
+        throw new Error("Selecione a botija de gás atribuída ao seu cadastro.");
+      }
+      if (data.destinationStockId) {
+        throw new Error("O colaborador não pode escolher outro estoque de destino. O Financeiro fará a separação e entrega.");
+      }
+    }
+
     if (data.partId) {
       const { data: part, error } = await admin.from("dbs_control_parts")
         .select("id,name,status").eq("id", data.partId).eq("scope_key", scopeKey).maybeSingle();
       if (error) throw new Error(error.message);
       if (!part || part.status !== "ativo") throw new Error("Peça não encontrada ou inativa.");
     }
+
     if (data.workOrderId) {
       const { data: order, error } = await admin.from("dbs_control_work_orders")
-        .select("id,created_by_user_id").eq("id", data.workOrderId).is("deleted_at", null).maybeSingle();
+        .select("id,created_by_user_id,assigned_employee_id,client_id")
+        .eq("id", data.workOrderId).is("deleted_at", null).maybeSingle();
       if (error) throw new Error(error.message);
       if (!order) throw new Error("Ordem de serviço não encontrada ou arquivada.");
-      const scopedUsers = companyId
-        ? await admin.from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
-        : { data: [{ id: user.id }], error: null };
-      if (scopedUsers.error) throw new Error(scopedUsers.error.message);
-      const allowedCreatorIds = new Set((scopedUsers.data ?? []).map((row: any) => String(row.id)));
-      if (!allowedCreatorIds.has(String(order.created_by_user_id))) {
-        throw new Error("A OS não pertence ao escopo operacional deste usuário.");
+      if (isCollaborator) {
+        if (String(order.assigned_employee_id ?? "") !== String(employee.id)) {
+          throw new Error("A OS selecionada não está atribuída a este colaborador.");
+        }
+        if (collaboratorBase?.baseId) {
+          if (!collaboratorBase.baseActive ||
+              !(collaboratorBase.clientIds ?? []).map(String).includes(String(order.client_id ?? ""))) {
+            throw new Error("A OS não pertence a um cliente vinculado à base ativa do colaborador.");
+          }
+        }
+      } else {
+        const allowedCreatorIds = new Set(scopedUserIds.map(String));
+        if (!allowedCreatorIds.has(String(order.created_by_user_id))) {
+          throw new Error("A OS não pertence ao escopo operacional deste usuário.");
+        }
       }
     }
+
     if (data.destinationStockId) {
       const { data: stock, error } = await admin.from("dbs_control_operational_stocks")
         .select("id").eq("id", data.destinationStockId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
       if (error) throw new Error(error.message);
       if (!stock) throw new Error("Estoque operacional de destino não encontrado ou inativo.");
     }
+
     if (data.gasCylinderId) {
       const { data: cylinder, error } = await admin.from("dbs_control_gas_cylinders")
         .select("id,employee_id,vehicle_label,status,scope_key")
         .eq("id", data.gasCylinderId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
       if (error) throw new Error(error.message);
       if (!cylinder) throw new Error("Botija de gás não encontrada ou inativa neste escopo.");
-      if (data.employeeId && data.employeeId !== cylinder.employee_id) throw new Error("O colaborador informado não corresponde à botija selecionada.");
+      if (isCollaborator && String(cylinder.employee_id) !== String(employee.id)) {
+        throw new Error("A botija selecionada não está atribuída a este colaborador.");
+      }
+      if (data.employeeId && data.employeeId !== cylinder.employee_id) {
+        throw new Error("O colaborador informado não corresponde à botija selecionada.");
+      }
       data.employeeId = cylinder.employee_id;
       if (!data.vehicleLabel) data.vehicleLabel = cylinder.vehicle_label ?? null;
     }
-    if (data.employeeId) {
-      let scopedUsersForEmployeeQuery = admin.from("users").select("id").eq("status", "ativo");
-      scopedUsersForEmployeeQuery = companyId
-        ? scopedUsersForEmployeeQuery.eq("company_id", companyId)
-        : scopedUsersForEmployeeQuery.eq("id", user.id);
-      const scopedUsersForEmployee = await scopedUsersForEmployeeQuery;
-      if (scopedUsersForEmployee.error) throw new Error(scopedUsersForEmployee.error.message);
-      const scopedUserIdsForEmployee = (scopedUsersForEmployee.data ?? []).map((row: any) => row.id);
-      const employeeAccess = scopedUserIdsForEmployee.length
-        ? await admin.from("rh_employee_access").select("employee_id")
-            .eq("employee_id", data.employeeId).in("user_id", scopedUserIdsForEmployee).eq("access_enabled", true).maybeSingle()
-        : { data: null, error: null };
+
+    if (data.employeeId && !isCollaborator) {
+      const employeeAccess = await admin.from("rh_employee_access").select("employee_id")
+        .eq("employee_id", data.employeeId).in("user_id", scopedUserIds).eq("access_enabled", true).maybeSingle();
       if (employeeAccess.error) throw new Error(employeeAccess.error.message);
-      const { data: employee, error } = await admin.from("rh_employees")
+      const { data: linkedEmployee, error } = await admin.from("rh_employees")
         .select("id,is_active").eq("id", data.employeeId).maybeSingle();
       if (error) throw new Error(error.message);
-      if (!employee || employee.is_active !== true || !employeeAccess.data) {
+      if (!linkedEmployee || linkedEmployee.is_active !== true || !employeeAccess.data) {
         throw new Error("Colaborador não encontrado, inativo ou fora da empresa vinculada.");
       }
     }
+
     const payload = {
       request_type: data.requestType, part_id: data.partId, work_order_id: data.workOrderId,
       destination_stock_id: data.destinationStockId, employee_id: data.employeeId,
@@ -5160,18 +5198,9 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       status: "pending", requested_by: user.id, request_hash: requestHash,
       idempotency_key: data.idempotencyKey, version: 1,
     }).select("id,request_type,part_id,work_order_id,description,quantity,unit_label,reason,status,version,created_at").single();
-    if (saved.error) {
-      if (saved.error.code === "23505") {
-        const replay = await admin.from("dbs_control_material_requests")
-          .select("id,request_hash,status,version,created_at")
-          .eq("scope_key", scopeKey).eq("idempotency_key", data.idempotencyKey).maybeSingle();
-        if (!replay.error && replay.data?.request_hash === requestHash) return { ...replay.data, replayed: true };
-      }
-      throw new Error(saved.error.message);
-    }
+    if (saved.error) throw new Error(saved.error.message);
     return { ...saved.data, replayed: false };
   });
-
 export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
