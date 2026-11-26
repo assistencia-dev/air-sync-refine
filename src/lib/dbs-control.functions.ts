@@ -4843,7 +4843,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
     const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
-        .eq("status", "ativo").order("name").limit(1000),
+        .eq("scope_key", scopeKey).eq("status", "ativo").order("name").limit(1000),
       (supabaseAdmin as any).from("dbs_control_operational_stocks")
         .select("id,cost_center_id,name,status,created_at")
         .eq("scope_key", scopeKey).eq("status", "active").order("created_at"),
