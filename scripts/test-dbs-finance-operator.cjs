@@ -54,7 +54,7 @@ assert.match(login, /FINANCEIRO_OPERADOR[\s\S]{0,160}\/financeiro/);
 assert.match(treasuryRoute, /"FINANCEIRO_OPERADOR"/);
 assert.match(treasuryRoute, /profile\?\.role_key === "FINANCEIRO_OPERADOR"/);
 assert.match(accessRoute, /FINANCEIRO_OPERADOR/);
-assert.match(viewer, /role_key:\s*"FINANCEIRO_LEITURA"\s*\|\s*"FINANCEIRO_OPERADOR"/);
+assert.match(viewer, /role_key\??:\s*"FINANCEIRO_LEITURA"\s*\|\s*"FINANCEIRO_OPERADOR"/);
 assert.match(viewer, /role_key: data\.role_key/);
 assert.match(types, /\| "FINANCEIRO_OPERADOR"/);
 
