@@ -18,7 +18,7 @@ assert.match(migration, /gas_cylinder_id uuid REFERENCES public\.dbs_control_gas
 assert.match(migration, /request_type <> 'gas_refill' OR gas_cylinder_id IS NOT NULL/i);
 assert.match(migration, /REFERENCES public\.dbs_control_purchases\(id\) ON DELETE RESTRICT/i);
 assert.match(migration, /REFERENCES public\.dbs_control_purchase_items\(id\) ON DELETE RESTRICT/i);
-assert.match(migration, /UNIQUE\(scope_key, idempotency_key\)/i);
+assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS dbs_control_material_requests_idempotency_uidx[\s\S]*ON public\.dbs_control_material_requests\(scope_key, idempotency_key\)/i);
 assert.match(migration, /version bigint NOT NULL DEFAULT 1/i);
 assert.match(migration, /DBS_MATERIAL_REQUEST_VERSION_CONFLICT/i);
 assert.match(migration, /DBS_MATERIAL_REQUEST_SKU_MISMATCH/i);
