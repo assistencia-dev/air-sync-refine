@@ -24,6 +24,11 @@ assert.match(operationalDto, /select\("id,sku,name,description,stock_quantity,re
 assert.doesNotMatch(operationalDto, /cost_cents|sale_cents|unit_cost_cents|purchase|supplier|accounts_payable/i);
 assert.match(operationalDto, /availableQuantity/);
 assert.match(operationalDto, /operationalBalances/);
+assert.match(operationalDto, /dbs_control_operational_reservations/);
+assert.match(operationalDto, /dbs_control_work_orders/);
+assert.match(operationalDto, /costCenters:/);
+assert.match(operationalDto, /workOrders:/);
+assert.match(operationalDto, /operationalReservations:/);
 
 const financeGuard = block(functions, "async function requireDbsInventoryFinanceAdmin", "function requireInventoryId");
 assert.match(financeGuard, /user\.role_key !== "SUPER_ADMIN"/);
@@ -38,6 +43,12 @@ assert.match(operationsPage, /getDbsOperationalInventoryOverview/);
 assert.match(operationsPage, /Peças & Estoque/);
 assert.match(operationsPage, /Estoque central/);
 assert.match(operationsPage, /Estoque operacional/);
+assert.match(operationsPage, /reserveDbsOperationalStockForWorkOrder/);
+assert.match(operationsPage, /transferDbsOperationalStock/);
+assert.match(operationsPage, /createDbsOperationalStock/);
+assert.match(operationsPage, /releaseDbsOperationalStockReservation/);
+assert.match(operationsPage, /Usar peça em uma OS/);
+assert.match(operationsPage, /Transferir estoque/);
 assert.doesNotMatch(operationsPage, /cost_cents|sale_cents|unit_cost_cents|catalogPartCost|catalogPartSale/i);
 
 const routeGuard = block(inventoryRoute, "function DbsInventoryRoute()", "function money(");
