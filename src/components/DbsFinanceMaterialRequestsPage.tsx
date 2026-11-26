@@ -4,6 +4,7 @@ import { CheckCircle2, ClipboardList, RefreshCw, Send, Truck, XCircle } from "lu
 import {
   decideDbsMaterialRequest,
   fulfillDbsMaterialRequest,
+  fulfillDbsGasRefillRequest,
   getDbsFinanceMaterialRequests,
   getDbsPhase2InventoryOverview,
   linkDbsMaterialRequestPurchase,
@@ -53,6 +54,7 @@ export function DbsFinanceMaterialRequestsPage() {
   const [linkQuantities, setLinkQuantities] = useState<Record<string, string>>({});
   const [destinationStocks, setDestinationStocks] = useState<Record<string, string>>({});
   const [fulfillQuantities, setFulfillQuantities] = useState<Record<string, string>>({});
+  const [gasRefillCharges, setGasRefillCharges] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -123,6 +125,23 @@ export function DbsFinanceMaterialRequestsPage() {
     },
   });
 
+  const fulfillGasRefill = useMutation({
+    mutationFn: ({ requestId, totalChargesAfter, expectedVersion }: { requestId: string; totalChargesAfter: number; expectedVersion: number }) =>
+      fulfillDbsGasRefillRequest({ data: {
+        requestId, totalChargesAfter, expectedVersion, idempotencyKey: newKey(),
+      } }),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage("Recarga de gás registrada, estoque consumido e custo lançado no Ledger.");
+      await queryClient.invalidateQueries({ queryKey: ["dbs-finance-material-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["dbs-operational-inventory-overview"] });
+    },
+    onError: (error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível concluir a recarga.");
+      setSuccessMessage("");
+    },
+  });
+
   const requests = queue.data?.requests ?? [];
   const purchases = queue.data?.purchases ?? [];
   const purchaseItems = queue.data?.purchaseItems ?? [];
@@ -177,6 +196,12 @@ export function DbsFinanceMaterialRequestsPage() {
           const fulfilled = Number(request.fulfilled_quantity ?? 0);
           const remaining = Math.max(0, Number(request.quantity ?? 0) - fulfilled);
           const selectableStocks = operationalStocks.filter((stock: any) => stock.status === "active");
+          const isGasRefill = request.request_type === "gas_refill";
+          const gasCylinder = request.gasCylinder;
+          const linkedPurchaseItem = linked.length > 0
+            ? purchaseItems.find((item: any) => String(item.id) === String(linked[0].purchase_item_id))
+            : null;
+          const gasReceiptReady = Boolean(linkedPurchaseItem && Number(linkedPurchaseItem.quantity_received ?? 0) >= 1);
           return (
             <article key={request.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -184,6 +209,7 @@ export function DbsFinanceMaterialRequestsPage() {
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{labels[request.request_type] ?? request.request_type}</p>
                   <h3 className="mt-1 text-base font-bold">{request.description}</h3>
                   {requestedPart && <p className="mt-1 text-sm text-slate-600">SKU {requestedPart.sku} · {requestedPart.name}</p>}
+                  {isGasRefill && gasCylinder && <p className="mt-1 text-sm font-semibold text-blue-800">Botija {gasCylinder.serial_number} · {gasCylinder.refrigerant_type} · {gasCylinder.remaining_charges}/{gasCylinder.total_charges} cargas atuais</p>}
                   <p className="mt-1 text-sm text-slate-600">{Number(request.quantity).toLocaleString("pt-BR")} {request.unit_label} solicitados · {fulfilled.toLocaleString("pt-BR")} atendidos</p>
                   {request.work_order_id && <p className="mt-1 text-xs text-slate-500">OS: {request.work_order_id}</p>}
                   <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{request.reason}</p>
@@ -222,13 +248,27 @@ export function DbsFinanceMaterialRequestsPage() {
                       })}
                     </select>
                     <div className="flex gap-2">
-                      <input aria-label="Quantidade vinculada" type="number" min="0.0001" step="0.0001" value={linkQuantities[request.id] ?? String(remaining || 1)} onChange={(e) => setLinkQuantities((current) => ({ ...current, [request.id]: e.target.value }))} className="min-h-11 w-32 rounded-xl border border-slate-200 px-3 text-sm" />
-                      <button type="button" disabled={!purchaseItemIds[request.id] || linkPurchase.isPending} onClick={() => linkPurchase.mutate({ requestId: request.id, purchaseItemId: purchaseItemIds[request.id], quantity: Number(linkQuantities[request.id] ?? remaining), expectedVersion: Number(request.version) })} className="min-h-11 flex-1 rounded-xl border border-blue-200 px-3 text-sm font-bold text-blue-800 disabled:opacity-50">Vincular item</button>
+                      {isGasRefill
+                        ? <div className="flex min-h-11 w-32 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">1 recarga</div>
+                        : <input aria-label="Quantidade vinculada" type="number" min="0.0001" step="0.0001" value={linkQuantities[request.id] ?? String(remaining || 1)} onChange={(e) => setLinkQuantities((current) => ({ ...current, [request.id]: e.target.value }))} className="min-h-11 w-32 rounded-xl border border-slate-200 px-3 text-sm" />}
+                      <button type="button" disabled={!purchaseItemIds[request.id] || linkPurchase.isPending} onClick={() => linkPurchase.mutate({ requestId: request.id, purchaseItemId: purchaseItemIds[request.id], quantity: isGasRefill ? 1 : Number(linkQuantities[request.id] ?? remaining), expectedVersion: Number(request.version) })} className="min-h-11 flex-1 rounded-xl border border-blue-200 px-3 text-sm font-bold text-blue-800 disabled:opacity-50">Vincular item</button>
                     </div>
                     {linked.length > 0 && <p className="text-xs text-slate-500">{linked.length} vínculo(s) registrados para esta solicitação.</p>}
                   </div>
 
-                  <div className="space-y-2">
+                  {isGasRefill ? (
+                    <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                      <h4 className="text-sm font-bold text-blue-900">Concluir recarga da botija</h4>
+                      <p className="text-xs text-blue-900">A recarga exige item comprado, recebimento físico disponível e saldo do SKU no estoque central. O sistema consome uma unidade, atualiza a botija e lança o custo no Ledger.</p>
+                      <label className="block text-sm font-semibold text-slate-700">Capacidade após recarga (cargas)
+                        <input type="number" min="1" step="1" value={gasRefillCharges[request.id] ?? String(gasCylinder?.total_charges ?? 1)} onChange={(e) => setGasRefillCharges((current) => ({ ...current, [request.id]: e.target.value }))} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                      </label>
+                      <button type="button" disabled={!gasReceiptReady || !request.part_id || fulfillGasRefill.isPending || !Number.isSafeInteger(Number(gasRefillCharges[request.id] ?? gasCylinder?.total_charges ?? 1)) || Number(gasRefillCharges[request.id] ?? gasCylinder?.total_charges ?? 1) <= 0} onClick={() => fulfillGasRefill.mutate({ requestId: request.id, totalChargesAfter: Number(gasRefillCharges[request.id] ?? gasCylinder?.total_charges ?? 1), expectedVersion: Number(request.version) })} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-3 text-sm font-bold text-white disabled:opacity-50"><Truck className="h-4 w-4"/> {fulfillGasRefill.isPending ? "Concluindo…" : "Concluir recarga e lançar custo"}</button>
+                      {!linked.length && <p className="text-xs text-amber-800">Vincule primeiro a linha de recarga na compra.</p>}
+                      {linked.length > 0 && !gasReceiptReady && <p className="text-xs text-amber-800">Aguardando o recebimento físico do item vinculado.</p>}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
                     <h4 className="text-sm font-bold">Transferir para estoque operacional</h4>
                     <p className="text-xs text-slate-600">A transferência só é confirmada com saldo central disponível e, quando houver compra vinculada, após o recebimento físico.</p>
                     <select value={destinationStocks[request.id] ?? request.destination_stock_id ?? ""} onChange={(e) => setDestinationStocks((current) => ({ ...current, [request.id]: e.target.value }))} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
@@ -241,6 +281,7 @@ export function DbsFinanceMaterialRequestsPage() {
                     </div>
                     {!request.part_id && <p className="text-xs text-amber-700">Para liberar esta solicitação, vincule primeiro um item de compra para identificar o SKU.</p>}
                   </div>
+                  )}
                 </div>
               )}
             </article>
@@ -252,7 +293,8 @@ export function DbsFinanceMaterialRequestsPage() {
         {recentRequests.length > 0 && <div className="space-y-2 pt-3">
           <h3 className="text-sm font-bold text-slate-700">Histórico recente</h3>
           {recentRequests.slice(0, 20).map((request: any) => <div key={request.id} className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-sm font-semibold">{request.description}</p><p className="text-xs text-slate-500">{labels[request.request_type] ?? request.request_type} · {Number(request.fulfilled_quantity ?? 0).toLocaleString("pt-BR")}/{Number(request.quantity).toLocaleString("pt-BR")} atendidos</p></div>
+            <div><p className="text-sm font-semibold">{request.description}</p><p className="text-xs text-slate-500">{labels[request.request_type] ?? request.request_type} · {Number(request.fulfilled_quantity ?? 0).toLocaleString("pt-BR")}/{Number(request.quantity).toLocaleString("pt-BR")} atendidos</p>
+              {request.request_type === "gas_refill" && request.gasRefillEvent && <p className="mt-1 text-xs text-slate-600">Botija {request.gasRefillEvent.total_charges_after} cargas · Custo: {moneyFromCents(Number(request.gasRefillEvent.total_cost_cents))} · Ledger {request.gasRefillEvent.ledger_entry_id}</p>}</div>
             <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${statusStyle[request.status as QueueStatus] ?? "bg-slate-100"}`}>{statusLabels[request.status as QueueStatus] ?? request.status}</span>
           </div>)}
         </div>}
