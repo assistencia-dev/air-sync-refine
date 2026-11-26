@@ -51,11 +51,13 @@ async function resolveTreasuryScopeOwner(user: { id: string; company_id: string 
   }
   const { data: owner, error: ownerError } = await supabaseAdmin
     .from("users")
-    .select("id,company_id,status")
+    .select("id,company_id,status,role_key")
     .eq("id", access.owner_user_id)
     .maybeSingle();
   if (ownerError) throw new Error(ownerError.message);
-  if (!owner || owner.status !== "ativo") throw new Error("O responsável pelo Financeiro não está ativo.");
+  if (!owner || owner.status !== "ativo" || owner.role_key !== "SUPER_ADMIN" || owner.company_id !== user.company_id) {
+    throw new Error("O responsável pelo Financeiro não está ativo ou não corresponde à empresa vinculada.");
+  }
   return owner;
 }
 
@@ -474,11 +476,11 @@ export const saveTreasuryCostCenter = createServerFn({ method: "POST" })
     return {code,name};
   })
   .handler(async ({context,data})=>{
-    const user=await requireTreasuryAdmin(context);
-    const scopeKey=user.company_id? `company:${user.company_id}` : `user:${user.id}`;
+    const {user,owner,scopeKey}=await requirePurchaseApprovalActor(context);
+    
     const admin=supabaseAdmin as any;
     const saved=await admin.from("dbs_control_cost_centers").upsert({
-      company_id:user.company_id,
+      company_id:owner.company_id,
       scope_key:scopeKey,
       code:data.code,
       name:data.name,
