@@ -3626,6 +3626,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     purchaseDate: string;
     idempotencyKey: string;
     sourceQuoteId?: string;
+    sourceInventoryRequestId?: string;
     items: Array<{ partId: string; purchaseUnitId: string; quantity: number; unitCostCents: number; conversionFactor: number }>;
   }) => {
     const purchaseDate = String(input?.purchaseDate ?? "").trim();
@@ -3643,6 +3644,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
       purchaseDate,
       idempotencyKey: input.idempotencyKey.trim().slice(0, 240),
       sourceQuoteId: input.sourceQuoteId ? requireInventoryId(input.sourceQuoteId, "Orçamento de origem") : null,
+      sourceInventoryRequestId: input.sourceInventoryRequestId ? requireInventoryId(input.sourceInventoryRequestId, "Solicitação de origem") : null,
       items: items.map((item) => {
         if (!item?.partId || !item?.purchaseUnitId || !Number.isFinite(item.quantity) || item.quantity <= 0 ||
             !Number.isSafeInteger(item.unitCostCents) || item.unitCostCents <= 0 ||
@@ -3681,6 +3683,16 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
       if (sourceQuoteError) throw new Error(sourceQuoteError.message);
       if (!sourceQuote) throw new Error("O orçamento de origem não foi encontrado neste cadastro.");
     }
+    if (data.sourceInventoryRequestId) {
+      const { data: sourceRequest, error: sourceRequestError } = await (supabaseAdmin as any)
+        .from("dbs_control_inventory_requests")
+        .select("id,scope_key,status")
+        .eq("id",data.sourceInventoryRequestId).eq("scope_key",scopeKey).maybeSingle();
+      if (sourceRequestError) throw new Error(sourceRequestError.message);
+      if (!sourceRequest || !["waiting_purchase","purchase_registered","partially_fulfilled"].includes(sourceRequest.status)) {
+        throw new Error("A solicitação de origem não está aguardando compra neste escopo.");
+      }
+    }
 
     const resolvedItems = [];
     for (const item of data.items) {
@@ -3717,22 +3729,25 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
         unit_cost_cents: item.unitCostCents,
       });
     }
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_register_purchase_with_quote", {
-      p_payload: {
-        actor_user_id: user.id,
-        company_id: companyId,
-        scope_key: scopeKey,
-        supplier_id: data.supplierId,
-        supplier_name: supplier.data.name,
-        cost_center_id: data.costCenterId,
-        document_number: data.documentNumber,
-        purchase_date: data.purchaseDate,
-        payment_status: "unpaid",
-        idempotency_key: data.idempotencyKey,
-        source_quote_id: data.sourceQuoteId,
-        items: resolvedItems,
-      },
-    });
+    const purchasePayload = {
+      actor_user_id: user.id,
+      company_id: companyId,
+      scope_key: scopeKey,
+      supplier_id: data.supplierId,
+      supplier_name: supplier.data.name,
+      cost_center_id: data.costCenterId,
+      document_number: data.documentNumber,
+      purchase_date: data.purchaseDate,
+      payment_status: "unpaid",
+      idempotency_key: data.idempotencyKey,
+      source_quote_id: data.sourceQuoteId,
+      source_inventory_request_id: data.sourceInventoryRequestId,
+      items: resolvedItems,
+    };
+    const { data: result, error } = await (supabaseAdmin as any).rpc(
+      data.sourceInventoryRequestId ? "dbs_control_register_purchase_with_request" : "dbs_control_register_purchase_with_quote",
+      { p_payload: purchasePayload },
+    );
     if (error) throw new Error(error.message);
     return result;
   });
