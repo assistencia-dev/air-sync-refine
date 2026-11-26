@@ -5036,6 +5036,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       parts: parts.data ?? [],
       operationalStocks: stocks.data ?? [],
       operationalBalances: balances.data ?? [],
+      canChooseDestination: !isCollaborator,
       workOrders: visibleWorkOrders,
       materialRequests: visibleRequests,
       employees: employees.data ?? [],
@@ -5076,6 +5077,7 @@ export const createDbsMaterialRequest = createServerFn({ method: "POST" })
       throw new Error("Informe uma quantidade maior que zero e dentro do limite.");
     }
     if (requestType === "gas_refill" && !input?.gasCylinderId) throw new Error("Selecione a botija de gás para solicitar a recarga.");
+    if (requestType === "gas_refill" && input.quantity !== 1) throw new Error("Cada solicitação de recarga corresponde a uma única botija.");
     if (requestType === "part" && (!input?.partId || !input?.workOrderId)) {
       throw new Error("Para solicitar uma peça cadastrada, selecione a peça e a OS.");
     }
