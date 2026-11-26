@@ -3924,6 +3924,12 @@ export const getDbsInventoryRequests = createServerFn({ method: "GET" })
           .in("request_id",ids).order("line_no")
       : {data:[],error:null};
     if (items.error) throw new Error(items.error.message);
+    const linkedPurchases = ids.length
+      ? await (supabaseAdmin as any).from("dbs_control_purchases")
+          .select("id,source_inventory_request_id,status,approval_status,document_number,purchase_date")
+          .in("source_inventory_request_id",ids).order("created_at",{ascending:false})
+      : {data:[],error:null};
+    if (linkedPurchases.error) throw new Error(linkedPurchases.error.message);
     const partMap = new Map((parts.data ?? []).map((part:any)=>[String(part.id),part]));
     return (requests.data ?? []).map((request:any)=>({
       id:String(request.id),requestNumber:String(request.request_number ?? ""),
@@ -3934,6 +3940,11 @@ export const getDbsInventoryRequests = createServerFn({ method: "GET" })
       decidedBy:request.decided_by ? String(request.decided_by) : null,
       decidedAt:request.decided_at ? String(request.decided_at) : null,
       version:Number(request.version ?? 1),createdAt:String(request.created_at),updatedAt:String(request.updated_at),
+      linkedPurchases:(linkedPurchases.data ?? []).filter((purchase:any)=>String(purchase.source_inventory_request_id)===String(request.id)).map((purchase:any)=>({
+        id:String(purchase.id),status:String(purchase.status ?? ""),approvalStatus:String(purchase.approval_status ?? ""),
+        documentNumber:purchase.document_number ? String(purchase.document_number) : null,
+        purchaseDate:purchase.purchase_date ? String(purchase.purchase_date) : null,
+      })),
       items:(items.data ?? []).filter((item:any)=>String(item.request_id)===String(request.id)).map((item:any)=>{
         const part=partMap.get(String(item.resolved_part_id ?? item.part_id));
         return {
