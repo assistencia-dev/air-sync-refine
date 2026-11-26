@@ -3881,6 +3881,156 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
     };
   });
 
+export const getDbsInventoryRequests = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users").select("id,company_id,role_key,status")
+      .eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" ||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso às solicitações de materiais não autorizado.");
+    }
+    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const [requests, parts] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_inventory_requests")
+        .select("id,request_number,scope_key,requested_by,cost_center_id,work_order_id,urgency,reason,status,decision_reason,decided_by,decided_at,version,created_at,updated_at")
+        .eq("scope_key",scopeKey).order("created_at",{ascending:false}).limit(250),
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,stock_quantity,reserved_quantity,status").order("name").limit(1000),
+    ]);
+    if (requests.error) throw new Error(requests.error.message);
+    if (parts.error) throw new Error(parts.error.message);
+    const ids = (requests.data ?? []).map((row:any)=>String(row.id));
+    const items = ids.length
+      ? await (supabaseAdmin as any).from("dbs_control_inventory_request_items")
+          .select("id,request_id,line_no,item_type,part_id,resolved_part_id,requested_label,requested_sku,description,quantity,unit_label,quantity_ready_for_dispatch,quantity_fulfilled,status")
+          .in("request_id",ids).order("line_no")
+      : {data:[],error:null};
+    if (items.error) throw new Error(items.error.message);
+    const partMap = new Map((parts.data ?? []).map((part:any)=>[String(part.id),part]));
+    return (requests.data ?? []).map((request:any)=>({
+      id:String(request.id),requestNumber:String(request.request_number ?? ""),
+      requestedBy:String(request.requested_by),costCenterId:request.cost_center_id ? String(request.cost_center_id) : null,
+      workOrderId:request.work_order_id ? String(request.work_order_id) : null,
+      urgency:String(request.urgency),reason:String(request.reason),status:String(request.status),
+      decisionReason:request.decision_reason ? String(request.decision_reason) : null,
+      decidedBy:request.decided_by ? String(request.decided_by) : null,
+      decidedAt:request.decided_at ? String(request.decided_at) : null,
+      version:Number(request.version ?? 1),createdAt:String(request.created_at),updatedAt:String(request.updated_at),
+      items:(items.data ?? []).filter((item:any)=>String(item.request_id)===String(request.id)).map((item:any)=>{
+        const part=partMap.get(String(item.resolved_part_id ?? item.part_id));
+        return {
+          id:String(item.id),lineNo:Number(item.line_no),itemType:String(item.item_type),
+          partId:item.part_id ? String(item.part_id) : null,
+          resolvedPartId:item.resolved_part_id ? String(item.resolved_part_id) : null,
+          requestedLabel:String(item.requested_label),requestedSku:item.requested_sku ? String(item.requested_sku) : null,
+          description:item.description ? String(item.description) : null,
+          quantity:Number(item.quantity),unitLabel:String(item.unit_label),
+          quantityReadyForDispatch:Number(item.quantity_ready_for_dispatch ?? 0),
+          quantityFulfilled:Number(item.quantity_fulfilled ?? 0),status:String(item.status),
+          currentPart:part ? {
+            id:String(part.id),sku:String(part.sku ?? ""),name:String(part.name ?? ""),
+            centralAvailableQuantity:Math.max(0,Number(part.stock_quantity ?? 0)-Number(part.reserved_quantity ?? 0)),
+            active:String(part.status ?? "")==="ativo",
+          } : null,
+        };
+      }),
+    }));
+  });
+
+export const createDbsInventoryRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    idempotencyKey:string;reason:string;urgency?:"normal"|"urgent";
+    workOrderId?:string|null;costCenterId?:string|null;
+    items:Array<{itemType:"part"|"tool"|"supply"|"gas";partId?:string|null;requestedLabel:string;requestedSku?:string;description?:string;quantity:number;unitLabel?:string}>;
+  })=>{
+    const reason=String(input?.reason ?? "").trim();
+    const items=Array.isArray(input?.items)?input.items:[];
+    const idempotencyKey=String(input?.idempotencyKey ?? "").trim();
+    if(reason.length<5||reason.length>2000||idempotencyKey.length<8||idempotencyKey.length>240||!items.length||items.length>30) {
+      throw new Error("Informe a necessidade e ao menos um item válido.");
+    }
+    return {
+      idempotencyKey,reason,urgency:input.urgency==="urgent"?"urgent" as const:"normal" as const,
+      workOrderId:input.workOrderId?requireInventoryId(input.workOrderId,"OS"):null,
+      costCenterId:input.costCenterId?requireInventoryId(input.costCenterId,"Centro de custo"):null,
+      items:items.map((item)=>{
+        const label=String(item?.requestedLabel ?? "").trim();
+        if(!["part","tool","supply","gas"].includes(item.itemType)||label.length<2||label.length>180||
+          !Number.isFinite(item.quantity)||item.quantity<=0) throw new Error("Revise a descrição, categoria e quantidade solicitadas.");
+        return {
+          item_type:item.itemType,
+          part_id:item.partId?requireInventoryId(item.partId,"Peça"):null,
+          requested_label:label,
+          requested_sku:String(item.requestedSku ?? "").trim().slice(0,80)||null,
+          description:String(item.description ?? "").trim().slice(0,1000)||null,
+          quantity:item.quantity,
+          unit_label:String(item.unitLabel ?? "un").trim().slice(0,30)||"un",
+        };
+      }),
+    };
+  })
+  .handler(async ({context,data})=>{
+    const user=await requireDbsInventoryAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_create_inventory_request",{
+      p_payload:{
+        actor_user_id:user.id,idempotency_key:data.idempotencyKey,reason:data.reason,urgency:data.urgency,
+        work_order_id:data.workOrderId,cost_center_id:data.costCenterId,items:data.items,
+      },
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const decideDbsInventoryRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{
+    requestId:string;decision:"approve"|"waiting_purchase"|"reject";reason?:string;
+    expectedVersion:number;itemMappings?:Array<{requestItemId:string;partId:string}>;
+  })=>{
+    const requestId=requireInventoryId(input?.requestId,"Solicitação");
+    if(!["approve","waiting_purchase","reject"].includes(input?.decision)) throw new Error("Decisão da solicitação inválida.");
+    const reason=String(input?.reason ?? "").trim();
+    if(input.decision==="reject"&&(reason.length<5||reason.length>1000)) throw new Error("Informe o motivo da rejeição.");
+    if(!Number.isSafeInteger(input.expectedVersion)||input.expectedVersion<1) throw new Error("Atualize a solicitação antes de decidir.");
+    const mappings=Array.isArray(input.itemMappings)?input.itemMappings:[];
+    return {requestId,decision:input.decision,reason:reason||null,expectedVersion:input.expectedVersion,
+      itemMappings:mappings.map(item=>({request_item_id:requireInventoryId(item.requestItemId,"Item da solicitação"),part_id:requireInventoryId(item.partId,"Peça")}))};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_decide_inventory_request",{
+      p_request_id:data.requestId,p_actor_user_id:user.id,p_decision:data.decision,p_reason:data.reason,
+      p_expected_version:data.expectedVersion,p_item_mappings:data.itemMappings,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
+export const fulfillDbsInventoryRequestFromCentral = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input:{requestId:string;requestItemId:string;destinationStockId:string;quantity:number;idempotencyKey:string})=>{
+    const idempotencyKey=String(input?.idempotencyKey ?? "").trim();
+    if(!Number.isFinite(input?.quantity)||input.quantity<=0||idempotencyKey.length<8||idempotencyKey.length>240)
+      throw new Error("Informe uma quantidade e chave de movimentação válidas.");
+    return {requestId:requireInventoryId(input.requestId,"Solicitação"),
+      requestItemId:requireInventoryId(input.requestItemId,"Item da solicitação"),
+      destinationStockId:requireInventoryId(input.destinationStockId,"Estoque de destino"),
+      quantity:input.quantity,idempotencyKey};
+  })
+  .handler(async({context,data})=>{
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const {data:result,error}=await (supabaseAdmin as any).rpc("dbs_control_fulfill_inventory_request_from_central",{
+      p_request_id:data.requestId,p_request_item_id:data.requestItemId,p_actor_user_id:user.id,
+      p_destination_stock_id:data.destinationStockId,p_quantity:data.quantity,p_idempotency_key:data.idempotencyKey,
+    });
+    if(error) throw new Error(error.message);
+    return result;
+  });
+
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
