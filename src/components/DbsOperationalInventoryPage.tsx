@@ -53,6 +53,25 @@ function quantity(value: number) {
 }
 const closedStatuses = new Set(["concluida", "concluída", "completed", "complete", "cancelada", "cancelado", "cancelled"]);
 
+function warrantyExpiryLabel(endDate: string, status: string) {
+  if (status === "claim_open") return "Em análise de garantia";
+  if (status === "replaced") return "Substituída";
+  if (status === "void") return "Cancelada";
+  const end = new Date(endDate + "T23:59:59");
+  const days = Math.ceil((end.getTime() - Date.now()) / 86400000);
+  if (days < 0) return "Vencida";
+  if (days <= 30) return days === 0 ? "Vence hoje" : "Vence em " + days + " dias";
+  return "Vigente";
+}
+
+function warrantyExpiryClass(endDate: string, status: string) {
+  const label = warrantyExpiryLabel(endDate, status);
+  if (label === "Vencida" || label === "Cancelada") return "bg-rose-50 text-rose-700";
+  if (label.startsWith("Vence") || label === "Em análise de garantia") return "bg-amber-50 text-amber-800";
+  if (label === "Substituída") return "bg-slate-100 text-slate-600";
+  return "bg-emerald-50 text-emerald-700";
+}
+
 export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: boolean }) {
   const inventory = useQuery({
     queryKey: ["dbs-operational-inventory-overview"],
@@ -444,7 +463,7 @@ export function DbsOperationalInventoryPage({ embedded = false }: { embedded?: b
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Fornecedor / fabricante</h3>
                 <div className="space-y-2">
                   {filteredSupplierWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-sm">{row.part?.name??"Peça"} {row.part?.sku&&<span className="font-mono text-xs text-slate-500">· {row.part.sku}</span>}</p><p className="mt-1 text-xs text-slate-500">{row.supplier_name_snapshot??"Fornecedor"} · {row.serial_number?"Série "+row.serial_number:row.lot_number?"Lote "+row.lot_number:"Sem série/lote informado"}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold">{new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")}</span></div>
+                    <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-sm">{row.part?.name??"Peça"} {row.part?.sku&&<span className="font-mono text-xs text-slate-500">· {row.part.sku}</span>}</p><p className="mt-1 text-xs text-slate-500">{row.supplier_name_snapshot??"Fornecedor"} · {row.serial_number?"Série "+row.serial_number:row.lot_number?"Lote "+row.lot_number:"Sem série/lote informado"}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${warrantyExpiryClass(row.end_date,row.status)}`}>{warrantyExpiryLabel(row.end_date,row.status)} · {new Date(row.end_date+"T00:00:00").toLocaleDateString("pt-BR")}</span></div>
                     <p className="mt-2 text-xs text-slate-600">Cobertura desde {new Date(row.start_date+"T00:00:00").toLocaleDateString("pt-BR")} · {row.quantity_covered} un. · {row.status==="claim_open"?"Reclamação em aberto":row.status==="replaced"?"Substituída":row.status}</p>
                     {row.terms&&<p className="mt-1 text-xs text-slate-500">{row.terms}</p>}
                     <button type="button" onClick={()=>{setWarrantyClaimTarget({id:row.id,kind:"supplier"});setWarrantyClaimDescription("");setWarrantyClaimResolution("");}} className="mt-2 min-h-8 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700">Abrir reclamação</button>
