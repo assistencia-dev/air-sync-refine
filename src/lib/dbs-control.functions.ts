@@ -4068,7 +4068,7 @@ export const fulfillDbsInventoryRequestFromCentral = createServerFn({ method: "P
 export const getDbsPartWarrantyDefaults = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async({context})=>{
-    const user=await requireDbsInventoryAdmin(context);
+    const user=await requireDbsInventoryFinanceAdmin(context);
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const {data,error}=await (supabaseAdmin as any).from("dbs_control_part_warranty_defaults")
       .select("id,part_id,supplier_id,supplier_warranty_months,supplier_start_rule,supplier_terms,customer_warranty_months,customer_start_rule,customer_terms,version")
