@@ -3312,11 +3312,20 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
   return user;
 }
 
-async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext) {
+type DbsInventoryFinanceActor = Awaited<ReturnType<typeof requireDbsControlUser>> & {
+  inventoryScopeOwnerId?: string;
+};
+
+async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext): Promise<DbsInventoryFinanceActor> {
   const user = await requireDbsControlUser(context);
-  if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
+  const legacyAdmin = DBS_INVENTORY_ADMIN_ROLES.includes(
+    user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number],
+  );
+  if (!legacyAdmin && user.role_key !== "FINANCEIRO_OPERADOR") {
     throw new Error("Operação financeira restrita ao Financeiro.");
   }
+
+  let inventoryScopeOwnerId = user.id;
   if (user.role_key === "FINANCEIRO_OPERADOR") {
     const { data: access, error: accessError } = await (supabaseAdmin as any)
       .from("treasury_viewer_access")
@@ -3335,8 +3344,19 @@ async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext
       || owner.company_id !== user.company_id) {
       throw new Error("O responsável pelo escopo financeiro não está ativo ou não corresponde à empresa vinculada.");
     }
+    inventoryScopeOwnerId = owner.id;
   }
-  return user;
+  return { ...user, inventoryScopeOwnerId };
+}
+
+function getDbsInventoryFinanceScope(user: DbsInventoryFinanceActor) {
+  const companyId = user.company_id ?? null;
+  const ownerUserId = user.inventoryScopeOwnerId ?? user.id;
+  return {
+    companyId,
+    ownerUserId,
+    scopeKey: companyId ? "company:" + companyId : "user:" + ownerUserId,
+  };
 }
 
 function requireInventoryId(value: string, label: string) {
@@ -3674,8 +3694,7 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const { companyId, scopeKey, ownerUserId } = getDbsInventoryFinanceScope(user);
     const [supplier, center] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,name").eq("id", data.costCenterId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
@@ -3791,11 +3810,10 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const { companyId, scopeKey, ownerUserId } = getDbsInventoryFinanceScope(user);
     const scopedUsers = companyId
       ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
-      : { data: [{ id: user.id }], error: null };
+      : { data: [{ id: ownerUserId }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     // dbs_control_clients is a shared canonical catalog without company_id; OS results remain scoped below.
@@ -3922,7 +3940,7 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
   })
   .handler(async ({context,data}) => {
     const user=await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
       company_id:user.company_id,scope_key:scopeKey,name:data.name,
       legal_name:data.name,cnpj:data.cnpj,phone:data.phone,status:"active",created_by:user.id,updated_by:user.id
@@ -3952,7 +3970,7 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved = await (supabaseAdmin as any).from("dbs_control_cost_centers").upsert({
       company_id: user.company_id, scope_key: scopeKey, code: data.code, name: data.name,
       status: "active", created_by: user.id, updated_by: user.id, updated_at: new Date().toISOString(),
@@ -3979,7 +3997,7 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const [supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
@@ -4021,7 +4039,7 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
@@ -4102,7 +4120,7 @@ export const updateDbsInventoryMasterData = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const now = new Date().toISOString();
 
@@ -4197,7 +4215,7 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const isPart = data.entity === "part";
     const table = data.entity === "part" ? "dbs_control_parts"
@@ -4296,7 +4314,7 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const table = data.entity === "part" ? "dbs_control_parts"
       : data.entity === "supplier" ? "dbs_control_suppliers"
@@ -4410,7 +4428,7 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
   })
   .handler(async ({context,data}) => {
     const user=await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
       company_id:user.company_id,scope_key:scopeKey,code:data.code,
       name:data.name,symbol:data.symbol,decimal_places:data.decimalPlaces,status:"active",is_system:false,
@@ -4432,7 +4450,7 @@ export const createDbsUnitConversion = createServerFn({ method: "POST" })
   })
   .handler(async ({context,data}) => {
     const user=await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_unit_conversions").upsert({
       company_id:user.company_id,scope_key:scopeKey,from_unit_id:data.fromUnitId,to_unit_id:data.toUnitId,
       factor:data.factor,status:"active",notes:"Conversão cadastrada pela tela de suprimentos"
@@ -4495,7 +4513,7 @@ export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
   })
   .handler(async ({context,data})=>{
     const user=await requireDbsInventoryFinanceAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin=supabaseAdmin as any;
     let quoteQuery=admin.from("dbs_control_quotes")
       .select("id,quote_number,status,scope_key,cost_center_id,source_quote_id")
