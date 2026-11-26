@@ -4316,14 +4316,14 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) throw new Error("Versão da peça inválida. Atualize a tela e tente novamente.");
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
@@ -4350,7 +4350,7 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     const saved = await admin.from("dbs_control_parts").update({
       sku: data.sku, name: data.name, description: data.description,
       supplier_id: data.supplierId, measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId,
-      cost_cents: data.costCents, sale_cents: data.saleCents,
+      cost_cents: data.costCents,
       version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
     }).eq("id", data.partId).eq("version", data.expectedVersion)
        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").maybeSingle();
