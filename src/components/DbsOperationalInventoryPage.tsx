@@ -56,6 +56,9 @@ export function DbsOperationalInventoryPage({
   const [reason, setReason] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [vehicleLabel, setVehicleLabel] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [gasCylinderId, setGasCylinderId] = useState("");
+  const [destinationStockId, setDestinationStockId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(requestKey);
@@ -79,6 +82,9 @@ export function DbsOperationalInventoryPage({
         requestType,
         partId: requestType === "part" ? partId : undefined,
         workOrderId: workOrderId || undefined,
+        gasCylinderId: requestType === "gas_refill" ? gasCylinderId : undefined,
+        employeeId: employeeId || undefined,
+        destinationStockId: destinationStockId || undefined,
         description: description.trim(),
         quantity: Number(quantity),
         unitLabel: unitLabel.trim() || "un",
@@ -97,6 +103,9 @@ export function DbsOperationalInventoryPage({
       setQuantity("1");
       setNeedByDate("");
       setVehicleLabel("");
+      setEmployeeId("");
+      setGasCylinderId("");
+      setDestinationStockId("");
       setIdempotencyKey(requestKey());
       setSection("requests");
     },
@@ -110,6 +119,8 @@ export function DbsOperationalInventoryPage({
   const workOrders = overview.data?.workOrders ?? [];
   const materialRequests = overview.data?.materialRequests ?? [];
   const operationalStocks = overview.data?.operationalStocks ?? [];
+  const employees = overview.data?.employees ?? [];
+  const gasCylinders = overview.data?.gasCylinders ?? [];
   const reservePart = useMutation({
     mutationFn: () => {
       const selectedStock = operationalStocks.find((stock: any) => String(stock.id) === useStockId);
@@ -281,6 +292,32 @@ export function DbsOperationalInventoryPage({
                   </select>
                 </label>
               </>}
+              {requestType === "gas_refill" && <label className="block text-sm font-semibold">Botija de gás
+                <select required value={gasCylinderId} onChange={(e) => {
+                  const selected = gasCylinders.find((cylinder: any) => String(cylinder.id) === e.target.value);
+                  setGasCylinderId(e.target.value);
+                  if (selected) {
+                    setEmployeeId(String(selected.employee_id ?? ""));
+                    setVehicleLabel(String(selected.vehicle_label ?? ""));
+                    setDescription(`Recarga ${selected.refrigerant_type} · série ${selected.serial_number}`);
+                  }
+                }} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                  <option value="">Selecione uma botija</option>
+                  {gasCylinders.map((cylinder: any) => <option key={cylinder.id} value={cylinder.id}>{cylinder.serial_number} · {cylinder.refrigerant_type} · {cylinder.remaining_charges}/{cylinder.total_charges} cargas</option>)}
+                </select>
+              </label>}
+              {requestType !== "part" && requestType !== "gas_refill" && <label className="block text-sm font-semibold">Responsável (opcional)
+                <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                  <option value="">Selecione colaborador</option>
+                  {employees.map((employee: any) => <option key={employee.id} value={employee.id}>{employee.full_name}</option>)}
+                </select>
+              </label>}
+              {requestType !== "part" && <label className="block text-sm font-semibold">Estoque / veículo de destino (opcional)
+                <select value={destinationStockId} onChange={(e) => setDestinationStockId(e.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal">
+                  <option value="">Definir depois pelo Financeiro</option>
+                  {operationalStocks.map((stock: any) => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+                </select>
+              </label>}
               <label className="block text-sm font-semibold">Descrição
                 <input required minLength={2} maxLength={240} value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder={requestType === "part" ? "Ex.: filtro secador 1/2" : "Informe o material ou ferramenta"}
