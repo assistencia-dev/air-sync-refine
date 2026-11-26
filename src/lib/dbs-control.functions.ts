@@ -4563,7 +4563,14 @@ export const setDbsWorkOrderCostCenter = createServerFn({ method: "POST" })
 export const getDbsControlCatalogMasterData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({context})=>{
-    const user=await requireDbsInventoryAdmin(context);
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users").select("id,company_id,role_key,status")
+      .eq("auth_id", context.userId).maybeSingle();
+    if (userError) throw new Error(userError.message);
+    if (!user || user.status !== "ativo" ||
+      !["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(user.role_key)) {
+      throw new Error("Acesso ao catálogo de referência não autorizado.");
+    }
     const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
     const [suppliers,measureUnits,unitConversions,costCenters]=await Promise.all([
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name,status").eq("scope_key",scopeKey).eq("status","active").order("name"),
