@@ -188,6 +188,23 @@ BEGIN
    WHERE id = p_request_id AND scope_key = v_scope
    FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_MATERIAL_REQUEST_NOT_FOUND' USING errcode = 'P0002'; END IF;
+  SELECT * INTO v_link
+    FROM public.dbs_control_material_request_purchase_links
+   WHERE material_request_id = p_request_id
+     AND purchase_item_id = p_purchase_item_id;
+  IF FOUND THEN
+    IF v_link.quantity_linked IS DISTINCT FROM p_quantity_linked THEN
+      RAISE EXCEPTION 'DBS_MATERIAL_REQUEST_LINK_KEY_REUSED' USING errcode = '23505';
+    END IF;
+    RETURN jsonb_build_object(
+      'ok', true, 'replayed', true,
+      'link_id', v_link.id, 'request_id', p_request_id,
+      'purchase_id', p_purchase_id, 'purchase_item_id', p_purchase_item_id,
+      'quantity_linked', v_link.quantity_linked,
+      'version', v_request.version
+    );
+  END IF;
+
   IF v_request.version <> p_expected_version THEN
     RAISE EXCEPTION 'DBS_MATERIAL_REQUEST_VERSION_CONFLICT' USING errcode = '40001';
   END IF;
@@ -224,23 +241,6 @@ BEGIN
   END IF;
   IF p_quantity_linked > v_item.quantity - v_item_linked THEN
     RAISE EXCEPTION 'DBS_MATERIAL_REQUEST_LINK_EXCEEDS_PURCHASE_ITEM' USING errcode = '23514';
-  END IF;
-
-  SELECT * INTO v_link
-    FROM public.dbs_control_material_request_purchase_links
-   WHERE material_request_id = p_request_id
-     AND purchase_item_id = p_purchase_item_id;
-  IF FOUND THEN
-    IF v_link.quantity_linked IS DISTINCT FROM p_quantity_linked THEN
-      RAISE EXCEPTION 'DBS_MATERIAL_REQUEST_LINK_KEY_REUSED' USING errcode = '23505';
-    END IF;
-    RETURN jsonb_build_object(
-      'ok', true, 'replayed', true,
-      'link_id', v_link.id, 'request_id', p_request_id,
-      'purchase_id', p_purchase_id, 'purchase_item_id', p_purchase_item_id,
-      'quantity_linked', v_link.quantity_linked,
-      'version', v_request.version
-    );
   END IF;
 
   INSERT INTO public.dbs_control_material_request_purchase_links(
