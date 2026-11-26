@@ -4162,7 +4162,7 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItemRows,
       sourceQuotes: sourceQuotes.data ?? [],
-      canApprovePurchases: user.role_key === "SUPER_ADMIN",
+      canApprovePurchases: user.role_key === "SUPER_ADMIN" || user.role_key === "FINANCEIRO_OPERADOR",
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
@@ -4351,7 +4351,7 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
     const admin = supabaseAdmin as any;
     const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
-      admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
+      admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents,supplier_id").eq("id", data.partId).maybeSingle(),
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       admin.from("dbs_control_measure_units").select("id").eq("id", data.measureUnitId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       data.purchaseMeasureUnitId ? admin.from("dbs_control_measure_units").select("id").eq("id",data.purchaseMeasureUnitId).eq("scope_key",scopeKey).eq("status","active").maybeSingle() : Promise.resolve({data:null,error:null}),
@@ -4359,6 +4359,11 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     ]);
     for (const result of [existing, supplier, unit, purchaseUnit, duplicate]) if (result.error) throw new Error(result.error.message);
     if (!existing.data) throw new Error("Peça não encontrada.");
+    const existingSupplier = existing.data.supplier_id
+      ? await admin.from("dbs_control_suppliers").select("id").eq("id",existing.data.supplier_id).eq("scope_key",scopeKey).maybeSingle()
+      : {data:null,error:null};
+    if(existingSupplier.error) throw new Error(existingSupplier.error.message);
+    if(!existingSupplier.data) throw new Error("Esta peça não pertence ao escopo financeiro do usuário.");
     if (Number(existing.data.version) !== data.expectedVersion) throw new Error("A peça foi alterada por outro usuário. Atualize a tela e tente novamente.");
     if (!supplier.data) throw new Error("Fornecedor não encontrado ou inativo neste escopo.");
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
