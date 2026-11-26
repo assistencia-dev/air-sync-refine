@@ -448,7 +448,7 @@ BEGIN
   IF v_actor_company IS NOT NULL AND v_actor_company IS DISTINCT FROM v_request.company_id THEN
     RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_SCOPE_MISMATCH' USING ERRCODE='42501';
   END IF;
-  IF v_request.status NOT IN ('waiting_purchase','purchase_registered','partially_fulfilled') THEN
+  IF v_request.status NOT IN ('waiting_purchase','purchase_registered','partially_fulfilled','ready_for_dispatch') THEN
     RAISE EXCEPTION 'DBS_PURCHASE_SOURCE_REQUEST_NOT_WAITING' USING ERRCODE='23514';
   END IF;
 
