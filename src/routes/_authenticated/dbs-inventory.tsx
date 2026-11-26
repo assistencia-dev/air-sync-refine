@@ -17,6 +17,7 @@ import {
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
   updateDbsPartCatalog, getDbsPartPricingPolicy, saveDbsPartPricingPolicy,
+  getDbsPartWarrantyDefaults, saveDbsPartWarrantyDefaults,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -107,6 +108,11 @@ export function DbsInventoryPage({
     queryFn: () => getDbsPartPricingPolicy(),
     retry: 1,
   });
+  const warrantyDefaultsQuery = useQuery({
+    queryKey: ["dbs-part-warranty-defaults"],
+    queryFn: () => getDbsPartWarrantyDefaults(),
+    retry: 1,
+  });
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders" | "requests";
@@ -180,6 +186,11 @@ export function DbsInventoryPage({
   const [purchaseSourceRequestId, setPurchaseSourceRequestId] = useState("");
   const [pricingPolicyType, setPricingPolicyType] = useState<"markup"|"gross_margin">("markup");
   const [pricingRatePercent, setPricingRatePercent] = useState("30");
+  const [supplierWarrantyMonths, setSupplierWarrantyMonths] = useState("");
+  const [supplierWarrantyStartRule, setSupplierWarrantyStartRule] = useState<"invoice_date"|"receipt_date">("receipt_date");
+  const [supplierWarrantyTerms, setSupplierWarrantyTerms] = useState("");
+  const [customerWarrantyMonths, setCustomerWarrantyMonths] = useState("");
+  const [customerWarrantyTerms, setCustomerWarrantyTerms] = useState("");
 
   const [message, setMessage] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -526,6 +537,12 @@ export function DbsInventoryPage({
 
   function selectCatalogPart(partIdValue: string) {
     setCatalogPartId(partIdValue);
+    const warrantyDefaults=(warrantyDefaultsQuery.data??[] as any[]).find((row:any)=>String(row.part_id)===partIdValue);
+    setSupplierWarrantyMonths(warrantyDefaults?.supplier_warranty_months==null?"":String(warrantyDefaults.supplier_warranty_months));
+    setSupplierWarrantyStartRule(warrantyDefaults?.supplier_start_rule==="invoice_date"?"invoice_date":"receipt_date");
+    setSupplierWarrantyTerms(String(warrantyDefaults?.supplier_terms??""));
+    setCustomerWarrantyMonths(warrantyDefaults?.customer_warranty_months==null?"":String(warrantyDefaults.customer_warranty_months));
+    setCustomerWarrantyTerms(String(warrantyDefaults?.customer_terms??""));
     const part = parts.find((entry: any) => String(entry.id) === partIdValue);
     if (!part) {
       setCatalogPartName("");
@@ -592,6 +609,18 @@ export function DbsInventoryPage({
       saved = await runAction(() => createDbsPartCatalog({ data: payload }), "Peça cadastrada no catálogo relacional. O saldo inicial permanece zero até o recebimento físico.");
     }
     if (saved) {
+      await overview.refetch();
+      const warrantyPartId=catalogPartId||String((overview.data?.parts??[]).find((part:any)=>String(part.sku)===payload.sku)?.id??"");
+      if(warrantyPartId) {
+        await runAction(()=>saveDbsPartWarrantyDefaults({data:{
+          partId:warrantyPartId,supplierId:catalogPartSupplierId,
+          supplierWarrantyMonths:supplierWarrantyMonths.trim()===""?null:Number(supplierWarrantyMonths),
+          supplierStartRule:supplierWarrantyStartRule,supplierTerms:supplierWarrantyTerms,
+          customerWarrantyMonths:customerWarrantyMonths.trim()===""?null:Number(customerWarrantyMonths),
+          customerTerms:customerWarrantyTerms,
+        }}),"Prazos e regras de garantia atualizados para a peça.");
+        await warrantyDefaultsQuery.refetch();
+      }
       selectCatalogPart("");
       setMasterRecordId("");
       setActiveDrawer(null);
@@ -917,6 +946,29 @@ export function DbsInventoryPage({
                   <p className="mt-1 text-[11px] text-blue-800">{pricingPolicy ? (pricingPolicyType==="markup"?"Aplicando acréscimo de ":"Aplicando margem bruta de ")+policyRate.toLocaleString("pt-BR")+"% conforme política financeira." : "Configure a política financeira para liberar o cadastro da peça."}</p>
                 </div>
               </div>
+              <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div><h3 className="text-sm font-bold text-slate-800">Garantias da peça</h3><p className="mt-1 text-[11px] text-slate-500">Os prazos são configuráveis e independentes. Deixe em branco quando não houver cobertura padrão definida.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-600">Garantia do fornecedor (meses)
+                    <input type="number" min="0" max="1200" step="1" value={supplierWarrantyMonths} onChange={e=>setSupplierWarrantyMonths(e.target.value)} placeholder="Não definida" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Início da garantia do fornecedor
+                    <select value={supplierWarrantyStartRule} onChange={e=>setSupplierWarrantyStartRule(e.target.value as typeof supplierWarrantyStartRule)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal">
+                      <option value="receipt_date">Recebimento físico</option><option value="invoice_date">Data da nota fiscal / compra</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos do fornecedor
+                    <textarea rows={2} maxLength={2000} value={supplierWarrantyTerms} onChange={e=>setSupplierWarrantyTerms(e.target.value)} placeholder="Condições, exclusões ou observações de cobertura" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal"/>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Garantia DBS ao cliente (meses)
+                    <input type="number" min="0" max="1200" step="1" value={customerWarrantyMonths} onChange={e=>setCustomerWarrantyMonths(e.target.value)} placeholder="Não definida" className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                  </label>
+                  <div className="flex items-center rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">A cobertura DBS começa na conclusão da OS que consumir a peça, usando o prazo configurado.</div>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos da garantia DBS
+                    <textarea rows={2} maxLength={2000} value={customerWarrantyTerms} onChange={e=>setCustomerWarrantyTerms(e.target.value)} placeholder="Condições de atendimento e cobertura ao cliente" className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal"/>
+                  </label>
+                </div>
+              </section>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
               </label>
