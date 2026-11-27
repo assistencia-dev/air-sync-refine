@@ -1,0 +1,50 @@
+const fs = require("node:fs");
+const assert = require("node:assert/strict");
+
+const migration = fs.readFileSync("supabase/migrations/20261127240000_dbs_control_customer_warranty_completion_policy.sql", "utf8");
+const functions = fs.readFileSync("src/lib/dbs-warranty.functions.ts", "utf8");
+const component = fs.readFileSync("src/components/DbsWarrantyManagementPage.tsx", "utf8");
+const backup = fs.readFileSync("scripts/backup-supabase.mjs", "utf8");
+
+assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_customer_warranty_policies/i);
+assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_customer_warranty_policy_history/i);
+assert.match(migration, /duration_months integer NOT NULL CHECK \(duration_months BETWEEN 1 AND 1200\)/i);
+assert.match(migration, /terms text NOT NULL CHECK/i);
+assert.match(migration, /approved_by uuid NOT NULL/i);
+assert.match(migration, /status text NOT NULL DEFAULT 'active' CHECK \(status IN \('active','disabled'\)\)/i);
+assert.match(migration, /policy_id uuid REFERENCES public\.dbs_control_customer_warranty_policies/i);
+assert.match(migration, /source_receipt_allocation_id uuid REFERENCES public\.dbs_control_work_order_part_receipt_allocations/i);
+assert.match(migration, /supplier_warranty_id uuid REFERENCES public\.dbs_control_supplier_warranties/i);
+assert.match(migration, /serial_number text/i);
+assert.match(migration, /lot_number text/i);
+assert.match(migration, /quantity_covered numeric\(18,4\) NOT NULL DEFAULT 1/i);
+assert.match(migration, /DBS_CUSTOMER_WARRANTY_POLICY_HISTORY_IMMUTABLE/i);
+assert.match(migration, /AFTER UPDATE OF status ON public\.dbs_control_work_orders/i);
+assert.match(migration, /OLD\.status/);
+assert.match(migration, /NEW\.completed_at::date/);
+assert.match(migration, /op\.consumption_status='consumed'/i);
+assert.match(migration, /p\.status='active'/i);
+assert.match(migration, /source_receipt_allocation_id/);
+assert.match(migration, /ON CONFLICT DO NOTHING/i);
+assert.match(migration, /make_interval\(months=>/i);
+assert.match(migration, /Sem regra ativa, concluir OS não cria cobertura automaticamente/i);
+assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN|SCHEMA)\b/i);
+assert.doesNotMatch(migration, /TRUNCATE\s+/i);
+assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
+assert.doesNotMatch(migration, /INSERT\s+INTO\s+public\.(dbs_control_inventory_movements|treasury_ledger_entries)/i);
+
+assert.match(functions, /export const saveDbsCustomerWarrantyPolicy/);
+assert.match(functions, /requireWarrantyFinance\(context\)/);
+assert.match(functions, /durationMonths/);
+assert.match(functions, /customer_warranty_policies/);
+assert.match(functions, /customerWarrantyPolicies:/);
+assert.match(functions, /services: services\.data/);
+assert.match(component, /Regra automática de garantia DBS ao concluir OS/);
+assert.match(component, /Salvar \/ aprovar regra de garantia/);
+assert.match(component, /Regras cadastradas/);
+assert.match(component, /As próximas OS concluídas receberão a cobertura configurada/);
+assert.match(backup, /"dbs_control_customer_warranty_policies"/);
+assert.match(backup, /"dbs_control_customer_warranty_policy_history"/);
+assert.match(backup, /tables\.length !== 98/);
+
+console.log("DBS automatic customer warranty: explicit approval, completion trigger, consumed-part traceability, immutability and backup coverage verified.");
