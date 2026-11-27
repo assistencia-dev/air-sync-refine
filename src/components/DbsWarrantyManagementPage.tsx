@@ -84,6 +84,7 @@ export function DbsWarrantyManagementPage() {
   const [claimStatus, setClaimStatus] = useState<Record<string, string>>({});
   const [historyClaimId, setHistoryClaimId] = useState("");
   const [message, setMessage] = useState("");
+  const [warrantySearch, setWarrantySearch] = useState("");
 
   const overview = useQuery({
     queryKey: ["dbs-warranty-overview"],
@@ -106,6 +107,22 @@ export function DbsWarrantyManagementPage() {
   const receipts = data?.receiptItems ?? [];
   const workOrders = data?.workOrders ?? [];
   const workOrderParts = (data?.workOrderParts ?? []).filter((row: any) => String(row.workOrderId) === String(customerWorkOrderId));
+  const searchKey = warrantySearch.trim().toLocaleLowerCase("pt-BR");
+  const filteredSupplierWarranties = useMemo(() => supplierWarranties.filter((row: any) => !searchKey ||
+    [row.partSku,row.partName,row.supplierName,row.serial_number,row.lot_number,row.receiptNumber,row.document_reference,row.provider_name]
+      .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey))), [supplierWarranties, searchKey]);
+  const filteredCustomerWarranties = useMemo(() => customerWarranties.filter((row: any) => !searchKey ||
+    [row.partSku,row.partName,row.workOrderProtocol,row.clientName,row.work_order_id,row.coverage_type]
+      .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey))), [customerWarranties, searchKey]);
+  const filteredClaims = useMemo(() => claims.filter((row: any) => {
+    if (!searchKey) return true;
+    const warranty = row.claim_type === "supplier"
+      ? supplierWarranties.find((item: any) => String(item.id) === String(row.supplier_warranty_id))
+      : customerWarranties.find((item: any) => String(item.id) === String(row.customer_warranty_id));
+    return [row.claim_reference,row.issue_description,row.status,row.resolution,warranty?.partSku,warranty?.partName,
+      warranty?.serial_number,warranty?.lot_number,warranty?.workOrderProtocol,warranty?.clientName,warranty?.supplierName]
+      .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey));
+  }), [claims, supplierWarranties, customerWarranties, searchKey]);
 
   const supplierMutation = useMutation({
     mutationFn: () => createDbsSupplierWarranty({ data: {
@@ -211,6 +228,9 @@ export function DbsWarrantyManagementPage() {
       {alerts.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Atenção a prazos:</strong> existem garantias vencidas ou com vencimento nos próximos 30 dias. Confira cada registro antes de autorizar qualquer atendimento.</div>}
       {message && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{message}</div>}
 
+      <label className="block max-w-2xl text-sm font-semibold text-slate-700">Consultar garantia por peça, SKU, série, lote, fornecedor, recebimento, cliente ou OS
+        <input value={warrantySearch} onChange={e=>setWarrantySearch(e.target.value)} placeholder="Digite peça, número de série, cliente, protocolo..." className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 font-normal"/>
+      </label>
       <nav className="flex flex-wrap gap-2" aria-label="Módulos de garantia">
         {([
           ["supplier","Garantias do fornecedor"],
@@ -254,9 +274,9 @@ export function DbsWarrantyManagementPage() {
         </form>}
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Garantias de fornecedor cadastradas</h2>
-          {supplierWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          {filteredSupplierWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">{row.partSku} · {row.partName}</div><div className="mt-1 text-sm text-slate-600">{row.supplierName}</div></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
-            <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2"><div>Série/lote: {row.serial_number||"—"} / {row.lot_number||"—"}</div><div>Período: {row.starts_on} até {row.expires_on}</div><div>Origem: {warrantyStartAnchorLabels[String(row.start_anchor)] ?? String(row.start_anchor)}</div><div>Quantidade coberta: {row.quantity_covered}</div></div>
+            <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2"><div>Série/lote: {row.serial_number||"—"} / {row.lot_number||"—"}</div><div>Período: {row.starts_on} até {row.expires_on}</div><div>Origem: {warrantyStartAnchorLabels[String(row.start_anchor)] ?? String(row.start_anchor)}</div><div>Quantidade coberta: {row.quantity_covered}</div>{row.receiptNumber&&<div>Recebimento: {row.receiptNumber} {row.receivedAt? "· "+String(row.receivedAt).slice(0,10):""}</div>}</div>
             {row.terms&&<p className="mt-3 text-sm text-slate-700">{row.terms}</p>}
             {row.document_reference&&<p className="mt-1 text-xs text-slate-500">Documento: {row.document_reference}</p>}
             <button type="button" onClick={()=>{setClaimType("supplier");setClaimWarrantyId(row.id);setTab("claims");}} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><ClipboardCheck className="h-4 w-4"/> Abrir chamado</button>
@@ -282,8 +302,8 @@ export function DbsWarrantyManagementPage() {
         </form>}
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Coberturas DBS vinculadas à OS</h2>
-          {customerWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">OS {row.workOrderProtocol||row.work_order_id}</div><div className="mt-1 text-sm text-slate-600">{row.partName || (warrantyCoverageTypeLabels[String(row.coverage_type)] ?? String(row.coverage_type))} {row.partSku&&"· "+row.partSku}</div></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
+          {filteredCustomerWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2"><div><div className="font-semibold text-slate-900">OS {row.workOrderProtocol||row.work_order_id}</div><div className="mt-1 text-sm text-slate-600">{row.partName || (warrantyCoverageTypeLabels[String(row.coverage_type)] ?? String(row.coverage_type))} {row.partSku&&"· "+row.partSku}</div>{row.clientName&&<div className="mt-1 text-xs text-slate-500">Cliente: {row.clientName}</div>}</div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{expiryLabel(row.expires_on)}</span></div>
             <div className="mt-3 text-sm text-slate-600">Período: {row.starts_on} até {row.expires_on}</div>
             {row.terms&&<p className="mt-2 text-sm text-slate-700">{row.terms}</p>}
             <button type="button" onClick={()=>{setClaimType("customer");setClaimWarrantyId(row.id);setTab("claims");}} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><ClipboardCheck className="h-4 w-4"/> Abrir chamado</button>
@@ -306,7 +326,7 @@ export function DbsWarrantyManagementPage() {
         </form>
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Histórico de chamados</h2>
-          {claims.map((claim:any)=><article key={claim.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          {filteredClaims.map((claim:any)=><article key={claim.id} className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold text-slate-900">{claim.claim_type==="supplier"?"Fornecedor / fabricante":"Cobertura DBS"}</div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{claimStatusLabel[claim.status]||claim.status}</span></div>
             <p className="mt-2 text-sm text-slate-700">{claim.issue_description}</p>
             <p className="mt-1 text-xs text-slate-500">Aberto em {String(claim.opened_at).slice(0,10)} · Versão {claim.version}</p>
