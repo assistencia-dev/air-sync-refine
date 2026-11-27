@@ -43,6 +43,7 @@ FOR EACH ROW EXECUTE FUNCTION public.dbs_control_reject_work_order_part_receipt_
 
 CREATE OR REPLACE FUNCTION public.dbs_control_link_work_order_part_receipt_item(
   p_actor_user_id uuid,
+  p_scope_key text,
   p_work_order_part_id uuid,
   p_receipt_item_id uuid,
   p_quantity numeric,
@@ -65,7 +66,7 @@ DECLARE
   v_key text:=nullif(btrim(p_idempotency_key),'');
   v_allocation_id uuid;
 BEGIN
-  IF p_actor_user_id IS NULL OR p_work_order_part_id IS NULL OR p_receipt_item_id IS NULL
+  IF p_actor_user_id IS NULL OR nullif(btrim(p_scope_key),'') IS NULL OR p_work_order_part_id IS NULL OR p_receipt_item_id IS NULL
      OR p_quantity IS NULL OR p_quantity<=0 OR v_key IS NULL OR char_length(v_key) NOT BETWEEN 8 AND 240 THEN
     RAISE EXCEPTION 'DBS_WORK_ORDER_RECEIPT_ALLOCATION_INPUT_INVALID' USING errcode='22023';
   END IF;
@@ -80,7 +81,8 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_WORK_ORDER_PART_NOT_FOUND' USING errcode='23503'; END IF;
 
   SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(v_work_order_part.work_order_id);
-  IF NOT FOUND OR v_scope.scope_key IS NULL OR (v_actor.company_id IS NOT NULL AND v_actor.company_id IS DISTINCT FROM v_scope.company_id) THEN
+  IF NOT FOUND OR v_scope.scope_key IS NULL OR v_scope.scope_key IS DISTINCT FROM p_scope_key
+     OR (v_actor.company_id IS NOT NULL AND v_actor.company_id IS DISTINCT FROM v_scope.company_id) THEN
     RAISE EXCEPTION 'DBS_WORK_ORDER_RECEIPT_ALLOCATION_SCOPE_MISMATCH' USING errcode='42501';
   END IF;
 
@@ -150,8 +152,8 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.dbs_control_reject_work_order_part_receipt_allocation_mutation() FROM PUBLIC,anon,authenticated;
-REVOKE ALL ON FUNCTION public.dbs_control_link_work_order_part_receipt_item(uuid,uuid,uuid,numeric,text) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.dbs_control_link_work_order_part_receipt_item(uuid,uuid,uuid,numeric,text) TO service_role;
+REVOKE ALL ON FUNCTION public.dbs_control_link_work_order_part_receipt_item(uuid,text,uuid,uuid,numeric,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.dbs_control_link_work_order_part_receipt_item(uuid,text,uuid,uuid,numeric,text) TO service_role;
 
 NOTIFY pgrst,'reload schema';
 COMMIT;
