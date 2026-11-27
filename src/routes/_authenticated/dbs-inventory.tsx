@@ -130,6 +130,9 @@ export function DbsInventoryPage({
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
+  const [purchaseReceiptWarrantyFields, setPurchaseReceiptWarrantyFields] = useState<Record<string, {
+    serialNumber: string; lotNumber: string; durationMonths: string; expiresOn: string; terms: string; documentReference: string;
+  }>>({});
   const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
@@ -398,11 +401,44 @@ export function DbsInventoryPage({
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
   }
 
-  async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
-    const items = selected.map((item: any) => ({
-      purchaseItemId: String(item.id),
-      quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+  function updatePurchaseReceiptWarranty(itemId: string, patch: Partial<{serialNumber:string;lotNumber:string;durationMonths:string;expiresOn:string;terms:string;documentReference:string}>) {
+    setPurchaseReceiptWarrantyFields(current => ({
+      ...current,
+      [itemId]: {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:"",...current[itemId],...patch},
     }));
+  }
+
+  function renderPurchaseReceiptWarrantyFields(itemId: string) {
+    const fields = purchaseReceiptWarrantyFields[itemId] ?? {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:""};
+    return <details className="mt-2 rounded-lg border border-sky-200 bg-white p-2">
+      <summary className="min-h-9 cursor-pointer py-2 text-xs font-bold text-sky-800">Garantia do fornecedor (opcional)</summary>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-600">Número de série<input value={fields.serialNumber} onChange={e=>updatePurchaseReceiptWarranty(itemId,{serialNumber:e.target.value})} maxLength={160} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Lote<input value={fields.lotNumber} onChange={e=>updatePurchaseReceiptWarranty(itemId,{lotNumber:e.target.value})} maxLength={160} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Prazo em meses<input type="number" min="1" max="1200" step="1" value={fields.durationMonths} onChange={e=>updatePurchaseReceiptWarranty(itemId,{durationMonths:e.target.value})} placeholder="Ex.: 12" className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Ou validade até<input type="date" value={fields.expiresOn} onChange={e=>updatePurchaseReceiptWarranty(itemId,{expiresOn:e.target.value})} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos / observação<input value={fields.terms} onChange={e=>updatePurchaseReceiptWarranty(itemId,{terms:e.target.value})} maxLength={4000} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Documento / NF / referência<input value={fields.documentReference} onChange={e=>updatePurchaseReceiptWarranty(itemId,{documentReference:e.target.value})} maxLength={240} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <p className="text-xs text-slate-500 sm:col-span-2">O início será a data deste recebimento. Para criar a garantia, informe o prazo em meses ou a data final; o sistema não presume duração.</p>
+      </div>
+    </details>;
+  }
+
+  async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
+    const items = selected.map((item: any) => {
+      const fields = purchaseReceiptWarrantyFields[String(item.id)];
+      const hasWarranty = Boolean(fields && [fields.serialNumber,fields.lotNumber,fields.durationMonths,fields.expiresOn,fields.terms,fields.documentReference].some(value=>String(value??"").trim()));
+      return {
+        purchaseItemId: String(item.id),
+        quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+        ...(hasWarranty ? { warranty: {
+          serialNumber: fields.serialNumber, lotNumber: fields.lotNumber,
+          durationMonths: fields.durationMonths ? Number(fields.durationMonths) : undefined,
+          expiresOn: fields.expiresOn || undefined, terms: fields.terms,
+          documentReference: fields.documentReference,
+        } } : {}),
+      };
+    });
     if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0)) {
       setMessage("Informe quantidades válidas para os itens conferidos.");
       return;
@@ -418,6 +454,11 @@ export function DbsInventoryPage({
       clearPersistentPurchaseIdempotencyKey(operation.storageKey);
       setPurchaseReceiptQuantities((previous) => {
         const next = { ...previous };
+        for (const item of selected) delete next[item.id];
+        return next;
+      });
+      setPurchaseReceiptWarrantyFields(previous => {
+        const next = {...previous};
         for (const item of selected) delete next[item.id];
         return next;
       });
@@ -1492,6 +1533,7 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                {renderPurchaseReceiptWarrantyFields(String(item.id))}
                               </label>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
@@ -1542,6 +1584,7 @@ export function DbsInventoryPage({
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
+                                {renderPurchaseReceiptWarrantyFields(String(item.id))}
                               </label>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
