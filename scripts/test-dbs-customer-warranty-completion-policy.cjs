@@ -55,6 +55,7 @@ assert.match(migration, /dbs_control_attach_late_receipt_allocation_to_customer_
 assert.match(migration, /AFTER INSERT ON public\.dbs_control_work_order_part_receipt_allocations/i);
 assert.match(migration, /v_unallocated\.quantity_covered-NEW\.quantity_allocated/i);
 assert.match(migration, /approved_at<=v_order\.completed_at/i);
+assert.match(migration, /p\.approved_at<=coalesce\(NEW\.completed_at,now\(\)\)/i);
 assert.match(migration, /v_scope\.company_id/i);
 assert.match(migration, /make_interval\(months=>/i);
 assert.match(migration, /Sem regra ativa, concluir OS não cria cobertura automaticamente/i);
