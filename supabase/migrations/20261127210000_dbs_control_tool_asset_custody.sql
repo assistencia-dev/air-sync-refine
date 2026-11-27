@@ -65,8 +65,9 @@ begin
   return new;
  end if;
  if old.employee_id is distinct from new.employee_id then
-  if old.employee_id is null then v_type:='assigned';
-  elsif new.employee_id is null then v_type:='returned';
+  if old.employee_id is null and new.employee_id is not null then v_type:='assigned';
+  elsif new.employee_id is null and new.status='available' then v_type:='returned';
+  elsif new.employee_id is null then v_type:='status_changed';
   else v_type:='transferred'; end if;
  elsif old.vehicle_label is distinct from new.vehicle_label then v_type:='vehicle_changed';
  elsif old.status is distinct from new.status then v_type:='status_changed';
