@@ -15,7 +15,7 @@ assert.match(migration,/FROM public,anon,authenticated/i);
 assert.match(migration,/TO service_role/i);
 assert.match(backup,/"dbs_control_tool_assets"/);
 assert.match(backup,/"dbs_control_tool_asset_movements"/);
-assert.match(backup,/tables\.length !== 96/);
+assert.match(backup,/tables\\.length !== 98/);
 assert.match(functions,/saveDbsToolAsset/);
 assert.match(functions,/select\("employee_id,assigned_at,returned_at"\)/);
 assert.match(functions,/assignmentChanged\?now:current\.data\.assigned_at/);
