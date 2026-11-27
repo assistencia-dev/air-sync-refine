@@ -295,10 +295,7 @@ export const linkDbsWorkOrderPartReceiptItem = createServerFn({ method: "POST" }
     };
   })
   .handler(async ({ context, data }) => {
-    const scope = await resolveWarrantyScope(context);
-    if (!["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(scope.roleKey)) {
-      throw new Error("Este perfil não pode vincular lote/série a uma peça consumida na OS.");
-    }
+    const scope = await requireWarrantyFinance(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_link_work_order_part_receipt_item", {
       p_actor_user_id: scope.id,
       p_work_order_part_id: data.workOrderPartId,
