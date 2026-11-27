@@ -135,8 +135,8 @@ DECLARE
   v_actor uuid;
 BEGIN
   SELECT id INTO v_actor FROM public.users WHERE auth_id=auth.uid() AND status='ativo' LIMIT 1;
-  IF lower(btrim(coalesce(NEW.status,''))) NOT IN ('concluida','concluída','concluido','concluído','completed','complete')
-     OR lower(btrim(coalesce(OLD.status,''))) IN ('concluida','concluída','concluido','concluído','completed','complete') THEN
+  IF lower(btrim(coalesce(NEW.status,''))) NOT IN ('concluida','concluída','concluido','concluído','concluida_com_pendencia','completed','complete')
+     OR lower(btrim(coalesce(OLD.status,''))) IN ('concluida','concluída','concluido','concluído','concluida_com_pendencia','completed','complete') THEN
     RETURN NEW;
   END IF;
 
@@ -254,7 +254,7 @@ BEGIN
   END IF;
   SELECT * INTO v_order FROM public.dbs_control_work_orders WHERE id=NEW.work_order_id;
   IF NOT FOUND OR v_order.completed_at IS NULL
-     OR lower(btrim(coalesce(v_order.status,''))) NOT IN ('concluida','concluída','concluido','concluído','completed','complete') THEN
+     OR lower(btrim(coalesce(v_order.status,''))) NOT IN ('concluida','concluída','concluido','concluído','concluida_com_pendencia','completed','complete') THEN
     RETURN NEW;
   END IF;
   SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(v_order.id);
@@ -335,7 +335,7 @@ BEGIN
   SELECT * INTO v_order FROM public.dbs_control_work_orders
    WHERE id=v_part.work_order_id;
   IF NOT FOUND OR lower(btrim(coalesce(v_order.status,''))) NOT IN
-    ('concluida','concluída','concluido','concluído','completed','complete') THEN
+    ('concluida','concluída','concluido','concluído','concluida_com_pendencia','completed','complete') THEN
     RETURN NEW;
   END IF;
   IF EXISTS (
