@@ -290,7 +290,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
         v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
-        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,v_order.created_by_user_id,
+        v_policy.duration_months,v_policy.terms,'active',COALESCE(v_actor,v_order.created_by_user_id),COALESCE(v_actor,v_order.created_by_user_id),
         v_policy.id,v_allocation.id,v_allocation.supplier_warranty_id,
         v_allocation.serial_number,v_allocation.lot_number,v_allocation.quantity_allocated
       ) ON CONFLICT DO NOTHING;
@@ -306,7 +306,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
         v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
-        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,v_order.created_by_user_id,
+        v_policy.duration_months,v_policy.terms,'active',COALESCE(v_actor,v_order.created_by_user_id),COALESCE(v_actor,v_order.created_by_user_id),
         v_policy.id,v_unallocated
       ) ON CONFLICT DO NOTHING;
     END IF;
