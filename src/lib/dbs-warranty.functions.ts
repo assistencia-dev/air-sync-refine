@@ -134,12 +134,12 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const scope = await resolveWarrantyScope(context);
-    const [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders] = await Promise.all([
+    const [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_supplier_warranties")
         .select("id,part_id,supplier_id,source_receipt_item_id,serial_number,lot_number,quantity_covered,provider_name,start_anchor,starts_on,expires_on,duration_months,terms,document_reference,evidence,status,notes,created_at,updated_at")
         .eq("scope_key", scope.scopeKey).order("expires_on").limit(1500),
       (supabaseAdmin as any).from("dbs_control_customer_warranties")
-        .select("id,work_order_id,work_order_part_id,part_id,coverage_type,starts_on,expires_on,duration_months,terms,evidence,status,notes,created_at,updated_at")
+        .select("id,work_order_id,work_order_part_id,part_id,coverage_type,starts_on,expires_on,duration_months,terms,evidence,status,notes,created_at,updated_at,policy_id,source_receipt_allocation_id,supplier_warranty_id,serial_number,lot_number,quantity_covered")
         .eq("scope_key", scope.scopeKey).order("expires_on").limit(1500),
       (supabaseAdmin as any).from("dbs_control_warranty_claims")
         .select("id,claim_type,supplier_warranty_id,customer_warranty_id,work_order_id,work_order_part_id,claim_reference,issue_description,status,resolution,evidence,opened_by,resolved_by,opened_at,resolved_at,version,updated_at")
@@ -154,8 +154,13 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
             .in("created_by_user_id", scope.scopedUserIds).is("deleted_at", null)
             .order("created_at", { ascending: false }).limit(1000)
         : Promise.resolve({ data: [], error: null }),
+      (supabaseAdmin as any).from("dbs_control_customer_warranty_policies")
+        .select("id,policy_key,coverage_type,part_id,service_id,duration_months,terms,status,approved_by,approved_at,updated_at")
+        .eq("scope_key", scope.scopeKey).order("coverage_type").limit(500),
+      (supabaseAdmin as any).from("dbs_control_service_catalog")
+        .select("id,name,status").eq("status", "active").order("name").limit(500),
     ]);
-    for (const result of [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders]) {
+    for (const result of [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services]) {
       if (result.error) throw new Error("Falha ao consultar garantias: " + result.error.message);
     }
 
@@ -252,6 +257,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       })),
       customerWarranties: (customerWarranties.data ?? []).map((row: any) => ({
         ...row,
+        quantityCovered: Number(row.quantity_covered ?? 1),
         partSku: partsById.get(String(row.part_id))?.sku ?? "",
         partName: partsById.get(String(row.part_id))?.name ?? "",
         workOrderProtocol: (workOrders.data ?? []).find((wo: any) => String(wo.id) === String(row.work_order_id))?.protocol ?? "",
@@ -263,6 +269,8 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       })),
       claims: claims.data ?? [],
       suppliers: suppliers.data ?? [],
+      customerWarrantyPolicies: warrantyPolicies.data ?? [],
+      services: services.data ?? [],
       parts: warrantyParts,
       receiptItems: receiptOptions,
       workOrderParts: (workOrderParts.data ?? []).map((row: any) => ({
