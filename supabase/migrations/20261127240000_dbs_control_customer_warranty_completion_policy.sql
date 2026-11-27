@@ -188,9 +188,13 @@ DECLARE
   v_allocated numeric(18,4);
   v_unallocated numeric(18,4);
 BEGIN
-  IF NEW.consumption_status IS DISTINCT FROM 'consumed'
-     OR (TG_OP='UPDATE' AND OLD.consumption_status IS NOT DISTINCT FROM NEW.consumption_status) THEN
+  IF NEW.consumption_status IS DISTINCT FROM 'consumed' THEN
     RETURN NEW;
+  END IF;
+  IF TG_OP='UPDATE' THEN
+    IF OLD.consumption_status IS NOT DISTINCT FROM NEW.consumption_status THEN
+      RETURN NEW;
+    END IF;
   END IF;
   SELECT * INTO v_order FROM public.dbs_control_work_orders WHERE id=NEW.work_order_id;
   IF NOT FOUND OR v_order.completed_at IS NULL
@@ -222,7 +226,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
         v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
-        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
+        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,v_order.created_by_user_id,
         v_policy.id,v_allocation.id,v_allocation.supplier_warranty_id,
         v_allocation.serial_number,v_allocation.lot_number,v_allocation.quantity_allocated
       ) ON CONFLICT DO NOTHING;
@@ -238,7 +242,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
         v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
-        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
+        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,v_order.created_by_user_id,
         v_policy.id,v_unallocated
       ) ON CONFLICT DO NOTHING;
     END IF;
