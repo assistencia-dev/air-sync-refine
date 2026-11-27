@@ -1529,12 +1529,13 @@ export function DbsInventoryPage({
                               const remainingPurchase=remaining/factor;
                               const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
                               const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
-                              return <label key={item.id} className="block text-xs font-semibold text-slate-700">
+                              return <div key={item.id} className="block text-xs font-semibold text-slate-700"><label className="block">
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
-                                {renderPurchaseReceiptWarrantyFields(String(item.id))}
-                              </label>;
+                              </label>
+                              {renderPurchaseReceiptWarrantyFields(String(item.id))}
+                            </div>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived && <p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
@@ -1580,12 +1581,13 @@ export function DbsInventoryPage({
                               const remainingPurchase=remaining/factor;
                               const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
                               const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
-                              return <label key={item.id} className="block text-xs font-semibold text-slate-700">
+                              return <div key={item.id} className="block text-xs font-semibold text-slate-700"><label className="block">
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
-                                {renderPurchaseReceiptWarrantyFields(String(item.id))}
-                              </label>;
+                              </label>
+                              {renderPurchaseReceiptWarrantyFields(String(item.id))}
+                            </div>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived&&<p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
