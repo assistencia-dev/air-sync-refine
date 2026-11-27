@@ -19,6 +19,8 @@ assert.match(functions,/linkDbsWorkOrderPartReceiptItem/);
 assert.match(functions,/dbs_control_link_work_order_part_receipt_item/);
 assert.match(ui,/Rastreabilidade de lote e série aplicada na OS/);
 assert.match(ui,/receiptAllocations/);
+assert.match(ui,/traceRemainingQuantity/);
+assert.match(ui,/Number\(traceQuantity\)>traceRemainingQuantity/);
 assert.match(backup,/"dbs_control_work_order_part_receipt_allocations"/);
 assert.match(backup,/tables.length !== 96/);
 assert.doesNotMatch(migration,/DROP\s+(TABLE|COLUMN|SCHEMA)\b/i);
