@@ -10,6 +10,7 @@ assert.match(migration,/ADD COLUMN IF NOT EXISTS serial_number text/i);
 assert.match(migration,/ADD COLUMN IF NOT EXISTS lot_number text/i);
 assert.match(migration,/DBS_PURCHASE_RECEIPT_SERIAL_CONFLICT/);
 assert.match(migration,/DBS_PURCHASE_RECEIPT_LOT_CONFLICT/);
+assert.match(migration,/DBS_PURCHASE_RECEIPT_SERIAL_QUANTITY_MUST_BE_ONE/);
 assert.match(migration,/DBS_PURCHASE_WARRANTY_EXPIRY_REQUIRED/);
 assert.match(migration,/make_interval\(months=>v_months\)/);
 assert.match(migration,/REVOKE ALL ON FUNCTION public\.dbs_control_receive_purchase_items_with_warranties/i);
