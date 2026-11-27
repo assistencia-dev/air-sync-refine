@@ -2,6 +2,10 @@
 -- Não presume prazo: a garantia só é criada quando o operador informa validade ou duração.
 BEGIN;
 
+ALTER TABLE public.dbs_control_purchase_receipt_items
+  ADD COLUMN IF NOT EXISTS serial_number text,
+  ADD COLUMN IF NOT EXISTS lot_number text;
+
 CREATE OR REPLACE FUNCTION public.dbs_control_receive_purchase_items_with_warranties(
   p_purchase_id uuid,
   p_actor_user_id uuid,
@@ -64,17 +68,33 @@ BEGIN
 
   FOR v_item IN SELECT value FROM jsonb_array_elements(p_items)
   LOOP
+    SELECT * INTO v_receipt_item
+      FROM public.dbs_control_purchase_receipt_items
+     WHERE receipt_id=v_receipt_id
+       AND purchase_item_id=nullif(v_item->>'purchase_item_id','')::uuid
+     FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_ITEM_NOT_FOUND' USING errcode='23503'; END IF;
+
+    v_serial := nullif(left(btrim(coalesce(v_item->>'serial_number',v_item->'warranty'->>'serial_number','')),160),'');
+    v_lot := nullif(left(btrim(coalesce(v_item->>'lot_number',v_item->'warranty'->>'lot_number','')),160),'');
+    IF v_receipt_item.serial_number IS NOT NULL AND v_serial IS NOT NULL
+       AND v_receipt_item.serial_number IS DISTINCT FROM v_serial THEN
+      RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_SERIAL_CONFLICT' USING errcode='23505';
+    END IF;
+    IF v_receipt_item.lot_number IS NOT NULL AND v_lot IS NOT NULL
+       AND v_receipt_item.lot_number IS DISTINCT FROM v_lot THEN
+      RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_LOT_CONFLICT' USING errcode='23505';
+    END IF;
+    UPDATE public.dbs_control_purchase_receipt_items
+       SET serial_number=coalesce(v_serial,serial_number),lot_number=coalesce(v_lot,lot_number)
+     WHERE id=v_receipt_item.id
+     RETURNING * INTO v_receipt_item;
+
     v_warranty := v_item->'warranty';
     IF v_warranty IS NULL OR jsonb_typeof(v_warranty)='null' THEN CONTINUE; END IF;
     IF jsonb_typeof(v_warranty) IS DISTINCT FROM 'object' THEN
       RAISE EXCEPTION 'DBS_PURCHASE_WARRANTY_INPUT_INVALID' USING errcode='22023';
     END IF;
-
-    SELECT * INTO v_receipt_item
-      FROM public.dbs_control_purchase_receipt_items
-     WHERE receipt_id=v_receipt_id
-       AND purchase_item_id=nullif(v_item->>'purchase_item_id','')::uuid;
-    IF NOT FOUND THEN RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_ITEM_NOT_FOUND' USING errcode='23503'; END IF;
 
     v_anchor := lower(coalesce(nullif(btrim(v_warranty->>'start_anchor'),''),'receipt_date'));
     IF v_anchor NOT IN ('invoice_date','receipt_date','installation_date','manual_date') THEN
