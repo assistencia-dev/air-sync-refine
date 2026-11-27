@@ -146,6 +146,7 @@ export function DbsOperationalInventoryPage({
   const employees = overview.data?.employees ?? [];
   const gasCylinders = overview.data?.gasCylinders ?? [];
   const canChooseDestination = overview.data?.canChooseDestination === true;
+  const canReserveStock = overview.data?.canReserveStock === true;
   const supplierWarranties = warrantyOverview.data?.supplierWarranties ?? [];
   const customerWarranties = warrantyOverview.data?.customerWarranties ?? [];
   const warrantyLabel = (expiresOn: string) => {
@@ -265,6 +266,7 @@ export function DbsOperationalInventoryPage({
               })}
             </div>
             <p className="text-xs text-slate-500">A disponibilidade considera as quantidades reservadas em ordens de serviço.</p>
+            {canReserveStock && (
             <form onSubmit={(e) => { e.preventDefault(); setUseError(""); setUseSuccess(""); reservePart.mutate(); }} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div>
                 <h3 className="font-bold">Usar peça em uma OS</h3>
@@ -300,6 +302,7 @@ export function DbsOperationalInventoryPage({
               </button>
               {!operationalStocks.length && <p className="text-xs text-amber-700">Não há estoque operacional ativo neste escopo. Solicite ao Financeiro a configuração do destino.</p>}
             </form>
+            )}
           </div>
         ) : section === "warranties" ? (
           <div className="space-y-4">
