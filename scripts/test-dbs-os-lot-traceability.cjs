@@ -11,6 +11,8 @@ assert.match(migration,/DBS_WORK_ORDER_RECEIPT_PART_MISMATCH/);
 assert.match(migration,/DBS_WORK_ORDER_RECEIPT_ALLOCATION_EXCEEDS_OS_QUANTITY/);
 assert.match(migration,/DBS_WORK_ORDER_RECEIPT_ALLOCATION_EXCEEDS_RECEIVED_QUANTITY/);
 assert.match(migration,/DBS_WORK_ORDER_SERIAL_QUANTITY_MUST_BE_ONE/);
+assert.match(migration,/coalesce\(v_actor\.role_key,''\)/);
+assert.match(migration,/v_scope\.scope_key IS NULL/);
 assert.match(migration,/BEFORE UPDATE OR DELETE/);
 assert.match(migration,/FROM PUBLIC,anon,authenticated/);
 assert.match(functions,/linkDbsWorkOrderPartReceiptItem/);
