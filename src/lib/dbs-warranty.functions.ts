@@ -159,6 +159,13 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       if (result.error) throw new Error("Falha ao consultar garantias: " + result.error.message);
     }
 
+    const clientIds = [...new Set((workOrders.data ?? []).map((row: any) => String(row.client_id ?? "")).filter(Boolean))];
+    const clients = clientIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_clients")
+          .select("id,legal_name,trade_name").in("id", clientIds)
+      : { data: [], error: null };
+    if (clients.error) throw new Error("Falha ao consultar clientes das garantias: " + clients.error.message);
+
     const receiptIds = (receipts.data ?? []).map((row: any) => row.id);
     const receiptItems = receiptIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_receipt_items")
@@ -197,6 +204,8 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     const receiptById = new Map<string, any>((receipts.data ?? []).map((row: any) => [String(row.id), row]));
     const supplierById = new Map<string, any>((suppliers.data ?? []).map((row: any) => [String(row.id), row]));
     const partsById = new Map<string, any>((parts.data ?? []).map((row: any) => [String(row.id), row]));
+    const clientsById = new Map<string, any>((clients.data ?? []).map((row: any) => [String(row.id), row]));
+    const receiptOptionById = new Map<string, any>();
     const receiptOptions = (receiptItems.data ?? []).map((item: any) => {
       const receipt = receiptById.get(String(item.receipt_id));
       const purchase = receipt ? purchaseById.get(String(receipt.purchase_id)) : null;
@@ -215,6 +224,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         partName: part?.name ?? "Peça",
       };
     });
+    for (const receiptOption of receiptOptions) receiptOptionById.set(String(receiptOption.id), receiptOption);
     const warrantyParts = (partIds.map(id => partsById.get(id)).filter(Boolean) as any[])
       .map(part => ({ id: part.id, sku: part.sku, name: part.name }));
     return {
@@ -225,12 +235,20 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         supplierName: supplierById.get(String(row.supplier_id))?.name ?? row.provider_name ?? "Fornecedor não informado",
         partSku: partsById.get(String(row.part_id))?.sku ?? "",
         partName: partsById.get(String(row.part_id))?.name ?? "Peça",
+        receiptNumber: receiptOptionById.get(String(row.source_receipt_item_id))?.receiptNumber ?? "",
+        receivedAt: receiptOptionById.get(String(row.source_receipt_item_id))?.receivedAt ?? null,
+        purchaseDate: receiptOptionById.get(String(row.source_receipt_item_id))?.purchaseDate ?? null,
       })),
       customerWarranties: (customerWarranties.data ?? []).map((row: any) => ({
         ...row,
         partSku: partsById.get(String(row.part_id))?.sku ?? "",
         partName: partsById.get(String(row.part_id))?.name ?? "",
         workOrderProtocol: (workOrders.data ?? []).find((wo: any) => String(wo.id) === String(row.work_order_id))?.protocol ?? "",
+        clientName: (() => {
+          const workOrder = (workOrders.data ?? []).find((wo: any) => String(wo.id) === String(row.work_order_id));
+          const client = workOrder ? clientsById.get(String(workOrder.client_id ?? "")) : null;
+          return client?.trade_name || client?.legal_name || "";
+        })(),
       })),
       claims: claims.data ?? [],
       suppliers: suppliers.data ?? [],
