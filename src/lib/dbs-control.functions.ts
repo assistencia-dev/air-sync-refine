@@ -3317,7 +3317,18 @@ type DbsInventoryFinanceActor = Awaited<ReturnType<typeof requireDbsControlUser>
 };
 
 async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext): Promise<DbsInventoryFinanceActor> {
-  const user = await requireDbsControlUser(context);
+  // Autenticação financeira isolada: não ampliar requireDbsControlUser,
+  // pois esse guard também protege rotas e operações do DBS Control.
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id, company_id, role_key, status, created_by")
+    .eq("auth_id", context.userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data || data.status !== "ativo") throw new Error("Usuário inativo ou não encontrado.");
+
+  const user = data as DbsControlUser;
   if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
     throw new Error("Custos, catálogo e compras são restritos ao Financeiro.");
   }
