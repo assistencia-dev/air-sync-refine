@@ -134,7 +134,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const scope = await resolveWarrantyScope(context);
-    const [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services] = await Promise.all([
+    const [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services, catalogParts] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_supplier_warranties")
         .select("id,part_id,supplier_id,source_receipt_item_id,serial_number,lot_number,quantity_covered,provider_name,start_anchor,starts_on,expires_on,duration_months,terms,document_reference,evidence,status,notes,created_at,updated_at")
         .eq("scope_key", scope.scopeKey).order("expires_on").limit(1500),
@@ -159,8 +159,10 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         .eq("scope_key", scope.scopeKey).order("coverage_type").limit(500),
       (supabaseAdmin as any).from("dbs_control_service_catalog")
         .select("id,name,status").eq("status", "active").order("name").limit(500),
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,status").eq("scope_key", scope.scopeKey).eq("status", "ativo").order("name").limit(2000),
     ]);
-    for (const result of [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services]) {
+    for (const result of [supplierWarranties, customerWarranties, claims, suppliers, receipts, workOrders, warrantyPolicies, services, catalogParts]) {
       if (result.error) throw new Error("Falha ao consultar garantias: " + result.error.message);
     }
 
@@ -207,6 +209,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
       ...(customerWarranties.data ?? []).map((row: any) => String(row.part_id ?? "")),
       ...(receiptItems.data ?? []).map((row: any) => String(row.part_id)),
       ...(workOrderParts.data ?? []).map((row: any) => String(row.part_id)),
+      ...(catalogParts.data ?? []).map((row: any) => String(row.id)),
     ].filter(Boolean))];
     const parts = partIds.length
       ? await (supabaseAdmin as any).from("dbs_control_parts")
