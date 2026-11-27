@@ -113,6 +113,8 @@ const tables = [
   "dbs_control_material_request_fulfillments",
   "dbs_control_supplier_warranties",
   "dbs_control_customer_warranties",
+  "dbs_control_customer_warranty_policies",
+  "dbs_control_customer_warranty_policy_history",
   "dbs_control_warranty_claims",
   "dbs_control_warranty_claim_history",
   "dbs_control_gas_refill_events",
@@ -129,8 +131,8 @@ const tables = [
   "treasury_ledger_outbox",
 ];
 
-if (tables.length !== 96 || new Set(tables).size !== tables.length) {
-  throw new Error(`Lista de backup inválida: esperadas 96 tabelas únicas, encontradas ${tables.length}.`);
+if (tables.length !== 98 || new Set(tables).size !== tables.length) {
+  throw new Error(`Lista de backup inválida: esperadas 98 tabelas únicas, encontradas ${tables.length}.`);
 }
 
 async function request(path, options = {}) {
