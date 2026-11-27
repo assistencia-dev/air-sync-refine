@@ -5069,6 +5069,64 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
   });
 
 
+
+export const saveDbsToolAsset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    assetId?: string; assetTag: string; name: string; category: string; serialNumber?: string;
+    brandModel?: string; employeeId?: string; vehicleLabel?: string;
+    status: "available" | "assigned" | "maintenance" | "retired" | "lost";
+    condition: "new" | "good" | "worn" | "damaged"; notes?: string;
+  }) => {
+    const assetTag=String(input?.assetTag??"").trim().toUpperCase();
+    const name=String(input?.name??"").trim();
+    const category=String(input?.category??"").trim();
+    if(!/^[A-Z0-9._/-]{2,40}$/.test(assetTag)||name.length<2||name.length>140||category.length<2||category.length>80)
+      throw new Error("Informe patrimônio, nome e categoria válidos.");
+    if(!["available","assigned","maintenance","retired","lost"].includes(input.status)||
+      !["new","good","worn","damaged"].includes(input.condition)) throw new Error("Status ou condição da ferramenta inválidos.");
+    const employeeId=input.employeeId?requireInventoryId(input.employeeId,"Colaborador"):null;
+    if(input.status==="assigned"&&!employeeId) throw new Error("Selecione o responsável pela ferramenta.");
+    if(input.status!=="assigned"&&employeeId) throw new Error("Somente ferramentas atribuídas podem ter responsável.");
+    return {assetId:input.assetId?requireInventoryId(input.assetId,"Ferramenta"):null,assetTag,name,category,
+      serialNumber:String(input.serialNumber??"").trim().slice(0,100)||null,
+      brandModel:String(input.brandModel??"").trim().slice(0,140)||null,employeeId,
+      vehicleLabel:String(input.vehicleLabel??"").trim().slice(0,80)||null,status,condition:input.condition,
+      notes:String(input.notes??"").trim().slice(0,1000)||null};
+  })
+  .handler(async ({context,data}) => {
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    if(data.employeeId){
+      const employee=await admin.from("rh_employees").select("id,is_active").eq("id",data.employeeId).eq("is_active",true).maybeSingle();
+      if(employee.error) throw new Error(employee.error.message);
+      if(!employee.data) throw new Error("Colaborador não encontrado ou inativo.");
+      const access=await admin.from("rh_employee_access").select("user_id").eq("employee_id",data.employeeId).eq("access_enabled",true).limit(1);
+      if(access.error) throw new Error(access.error.message);
+      if(!access.data?.length) throw new Error("O colaborador precisa estar vinculado ao acesso RH para receber ferramenta.");
+      const linkedUser=await admin.from("users").select("company_id,status").eq("id",access.data[0].user_id).maybeSingle();
+      if(linkedUser.error) throw new Error(linkedUser.error.message);
+      if(!linkedUser.data||linkedUser.data.status!=="ativo"||(user.company_id&&linkedUser.data.company_id!==user.company_id))
+        throw new Error("O colaborador não pertence à empresa deste estoque.");
+    }
+    const payload={asset_tag:data.assetTag,name:data.name,category:data.category,serial_number:data.serialNumber,
+      brand_model:data.brandModel,employee_id:data.employeeId,vehicle_label:data.employeeId?data.vehicleLabel:null,
+      status:data.status,condition_label:data.condition,notes:data.notes,updated_by:user.id,
+      assigned_at:data.employeeId?new Date().toISOString():null,returned_at:data.employeeId?null:new Date().toISOString(),updated_at:new Date().toISOString()};
+    if(data.assetId){
+      const saved=await admin.from("dbs_control_tool_assets").update(payload).eq("id",data.assetId).eq("scope_key",scopeKey)
+        .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").maybeSingle();
+      if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
+      if(!saved.data) throw new Error("Ferramenta não encontrada neste escopo.");
+      return saved.data;
+    }
+    const saved=await admin.from("dbs_control_tool_assets").insert({...payload,company_id:user.company_id,scope_key:scopeKey,created_by:user.id})
+      .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").single();
+    if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
+    return saved.data;
+  });
+
 export const createDbsMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
