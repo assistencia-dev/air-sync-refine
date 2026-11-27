@@ -32,7 +32,17 @@ assert.doesNotMatch(migration, /DELETE\s+FROM\s+/i);
 
 assert.match(dbs, /requireDbsInventoryFinanceAdmin/);
 assert.match(dbs, /if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
-assert.doesNotMatch(dbs.slice(dbs.indexOf("async function requireDbsInventoryFinanceAdmin"), dbs.indexOf("function getDbsInventoryFinanceScope")), /DBS_INVENTORY_ADMIN_ROLES/);
+const financeGuard = dbs.slice(
+  dbs.indexOf("async function requireDbsInventoryFinanceAdmin"),
+  dbs.indexOf("function getDbsInventoryFinanceScope"),
+);
+assert.match(financeGuard, /\.from\("users"\)[\s\S]*\.eq\("auth_id", context\.userId\)/,
+  "Finance operator must be loaded through an isolated server-side auth lookup.");
+assert.doesNotMatch(financeGuard, /requireDbsControlUser\(context\)/,
+  "Do not reuse the operational DBS Control guard for the finance-only role.");
+assert.doesNotMatch(dbs.slice(dbs.indexOf("async function requireDbsControlUser"), dbs.indexOf("type CollaboratorBaseScope")), /FINANCEIRO_OPERADOR/,
+  "Finance operator must not gain access to general DBS Control operations.");
+assert.doesNotMatch(financeGuard, /DBS_INVENTORY_ADMIN_ROLES/);
 assert.doesNotMatch(migration, /IF public\.dbs_control_is_admin_actor\(v_actor\.id\) THEN/);
 assert.match(migration, /IF v_actor\.role_key::text = 'SUPER_ADMIN' THEN/);
 assert.match(dbs, /async function requireDbsMaterialRequestActor[\s\S]*return requireDbsInventoryFinanceAdmin\(context\)/);
