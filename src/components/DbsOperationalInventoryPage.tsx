@@ -5,10 +5,11 @@ import {
   createDbsMaterialRequest,
   getDbsOperationalInventoryOverview,
   reserveDbsOperationalStockForWorkOrder,
+  saveDbsToolAsset,
 } from "@/lib/dbs-control.functions";
 import { getDbsWarrantyOverview } from "@/lib/dbs-warranty.functions";
 
-type OperationalSection = "parts" | "request" | "requests" | "warranties" | "cylinders";
+type OperationalSection = "parts" | "request" | "requests" | "warranties" | "cylinders" | "tools";
 type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 
 type DbsOperationalInventoryPageProps = {
@@ -74,6 +75,17 @@ export function DbsOperationalInventoryPage({
   const [useError, setUseError] = useState("");
   const [useSuccess, setUseSuccess] = useState("");
   const [useRequestKey, setUseRequestKey] = useState(requestKey);
+  const [toolAssetId, setToolAssetId] = useState("");
+  const [toolAssetTag, setToolAssetTag] = useState("");
+  const [toolName, setToolName] = useState("");
+  const [toolCategory, setToolCategory] = useState("Ferramenta");
+  const [toolSerial, setToolSerial] = useState("");
+  const [toolBrandModel, setToolBrandModel] = useState("");
+  const [toolEmployeeId, setToolEmployeeId] = useState("");
+  const [toolVehicle, setToolVehicle] = useState("");
+  const [toolStatus, setToolStatus] = useState<"available"|"assigned"|"maintenance"|"retired"|"lost">("available");
+  const [toolCondition, setToolCondition] = useState<"new"|"good"|"worn"|"damaged">("good");
+  const [toolNotes, setToolNotes] = useState("");
 
   useEffect(() => {
     if (!initialRequestType || requestToken < 1) return;
@@ -146,6 +158,9 @@ export function DbsOperationalInventoryPage({
   const employees = overview.data?.employees ?? [];
   const gasCylinders = overview.data?.gasCylinders ?? [];
   const gasCylinderMovements = overview.data?.gasCylinderMovements ?? [];
+  const toolAssets = overview.data?.toolAssets ?? [];
+  const toolAssetMovements = overview.data?.toolAssetMovements ?? [];
+  const canManageTools = overview.data?.canManageTools === true;
   const canChooseDestination = overview.data?.canChooseDestination === true;
   const canReserveStock = overview.data?.canReserveStock === true;
   const supplierWarranties = warrantyOverview.data?.supplierWarranties ?? [];
@@ -182,6 +197,19 @@ export function DbsOperationalInventoryPage({
       setUseSuccess("");
     },
   });
+  const saveToolMutation = useMutation({
+    mutationFn: () => saveDbsToolAsset({data:{assetId:toolAssetId||undefined,assetTag:toolAssetTag,name:toolName,category:toolCategory,
+      serialNumber:toolSerial||undefined,brandModel:toolBrandModel||undefined,employeeId:toolStatus==="assigned"?toolEmployeeId||undefined:undefined,
+      vehicleLabel:toolVehicle||undefined,status:toolStatus,condition:toolCondition,notes:toolNotes||undefined}}),
+    onSuccess:async()=>{await queryClient.invalidateQueries({queryKey:["dbs-operational-inventory-overview"]});setToolAssetId("");setToolAssetTag("");setToolName("");setToolCategory("Ferramenta");setToolSerial("");setToolBrandModel("");setToolEmployeeId("");setToolVehicle("");setToolStatus("available");setToolCondition("good");setToolNotes("");},
+    onError:(error)=>setErrorMessage(error instanceof Error?error.message:"Não foi possível salvar a ferramenta.")
+  });
+  function editToolAsset(asset:any){
+    setToolAssetId(String(asset.id));setToolAssetTag(String(asset.asset_tag));setToolName(String(asset.name));setToolCategory(String(asset.category));
+    setToolSerial(String(asset.serial_number??""));setToolBrandModel(String(asset.brand_model??""));setToolEmployeeId(String(asset.employee_id??""));
+    setToolVehicle(String(asset.vehicle_label??""));setToolStatus(asset.status);setToolCondition(asset.condition_label);setToolNotes(String(asset.notes??""));
+    setSection("tools");
+  }
   const availableParts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return parts.filter((part: any) => !term
@@ -225,6 +253,10 @@ export function DbsOperationalInventoryPage({
           <button type="button" onClick={() => { setSection("request"); setSuccessMessage(""); }}
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
             <Send className="h-4 w-4" /> Solicitar material
+          </button>
+          <button type="button" onClick={() => setSection("tools")} aria-pressed={section === "tools"}
+            className={section === "tools" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
+            <Wrench className="h-4 w-4" /> Ferramentas
           </button>
           <button type="button" onClick={() => setSection("cylinders")} aria-pressed={section === "cylinders"}
             className={section === "cylinders" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
@@ -346,6 +378,33 @@ export function DbsOperationalInventoryPage({
                 {!gasCylinderMovements.length && <p className="text-sm text-slate-500">Ainda não há movimentações registradas para as botijas visíveis.</p>}
               </div>
             </section>
+          </div>
+        ) : section === "tools" ? (
+          <div className="space-y-4">
+            {canManageTools && <form onSubmit={(e)=>{e.preventDefault();setErrorMessage("");saveToolMutation.mutate();}} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-2"><div><h3 className="font-bold">{toolAssetId?"Editar / movimentar ferramenta":"Cadastrar ferramenta individual"}</h3><p className="text-sm text-slate-600">Cada item tem patrimônio próprio, responsável, veículo e histórico.</p></div>{toolAssetId&&<button type="button" onClick={()=>{setToolAssetId("");setToolAssetTag("");setToolName("");setToolSerial("");setToolBrandModel("");setToolEmployeeId("");setToolVehicle("");setToolStatus("available");setToolNotes("");}} className="min-h-10 rounded-lg border px-3 text-sm">Novo</button>}</div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="text-sm font-semibold">Patrimônio<input required maxLength={40} value={toolAssetTag} onChange={e=>setToolAssetTag(e.target.value)} placeholder="DBS-FER-001" className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+                <label className="text-sm font-semibold">Nome<input required maxLength={140} value={toolName} onChange={e=>setToolName(e.target.value)} placeholder="Furadeira de impacto" className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+                <label className="text-sm font-semibold">Categoria<input required maxLength={80} value={toolCategory} onChange={e=>setToolCategory(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+                <label className="text-sm font-semibold">Nº de série<input maxLength={100} value={toolSerial} onChange={e=>setToolSerial(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+                <label className="text-sm font-semibold">Marca / modelo<input maxLength={140} value={toolBrandModel} onChange={e=>setToolBrandModel(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+                <label className="text-sm font-semibold">Condição<select value={toolCondition} onChange={e=>setToolCondition(e.target.value as any)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"><option value="new">Nova</option><option value="good">Boa</option><option value="worn">Desgastada</option><option value="damaged">Danificada</option></select></label>
+                <label className="text-sm font-semibold">Status<select value={toolStatus} onChange={e=>setToolStatus(e.target.value as any)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"><option value="available">Disponível</option><option value="assigned">Com colaborador</option><option value="maintenance">Manutenção</option><option value="retired">Baixada</option><option value="lost">Extraviada</option></select></label>
+                {toolStatus==="assigned"&&<label className="text-sm font-semibold">Responsável<select required value={toolEmployeeId} onChange={e=>setToolEmployeeId(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"><option value="">Selecione</option>{employees.map((employee:any)=><option key={employee.id} value={employee.id}>{employee.full_name}</option>)}</select></label>}
+                {toolStatus==="assigned"&&<label className="text-sm font-semibold">Veículo<input maxLength={80} value={toolVehicle} onChange={e=>setToolVehicle(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>}
+                <label className="text-sm font-semibold sm:col-span-2">Observações<input maxLength={1000} value={toolNotes} onChange={e=>setToolNotes(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border px-3 font-normal"/></label>
+              </div>
+              <button disabled={saveToolMutation.isPending} className="min-h-11 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-50">{saveToolMutation.isPending?"Salvando…":toolAssetId?"Salvar movimentação":"Cadastrar ferramenta"}</button>
+            </form>}
+            <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-bold">Ferramentas cadastradas</h3><div className="mt-3 space-y-2">
+              {toolAssets.map((asset:any)=>{const employee=employees.find((row:any)=>String(row.id)===String(asset.employee_id));return <article key={asset.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{asset.asset_tag} · {asset.name}</p><p className="text-xs text-slate-600">{asset.category} · {asset.serial_number||"Sem série"} · {asset.brand_model||"Sem modelo"}</p><p className="text-xs text-slate-600">{employee?.full_name??"Sem responsável"}{asset.vehicle_label?" · "+asset.vehicle_label:""} · Condição: {asset.condition_label}</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{({available:"Disponível",assigned:"Atribuída",maintenance:"Manutenção",retired:"Baixada",lost:"Extraviada"} as any)[asset.status]??asset.status}</span>{canManageTools&&<button type="button" onClick={()=>editToolAsset(asset)} className="min-h-10 rounded-lg border px-3 text-sm font-semibold">Editar / movimentar</button>}</div></article>;})}
+              {!toolAssets.length&&<p className="text-sm text-slate-500">Nenhuma ferramenta individual cadastrada.</p>}
+            </div></section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4"><h3 className="font-bold">Histórico de entrega e devolução</h3><div className="mt-3 space-y-2">
+              {toolAssetMovements.map((movement:any)=>{const asset=toolAssets.find((row:any)=>String(row.id)===String(movement.tool_asset_id));const from=employees.find((row:any)=>String(row.id)===String(movement.from_employee_id));const to=employees.find((row:any)=>String(row.id)===String(movement.to_employee_id));const labels:Record<string,string>={registered:"Cadastro",assigned:"Entrega ao colaborador",returned:"Devolução",transferred:"Transferência",vehicle_changed:"Mudança de veículo",status_changed:"Mudança de status",condition_changed:"Mudança de condição"};return <article key={movement.id} className="rounded-xl border border-slate-100 p-3"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-semibold">{labels[movement.movement_type]??movement.movement_type} · {asset?.asset_tag??"Patrimônio"}</p><time className="text-xs text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</time></div><p className="mt-1 text-xs text-slate-600">{from?.full_name??"—"} → {to?.full_name??"—"} · {movement.from_vehicle_label??"—"} → {movement.to_vehicle_label??"—"}</p></article>;})}
+              {!toolAssetMovements.length&&<p className="text-sm text-slate-500">Nenhuma movimentação registrada.</p>}
+            </div></section>
           </div>
         ) : section === "warranties" ? (
           <div className="space-y-4">
