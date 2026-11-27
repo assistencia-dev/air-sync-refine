@@ -357,7 +357,7 @@ export function DbsOperationalInventoryPage({
                     <p className="mt-2 text-sm">Saldo: <strong>{cylinder.remaining_charges}/{cylinder.total_charges}</strong> cargas · Utilizadas: {cylinder.used_charges} · Recargas: {cylinder.refill_count}</p>
                   </article>;
                 })}
-                {!gasCylinders.length && <p className="text-sm text-slate-500">Nenhuma botija ativa vinculada a este escopo.</p>}
+                {!gasCylinders.length && <p className="text-sm text-slate-500">Nenhuma botija vinculada a este escopo.</p>}
               </div>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
