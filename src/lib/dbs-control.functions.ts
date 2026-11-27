@@ -3977,28 +3977,6 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       .select("pricing_method,rate_bps,version,updated_at,updated_by")
       .eq("scope_key", "dbs-control:global").maybeSingle();
     if (pricingPolicy.error) throw new Error("Falha ao carregar política de preço de revenda: " + pricingPolicy.error.message);
-    const visibleCylinderIds = visibleGasCylinders.map((cylinder: any) => String(cylinder.id));
-    const gasCylinderMovementsResult = visibleCylinderIds.length
-      ? await (supabaseAdmin as any).from("dbs_control_gas_cylinder_movements")
-          .select("id,cylinder_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,remaining_before,remaining_after,used_before,used_after,work_order_id,gas_usage_id,actor_user_id,created_at")
-          .eq("scope_key", scopeKey).in("cylinder_id", visibleCylinderIds)
-          .order("created_at", { ascending: false }).limit(500)
-      : { data: [], error: null };
-    if (gasCylinderMovementsResult.error) {
-      throw new Error("Falha ao carregar o histórico das botijas: " + gasCylinderMovementsResult.error.message);
-    }
-
-    const visibleToolAssetIds = visibleToolAssets.map((asset: any) => String(asset.id));
-    const toolAssetMovementsResult = visibleToolAssetIds.length
-      ? await (supabaseAdmin as any).from("dbs_control_tool_asset_movements")
-          .select("id,tool_asset_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,from_condition,to_condition,notes,actor_user_id,created_at")
-          .eq("scope_key", scopeKey).in("tool_asset_id", visibleToolAssetIds)
-          .order("created_at", { ascending: false }).limit(1000)
-      : { data: [], error: null };
-    if (toolAssetMovementsResult.error) {
-      throw new Error("Falha ao carregar o histórico de ferramentas: " + toolAssetMovementsResult.error.message);
-    }
-
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -5072,6 +5050,24 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
         !request.work_order_id || visibleWorkOrderIds.has(String(request.work_order_id))
       );
     }
+
+    const visibleCylinderIds = visibleGasCylinders.map((cylinder: any) => String(cylinder.id));
+    const gasCylinderMovementsResult = visibleCylinderIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_gas_cylinder_movements")
+          .select("id,cylinder_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,remaining_before,remaining_after,used_before,used_after,work_order_id,gas_usage_id,actor_user_id,created_at")
+          .eq("scope_key", scopeKey).in("cylinder_id", visibleCylinderIds)
+          .order("created_at", { ascending: false }).limit(500)
+      : { data: [], error: null };
+    if (gasCylinderMovementsResult.error) throw new Error("Falha ao carregar o histórico das botijas: " + gasCylinderMovementsResult.error.message);
+
+    const visibleToolAssetIds = visibleToolAssets.map((asset: any) => String(asset.id));
+    const toolAssetMovementsResult = visibleToolAssetIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_tool_asset_movements")
+          .select("id,tool_asset_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,from_condition,to_condition,notes,actor_user_id,created_at")
+          .eq("scope_key", scopeKey).in("tool_asset_id", visibleToolAssetIds)
+          .order("created_at", { ascending: false }).limit(1000)
+      : { data: [], error: null };
+    if (toolAssetMovementsResult.error) throw new Error("Falha ao carregar o histórico de ferramentas: " + toolAssetMovementsResult.error.message);
 
     return {
       parts: parts.data ?? [],
