@@ -338,15 +338,6 @@ BEGIN
     ('concluida','concluída','concluido','concluído','concluida_com_pendencia','completed','complete') THEN
     RETURN NEW;
   END IF;
-  IF EXISTS (
-    SELECT 1 FROM public.dbs_control_customer_warranties
-     WHERE scope_key=NEW.scope_key AND work_order_id=v_order.id
-       AND work_order_part_id=v_part.id AND policy_id IS NULL
-       AND status IN ('active','suspended')
-  ) THEN
-    RETURN NEW;
-  END IF;
-
   -- Prefer the coverage already issued at close, even when its policy has
   -- since been disabled. This only enriches the existing quantity split.
   SELECT * INTO v_unallocated
