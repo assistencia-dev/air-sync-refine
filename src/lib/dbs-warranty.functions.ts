@@ -298,6 +298,7 @@ export const linkDbsWorkOrderPartReceiptItem = createServerFn({ method: "POST" }
     const scope = await requireWarrantyFinance(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_link_work_order_part_receipt_item", {
       p_actor_user_id: scope.id,
+      p_scope_key: scope.scopeKey,
       p_work_order_part_id: data.workOrderPartId,
       p_receipt_item_id: data.receiptItemId,
       p_quantity: data.quantity,
