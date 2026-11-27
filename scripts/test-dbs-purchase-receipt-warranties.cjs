@@ -6,11 +6,17 @@ const route=fs.readFileSync("src/routes/_authenticated/dbs-inventory.tsx","utf8"
 assert.match(migration,/dbs_control_receive_purchase_items_with_warranties/i);
 assert.match(migration,/public\.dbs_control_receive_purchase_items\(/i);
 assert.match(migration,/source_receipt_item_id/);
+assert.match(migration,/ADD COLUMN IF NOT EXISTS serial_number text/i);
+assert.match(migration,/ADD COLUMN IF NOT EXISTS lot_number text/i);
+assert.match(migration,/DBS_PURCHASE_RECEIPT_SERIAL_CONFLICT/);
+assert.match(migration,/DBS_PURCHASE_RECEIPT_LOT_CONFLICT/);
 assert.match(migration,/DBS_PURCHASE_WARRANTY_EXPIRY_REQUIRED/);
 assert.match(migration,/make_interval\(months=>v_months\)/);
 assert.match(migration,/REVOKE ALL ON FUNCTION public\.dbs_control_receive_purchase_items_with_warranties/i);
 assert.match(functions,/dbs_control_receive_purchase_items_with_warranties/);
 assert.match(functions,/duration_months/);
+assert.match(functions,/serial_number: serialNumber/);
+assert.match(functions,/lot_number: lotNumber/);
 assert.match(route,/Garantia do fornecedor/);
 assert.match(route,/purchaseReceiptWarrantyFields/);
 assert.match(route,/serialNumber/);
