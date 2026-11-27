@@ -111,6 +111,10 @@ export function DbsWarrantyManagementPage() {
   const filteredSupplierWarranties = useMemo(() => supplierWarranties.filter((row: any) => !searchKey ||
     [row.partSku,row.partName,row.supplierName,row.serial_number,row.lot_number,row.receiptNumber,row.document_reference,row.provider_name]
       .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey))), [supplierWarranties, searchKey]);
+  const filteredReceiptItems = useMemo(() => receipts.filter((row: any) =>
+    Boolean(row.serialNumber || row.lotNumber) && (!searchKey ||
+      [row.partSku,row.partName,row.supplierName,row.serialNumber,row.lotNumber,row.receiptNumber]
+        .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey)))), [receipts, searchKey]);
   const filteredCustomerWarranties = useMemo(() => customerWarranties.filter((row: any) => !searchKey ||
     [row.partSku,row.partName,row.workOrderProtocol,row.clientName,row.work_order_id,row.coverage_type]
       .some(value => String(value ?? "").toLocaleLowerCase("pt-BR").includes(searchKey))), [customerWarranties, searchKey]);
@@ -281,7 +285,21 @@ export function DbsWarrantyManagementPage() {
             {row.document_reference&&<p className="mt-1 text-xs text-slate-500">Documento: {row.document_reference}</p>}
             <button type="button" onClick={()=>{setClaimType("supplier");setClaimWarrantyId(row.id);setTab("claims");}} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700"><ClipboardCheck className="h-4 w-4"/> Abrir chamado</button>
           </article>)}
-          {!supplierWarranties.length&&<p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">Nenhuma garantia de fornecedor cadastrada.</p>}
+          {!filteredSupplierWarranties.length&&<p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">Nenhuma garantia de fornecedor corresponde à pesquisa.</p>}
+          <div className="space-y-3 border-t border-slate-200 pt-4">
+            <h3 className="font-bold text-slate-900">Série e lote registrados no recebimento</h3>
+            <p className="text-xs text-slate-500">Itens identificados fisicamente, mesmo quando o fornecedor não informou prazo de garantia.</p>
+            {filteredReceiptItems.map((row:any)=>{
+              const warranty=supplierWarranties.find((item:any)=>String(item.source_receipt_item_id)===String(row.id));
+              return <article key={row.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{row.partSku} · {row.partName}</p>
+                  <span className={warranty?"rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700":"rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"}>{warranty?"Garantia cadastrada":"Sem prazo de garantia informado"}</span></div>
+                <p className="mt-1 text-xs text-slate-600">Série: {row.serialNumber||"—"} · Lote: {row.lotNumber||"—"}</p>
+                <p className="mt-1 text-xs text-slate-500">Recebimento {row.receiptNumber||"—"} · {row.receivedAt?String(row.receivedAt).slice(0,10):"Data não informada"} · {row.supplierName||"Fornecedor não informado"}</p>
+              </article>;
+            })}
+            {!filteredReceiptItems.length&&<p className="text-sm text-slate-500">Nenhum recebimento com série ou lote informado.</p>}
+          </div>
         </section>
       </div>}
 
