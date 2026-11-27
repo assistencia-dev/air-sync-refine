@@ -177,6 +177,76 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.dbs_control_issue_customer_warranty_after_late_part_consumption()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $function$
+DECLARE
+  v_order public.dbs_control_work_orders%rowtype;
+  v_scope record;
+  v_policy record;
+  v_allocation record;
+  v_start date;
+  v_allocated numeric(18,4);
+  v_unallocated numeric(18,4);
+BEGIN
+  IF NEW.consumption_status IS DISTINCT FROM 'consumed'
+     OR (TG_OP='UPDATE' AND OLD.consumption_status IS NOT DISTINCT FROM NEW.consumption_status) THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_order FROM public.dbs_control_work_orders WHERE id=NEW.work_order_id;
+  IF NOT FOUND OR v_order.completed_at IS NULL
+     OR lower(btrim(coalesce(v_order.status,''))) NOT IN ('concluida','concluída','concluido','concluído','completed','complete') THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(v_order.id);
+  IF NOT FOUND OR v_scope.scope_key IS NULL THEN
+    RETURN NEW;
+  END IF;
+  v_start:=v_order.completed_at::date;
+
+  FOR v_policy IN
+    SELECT * FROM public.dbs_control_customer_warranty_policies
+     WHERE scope_key=v_scope.scope_key AND coverage_type='part'
+       AND part_id=NEW.part_id AND status='active'
+       AND approved_at<=v_order.completed_at
+  LOOP
+    v_allocated:=0;
+    FOR v_allocation IN
+      SELECT * FROM public.dbs_control_work_order_part_receipt_allocations
+       WHERE scope_key=v_scope.scope_key AND work_order_part_id=NEW.id
+       ORDER BY created_at,id
+    LOOP
+      INSERT INTO public.dbs_control_customer_warranties(
+        company_id,scope_key,work_order_id,work_order_part_id,part_id,coverage_type,
+        starts_on,expires_on,duration_months,terms,status,created_by,updated_by,
+        policy_id,source_receipt_allocation_id,supplier_warranty_id,serial_number,lot_number,quantity_covered
+      ) VALUES (
+        v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
+        v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
+        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
+        v_policy.id,v_allocation.id,v_allocation.supplier_warranty_id,
+        v_allocation.serial_number,v_allocation.lot_number,v_allocation.quantity_allocated
+      ) ON CONFLICT DO NOTHING;
+      v_allocated:=v_allocated+v_allocation.quantity_allocated;
+    END LOOP;
+
+    v_unallocated:=greatest(0,NEW.quantity-v_allocated);
+    IF v_unallocated>0 THEN
+      INSERT INTO public.dbs_control_customer_warranties(
+        company_id,scope_key,work_order_id,work_order_part_id,part_id,coverage_type,
+        starts_on,expires_on,duration_months,terms,status,created_by,updated_by,
+        policy_id,quantity_covered
+      ) VALUES (
+        v_scope.company_id,v_scope.scope_key,v_order.id,NEW.id,NEW.part_id,'part',
+        v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
+        v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
+        v_policy.id,v_unallocated
+      ) ON CONFLICT DO NOTHING;
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.dbs_control_attach_late_receipt_allocation_to_customer_warranty()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $function$
 DECLARE
@@ -316,6 +386,12 @@ CREATE TRIGGER dbs_control_customer_warranty_policy_history_immutable
 BEFORE UPDATE OR DELETE ON public.dbs_control_customer_warranty_policy_history
 FOR EACH ROW EXECUTE FUNCTION public.dbs_control_reject_customer_warranty_policy_history_mutation();
 
+DROP TRIGGER IF EXISTS dbs_control_issue_customer_warranty_after_late_part_consumption
+  ON public.dbs_control_work_order_parts;
+CREATE TRIGGER dbs_control_issue_customer_warranty_after_late_part_consumption
+AFTER INSERT OR UPDATE OF consumption_status ON public.dbs_control_work_order_parts
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_issue_customer_warranty_after_late_part_consumption();
+
 DROP TRIGGER IF EXISTS dbs_control_attach_late_receipt_allocation_to_customer_warranty
   ON public.dbs_control_work_order_part_receipt_allocations;
 CREATE TRIGGER dbs_control_attach_late_receipt_allocation_to_customer_warranty
@@ -332,6 +408,7 @@ REVOKE ALL ON FUNCTION public.dbs_control_capture_customer_warranty_policy_histo
 REVOKE ALL ON FUNCTION public.dbs_control_reject_customer_warranty_policy_history_mutation() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_issue_customer_warranties_on_work_order_completion() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_attach_late_receipt_allocation_to_customer_warranty() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.dbs_control_issue_customer_warranty_after_late_part_consumption() FROM PUBLIC,anon,authenticated;
 
 COMMENT ON TABLE public.dbs_control_customer_warranty_policies IS
   'Regras de cobertura DBS aprovadas explicitamente. Sem regra ativa, concluir OS não cria cobertura automaticamente.';
