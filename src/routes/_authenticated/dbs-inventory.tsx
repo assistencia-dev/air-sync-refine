@@ -402,10 +402,10 @@ export function DbsInventoryPage({
   }
 
   function updatePurchaseReceiptWarranty(itemId: string, patch: Partial<{serialNumber:string;lotNumber:string;durationMonths:string;expiresOn:string;terms:string;documentReference:string}>) {
-    setPurchaseReceiptWarrantyFields(current => ({
-      ...current,
-      [itemId]: {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:"",...current[itemId],...patch},
-    }));
+    setPurchaseReceiptWarrantyFields(current => {
+      const previous = current[itemId] ?? {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:""};
+      return {...current,[itemId]:{...previous,...patch}};
+    });
   }
 
   function renderPurchaseReceiptWarrantyFields(itemId: string) {
