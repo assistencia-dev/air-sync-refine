@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, FileClock, 
 import {
   createDbsCustomerWarranty,
   createDbsSupplierWarranty,
+  linkDbsWorkOrderPartReceiptItem,
   getDbsWarrantyClaimHistory,
   getDbsWarrantyOverview,
   openDbsWarrantyClaim,
@@ -76,6 +77,8 @@ export function DbsWarrantyManagementPage() {
   const [customerExpiresOn, setCustomerExpiresOn] = useState("");
   const [customerDuration, setCustomerDuration] = useState("");
   const [customerTerms, setCustomerTerms] = useState("");
+  const [traceReceiptItemId, setTraceReceiptItemId] = useState("");
+  const [traceQuantity, setTraceQuantity] = useState("1");
   const [claimType, setClaimType] = useState<ClaimType>("supplier");
   const [claimWarrantyId, setClaimWarrantyId] = useState("");
   const [claimIssue, setClaimIssue] = useState("");
@@ -107,6 +110,8 @@ export function DbsWarrantyManagementPage() {
   const receipts = data?.receiptItems ?? [];
   const workOrders = data?.workOrders ?? [];
   const workOrderParts = (data?.workOrderParts ?? []).filter((row: any) => String(row.workOrderId) === String(customerWorkOrderId));
+  const selectedWorkOrderPart = workOrderParts.find((row: any) => String(row.id) === String(customerWorkOrderPartId));
+  const traceableReceiptItems = receipts.filter((row: any) => String(row.partId) === String(selectedWorkOrderPart?.partId));
   const searchKey = warrantySearch.trim().toLocaleLowerCase("pt-BR");
   const filteredSupplierWarranties = useMemo(() => supplierWarranties.filter((row: any) => !searchKey ||
     [row.partSku,row.partName,row.supplierName,row.serial_number,row.lot_number,row.receiptNumber,row.document_reference,row.provider_name]
@@ -168,6 +173,21 @@ export function DbsWarrantyManagementPage() {
       await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-overview"] });
     },
     onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível registrar a cobertura."),
+  });
+
+  const traceReceiptMutation = useMutation({
+    mutationFn: () => linkDbsWorkOrderPartReceiptItem({ data: {
+      workOrderPartId: customerWorkOrderPartId,
+      receiptItemId: traceReceiptItemId,
+      quantity: Number(traceQuantity),
+      idempotencyKey: idempotencyKey(),
+    } }),
+    onSuccess: async () => {
+      setMessage("Lote/série vinculado ao item consumido da OS; a rastreabilidade foi registrada no histórico.");
+      setTraceReceiptItemId(""); setTraceQuantity("1");
+      await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-overview"] });
+    },
+    onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível vincular o lote/série à OS."),
   });
 
   const openClaimMutation = useMutation({
@@ -312,12 +332,31 @@ export function DbsWarrantyManagementPage() {
           <label className="block text-sm font-semibold text-slate-700">Cobertura
             <select value={coverageType} onChange={e=>setCoverageType(e.target.value as typeof coverageType)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="part">Peça instalada</option><option value="service">Serviço executado</option><option value="work_order">OS / atendimento</option></select>
           </label>
-          {coverageType==="part"&&<label className="block text-sm font-semibold text-slate-700">Peça realmente registrada na OS<select required value={customerWorkOrderPartId} onChange={e=>setCustomerWorkOrderPartId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione o item da OS</option>{workOrderParts.map((p:any)=><option key={p.id} value={p.id}>{p.partSku} · {p.partName}</option>)}</select></label>}
+          {coverageType==="part"&&<label className="block text-sm font-semibold text-slate-700">Peça realmente registrada na OS<select required value={customerWorkOrderPartId} onChange={e=>{setCustomerWorkOrderPartId(e.target.value);setTraceReceiptItemId("");setTraceQuantity("1");}} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal"><option value="">Selecione o item da OS</option>{workOrderParts.map((p:any)=><option key={p.id} value={p.id}>{p.partSku} · {p.partName} · {Number(p.quantity||0).toLocaleString("pt-BR")} un.</option>)}</select></label>}
           <div className="grid grid-cols-2 gap-3"><label className="block text-sm font-semibold text-slate-700">Início<input type="date" required value={customerStartsOn} onChange={e=>setCustomerStartsOn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label><label className="block text-sm font-semibold text-slate-700">Término<input type="date" value={customerExpiresOn} onChange={e=>setCustomerExpiresOn(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label></div>
           <label className="block text-sm font-semibold text-slate-700">Duração em meses (alternativa à data de término)<input type="number" min="0" max="600" value={customerDuration} onChange={e=>setCustomerDuration(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label>
           <label className="block text-sm font-semibold text-slate-700">Termos da cobertura DBS<textarea value={customerTerms} onChange={e=>setCustomerTerms(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 font-normal"/></label>
           <button disabled={customerMutation.isPending || !customerWorkOrderId || (!customerExpiresOn && !customerDuration) || (coverageType==="part"&&!customerWorkOrderPartId)} className="min-h-11 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-50">{customerMutation.isPending?"Salvando…":"Registrar cobertura DBS"}</button>
         </form>}
+        {customerWorkOrderId && customerWorkOrderPartId && selectedWorkOrderPart && <section className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-4 xl:col-span-2">
+          <div><h3 className="font-bold text-slate-900">Rastreabilidade de lote e série aplicada na OS</h3><p className="mt-1 text-sm text-slate-600">Vincule o lote ou número de série do recebimento ao item que já consta como consumido na OS. O sistema confere a peça e impede exceder as quantidades recebidas ou consumidas.</p></div>
+          {selectedWorkOrderPart.consumptionStatus === "consumed" ? <form onSubmit={e=>{e.preventDefault();traceReceiptMutation.mutate();}} className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(120px,0.7fr)_auto] sm:items-end">
+            <label className="text-sm font-semibold text-slate-700">Lote / série do recebimento
+              <select required value={traceReceiptItemId} onChange={e=>setTraceReceiptItemId(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
+                <option value="">Selecione o recebimento da peça</option>{traceableReceiptItems.map((row:any)=><option key={row.id} value={row.id}>{row.partSku} · {row.receiptNumber||"Recebimento"} · {row.serialNumber?"Série "+row.serialNumber+" · ":""}{row.lotNumber?"Lote "+row.lotNumber+" · ":""}Qtd. recebida: {row.quantityReceived}</option>)}
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">Quantidade utilizada
+              <input required type="number" min="0.0001" step="0.0001" max={Math.max(0,Number(selectedWorkOrderPart.quantity||0)-(selectedWorkOrderPart.receiptAllocations??[]).reduce((sum:number,row:any)=>sum+Number(row.quantity_allocated||0),0))} value={traceQuantity} onChange={e=>setTraceQuantity(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 font-normal"/>
+            </label>
+            <button type="submit" disabled={traceReceiptMutation.isPending||!traceReceiptItemId||!Number(traceQuantity)||Number(traceQuantity)<=0} className="min-h-11 rounded-lg bg-sky-800 px-4 text-sm font-bold text-white disabled:opacity-50">{traceReceiptMutation.isPending?"Vinculando…":"Vincular lote / série"}</button>
+          </form> : <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">A rastreabilidade só pode ser vinculada após o consumo da peça estar registrado na OS.</p>}
+          <div className="space-y-2">
+            <h4 className="text-sm font-bold text-slate-800">Lotes e séries já vinculados</h4>
+            {(selectedWorkOrderPart.receiptAllocations??[]).map((allocation:any)=>{const warranty=supplierWarranties.find((row:any)=>String(row.id)===String(allocation.supplier_warranty_id));return <article key={allocation.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><strong>Série: {allocation.serial_number||"—"} · Lote: {allocation.lot_number||"—"}</strong><span>Quantidade: {Number(allocation.quantity_allocated).toLocaleString("pt-BR")}</span></div><p className="mt-1 text-xs text-slate-500">{warranty ? "Garantia fornecedor até "+warranty.expires_on : "Sem garantia de fornecedor vinculada a este recebimento"}</p></article>;})}
+            {!(selectedWorkOrderPart.receiptAllocations??[]).length&&<p className="text-sm text-slate-500">Nenhum lote/série vinculado a este item da OS.</p>}
+          </div>
+        </section>}
         <section className="space-y-3">
           <h2 className="font-bold text-slate-900">Coberturas DBS vinculadas à OS</h2>
           {filteredCustomerWarranties.map((row:any)=><article key={row.id} className="rounded-xl border border-slate-200 bg-white p-4">
