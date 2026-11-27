@@ -116,6 +116,12 @@ BEGIN
         ON p.scope_key=v_scope.scope_key AND p.coverage_type='part'
        AND p.part_id=op.part_id AND p.status='active'
      WHERE op.work_order_id=NEW.id AND op.consumption_status='consumed'
+       AND NOT EXISTS (
+         SELECT 1 FROM public.dbs_control_customer_warranties cw
+          WHERE cw.scope_key=v_scope.scope_key AND cw.work_order_id=NEW.id
+            AND cw.work_order_part_id=op.id AND cw.policy_id IS NULL
+            AND cw.status IN ('active','suspended')
+       )
   LOOP
     v_allocated := 0;
     FOR v_allocation IN
@@ -155,11 +161,17 @@ BEGIN
 
   -- Cobertura de serviço ou do atendimento. Só é emitida quando há regra ativa.
   FOR v_policy IN
-    SELECT * FROM public.dbs_control_customer_warranty_policies
-     WHERE scope_key=v_scope.scope_key AND status='active'
+    SELECT p.* FROM public.dbs_control_customer_warranty_policies p
+     WHERE p.scope_key=v_scope.scope_key AND p.status='active'
        AND (
-         (coverage_type='service' AND service_id=NEW.service_id)
-         OR coverage_type='work_order'
+         (p.coverage_type='service' AND p.service_id=NEW.service_id)
+         OR p.coverage_type='work_order'
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM public.dbs_control_customer_warranties cw
+          WHERE cw.scope_key=v_scope.scope_key AND cw.work_order_id=NEW.id
+            AND cw.coverage_type=p.coverage_type AND cw.policy_id IS NULL
+            AND cw.status IN ('active','suspended')
        )
   LOOP
     INSERT INTO public.dbs_control_customer_warranties(
@@ -206,6 +218,14 @@ BEGIN
     RETURN NEW;
   END IF;
   v_start:=v_order.completed_at::date;
+  IF EXISTS (
+    SELECT 1 FROM public.dbs_control_customer_warranties
+     WHERE scope_key=v_scope.scope_key AND work_order_id=v_order.id
+       AND work_order_part_id=NEW.id AND policy_id IS NULL
+       AND status IN ('active','suspended')
+  ) THEN
+    RETURN NEW;
+  END IF;
 
   FOR v_policy IN
     SELECT * FROM public.dbs_control_customer_warranty_policies
@@ -272,6 +292,14 @@ BEGIN
    WHERE id=v_part.work_order_id;
   IF NOT FOUND OR lower(btrim(coalesce(v_order.status,''))) NOT IN
     ('concluida','concluída','concluido','concluído','completed','complete') THEN
+    RETURN NEW;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.dbs_control_customer_warranties
+     WHERE scope_key=NEW.scope_key AND work_order_id=v_order.id
+       AND work_order_part_id=v_part.id AND policy_id IS NULL
+       AND status IN ('active','suspended')
+  ) THEN
     RETURN NEW;
   END IF;
 
