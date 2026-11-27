@@ -241,7 +241,9 @@ DECLARE
   v_start date;
   v_allocated numeric(18,4);
   v_unallocated numeric(18,4);
+  v_actor uuid;
 BEGIN
+  SELECT id INTO v_actor FROM public.users WHERE auth_id=auth.uid() AND status='ativo' LIMIT 1;
   IF NEW.consumption_status IS DISTINCT FROM 'consumed' THEN
     RETURN NEW;
   END IF;
@@ -259,7 +261,7 @@ BEGIN
   IF NOT FOUND OR v_scope.scope_key IS NULL THEN
     RETURN NEW;
   END IF;
-  v_start:=v_order.completed_at::date;
+  v_start:=(v_order.completed_at AT TIME ZONE 'America/Sao_Paulo')::date;
   IF EXISTS (
     SELECT 1 FROM public.dbs_control_customer_warranties
      WHERE scope_key=v_scope.scope_key AND work_order_id=v_order.id
@@ -412,7 +414,7 @@ BEGIN
     RAISE EXCEPTION 'DBS_CUSTOMER_WARRANTY_SCOPE_MISMATCH' USING errcode='42501';
   END IF;
 
-  v_start := v_order.completed_at::date;
+  v_start := (v_order.completed_at AT TIME ZONE 'America/Sao_Paulo')::date;
   INSERT INTO public.dbs_control_customer_warranties(
     company_id,scope_key,work_order_id,work_order_part_id,part_id,coverage_type,
     starts_on,expires_on,duration_months,terms,status,created_by,updated_by,
