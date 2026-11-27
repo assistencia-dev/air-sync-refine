@@ -28,7 +28,7 @@ assert.match(component,/Botijas e histórico/);
 assert.match(component,/Histórico de movimentações/);
 assert.match(gas,/dbs_control_register_gas_usage/i);
 assert.match(backup,/"dbs_control_gas_cylinder_movements"/);
-assert.match(backup,/tables\\.length !== 98/);
+assert.match(backup,/tables\.length !== 98/);
 assert.doesNotMatch(migration,/DROP\s+(TABLE|COLUMN|SCHEMA)\b/i);
 assert.doesNotMatch(migration,/TRUNCATE\s+/i);
 assert.doesNotMatch(migration,/DELETE\s+FROM\s+/i);
