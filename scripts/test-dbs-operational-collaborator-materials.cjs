@@ -25,6 +25,8 @@ assert.match(overview, /select\("id,request_type,part_id,work_order_id,gas_cylin
 assert.match(overview, /visibleRequests = visibleRequests\.filter\(\(request: any\) =>[\s\S]*requested_by[\s\S]*user\.id/);
 assert.match(overview, /employee_id", employee\.id/);
 assert.match(overview, /canChooseDestination: !isCollaborator/);
+assert.match(overview, /canReserveStock: !isCollaborator/,
+  "Collaborators can request materials but must not receive admin-only stock reservation controls.");
 assert.doesNotMatch(overview, /cost_cents|unit_cost_cents|sale_cents/i);
 
 const requestStart = functions.indexOf("export const createDbsMaterialRequest");
