@@ -86,5 +86,5 @@ for (const table of [
 ]) {
   assert.match(backup, new RegExp(`"${table}"`), `Backup must cover ${table}.`);
 }
-assert.match(backup, /tables.length !== 92/);
+assert.match(backup, /tables.length !== 93/);
 console.log("DBS warranties: supplier receipt traceability, customer OS item coverage, claim history, Finance workspace, operational read-only consultation and backup coverage verified.");
