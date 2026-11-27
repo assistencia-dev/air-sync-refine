@@ -368,7 +368,7 @@ export function DbsWarrantyManagementPage() {
         {data?.canManage && <section className="space-y-4 rounded-2xl border border-blue-200 bg-blue-50/40 p-4 sm:p-5">
           <div>
             <h2 className="font-bold text-slate-900">Regra automática de garantia DBS ao concluir OS</h2>
-            <p className="mt-1 text-sm text-slate-600">Cadastre e aprove explicitamente o prazo e os termos. A regra só vale para futuras conclusões; não altera OS antigas nem inventa prazo quando não houver regra ativa.</p>
+            <p className="mt-1 text-sm text-slate-600">Cadastre e aprove explicitamente o prazo e os termos. A cobertura é emitida na conclusão da OS, inclusive com pendência, e considera apenas peças consumidas. Se o consumo ou o lote/série for registrado depois, o histórico é complementado sem duplicar a cobertura. As regras e emissões ficam em histórico imutável; sem regra ativa, nenhum prazo é presumido.</p>
           </div>
           <form onSubmit={e=>{e.preventDefault();policyMutation.mutate();}} className="grid gap-3 md:grid-cols-2">
             <label className="block text-sm font-semibold text-slate-700">Aplicar a
