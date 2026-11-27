@@ -132,7 +132,9 @@ DECLARE
   v_start date;
   v_allocated numeric(18,4);
   v_unallocated numeric(18,4);
+  v_actor uuid;
 BEGIN
+  SELECT id INTO v_actor FROM public.users WHERE auth_id=auth.uid() AND status='ativo' LIMIT 1;
   IF lower(btrim(coalesce(NEW.status,''))) NOT IN ('concluida','concluída','concluido','concluído','completed','complete')
      OR lower(btrim(coalesce(OLD.status,''))) IN ('concluida','concluída','concluido','concluído','completed','complete') THEN
     RETURN NEW;
@@ -143,16 +145,17 @@ BEGIN
   IF NOT FOUND OR v_scope.scope_key IS NULL THEN
     RETURN NEW;
   END IF;
-  v_start := coalesce(NEW.completed_at::date,current_date);
+  v_start := coalesce((NEW.completed_at AT TIME ZONE 'America/Sao_Paulo')::date,(now() AT TIME ZONE 'America/Sao_Paulo')::date);
 
   -- Cobertura por peça: apenas itens já marcados como efetivamente consumidos.
   FOR v_part IN
     SELECT op.id,op.part_id,op.quantity,p.id AS policy_id,p.company_id AS policy_company_id,
-           p.scope_key,p.duration_months,p.terms,p.approved_by
+           p.scope_key,p.duration_months,p.terms,p.approved_by,p.approved_at
       FROM public.dbs_control_work_order_parts op
       JOIN public.dbs_control_customer_warranty_policies p
         ON p.scope_key=v_scope.scope_key AND p.coverage_type='part'
        AND p.part_id=op.part_id AND p.status='active'
+       AND p.approved_at<=coalesce(NEW.completed_at,now())
      WHERE op.work_order_id=NEW.id AND op.consumption_status='consumed'
        AND NOT EXISTS (
          SELECT 1 FROM public.dbs_control_customer_warranties cw
@@ -160,6 +163,7 @@ BEGIN
             AND cw.work_order_part_id=op.id AND cw.policy_id IS NULL
             AND cw.status IN ('active','suspended')
        )
+  FOR UPDATE OF op
   LOOP
     v_allocated := 0;
     FOR v_allocation IN
@@ -175,7 +179,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,NEW.id,v_part.id,v_part.part_id,'part',
         v_start,(v_start+make_interval(months=>v_part.duration_months))::date,
-        v_part.duration_months,v_part.terms,'active',NEW.created_by_user_id,NEW.created_by_user_id,
+        v_part.duration_months,v_part.terms,'active',COALESCE(v_actor,NEW.created_by_user_id),COALESCE(v_actor,NEW.created_by_user_id),
         v_part.policy_id,v_allocation.id,v_allocation.supplier_warranty_id,
         v_allocation.serial_number,v_allocation.lot_number,v_allocation.quantity_allocated
       ) ON CONFLICT DO NOTHING;
@@ -191,7 +195,7 @@ BEGIN
       ) VALUES (
         v_scope.company_id,v_scope.scope_key,NEW.id,v_part.id,v_part.part_id,'part',
         v_start,(v_start+make_interval(months=>v_part.duration_months))::date,
-        v_part.duration_months,v_part.terms,'active',NEW.created_by_user_id,NEW.created_by_user_id,
+        v_part.duration_months,v_part.terms,'active',COALESCE(v_actor,NEW.created_by_user_id),COALESCE(v_actor,NEW.created_by_user_id),
         v_part.policy_id,v_unallocated
       ) ON CONFLICT DO NOTHING;
     END IF;
@@ -218,8 +222,8 @@ BEGIN
     ) VALUES (
       v_scope.company_id,v_scope.scope_key,NEW.id,v_policy.coverage_type,v_start,
       (v_start+make_interval(months=>v_policy.duration_months))::date,
-      v_policy.duration_months,v_policy.terms,'active',NEW.created_by_user_id,
-      NEW.created_by_user_id,v_policy.id
+      v_policy.duration_months,v_policy.terms,'active',COALESCE(v_actor,NEW.created_by_user_id),
+      COALESCE(v_actor,NEW.created_by_user_id),v_policy.id
     ) ON CONFLICT DO NOTHING;
   END LOOP;
 
