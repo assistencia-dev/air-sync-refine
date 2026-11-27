@@ -37,6 +37,7 @@ const lateConsumptionEnd = migration.indexOf("CREATE OR REPLACE FUNCTION public.
 const lateConsumptionFunction = migration.slice(lateConsumptionStart, lateConsumptionEnd);
 assert.doesNotMatch(lateConsumptionFunction, /NEW\.created_by/);
 assert.match(lateConsumptionFunction, /v_order\.created_by_user_id/);
+assert.match(lateConsumptionFunction, /COALESCE\(v_actor,v_order\.created_by_user_id\)/);
 const lateAllocationStart = migration.indexOf("CREATE OR REPLACE FUNCTION public.dbs_control_attach_late_receipt_allocation_to_customer_warranty()");
 const lateAllocationEnd = migration.indexOf("DROP TRIGGER IF EXISTS dbs_control_customer_warranty_history_capture", lateAllocationStart);
 const lateAllocationFunction = migration.slice(lateAllocationStart, lateAllocationEnd);
