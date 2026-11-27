@@ -46,10 +46,11 @@
 - Registrar garantia de fornecedor ao conferir recebimento, incluindo nota, série/lote, evidências e regra de início.
 - Vincular lote/série efetivamente consumido à peça instalada na OS.
 - Registrar cobertura da DBS na conclusão da OS, de acordo com os termos configurados e aprovados.
-- Consultar por peça, série/lote, cliente e OS; alertar vencimentos e acompanhar reclamações/RMA sem apagar o histórico.
+- Consultar por peça/SKU, série/lote, fornecedor, recebimento, cliente e protocolo da OS; alertar vencimentos e acompanhar reclamações/RMA sem apagar o histórico.
+- A consulta cruzada de garantias por peça, série/lote, fornecedor, recebimento, cliente e OS está implementada nesta branch; a criação automática na conferência de recebimento e a captura do lote/série efetivamente consumido na OS permanecem condicionadas à integração com o fluxo transacional de recebimento/consumo, sem presumir prazos ou criar vínculos artificiais.
 
 ## Situação desta entrega
 
 A Fase 1 cria a estrutura relacional e testes estáticos de garantias. A Fase 2 inclui o perfil FINANCEIRO_OPERADOR separado do FINANCEIRO_LEITURA, com guardas de servidor/RPC e navegação. A Fase 3 inclui consulta operacional sem valores financeiros, reserva de peça por OS, solicitação de peça/ferramenta/insumo/recarga de botija e fila financeira inicial com vínculo de-para e transferência idempotente do saldo central ao estoque operacional.
 
-A interface e os contratos desta branch ainda precisam passar por toda a validação CI antes de qualquer merge. As regras de preço configurável, movimentação/custódia completa de ferramentas e cilindros, criação automática da garantia ao receber, vínculo real de lote/série consumido na OS e consulta completa de garantias continuam para as próximas fases. As migrations ainda não foram aplicadas no Supabase oficial e nenhuma tabela/dado de produção foi alterado.
+A consulta de garantias por múltiplas referências foi concluída nesta etapa, incluindo identificação do cliente e do recebimento. A custódia individual de ferramentas e o histórico de movimentações de botijas/ferramentas também estão implementados no branch. Permanecem para integração seguinte: criação de garantia durante o recebimento quando houver termos/documentos informados, captura real de série/lote no consumo de peças da OS e emissão da cobertura DBS no encerramento da OS. Não se presume prazo de garantia. As migrations ainda não foram aplicadas no Supabase oficial e nenhuma tabela/dado de produção foi alterado.
