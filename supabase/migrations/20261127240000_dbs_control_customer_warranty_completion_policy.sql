@@ -205,6 +205,7 @@ BEGIN
   FOR v_policy IN
     SELECT p.* FROM public.dbs_control_customer_warranty_policies p
      WHERE p.scope_key=v_scope.scope_key AND p.status='active'
+       AND p.approved_at<=coalesce(NEW.completed_at,now())
        AND (
          (p.coverage_type='service' AND p.service_id=NEW.service_id)
          OR p.coverage_type='work_order'
