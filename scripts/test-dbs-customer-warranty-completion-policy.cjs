@@ -43,7 +43,7 @@ const lateAllocationFunction = migration.slice(lateAllocationStart, lateAllocati
 assert.match(lateAllocationFunction, /SELECT \* INTO v_unallocated/);
 assert.match(lateAllocationFunction, /v_unallocated\.quantity_covered-NEW\.quantity_allocated/);
 assert.match(lateAllocationFunction, /IF EXISTS \([\s\S]*?policy_id IS NULL[\s\S]*?RETURN NEW/);
-assert.match(migration, /coalesce\(NEW\.completed_at AT TIME ZONE 'America\/Sao_Paulo'/i);
+assert.match(migration, /coalesce\(\(NEW\.completed_at AT TIME ZONE 'America\/Sao_Paulo'/i);
 assert.match(migration, /OLD\.status/);
 assert.match(migration, /NEW\.completed_at::date/);
 assert.match(migration, /op\.consumption_status='consumed'/i);
