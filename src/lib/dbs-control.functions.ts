@@ -3635,7 +3635,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
 
 export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number; warranty?: { serialNumber?: string; lotNumber?: string; durationMonths?: number; expiresOn?: string; terms?: string; documentReference?: string } }> }) => {
     const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
     const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
@@ -3647,13 +3647,35 @@ export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
         if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
           throw new Error("A quantidade conferida deve ser maior que zero.");
         }
+        const warranty = item.warranty;
+        if (warranty) {
+          const durationMonths = warranty.durationMonths == null ? null : Number(warranty.durationMonths);
+          const expiresOn = warranty.expiresOn ? String(warranty.expiresOn).trim() : "";
+          if ((!durationMonths || !Number.isSafeInteger(durationMonths) || durationMonths < 1 || durationMonths > 1200) && !isValidIsoCalendarDate(expiresOn)) {
+            throw new Error("Para registrar garantia no recebimento, informe a duração em meses ou a data de validade.");
+          }
+          if (expiresOn && !isValidIsoCalendarDate(expiresOn)) throw new Error("Data de validade da garantia inválida.");
+          return {
+            purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"),
+            quantity_received: item.quantityReceived,
+            warranty: {
+              serial_number: String(warranty.serialNumber ?? "").trim().slice(0,160) || null,
+              lot_number: String(warranty.lotNumber ?? "").trim().slice(0,160) || null,
+              duration_months: durationMonths,
+              expires_on: expiresOn || null,
+              start_anchor: "receipt_date",
+              terms: String(warranty.terms ?? "").trim().slice(0,4000),
+              document_reference: String(warranty.documentReference ?? "").trim().slice(0,240) || null,
+            },
+          };
+        }
         return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
       }),
     };
   })
   .handler(async ({ context, data }) => {
     const user = await requireDbsInventoryFinanceAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items_with_warranties", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
