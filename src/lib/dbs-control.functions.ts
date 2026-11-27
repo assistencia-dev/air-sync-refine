@@ -5039,7 +5039,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
             .order("full_name"),
       (supabaseAdmin as any).from("dbs_control_gas_cylinders")
         .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
-        .eq("scope_key", scopeKey).eq("status", "active")
+        .eq("scope_key", scopeKey)
         .order("assigned_at", { ascending: false }),
       isCollaborator
         ? (supabaseAdmin as any).from("dbs_control_tool_assets")
