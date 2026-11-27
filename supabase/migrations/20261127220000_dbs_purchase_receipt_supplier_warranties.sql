@@ -77,6 +77,9 @@ BEGIN
 
     v_serial := nullif(left(btrim(coalesce(v_item->>'serial_number',v_item->'warranty'->>'serial_number','')),160),'');
     v_lot := nullif(left(btrim(coalesce(v_item->>'lot_number',v_item->'warranty'->>'lot_number','')),160),'');
+    IF v_serial IS NOT NULL AND v_receipt_item.quantity_received<>1 THEN
+      RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_SERIAL_QUANTITY_MUST_BE_ONE' USING errcode='22023';
+    END IF;
     IF v_receipt_item.serial_number IS NOT NULL AND v_serial IS NOT NULL
        AND v_receipt_item.serial_number IS DISTINCT FROM v_serial THEN
       RAISE EXCEPTION 'DBS_PURCHASE_RECEIPT_SERIAL_CONFLICT' USING errcode='23505';
