@@ -56,6 +56,44 @@ CREATE UNIQUE INDEX IF NOT EXISTS dbs_control_customer_warranties_policy_source_
     coalesce(source_receipt_allocation_id,'00000000-0000-0000-0000-000000000000'::uuid)
   ) WHERE policy_id IS NOT NULL;
 
+-- Keep an immutable before/after trail for each emitted or enriched coverage.
+CREATE TABLE IF NOT EXISTS public.dbs_control_customer_warranty_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  warranty_id uuid NOT NULL REFERENCES public.dbs_control_customer_warranties(id) ON DELETE RESTRICT,
+  scope_key text NOT NULL,
+  operation text NOT NULL CHECK (operation IN ('issued','updated')),
+  before_data jsonb,
+  after_data jsonb NOT NULL,
+  actor_user_id uuid REFERENCES public.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS dbs_control_customer_warranty_history_idx
+  ON public.dbs_control_customer_warranty_history(scope_key,warranty_id,created_at DESC);
+ALTER TABLE public.dbs_control_customer_warranty_history ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.dbs_control_customer_warranty_history FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT ON public.dbs_control_customer_warranty_history TO service_role;
+
+CREATE OR REPLACE FUNCTION public.dbs_control_capture_customer_warranty_history()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $function$
+BEGIN
+  INSERT INTO public.dbs_control_customer_warranty_history(
+    warranty_id,scope_key,operation,before_data,after_data,actor_user_id
+  ) VALUES (
+    NEW.id,NEW.scope_key,CASE WHEN TG_OP='INSERT' THEN 'issued' ELSE 'updated' END,
+    CASE WHEN TG_OP='UPDATE' THEN to_jsonb(OLD) ELSE NULL END,
+    to_jsonb(NEW),COALESCE(NEW.updated_by,NEW.created_by)
+  );
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.dbs_control_reject_customer_warranty_history_mutation()
+RETURNS trigger LANGUAGE plpgsql SET search_path=public,pg_temp AS $function$
+BEGIN
+  RAISE EXCEPTION 'DBS_CUSTOMER_WARRANTY_HISTORY_IMMUTABLE' USING errcode='55000';
+END;
+$function$;
+
 ALTER TABLE public.dbs_control_customer_warranty_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dbs_control_customer_warranty_policy_history ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.dbs_control_customer_warranty_policies,
@@ -406,6 +444,18 @@ BEGIN
 END;
 $function$;
 
+DROP TRIGGER IF EXISTS dbs_control_customer_warranty_history_capture
+  ON public.dbs_control_customer_warranties;
+CREATE TRIGGER dbs_control_customer_warranty_history_capture
+AFTER INSERT OR UPDATE ON public.dbs_control_customer_warranties
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_capture_customer_warranty_history();
+
+DROP TRIGGER IF EXISTS dbs_control_customer_warranty_history_immutable
+  ON public.dbs_control_customer_warranty_history;
+CREATE TRIGGER dbs_control_customer_warranty_history_immutable
+BEFORE UPDATE OR DELETE ON public.dbs_control_customer_warranty_history
+FOR EACH ROW EXECUTE FUNCTION public.dbs_control_reject_customer_warranty_history_mutation();
+
 DROP TRIGGER IF EXISTS dbs_control_customer_warranty_policy_history_capture
   ON public.dbs_control_customer_warranty_policies;
 CREATE TRIGGER dbs_control_customer_warranty_policy_history_capture
@@ -436,6 +486,8 @@ CREATE TRIGGER dbs_control_issue_customer_warranties_on_completion
 AFTER UPDATE OF status ON public.dbs_control_work_orders
 FOR EACH ROW EXECUTE FUNCTION public.dbs_control_issue_customer_warranties_on_work_order_completion();
 
+REVOKE ALL ON FUNCTION public.dbs_control_capture_customer_warranty_history() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.dbs_control_reject_customer_warranty_history_mutation() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_capture_customer_warranty_policy_history() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_reject_customer_warranty_policy_history_mutation() FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.dbs_control_issue_customer_warranties_on_work_order_completion() FROM PUBLIC,anon,authenticated;
