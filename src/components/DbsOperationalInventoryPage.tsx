@@ -201,7 +201,7 @@ export function DbsOperationalInventoryPage({
     mutationFn: () => saveDbsToolAsset({data:{assetId:toolAssetId||undefined,assetTag:toolAssetTag,name:toolName,category:toolCategory,
       serialNumber:toolSerial||undefined,brandModel:toolBrandModel||undefined,employeeId:toolStatus==="assigned"?toolEmployeeId||undefined:undefined,
       vehicleLabel:toolVehicle||undefined,status:toolStatus,condition:toolCondition,notes:toolNotes||undefined}}),
-    onSuccess:async()=>{await queryClient.invalidateQueries({queryKey:["dbs-operational-inventory-overview"]});setToolAssetId("");setToolAssetTag("");setToolName("");setToolCategory("Ferramenta");setToolSerial("");setToolBrandModel("");setToolEmployeeId("");setToolVehicle("");setToolStatus("available");setToolCondition("good");setToolNotes("");},
+    onSuccess:async()=>{await queryClient.invalidateQueries({queryKey:["dbs-operational-inventory-overview"]});setSuccessMessage("Ferramenta salva e movimentação registrada no histórico.");setErrorMessage("");setToolAssetId("");setToolAssetTag("");setToolName("");setToolCategory("Ferramenta");setToolSerial("");setToolBrandModel("");setToolEmployeeId("");setToolVehicle("");setToolStatus("available");setToolCondition("good");setToolNotes("");},
     onError:(error)=>setErrorMessage(error instanceof Error?error.message:"Não foi possível salvar a ferramenta.")
   });
   function editToolAsset(asset:any){
