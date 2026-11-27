@@ -184,9 +184,18 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     const workOrderIds = (workOrders.data ?? []).map((row: any) => String(row.id));
     const workOrderParts = workOrderIds.length
       ? await (supabaseAdmin as any).from("dbs_control_work_order_parts")
-          .select("id,work_order_id,part_id").in("work_order_id", workOrderIds).limit(5000)
+          .select("id,work_order_id,part_id,quantity,consumption_status").in("work_order_id", workOrderIds).limit(5000)
       : { data: [], error: null };
     if (workOrderParts.error) throw new Error("Falha ao consultar itens das OS para garantia: " + workOrderParts.error.message);
+
+    const workOrderPartIds = (workOrderParts.data ?? []).map((row: any) => String(row.id));
+    const receiptAllocations = workOrderPartIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_work_order_part_receipt_allocations")
+          .select("id,work_order_id,work_order_part_id,receipt_item_id,part_id,supplier_warranty_id,quantity_allocated,serial_number,lot_number,created_at")
+          .eq("scope_key", scope.scopeKey).in("work_order_part_id", workOrderPartIds)
+          .order("created_at", { ascending: false }).limit(5000)
+      : { data: [], error: null };
+    if (receiptAllocations.error) throw new Error("Falha ao consultar lotes/séries aplicados nas OS: " + receiptAllocations.error.message);
 
     const partIds = [...new Set([
       ...(supplierWarranties.data ?? []).map((row: any) => String(row.part_id)),
@@ -260,13 +269,45 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         id: row.id,
         workOrderId: row.work_order_id,
         partId: row.part_id,
+        quantity: Number(row.quantity ?? 0),
+        consumptionStatus: row.consumption_status ?? null,
         partSku: partsById.get(String(row.part_id))?.sku ?? "",
         partName: partsById.get(String(row.part_id))?.name ?? "Peça",
+        receiptAllocations: (receiptAllocations.data ?? []).filter((allocation: any) => String(allocation.work_order_part_id) === String(row.id)),
       })),
       workOrders: (workOrders.data ?? []).map((row: any) => ({
         id: row.id, protocol: row.protocol, clientId: row.client_id, type: row.type, createdAt: row.created_at,
       })),
     };
+  });
+
+export const linkDbsWorkOrderPartReceiptItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { workOrderPartId: string; receiptItemId: string; quantity: number; idempotencyKey: string }) => {
+    const quantity = Number(input?.quantity);
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1000000) throw new Error("Quantidade de lote/série inválida.");
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de rastreabilidade inválida.");
+    return {
+      workOrderPartId: requiredId(input?.workOrderPartId, "Item da OS"),
+      receiptItemId: requiredId(input?.receiptItemId, "Item do recebimento"),
+      quantity, idempotencyKey,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const scope = await resolveWarrantyScope(context);
+    if (!["SUPER_ADMIN","ADMIN_OPERACIONAL","GESTOR_CONTA","GESTOR_REGIONAL","FINANCEIRO_OPERADOR"].includes(scope.roleKey)) {
+      throw new Error("Este perfil não pode vincular lote/série a uma peça consumida na OS.");
+    }
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_link_work_order_part_receipt_item", {
+      p_actor_user_id: scope.id,
+      p_work_order_part_id: data.workOrderPartId,
+      p_receipt_item_id: data.receiptItemId,
+      p_quantity: data.quantity,
+      p_idempotency_key: data.idempotencyKey,
+    });
+    if (error) throw new Error(error.message);
+    return result;
   });
 
 export const createDbsSupplierWarranty = createServerFn({ method: "POST" })
