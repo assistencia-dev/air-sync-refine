@@ -5050,7 +5050,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
     let visibleWorkOrders = workOrders.data ?? [];
     let visibleGasCylinders = gasCylinders.data ?? [];
     let visibleRequests = requests.data ?? [];
-    let visibleToolAssets = toolAssetsResult.data ?? [];
+    const visibleToolAssets = toolAssetsResult.data ?? [];
     if (isCollaborator) {
       const permittedClients = new Set((collaboratorBase?.clientIds ?? []).map(String));
       visibleWorkOrders = visibleWorkOrders.filter((order: any) => {
