@@ -73,6 +73,8 @@ assert.match(warrantyUi, /filteredCustomerWarranties/);
 assert.match(warrantyUi, /filteredClaims/);
 assert.match(warrantyUi, /Cliente: \{row\.clientName\}/);
 assert.match(warrantyUi, /Recebimento: \{row\.receiptNumber\}/);
+assert.match(warrantyUi, /setSerialNumber\(String\(selected\.serialNumber/);
+assert.match(warrantyUi, /setLotNumber\(String\(selected\.lotNumber/);
 assert.match(treasury, /DbsWarrantyManagementPage/i);
 assert.match(treasury, /financeWorkspace === "warranties"/i);
 
