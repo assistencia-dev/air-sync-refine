@@ -66,6 +66,6 @@ assert.match(component, /As próximas OS concluídas receberão a cobertura conf
 assert.match(backup, /"dbs_control_customer_warranty_policies"/);
 assert.match(backup, /"dbs_control_customer_warranty_policy_history"/);
 assert.match(backup, /"dbs_control_customer_warranty_history"/);
-assert.match(backup, /tables\.length !== 98/);
+assert.match(backup, /tables\.length !== 99/);
 
 console.log("DBS automatic customer warranty: explicit approval, completion trigger, consumed-part traceability, immutability and backup coverage verified.");
