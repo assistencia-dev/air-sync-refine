@@ -8,6 +8,7 @@ import {
   getDbsWarrantyClaimHistory,
   getDbsWarrantyOverview,
   openDbsWarrantyClaim,
+  saveDbsCustomerWarrantyPolicy,
   updateDbsWarrantyClaim,
 } from "@/lib/dbs-warranty.functions";
 
@@ -77,6 +78,12 @@ export function DbsWarrantyManagementPage() {
   const [customerExpiresOn, setCustomerExpiresOn] = useState("");
   const [customerDuration, setCustomerDuration] = useState("");
   const [customerTerms, setCustomerTerms] = useState("");
+  const [policyCoverageType, setPolicyCoverageType] = useState<"part"|"service"|"work_order">("part");
+  const [policyPartId, setPolicyPartId] = useState("");
+  const [policyServiceId, setPolicyServiceId] = useState("");
+  const [policyDuration, setPolicyDuration] = useState("");
+  const [policyTerms, setPolicyTerms] = useState("");
+  const [policyEnabled, setPolicyEnabled] = useState(true);
   const [traceReceiptItemId, setTraceReceiptItemId] = useState("");
   const [traceQuantity, setTraceQuantity] = useState("1");
   const [claimType, setClaimType] = useState<ClaimType>("supplier");
@@ -109,6 +116,8 @@ export function DbsWarrantyManagementPage() {
   const suppliers = data?.suppliers ?? [];
   const receipts = data?.receiptItems ?? [];
   const workOrders = data?.workOrders ?? [];
+  const customerWarrantyPolicies = data?.customerWarrantyPolicies ?? [];
+  const services = data?.services ?? [];
   const workOrderParts = (data?.workOrderParts ?? []).filter((row: any) => String(row.workOrderId) === String(customerWorkOrderId));
   const selectedWorkOrderPart = workOrderParts.find((row: any) => String(row.id) === String(customerWorkOrderPartId));
   const traceableReceiptItems = receipts.filter((row: any) => String(row.partId) === String(selectedWorkOrderPart?.partId));
@@ -176,6 +185,36 @@ export function DbsWarrantyManagementPage() {
     },
     onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível registrar a cobertura."),
   });
+
+  const policyMutation = useMutation({
+    mutationFn: () => saveDbsCustomerWarrantyPolicy({ data: {
+      coverageType: policyCoverageType,
+      partId: policyCoverageType === "part" ? policyPartId : undefined,
+      serviceId: policyCoverageType === "service" ? policyServiceId : undefined,
+      durationMonths: Number(policyDuration),
+      terms: policyTerms,
+      enabled: policyEnabled,
+    } }),
+    onSuccess: async (policy: any) => {
+      setMessage(policy.status === "active"
+        ? "Regra aprovada. As próximas OS concluídas receberão a cobertura configurada."
+        : "Regra desativada. As coberturas já emitidas foram preservadas.");
+      setPolicyPartId(""); setPolicyServiceId(""); setPolicyDuration(""); setPolicyTerms("");
+      setPolicyCoverageType("part"); setPolicyEnabled(true);
+      await queryClient.invalidateQueries({ queryKey: ["dbs-warranty-overview"] });
+    },
+    onError: error => setMessage(error instanceof Error ? error.message : "Não foi possível salvar a regra de garantia."),
+  });
+
+  function editCustomerWarrantyPolicy(policy: any) {
+    setPolicyCoverageType(policy.coverage_type);
+    setPolicyPartId(String(policy.part_id ?? ""));
+    setPolicyServiceId(String(policy.service_id ?? ""));
+    setPolicyDuration(String(policy.duration_months ?? ""));
+    setPolicyTerms(String(policy.terms ?? ""));
+    setPolicyEnabled(policy.status === "active");
+    setMessage("Regra carregada para edição. Ao salvar, a aprovação e seu histórico serão atualizados.");
+  }
 
   const traceReceiptMutation = useMutation({
     mutationFn: () => linkDbsWorkOrderPartReceiptItem({ data: {
@@ -325,7 +364,62 @@ export function DbsWarrantyManagementPage() {
         </section>
       </div>}
 
-      {tab === "customer" && <div className="grid gap-5 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.5fr)]">
+      {tab === "customer" && <>
+        {data?.canManage && <section className="space-y-4 rounded-2xl border border-blue-200 bg-blue-50/40 p-4 sm:p-5">
+          <div>
+            <h2 className="font-bold text-slate-900">Regra automática de garantia DBS ao concluir OS</h2>
+            <p className="mt-1 text-sm text-slate-600">Cadastre e aprove explicitamente o prazo e os termos. A regra só vale para futuras conclusões; não altera OS antigas nem inventa prazo quando não houver regra ativa.</p>
+          </div>
+          <form onSubmit={e=>{e.preventDefault();policyMutation.mutate();}} className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm font-semibold text-slate-700">Aplicar a
+              <select value={policyCoverageType} onChange={e=>{setPolicyCoverageType(e.target.value as typeof policyCoverageType);setPolicyPartId("");setPolicyServiceId("");}} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
+                <option value="part">Peça consumida na OS</option>
+                <option value="service">Serviço específico</option>
+                <option value="work_order">Atendimento / OS inteira</option>
+              </select>
+            </label>
+            {policyCoverageType==="part" && <label className="block text-sm font-semibold text-slate-700">Peça do catálogo
+              <select required value={policyPartId} onChange={e=>setPolicyPartId(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
+                <option value="">Selecione a peça</option>{parts.map((p:any)=><option key={p.id} value={p.id}>{p.sku} · {p.name}</option>)}
+              </select>
+            </label>}
+            {policyCoverageType==="service" && <label className="block text-sm font-semibold text-slate-700">Serviço do catálogo
+              <select required value={policyServiceId} onChange={e=>setPolicyServiceId(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal">
+                <option value="">Selecione o serviço</option>{services.map((service:any)=><option key={service.id} value={service.id}>{service.name}</option>)}
+              </select>
+            </label>}
+            <label className="block text-sm font-semibold text-slate-700">Prazo aprovado (meses)
+              <input required type="number" min="1" max="1200" step="1" value={policyDuration} onChange={e=>setPolicyDuration(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 font-normal" placeholder="Informe o prazo real"/>
+            </label>
+            <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={policyEnabled} onChange={e=>setPolicyEnabled(e.target.checked)} className="h-4 w-4"/> Regra aprovada e ativa
+            </label>
+            <label className="block text-sm font-semibold text-slate-700 md:col-span-2">Termos aprovados da cobertura
+              <textarea required minLength={5} maxLength={4000} value={policyTerms} onChange={e=>setPolicyTerms(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 font-normal" placeholder="Descreva exatamente a cobertura aprovada, suas condições e exclusões."/>
+            </label>
+            <button disabled={policyMutation.isPending || !policyDuration || !policyTerms.trim() || (policyCoverageType==="part"&&!policyPartId) || (policyCoverageType==="service"&&!policyServiceId)} className="min-h-11 rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-50 md:col-span-2">{policyMutation.isPending?"Salvando regra…":"Salvar / aprovar regra de garantia"}</button>
+          </form>
+          <div className="space-y-2 border-t border-blue-100 pt-3">
+            <h3 className="text-sm font-bold text-slate-800">Regras cadastradas</h3>
+            {customerWarrantyPolicies.map((policy:any)=>{
+              const target=policy.coverage_type==="part"
+                ? parts.find((part:any)=>String(part.id)===String(policy.part_id))
+                : policy.coverage_type==="service"
+                  ? services.find((service:any)=>String(service.id)===String(policy.service_id))
+                  : null;
+              return <article key={policy.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{policy.coverage_type==="part"?"Peça":policy.coverage_type==="service"?"Serviço":"OS / atendimento"}{target?" · "+(target.sku?target.sku+" · ":"")+target.name:""} · {policy.duration_months} meses</p>
+                  <p className="mt-1 text-xs text-slate-600">{policy.terms}</p>
+                  <p className="mt-1 text-xs text-slate-500">Aprovada em {policy.approved_at?new Date(policy.approved_at).toLocaleString("pt-BR"):"—"} · {policy.status==="active"?"Ativa":"Desativada"}</p>
+                </div>
+                <button type="button" onClick={()=>editCustomerWarrantyPolicy(policy)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700">Editar regra</button>
+              </article>;
+            })}
+            {!customerWarrantyPolicies.length&&<p className="text-sm text-slate-500">Nenhuma regra automática aprovada. Sem regra ativa, concluir OS não cria cobertura DBS automaticamente.</p>}
+          </div>
+        </section>}
+        <div className="grid gap-5 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.5fr)]">
         {data?.canManage && <form onSubmit={e=>{e.preventDefault();customerMutation.mutate();}} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="font-bold text-slate-900">Registrar cobertura de garantia DBS</h2>
           <label className="block text-sm font-semibold text-slate-700">Ordem de Serviço
@@ -370,7 +464,8 @@ export function DbsWarrantyManagementPage() {
           </article>)}
           {!customerWarranties.length&&<p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">Nenhuma cobertura DBS cadastrada.</p>}
         </section>
-      </div>}
+        </div>
+      </>}
 
       {tab === "claims" && <div className="grid gap-5 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.7fr)]">
         <form onSubmit={e=>{e.preventDefault();openClaimMutation.mutate();}} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
