@@ -60,6 +60,15 @@ assert.match(warrantyUi, /Coberturas DBS vinculadas à OS/i);
 assert.match(warrantyUi, /Chamados de garantia/i);
 assert.match(warrantyUi, /workOrderPartId/i);
 assert.match(warrantyUi, /durationMonths/i);
+assert.match(warrantyFunctions, /from\("dbs_control_clients"\)/);
+assert.match(warrantyFunctions, /clientName:/);
+assert.match(warrantyFunctions, /receiptNumber:/);
+assert.match(warrantyUi, /Consultar garantia por peça, SKU, série, lote, fornecedor, recebimento, cliente ou OS/i);
+assert.match(warrantyUi, /filteredSupplierWarranties/);
+assert.match(warrantyUi, /filteredCustomerWarranties/);
+assert.match(warrantyUi, /filteredClaims/);
+assert.match(warrantyUi, /Cliente: \{row\.clientName\}/);
+assert.match(warrantyUi, /Recebimento: \{row\.receiptNumber\}/);
 assert.match(treasury, /DbsWarrantyManagementPage/i);
 assert.match(treasury, /financeWorkspace === "warranties"/i);
 
