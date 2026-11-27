@@ -27,7 +27,7 @@ assert.match(ui,/receiptAllocations/);
 assert.match(ui,/traceRemainingQuantity/);
 assert.match(ui,/Number\(traceQuantity\)>traceRemainingQuantity/);
 assert.match(backup,/"dbs_control_work_order_part_receipt_allocations"/);
-assert.match(backup,/tables.length !== 98/);
+assert.match(backup,/tables.length !== 99/);
 assert.doesNotMatch(migration,/DROP\s+(TABLE|COLUMN|SCHEMA)\b/i);
 assert.doesNotMatch(migration,/TRUNCATE\s+/i);
 assert.doesNotMatch(migration,/DELETE\s+FROM\s+/i);
