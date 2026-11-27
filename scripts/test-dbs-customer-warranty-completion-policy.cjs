@@ -30,7 +30,7 @@ assert.match(migration, /source_receipt_allocation_id/);
 assert.match(migration, /ON CONFLICT DO NOTHING/i);
 assert.match(migration, /dbs_control_attach_late_receipt_allocation_to_customer_warranty/i);
 assert.match(migration, /AFTER INSERT ON public\.dbs_control_work_order_part_receipt_allocations/i);
-assert.match(migration, /v_unallocated\.quantity_covered-NEW\\.quantity_allocated/i);
+assert.match(migration, /v_unallocated\.quantity_covered-NEW\.quantity_allocated/i);
 assert.match(migration, /approved_at<=v_order\.completed_at/i);
 assert.match(migration, /v_scope\.company_id/i);
 assert.match(migration, /make_interval\(months=>/i);
