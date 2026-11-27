@@ -169,7 +169,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     const receiptIds = (receipts.data ?? []).map((row: any) => row.id);
     const receiptItems = receiptIds.length
       ? await (supabaseAdmin as any).from("dbs_control_purchase_receipt_items")
-          .select("id,receipt_id,part_id,quantity_received")
+          .select("id,receipt_id,part_id,quantity_received,serial_number,lot_number")
           .in("receipt_id", receiptIds).limit(3000)
       : { data: [], error: null };
     if (receiptItems.error) throw new Error("Falha ao consultar itens recebidos para garantia: " + receiptItems.error.message);
@@ -215,6 +215,8 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
         receiptId: item.receipt_id,
         partId: item.part_id,
         quantityReceived: Number(item.quantity_received),
+        serialNumber: item.serial_number ?? null,
+        lotNumber: item.lot_number ?? null,
         receiptNumber: String(receipt?.receipt_number ?? ""),
         receivedAt: receipt?.received_at ?? null,
         supplierId: purchase?.supplier_id ?? null,
