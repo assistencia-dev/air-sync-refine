@@ -5156,17 +5156,26 @@ export const saveDbsToolAsset = createServerFn({ method: "POST" })
       if(!linkedUser.data||linkedUser.data.status!=="ativo"||(user.company_id&&linkedUser.data.company_id!==user.company_id))
         throw new Error("O colaborador não pertence à empresa deste estoque.");
     }
-    const payload={asset_tag:data.assetTag,name:data.name,category:data.category,serial_number:data.serialNumber,
+    const now=new Date().toISOString();
+    const basePayload={asset_tag:data.assetTag,name:data.name,category:data.category,serial_number:data.serialNumber,
       brand_model:data.brandModel,employee_id:data.employeeId,vehicle_label:data.employeeId?data.vehicleLabel:null,
-      status:data.status,condition_label:data.condition,notes:data.notes,updated_by:user.id,
-      assigned_at:data.employeeId?new Date().toISOString():null,returned_at:data.employeeId?null:new Date().toISOString(),updated_at:new Date().toISOString()};
+      status:data.status,condition_label:data.condition,notes:data.notes,updated_by:user.id,updated_at:now};
     if(data.assetId){
+      const current=await admin.from("dbs_control_tool_assets").select("employee_id,assigned_at,returned_at")
+        .eq("id",data.assetId).eq("scope_key",scopeKey).maybeSingle();
+      if(current.error) throw new Error(current.error.message);
+      if(!current.data) throw new Error("Ferramenta não encontrada neste escopo.");
+      const assignmentChanged=String(current.data.employee_id??"")!==String(data.employeeId??"");
+      const payload={...basePayload,
+        assigned_at:data.employeeId?(assignmentChanged?now:current.data.assigned_at):null,
+        returned_at:data.employeeId?null:(current.data.employee_id?now:current.data.returned_at)};
       const saved=await admin.from("dbs_control_tool_assets").update(payload).eq("id",data.assetId).eq("scope_key",scopeKey)
         .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").maybeSingle();
       if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
       if(!saved.data) throw new Error("Ferramenta não encontrada neste escopo.");
       return saved.data;
     }
+    const payload={...basePayload,assigned_at:data.employeeId?now:null,returned_at:null};
     const saved=await admin.from("dbs_control_tool_assets").insert({...payload,company_id:user.company_id,scope_key:scopeKey,created_by:user.id})
       .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").single();
     if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
