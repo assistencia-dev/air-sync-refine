@@ -71,7 +71,7 @@ BEGIN
   END IF;
 
   SELECT * INTO v_actor FROM public.users WHERE id=p_actor_user_id AND status='ativo';
-  IF NOT FOUND OR v_actor.role_key NOT IN ('SUPER_ADMIN','ADMIN_OPERACIONAL','GESTOR_CONTA','GESTOR_REGIONAL','FINANCEIRO_OPERADOR') THEN
+  IF NOT FOUND OR coalesce(v_actor.role_key,'') NOT IN ('SUPER_ADMIN','ADMIN_OPERACIONAL','GESTOR_CONTA','GESTOR_REGIONAL','FINANCEIRO_OPERADOR') THEN
     RAISE EXCEPTION 'DBS_WORK_ORDER_RECEIPT_ALLOCATION_FORBIDDEN' USING errcode='42501';
   END IF;
 
@@ -80,7 +80,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'DBS_WORK_ORDER_PART_NOT_FOUND' USING errcode='23503'; END IF;
 
   SELECT * INTO v_scope FROM public.dbs_control_inventory_scope_for_work_order(v_work_order_part.work_order_id);
-  IF NOT FOUND OR (v_actor.company_id IS NOT NULL AND v_actor.company_id IS DISTINCT FROM v_scope.company_id) THEN
+  IF NOT FOUND OR v_scope.scope_key IS NULL OR (v_actor.company_id IS NOT NULL AND v_actor.company_id IS DISTINCT FROM v_scope.company_id) THEN
     RAISE EXCEPTION 'DBS_WORK_ORDER_RECEIPT_ALLOCATION_SCOPE_MISMATCH' USING errcode='42501';
   END IF;
 
