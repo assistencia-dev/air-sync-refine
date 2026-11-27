@@ -184,6 +184,7 @@ DECLARE
   v_order public.dbs_control_work_orders%rowtype;
   v_policy public.dbs_control_customer_warranty_policies%rowtype;
   v_unallocated public.dbs_control_customer_warranties%rowtype;
+  v_scope record;
   v_start date;
   v_remaining numeric(18,4);
   v_total_allocated numeric(18,4);
@@ -196,27 +197,18 @@ BEGIN
   SELECT * INTO v_order FROM public.dbs_control_work_orders
    WHERE id=v_part.work_order_id;
   IF NOT FOUND OR lower(btrim(coalesce(v_order.status,''))) NOT IN
-    ('concluida','concluída','concluido','concluído','completed','complete')
-     OR v_order.completed_at IS NULL THEN
+    ('concluida','concluída','concluido','concluído','completed','complete') THEN
     RETURN NEW;
   END IF;
 
-  SELECT * INTO v_policy FROM public.dbs_control_customer_warranty_policies
-   WHERE scope_key=NEW.scope_key AND coverage_type='part'
-     AND part_id=v_part.part_id AND status='active'
-     AND approved_at<=v_order.completed_at
-   ORDER BY approved_at DESC LIMIT 1;
-  IF NOT FOUND THEN
-    RETURN NEW;
-  END IF;
-
+  -- Prefer the coverage already issued at close, even when its policy has
+  -- since been disabled. This only enriches the existing quantity split.
   SELECT * INTO v_unallocated
     FROM public.dbs_control_customer_warranties
-   WHERE policy_id=v_policy.id AND work_order_id=v_order.id
+   WHERE policy_id IS NOT NULL AND work_order_id=v_order.id
      AND work_order_part_id=v_part.id AND source_receipt_allocation_id IS NULL
    ORDER BY created_at LIMIT 1 FOR UPDATE;
 
-  v_start := v_order.completed_at::date;
   IF FOUND THEN
     v_remaining := v_unallocated.quantity_covered-NEW.quantity_allocated;
     IF v_remaining<0 THEN
@@ -242,14 +234,26 @@ BEGIN
         v_unallocated.work_order_part_id,v_unallocated.part_id,v_unallocated.coverage_type,
         v_unallocated.starts_on,v_unallocated.expires_on,v_unallocated.duration_months,
         v_unallocated.terms,v_unallocated.status,v_unallocated.created_by,NEW.created_by,
-        v_policy.id,NEW.id,NEW.supplier_warranty_id,NEW.serial_number,NEW.lot_number,NEW.quantity_allocated
+        v_unallocated.policy_id,NEW.id,NEW.supplier_warranty_id,NEW.serial_number,NEW.lot_number,NEW.quantity_allocated
       ) ON CONFLICT DO NOTHING;
     END IF;
     RETURN NEW;
   END IF;
 
-  -- If the OS completed before consumption was marked, still require a rule
-  -- already approved at completion. A manual coverage prevents a second issue.
+  -- Late consumption can only receive an automatic warranty when the rule
+  -- had already been approved by the recorded OS completion timestamp.
+  IF v_order.completed_at IS NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_policy FROM public.dbs_control_customer_warranty_policies
+   WHERE scope_key=NEW.scope_key AND coverage_type='part'
+     AND part_id=v_part.part_id AND status='active'
+     AND approved_at<=v_order.completed_at
+   ORDER BY approved_at DESC LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM public.dbs_control_customer_warranties
      WHERE work_order_id=v_order.id AND work_order_part_id=v_part.id
@@ -258,12 +262,19 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  SELECT * INTO v_scope
+    FROM public.dbs_control_inventory_scope_for_work_order(v_order.id);
+  IF NOT FOUND OR v_scope.scope_key IS DISTINCT FROM NEW.scope_key THEN
+    RAISE EXCEPTION 'DBS_CUSTOMER_WARRANTY_SCOPE_MISMATCH' USING errcode='42501';
+  END IF;
+
+  v_start := v_order.completed_at::date;
   INSERT INTO public.dbs_control_customer_warranties(
     company_id,scope_key,work_order_id,work_order_part_id,part_id,coverage_type,
     starts_on,expires_on,duration_months,terms,status,created_by,updated_by,
     policy_id,source_receipt_allocation_id,supplier_warranty_id,serial_number,lot_number,quantity_covered
   ) VALUES (
-    v_order.created_by_user_id::uuid,NEW.scope_key,v_order.id,v_part.id,v_part.part_id,'part',
+    v_scope.company_id,NEW.scope_key,v_order.id,v_part.id,v_part.part_id,'part',
     v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
     v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
     v_policy.id,NEW.id,NEW.supplier_warranty_id,NEW.serial_number,NEW.lot_number,NEW.quantity_allocated
@@ -283,7 +294,7 @@ BEGIN
       starts_on,expires_on,duration_months,terms,status,created_by,updated_by,
       policy_id,quantity_covered
     ) VALUES (
-      v_policy.company_id,NEW.scope_key,v_order.id,v_part.id,v_part.part_id,'part',
+      v_scope.company_id,NEW.scope_key,v_order.id,v_part.id,v_part.part_id,'part',
       v_start,(v_start+make_interval(months=>v_policy.duration_months))::date,
       v_policy.duration_months,v_policy.terms,'active',v_order.created_by_user_id,NEW.created_by,
       v_policy.id,v_remaining
