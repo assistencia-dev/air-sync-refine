@@ -289,6 +289,87 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     };
   });
 
+export const saveDbsCustomerWarrantyPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    coverageType: "part" | "service" | "work_order";
+    partId?: string;
+    serviceId?: string;
+    durationMonths: number;
+    terms: string;
+    enabled: boolean;
+  }) => {
+    const coverageType = input?.coverageType;
+    if (!["part", "service", "work_order"].includes(coverageType)) {
+      throw new Error("Tipo de regra de garantia inválido.");
+    }
+    const partId = optionalId(input?.partId, "Peça");
+    const serviceId = optionalId(input?.serviceId, "Serviço");
+    if (coverageType === "part" && (!partId || serviceId)) throw new Error("Selecione somente uma peça para a regra.");
+    if (coverageType === "service" && (!serviceId || partId)) throw new Error("Selecione somente um serviço para a regra.");
+    if (coverageType === "work_order" && (partId || serviceId)) throw new Error("A regra de atendimento não aceita peça ou serviço específico.");
+    const durationMonths = Number(input?.durationMonths);
+    if (!Number.isSafeInteger(durationMonths) || durationMonths < 1 || durationMonths > 1200) {
+      throw new Error("A duração aprovada deve estar entre 1 e 1.200 meses.");
+    }
+    const terms = String(input?.terms ?? "").trim().slice(0, 4000);
+    if (terms.length < 5) throw new Error("Descreva os termos aprovados da cobertura DBS (mínimo 5 caracteres).");
+    return {
+      coverageType, partId, serviceId, durationMonths, terms,
+      enabled: input?.enabled !== false,
+      policyKey: coverageType === "part" ? "part:" + partId
+        : coverageType === "service" ? "service:" + serviceId : "work_order",
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const scope = await requireWarrantyFinance(context);
+    if (data.partId) {
+      const part = await (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,status").eq("id", data.partId).eq("scope_key", scope.scopeKey).maybeSingle();
+      if (part.error) throw new Error(part.error.message);
+      if (!part.data || part.data.status !== "ativo") throw new Error("Peça não encontrada ou inativa neste escopo.");
+    }
+    if (data.serviceId) {
+      const service = await (supabaseAdmin as any).from("dbs_control_service_catalog")
+        .select("id,status").eq("id", data.serviceId).eq("status", "active").maybeSingle();
+      if (service.error) throw new Error(service.error.message);
+      if (!service.data) throw new Error("Serviço não encontrado ou inativo.");
+    }
+
+    const admin = supabaseAdmin as any;
+    const existing = await admin.from("dbs_control_customer_warranty_policies")
+      .select("id,created_by").eq("scope_key", scope.scopeKey).eq("policy_key", data.policyKey).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    const now = new Date().toISOString();
+    const payload = {
+      company_id: scope.companyId,
+      scope_key: scope.scopeKey,
+      policy_key: data.policyKey,
+      coverage_type: data.coverageType,
+      part_id: data.partId,
+      service_id: data.serviceId,
+      duration_months: data.durationMonths,
+      terms: data.terms,
+      status: data.enabled ? "active" : "disabled",
+      approved_by: scope.id,
+      approved_at: now,
+      updated_by: scope.id,
+      updated_at: now,
+    };
+    const saved = existing.data
+      ? await admin.from("dbs_control_customer_warranty_policies").update(payload)
+          .eq("id", existing.data.id).eq("scope_key", scope.scopeKey)
+          .select("id,policy_key,coverage_type,part_id,service_id,duration_months,terms,status,approved_by,approved_at,updated_at").single()
+      : await admin.from("dbs_control_customer_warranty_policies").insert({
+          ...payload, created_by: scope.id,
+        }).select("id,policy_key,coverage_type,part_id,service_id,duration_months,terms,status,approved_by,approved_at,updated_at").single();
+    if (saved.error) {
+      if (saved.error.code === "23505") throw new Error("Esta regra mudou em outro acesso. Atualize a tela e tente novamente.");
+      throw new Error(saved.error.message);
+    }
+    return saved.data;
+  });
+
 export const linkDbsWorkOrderPartReceiptItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { workOrderPartId: string; receiptItemId: string; quantity: number; idempotencyKey: string }) => {
