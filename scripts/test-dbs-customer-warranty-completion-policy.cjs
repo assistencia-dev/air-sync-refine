@@ -8,6 +8,9 @@ const backup = fs.readFileSync("scripts/backup-supabase.mjs", "utf8");
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_customer_warranty_policies/i);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_customer_warranty_policy_history/i);
+assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.dbs_control_customer_warranty_history/i);
+assert.match(migration, /DBS_CUSTOMER_WARRANTY_HISTORY_IMMUTABLE/i);
+assert.match(migration, /dbs_control_capture_customer_warranty_history/i);
 assert.match(migration, /duration_months integer NOT NULL CHECK \(duration_months BETWEEN 1 AND 1200\)/i);
 assert.match(migration, /terms text NOT NULL CHECK/i);
 assert.match(migration, /approved_by uuid NOT NULL/i);
@@ -54,6 +57,7 @@ assert.match(component, /row.lot_number/);
 assert.match(component, /As próximas OS concluídas receberão a cobertura configurada/);
 assert.match(backup, /"dbs_control_customer_warranty_policies"/);
 assert.match(backup, /"dbs_control_customer_warranty_policy_history"/);
+assert.match(backup, /"dbs_control_customer_warranty_history"/);
 assert.match(backup, /tables\.length !== 98/);
 
 console.log("DBS automatic customer warranty: explicit approval, completion trigger, consumed-part traceability, immutability and backup coverage verified.");
