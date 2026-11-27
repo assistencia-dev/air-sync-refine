@@ -292,7 +292,7 @@ export const getDbsWarrantyOverview = createServerFn({ method: "GET" })
     };
   });
 
-// Only an explicit Finance approval creates an active policy; no warranty period is inferred.
+// Only explicit Finance approval activates a policy; no term is inferred, and the database trigger records the actual actor when available.
 export const saveDbsCustomerWarrantyPolicy = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: {
