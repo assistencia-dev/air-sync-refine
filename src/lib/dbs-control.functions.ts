@@ -5048,6 +5048,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       operationalStocks: stocks.data ?? [],
       operationalBalances: balances.data ?? [],
       canChooseDestination: !isCollaborator,
+      canReserveStock: !isCollaborator,
       workOrders: visibleWorkOrders,
       materialRequests: visibleRequests,
       employees: employees.data ?? [],
