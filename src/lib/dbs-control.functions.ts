@@ -3988,6 +3988,17 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       throw new Error("Falha ao carregar o histórico das botijas: " + gasCylinderMovementsResult.error.message);
     }
 
+    const visibleToolAssetIds = visibleToolAssets.map((asset: any) => String(asset.id));
+    const toolAssetMovementsResult = visibleToolAssetIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_tool_asset_movements")
+          .select("id,tool_asset_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,from_condition,to_condition,notes,actor_user_id,created_at")
+          .eq("scope_key", scopeKey).in("tool_asset_id", visibleToolAssetIds)
+          .order("created_at", { ascending: false }).limit(1000)
+      : { data: [], error: null };
+    if (toolAssetMovementsResult.error) {
+      throw new Error("Falha ao carregar o histórico de ferramentas: " + toolAssetMovementsResult.error.message);
+    }
+
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -4991,7 +5002,7 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       ...(linkedEmployees.data ?? []).map((row: any) => String(row.id ?? "")),
     ].filter(Boolean))];
 
-    const [parts, stocks, balances, workOrders, requests, employees, gasCylinders] = await Promise.all([
+    const [parts, stocks, balances, workOrders, requests, employees, gasCylinders, toolAssetsResult] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_parts")
         .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
         .eq("scope_key", scopeKey).eq("status", "ativo").order("name").limit(1000),
@@ -5024,14 +5035,22 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
         .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
         .eq("scope_key", scopeKey).eq("status", "active")
         .order("assigned_at", { ascending: false }),
+      isCollaborator
+        ? (supabaseAdmin as any).from("dbs_control_tool_assets")
+            .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes,updated_at")
+            .eq("scope_key", scopeKey).eq("employee_id", employee.id).order("updated_at", { ascending: false })
+        : (supabaseAdmin as any).from("dbs_control_tool_assets")
+            .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes,updated_at")
+            .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(1000),
     ]);
-    for (const result of [parts, stocks, balances, workOrders, requests, employees, gasCylinders]) {
+    for (const result of [parts, stocks, balances, workOrders, requests, employees, gasCylinders, toolAssetsResult]) {
       if (result.error) throw new Error("Falha ao carregar materiais operacionais: " + result.error.message);
     }
 
     let visibleWorkOrders = workOrders.data ?? [];
     let visibleGasCylinders = gasCylinders.data ?? [];
     let visibleRequests = requests.data ?? [];
+    let visibleToolAssets = toolAssetsResult.data ?? [];
     if (isCollaborator) {
       const permittedClients = new Set((collaboratorBase?.clientIds ?? []).map(String));
       visibleWorkOrders = visibleWorkOrders.filter((order: any) => {
@@ -5065,6 +5084,9 @@ export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET"
       employees: employees.data ?? [],
       gasCylinders: visibleGasCylinders,
       gasCylinderMovements: gasCylinderMovementsResult.data ?? [],
+      toolAssets: visibleToolAssets,
+      toolAssetMovements: toolAssetMovementsResult.data ?? [],
+      canManageTools: !isCollaborator,
     };
   });
 
