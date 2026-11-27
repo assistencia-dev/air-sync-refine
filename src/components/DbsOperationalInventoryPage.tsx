@@ -8,7 +8,7 @@ import {
 } from "@/lib/dbs-control.functions";
 import { getDbsWarrantyOverview } from "@/lib/dbs-warranty.functions";
 
-type OperationalSection = "parts" | "request" | "requests" | "warranties";
+type OperationalSection = "parts" | "request" | "requests" | "warranties" | "cylinders";
 type RequestType = "part" | "new_part" | "tool" | "supply" | "gas_refill";
 
 type DbsOperationalInventoryPageProps = {
@@ -145,6 +145,7 @@ export function DbsOperationalInventoryPage({
   const operationalStocks = overview.data?.operationalStocks ?? [];
   const employees = overview.data?.employees ?? [];
   const gasCylinders = overview.data?.gasCylinders ?? [];
+  const gasCylinderMovements = overview.data?.gasCylinderMovements ?? [];
   const canChooseDestination = overview.data?.canChooseDestination === true;
   const canReserveStock = overview.data?.canReserveStock === true;
   const supplierWarranties = warrantyOverview.data?.supplierWarranties ?? [];
@@ -225,6 +226,10 @@ export function DbsOperationalInventoryPage({
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
             <Send className="h-4 w-4" /> Solicitar material
           </button>
+          <button type="button" onClick={() => setSection("cylinders")} aria-pressed={section === "cylinders"}
+            className={section === "cylinders" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
+            <Wrench className="h-4 w-4" /> Botijas e histórico
+          </button>
           <button type="button" onClick={() => setSection("warranties")} aria-pressed={section === "warranties"}
             className={section === "warranties" ? "inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"}>
             <ShieldCheck className="h-4 w-4" /> Garantias
@@ -303,6 +308,44 @@ export function DbsOperationalInventoryPage({
               {!operationalStocks.length && <p className="text-xs text-amber-700">Não há estoque operacional ativo neste escopo. Solicite ao Financeiro a configuração do destino.</p>}
             </form>
             )}
+          </div>
+        ) : section === "cylinders" ? (
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="font-bold">Botijas vinculadas à operação</h3>
+              <p className="mt-1 text-sm text-slate-600">Acompanhe responsável, veículo, capacidade e saldo de cargas. O histórico é gravado automaticamente e não pode ser alterado.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {gasCylinders.map((cylinder: any) => {
+                  const employee = employees.find((row: any) => String(row.id) === String(cylinder.employee_id));
+                  return <article key={cylinder.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div><p className="font-semibold">{cylinder.serial_number} · {cylinder.refrigerant_type}</p><p className="text-xs text-slate-600">{employee?.full_name ?? "Responsável vinculado"}{cylinder.vehicle_label ? " · " + cylinder.vehicle_label : ""}</p></div>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold">{cylinder.status === "active" ? "Em uso" : cylinder.status === "empty" ? "Vazia" : "Inativa"}</span>
+                    </div>
+                    <p className="mt-2 text-sm">Saldo: <strong>{cylinder.remaining_charges}/{cylinder.total_charges}</strong> cargas · Utilizadas: {cylinder.used_charges} · Recargas: {cylinder.refill_count}</p>
+                  </article>;
+                })}
+                {!gasCylinders.length && <p className="text-sm text-slate-500">Nenhuma botija ativa vinculada a este escopo.</p>}
+              </div>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="font-bold">Histórico de movimentações</h3>
+              <p className="mt-1 text-sm text-slate-600">Atribuição, transferência, alteração de veículo, recarga e consumo em OS.</p>
+              <div className="mt-3 space-y-2">
+                {gasCylinderMovements.map((movement: any) => {
+                  const cylinder = gasCylinders.find((row: any) => String(row.id) === String(movement.cylinder_id));
+                  const fromEmployee = employees.find((row: any) => String(row.id) === String(movement.from_employee_id));
+                  const toEmployee = employees.find((row: any) => String(row.id) === String(movement.to_employee_id));
+                  const labels: Record<string,string> = {assigned:"Atribuição inicial",transferred:"Transferência de responsável",vehicle_changed:"Mudança de veículo",refilled:"Recarga",status_changed:"Alteração de status",usage_registered:"Consumo registrado em OS"};
+                  return <article key={movement.id} className="rounded-xl border border-slate-100 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2"><p className="text-sm font-semibold">{labels[movement.movement_type] ?? movement.movement_type} · {cylinder?.serial_number ?? "Botija"}</p><time className="text-xs text-slate-500">{new Date(movement.created_at).toLocaleString("pt-BR")}</time></div>
+                    <p className="mt-1 text-xs text-slate-600">{fromEmployee?.full_name ?? "—"}{movement.from_vehicle_label ? " · " + movement.from_vehicle_label : ""} → {toEmployee?.full_name ?? "—"}{movement.to_vehicle_label ? " · " + movement.to_vehicle_label : ""}</p>
+                    <p className="mt-1 text-xs text-slate-600">Cargas: {movement.remaining_before ?? "—"} → {movement.remaining_after ?? "—"} · OS: {movement.work_order_id ?? "—"}</p>
+                  </article>;
+                })}
+                {!gasCylinderMovements.length && <p className="text-sm text-slate-500">Ainda não há movimentações registradas para as botijas visíveis.</p>}
+              </div>
+            </section>
           </div>
         ) : section === "warranties" ? (
           <div className="space-y-4">
