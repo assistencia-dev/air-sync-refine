@@ -3312,6 +3312,124 @@ async function requireDbsInventoryAdmin(context: DbsInventoryAdminContext) {
   return user;
 }
 
+type DbsInventoryFinanceActor = Awaited<ReturnType<typeof requireDbsControlUser>> & {
+  inventoryScopeOwnerId?: string;
+};
+
+async function requireDbsInventoryFinanceAdmin(context: DbsInventoryAdminContext): Promise<DbsInventoryFinanceActor> {
+  // Autenticação financeira isolada: não ampliar requireDbsControlUser,
+  // pois esse guard também protege rotas e operações do DBS Control.
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id, company_id, role_key, status, created_by")
+    .eq("auth_id", context.userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data || data.status !== "ativo") throw new Error("Usuário inativo ou não encontrado.");
+
+  const user = data as DbsControlUser;
+  if (user.role_key !== "SUPER_ADMIN" && user.role_key !== "FINANCEIRO_OPERADOR") {
+    throw new Error("Custos, catálogo e compras são restritos ao Financeiro.");
+  }
+
+  let inventoryScopeOwnerId = user.id;
+  if (user.role_key === "FINANCEIRO_OPERADOR") {
+    const { data: access, error: accessError } = await (supabaseAdmin as any)
+      .from("treasury_viewer_access")
+      .select("owner_user_id,enabled")
+      .eq("viewer_user_id", user.id)
+      .maybeSingle();
+    if (accessError || !access || access.enabled !== true) {
+      throw new Error("O acesso financeiro está desativado ou sem vínculo com o responsável.");
+    }
+    const { data: owner, error: ownerError } = await (supabaseAdmin as any)
+      .from("users")
+      .select("id,company_id,role_key,status")
+      .eq("id", access.owner_user_id)
+      .maybeSingle();
+    if (ownerError || !owner || owner.status !== "ativo" || owner.role_key !== "SUPER_ADMIN"
+      || owner.company_id !== user.company_id) {
+      throw new Error("O responsável pelo escopo financeiro não está ativo ou não corresponde à empresa vinculada.");
+    }
+    inventoryScopeOwnerId = owner.id;
+  }
+  return { ...user, inventoryScopeOwnerId };
+}
+
+function getDbsInventoryFinanceScope(user: DbsInventoryFinanceActor) {
+  const companyId = user.company_id ?? null;
+  const ownerUserId = user.inventoryScopeOwnerId ?? user.id;
+  return {
+    companyId,
+    ownerUserId,
+    scopeKey: companyId ? "company:" + companyId : "user:" + ownerUserId,
+  };
+}
+
+function calculateDbsPartSaleCents(costCents: number, policy: { pricing_method: string; rate_bps: number } | null | undefined) {
+  if (!policy) throw new Error("Configure a política de preço de revenda no Financeiro antes de cadastrar peças.");
+  if (!Number.isSafeInteger(costCents) || costCents < 0) throw new Error("Custo de referência inválido.");
+  const rateBps = Number(policy.rate_bps);
+  if (!Number.isInteger(rateBps) || rateBps <= 0 || rateBps > 99000) {
+    throw new Error("A política de preço de revenda está inválida. Revise o Financeiro.");
+  }
+  const rawSaleCents = policy.pricing_method === "markup"
+    ? costCents * (10000 + rateBps) / 10000
+    : policy.pricing_method === "gross_margin" && rateBps < 10000
+      ? costCents * 10000 / (10000 - rateBps)
+      : Number.NaN;
+  const saleCents = Math.round(rawSaleCents);
+  if (!Number.isSafeInteger(saleCents) || saleCents < 0 || saleCents > 2147483647) {
+    throw new Error("O preço calculado excede o limite permitido. Revise o custo ou a política.");
+  }
+  return saleCents;
+}
+
+type DbsOperationalMaterialActor = {
+  user: DbsControlUser;
+  companyId: string | null;
+  scopeKey: string;
+  ownerUserId: string;
+  scopedUserIds: string[];
+  employee: any | null;
+  collaboratorBase: Awaited<ReturnType<typeof getCollaboratorBaseScope>> | null;
+};
+
+async function resolveDbsOperationalMaterialActor(context: { userId: string }): Promise<DbsOperationalMaterialActor> {
+  const user = await requireDbsControlUser(context);
+  let employee: any | null = null;
+  let collaboratorBase: Awaited<ReturnType<typeof getCollaboratorBaseScope>> | null = null;
+  if (user.role_key === "COLABORADOR") {
+    employee = await getCollaboratorEmployee(user.id);
+    if (!employee) throw new Error("Vínculo ativo do colaborador com o DBS Control não encontrado.");
+    collaboratorBase = await getCollaboratorBaseScope(employee);
+    if (collaboratorBase.baseId && !collaboratorBase.baseActive) {
+      throw new Error("A base vinculada ao colaborador está inativa. Solicite a regularização ao RH.");
+    }
+  } else if (!DBS_INVENTORY_ADMIN_ROLES.includes(user.role_key as (typeof DBS_INVENTORY_ADMIN_ROLES)[number])) {
+    throw new Error("Acesso ao estoque operacional não autorizado.");
+  }
+
+  const resolved = await resolveDbsControlScope(user, collaboratorBase);
+  const scopedUsers = resolved.companyId
+    ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", resolved.companyId).eq("status", "ativo")
+    : { data: [{ id: resolved.ownerUserId }], error: null };
+  if (scopedUsers.error) throw new Error("Falha ao resolver o escopo operacional: " + scopedUsers.error.message);
+  const scopedUserIds: string[] = [...new Set<string>((scopedUsers.data ?? []).map((row: any) => String(row.id)).filter((id: string) => Boolean(id)))];
+  if (!scopedUserIds.length) throw new Error("O escopo operacional não possui usuários ativos vinculados.");
+
+  return {
+    user,
+    companyId: resolved.companyId,
+    scopeKey: resolved.scopeKey,
+    ownerUserId: resolved.ownerUserId,
+    scopedUserIds,
+    employee,
+    collaboratorBase,
+  };
+}
+
 function requireInventoryId(value: string, label: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(label + " inválido.");
@@ -3481,7 +3599,7 @@ export const settleDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_settle_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3504,7 +3622,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
     return { movementId, idempotencyKey, reason };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_reverse_inventory_movement", {
       p_movement_id: data.movementId,
       p_actor_user_id: user.id,
@@ -3517,7 +3635,7 @@ export const reverseDbsInventoryMovement = createServerFn({ method: "POST" })
 
 export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number }> }) => {
+  .validator((input: { purchaseId: string; idempotencyKey: string; items: Array<{ purchaseItemId: string; quantityReceived: number; serialNumber?: string; lotNumber?: string; warranty?: { serialNumber?: string; lotNumber?: string; durationMonths?: number; expiresOn?: string; terms?: string; documentReference?: string } }> }) => {
     const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
     const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
     const items = Array.isArray(input?.items) ? input.items : [];
@@ -3529,13 +3647,41 @@ export const receiveDbsPurchaseItems = createServerFn({ method: "POST" })
         if (!Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
           throw new Error("A quantidade conferida deve ser maior que zero.");
         }
-        return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived };
+        const warranty = item.warranty;
+        const serialNumber = String(item.serialNumber ?? warranty?.serialNumber ?? "").trim().slice(0,160) || null;
+        const lotNumber = String(item.lotNumber ?? warranty?.lotNumber ?? "").trim().slice(0,160) || null;
+        if (!warranty) {
+          return { purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"), quantity_received: item.quantityReceived,
+            serial_number: serialNumber, lot_number: lotNumber };
+        }
+        const durationMonths = warranty.durationMonths == null ? null : Number(warranty.durationMonths);
+        const expiresOn = warranty.expiresOn ? String(warranty.expiresOn).trim() : "";
+        const hasCoverageTerm = Boolean(durationMonths || expiresOn);
+        const terms = String(warranty.terms ?? "").trim().slice(0,4000);
+        const documentReference = String(warranty.documentReference ?? "").trim().slice(0,240) || null;
+        if (!hasCoverageTerm && (terms || documentReference)) {
+          throw new Error("Para registrar termos/documento de garantia, informe também a duração em meses ou a data de validade.");
+        }
+        if (durationMonths != null && (!Number.isSafeInteger(durationMonths) || durationMonths < 1 || durationMonths > 1200)) {
+          throw new Error("Duração da garantia inválida.");
+        }
+        if (expiresOn && !isValidIsoCalendarDate(expiresOn)) throw new Error("Data de validade da garantia inválida.");
+        return {
+          purchase_item_id: requireInventoryId(item.purchaseItemId, "Item da compra"),
+          quantity_received: item.quantityReceived,
+          serial_number: serialNumber,
+          lot_number: lotNumber,
+          ...(hasCoverageTerm ? { warranty: {
+            serial_number: serialNumber, lot_number: lotNumber, duration_months: durationMonths,
+            expires_on: expiresOn || null, start_anchor: "receipt_date", terms, document_reference: documentReference,
+          } } : {}),
+        };
       }),
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items", {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_purchase_items_with_warranties", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
       p_idempotency_key: data.idempotencyKey,
@@ -3557,7 +3703,7 @@ export const receiveDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_receive_registered_purchase", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3591,7 +3737,7 @@ export const decideDbsPurchaseApproval = createServerFn({ method: "POST" })
     return { purchaseId, decision, reason: reason || null, expectedVersion: input?.expectedVersion ?? null };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_purchase_approval", {
       p_purchase_id: data.purchaseId,
       p_actor_user_id: user.id,
@@ -3646,9 +3792,8 @@ export const createDbsPurchase = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { companyId, scopeKey, ownerUserId } = getDbsInventoryFinanceScope(user);
     const [supplier, center] = await Promise.all([
       (supabaseAdmin as any).from("dbs_control_suppliers").select("id,name").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
       (supabaseAdmin as any).from("dbs_control_cost_centers").select("id,name").eq("id", data.costCenterId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
@@ -3743,7 +3888,7 @@ export const reconcileDbsWorkOrderFinancials = createServerFn({ method: "POST" }
 export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
+    const user = await requireDbsInventoryFinanceAdmin(context);
     const { data, error } = await (supabaseAdmin as any).rpc("dbs_control_inventory_financial_overview", {
       p_actor_user_id: user.id,
     });
@@ -3763,12 +3908,11 @@ export const getDbsInventoryFinancialOverview = createServerFn({ method: "GET" }
 export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const companyId = user.company_id;
-    const scopeKey = companyId ? "company:" + companyId : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { companyId, scopeKey, ownerUserId } = getDbsInventoryFinanceScope(user);
     const scopedUsers = companyId
       ? await (supabaseAdmin as any).from("users").select("id").eq("company_id", companyId).eq("status", "ativo")
-      : { data: [{ id: user.id }], error: null };
+      : { data: [{ id: ownerUserId }], error: null };
     if (scopedUsers.error) throw new Error("Falha ao identificar usuários da empresa: " + scopedUsers.error.message);
     const scopedUserIds = (scopedUsers.data ?? []).map((row: any) => row.id);
     // dbs_control_clients is a shared canonical catalog without company_id; OS results remain scoped below.
@@ -3857,6 +4001,10 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       .select("id,part_id,movement_type,quantity_delta,unit_cost_cents,balance_after,purchase_id,purchase_item_id,work_order_id,work_order_part_id,reversal_of_movement_id,cost_center_id,created_at,metadata")
       .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(100);
     if (inventoryMovements.error) throw new Error("Falha ao carregar histórico de movimentações: " + inventoryMovements.error.message);
+    const pricingPolicy = await (supabaseAdmin as any).from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps,version,updated_at,updated_by")
+      .eq("scope_key", "dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error("Falha ao carregar política de preço de revenda: " + pricingPolicy.error.message);
     return {
       parts: parts.data ?? [],
       workOrders: workOrders.data ?? [],
@@ -3864,7 +4012,8 @@ export const getDbsPhase2InventoryOverview = createServerFn({ method: "GET" })
       purchases: purchases.data ?? [],
       purchaseItems: purchaseItemRows,
       sourceQuotes: sourceQuotes.data ?? [],
-      canApprovePurchases: user.role_key === "SUPER_ADMIN",
+      canApprovePurchases: user.role_key === "SUPER_ADMIN" || user.role_key === "FINANCEIRO_OPERADOR",
+      pricingPolicy: pricingPolicy.data ?? null,
       inventoryMovements: inventoryMovements.data ?? [],
       workOrderFinancials: workOrderFinancials.data ?? [],
       suppliers: suppliers.data ?? [],
@@ -3894,8 +4043,8 @@ export const createDbsSupplier = createServerFn({ method: "POST" })
     return {name,cnpj:cnpj||null,phone:String(input?.phone||"").trim().slice(0,40)||null};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_suppliers").insert({
       company_id:user.company_id,scope_key:scopeKey,name:data.name,
       legal_name:data.name,cnpj:data.cnpj,phone:data.phone,status:"active",created_by:user.id,updated_by:user.id
@@ -3924,8 +4073,8 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return { code, name };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved = await (supabaseAdmin as any).from("dbs_control_cost_centers").upsert({
       company_id: user.company_id, scope_key: scopeKey, code: data.code, name: data.name,
       status: "active", created_by: user.id, updated_by: user.id, updated_at: new Date().toISOString(),
@@ -3934,25 +4083,54 @@ export const createDbsCostCenter = createServerFn({ method: "POST" })
     return saved.data;
   });
 
+export const saveDbsInventoryPricingPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { pricingMethod: "markup" | "gross_margin"; rateBps: number; expectedVersion: number }) => {
+    if (input?.pricingMethod !== "markup" && input?.pricingMethod !== "gross_margin") {
+      throw new Error("Selecione uma regra válida para o preço de revenda.");
+    }
+    if (!Number.isSafeInteger(input?.rateBps) || input.rateBps <= 0 || input.rateBps > 99000) {
+      throw new Error("Informe um percentual válido maior que zero.");
+    }
+    if (input.pricingMethod === "gross_margin" && input.rateBps >= 10000) {
+      throw new Error("A margem bruta precisa ser menor que 100%.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 0) {
+      throw new Error("Versão da política inválida. Atualize a tela.");
+    }
+    return { pricingMethod: input.pricingMethod, rateBps: input.rateBps, expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_save_inventory_pricing_policy", {
+      p_actor_user_id: user.id,
+      p_pricing_method: data.pricingMethod,
+      p_rate_bps: data.rateBps,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
 export const createDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const [supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_suppliers").select("id").eq("id", data.supplierId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle(),
@@ -3965,10 +4143,14 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
     if (!unit.data) throw new Error("Unidade-base não encontrada ou inativa neste escopo.");
     if (data.purchaseMeasureUnitId && !purchaseUnit.data) throw new Error("Unidade de compra não encontrada ou inativa neste escopo.");
     if (duplicate.data) throw new Error("Já existe uma peça cadastrada com este SKU.");
+    const pricingPolicy = await admin.from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps").eq("scope_key","dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error(pricingPolicy.error.message);
+    const saleCents = calculateDbsPartSaleCents(data.costCents, pricingPolicy.data);
     const saved = await admin.from("dbs_control_parts").insert({
       sku: data.sku, name: data.name, description: data.description, supplier_id: data.supplierId,
       measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId, stock_quantity: 0, reserved_quantity: 0,
-      cost_cents: data.costCents, sale_cents: data.saleCents, status: "ativo",
+      cost_cents: data.costCents, sale_cents: saleCents, status: "ativo",
     }) .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").single();
     if (saved.error) throw new Error(saved.error.message);
     return saved.data;
@@ -3976,25 +4158,25 @@ export const createDbsPartCatalog = createServerFn({ method: "POST" })
 
 export const updateDbsPartCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number; saleCents: number }) => {
+  .validator((input: { partId: string; expectedVersion: number; sku: string; name: string; description?: string; supplierId: string; measureUnitId: string; purchaseMeasureUnitId?: string; costCents: number }) => {
     const sku = String(input?.sku ?? "").trim().toUpperCase();
     const name = String(input?.name ?? "").trim();
     const description = String(input?.description ?? "").trim().slice(0, 1000) || null;
     if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) throw new Error("Versão da peça inválida. Atualize a tela e tente novamente.");
     if (!sku || sku.length > 80 || name.length < 2 || name.length > 180) throw new Error("Informe SKU e nome válidos.");
-    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0 || !Number.isSafeInteger(input?.saleCents) || input.saleCents < 0) throw new Error("Informe valores válidos de custo e venda.");
+    if (!Number.isSafeInteger(input?.costCents) || input.costCents < 0) throw new Error("Informe um custo de referência válido.");
     return {
       partId: requireInventoryId(input.partId, "Peça"), expectedVersion: input.expectedVersion,
       sku, name, description,
       supplierId: requireInventoryId(input.supplierId, "Fornecedor"),
       measureUnitId: requireInventoryId(input.measureUnitId, "Unidade de controle/consumo"),
       purchaseMeasureUnitId: input.purchaseMeasureUnitId ? requireInventoryId(input.purchaseMeasureUnitId, "Unidade de compra") : null,
-      costCents: input.costCents, saleCents: input.saleCents,
+      costCents: input.costCents,
     };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const [existing, supplier, unit, purchaseUnit, duplicate] = await Promise.all([
       admin.from("dbs_control_parts").select("id,version,stock_quantity,cost_cents").eq("id", data.partId).maybeSingle(),
@@ -4013,10 +4195,14 @@ export const updateDbsPartCatalog = createServerFn({ method: "POST" })
     if (Number(existing.data.stock_quantity) > 0 && Number(existing.data.cost_cents ?? 0) !== data.costCents) {
       throw new Error("O custo médio de uma peça com saldo não pode ser alterado manualmente. Faça o ajuste por recebimento/estorno.");
     }
+    const pricingPolicy = await admin.from("dbs_control_inventory_pricing_policies")
+      .select("pricing_method,rate_bps").eq("scope_key","dbs-control:global").maybeSingle();
+    if (pricingPolicy.error) throw new Error(pricingPolicy.error.message);
+    const saleCents = calculateDbsPartSaleCents(data.costCents, pricingPolicy.data);
     const saved = await admin.from("dbs_control_parts").update({
       sku: data.sku, name: data.name, description: data.description,
       supplier_id: data.supplierId, measure_unit_id: data.measureUnitId, purchase_measure_unit_id: data.purchaseMeasureUnitId,
-      cost_cents: data.costCents, sale_cents: data.saleCents,
+      cost_cents: data.costCents, sale_cents: saleCents,
       version: data.expectedVersion + 1, updated_at: new Date().toISOString(),
     }).eq("id", data.partId).eq("version", data.expectedVersion)
        .select("id,sku,name,description,stock_quantity,reserved_quantity,cost_cents,sale_cents,status,supplier_id,measure_unit_id,purchase_measure_unit_id,version").maybeSingle();
@@ -4074,8 +4260,8 @@ export const updateDbsInventoryMasterData = createServerFn({ method: "POST" })
     throw new Error("Tipo de cadastro não permitido.");
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const now = new Date().toISOString();
 
@@ -4169,8 +4355,8 @@ export const setDbsInventoryRecordStatus = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro"), action: input.action };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const isPart = data.entity === "part";
     const table = data.entity === "part" ? "dbs_control_parts"
@@ -4268,8 +4454,8 @@ export const deleteDbsInventoryRecord = createServerFn({ method: "POST" })
     return { entity: input.entity, id: requireInventoryId(input.id, "Cadastro") };
   })
   .handler(async ({ context, data }) => {
-    const user = await requireDbsInventoryAdmin(context);
-    const scopeKey = user.company_id ? "company:" + user.company_id : "user:" + user.id;
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin = supabaseAdmin as any;
     const table = data.entity === "part" ? "dbs_control_parts"
       : data.entity === "supplier" ? "dbs_control_suppliers"
@@ -4382,8 +4568,8 @@ export const createDbsMeasureUnit = createServerFn({ method: "POST" })
     return {code,name,symbol:String(input?.symbol||code).trim().slice(0,12)||code,decimalPlaces:decimals};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_measure_units").insert({
       company_id:user.company_id,scope_key:scopeKey,code:data.code,
       name:data.name,symbol:data.symbol,decimal_places:data.decimalPlaces,status:"active",is_system:false,
@@ -4404,8 +4590,8 @@ export const createDbsUnitConversion = createServerFn({ method: "POST" })
     return {fromUnitId:requireInventoryId(input.fromUnitId,"Unidade de compra"),toUnitId:requireInventoryId(input.toUnitId,"Unidade-base"),factor:input.factor};
   })
   .handler(async ({context,data}) => {
-    const user=await requireDbsInventoryAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const saved=await (supabaseAdmin as any).from("dbs_control_unit_conversions").upsert({
       company_id:user.company_id,scope_key:scopeKey,from_unit_id:data.fromUnitId,to_unit_id:data.toUnitId,
       factor:data.factor,status:"active",notes:"Conversão cadastrada pela tela de suprimentos"
@@ -4467,8 +4653,8 @@ export const getDbsQuotePurchaseItems = createServerFn({ method: "GET" })
     return {quoteId};
   })
   .handler(async ({context,data})=>{
-    const user=await requireDbsInventoryAdmin(context);
-    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const user=await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey, companyId, ownerUserId } = getDbsInventoryFinanceScope(user);
     const admin=supabaseAdmin as any;
     let quoteQuery=admin.from("dbs_control_quotes")
       .select("id,quote_number,status,scope_key,cost_center_id,source_quote_id")
@@ -4793,4 +4979,541 @@ export const geocodeDbsControlSiteAddress = createServerFn({ method: "POST" })
 
     const [longitude, latitude] = brazilFeature.geometry.coordinates.map(Number);
     return { ok: true, latitude, longitude, provider: "Photon/OpenStreetMap" };
+  });
+
+// Operação: consulta de estoque sem valores financeiros.
+export const getDbsOperationalInventoryOverview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const actor = await resolveDbsOperationalMaterialActor(context);
+    const { user, companyId, scopeKey, scopedUserIds, employee, collaboratorBase } = actor;
+    const isCollaborator = user.role_key === "COLABORADOR";
+    const [employeeAccess, linkedEmployees] = isCollaborator ? [
+      { data: [{ employee_id: employee?.id }], error: null },
+      { data: [], error: null },
+    ] : await Promise.all([
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employee_access").select("employee_id")
+            .in("user_id", scopedUserIds).eq("access_enabled", true)
+        : Promise.resolve({ data: [], error: null }),
+      scopedUserIds.length
+        ? (supabaseAdmin as any).from("rh_employees").select("id")
+            .in("ponto_portal_user_id", scopedUserIds).eq("dbs_control_access_enabled", true).eq("is_active", true)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (employeeAccess.error) throw new Error("Falha ao carregar vínculos de colaboradores: " + employeeAccess.error.message);
+    if (linkedEmployees.error) throw new Error("Falha ao carregar colaboradores do escopo: " + linkedEmployees.error.message);
+    const employeeIds = [...new Set([
+      ...(employeeAccess.data ?? []).map((row: any) => String(row.employee_id ?? "")),
+      ...(linkedEmployees.data ?? []).map((row: any) => String(row.id ?? "")),
+    ].filter(Boolean))];
+
+    const [parts, stocks, balances, workOrders, requests, employees, gasCylinders, toolAssetsResult] = await Promise.all([
+      (supabaseAdmin as any).from("dbs_control_parts")
+        .select("id,sku,name,description,stock_quantity,reserved_quantity,status,version")
+        .eq("scope_key", scopeKey).eq("status", "ativo").order("name").limit(1000),
+      (supabaseAdmin as any).from("dbs_control_operational_stocks")
+        .select("id,cost_center_id,name,status,created_at")
+        .eq("scope_key", scopeKey).eq("status", "active").order("created_at"),
+      (supabaseAdmin as any).from("dbs_control_operational_stock_balances")
+        .select("id,stock_id,part_id,quantity,reserved_quantity,version")
+        .eq("scope_key", scopeKey).limit(5000),
+      isCollaborator
+        ? (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,type,client_id,assigned_employee_id,created_at")
+            .eq("assigned_employee_id", employee.id).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500)
+        : (supabaseAdmin as any).from("dbs_control_work_orders")
+            .select("id,protocol,status,type,client_id,created_by_user_id,created_at")
+            .in("created_by_user_id", scopedUserIds).is("deleted_at", null)
+            .order("created_at", { ascending: false }).limit(500),
+      (supabaseAdmin as any).from("dbs_control_material_requests")
+        .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,fulfilled_quantity,requested_by,version,created_at,updated_at")
+        .eq("scope_key", scopeKey)
+        .order("created_at", { ascending: false }).limit(500),
+      isCollaborator
+        ? (supabaseAdmin as any).from("rh_employees")
+            .select("id,full_name,unit,is_active").eq("id", employee.id).eq("is_active", true)
+        : (supabaseAdmin as any).from("rh_employees")
+            .select("id,full_name,unit,is_active").in("id", employeeIds).eq("is_active", true)
+            .order("full_name"),
+      (supabaseAdmin as any).from("dbs_control_gas_cylinders")
+        .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
+        .eq("scope_key", scopeKey)
+        .order("assigned_at", { ascending: false }),
+      isCollaborator
+        ? (supabaseAdmin as any).from("dbs_control_tool_assets")
+            .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes,updated_at")
+            .eq("scope_key", scopeKey).eq("employee_id", employee.id).order("updated_at", { ascending: false })
+        : (supabaseAdmin as any).from("dbs_control_tool_assets")
+            .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes,updated_at")
+            .eq("scope_key", scopeKey).order("updated_at", { ascending: false }).limit(1000),
+    ]);
+    for (const result of [parts, stocks, balances, workOrders, requests, employees, gasCylinders, toolAssetsResult]) {
+      if (result.error) throw new Error("Falha ao carregar materiais operacionais: " + result.error.message);
+    }
+
+    let visibleWorkOrders = workOrders.data ?? [];
+    let visibleGasCylinders = gasCylinders.data ?? [];
+    let visibleRequests = requests.data ?? [];
+    const visibleToolAssets = toolAssetsResult.data ?? [];
+    if (isCollaborator) {
+      const permittedClients = new Set((collaboratorBase?.clientIds ?? []).map(String));
+      visibleWorkOrders = visibleWorkOrders.filter((order: any) => {
+        if (collaboratorBase?.baseId) {
+          return collaboratorBase.baseActive && permittedClients.has(String(order.client_id ?? ""));
+        }
+        return true;
+      });
+      const visibleWorkOrderIds = new Set(visibleWorkOrders.map((order: any) => String(order.id)));
+      visibleGasCylinders = visibleGasCylinders.filter((cylinder: any) => String(cylinder.employee_id) === String(employee.id));
+      visibleRequests = visibleRequests.filter((request: any) =>
+        String(request.requested_by ?? "") === String(user.id)
+      );
+      visibleWorkOrders = visibleWorkOrders.map((order: any) => ({
+        id: order.id, protocol: order.protocol, status: order.status, type: order.type,
+        client_id: order.client_id, created_at: order.created_at,
+      }));
+      visibleRequests = visibleRequests.filter((request: any) =>
+        !request.work_order_id || visibleWorkOrderIds.has(String(request.work_order_id))
+      );
+    }
+
+    const visibleCylinderIds = visibleGasCylinders.map((cylinder: any) => String(cylinder.id));
+    const gasCylinderMovementsResult = visibleCylinderIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_gas_cylinder_movements")
+          .select("id,cylinder_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,remaining_before,remaining_after,used_before,used_after,work_order_id,gas_usage_id,actor_user_id,created_at")
+          .eq("scope_key", scopeKey).in("cylinder_id", visibleCylinderIds)
+          .order("created_at", { ascending: false }).limit(500)
+      : { data: [], error: null };
+    if (gasCylinderMovementsResult.error) throw new Error("Falha ao carregar o histórico das botijas: " + gasCylinderMovementsResult.error.message);
+
+    const visibleToolAssetIds = visibleToolAssets.map((asset: any) => String(asset.id));
+    const toolAssetMovementsResult = visibleToolAssetIds.length
+      ? await (supabaseAdmin as any).from("dbs_control_tool_asset_movements")
+          .select("id,tool_asset_id,movement_type,from_employee_id,to_employee_id,from_vehicle_label,to_vehicle_label,from_status,to_status,from_condition,to_condition,notes,actor_user_id,created_at")
+          .eq("scope_key", scopeKey).in("tool_asset_id", visibleToolAssetIds)
+          .order("created_at", { ascending: false }).limit(1000)
+      : { data: [], error: null };
+    if (toolAssetMovementsResult.error) throw new Error("Falha ao carregar o histórico de ferramentas: " + toolAssetMovementsResult.error.message);
+
+    return {
+      parts: parts.data ?? [],
+      operationalStocks: stocks.data ?? [],
+      operationalBalances: balances.data ?? [],
+      canChooseDestination: !isCollaborator,
+      canReserveStock: !isCollaborator,
+      workOrders: visibleWorkOrders,
+      materialRequests: visibleRequests,
+      employees: employees.data ?? [],
+      gasCylinders: visibleGasCylinders,
+      gasCylinderMovements: gasCylinderMovementsResult.data ?? [],
+      toolAssets: visibleToolAssets,
+      toolAssetMovements: toolAssetMovementsResult.data ?? [],
+      canManageTools: !isCollaborator,
+    };
+  });
+
+
+
+export const saveDbsToolAsset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    assetId?: string; assetTag: string; name: string; category: string; serialNumber?: string;
+    brandModel?: string; employeeId?: string; vehicleLabel?: string;
+    status: "available" | "assigned" | "maintenance" | "retired" | "lost";
+    condition: "new" | "good" | "worn" | "damaged"; notes?: string;
+  }) => {
+    const assetTag=String(input?.assetTag??"").trim().toUpperCase();
+    const name=String(input?.name??"").trim();
+    const category=String(input?.category??"").trim();
+    if(!/^[A-Z0-9._/-]{2,40}$/.test(assetTag)||name.length<2||name.length>140||category.length<2||category.length>80)
+      throw new Error("Informe patrimônio, nome e categoria válidos.");
+    if(!["available","assigned","maintenance","retired","lost"].includes(input.status)||
+      !["new","good","worn","damaged"].includes(input.condition)) throw new Error("Status ou condição da ferramenta inválidos.");
+    const employeeId=input.employeeId?requireInventoryId(input.employeeId,"Colaborador"):null;
+    if(input.status==="assigned"&&!employeeId) throw new Error("Selecione o responsável pela ferramenta.");
+    if(input.status!=="assigned"&&employeeId) throw new Error("Somente ferramentas atribuídas podem ter responsável.");
+    return {assetId:input.assetId?requireInventoryId(input.assetId,"Ferramenta"):null,assetTag,name,category,
+      serialNumber:String(input.serialNumber??"").trim().slice(0,100)||null,
+      brandModel:String(input.brandModel??"").trim().slice(0,140)||null,employeeId,
+      vehicleLabel:String(input.vehicleLabel??"").trim().slice(0,80)||null,status,condition:input.condition,
+      notes:String(input.notes??"").trim().slice(0,1000)||null};
+  })
+  .handler(async ({context,data}) => {
+    const user=await requireDbsInventoryAdmin(context);
+    const scopeKey=user.company_id?"company:"+user.company_id:"user:"+user.id;
+    const admin=supabaseAdmin as any;
+    if(data.employeeId){
+      const employee=await admin.from("rh_employees").select("id,is_active").eq("id",data.employeeId).eq("is_active",true).maybeSingle();
+      if(employee.error) throw new Error(employee.error.message);
+      if(!employee.data) throw new Error("Colaborador não encontrado ou inativo.");
+      const access=await admin.from("rh_employee_access").select("user_id").eq("employee_id",data.employeeId).eq("access_enabled",true).limit(1);
+      if(access.error) throw new Error(access.error.message);
+      if(!access.data?.length) throw new Error("O colaborador precisa estar vinculado ao acesso RH para receber ferramenta.");
+      const linkedUser=await admin.from("users").select("company_id,status").eq("id",access.data[0].user_id).maybeSingle();
+      if(linkedUser.error) throw new Error(linkedUser.error.message);
+      if(!linkedUser.data||linkedUser.data.status!=="ativo"||(user.company_id&&linkedUser.data.company_id!==user.company_id))
+        throw new Error("O colaborador não pertence à empresa deste estoque.");
+    }
+    const now=new Date().toISOString();
+    const basePayload={asset_tag:data.assetTag,name:data.name,category:data.category,serial_number:data.serialNumber,
+      brand_model:data.brandModel,employee_id:data.employeeId,vehicle_label:data.employeeId?data.vehicleLabel:null,
+      status:data.status,condition_label:data.condition,notes:data.notes,updated_by:user.id,updated_at:now};
+    if(data.assetId){
+      const current=await admin.from("dbs_control_tool_assets").select("employee_id,assigned_at,returned_at")
+        .eq("id",data.assetId).eq("scope_key",scopeKey).maybeSingle();
+      if(current.error) throw new Error(current.error.message);
+      if(!current.data) throw new Error("Ferramenta não encontrada neste escopo.");
+      const assignmentChanged=String(current.data.employee_id??"")!==String(data.employeeId??"");
+      const payload={...basePayload,
+        assigned_at:data.employeeId?(assignmentChanged?now:current.data.assigned_at):null,
+        returned_at:data.employeeId?null:(current.data.employee_id?now:current.data.returned_at)};
+      const saved=await admin.from("dbs_control_tool_assets").update(payload).eq("id",data.assetId).eq("scope_key",scopeKey)
+        .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").maybeSingle();
+      if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
+      if(!saved.data) throw new Error("Ferramenta não encontrada neste escopo.");
+      return saved.data;
+    }
+    const payload={...basePayload,assigned_at:data.employeeId?now:null,returned_at:null};
+    const saved=await admin.from("dbs_control_tool_assets").insert({...payload,company_id:user.company_id,scope_key:scopeKey,created_by:user.id})
+      .select("id,asset_tag,name,category,serial_number,brand_model,status,employee_id,vehicle_label,condition_label,notes").single();
+    if(saved.error){if(saved.error.code==="23505") throw new Error("Já existe uma ferramenta com esse patrimônio.");throw new Error(saved.error.message);}
+    return saved.data;
+  });
+
+export const createDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestType: "part" | "new_part" | "tool" | "supply" | "gas_refill";
+    partId?: string;
+    workOrderId?: string;
+    destinationStockId?: string;
+    employeeId?: string;
+    gasCylinderId?: string;
+    vehicleLabel?: string;
+    description: string;
+    quantity: number;
+    unitLabel?: string;
+    reason: string;
+    needByDate?: string;
+    idempotencyKey: string;
+  }) => {
+    const requestType = input?.requestType;
+    if (!["part", "new_part", "tool", "supply", "gas_refill"].includes(requestType)) {
+      throw new Error("Tipo de solicitação inválido.");
+    }
+    const description = String(input?.description ?? "").trim().slice(0, 240);
+    const reason = String(input?.reason ?? "").trim().slice(0, 2000);
+    const unitLabel = String(input?.unitLabel ?? "un").trim().slice(0, 24) || "un";
+    const vehicleLabel = String(input?.vehicleLabel ?? "").trim().slice(0, 80) || null;
+    const needByDate = String(input?.needByDate ?? "").trim() || null;
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (description.length < 2 || reason.length < 5) throw new Error("Descreva o material e a necessidade (mínimo 5 caracteres).");
+    if (!Number.isFinite(input?.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
+      throw new Error("Informe uma quantidade maior que zero e dentro do limite.");
+    }
+    if (requestType === "gas_refill" && !input?.gasCylinderId) throw new Error("Selecione a botija de gás para solicitar a recarga.");
+    if (requestType === "gas_refill" && input.quantity !== 1) throw new Error("Cada solicitação de recarga corresponde a uma única botija.");
+    if (requestType === "part" && (!input?.partId || !input?.workOrderId)) {
+      throw new Error("Para solicitar uma peça cadastrada, selecione a peça e a OS.");
+    }
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) throw new Error("Chave de segurança da solicitação inválida.");
+    if (needByDate && !isValidIsoCalendarDate(needByDate)) throw new Error("Data necessária inválida.");
+    return {
+      requestType,
+      partId: input.partId ? requireInventoryId(input.partId, "Peça") : null,
+      workOrderId: input.workOrderId ? requireInventoryId(input.workOrderId, "OS") : null,
+      destinationStockId: input.destinationStockId ? requireInventoryId(input.destinationStockId, "Estoque operacional") : null,
+      employeeId: input.employeeId ? requireInventoryId(input.employeeId, "Colaborador") : null,
+      gasCylinderId: input.gasCylinderId ? requireInventoryId(input.gasCylinderId, "Botija de gás") : null,
+      vehicleLabel, description, quantity: Number(input.quantity.toFixed(4)),
+      unitLabel, reason, needByDate, idempotencyKey,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const actor = await resolveDbsOperationalMaterialActor(context);
+    const { user, companyId, scopeKey, scopedUserIds, employee, collaboratorBase } = actor;
+    const isCollaborator = user.role_key === "COLABORADOR";
+    const admin = supabaseAdmin as any;
+
+    if (isCollaborator) {
+      if (!employee?.id) throw new Error("O vínculo do colaborador com o RH não está ativo.");
+      if (data.employeeId && String(data.employeeId) !== String(employee.id)) {
+        throw new Error("O colaborador só pode solicitar material em seu próprio nome.");
+      }
+      if (!data.employeeId) data.employeeId = String(employee.id);
+      if (data.requestType === "gas_refill" && String(data.gasCylinderId || "") === "") {
+        throw new Error("Selecione a botija de gás atribuída ao seu cadastro.");
+      }
+      if (data.destinationStockId) {
+        throw new Error("O colaborador não pode escolher outro estoque de destino. O Financeiro fará a separação e entrega.");
+      }
+    }
+
+    if (data.partId) {
+      const { data: part, error } = await admin.from("dbs_control_parts")
+        .select("id,name,status").eq("id", data.partId).eq("scope_key", scopeKey).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!part || part.status !== "ativo") throw new Error("Peça não encontrada ou inativa.");
+    }
+
+    if (data.workOrderId) {
+      const { data: order, error } = await admin.from("dbs_control_work_orders")
+        .select("id,created_by_user_id,assigned_employee_id,client_id")
+        .eq("id", data.workOrderId).is("deleted_at", null).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!order) throw new Error("Ordem de serviço não encontrada ou arquivada.");
+      if (isCollaborator) {
+        if (String(order.assigned_employee_id ?? "") !== String(employee.id)) {
+          throw new Error("A OS selecionada não está atribuída a este colaborador.");
+        }
+        if (collaboratorBase?.baseId) {
+          if (!collaboratorBase.baseActive ||
+              !(collaboratorBase.clientIds ?? []).map(String).includes(String(order.client_id ?? ""))) {
+            throw new Error("A OS não pertence a um cliente vinculado à base ativa do colaborador.");
+          }
+        }
+      } else {
+        const allowedCreatorIds = new Set(scopedUserIds.map(String));
+        if (!allowedCreatorIds.has(String(order.created_by_user_id))) {
+          throw new Error("A OS não pertence ao escopo operacional deste usuário.");
+        }
+      }
+    }
+
+    if (data.destinationStockId) {
+      const { data: stock, error } = await admin.from("dbs_control_operational_stocks")
+        .select("id").eq("id", data.destinationStockId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!stock) throw new Error("Estoque operacional de destino não encontrado ou inativo.");
+    }
+
+    if (data.gasCylinderId) {
+      const { data: cylinder, error } = await admin.from("dbs_control_gas_cylinders")
+        .select("id,employee_id,vehicle_label,status,scope_key")
+        .eq("id", data.gasCylinderId).eq("scope_key", scopeKey).eq("status", "active").maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!cylinder) throw new Error("Botija de gás não encontrada ou inativa neste escopo.");
+      if (isCollaborator && String(cylinder.employee_id) !== String(employee.id)) {
+        throw new Error("A botija selecionada não está atribuída a este colaborador.");
+      }
+      if (data.employeeId && data.employeeId !== cylinder.employee_id) {
+        throw new Error("O colaborador informado não corresponde à botija selecionada.");
+      }
+      data.employeeId = cylinder.employee_id;
+      if (!data.vehicleLabel) data.vehicleLabel = cylinder.vehicle_label ?? null;
+    }
+
+    if (data.employeeId && !isCollaborator) {
+      const [employeeAccess, linkedEmployee] = await Promise.all([
+        admin.from("rh_employee_access").select("employee_id")
+          .eq("employee_id", data.employeeId).in("user_id", scopedUserIds).eq("access_enabled", true).maybeSingle(),
+        admin.from("rh_employees").select("id,is_active,dbs_control_access_enabled,ponto_portal_user_id")
+          .eq("id", data.employeeId).maybeSingle(),
+      ]);
+      if (employeeAccess.error) throw new Error(employeeAccess.error.message);
+      if (linkedEmployee.error) throw new Error(linkedEmployee.error.message);
+      const portalUserIsScoped = Boolean(
+        linkedEmployee.data?.dbs_control_access_enabled === true
+        && scopedUserIds.includes(String(linkedEmployee.data?.ponto_portal_user_id ?? "")),
+      );
+      const employeeLinked = Boolean(employeeAccess.data || portalUserIsScoped);
+      if (!linkedEmployee.data || linkedEmployee.data.is_active !== true || !employeeLinked) {
+        throw new Error("Colaborador não encontrado, inativo ou fora da empresa vinculada.");
+      }
+    }
+
+    const payload = {
+      request_type: data.requestType, part_id: data.partId, work_order_id: data.workOrderId,
+      destination_stock_id: data.destinationStockId, employee_id: data.employeeId,
+      gas_cylinder_id: data.gasCylinderId, vehicle_label: data.vehicleLabel, description: data.description, quantity: data.quantity,
+      unit_label: data.unitLabel, reason: data.reason, need_by_date: data.needByDate,
+    };
+    const requestHash = JSON.stringify(payload);
+    const existing = await admin.from("dbs_control_material_requests")
+      .select("id,request_hash,status,version,created_at")
+      .eq("scope_key", scopeKey).eq("idempotency_key", data.idempotencyKey).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (existing.data) {
+      if (existing.data.request_hash !== requestHash) throw new Error("A chave da solicitação já foi utilizada com dados diferentes.");
+      return { ...existing.data, replayed: true };
+    }
+    const saved = await admin.from("dbs_control_material_requests").insert({
+      company_id: companyId, scope_key: scopeKey, ...payload,
+      status: "pending", requested_by: user.id, request_hash: requestHash,
+      idempotency_key: data.idempotencyKey, version: 1,
+    }).select("id,request_type,part_id,work_order_id,description,quantity,unit_label,reason,status,version,created_at").single();
+    if (saved.error) throw new Error(saved.error.message);
+    return { ...saved.data, replayed: false };
+  });
+export const getDbsFinanceMaterialRequests = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { scopeKey } = getDbsInventoryFinanceScope(user);
+    const admin = supabaseAdmin as any;
+    const requests = await admin.from("dbs_control_material_requests")
+      .select("id,request_type,part_id,work_order_id,gas_cylinder_id,destination_stock_id,employee_id,vehicle_label,description,quantity,unit_label,reason,need_by_date,status,decision_note,requested_by,decided_by,decided_at,fulfilled_quantity,version,created_at,updated_at")
+      .eq("scope_key", scopeKey).order("created_at", { ascending: false }).limit(1000);
+    if (requests.error) throw new Error(requests.error.message);
+    const ids = (requests.data ?? []).map((row: any) => String(row.id));
+    const cylinderIds = [...new Set((requests.data ?? []).map((row: any) => String(row.gas_cylinder_id ?? "")).filter(Boolean))];
+    const [links, cylinders, gasRefillEvents] = await Promise.all([
+      ids.length
+        ? admin.from("dbs_control_material_request_purchase_links")
+            .select("id,material_request_id,purchase_id,purchase_item_id,quantity_linked,created_at")
+            .in("material_request_id", ids).order("created_at")
+        : Promise.resolve({ data: [], error: null }),
+      cylinderIds.length
+        ? admin.from("dbs_control_gas_cylinders")
+            .select("id,serial_number,refrigerant_type,employee_id,vehicle_label,total_charges,used_charges,remaining_charges,refill_count,status")
+            .eq("scope_key", scopeKey).in("id", cylinderIds)
+        : Promise.resolve({ data: [], error: null }),
+      ids.length
+        ? admin.from("dbs_control_gas_refill_events")
+            .select("id,material_request_id,gas_cylinder_id,part_id,purchase_id,purchase_item_id,receipt_item_id,unit_cost_cents,total_cost_cents,total_charges_after,ledger_entry_id,created_at")
+            .eq("scope_key", scopeKey).in("material_request_id", ids)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const result of [links, cylinders, gasRefillEvents]) {
+      if (result.error) throw new Error("Falha ao carregar vínculos de compras ou recargas: " + result.error.message);
+    }
+    const cylinderById = new Map((cylinders.data ?? []).map((row: any) => [String(row.id), row]));
+    const eventByRequestId = new Map((gasRefillEvents.data ?? []).map((row: any) => [String(row.material_request_id), row]));
+    return {
+      requests: (requests.data ?? []).map((row: any) => ({
+        ...row,
+        gasCylinder: cylinderById.get(String(row.gas_cylinder_id ?? "")) ?? null,
+        gasRefillEvent: eventByRequestId.get(String(row.id)) ?? null,
+      })),
+      purchaseLinks: links.data ?? [],
+      gasRefillEvents: gasRefillEvents.data ?? [],
+    };
+  });
+
+
+export const decideDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { requestId: string; status: "in_review" | "approved" | "rejected" | "awaiting_purchase" | "ready_for_delivery" | "cancelled"; note?: string; expectedVersion: number }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const status = input?.status;
+    const note = String(input?.note ?? "").trim().slice(0, 2000);
+    if (!["in_review", "approved", "rejected", "awaiting_purchase", "ready_for_delivery", "cancelled"].includes(status)) {
+      throw new Error("Etapa de solicitação inválida.");
+    }
+    if (status === "rejected" && note.length < 5) throw new Error("Informe o motivo da rejeição.");
+    if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) throw new Error("Atualize a solicitação antes de decidir.");
+    return { requestId, status, note, expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_decide_material_request", {
+      p_request_id: data.requestId, p_actor_user_id: user.id,
+      p_status: data.status, p_note: data.note, p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const linkDbsMaterialRequestPurchase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { requestId: string; purchaseId: string; purchaseItemId: string; quantityLinked: number; expectedVersion: number }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const purchaseId = requireInventoryId(input?.purchaseId, "Compra");
+    const purchaseItemId = requireInventoryId(input?.purchaseItemId, "Item da compra");
+    if (!Number.isFinite(input?.quantityLinked) || input.quantityLinked <= 0 ||
+      !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Quantidade vinculada ou versão inválida.");
+    }
+    return { requestId, purchaseId, purchaseItemId, quantityLinked: Number(input.quantityLinked.toFixed(4)), expectedVersion: input.expectedVersion };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_link_material_request_purchase", {
+      p_request_id: data.requestId, p_purchase_id: data.purchaseId,
+      p_purchase_item_id: data.purchaseItemId, p_actor_user_id: user.id,
+      p_quantity_linked: data.quantityLinked, p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+async function requireDbsMaterialRequestActor(context: DbsInventoryAdminContext) {
+  return requireDbsInventoryFinanceAdmin(context);
+}
+
+export const fulfillDbsGasRefillRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestId: string;
+    totalChargesAfter: number;
+    expectedVersion: number;
+    idempotencyKey: string;
+  }) => {
+    const requestId = requireInventoryId(input?.requestId, "Solicitação");
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (!Number.isSafeInteger(input?.totalChargesAfter) || input.totalChargesAfter <= 0) {
+      throw new Error("Informe a capacidade final de cargas da botija.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Atualize a solicitação antes de concluir a recarga.");
+    }
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) {
+      throw new Error("Chave de segurança da recarga inválida.");
+    }
+    return { requestId, totalChargesAfter: input.totalChargesAfter, expectedVersion: input.expectedVersion, idempotencyKey };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsInventoryFinanceAdmin(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_fulfill_gas_refill_request", {
+      p_request_id: data.requestId,
+      p_actor_user_id: user.id,
+      p_total_charges: data.totalChargesAfter,
+      p_idempotency_key: data.idempotencyKey,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const fulfillDbsMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: {
+    requestId: string;
+    quantity: number;
+    destinationStockId: string;
+    idempotencyKey: string;
+    expectedVersion: number;
+  }) => {
+    if (!Number.isFinite(input?.quantity) || input.quantity <= 0 || input.quantity > 1000000) {
+      throw new Error("Quantidade de entrega inválida.");
+    }
+    const idempotencyKey = String(input?.idempotencyKey ?? "").trim();
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 240) {
+      throw new Error("Chave de segurança da entrega inválida.");
+    }
+    if (!Number.isSafeInteger(input?.expectedVersion) || input.expectedVersion < 1) {
+      throw new Error("Atualize a solicitação antes de confirmar a entrega.");
+    }
+    return {
+      requestId: requireInventoryId(input.requestId, "Solicitação"),
+      quantity: Number(input.quantity.toFixed(4)),
+      destinationStockId: requireInventoryId(input.destinationStockId, "Estoque operacional"),
+      idempotencyKey,
+      expectedVersion: input.expectedVersion,
+    };
+  })
+  .handler(async ({ context, data }) => {
+    const user = await requireDbsMaterialRequestActor(context);
+    const { data: result, error } = await (supabaseAdmin as any).rpc("dbs_control_fulfill_material_request", {
+      p_request_id: data.requestId,
+      p_actor_user_id: user.id,
+      p_quantity: data.quantity,
+      p_destination_stock_id: data.destinationStockId,
+      p_idempotency_key: data.idempotencyKey,
+      p_expected_version: data.expectedVersion,
+    });
+    if (error) throw new Error(error.message);
+    return result;
   });

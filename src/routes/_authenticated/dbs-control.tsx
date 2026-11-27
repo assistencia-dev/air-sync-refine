@@ -6,7 +6,7 @@ import { createClientUser } from "@/lib/admin.functions";
 import { hasMyDbsControlAccess, listRhEmployeeRegistry, listRhCollaboratorUsers, saveRhEmployeeRecord, saveRhEmployeeAccess, updateDbsControlTechnician, archiveDbsControlTechnician, deleteDbsControlTechnician, restoreDbsControlTechnician } from "@/lib/rh.functions";
 import { getMyProfile } from "@/lib/admin-profile.functions";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
-import { DbsInventoryPage } from "./dbs-inventory";
+import { DbsOperationalInventoryPage } from "@/components/DbsOperationalInventoryPage";
 import { supabase } from "@/integrations/supabase/client";
 import { applyDbsControlDelta, deleteDbsControlWorkOrder, getDbsControlCloudState, getDbsControlSyncCursor, getDbsControlDashboardSummary, auditDbsControlDatabase, uploadDbsControlOsAttachment, getDbsControlWorkOrderAudit, getDbsControlCatalogMasterData, saveDbsControlSiteMapCoordinates, geocodeDbsControlSiteAddress } from "@/lib/dbs-control.functions";
 import {
@@ -600,6 +600,8 @@ function DbsControlPage() {
   const [inventoryPortals, setInventoryPortals] = useState<Partial<Record<DbsMaterialsSection, {
     target: HTMLElement;
     quoteId: string;
+    initialRequestType?: "new_part";
+    requestToken: number;
   }>>>({});
 
   // O HTML legado pode chegar do CDN sem o último asset de navegação. O shell
@@ -1637,8 +1639,8 @@ function DbsControlPage() {
       }
       if (msg.type === "DBS_CONTROL_OPEN_INVENTORY_DRAWER") {
         if (employeeModeRef.current) return;
-        const drawer = msg.drawer === "purchase" ? "purchase" : "part";
-        const section: DbsMaterialsSection = drawer === "purchase" ? "purchases" : "parts";
+        const drawer = msg.drawer === "request" ? "request" : msg.drawer === "purchase" ? "purchase" : "part";
+        const section: DbsMaterialsSection = drawer === "purchase" || drawer === "request" ? "purchases" : "parts";
         const target = mountDbsMaterialsPortal(iframeRef.current, section);
         if (!target) {
           iframeRef.current?.contentWindow?.postMessage({
@@ -1649,7 +1651,12 @@ function DbsControlPage() {
         }
         setInventoryPortals((current) => ({
           ...current,
-          [section]: { target, quoteId: "" },
+          [section]: {
+            target,
+            quoteId: "",
+            initialRequestType: drawer === "request" ? "new_part" : undefined,
+            requestToken: (current[section]?.requestToken ?? 0) + 1,
+          },
         }));
         window.dispatchEvent(new CustomEvent("dbs-inventory-open-drawer", { detail: { drawer } }));
         return;
@@ -1667,7 +1674,7 @@ function DbsControlPage() {
         }
         setInventoryPortals((current) => ({
           ...current,
-          [section]: { target, quoteId: String(msg.quoteId || "") },
+          [section]: { target, quoteId: String(msg.quoteId || ""), requestToken: (current[section]?.requestToken ?? 0) + 1 },
         }));
         return;
       }
@@ -2970,15 +2977,11 @@ function DbsControlPage() {
         />
       </div>
       {inventoryPortals.parts && createPortal(
-        <DbsInventoryPage embedded initialSection="parts" />,
+        <DbsOperationalInventoryPage initialSection="parts" requestToken={inventoryPortals.parts.requestToken} initialRequestType={inventoryPortals.parts.initialRequestType} />,
         inventoryPortals.parts.target,
       )}
       {inventoryPortals.purchases && createPortal(
-        <DbsInventoryPage
-          embedded
-          initialSection="purchases"
-          initialQuoteId={inventoryPortals.purchases.quoteId}
-        />,
+        <DbsOperationalInventoryPage initialSection="purchases" initialQuoteId={inventoryPortals.purchases.quoteId} requestToken={inventoryPortals.purchases.requestToken} initialRequestType={inventoryPortals.purchases.initialRequestType} />,
         inventoryPortals.purchases.target,
       )}
       {mapsLaunchUrl && <DbsControlMapsLaunchDialog url={mapsLaunchUrl} onClose={() => setMapsLaunchUrl(null)} />}

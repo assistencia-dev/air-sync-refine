@@ -72,6 +72,10 @@ function LoginPage() {
           navigate({ to: "/financeiro-acompanhamento", replace: true });
           return;
         }
+        if (profile.role_key === "FINANCEIRO_OPERADOR") {
+          navigate({ to: "/financeiro", replace: true });
+          return;
+        }
         if (profile.role_key === "SUPER_ADMIN" || profile.role_key === "ADMIN_OPERACIONAL") {
           navigate({ to: "/admin", replace: true });
           return;
@@ -126,6 +130,8 @@ function LoginPage() {
       const isCollaborator = role === "COLABORADOR";
       if (role === "FINANCEIRO_LEITURA") {
         navigate({ to: "/financeiro-acompanhamento", replace: true });
+      } else if (role === "FINANCEIRO_OPERADOR") {
+        navigate({ to: "/financeiro", replace: true });
       } else if (isAdmin) {
         navigate({ to: "/admin", replace: true });
       } else if (isCollaborator) {

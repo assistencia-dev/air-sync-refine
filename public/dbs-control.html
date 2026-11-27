@@ -3881,7 +3881,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
             <div class="nav-section">Insumos & Operação</div>
             <li class="nav-item" title="Controle peças e estoque" onclick="switchTab('tab-pecas', this)"><span>Peças & Estoque</span></li>
             <li class="nav-item" title="Cadastre serviços para usar diretamente na OS" onclick="switchTab('tab-servicos', this)"><span>Serviços</span></li>
-            <li class="nav-item" title="Acompanhe solicitações e pedidos de compra" onclick="switchTab('tab-compras', this)"><span>Compras</span></li>
+            <li class="nav-item" title="Solicite peças, ferramentas, insumos e recargas ao Financeiro" onclick="switchTab('tab-compras', this)"><span>Solicitar materiais</span></li>
 
             <div class="nav-section">Mobile Field Service</div>
         </ul>
@@ -6728,7 +6728,7 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     'tab-tecnicos':['Equipe Técnica','Técnicos, vínculos RH e acessos'],
                     'tab-pecas':['Peças & Estoque','Controle de materiais e estoque'],
                     'tab-servicos':['Serviços','Catálogo de serviços'],
-                    'tab-compras':['Compras','Solicitações e pedidos de compra'],
+                    'tab-compras':['Solicitar materiais','Acompanhe pedidos enviados ao Financeiro'],
                     'tab-pwa':['Atendimentos','Execução das ordens atribuídas ao colaborador'],
                     'tab-orcamentos':['Orçamentos','Gestão comercial e propostas']
                 };
@@ -6753,6 +6753,13 @@ table{max-width:100%}.table-responsive,.table-container,.overflow-x-auto{max-wid
                     ? 'purchases'
                     : employeeTab === 'tab-pecas' ? 'parts' : null;
                 if (materialsSection && !employeeMode && window.parent !== window) {
+                    // Oculta imediatamente o formulário HTML legado (que contém
+                    // campos históricos de valores) antes de pedir a montagem
+                    // do portal React com os dados autorizados por perfil.
+                    Array.from(target.children).forEach(child => {
+                        if (child.dataset?.dbsMaterialsReactRoot === 'true') return;
+                        child.hidden = true;
+                    });
                     window.parent.postMessage({
                         type: 'DBS_CONTROL_OPEN_INVENTORY_MODULE',
                         section: materialsSection,

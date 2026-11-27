@@ -13,7 +13,7 @@ import {
   getDbsPhase2InventoryOverview, getDbsQuotePurchaseItems, releaseDbsWorkOrderReservation,
   setDbsWorkOrderCostCenter, receiveDbsPurchaseItems,
   reverseDbsInventoryMovement, createDbsCostCenter, createDbsPartCatalog,
-  updateDbsPartCatalog,
+  saveDbsInventoryPricingPolicy, updateDbsPartCatalog,
   updateDbsInventoryMasterData, setDbsInventoryRecordStatus, deleteDbsInventoryRecord,
 } from "@/lib/dbs-control.functions";
 
@@ -78,7 +78,7 @@ export function DbsInventoryPage({
   const [moduleSection, setModuleSection] = useState<DbsInventorySection>(initialSection);
   type PartsView = "catalog" | "stock" | "reservations" | "settings";
   type PurchasesView = "new" | "approval" | "orders";
-  type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions";
+  type SettingsView = "suppliers" | "cost-centers" | "units" | "conversions" | "pricing";
   type InventoryDrawer = "new-part" | "new-purchase" | "transfer" | "reservation" | "supplier" | "cost-center" | "unit" | "conversion" | "link-cost-center" | "gas-cylinder" | "operational-stock" | null;
   const [partsView, setPartsView] = useState<PartsView>("catalog");
   const [purchasesView, setPurchasesView] = useState<PurchasesView>("new");
@@ -92,6 +92,8 @@ export function DbsInventoryPage({
   useEffect(() => {
     setModuleSection(initialSection);
   }, [initialSection]);
+
+
   useEffect(() => {
     const openFromHeader = (event: Event) => {
       const drawer = (event as CustomEvent<{ drawer?: string }>).detail?.drawer;
@@ -106,7 +108,6 @@ export function DbsInventoryPage({
         setCatalogPartUnitId("");
         setCatalogPartPurchaseUnitId("");
         setCatalogPartCost("");
-        setCatalogPartSale("");
         setActiveDrawer("new-part");
       } else if (drawer === "purchase") {
         setModuleSection("purchases");
@@ -129,6 +130,9 @@ export function DbsInventoryPage({
   const [workOrderId, setWorkOrderId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchaseReceiptQuantities, setPurchaseReceiptQuantities] = useState<Record<string, string>>({});
+  const [purchaseReceiptWarrantyFields, setPurchaseReceiptWarrantyFields] = useState<Record<string, {
+    serialNumber: string; lotNumber: string; durationMonths: string; expiresOn: string; terms: string; documentReference: string;
+  }>>({});
   const [movementReversalReasons, setMovementReversalReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [purchaseApprovalBusyId, setPurchaseApprovalBusyId] = useState<string | null>(null);
@@ -144,7 +148,9 @@ export function DbsInventoryPage({
   const [catalogPartUnitId, setCatalogPartUnitId] = useState("");
   const [catalogPartPurchaseUnitId, setCatalogPartPurchaseUnitId] = useState("");
   const [catalogPartCost, setCatalogPartCost] = useState("");
-  const [catalogPartSale, setCatalogPartSale] = useState("");
+  const [pricingMethod, setPricingMethod] = useState<"markup" | "gross_margin">("markup");
+  const [pricingRate, setPricingRate] = useState("");
+  const [pricingExpectedVersion, setPricingExpectedVersion] = useState(0);
   const [newCostCenterCode, setNewCostCenterCode] = useState("");
   const [newCostCenterName, setNewCostCenterName] = useState("");
   const [transferSourceStockId, setTransferSourceStockId] = useState("central");
@@ -199,7 +205,28 @@ export function DbsInventoryPage({
   });
 
   const data = overview.data;
+  const pricingPolicy = data?.pricingPolicy ?? null;
+  const catalogCalculatedSaleCents = (() => {
+    if (!pricingPolicy) return null;
+    const cost = Math.round(Number(catalogPartCost || 0) * 100);
+    const rate = Number(pricingPolicy.rate_bps);
+    if (!Number.isSafeInteger(cost) || cost < 0 || !Number.isInteger(rate) || rate <= 0) return null;
+    const raw = pricingPolicy.pricing_method === "markup"
+      ? cost * (10000 + rate) / 10000
+      : pricingPolicy.pricing_method === "gross_margin" && rate < 10000 ? cost * 10000 / (10000 - rate) : Number.NaN;
+    const result = Math.round(raw);
+    return Number.isSafeInteger(result) && result >= 0 && result <= 2147483647 ? result : null;
+  })();
   const parts = data?.parts ?? [];
+  useEffect(() => {
+    if (!pricingPolicy) {
+      setPricingExpectedVersion(0);
+      return;
+    }
+    setPricingMethod(pricingPolicy.pricing_method === "gross_margin" ? "gross_margin" : "markup");
+    setPricingRate((Number(pricingPolicy.rate_bps) / 100).toFixed(2));
+    setPricingExpectedVersion(Number(pricingPolicy.version) || 0);
+  }, [pricingPolicy?.version, pricingPolicy?.pricing_method, pricingPolicy?.rate_bps]);
   const suppliers = data?.suppliers ?? [];
   const measureUnits = data?.measureUnits ?? [];
   const unitConversions = data?.unitConversions ?? [];
@@ -374,11 +401,44 @@ export function DbsInventoryPage({
     setPurchaseLines((current) => current.map((line, i) => i === index ? { ...line, ...patch } : line));
   }
 
+  function updatePurchaseReceiptWarranty(itemId: string, patch: Partial<{serialNumber:string;lotNumber:string;durationMonths:string;expiresOn:string;terms:string;documentReference:string}>) {
+    setPurchaseReceiptWarrantyFields(current => {
+      const previous = current[itemId] ?? {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:""};
+      return {...current,[itemId]:{...previous,...patch}};
+    });
+  }
+
+  function renderPurchaseReceiptWarrantyFields(itemId: string) {
+    const fields = purchaseReceiptWarrantyFields[itemId] ?? {serialNumber:"",lotNumber:"",durationMonths:"",expiresOn:"",terms:"",documentReference:""};
+    return <details className="mt-2 rounded-lg border border-sky-200 bg-white p-2">
+      <summary className="min-h-9 cursor-pointer py-2 text-xs font-bold text-sky-800">Garantia do fornecedor (opcional)</summary>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-600">Número de série<input value={fields.serialNumber} onChange={e=>updatePurchaseReceiptWarranty(itemId,{serialNumber:e.target.value})} maxLength={160} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Lote<input value={fields.lotNumber} onChange={e=>updatePurchaseReceiptWarranty(itemId,{lotNumber:e.target.value})} maxLength={160} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Prazo em meses<input type="number" min="1" max="1200" step="1" value={fields.durationMonths} onChange={e=>updatePurchaseReceiptWarranty(itemId,{durationMonths:e.target.value})} placeholder="Ex.: 12" className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600">Ou validade até<input type="date" value={fields.expiresOn} onChange={e=>updatePurchaseReceiptWarranty(itemId,{expiresOn:e.target.value})} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Termos / observação<input value={fields.terms} onChange={e=>updatePurchaseReceiptWarranty(itemId,{terms:e.target.value})} maxLength={4000} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Documento / NF / referência<input value={fields.documentReference} onChange={e=>updatePurchaseReceiptWarranty(itemId,{documentReference:e.target.value})} maxLength={240} className="mt-1 min-h-9 w-full rounded-lg border px-2 text-sm font-normal"/></label>
+        <p className="text-xs text-slate-500 sm:col-span-2">O início será a data deste recebimento. Para criar a garantia, informe o prazo em meses ou a data final; o sistema não presume duração.</p>
+      </div>
+    </details>;
+  }
+
   async function confirmPurchaseReceipt(purchase: any, selected: any[]) {
-    const items = selected.map((item: any) => ({
-      purchaseItemId: String(item.id),
-      quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
-    }));
+    const items = selected.map((item: any) => {
+      const fields = purchaseReceiptWarrantyFields[String(item.id)];
+      const hasWarranty = Boolean(fields && [fields.serialNumber,fields.lotNumber,fields.durationMonths,fields.expiresOn,fields.terms,fields.documentReference].some(value=>String(value??"").trim()));
+      return {
+        purchaseItemId: String(item.id),
+        quantityReceived: Number(purchaseReceiptQuantities[item.id]) * Number(item.conversion_factor || 1),
+        ...(hasWarranty ? { warranty: {
+          serialNumber: fields.serialNumber, lotNumber: fields.lotNumber,
+          durationMonths: fields.durationMonths ? Number(fields.durationMonths) : undefined,
+          expiresOn: fields.expiresOn || undefined, terms: fields.terms,
+          documentReference: fields.documentReference,
+        } } : {}),
+      };
+    });
     if (!items.length || items.some((item) => !Number.isFinite(item.quantityReceived) || item.quantityReceived <= 0)) {
       setMessage("Informe quantidades válidas para os itens conferidos.");
       return;
@@ -394,6 +454,11 @@ export function DbsInventoryPage({
       clearPersistentPurchaseIdempotencyKey(operation.storageKey);
       setPurchaseReceiptQuantities((previous) => {
         const next = { ...previous };
+        for (const item of selected) delete next[item.id];
+        return next;
+      });
+      setPurchaseReceiptWarrantyFields(previous => {
+        const next = {...previous};
         for (const item of selected) delete next[item.id];
         return next;
       });
@@ -421,7 +486,6 @@ export function DbsInventoryPage({
       setCatalogPartUnitId("");
       setCatalogPartPurchaseUnitId("");
       setCatalogPartCost("");
-      setCatalogPartSale("");
       return;
     }
     setCatalogPartName(String(part.name ?? ""));
@@ -431,11 +495,16 @@ export function DbsInventoryPage({
     setCatalogPartUnitId(String(part.measure_unit_id ?? ""));
     setCatalogPartPurchaseUnitId(String(part.purchase_measure_unit_id ?? ""));
     setCatalogPartCost((Number(part.cost_cents ?? 0) / 100).toFixed(2));
-    setCatalogPartSale((Number(part.sale_cents ?? 0) / 100).toFixed(2));
   }
 
   async function saveCatalogPart(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!pricingPolicy) {
+      setMessage("Configure a política de preço de revenda no Financeiro antes de cadastrar peças.");
+      setPartsView("settings");
+      setSettingsView("pricing");
+      return;
+    }
     if (!catalogPartSupplierId || !catalogPartUnitId || !catalogPartName.trim() || !catalogPartSku.trim()) {
       setMessage("Informe código, nome, fornecedor e unidade-base da peça.");
       return;
@@ -448,7 +517,6 @@ export function DbsInventoryPage({
       measureUnitId: catalogPartUnitId,
       purchaseMeasureUnitId: catalogPartPurchaseUnitId || undefined,
       costCents: Math.round(Number(catalogPartCost || 0) * 100),
-      saleCents: Math.round(Number(catalogPartSale || 0) * 100),
     };
     let saved = false;
     if (catalogPartId) {
@@ -469,6 +537,29 @@ export function DbsInventoryPage({
       selectCatalogPart("");
       setMasterRecordId("");
       setActiveDrawer(null);
+    }
+  }
+
+  async function savePricingPolicy(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const percentage = Number(pricingRate);
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 990) {
+      setMessage("Informe um percentual maior que zero e de até 990%.");
+      return;
+    }
+    const rateBps = Math.round(percentage * 100);
+    if (pricingMethod === "gross_margin" && rateBps >= 10000) {
+      setMessage("A margem bruta precisa ser menor que 100%.");
+      return;
+    }
+    const saved = await runAction(() => saveDbsInventoryPricingPolicy({ data: {
+      pricingMethod,
+      rateBps,
+      expectedVersion: pricingExpectedVersion,
+    } }), "Política atualizada. Os preços do catálogo foram recalculados sem movimentar o estoque.");
+    if (saved) {
+      setPricingExpectedVersion(pricingExpectedVersion + 1);
+      void overview.refetch();
     }
   }
 
@@ -765,9 +856,11 @@ export function DbsInventoryPage({
                 <label className="text-xs font-bold text-slate-600">Custo de referência (R$)
                   <input type="number" min="0" step="0.01" value={catalogPartCost} onChange={e=>setCatalogPartCost(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
                 </label>
-                <label className="text-xs font-bold text-slate-600">Preço de venda (R$)
-                  <input type="number" min="0" step="0.01" value={catalogPartSale} onChange={e=>setCatalogPartSale(e.target.value)} className="mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
-                </label>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 sm:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-800">Preço de revenda calculado</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{catalogCalculatedSaleCents == null ? "Configure a política no Financeiro" : money(catalogCalculatedSaleCents)}</p>
+                  <p className="mt-1 text-xs text-slate-600">{pricingPolicy ? (pricingPolicy.pricing_method === "markup" ? `Markup de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% sobre o custo de referência` : `Margem bruta alvo de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% sobre o preço de venda`) : "O sistema não usa percentual presumido. Configure markup ou margem bruta em Cadastros básicos → Preço e revenda."}</p>
+                </div>
               </div>
               <label className="mt-3 block text-xs font-bold text-slate-600">Descrição complementar
                 <textarea rows={2} maxLength={1000} value={catalogPartDescription} onChange={e=>setCatalogPartDescription(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
@@ -789,16 +882,42 @@ export function DbsInventoryPage({
               <button type="button" role="tab" aria-selected={settingsView==="cost-centers"} onClick={()=>setSettingsView("cost-centers")} className={settingsView==="cost-centers"?"dbs-op-tab is-active":"dbs-op-tab"}>Centros de custo <span className="dbs-op-count">{costCenters.length}</span></button>
               <button type="button" role="tab" aria-selected={settingsView==="units"} onClick={()=>setSettingsView("units")} className={settingsView==="units"?"dbs-op-tab is-active":"dbs-op-tab"}>Unidades <span className="dbs-op-count">{measureUnits.length}</span></button>
               <button type="button" role="tab" aria-selected={settingsView==="conversions"} onClick={()=>setSettingsView("conversions")} className={settingsView==="conversions"?"dbs-op-tab is-active":"dbs-op-tab"}>Conversões <span className="dbs-op-count">{unitConversions.length}</span></button>
+              <button type="button" role="tab" aria-selected={settingsView==="pricing"} onClick={()=>setSettingsView("pricing")} className={settingsView==="pricing"?"dbs-op-tab is-active":"dbs-op-tab"}>Preço e revenda</button>
             </nav>
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>{(!suppliers.length||!measureUnits.length||!costCenters.length)&&<p className="text-xs text-amber-700">Complete os cadastros básicos para liberar o fluxo de compras.</p>}</div>
-                <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>
+                {settingsView !== "pricing" && <button type="button" onClick={openNewMasterRecord} className="min-h-10 rounded-lg bg-[#1557a0] px-4 text-sm font-semibold text-white">+ Adicionar</button>}
               </div>
               {settingsView==="suppliers"&&<div className="divide-y divide-slate-100">{suppliers.map((supplier:any)=><div key={supplier.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{supplier.name}</p><p className="text-xs text-slate-500">{supplier.cnpj||"Sem CNPJ/CPF"} {supplier.phone?"· "+supplier.phone:""}</p></div>{inventoryRecordActions("supplier",supplier,supplier.name)}</div>)}{!suppliers.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum fornecedor cadastrado.</p>}</div>}
               {settingsView==="cost-centers"&&<div className="divide-y divide-slate-100">{costCenters.map((center:any)=><div key={center.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{center.name}</p><p className="text-xs text-slate-500">{center.code}</p></div>{inventoryRecordActions("cost_center",center,center.name)}</div>)}{!costCenters.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhum centro de custo cadastrado.</p>}</div>}
               {settingsView==="units"&&<div className="divide-y divide-slate-100">{measureUnits.map((unit:any)=><div key={unit.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div className="min-w-0"><p className="text-sm font-medium text-slate-900">{unit.name} {unit.is_system&&<span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Padrão</span>}</p><p className="text-xs text-slate-500">{unit.code} · {unit.symbol||unit.code}</p></div>{inventoryRecordActions("measure_unit",unit,unit.name)}</div>)}{!measureUnits.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma unidade cadastrada.</p>}</div>}
               {settingsView==="conversions"&&<div className="divide-y divide-slate-100">{unitConversions.map((conversion:any)=>{const from=measureUnits.find((u:any)=>String(u.id)===String(conversion.from_unit_id));const to=measureUnits.find((u:any)=>String(u.id)===String(conversion.to_unit_id));const label=(from?.code||"Compra")+" → "+(to?.code||"Base");return <div key={conversion.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"><div><p className="text-sm font-medium text-slate-900">{from?.name||"Unidade de compra"} → {to?.name||"Unidade-base"}</p><p className="text-xs text-slate-500">{from?.symbol||from?.code||"—"} para {to?.symbol||to?.code||"—"} · {Number(conversion.factor).toLocaleString("pt-BR")} ×</p></div>{inventoryRecordActions("unit_conversion",conversion,label)}</div>;})}{!unitConversions.length&&<p className="px-5 py-8 text-center text-sm text-slate-500">Nenhuma conversão cadastrada.</p>}</div>}
+              {settingsView==="pricing"&&<form onSubmit={savePricingPolicy} className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="md:col-span-2">
+                  <h3 className="text-base font-bold text-slate-900">Política de preço de revenda</h3>
+                  <p className="mt-1 max-w-3xl text-sm text-slate-600">Defina como o sistema transforma o custo de referência/custo médio em preço de catálogo. A alteração recalcula os preços de todas as peças e não movimenta estoque nem cria lançamento financeiro.</p>
+                </div>
+                <label className="block text-xs font-bold text-slate-600">Método de cálculo
+                  <select value={pricingMethod} onChange={e=>setPricingMethod(e.target.value as "markup"|"gross_margin")} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal">
+                    <option value="markup">Markup sobre o custo</option>
+                    <option value="gross_margin">Margem bruta alvo sobre venda</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-bold text-slate-600">Percentual (%)
+                  <input required type="number" min="0.01" max={pricingMethod==="gross_margin" ? "99.99" : "990"} step="0.01" value={pricingRate} onChange={e=>setPricingRate(e.target.value)} placeholder="Informe o percentual definido pela DBS" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal"/>
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 md:col-span-2">
+                  {pricingMethod==="markup"
+                    ? "Exemplo de fórmula: custo × (1 + markup). Um markup de 30% aplicado sobre custo de R$ 100,00 gera preço de R$ 130,00."
+                    : "Exemplo de fórmula: custo ÷ (1 − margem). Uma margem bruta de 30% sobre a venda, com custo de R$ 100,00, gera preço de R$ 142,86."}
+                  <p className="mt-1 text-xs text-slate-500">Os exemplos explicam a fórmula, não definem a política da empresa. Nenhum percentual é pré-cadastrado.</p>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-2">
+                  <p className="text-xs text-slate-500">{pricingPolicy ? `Política atual: ${pricingPolicy.pricing_method==="markup"?"Markup":"Margem bruta"} de ${(Number(pricingPolicy.rate_bps)/100).toFixed(2)}% · versão ${pricingPolicy.version}` : "Ainda não há política configurada. O cadastro de novas peças ficará bloqueado até esta definição."}</p>
+                  <button type="submit" disabled={busy||!pricingRate} className="min-h-11 rounded-xl bg-[#1557a0] px-5 text-sm font-bold text-white disabled:opacity-40">{busy?"Salvando…":"Salvar política e recalcular catálogo"}</button>
+                </div>
+              </form>}
             </section>
             <Sheet open={activeDrawer==="supplier"} onOpenChange={(open)=>setActiveDrawer(open?"supplier":null)}><SheetContent side="right" className="dbs-operations-drawer w-[96vw] max-w-[480px] overflow-y-auto bg-white p-5 sm:p-7"><SheetHeader className="mb-6 border-b border-slate-100 pb-4"><SheetTitle>{masterRecordId ? "Editar fornecedor" : "Novo fornecedor"}</SheetTitle></SheetHeader><form onSubmit={addSupplier} className="space-y-3">
               <input required value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} placeholder="Nome / razão social" className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"/>
@@ -1410,11 +1529,13 @@ export function DbsInventoryPage({
                               const remainingPurchase=remaining/factor;
                               const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
                               const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
-                              return <label key={item.id} className="block text-xs font-semibold text-slate-700">
+                              return <div key={item.id} className="block text-xs font-semibold text-slate-700"><label className="block">
                                 <span className="block">{part?.sku ? part.sku + " · " : ""}{part?.name || part?.description || "Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id] ?? ""} onChange={e => setPurchaseReceiptQuantities(prev => ({ ...prev, [item.id]: e.target.value }))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
-                              </label>;
+                              </label>
+                              {renderPurchaseReceiptWarrantyFields(String(item.id))}
+                            </div>;
                             })}
                             <button type="button" disabled={busy || !selected.length || overReceived} onClick={() => void confirmPurchaseReceipt(purchase, selected)} className="min-h-10 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived && <p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}
@@ -1460,11 +1581,13 @@ export function DbsInventoryPage({
                               const remainingPurchase=remaining/factor;
                               const purchaseUnit=measureUnits.find((u:any)=>String(u.id)===String(item.purchase_unit_id));
                               const baseUnit=measureUnits.find((u:any)=>String(u.id)===String(part?.measure_unit_id));
-                              return <label key={item.id} className="block text-xs font-semibold text-slate-700">
+                              return <div key={item.id} className="block text-xs font-semibold text-slate-700"><label className="block">
                                 <span className="block">{part?.sku?part.sku+" · ":""}{part?.name||part?.description||"Peça"}</span>
                                 <span className="mt-1 block font-normal text-slate-500">Pedido: {Number(item.purchase_quantity??(Number(item.quantity)/factor)).toLocaleString("pt-BR")} {purchaseUnit?.code||""} = {Number(item.quantity).toLocaleString("pt-BR")} {baseUnit?.code||""} · Recebido: {Number(item.quantity_received??0).toLocaleString("pt-BR")} {baseUnit?.code||""} · Falta: {remaining.toLocaleString("pt-BR")} {baseUnit?.code||""}</span>
                                 <input aria-label={"Quantidade recebida em "+(purchaseUnit?.code||"unidade de compra")+" de "+(part?.name||part?.sku||item.id)} type="number" min="0.001" max={remainingPurchase} step="0.001" value={purchaseReceiptQuantities[item.id]??""} onChange={e=>setPurchaseReceiptQuantities(prev=>({...prev,[item.id]:e.target.value}))} placeholder={"Conferido agora em "+(purchaseUnit?.code||"unidade de compra")+" (máx. "+remainingPurchase.toLocaleString("pt-BR")+")"} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"/>
-                              </label>;
+                              </label>
+                              {renderPurchaseReceiptWarrantyFields(String(item.id))}
+                            </div>;
                             })}
                             <button type="button" disabled={busy||!selected.length||overReceived} onClick={()=>void confirmPurchaseReceipt(purchase,selected)} className="min-h-11 w-full rounded-lg bg-emerald-700 px-3 text-xs font-black text-white disabled:opacity-40">Confirmar quantidades recebidas</button>
                             {overReceived&&<p className="text-xs font-bold text-rose-700">A quantidade não pode ultrapassar o saldo pendente do pedido.</p>}

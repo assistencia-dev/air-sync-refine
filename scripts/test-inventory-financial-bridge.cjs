@@ -354,10 +354,16 @@ assert.match(mainHtml, /DBS_CONTROL_BACK_TO_ADMIN_MENU/);
 assert.match(controlUx, /window\.switchTab\(id,item\)/);
 assert.doesNotMatch(controlUx, /DBS_CONTROL_OPEN_INVENTORY_FINANCE/);
 assert.match(mainHtml, /dbs-control-ux\.js\?v=20261114-erp-clean-ui-2/);
-assert.match(controlRoute, /inventoryPortals\.purchases\.quoteId/);
-assert.match(controlRoute, /initialSection="parts"/);
-assert.match(controlRoute, /initialSection="purchases"/);
-assert.match(controlRoute, /inventoryPortals\.purchases\.quoteId/);
+assert.match(controlRoute, /import \{ DbsOperationalInventoryPage \} from "@\/components\/DbsOperationalInventoryPage"/);
+assert.match(controlRoute, /<DbsOperationalInventoryPage initialSection="parts"/);
+assert.match(controlRoute, /<DbsOperationalInventoryPage initialSection="purchases" initialQuoteId=\{inventoryPortals\.purchases\.quoteId\}/);
+assert.doesNotMatch(controlRoute, /<DbsInventoryPage/);
+const operationalUi = fs.readFileSync('src/components/DbsOperationalInventoryPage.tsx', 'utf8');
+assert.match(operationalUi, /getDbsOperationalInventoryOverview/);
+assert.match(operationalUi, /createDbsMaterialRequest/);
+assert.match(operationalUi, /Peças e estoque/);
+assert.match(operationalUi, /Solicitações/);
+assert.doesNotMatch(operationalUi, /cost_cents|unit_cost_cents|sale_cents/);
 assert.match(mainHtml, /DBS_CONTROL_OPEN_INVENTORY_MODULE/);
 assert.match(mainHtml, /window\.abrirModuloMateriais/);
 assert.match(mainHtml, /function switchTab\(tabId, element, quoteId\)/);
@@ -635,14 +641,14 @@ assert.match(phase2Ui, /purchase-receipt/);
 assert.match(phase2Ui, /sourceQuoteId/);
 assert.match(phase2Ui, /Conferir composição/);
 assert.match(phase2Ui, /data\?\.canApprovePurchases === true/);
-assert.match(treasuryFunctions, /async function requirePurchaseApprovalActor[\s\S]*?if \(user\.role_key !== "SUPER_ADMIN"\)/);
+assert.match(treasuryFunctions, /async function requirePurchaseApprovalActor[\s\S]*?if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
 const purchaseApprovalGuard = treasuryFunctions.slice(
   treasuryFunctions.indexOf("async function requirePurchaseApprovalActor"),
   treasuryFunctions.indexOf("function asObject", treasuryFunctions.indexOf("async function requirePurchaseApprovalActor")),
 );
-assert.match(purchaseApprovalGuard, /if \(user\.role_key !== "SUPER_ADMIN"\)/);
+assert.match(purchaseApprovalGuard, /if \(user\.role_key !== "SUPER_ADMIN" && user\.role_key !== "FINANCEIRO_OPERADOR"\)/);
 assert.doesNotMatch(purchaseApprovalGuard, /\|\|\s*user\.role_key/);
-assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA"\]\.includes\(data\.role_key\)/);
+assert.match(treasuryFunctions, /!\["SUPER_ADMIN", "FINANCEIRO_LEITURA", "FINANCEIRO_OPERADOR"\]\.includes\(data\.role_key\)/);
 assert.match(treasuryPage, /canApprovePurchases: canApprovePurchasesRef\.current/);
 assert.match(treasuryHtml, /CAN_APPROVE_PURCHASES = msg\.canApprovePurchases === true/);
 assert.match(treasuryHtml, /approval-purchase-items/);

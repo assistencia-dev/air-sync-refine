@@ -75,3 +75,16 @@ console.log("Data protection: immutable OS history, document checksums, verified
 
 assert.match(backup, /"dbs_control_purchase_receipts"/);
 assert.match(backup, /"dbs_control_purchase_receipt_items"/);
+for (const table of [
+  "dbs_control_material_requests",
+  "dbs_control_material_request_purchase_links",
+  "dbs_control_material_request_fulfillments",
+  "dbs_control_supplier_warranties",
+  "dbs_control_customer_warranties",
+  "dbs_control_warranty_claims",
+  "dbs_control_warranty_claim_history",
+  "dbs_control_gas_refill_events",
+]) {
+  assert.match(backup, new RegExp(`"${table}"`), `Backup must include ${table}.`);
+}
+

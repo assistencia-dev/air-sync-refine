@@ -108,6 +108,21 @@ const tables = [
   "dbs_control_purchase_approval_history",
   "dbs_control_purchase_receipts",
   "dbs_control_purchase_receipt_items",
+  "dbs_control_material_requests",
+  "dbs_control_material_request_purchase_links",
+  "dbs_control_material_request_fulfillments",
+  "dbs_control_supplier_warranties",
+  "dbs_control_customer_warranties",
+  "dbs_control_customer_warranty_policies",
+  "dbs_control_customer_warranty_policy_history",
+  "dbs_control_customer_warranty_history",
+  "dbs_control_warranty_claims",
+  "dbs_control_warranty_claim_history",
+  "dbs_control_gas_refill_events",
+  "dbs_control_gas_cylinder_movements",
+  "dbs_control_tool_assets",
+  "dbs_control_tool_asset_movements",
+  "dbs_control_work_order_part_receipt_allocations",
   "dbs_control_inventory_movements",
   "dbs_control_inventory_commands",
   "dbs_control_work_order_financials",
@@ -117,8 +132,8 @@ const tables = [
   "treasury_ledger_outbox",
 ];
 
-if (tables.length !== 84 || new Set(tables).size !== tables.length) {
-  throw new Error(`Lista de backup inválida: esperadas 84 tabelas únicas, encontradas ${tables.length}.`);
+if (tables.length !== 99 || new Set(tables).size !== tables.length) {
+  throw new Error(`Lista de backup inválida: esperadas 99 tabelas únicas, encontradas ${tables.length}.`);
 }
 
 async function request(path, options = {}) {

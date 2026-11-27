@@ -14,12 +14,12 @@ async function getCaller(context: { userId: string }) {
 
 export const createTreasuryViewer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: { full_name: string; email: string; username: string; password: string }) => {
+  .validator((input: { full_name: string; email: string; username: string; password: string; role_key?: "FINANCEIRO_LEITURA" | "FINANCEIRO_OPERADOR" }) => {
     if (!input?.full_name?.trim()) throw new Error("Informe o nome completo.");
     if (!input.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("E-mail inválido.");
     if (!input.username?.trim() || !/^[a-zA-Z0-9._-]{3,40}$/.test(input.username)) throw new Error("Usuário deve ter de 3 a 40 caracteres (letras, números, ponto, hífen ou sublinhado).");
     if (!input.password || input.password.length < 12) throw new Error("Use uma senha com pelo menos 12 caracteres.");
-    return { full_name: input.full_name.trim(), email: input.email.trim().toLowerCase(), username: input.username.trim(), password: input.password };
+    return { full_name: input.full_name.trim(), email: input.email.trim().toLowerCase(), username: input.username.trim(), password: input.password, role_key: input.role_key === "FINANCEIRO_OPERADOR" ? "FINANCEIRO_OPERADOR" as const : "FINANCEIRO_LEITURA" as const };
   })
   .handler(async ({ context, data }) => {
     const { admin, user } = await getCaller(context);
@@ -33,7 +33,7 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
     if (authError || !authData.user) throw new Error(authError?.message || "Não foi possível criar a autenticação.");
     const { data: viewerProfile, error: profileError } = await admin.from("users").insert({
       auth_id: authData.user.id, username: data.username, full_name: data.full_name,
-      email: data.email, role_key: "FINANCEIRO_LEITURA" as any, status: "ativo", created_by: user.id,
+      email: data.email, role_key: data.role_key as any, status: "ativo", created_by: user.id,
       company_id: user.company_id ?? null
     }).select("id").single();
     if (profileError || !viewerProfile) {
@@ -49,8 +49,8 @@ export const createTreasuryViewer = createServerFn({ method: "POST" })
       throw new Error("Não foi possível vincular o acesso ao financeiro: " + accessError.message);
     }
     await admin.from("audit_log").insert({
-      actor_user_id: user.id, action: "created_treasury_viewer",
-      metadata_json: { username: data.username, email: data.email, role_key: "FINANCEIRO_LEITURA" }
+      actor_user_id: user.id, action: data.role_key === "FINANCEIRO_OPERADOR" ? "created_treasury_operator" : "created_treasury_viewer",
+      metadata_json: { username: data.username, email: data.email, role_key: data.role_key }
     });
     return { ok: true, username: data.username, email: data.email };
   });

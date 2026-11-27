@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { decideDbsPurchaseApprovalFromTreasury, getTreasuryCloudState, postTreasuryLedgerEntry, saveTreasuryCostCenter } from "@/lib/treasury.functions";
 import { BrandLogo } from "@/components/BrandLogo";
 import { MobileAdminNavigation } from "@/components/MobileAdminNavigation";
+import { DbsInventoryPage } from "./dbs-inventory";
+import { DbsFinanceMaterialRequestsPage } from "@/components/DbsFinanceMaterialRequestsPage";
+import { DbsWarrantyManagementPage } from "@/components/DbsWarrantyManagementPage";
 
 
 export const Route = createFileRoute("/_authenticated/treasury")({
@@ -33,6 +36,7 @@ function TreasuryPage() {
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [financeWorkspace, setFinanceWorkspace] = useState<"treasury" | "inventory" | "requests" | "warranties">("treasury");
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +51,7 @@ function TreasuryPage() {
         .select("role_key, status")
         .eq("auth_id", auth.user.id)
         .maybeSingle();
-      if (error || !user || user.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA"].includes(user.role_key)) {
+      if (error || !user || user.status !== "ativo" || !["SUPER_ADMIN", "FINANCEIRO_LEITURA", "FINANCEIRO_OPERADOR"].includes(user.role_key)) {
         if (!cancelled) navigate({ to: "/portal", replace: true });
         return;
       }
@@ -58,7 +62,7 @@ function TreasuryPage() {
   }, [navigate]);
 
   useEffect(() => {
-    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN";
+    canApprovePurchasesRef.current = profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR";
     iframeRef.current?.contentWindow?.postMessage(
       { type: "DBS_TREASURY_APPROVAL_CAPABILITY", canApprovePurchases: canApprovePurchasesRef.current },
       window.location.origin,
@@ -249,9 +253,22 @@ function TreasuryPage() {
     <div className="admin-mobile-shell flex min-h-screen flex-col pb-20 lg:pb-0" style={{ background: "#f4f8fc", fontFamily: "'Inter',system-ui,sans-serif" }}>
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm sm:px-6">
         <div className="flex items-center gap-3"><BrandLogo frameClassName="rounded-lg px-2 py-1" imageClassName="h-9 w-auto max-w-[190px] object-contain" /><span className="hidden h-7 w-px bg-slate-200 sm:block" /><span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#1769D1" }}>Módulo Financeiro · DBS TREASURY</span></div>
-        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: profile?.role_key === "FINANCEIRO_LEITURA" ? "/financeiro-acompanhamento" : "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar</button></div>
+        <div className="flex items-center gap-3">{cloudError ? <span className="hidden max-w-[420px] truncate rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold text-rose-700 sm:inline-flex" title={cloudError}>Erro de sincronização</span> : <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 sm:inline-flex"><Shield className="h-3.5 w-3.5" /> Financeiro protegido</span>}<button onClick={() => navigate({ to: profile?.role_key === "FINANCEIRO_LEITURA" ? "/financeiro-acompanhamento" : profile?.role_key === "FINANCEIRO_OPERADOR" ? "/portal" : "/admin" })} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><ArrowLeft className="h-4 w-4" /> Voltar</button></div>
       </header>
+      {(profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") && <nav aria-label="Áreas do Financeiro" className="flex shrink-0 gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+        <button type="button" onClick={() => setFinanceWorkspace("treasury")} aria-pressed={financeWorkspace === "treasury"} className={financeWorkspace === "treasury" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>DBS TREASURY</button>
+        <button type="button" onClick={() => setFinanceWorkspace("inventory")} aria-pressed={financeWorkspace === "inventory"} className={financeWorkspace === "inventory" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>Peças, estoque e compras</button>
+        <button type="button" onClick={() => setFinanceWorkspace("requests")} aria-pressed={financeWorkspace === "requests"} className={financeWorkspace === "requests" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>Solicitações do DBS Control</button>
+        <button type="button" onClick={() => setFinanceWorkspace("warranties")} aria-pressed={financeWorkspace === "warranties"} className={financeWorkspace === "warranties" ? "rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white" : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"}>Garantias</button>
+      </nav>}
       <main className="relative flex-1 w-full bg-[#f5f7fb]" style={{ minHeight: "calc(100dvh - 64px)" }}>
+        {financeWorkspace === "inventory" && (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") ? (
+          <div className="h-full min-h-0 overflow-y-auto"><DbsInventoryPage embedded initialSection="parts" /></div>
+        ) : financeWorkspace === "requests" && (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") ? (
+          <div className="h-full min-h-0 overflow-y-auto"><DbsFinanceMaterialRequestsPage /></div>
+        ) : financeWorkspace === "warranties" && (profile?.role_key === "SUPER_ADMIN" || profile?.role_key === "FINANCEIRO_OPERADOR") ? (
+          <div className="h-full min-h-0 overflow-y-auto"><DbsWarrantyManagementPage /></div>
+        ) : <>
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 p-5">
           {cloudError ? (
             <div role="alert" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-lg">
@@ -273,6 +290,7 @@ function TreasuryPage() {
           )}
         </div>}
         <iframe className="admin-mobile-iframe treasury-content-frame" key={iframeReloadKey} ref={iframeRef} title="DBS TREASURY" src={TREASURY_URL} sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads" style={{ width: "100%", height: "calc(100dvh - 64px)", border: "none", display: "block", background: "#f5f7fb" }} />
+        </>}
       </main>
       {profile?.role_key === "SUPER_ADMIN" && <MobileAdminNavigation active="finance" currentPage="finance" />}
     </div>
