@@ -62,11 +62,15 @@ assert.match(warrantyUi, /workOrderPartId/i);
 assert.match(warrantyUi, /durationMonths/i);
 assert.match(warrantyFunctions, /from\("dbs_control_clients"\)/);
 assert.match(warrantyFunctions, /clientName:/);
+assert.match(warrantyFunctions, /linkDbsWorkOrderPartReceiptItem/);
+assert.match(warrantyFunctions, /receiptAllocations/);
 assert.match(warrantyFunctions, /receiptNumber:/);
 assert.match(warrantyFunctions, /serial_number,lot_number/);
 assert.match(warrantyUi, /Consultar garantia por peça, SKU, série, lote, fornecedor, recebimento, cliente ou OS/i);
 assert.match(warrantyUi, /filteredSupplierWarranties/);
 assert.match(warrantyUi, /filteredReceiptItems/);
+assert.match(warrantyUi, /Rastreabilidade de lote e série aplicada na OS/i);
+assert.match(warrantyUi, /Lotes e séries já vinculados/i);
 assert.match(warrantyUi, /Série e lote registrados no recebimento/i);
 assert.match(warrantyUi, /Sem prazo de garantia informado/);
 assert.match(warrantyUi, /filteredCustomerWarranties/);
@@ -101,5 +105,5 @@ for (const table of [
 ]) {
   assert.match(backup, new RegExp(`"${table}"`), `Backup must cover ${table}.`);
 }
-assert.match(backup, /tables.length !== 95/);
+assert.match(backup, /tables.length !== 96/);
 console.log("DBS warranties: supplier receipt traceability, customer OS item coverage, claim history, Finance workspace, operational read-only consultation and backup coverage verified.");
