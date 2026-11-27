@@ -45,7 +45,7 @@ assert.match(lateAllocationFunction, /v_unallocated\.quantity_covered-NEW\.quant
 assert.match(lateAllocationFunction, /IF EXISTS \([\s\S]*?policy_id IS NULL[\s\S]*?RETURN NEW/);
 assert.match(migration, /coalesce\(\(NEW\.completed_at AT TIME ZONE 'America\/Sao_Paulo'/i);
 assert.match(migration, /OLD\.status/);
-assert.match(migration, /NEW\.completed_at::date/);
+assert.match(migration, /NEW\.completed_at AT TIME ZONE 'America\/Sao_Paulo'/);
 assert.match(migration, /op\.consumption_status='consumed'/i);
 assert.match(migration, /p\.status='active'/i);
 assert.match(migration, /source_receipt_allocation_id/);
