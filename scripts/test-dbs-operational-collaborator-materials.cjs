@@ -42,6 +42,9 @@ assert.match(requestHandler, /botija selecionada não está atribuída a este co
 assert.match(requestHandler, /requested_by: user\.id/);
 
 assert.match(operational, /canChooseDestination = overview\.data\?\.canChooseDestination === true/);
+assert.match(operational, /canReserveStock = overview\.data\?\.canReserveStock === true/);
+assert.match(operational, /\{canReserveStock && \([\s\S]*?reservePart\.mutate\(\)/,
+  "Admin-only reservation form must not render for collaborators.");
 assert.match(operational, /requestType !== "gas_refill" && canChooseDestination/);
 assert.match(operational, /Quantidade<input readOnly value="1"/);
 assert.doesNotMatch(operational, /cost_cents|unit_cost_cents|sale_cents|total_cost_cents/i);
