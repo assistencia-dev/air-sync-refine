@@ -14,6 +14,20 @@ create table if not exists public.dbs_control_gas_cylinder_movements (
  actor_user_id uuid references public.users(id) on delete set null,
  created_at timestamptz not null default now()
 );
+-- Capture the current assignment as the baseline for cylinders that already existed
+-- before this migration. This is idempotent and does not modify cylinder rows.
+insert into public.dbs_control_gas_cylinder_movements(
+ company_id,scope_key,cylinder_id,movement_type,to_employee_id,to_vehicle_label,
+ to_status,remaining_after,used_after,actor_user_id,created_at
+)
+select c.company_id,c.scope_key,c.id,'assigned',c.employee_id,c.vehicle_label,
+ c.status,c.remaining_charges,c.used_charges,c.created_by,c.assigned_at
+from public.dbs_control_gas_cylinders c
+where not exists (
+ select 1 from public.dbs_control_gas_cylinder_movements m
+ where m.cylinder_id=c.id
+);
+
 create index if not exists dbs_control_gas_cylinder_movements_scope_idx
  on public.dbs_control_gas_cylinder_movements(scope_key,cylinder_id,created_at desc);
 create index if not exists dbs_control_gas_cylinder_movements_os_idx
